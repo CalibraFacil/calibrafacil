@@ -3,6 +3,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  DashboardSpeed02Icon,
+  LegalDocument01Icon,
+  ToolsIcon,
+} from '@hugeicons/core-free-icons'
 import type { CreateNonConformanceInput } from '@calibra-facil/schemas/quality'
 
 import { calibraApi } from '@/utils/api'
@@ -12,13 +18,6 @@ import {
 } from '@/features/quality/forms'
 import { useNonConformanceJobsData } from '@/features/quality/queries'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -30,16 +29,53 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 
-const NC_TYPE_LABELS: Record<NonConformanceFormData['type'], string> = {
-  work: 'Trabalho',
-  equipment: 'Equipamento',
-  documentation: 'Documentação',
-}
+const NC_TYPES: ReadonlyArray<{
+  value: NonConformanceFormData['type']
+  label: string
+  hint: string
+  icon: typeof ToolsIcon
+}> = [
+  {
+    value: 'work',
+    label: 'Trabalho',
+    hint: 'Leitura fora de faixa, padrão inadequado',
+    icon: ToolsIcon,
+  },
+  {
+    value: 'equipment',
+    label: 'Equipamento',
+    hint: 'Falha ou item fora de tolerância',
+    icon: DashboardSpeed02Icon,
+  },
+  {
+    value: 'documentation',
+    label: 'Documentação',
+    hint: 'Erro em documento, certificado ou registro',
+    icon: LegalDocument01Icon,
+  },
+]
+
+const NC_FLOW_STEPS = [
+  {
+    title: 'Registro',
+    description: 'Você descreve o que foi detectado, quando e o impacto.',
+  },
+  {
+    title: 'Disposição',
+    description: 'Retrabalho, sucata, uso como está ou concessão.',
+  },
+  {
+    title: 'Resolução',
+    description: 'A correção é registrada e a NC é encerrada.',
+  },
+]
 
 export function NewNCPage() {
   const navigate = useNavigate()
@@ -108,46 +144,67 @@ export function NewNCPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>Registrar Não Conformidade</CardTitle>
-          <CardDescription>
-            ISO 17025 Cláusula 8.7 - Controle de trabalho não conforme
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="space-y-6">
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Qualidade
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Registrar não conformidade
+        </h1>
+        <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          O registro é o primeiro passo do tratamento de um trabalho não
+          conforme detectado no laboratório.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <Panel className="p-5">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Type */}
             <div className="space-y-2">
-              <Label htmlFor="type">Tipo de Não Conformidade</Label>
-              <Select
-                value={typeValue}
-                onValueChange={(v) =>
-                  // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to non-conformance types.
-                  setValue('type', v as NonConformanceFormData['type'])
-                }
+              <Label>Tipo de não conformidade</Label>
+              <div
+                role="radiogroup"
+                aria-label="Tipo de não conformidade"
+                className="grid gap-2 sm:grid-cols-3"
               >
-                <SelectTrigger>
-                  <span
-                    className="flex flex-1 text-left line-clamp-1"
-                    data-slot="select-value"
-                  >
-                    {NC_TYPE_LABELS[typeValue] ?? 'Selecione o tipo'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="work">
-                    Trabalho - Leitura fora de faixa, padrão inadequado, etc.
-                  </SelectItem>
-                  <SelectItem value="equipment">
-                    Equipamento - Falha de equipamento, fora de tolerância
-                  </SelectItem>
-                  <SelectItem value="documentation">
-                    Documentação - Erro em documento, certificado, registro
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                {NC_TYPES.map((option) => {
+                  const selected = typeValue === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setValue('type', option.value)}
+                      className={cn(
+                        'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-[background-color,box-shadow,transform] active:scale-[0.98]',
+                        selected
+                          ? 'border-transparent bg-primary/5 shadow-[0_0_0_1.5px_hsl(var(--primary))]'
+                          : 'border-border/70 hover:bg-muted/40',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex size-8 items-center justify-center rounded-lg transition-colors',
+                          selected
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        <HugeiconsIcon icon={option.icon} className="size-4" />
+                      </span>
+                      <span className="text-sm font-medium">
+                        {option.label}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.hint}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Detected At */}
@@ -226,7 +283,7 @@ export function NewNCPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 border-t pt-5">
               <Button
                 type="button"
                 variant="outline"
@@ -234,13 +291,48 @@ export function NewNCPage() {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                className={ACTION_BUTTON_CLASS}
+                disabled={createMutation.isPending}
+              >
                 {createMutation.isPending ? 'Registrando...' : 'Registrar NC'}
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </Panel>
+
+        <aside className="space-y-4">
+          <Panel className="p-5">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Como funciona
+            </p>
+            <h2 className="mt-0.5 text-base font-semibold">
+              Fluxo da não conformidade
+            </h2>
+            <ol className="mt-4 space-y-3">
+              {NC_FLOW_STEPS.map((step, index) => (
+                <li key={step.title} className="flex gap-3">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs font-medium tabular-nums text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{step.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {step.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-4 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+              NCs críticas podem ser escaladas para uma{' '}
+              <span className="font-medium text-foreground">CAPA</span> — ação
+              corretiva e preventiva com análise de causa raiz.
+            </div>
+          </Panel>
+        </aside>
+      </div>
     </div>
   )
 }

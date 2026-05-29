@@ -8,19 +8,22 @@ export function SettingsLayout() {
     <SettingsProvider>
       <div className="space-y-6">
         {/* Page header */}
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+        <div className="min-w-0 space-y-1">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Plataforma
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Configurações
           </h1>
-          <p className="text-muted-foreground">
-            Gerencie sua conta e preferências.
+          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gerencie sua conta, o laboratório e as preferências da plataforma.
           </p>
         </div>
 
         {/* Settings content with vertical tabs */}
-        <div className="flex flex-col gap-8 md:flex-row md:gap-12">
+        <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
           <SettingsNav />
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <Outlet />
           </div>
         </div>

@@ -14,9 +14,11 @@ import {
   buildAdjustmentSummaryRows,
   buildApprovedJobRecordModel,
   buildJobReviewModel,
+  buildJobVerdictModel,
   desktopCloudActionError,
   formatDate,
   formatDateTime,
+  formatExpandedUncertainty,
   formatReviewValue,
   getFinancialVariant,
   JOB_STATUS_LABELS,
@@ -323,6 +325,77 @@ describe('job detail model', () => {
     expect(model.validations).toEqual([
       expect.objectContaining({ message: 'Erro dentro da tolerância' }),
     ])
+  })
+
+  it('formats the worst-case expanded uncertainty from stored results', () => {
+    expect(
+      formatExpandedUncertainty(
+        { incerteza_expandida_apos: [0.4, '0,9', -0.2] },
+        [{ outputKey: 'incerteza_expandida_apos', unit: 'mg' }],
+        () => 'mg',
+      ),
+    ).toBe('±0.9 mg')
+    expect(
+      formatExpandedUncertainty(
+        { incerteza_expandida_antes: [1.5] },
+        [{ outputKey: 'incerteza_expandida_antes' }],
+        () => undefined,
+      ),
+    ).toBe('±1.5')
+    expect(formatExpandedUncertainty({}, [], () => undefined)).toBeNull()
+  })
+
+  it('derives the approval verdict from criteria and tolerance margins', () => {
+    const row = (afterMargin: number | null, beforeMargin: number | null) => ({
+      key: `${afterMargin}-${beforeMargin}`,
+      point: 10,
+      beforeReadings: [],
+      afterReadings: [],
+      beforeError: null,
+      afterError: null,
+      beforeMargin,
+      afterMargin,
+    })
+    const base = {
+      acceptanceItems: [],
+      adjustmentSummaryRows: [row(0.2, 0.1), row(0.05, -0.3)],
+      reviewHasData: true,
+      reviewHasResults: true,
+      standardsCount: 2,
+      environmentWithinLimits: true,
+      expandedUncertainty: '±0.02 g',
+    }
+
+    const conforme = buildJobVerdictModel(base)
+    expect(conforme.level).toBe('conforme')
+    expect(conforme.pointsTotal).toBe(2)
+    expect(conforme.pointsWithin).toBe(2)
+
+    expect(
+      buildJobVerdictModel({ ...base, reviewHasResults: false }).level,
+    ).toBe('incompleto')
+    expect(
+      buildJobVerdictModel({
+        ...base,
+        adjustmentSummaryRows: [row(-0.1, 0.2)],
+      }).level,
+    ).toBe('nao_conforme')
+    expect(
+      buildJobVerdictModel({
+        ...base,
+        acceptanceItems: [
+          {
+            key: 'c1',
+            message: 'critério reprovado',
+            severity: 'error',
+            status: 'error',
+          },
+        ],
+      }).level,
+    ).toBe('nao_conforme')
+    expect(
+      buildJobVerdictModel({ ...base, environmentWithinLimits: false }).level,
+    ).toBe('atencao')
   })
 
   it('keeps the desktop cloud-action error message centralized', () => {

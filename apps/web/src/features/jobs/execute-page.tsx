@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   ArrowDown01Icon,
   CheckmarkCircle02Icon,
   Alert02Icon,
@@ -26,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
 import { Field, FieldLabel } from '@/components/ui/field'
 import {
   Collapsible,
@@ -180,6 +180,18 @@ function toRecordArray(value: unknown): Array<Record<string, unknown>> {
 
 function toStringValue(value: unknown) {
   return typeof value === 'string' ? value : ''
+}
+
+function formatContextValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (
+    typeof value === 'number' ||
+    typeof value === 'string' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value)
+  }
+  return JSON.stringify(value)
 }
 
 export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
@@ -969,6 +981,15 @@ function ExecuteJobForm({
     const value = formData[field.key]
     return value !== undefined && value !== ''
   })
+  const requiredCompletionPercent =
+    requiredFields.length > 0
+      ? Math.round(
+          (completedRequiredFields.length / requiredFields.length) * 100,
+        )
+      : 100
+  const requiredComplete =
+    requiredFields.length > 0 &&
+    completedRequiredFields.length >= requiredFields.length
   const formulaIssueCount = Object.values(formulaResults).filter(
     (result) => result.error,
   ).length
@@ -1010,28 +1031,20 @@ function ExecuteJobForm({
     <div className="mx-auto w-full max-w-[1500px] space-y-6 pb-10">
       <SyncConflictReturnNotice search={conflictReturn} />
       {/* Header */}
-      <div className="space-y-5">
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate({ to: '/dashboard/jobs' })}
-            className="-ml-2 min-h-10 transition-[background-color,color,transform] active:scale-[0.96]"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-            Voltar
-          </Button>
-        </div>
-
-        <section className="flex flex-col gap-5 border-b border-black/5 px-1 pb-6 xl:flex-row xl:items-start xl:justify-between dark:border-white/10">
+      <Panel className="relative overflow-hidden p-5 sm:p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight text-foreground">
-                {job.jobId}
-              </h1>
-              <Badge className="shadow-[0_8px_18px_rgba(37,99,235,0.18)]">
-                {JOB_STATUS_LABELS[job.status]}
-              </Badge>
+            <div>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Calibração · Execução
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-3">
+                <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight text-foreground">
+                  {job.jobId}
+                </h1>
+                <Badge>{JOB_STATUS_LABELS[job.status]}</Badge>
+              </div>
             </div>
             <p className="max-w-3xl text-pretty text-sm text-muted-foreground">
               {job.customerName} · {job.assetName} ({job.assetTag})
@@ -1048,12 +1061,6 @@ function ExecuteJobForm({
                 <span className="text-muted-foreground">Ambiente</span>
                 {environmentStatus}
               </Badge>
-              <Badge variant="secondary" className="h-7 rounded-lg px-2.5">
-                <span className="text-muted-foreground">Obrigatórios</span>
-                <span className="tabular-nums">
-                  {completedRequiredFields.length}/{requiredFields.length}
-                </span>
-              </Badge>
               <Badge
                 variant={totalIssueCount > 0 ? 'destructive' : 'secondary'}
                 className={`h-7 rounded-lg px-2.5 ${
@@ -1066,6 +1073,28 @@ function ExecuteJobForm({
                 <span className="tabular-nums">{totalIssueCount}</span>
               </Badge>
             </div>
+
+            {requiredFields.length > 0 && (
+              <div className="max-w-md space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-medium">
+                    Campos obrigatórios preenchidos
+                  </span>
+                  <span className="font-mono tabular-nums text-muted-foreground">
+                    {completedRequiredFields.length}/{requiredFields.length} ·{' '}
+                    {requiredCompletionPercent}%
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ease-out ${
+                      requiredComplete ? 'bg-emerald-500' : 'bg-primary'
+                    }`}
+                    style={{ width: `${requiredCompletionPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {assetSpecSummaryItems.length > 0 && (
               <div className="space-y-2">
@@ -1131,14 +1160,14 @@ function ExecuteJobForm({
               </Button>
             </div>
           )}
-        </section>
-      </div>
+        </div>
+      </Panel>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         {/* Left Column: Data Entry */}
         <div className="min-w-0 space-y-5">
           {/* Reference Standards */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.standards}
               onOpenChange={(open) =>
@@ -1235,7 +1264,7 @@ function ExecuteJobForm({
           </Card>
 
           {/* Calibration Location */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.location}
               onOpenChange={(open) =>
@@ -1326,7 +1355,7 @@ function ExecuteJobForm({
           </Card>
 
           {/* Environmental Conditions */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.environment}
               onOpenChange={(open) =>
@@ -1533,7 +1562,7 @@ function ExecuteJobForm({
           </Card>
 
           {/* Data Entry Form */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.data}
               onOpenChange={(open) =>
@@ -1577,7 +1606,7 @@ function ExecuteJobForm({
         {/* Right Column: Results & Validations */}
         <div className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
           {officialExecution ? (
-            <Card className="rounded-2xl border-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+            <Card className="rounded-2xl border-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
               <CardHeader className="px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-balance text-base">
@@ -1625,7 +1654,7 @@ function ExecuteJobForm({
           ) : null}
 
           {/* Formula Results */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.results}
               onOpenChange={(open) =>
@@ -1702,7 +1731,7 @@ function ExecuteJobForm({
           </Card>
 
           {/* Validations */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.validations}
               onOpenChange={(open) =>
@@ -1763,7 +1792,7 @@ function ExecuteJobForm({
           </Card>
 
           {/* Debug Context */}
-          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+          <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
             <Collapsible
               open={sectionsOpen.debug}
               onOpenChange={(open) =>
@@ -1772,22 +1801,59 @@ function ExecuteJobForm({
             >
               <CollapsibleTrigger className="group w-full text-left outline-none">
                 <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base text-muted-foreground">
-                      Debug: Contexto
-                    </CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CardTitle className="text-balance text-base">
+                        Contexto de cálculo
+                      </CardTitle>
+                      <Badge variant="outline" className="tabular-nums">
+                        {Object.keys(context).length} variáve
+                        {Object.keys(context).length === 1 ? 'l' : 'is'}
+                      </Badge>
+                    </div>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${sectionsOpen.debug ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.debug ? 'rotate-180' : ''}`}
                     />
                   </div>
+                  <CardDescription className="text-pretty">
+                    Variáveis e valores usados nos cálculos do método — a base de
+                    rastreabilidade do resultado.
+                  </CardDescription>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="px-5 pb-5 pt-0">
-                  <pre className="max-h-48 overflow-auto rounded-xl bg-muted p-3 text-xs">
-                    {JSON.stringify(context, null, 2)}
-                  </pre>
+                  {Object.keys(context).length > 0 ? (
+                    <div className="max-h-72 overflow-auto rounded-xl ring-1 ring-foreground/10">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b bg-muted/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Variável</span>
+                        <span>Valor</span>
+                      </div>
+                      <div className="divide-y divide-foreground/10">
+                        {Object.entries(context).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-3 px-3 py-2 text-xs"
+                          >
+                            <span
+                              className="truncate font-mono text-muted-foreground"
+                              title={key}
+                            >
+                              {key}
+                            </span>
+                            <span className="min-w-0 font-mono tabular-nums [overflow-wrap:anywhere]">
+                              {formatContextValue(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma variável de contexto disponível ainda.
+                    </p>
+                  )}
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>

@@ -1,10 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircleIcon,
   BookOpen02Icon,
+  CheckmarkCircle02Icon,
+  CloudUploadIcon,
   CodeSquareIcon,
   Copy01Icon,
   Database02Icon,
+  DocumentValidationIcon,
+  Link01Icon,
+  LinkSquare02Icon,
+  RocketIcon,
   SearchIcon,
+  Table01Icon,
   Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -23,6 +31,15 @@ import {
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import {
   CloudOnlyOfflineState,
@@ -71,6 +88,40 @@ import type {
   XlsxWorkbenchState,
 } from '@/features/certificate-templates/types'
 
+type StageId = 'source' | 'mapping' | 'verify' | 'publish'
+
+const CERTIFICATE_STAGES: ReadonlyArray<{
+  id: StageId
+  label: string
+  hint: string
+  icon: typeof CloudUploadIcon
+}> = [
+  {
+    id: 'source',
+    label: 'Planilha',
+    hint: 'Layout oficial',
+    icon: CloudUploadIcon,
+  },
+  {
+    id: 'mapping',
+    label: 'Vínculos',
+    hint: 'Campos × dados',
+    icon: Link01Icon,
+  },
+  {
+    id: 'verify',
+    label: 'Verificação',
+    hint: 'Validar e prever',
+    icon: DocumentValidationIcon,
+  },
+  {
+    id: 'publish',
+    label: 'Publicação',
+    hint: 'Publicar e atribuir',
+    icon: RocketIcon,
+  },
+]
+
 export function CertificateTemplatesPage() {
   const queryClient = useQueryClient()
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
@@ -91,6 +142,7 @@ export function CertificateTemplatesPage() {
   )
   const [tokenSearch, setTokenSearch] = useState('')
   const [activeTokenGroup, setActiveTokenGroup] = useState('all')
+  const [activeStage, setActiveStage] = useState<StageId | null>(null)
   const [assignmentDraft, setAssignmentDraft] = useState<XlsxAssignmentDraft>({
     unitId: '',
     serviceId: '',
@@ -214,6 +266,7 @@ export function CertificateTemplatesPage() {
       toast.success('XLSX analisado')
       setXlsxWorkbench(data)
       setXlsxPreview(null)
+      setActiveStage('mapping')
       await refreshTemplates()
     },
     onError: (error) => {
@@ -377,6 +430,7 @@ export function CertificateTemplatesPage() {
       toast.success('Template criado')
       setNewTemplateName('')
       setSelectedTemplateKey(certificateTemplateKey(data.item))
+      setActiveStage('source')
       await refreshTemplates()
     },
     onError: (error) => {
@@ -536,136 +590,69 @@ export function CertificateTemplatesPage() {
     })
   }
 
+  // — Lifecycle of the controlled certificate template (document control) —
+  const hasWorkbench = Boolean(activeXlsxWorkbench)
+  const detectedCount = placeholderRows.length
+  const boundCount = scalarBindings.filter(
+    (binding) => binding.fieldPath.trim().length > 0,
+  ).length
+  const requiredPending = scalarBindings.filter(
+    (binding) => binding.required && binding.fieldPath.trim().length === 0,
+  ).length
+  const warningCount =
+    activeXlsxWorkbench?.analysis.warnings.length ??
+    currentXlsxVersion?.warningCount ??
+    0
+  const sheetCount =
+    activeXlsxWorkbench?.analysis.sheets.length ??
+    currentXlsxVersion?.sheetCount ??
+    0
+  const fieldCount = activeXlsxWorkbench
+    ? detectedCount
+    : (currentXlsxVersion?.placeholderCount ?? 0)
+  const mappingComplete = scalarBindings.length > 0 && requiredPending === 0
+  const fullyBound = scalarBindings.length > 0 && boundCount === scalarBindings.length
+  // Verification is concluded once the version reached a validated/published
+  // state on the server — not just when a preview was rendered this session.
+  const xlsxStatus = currentXlsxVersion?.status
+  const isXlsxVerified =
+    xlsxStatus === 'VALIDATED' ||
+    xlsxStatus === 'PUBLISHED' ||
+    xlsxStatus === 'ARCHIVED' ||
+    Boolean(hasRenderedPreview)
+
+  const stageDone: Record<StageId, boolean> = {
+    source: Boolean(currentXlsxVersion),
+    mapping: mappingComplete,
+    verify: isXlsxVerified,
+    publish: isXlsxPublished,
+  }
+  const stageBlocked: Record<StageId, boolean> = {
+    source: false,
+    mapping: !currentXlsxVersion,
+    verify: !currentXlsxVersion,
+    publish: !isXlsxPublished && !canPublishXlsx,
+  }
+  const defaultStage: StageId = !currentXlsxVersion
+    ? 'source'
+    : !mappingComplete
+      ? 'mapping'
+      : !isXlsxVerified
+        ? 'verify'
+        : 'publish'
+  const effectiveStage: StageId = activeStage ?? defaultStage
+  const templateNameDirty =
+    !isReadOnly &&
+    draft.name.trim().length > 0 &&
+    draft.name.trim() !== (selectedTemplate?.name ?? '')
+  const showTokenAside =
+    hasWorkbench && (effectiveStage === 'mapping' || effectiveStage === 'verify')
+  const goToSource = () => setActiveStage('source')
+
+  const warningsPreview = activeXlsxWorkbench?.analysis.warnings.slice(0, 4) ?? []
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-lg border bg-background p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold">Templates de certificados</h1>
-            {selectedTemplate?.isDefault && <Badge>Padrão</Badge>}
-            {selectedTemplate && (
-              <Badge variant="secondary">
-                Template v{selectedTemplate.version}
-              </Badge>
-            )}
-            {currentXlsxVersion && (
-              <Badge variant="outline">
-                XLSX v{currentXlsxVersion.version}
-              </Badge>
-            )}
-            {isReadOnly && <Badge variant="outline">Somente leitura</Badge>}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Use a planilha oficial do laboratório como fonte do layout do
-            certificado e vincule os placeholders aos dados da calibração.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <NativeSelect
-            value={effectiveSelectedTemplateKey ?? ''}
-            onChange={(event) => setSelectedTemplateKey(event.target.value)}
-            className="min-w-56"
-          >
-            {templates.map((template) => (
-              <NativeSelectOption
-                key={certificateTemplateKey(template)}
-                value={certificateTemplateKey(template)}
-              >
-                {template.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => duplicateMutation.mutate()}
-            disabled={
-              !canManageTemplates ||
-              !selectedTemplate?.id ||
-              duplicateMutation.isPending
-            }
-          >
-            Duplicar
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setDefaultMutation.mutate()}
-            disabled={
-              !canManageTemplates ||
-              !selectedTemplate?.id ||
-              selectedTemplate.isDefault ||
-              setDefaultMutation.isPending
-            }
-          >
-            Tornar padrão
-          </Button>
-          <Button
-            type="button"
-            onClick={() => updateMutation.mutate()}
-            disabled={
-              !canManageTemplates ||
-              isSystemTemplate ||
-              !draft.name.trim() ||
-              updateMutation.isPending
-            }
-          >
-            Salvar
-          </Button>
-        </div>
-      </div>
-
-      {!canManageTemplates && (
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-          Templates personalizados ficam disponíveis a partir do plano
-          Professional. A prévia permanece disponível para revisão.
-        </div>
-      )}
-
-      <div className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(220px,360px)_auto] md:items-end">
-        <label className="space-y-1">
-          <span className="text-sm font-medium">Nome do template</span>
-          <Input
-            value={draft.name}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                name: event.target.value,
-              }))
-            }
-            disabled={isReadOnly}
-          />
-        </label>
-
-        <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-center"
-          onSubmit={(event) => {
-            event.preventDefault()
-            createMutation.mutate()
-          }}
-        >
-          <Input
-            value={newTemplateName}
-            onChange={(event) => setNewTemplateName(event.target.value)}
-            placeholder="Novo template"
-            disabled={!canManageTemplates || createMutation.isPending}
-            className="sm:w-64"
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={
-              !canManageTemplates ||
-              !newTemplateName.trim() ||
-              createMutation.isPending
-            }
-          >
-            Criar
-          </Button>
-        </form>
-      </div>
-
+    <div className="space-y-5">
       <input
         ref={xlsxInputRef}
         type="file"
@@ -681,359 +668,682 @@ export function CertificateTemplatesPage() {
         }}
       />
 
-      <div className="grid gap-3 rounded-lg border bg-background p-3 lg:grid-cols-[minmax(260px,360px)_1fr]">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold">Template XLSX</h2>
-              <p className="text-xs text-muted-foreground">
-                Upload, análise e validação da pasta de certificado.
-              </p>
-            </div>
-            {currentXlsxVersion && (
-              <Badge variant="secondary">
-                v{currentXlsxVersion.version} ·{' '}
-                {getXlsxStatusLabel(currentXlsxVersion.status)}
-              </Badge>
+      {/* Identity + lifecycle status */}
+      <Panel className="relative overflow-hidden p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Certificados
+            </p>
+            {isReadOnly ? (
+              <h1 className="mt-0.5 text-balance text-2xl font-semibold tracking-tight">
+                {selectedTemplate?.name ?? 'Template de certificado'}
+              </h1>
+            ) : (
+              <input
+                value={draft.name}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                aria-label="Nome do template"
+                placeholder="Nome do template"
+                className="-mx-1 mt-0.5 w-full max-w-xl rounded-md bg-transparent px-1 text-balance text-2xl font-semibold tracking-tight outline-none focus:bg-background/70 focus:ring-2 focus:ring-ring/40"
+              />
             )}
-          </div>
-
-          {currentXlsxVersion ? (
-            <div className="rounded-lg bg-background p-3 text-xs shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_10px_24px_rgba(0,0,0,0.04)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.10)]">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium">
-                    XLSX atual v{currentXlsxVersion.version}
-                  </p>
-                  <p className="text-muted-foreground">
-                    Atualizado em{' '}
-                    {formatCertificateTemplateDateTime(
-                      currentXlsxVersion.updatedAt,
-                    )}
-                  </p>
-                </div>
-                <Badge
-                  variant={
-                    currentXlsxVersion.status === 'PUBLISHED'
-                      ? 'default'
-                      : 'secondary'
-                  }
-                >
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {selectedTemplate?.isDefault && <Badge>Padrão</Badge>}
+              {selectedTemplate && (
+                <Badge variant="secondary">
+                  Template v{selectedTemplate.version}
+                </Badge>
+              )}
+              {currentXlsxVersion && (
+                <Badge variant="outline">
+                  XLSX v{currentXlsxVersion.version} ·{' '}
                   {getXlsxStatusLabel(currentXlsxVersion.status)}
                 </Badge>
-              </div>
-              <dl className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-md bg-muted/45 p-2">
-                  <dt className="text-muted-foreground">Abas</dt>
-                  <dd className="font-medium tabular-nums">
-                    {activeXlsxWorkbench?.analysis.sheets.length ??
-                      currentXlsxVersion.sheetCount ??
-                      0}
-                  </dd>
-                </div>
-                <div className="rounded-md bg-muted/45 p-2">
-                  <dt className="text-muted-foreground">Campos</dt>
-                  <dd className="font-medium tabular-nums">
-                    {(activeXlsxWorkbench
-                      ? placeholderRows.length
-                      : currentXlsxVersion.placeholderCount) ?? 0}
-                  </dd>
-                </div>
-                <div className="rounded-md bg-muted/45 p-2">
-                  <dt className="text-muted-foreground">Avisos</dt>
-                  <dd className="font-medium tabular-nums">
-                    {activeXlsxWorkbench?.analysis.warnings.length ??
-                      currentXlsxVersion.warningCount ??
-                      0}
-                  </dd>
-                </div>
-              </dl>
-              {isCurrentXlsxLoading && (
-                <p className="mt-2 text-muted-foreground">
-                  Carregando detalhes da versão...
-                </p>
               )}
+              {isReadOnly && <Badge variant="outline">Somente leitura</Badge>}
             </div>
-          ) : (
-            <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-              Nenhum XLSX foi carregado neste template ainda.
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isReadOnly || xlsxUploadMutation.isPending}
-              onClick={() => xlsxInputRef.current?.click()}
-            >
-              {xlsxUploadMutation.isPending ? 'Analisando...' : 'Enviar XLSX'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                isReadOnly ||
-                !activeXlsxWorkbench ||
-                isXlsxImmutable ||
-                xlsxValidateMutation.isPending
-              }
-              onClick={() => xlsxValidateMutation.mutate()}
-            >
-              {xlsxValidateMutation.isPending ? 'Validando...' : 'Validar'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                isReadOnly ||
-                !activeXlsxWorkbench ||
-                xlsxPreviewMutation.isPending
-              }
-              onClick={() => xlsxPreviewMutation.mutate()}
-            >
-              {xlsxPreviewMutation.isPending ? 'Solicitando...' : 'Prévia PDF'}
-            </Button>
+            <p className="mt-2 max-w-2xl text-pretty text-sm text-muted-foreground">
+              A planilha oficial do laboratório é o layout do certificado; cada
+              célula com placeholder vira um dado da calibração quando o
+              certificado é emitido.
+            </p>
           </div>
-
-          {xlsxPreviewQuery.data && (
-            <div className="rounded-md border bg-muted/20 p-2 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium">
-                  Prévia {xlsxPreviewQuery.data.item.status}
-                </span>
-                {xlsxPreviewQuery.data.pdfUrl && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    render={
-                      <a
-                        href={xlsxPreviewQuery.data.pdfUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      />
-                    }
-                  >
-                    Abrir PDF
-                  </Button>
-                )}
-              </div>
-              {xlsxPreviewQuery.data.item.error && (
-                <p className="mt-2 text-destructive">
-                  {xlsxPreviewQuery.data.item.error}
-                </p>
-              )}
-            </div>
+          {templateNameDirty && (
+            <Button
+              className={`${ACTION_BUTTON_CLASS} shrink-0`}
+              onClick={() => updateMutation.mutate()}
+              disabled={updateMutation.isPending || !draft.name.trim()}
+            >
+              {updateMutation.isPending ? 'Salvando...' : 'Salvar nome'}
+            </Button>
           )}
+        </div>
+      </Panel>
 
-          {activeXlsxWorkbench ? (
-            <div className="space-y-2">
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md border bg-muted/20 p-2">
-                  <dt className="text-muted-foreground">Abas</dt>
-                  <dd className="font-medium">
-                    {activeXlsxWorkbench.analysis.sheets.length}
-                  </dd>
-                </div>
-                <div className="rounded-md border bg-muted/20 p-2">
-                  <dt className="text-muted-foreground">Campos</dt>
-                  <dd className="font-medium">{placeholderRows.length}</dd>
-                </div>
-                <div className="rounded-md border bg-muted/20 p-2">
-                  <dt className="text-muted-foreground">Avisos</dt>
-                  <dd className="font-medium">
-                    {activeXlsxWorkbench.analysis.warnings.length}
-                  </dd>
-                </div>
-                <div className="rounded-md border bg-muted/20 p-2">
-                  <dt className="text-muted-foreground">Status</dt>
-                  <dd className="font-medium">
-                    {getXlsxStatusLabel(activeXlsxWorkbench.version.status)}
-                  </dd>
-                </div>
-              </dl>
-              {activeXlsxWorkbench.analysis.warnings.length > 0 && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
-                  {activeXlsxWorkbench.analysis.warnings
-                    .slice(0, 4)
-                    .map((warning) => (
+      {/* Template library controls */}
+      <Panel className="flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Template
+          </span>
+          <NativeSelect
+            value={effectiveSelectedTemplateKey ?? ''}
+            onChange={(event) => {
+              setSelectedTemplateKey(event.target.value)
+              setActiveStage(null)
+            }}
+            className="min-w-56"
+          >
+            {templates.map((template) => (
+              <NativeSelectOption
+                key={certificateTemplateKey(template)}
+                value={certificateTemplateKey(template)}
+              >
+                {template.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => duplicateMutation.mutate()}
+            disabled={
+              !canManageTemplates ||
+              !selectedTemplate?.id ||
+              duplicateMutation.isPending
+            }
+          >
+            Duplicar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDefaultMutation.mutate()}
+            disabled={
+              !canManageTemplates ||
+              !selectedTemplate?.id ||
+              selectedTemplate.isDefault ||
+              setDefaultMutation.isPending
+            }
+          >
+            Tornar padrão
+          </Button>
+        </div>
+
+        {canManageTemplates && (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              createMutation.mutate()
+            }}
+          >
+            <Input
+              value={newTemplateName}
+              onChange={(event) => setNewTemplateName(event.target.value)}
+              placeholder="Novo template"
+              disabled={createMutation.isPending}
+              className="h-9 w-44 sm:w-56"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              disabled={!newTemplateName.trim() || createMutation.isPending}
+            >
+              Criar
+            </Button>
+          </form>
+        )}
+      </Panel>
+
+      {!canManageTemplates && (
+        <div className="rounded-xl border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Templates personalizados ficam disponíveis a partir do plano
+          Professional. A prévia permanece disponível para revisão.
+        </div>
+      )}
+
+      {/* Lifecycle rail */}
+      <Panel className="p-2">
+        <nav
+          className="flex items-stretch gap-1 overflow-x-auto"
+          aria-label="Etapas do template de certificado"
+        >
+          {CERTIFICATE_STAGES.map((stage, index) => {
+            const done = stageDone[stage.id]
+            const blocked = stageBlocked[stage.id] && !done
+            const active = stage.id === effectiveStage
+
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                onClick={() => setActiveStage(stage.id)}
+                aria-current={active ? 'step' : undefined}
+                className={cn(
+                  'group flex min-w-[8.5rem] flex-1 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-[background-color,box-shadow,transform] active:scale-[0.99]',
+                  active
+                    ? 'bg-background shadow-[0_0_0_1px_rgba(15,23,42,0.10),0_10px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                    : 'hover:bg-background/60',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                    done
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : active
+                        ? 'bg-primary text-primary-foreground'
+                        : blocked
+                          ? 'bg-muted text-muted-foreground/50'
+                          : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={done ? CheckmarkCircle02Icon : stage.icon}
+                    className="size-4"
+                  />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Etapa {index + 1}
+                  </span>
+                  <span className="block truncate text-sm font-medium">
+                    {stage.label}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {stage.hint}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </nav>
+      </Panel>
+
+      {/* Active stage workspace */}
+      <div
+        className={cn(
+          'grid gap-4',
+          showTokenAside && 'lg:grid-cols-[1fr_minmax(280px,360px)]',
+        )}
+      >
+        <div className="min-w-0 space-y-4">
+          {effectiveStage === 'source' && (
+            <Panel className="p-5">
+              <PanelHeader
+                eyebrow="Etapa 1"
+                title="Planilha do certificado"
+                description="Envie a planilha oficial (.xlsx). Ela define o layout e vira a base versionada deste template."
+                action={
+                  <Button
+                    type="button"
+                    className={ACTION_BUTTON_CLASS}
+                    disabled={isReadOnly || xlsxUploadMutation.isPending}
+                    onClick={() => xlsxInputRef.current?.click()}
+                  >
+                    <HugeiconsIcon
+                      icon={CloudUploadIcon}
+                      className="mr-2 size-4"
+                    />
+                    {xlsxUploadMutation.isPending
+                      ? 'Analisando...'
+                      : currentXlsxVersion
+                        ? 'Enviar nova versão'
+                        : 'Enviar XLSX'}
+                  </Button>
+                }
+              />
+              <div className="mt-4">
+                {currentXlsxVersion ? (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          XLSX v{currentXlsxVersion.version}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Atualizado em{' '}
+                          {formatCertificateTemplateDateTime(
+                            currentXlsxVersion.updatedAt,
+                          )}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          currentXlsxVersion.status === 'PUBLISHED'
+                            ? 'default'
+                            : 'secondary'
+                        }
+                      >
+                        {getXlsxStatusLabel(currentXlsxVersion.status)}
+                      </Badge>
+                    </div>
+                    <StaggerGroup className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <StaggerItem>
+                        <SignalTile
+                          icon={Table01Icon}
+                          label="Abas"
+                          value={sheetCount}
+                          tone="neutral"
+                        />
+                      </StaggerItem>
+                      <StaggerItem>
+                        <SignalTile
+                          icon={Database02Icon}
+                          label="Campos detectados"
+                          value={fieldCount}
+                          tone="info"
+                        />
+                      </StaggerItem>
+                      <StaggerItem>
+                        <SignalTile
+                          icon={AlertCircleIcon}
+                          label="Avisos"
+                          value={warningCount}
+                          tone={warningCount > 0 ? 'warning' : 'ok'}
+                        />
+                      </StaggerItem>
+                    </StaggerGroup>
+                    {isCurrentXlsxLoading && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Carregando detalhes da versão...
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isReadOnly || xlsxUploadMutation.isPending}
+                    onClick={() => xlsxInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 px-6 py-12 text-center transition-colors hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <HugeiconsIcon icon={CloudUploadIcon} className="size-6" />
+                    </span>
+                    <span className="text-sm font-medium">
+                      Envie a planilha oficial do certificado
+                    </span>
+                    <span className="max-w-sm text-xs text-muted-foreground">
+                      Detectamos as abas, intervalos usados e placeholders{' '}
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                        {'{{...}}'}
+                      </code>{' '}
+                      para você vincular aos dados da calibração.
+                    </span>
+                  </button>
+                )}
+
+                {warningsPreview.length > 0 && (
+                  <div className="mt-4 space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                    <p className="font-medium">Avisos da análise</p>
+                    {warningsPreview.map((warning) => (
                       <p
                         key={`${warning.code}-${warning.sheet ?? ''}-${warning.cell ?? ''}`}
                       >
                         {warning.message}
                       </p>
                     ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-              Envie a planilha criada pelo laboratório para detectar abas,
-              intervalos usados e placeholders.
-            </div>
+                  </div>
+                )}
+              </div>
+            </Panel>
           )}
 
-          <XlsxAssignmentPanel
-            disabled={isReadOnly || !activeXlsxWorkbench}
-            isPublished={isXlsxPublished}
-            canPublish={canPublishXlsx}
-            hasRenderedPreview={Boolean(hasRenderedPreview)}
-            publishPending={xlsxPublishMutation.isPending}
-            assignmentPending={xlsxAssignmentMutation.isPending}
-            draft={assignmentDraft}
-            methods={methodsQuery.data ?? []}
-            services={servicesQuery.data ?? []}
-            units={unitsQuery.data ?? []}
-            optionsLoading={
-              methodsQuery.isLoading ||
-              servicesQuery.isLoading ||
-              unitsQuery.isLoading
-            }
-            optionsError={
-              methodsQuery.isError ||
-              servicesQuery.isError ||
-              unitsQuery.isError
-            }
-            onDraftChange={setAssignmentDraft}
-            onPublish={() => xlsxPublishMutation.mutate()}
-            onAssign={() => xlsxAssignmentMutation.mutate()}
-          />
-        </div>
+          {effectiveStage === 'mapping' &&
+            (hasWorkbench ? (
+              <Panel className="p-5">
+                <PanelHeader
+                  eyebrow="Etapa 2"
+                  title="Mapa de campos"
+                  description="Cada placeholder da planilha aponta para um dado da calibração. Copie tokens da biblioteca ao lado para preencher as células."
+                  action={
+                    <Button
+                      type="button"
+                      className={ACTION_BUTTON_CLASS}
+                      disabled={
+                        isReadOnly ||
+                        !activeXlsxWorkbench ||
+                        isXlsxImmutable ||
+                        xlsxBindingSaveMutation.isPending
+                      }
+                      onClick={() => xlsxBindingSaveMutation.mutate()}
+                    >
+                      {xlsxBindingSaveMutation.isPending
+                        ? 'Salvando...'
+                        : 'Salvar vínculos'}
+                    </Button>
+                  }
+                />
 
-        <div className="min-w-0 space-y-3">
-          <TokenLibrary
-            search={tokenSearch}
-            onSearchChange={setTokenSearch}
-            activeGroup={activeTokenGroup}
-            onActiveGroupChange={setActiveTokenGroup}
-            tokens={filteredTokens}
-            usedFieldPaths={usedFieldPaths}
-            onCopyToken={copyToken}
-          />
+                <StaggerGroup className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StaggerItem>
+                    <SignalTile
+                      icon={Table01Icon}
+                      label="Detectados"
+                      value={detectedCount}
+                      tone="neutral"
+                    />
+                  </StaggerItem>
+                  <StaggerItem>
+                    <SignalTile
+                      icon={Link01Icon}
+                      label="Vinculados"
+                      value={`${boundCount}/${scalarBindings.length}`}
+                      tone={fullyBound ? 'ok' : 'info'}
+                    />
+                  </StaggerItem>
+                  <StaggerItem>
+                    <SignalTile
+                      icon={AlertCircleIcon}
+                      label="Obrigatórios pendentes"
+                      value={requiredPending}
+                      tone={requiredPending > 0 ? 'critical' : 'ok'}
+                    />
+                  </StaggerItem>
+                  <StaggerItem>
+                    <SignalTile
+                      icon={AlertCircleIcon}
+                      label="Avisos"
+                      value={warningCount}
+                      tone={warningCount > 0 ? 'warning' : 'neutral'}
+                    />
+                  </StaggerItem>
+                </StaggerGroup>
 
-          <div className="rounded-md border">
-            <div className="grid grid-cols-[1.1fr_80px_1fr] border-b bg-muted/30 px-3 py-2 text-xs font-medium">
-              <span>Aba detectada</span>
-              <span>Célula</span>
-              <span>Placeholder</span>
-            </div>
-            <div className="max-h-40 overflow-auto">
-              {placeholderRows.length > 0 ? (
-                placeholderRows.slice(0, 40).map((placeholder) => (
-                  <div
-                    key={`${placeholder.sheet}:${placeholder.cell}:${placeholder.fieldPath}`}
-                    className="grid grid-cols-[1.1fr_80px_1fr] gap-2 border-b px-3 py-2 text-xs last:border-0"
-                  >
-                    <span className="truncate">{placeholder.sheet}</span>
-                    <span className="font-mono">{placeholder.cell}</span>
-                    <span className="truncate font-mono">
-                      {placeholder.fieldPath}
-                    </span>
+                <div className="mt-4 overflow-hidden rounded-xl border">
+                  <div className="grid grid-cols-[1fr_72px_1.1fr_120px_80px] gap-2 border-b bg-muted/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span>Aba</span>
+                    <span>Célula</span>
+                    <span>Campo de dados</span>
+                    <span>Formato</span>
+                    <span>Obrig.</span>
                   </div>
-                ))
-              ) : (
-                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  Nenhum placeholder detectado.
+                  <div className="max-h-[28rem] overflow-auto">
+                    {scalarBindings.length > 0 ? (
+                      scalarBindings.map((binding) => (
+                        <div
+                          key={binding.id}
+                          className="grid gap-2 border-b px-3 py-2 text-xs last:border-0 md:grid-cols-[1fr_72px_1.1fr_120px_80px]"
+                        >
+                          <Input
+                            value={binding.sheet}
+                            disabled={isReadOnly || isXlsxImmutable}
+                            className="h-8 text-xs"
+                            onChange={(event) =>
+                              updateScalarBinding(binding.id, {
+                                sheet: event.target.value,
+                              })
+                            }
+                          />
+                          <Input
+                            value={binding.cell}
+                            disabled={isReadOnly || isXlsxImmutable}
+                            className="h-8 font-mono text-xs"
+                            onChange={(event) =>
+                              updateScalarBinding(binding.id, {
+                                cell: event.target.value,
+                              })
+                            }
+                          />
+                          <Input
+                            value={binding.fieldPath}
+                            disabled={isReadOnly || isXlsxImmutable}
+                            className={cn(
+                              'h-8 font-mono text-xs',
+                              binding.required &&
+                                !binding.fieldPath.trim() &&
+                                'ring-1 ring-destructive/50',
+                            )}
+                            placeholder="ex.: asset.serialNumber"
+                            onChange={(event) =>
+                              updateScalarBinding(binding.id, {
+                                fieldPath: event.target.value,
+                              })
+                            }
+                          />
+                          <Input
+                            value={binding.formatter ?? ''}
+                            placeholder="formato"
+                            disabled={isReadOnly || isXlsxImmutable}
+                            className="h-8 text-xs"
+                            onChange={(event) =>
+                              updateScalarBinding(binding.id, {
+                                formatter: event.target.value || undefined,
+                              })
+                            }
+                          />
+                          <label className="flex items-center gap-2">
+                            <Checkbox
+                              checked={Boolean(binding.required)}
+                              disabled={isReadOnly || isXlsxImmutable}
+                              onCheckedChange={(checked) =>
+                                updateScalarBinding(binding.id, {
+                                  required: Boolean(checked),
+                                })
+                              }
+                            />
+                            <span>Obrig.</span>
+                          </label>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-10 text-center text-xs text-muted-foreground">
+                        Nenhum placeholder gerou vínculos. Envie uma planilha com
+                        células no formato{' '}
+                        <code className="font-mono">{'{{campo}}'}</code>.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+              </Panel>
+            ) : (
+              <StageLocked
+                message="Envie uma planilha na etapa Planilha para liberar o mapa de campos."
+                onGoToSource={goToSource}
+              />
+            ))}
 
-          <div className="rounded-md border">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
-              <span className="text-xs font-medium">Vínculos escalares</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={
-                  isReadOnly ||
-                  !activeXlsxWorkbench ||
-                  isXlsxImmutable ||
-                  xlsxBindingSaveMutation.isPending
-                }
-                onClick={() => xlsxBindingSaveMutation.mutate()}
-              >
-                {xlsxBindingSaveMutation.isPending
-                  ? 'Salvando...'
-                  : 'Salvar vínculos'}
-              </Button>
-            </div>
-            <div className="max-h-64 overflow-auto">
-              {scalarBindings.length > 0 ? (
-                scalarBindings.map((binding) => (
-                  <div
-                    key={binding.id}
-                    className="grid gap-2 border-b px-3 py-2 text-xs last:border-0 md:grid-cols-[1fr_72px_1.1fr_120px_80px]"
-                  >
-                    <Input
-                      value={binding.sheet}
-                      disabled={isReadOnly || isXlsxImmutable}
-                      className="h-8 text-xs"
-                      onChange={(event) =>
-                        updateScalarBinding(binding.id, {
-                          sheet: event.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      value={binding.cell}
-                      disabled={isReadOnly || isXlsxImmutable}
-                      className="h-8 font-mono text-xs"
-                      onChange={(event) =>
-                        updateScalarBinding(binding.id, {
-                          cell: event.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      value={binding.fieldPath}
-                      disabled={isReadOnly || isXlsxImmutable}
-                      className="h-8 font-mono text-xs"
-                      onChange={(event) =>
-                        updateScalarBinding(binding.id, {
-                          fieldPath: event.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      value={binding.formatter ?? ''}
-                      placeholder="formatter"
-                      disabled={isReadOnly || isXlsxImmutable}
-                      className="h-8 text-xs"
-                      onChange={(event) =>
-                        updateScalarBinding(binding.id, {
-                          formatter: event.target.value || undefined,
-                        })
-                      }
-                    />
-                    <label className="flex items-center gap-2">
-                      <Checkbox
-                        checked={Boolean(binding.required)}
-                        disabled={isReadOnly || isXlsxImmutable}
-                        onCheckedChange={(checked) =>
-                          updateScalarBinding(binding.id, {
-                            required: Boolean(checked),
-                          })
+          {effectiveStage === 'verify' &&
+            (hasWorkbench ? (
+              <Panel className="p-5">
+                <PanelHeader
+                  eyebrow="Etapa 3"
+                  title="Verificação"
+                  description="Valide a planilha e gere uma prévia em PDF com dados de exemplo — é como você confere o certificado antes de publicar."
+                  action={
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          isReadOnly ||
+                          !activeXlsxWorkbench ||
+                          isXlsxImmutable ||
+                          xlsxValidateMutation.isPending
                         }
-                      />
-                      <span>Obrig.</span>
-                    </label>
-                  </div>
-                ))
-              ) : (
-                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  Envie um XLSX com placeholders para gerar vínculos iniciais.
+                        onClick={() => xlsxValidateMutation.mutate()}
+                      >
+                        <HugeiconsIcon
+                          icon={DocumentValidationIcon}
+                          className="mr-2 size-4"
+                        />
+                        {xlsxValidateMutation.isPending
+                          ? 'Validando...'
+                          : 'Validar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        className={ACTION_BUTTON_CLASS}
+                        disabled={
+                          isReadOnly ||
+                          !activeXlsxWorkbench ||
+                          xlsxPreviewMutation.isPending
+                        }
+                        onClick={() => xlsxPreviewMutation.mutate()}
+                      >
+                        {xlsxPreviewMutation.isPending
+                          ? 'Gerando...'
+                          : 'Gerar prévia PDF'}
+                      </Button>
+                    </div>
+                  }
+                />
+
+                <div className="mt-4">
+                  {xlsxPreviewQuery.data ? (
+                    <div className="rounded-xl border p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={hasRenderedPreview ? 'default' : 'secondary'}
+                          >
+                            Prévia {xlsxPreviewQuery.data.item.status}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {hasRenderedPreview
+                              ? 'PDF pronto para conferência.'
+                              : 'Processando a prévia...'}
+                          </span>
+                        </div>
+                        {xlsxPreviewQuery.data.pdfUrl && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            render={
+                              <a
+                                href={xlsxPreviewQuery.data.pdfUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              />
+                            }
+                          >
+                            <HugeiconsIcon
+                              icon={LinkSquare02Icon}
+                              className="mr-2 size-4"
+                            />
+                            Abrir PDF
+                          </Button>
+                        )}
+                      </div>
+                      {xlsxPreviewQuery.data.item.error && (
+                        <p className="mt-3 text-sm text-destructive">
+                          {xlsxPreviewQuery.data.item.error}
+                        </p>
+                      )}
+                    </div>
+                  ) : isXlsxVerified ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border p-4">
+                      <Badge variant="default">
+                        {getXlsxStatusLabel(xlsxStatus)}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        Esta versão já passou pela verificação. Gere uma nova
+                        prévia se quiser reconferir o resultado.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                      Gere uma prévia em PDF para conferir o certificado com
+                      dados de exemplo.
+                    </div>
+                  )}
+
+                  {!isXlsxVerified && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Uma prévia concluída é necessária para liberar a
+                      publicação.
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </Panel>
+            ) : (
+              <StageLocked
+                message="Envie uma planilha antes de validar e gerar a prévia."
+                onGoToSource={goToSource}
+              />
+            ))}
+
+          {effectiveStage === 'publish' &&
+            (hasWorkbench ? (
+              <XlsxAssignmentPanel
+                disabled={isReadOnly || !activeXlsxWorkbench}
+                isPublished={isXlsxPublished}
+                canPublish={canPublishXlsx}
+                hasRenderedPreview={Boolean(hasRenderedPreview)}
+                publishPending={xlsxPublishMutation.isPending}
+                assignmentPending={xlsxAssignmentMutation.isPending}
+                draft={assignmentDraft}
+                methods={methodsQuery.data ?? []}
+                services={servicesQuery.data ?? []}
+                units={unitsQuery.data ?? []}
+                optionsLoading={
+                  methodsQuery.isLoading ||
+                  servicesQuery.isLoading ||
+                  unitsQuery.isLoading
+                }
+                optionsError={
+                  methodsQuery.isError ||
+                  servicesQuery.isError ||
+                  unitsQuery.isError
+                }
+                onDraftChange={setAssignmentDraft}
+                onPublish={() => xlsxPublishMutation.mutate()}
+                onAssign={() => xlsxAssignmentMutation.mutate()}
+              />
+            ) : (
+              <StageLocked
+                message="Envie e verifique uma planilha antes de publicar e atribuir."
+                onGoToSource={goToSource}
+              />
+            ))}
         </div>
+
+        {showTokenAside && (
+          <aside className="min-w-0">
+            <TokenLibrary
+              search={tokenSearch}
+              onSearchChange={setTokenSearch}
+              activeGroup={activeTokenGroup}
+              onActiveGroupChange={setActiveTokenGroup}
+              tokens={filteredTokens}
+              usedFieldPaths={usedFieldPaths}
+              onCopyToken={copyToken}
+            />
+          </aside>
+        )}
       </div>
     </div>
+  )
+}
+
+function StageLocked({
+  message,
+  onGoToSource,
+}: {
+  message: string
+  onGoToSource: () => void
+}) {
+  return (
+    <Panel className="flex flex-col items-center gap-3 p-10 text-center">
+      <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <HugeiconsIcon icon={CloudUploadIcon} className="size-6" />
+      </span>
+      <p className="max-w-sm text-sm text-muted-foreground">{message}</p>
+      <Button variant="outline" size="sm" onClick={onGoToSource}>
+        Ir para Planilha
+      </Button>
+    </Panel>
   )
 }
 
@@ -1082,15 +1392,18 @@ function XlsxAssignmentPanel({
   }
 
   return (
-    <section className="rounded-lg bg-background shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_10px_28px_rgba(0,0,0,0.05)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.10)]">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b px-3 py-3">
+    <Panel className="overflow-hidden p-0">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold">Publicação e atribuição</h2>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Etapa 4
+            </p>
             <Badge variant={isPublished ? 'default' : 'secondary'}>
               {isPublished ? 'Publicado' : 'Não publicado'}
             </Badge>
           </div>
+          <h2 className="text-base font-semibold">Publicação e atribuição</h2>
           <p className="text-xs text-muted-foreground">
             Defina quais calibrações usam esta versão XLSX quando o certificado
             for emitido.
@@ -1103,6 +1416,7 @@ function XlsxAssignmentPanel({
           disabled={disabled || isPublished || !canPublish || publishPending}
           onClick={onPublish}
         >
+          <HugeiconsIcon icon={RocketIcon} className="mr-2 size-4" />
           {publishPending
             ? 'Publicando...'
             : isPublished
@@ -1112,7 +1426,7 @@ function XlsxAssignmentPanel({
       </div>
 
       {!isPublished && (
-        <div className="border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <div className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
           {hasRenderedPreview
             ? 'Prévia concluída. Publique a versão para liberar a atribuição.'
             : 'Valide o XLSX e gere uma prévia PDF concluída antes de publicar.'}
@@ -1120,14 +1434,14 @@ function XlsxAssignmentPanel({
       )}
 
       {optionsError && (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
           Não foi possível carregar todos os métodos, serviços ou unidades.
           Atualize a página e tente novamente.
         </div>
       )}
 
       <form
-        className="space-y-3 px-3 py-3"
+        className="space-y-3 px-4 py-4"
         onSubmit={(event) => {
           event.preventDefault()
           onAssign()
@@ -1202,9 +1516,7 @@ function XlsxAssignmentPanel({
               inputMode="numeric"
               value={draft.priority}
               disabled={formDisabled}
-              onChange={(event) =>
-                updateDraft({ priority: event.target.value })
-              }
+              onChange={(event) => updateDraft({ priority: event.target.value })}
               className="h-9 text-xs tabular-nums"
             />
           </label>
@@ -1221,16 +1533,12 @@ function XlsxAssignmentPanel({
               Maior prioridade vence
             </span>
           </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={formDisabled || optionsLoading}
-          >
+          <Button type="submit" size="sm" disabled={formDisabled || optionsLoading}>
             {assignmentPending ? 'Atribuindo...' : 'Atribuir versão'}
           </Button>
         </div>
       </form>
-    </section>
+    </Panel>
   )
 }
 
@@ -1278,19 +1586,19 @@ function TokenLibrary({
   }
 
   return (
-    <section className="overflow-hidden rounded-lg bg-background shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_10px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.10)]">
-      <div className="grid gap-3 border-b bg-[linear-gradient(135deg,hsl(var(--muted))_0%,hsl(var(--background))_68%)] px-3 py-3 md:grid-cols-[1fr_280px] md:items-center">
+    <Panel className="overflow-hidden p-0 lg:sticky lg:top-4">
+      <div className="grid gap-3 border-b bg-[linear-gradient(135deg,hsl(var(--muted))_0%,hsl(var(--background))_68%)] px-3 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-[0_6px_18px_hsl(var(--primary)/0.24)]">
               <HugeiconsIcon icon={BookOpen02Icon} className="size-4" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-wrap-balance text-sm font-semibold">
+              <h2 className="text-balance text-sm font-semibold">
                 Biblioteca de tokens
               </h2>
               <p className="text-xs text-muted-foreground">
-                Copie um token e cole na célula do XLSX no formato{' '}
+                Copie um token e cole na célula do XLSX, ex.{' '}
                 <code className="rounded bg-background px-1 py-0.5 font-mono text-[11px] text-foreground">
                   {'{{asset.serialNumber}}'}
                 </code>
@@ -1346,7 +1654,7 @@ function TokenLibrary({
         </div>
       </div>
 
-      <div className="max-h-72 overflow-auto">
+      <div className="max-h-[32rem] overflow-auto">
         {tokens.length > 0 ? (
           <div className="divide-y">
             {tokens.map((token) => {
@@ -1355,35 +1663,38 @@ function TokenLibrary({
               return (
                 <div
                   key={token.path}
-                  className="grid gap-2 px-3 py-2.5 transition-[background-color] hover:bg-muted/40 md:grid-cols-[minmax(180px,1fr)_minmax(220px,1.2fr)_96px]"
+                  className="space-y-2 px-3 py-2.5 transition-[background-color] hover:bg-muted/40"
                 >
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <HugeiconsIcon
-                        icon={isUsed ? Database02Icon : CodeSquareIcon}
-                        className="size-4 shrink-0 text-muted-foreground"
-                      />
-                      <span className="truncate text-sm font-medium">
-                        {token.label}
-                      </span>
-                      {isUsed && (
-                        <Badge
-                          variant="secondary"
-                          className="h-4 px-1 text-[10px]"
-                        >
-                          Em uso
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {token.description}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <HugeiconsIcon
+                      icon={isUsed ? Database02Icon : CodeSquareIcon}
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                    <span className="truncate text-sm font-medium">
+                      {token.label}
+                    </span>
+                    {isUsed && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1 text-[10px]"
+                      >
+                        Em uso
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="ml-auto font-normal text-[10px]"
+                    >
+                      {token.kind}
+                    </Badge>
                   </div>
-
+                  <p className="text-xs text-muted-foreground">
+                    {token.description}
+                  </p>
                   <button
                     type="button"
                     onClick={() => void handleCopyToken(token.path)}
-                    className="group/token flex min-h-10 min-w-0 items-center justify-between gap-2 rounded-md bg-primary/10 px-2 text-left font-mono text-xs text-primary ring-1 ring-primary/15 transition-[background-color,box-shadow] hover:bg-primary/15 active:bg-primary/20"
+                    className="group/token flex min-h-10 w-full min-w-0 items-center justify-between gap-2 rounded-md bg-primary/10 px-2 text-left font-mono text-xs text-primary ring-1 ring-primary/15 transition-[background-color,box-shadow] hover:bg-primary/15 active:bg-primary/20"
                     aria-label={
                       isCopied
                         ? `Token ${token.path} copiado`
@@ -1401,17 +1712,6 @@ function TokenLibrary({
                       )}
                     />
                   </button>
-
-                  <div className="flex items-center justify-between gap-2 md:justify-end">
-                    <Badge variant="outline" className="font-normal">
-                      {token.kind}
-                    </Badge>
-                    {token.example && (
-                      <span className="max-w-28 truncate text-right text-xs text-muted-foreground">
-                        {token.example}
-                      </span>
-                    )}
-                  </div>
                 </div>
               )
             })}
@@ -1422,16 +1722,17 @@ function TokenLibrary({
           </div>
         )}
       </div>
-    </section>
+    </Panel>
   )
 }
 
 function DesignerSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-28 w-full" />
       <Skeleton className="h-14 w-full" />
-      <Skeleton className="h-[760px] w-full" />
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-[560px] w-full" />
     </div>
   )
 }

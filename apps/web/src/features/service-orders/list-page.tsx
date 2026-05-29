@@ -27,13 +27,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -98,7 +92,9 @@ const statusVariants: Record<
   warranty_return: 'outline',
 }
 
-function parseServiceOrderStatus(value: string | null): ServiceOrderStatus | '' {
+function parseServiceOrderStatus(
+  value: string | null,
+): ServiceOrderStatus | '' {
   switch (value) {
     case 'opened':
     case 'awaiting_tech_evaluation':
@@ -289,117 +285,113 @@ export function ServiceOrdersPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar ordens de serviço: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar ordens de serviço: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Ordens de Serviço</CardTitle>
-            <CardDescription>
-              Recebimento, avaliação, orçamento, execução e entrega de
-              instrumentos
-            </CardDescription>
-          </div>
-          <Button
-            render={
-              <Link to="/dashboard/service-orders/new">
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                Nova OS
-              </Link>
-            }
-          />
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSearch} className="flex gap-4 mb-6">
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por OS, cliente, instrumento ou série"
-              className="max-w-xs"
-            />
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(parseServiceOrderStatus(value))
-                setPage(1)
-              }}
-            >
-              <SelectTrigger className="w-56">
-                <span>
-                  {statusFilter ? statusLabels[statusFilter] : 'Todos'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
-                {Object.entries(statusLabels).map(([status, label]) => (
-                  <SelectItem key={status} value={status}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" variant="secondary">
-              Buscar
-            </Button>
-          </form>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Atendimento
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Ordens de serviço
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Recebimento, avaliação, orçamento, execução e entrega de
+            instrumentos.
+          </p>
+        </div>
+        <Button
+          render={<Link to="/dashboard/service-orders/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Nova OS
+        </Button>
+      </div>
 
-          {!isLoading && data?.data.length === 0 ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={ClipboardIcon} />
-                </EmptyMedia>
-                <EmptyTitle>Nenhuma ordem de serviço encontrada</EmptyTitle>
-                <EmptyDescription>
-                  {search || statusFilter
-                    ? 'Nenhuma OS encontrada para os filtros aplicados.'
-                    : 'As ordens de serviço abertas no recebimento aparecerão aqui.'}
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                {search || statusFilter ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearch('')
-                      setStatusFilter('')
-                      setPage(1)
-                    }}
-                  >
-                    Limpar filtros
-                  </Button>
-                ) : (
-                  <Button render={<Link to="/dashboard/service-orders/new" />}>
-                    <HugeiconsIcon
-                      icon={PlusSignIcon}
-                      className="mr-2 size-4"
-                    />
-                    Nova OS
-                  </Button>
-                )}
-              </EmptyContent>
-            </Empty>
-          ) : (
-            <DataTable
-              columns={serviceOrderColumns}
-              data={data?.data ?? []}
-              isLoading={isLoading}
-              pagination={data?.pagination}
-              onPageChange={setPage}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <Panel className="p-4 sm:p-5">
+        <form onSubmit={handleSearch} className="mb-6 flex gap-4">
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por OS, cliente, instrumento ou série"
+            className="max-w-xs"
+          />
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(parseServiceOrderStatus(value))
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="w-56">
+              <span>{statusFilter ? statusLabels[statusFilter] : 'Todos'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos</SelectItem>
+              {Object.entries(statusLabels).map(([status, label]) => (
+                <SelectItem key={status} value={status}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button type="submit" variant="secondary">
+            Buscar
+          </Button>
+        </form>
+
+        {!isLoading && data?.data.length === 0 ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <HugeiconsIcon icon={ClipboardIcon} />
+              </EmptyMedia>
+              <EmptyTitle>Nenhuma ordem de serviço encontrada</EmptyTitle>
+              <EmptyDescription>
+                {search || statusFilter
+                  ? 'Nenhuma OS encontrada para os filtros aplicados.'
+                  : 'As ordens de serviço abertas no recebimento aparecerão aqui.'}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              {search || statusFilter ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearch('')
+                    setStatusFilter('')
+                    setPage(1)
+                  }}
+                >
+                  Limpar filtros
+                </Button>
+              ) : (
+                <Button render={<Link to="/dashboard/service-orders/new" />}>
+                  <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                  Nova OS
+                </Button>
+              )}
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <DataTable
+            columns={serviceOrderColumns}
+            data={data?.data ?? []}
+            isLoading={isLoading}
+            pagination={data?.pagination}
+            onPageChange={setPage}
+          />
+        )}
+      </Panel>
     </div>
   )
 }

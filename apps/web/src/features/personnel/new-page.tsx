@@ -12,13 +12,6 @@ import {
 } from '@/features/personnel/forms'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   Field,
   FieldGroup,
   FieldLabel,
@@ -31,6 +24,27 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
+
+const COMPETENCE_LIFECYCLE = [
+  {
+    title: 'Solicitada',
+    description: 'Você abre o pedido de qualificação para um escopo.',
+  },
+  {
+    title: 'Treinamento',
+    description: 'Treinamentos são atribuídos e concluídos.',
+  },
+  {
+    title: 'Avaliação',
+    description: 'A eficácia da capacitação é avaliada.',
+  },
+  {
+    title: 'Ativa',
+    description: 'O técnico fica habilitado para o escopo.',
+  },
+]
 
 export function NewCompetencePage() {
   const navigate = useNavigate()
@@ -90,16 +104,22 @@ export function NewCompetencePage() {
   )
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nova Solicitação de Competência</CardTitle>
-          <CardDescription>
-            ISO 17025 Cláusula 6.2.3 - Solicite a qualificação de um técnico
-            para um tipo de instrumento
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="space-y-6">
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Pessoal
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Nova solicitação de competência
+        </h1>
+        <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          Inicie o ciclo de qualificação de um técnico para um escopo de
+          calibração.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <Panel className="p-5">
           <form onSubmit={handleSubmit} className="space-y-6">
             <FieldGroup>
               {/* Technician */}
@@ -137,7 +157,7 @@ export function NewCompetencePage() {
 
               {/* Asset Type */}
               <Field>
-                <FieldLabel>Tipo de Instrumento (opcional)</FieldLabel>
+                <FieldLabel>Tipo de instrumento (opcional)</FieldLabel>
                 <Select
                   value={formData.assetTypeId}
                   onValueChange={(v) =>
@@ -173,7 +193,7 @@ export function NewCompetencePage() {
 
               {/* Scope Description */}
               <Field>
-                <FieldLabel>Descrição do Escopo *</FieldLabel>
+                <FieldLabel>Descrição do escopo *</FieldLabel>
                 <Textarea
                   value={formData.scopeDescription}
                   onChange={(e) =>
@@ -191,7 +211,7 @@ export function NewCompetencePage() {
               </Field>
             </FieldGroup>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 border-t pt-5">
               <Button
                 type="button"
                 variant="outline"
@@ -199,13 +219,64 @@ export function NewCompetencePage() {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                className={ACTION_BUTTON_CLASS}
+                disabled={createMutation.isPending}
+              >
                 {createMutation.isPending ? 'Criando...' : 'Criar Solicitação'}
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </Panel>
+
+        <aside className="space-y-4">
+          <Panel className="p-5">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Como funciona
+            </p>
+            <h2 className="mt-0.5 text-base font-semibold">
+              Ciclo de qualificação
+            </h2>
+            <ol className="mt-4 space-y-3">
+              {COMPETENCE_LIFECYCLE.map((step, index) => {
+                const isFirst = index === 0
+                return (
+                  <li key={step.title} className="flex gap-3">
+                    <span
+                      className={cn(
+                        'flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-medium tabular-nums',
+                        isFirst
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {step.title}
+                        {isFirst && (
+                          <span className="ml-1.5 text-xs font-normal text-primary">
+                            você está aqui
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {step.description}
+                      </p>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+            <div className="mt-4 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+              Descreva o escopo como aparece no certificado — faixa, exatidão e
+              tipo de instrumento.
+            </div>
+          </Panel>
+        </aside>
+      </div>
     </div>
   )
 }

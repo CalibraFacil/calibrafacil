@@ -186,12 +186,26 @@ function CommandShortcut({
   )
 }
 
+function CommandFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="command-footer"
+      className={cn(
+        'text-muted-foreground -mx-1 -mb-1 mt-1 flex items-center justify-between gap-3 border-t bg-muted/30 px-3 py-2 text-xs',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
 export {
   Command,
   CommandDialog,
   CommandInput,
   CommandList,
   CommandEmpty,
+  CommandFooter,
   CommandGroup,
   CommandItem,
   CommandShortcut,

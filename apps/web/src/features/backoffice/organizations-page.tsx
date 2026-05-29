@@ -84,9 +84,14 @@ export function BackofficeOrganizationsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Organizações</h1>
-        <p className="text-sm text-muted-foreground">
+      <div className="min-w-0">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Backoffice
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Organizações
+        </h1>
+        <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
           Visão consolidada das contas LAB, unidades, integrações e suporte.
         </p>
       </div>

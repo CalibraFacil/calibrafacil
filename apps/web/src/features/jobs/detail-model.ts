@@ -205,7 +205,7 @@ export const REVIEW_ACTION_BUTTON_CLASS =
   'min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform]'
 
 export const REVIEW_SURFACE_CLASS =
-  'min-w-0 rounded-lg bg-card shadow-[0_1px_2px_rgba(15,23,42,0.06),0_8px_24px_rgba(15,23,42,0.04)] ring-1 ring-black/5'
+  'min-w-0 rounded-2xl bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10'
 
 export const PRIORITY_REVIEW_FIELD_KEYS = [
   'pontos_indicacao',
@@ -440,6 +440,15 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
   const { measurementFields, nonAssetDataFields } =
     getApprovedReviewMeasurementFields(methodSnapshot.dataFields)
 
+  const aposMargins = numericValues(displayResults?.margem_conformidade_apos)
+  const pointsTotal = aposMargins.length
+  const pointsWithin = aposMargins.filter((margin) => margin >= 0).length
+  const expandedUncertainty = formatExpandedUncertainty(
+    displayResults,
+    methodSnapshot.formulas,
+    displayUnitFor,
+  )
+
   return {
     validations,
     assetBaseMeasurementUnit,
@@ -456,6 +465,9 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
     ],
     nonAssetDataFields,
     measurementFields,
+    pointsTotal,
+    pointsWithin,
+    expandedUncertainty,
   }
 }
 
@@ -588,6 +600,124 @@ export function buildAcceptanceItems({
   })
 }
 
+export type JobVerdictLevel =
+  | 'conforme'
+  | 'nao_conforme'
+  | 'atencao'
+  | 'incompleto'
+
+export type JobVerdict = {
+  level: JobVerdictLevel
+  pointsTotal: number
+  pointsWithin: number
+  pointsOutOfTolerance: number
+  criteriaTotal: number
+  criteriaPassed: number
+  criteriaFailed: number
+  criteriaWarning: number
+  environment: 'within' | 'out' | 'unknown'
+  standardsCount: number
+  hasData: boolean
+  hasResults: boolean
+  expandedUncertainty: string | null
+}
+
+/**
+ * Formats the worst-case expanded uncertainty (U) from stored results, so the
+ * verdict band can surface a single conservative number. Returns null when no
+ * uncertainty was computed for the job.
+ */
+export function formatExpandedUncertainty(
+  displayResults: Record<string, unknown> | null | undefined,
+  formulas: ReviewFormula[],
+  displayUnitFor: (unit?: string | null) => string | undefined,
+): string | null {
+  for (const key of ['incerteza_expandida_apos', 'incerteza_expandida_antes']) {
+    const values = numericValues(displayResults?.[key])
+    if (values.length === 0) continue
+
+    const max = Math.max(...values.map((value) => Math.abs(value)))
+    const unit = displayUnitFor(
+      formulas.find((formula) => formula.outputKey === key)?.unit,
+    )
+    return `±${formatCalibrationValue(max)}${unit ? ` ${unit}` : ''}`
+  }
+
+  return null
+}
+
+function marginIsWithin(margin: number | null): boolean {
+  return margin != null && margin >= 0
+}
+
+/**
+ * Derives the at-a-glance approval verdict from data already computed for the
+ * review screen. Conformance is decided by acceptance criteria and per-point
+ * tolerance margins; environment/warnings only downgrade a pass to "atenção".
+ */
+export function buildJobVerdictModel(input: {
+  acceptanceItems: AcceptanceItem[]
+  adjustmentSummaryRows: AdjustmentSummaryRow[]
+  reviewHasData: boolean
+  reviewHasResults: boolean
+  standardsCount: number
+  environmentWithinLimits: boolean | null | undefined
+  expandedUncertainty: string | null
+}): JobVerdict {
+  const pointMargins = input.adjustmentSummaryRows.map(
+    (row) => row.afterMargin ?? row.beforeMargin,
+  )
+  const pointsTotal = pointMargins.length
+  const pointsWithin = pointMargins.filter(marginIsWithin).length
+  const pointsOutOfTolerance = pointMargins.filter(
+    (margin) => margin != null && margin < 0,
+  ).length
+
+  const criteriaFailed = input.acceptanceItems.filter(
+    (item) => item.status === 'error',
+  ).length
+  const criteriaWarning = input.acceptanceItems.filter(
+    (item) => item.status === 'warning',
+  ).length
+  const criteriaPassed = input.acceptanceItems.filter(
+    (item) => item.status === 'ok',
+  ).length
+
+  const environment =
+    input.environmentWithinLimits == null
+      ? 'unknown'
+      : input.environmentWithinLimits
+        ? 'within'
+        : 'out'
+
+  let level: JobVerdictLevel
+  if (!input.reviewHasData || !input.reviewHasResults) {
+    level = 'incompleto'
+  } else if (criteriaFailed > 0 || pointsOutOfTolerance > 0) {
+    level = 'nao_conforme'
+  } else if (criteriaWarning > 0 || environment === 'out') {
+    level = 'atencao'
+  } else {
+    level = 'conforme'
+  }
+
+  return {
+    level,
+    pointsTotal,
+    pointsWithin,
+    pointsOutOfTolerance,
+    criteriaTotal: input.acceptanceItems.length,
+    criteriaPassed,
+    criteriaFailed,
+    criteriaWarning,
+    environment,
+    standardsCount: input.standardsCount,
+    hasData: input.reviewHasData,
+    hasResults: input.reviewHasResults,
+    expandedUncertainty: input.expandedUncertainty,
+  }
+}
+
 export function buildJobReviewModel(
   job: ReviewJobDetailData | null | undefined,
 ) {
@@ -690,6 +820,21 @@ export function buildJobReviewModel(
     ? [...acceptanceItems, environmentalWarning]
     : acceptanceItems
 
+  const expandedUncertainty = formatExpandedUncertainty(
+    displayReviewResults,
+    reviewFormulas,
+    displayUnitForReview,
+  )
+  const verdict = buildJobVerdictModel({
+    acceptanceItems,
+    adjustmentSummaryRows,
+    reviewHasData,
+    reviewHasResults,
+    standardsCount: reviewStandards.length,
+    environmentWithinLimits: job?.environmentalSnapshot?.withinLimits ?? null,
+    expandedUncertainty,
+  })
+
   return {
     reviewDataFields,
     reviewFormulas,
@@ -706,5 +851,7 @@ export function buildJobReviewModel(
     adjustmentSummaryRows,
     acceptanceItems,
     quickAlertItems,
+    expandedUncertainty,
+    verdict,
   }
 }

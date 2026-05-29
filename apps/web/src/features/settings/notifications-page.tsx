@@ -1,16 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Panel, PanelHeader } from '@/components/instrument-panel'
 import { calibraApi } from '@/utils/api'
 import { useNotificationPreferencesData } from '@/features/settings/queries'
 
@@ -382,51 +375,43 @@ export function NotificationsSettingsPage() {
     (s) => s.category === 'billing',
   )
 
+  const groups = [
+    { title: 'Operacionais', items: operationalSettings },
+    { title: 'Conformidade', items: complianceSettings },
+    { title: 'Qualidade', items: qualitySettings },
+    { title: 'Pagamentos', items: billingSettings },
+  ]
+
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-72" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex justify-between items-center">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-64" />
-                </div>
-                <Skeleton className="h-6 w-10" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+      <Panel className="space-y-3 p-5 sm:p-6">
+        <Skeleton className="h-6 w-48" />
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Global Email Toggle */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Preferências Globais</CardTitle>
-          <CardDescription>
-            Controle geral de notificações por email
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Global preferences */}
+      <Panel className="p-5 sm:p-6">
+        <PanelHeader
+          title="Preferências globais"
+          description="Controle geral dos canais de notificação."
+        />
+        <div className="mt-4 divide-y divide-foreground/10">
+          <div className="flex items-center justify-between gap-4 pb-4">
             <div className="space-y-0.5 pr-4">
               <label
                 htmlFor="global-email"
-                className="text-sm font-medium cursor-pointer"
+                className="cursor-pointer text-sm font-medium"
               >
                 Receber notificações por email
               </label>
               <p className="text-sm text-muted-foreground">
-                Desativar esta opção desliga todos os emails de notificação
+                Desativar desliga todos os emails de notificação.
               </p>
             </div>
             <Switch
@@ -436,18 +421,17 @@ export function NotificationsSettingsPage() {
               disabled={updateMutation.isPending}
             />
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 pt-4">
             <div className="space-y-0.5 pr-4">
               <label
                 htmlFor="self-notifications"
-                className="text-sm font-medium cursor-pointer"
+                className="cursor-pointer text-sm font-medium"
               >
                 Notificar minhas próprias ações
               </label>
               <p className="text-sm text-muted-foreground">
                 Receber notificações quando você atribui uma calibração para si
-                mesmo
+                mesmo.
               </p>
             </div>
             <Switch
@@ -457,41 +441,44 @@ export function NotificationsSettingsPage() {
               disabled={updateMutation.isPending}
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
-      {/* Operational Notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Notificações Operacionais</CardTitle>
-          <CardDescription>
-            Atualizações sobre calibrações e fluxo de trabalho
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {operationalSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? {
-                inApp: true,
-                email: true,
-              }
-              return (
-                <div key={setting.id}>
-                  {index > 0 && <Separator className="my-4" />}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5 flex-1">
-                      <label className="text-sm font-medium">
-                        {setting.title}
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        {setting.description}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          App
-                        </span>
+      {/* Per-event matrix */}
+      <Panel className="p-5 sm:p-6">
+        <PanelHeader
+          title="Por evento"
+          description="Escolha como você recebe cada tipo de notificação."
+        />
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-3 border-b pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span>Evento</span>
+          <span className="text-center">No app</span>
+          <span className="text-center">Email</span>
+        </div>
+        <div className="mt-2 space-y-6">
+          {groups.map((group) => (
+            <section key={group.title}>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {group.title}
+              </p>
+              <div className="mt-1 divide-y divide-foreground/10">
+                {group.items.map((setting) => {
+                  const pref = preferences[setting.id] ?? {
+                    inApp: true,
+                    email: true,
+                  }
+                  return (
+                    <div
+                      key={setting.id}
+                      className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-3 py-2.5"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="text-sm font-medium">{setting.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {setting.description}
+                        </p>
+                      </div>
+                      <div className="flex justify-center">
                         <Switch
                           checked={pref.inApp}
                           onCheckedChange={() =>
@@ -500,10 +487,7 @@ export function NotificationsSettingsPage() {
                           disabled={updateMutation.isPending}
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          Email
-                        </span>
+                      <div className="flex justify-center">
                         <Switch
                           checked={pref.email && emailEnabled}
                           onCheckedChange={() =>
@@ -513,197 +497,13 @@ export function NotificationsSettingsPage() {
                         />
                       </div>
                     </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Compliance Notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Alertas de Conformidade</CardTitle>
-          <CardDescription>
-            Lembretes para manter a conformidade ISO 17025
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {complianceSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? {
-                inApp: true,
-                email: true,
-              }
-              return (
-                <div key={setting.id}>
-                  {index > 0 && <Separator className="my-4" />}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5 flex-1">
-                      <label className="text-sm font-medium">
-                        {setting.title}
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        {setting.description}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          App
-                        </span>
-                        <Switch
-                          checked={pref.inApp}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'inApp')
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          Email
-                        </span>
-                        <Switch
-                          checked={pref.email && emailEnabled}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'email')
-                          }
-                          disabled={!emailEnabled || updateMutation.isPending}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quality Notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Qualidade</CardTitle>
-          <CardDescription>
-            Notificações de não conformidades e ações corretivas (ISO 17025
-            Cláusula 8.7)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {qualitySettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? {
-                inApp: true,
-                email: true,
-              }
-              return (
-                <div key={setting.id}>
-                  {index > 0 && <Separator className="my-4" />}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5 flex-1">
-                      <label className="text-sm font-medium">
-                        {setting.title}
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        {setting.description}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          App
-                        </span>
-                        <Switch
-                          checked={pref.inApp}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'inApp')
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          Email
-                        </span>
-                        <Switch
-                          checked={pref.email && emailEnabled}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'email')
-                          }
-                          disabled={!emailEnabled || updateMutation.isPending}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Billing Notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Notificações de Pagamento</CardTitle>
-          <CardDescription>
-            Atualizações sobre faturamento e pagamentos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {billingSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? {
-                inApp: true,
-                email: true,
-              }
-              return (
-                <div key={setting.id}>
-                  {index > 0 && <Separator className="my-4" />}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5 flex-1">
-                      <label className="text-sm font-medium">
-                        {setting.title}
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        {setting.description}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          App
-                        </span>
-                        <Switch
-                          checked={pref.inApp}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'inApp')
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          Email
-                        </span>
-                        <Switch
-                          checked={pref.email && emailEnabled}
-                          onCheckedChange={() =>
-                            togglePreference(setting.id, 'email')
-                          }
-                          disabled={!emailEnabled || updateMutation.isPending}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </Panel>
     </div>
   )
 }

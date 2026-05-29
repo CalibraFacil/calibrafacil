@@ -9,12 +9,12 @@ import type { CreateJobInput } from '@calibra-facil/schemas'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
   Field,
   FieldDescription,
   FieldError,
-  FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
 import {
@@ -128,13 +128,6 @@ export function NewJobPage() {
     return tech?.name || ''
   }, [formData.technicianId, techniciansData?.data])
 
-  const selectedTechnician = useMemo(() => {
-    if (!formData.technicianId || !techniciansData?.data) return null
-    return (
-      techniciansData.data.find((t) => t.id === formData.technicianId) || null
-    )
-  }, [formData.technicianId, techniciansData?.data])
-
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data: CreateJobInput) => calibraApi.jobs.create(data),
@@ -229,22 +222,24 @@ export function NewJobPage() {
 
   return (
     <div className="space-y-6">
-      <header className="border-b pb-5">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">
-            Nova Calibração
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
-            Crie uma ordem a partir do cliente, ativo e serviço publicado; o
-            prazo e a equipe podem ser definidos agora ou ajustados depois.
-          </p>
-        </div>
-      </header>
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Calibração
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Nova calibração
+        </h1>
+        <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          Monte a ordem a partir do cliente, do instrumento e do serviço
+          publicado. O prazo e a equipe podem ser definidos agora ou depois.
+        </p>
+      </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <form id="job-registration-form" onSubmit={handleSubmit}>
-          <FieldGroup className="gap-0 divide-y">
+          <Panel className="space-y-6 p-5 sm:p-6">
             <FormSection
+              step={1}
               title="Origem"
               description="Cliente qualificado e instrumento que será calibrado."
             >
@@ -375,6 +370,7 @@ export function NewJobPage() {
             </FormSection>
 
             <FormSection
+              step={2}
               title="Serviço"
               description="Catálogo comercial, método vinculado, preço e prazo previsto."
             >
@@ -479,6 +475,7 @@ export function NewJobPage() {
             </FormSection>
 
             <FormSection
+              step={3}
               title="Planejamento"
               description="Responsável técnico e data esperada para conclusão."
             >
@@ -547,41 +544,23 @@ export function NewJobPage() {
                 </Field>
               </div>
             </FormSection>
-
-            <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate({ to: '/dashboard/jobs' })}
-                disabled={createMutation.isPending}
-                className="active:scale-[0.96] transition-transform"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  createMutation.isPending ||
-                  selectedCustomerIsSuspended ||
-                  !formData.customerId ||
-                  !formData.assetId ||
-                  !formData.serviceId
-                }
-                className="active:scale-[0.96] transition-transform"
-              >
-                {createMutation.isPending ? 'Criando...' : 'Criar Ordem'}
-              </Button>
-            </div>
-          </FieldGroup>
+          </Panel>
         </form>
 
         <aside className="lg:sticky lg:top-20 lg:self-start">
-          <div className="border-l pl-5">
-            <h2 className="text-sm font-medium">Resumo da Ordem</h2>
-            <dl className="mt-4 space-y-4">
+          <Panel className="p-5">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Ordem de calibração
+            </p>
+            <h2 className="mt-0.5 text-base font-semibold">Resumo</h2>
+
+            <dl className="mt-4 space-y-2.5">
               {orderSummary.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <dt className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <div
+                  key={item.label}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <dt className="flex shrink-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <span
                       className={`size-1.5 rounded-full ${
                         item.complete ? 'bg-primary' : 'bg-muted-foreground/35'
@@ -589,68 +568,84 @@ export function NewJobPage() {
                     />
                     {item.label}
                   </dt>
-                  <dd className="min-w-0 truncate text-sm text-foreground">
+                  <dd
+                    className={`min-w-0 truncate text-right text-sm ${
+                      item.complete
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
                     {item.value}
                   </dd>
                 </div>
               ))}
             </dl>
 
-            {(selectedAsset || selectedService || selectedTechnician) && (
-              <dl className="mt-5 space-y-4 border-t pt-4">
-                {selectedAsset?.assetTypeName && (
-                  <div className="space-y-1">
+            {selectedService && (
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-4">
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Preço
+                  </dt>
+                  <dd className="font-mono text-sm tabular-nums">
+                    {formatPrice(
+                      selectedService.price,
+                      selectedService.currency,
+                    )}
+                  </dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    TAT
+                  </dt>
+                  <dd className="font-mono text-sm tabular-nums">
+                    {selectedService.tat ? `${selectedService.tat} dias` : '—'}
+                  </dd>
+                </div>
+                {selectedService.methodName && (
+                  <div className="col-span-2 space-y-1">
                     <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Tipo do ativo
+                      Método
                     </dt>
-                    <dd className="text-sm text-foreground">
-                      {selectedAsset.assetTypeName}
+                    <dd className="truncate text-sm">
+                      {selectedService.methodName}
                     </dd>
                   </div>
                 )}
-                {selectedService && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Preço
-                      </dt>
-                      <dd className="text-sm tabular-nums">
-                        {formatPrice(
-                          selectedService.price,
-                          selectedService.currency,
-                        )}
-                      </dd>
-                    </div>
-                    <div className="space-y-1">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        TAT
-                      </dt>
-                      <dd className="text-sm tabular-nums">
-                        {selectedService.tat
-                          ? `${selectedService.tat} dias`
-                          : 'Não definido'}
-                      </dd>
-                    </div>
-                  </div>
-                )}
-                {selectedTechnician && (
-                  <div className="space-y-1">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Técnico
-                    </dt>
-                    <dd className="text-sm text-foreground">
-                      {selectedTechnician.name}
-                    </dd>
-                  </div>
-                )}
-              </dl>
+              </div>
             )}
 
-            <p className="mt-5 border-t pt-4 text-xs leading-5 text-muted-foreground text-pretty">
+            <div className="mt-5 space-y-2 border-t pt-4">
+              <Button
+                form="job-registration-form"
+                type="submit"
+                className={`${ACTION_BUTTON_CLASS} w-full`}
+                disabled={
+                  createMutation.isPending ||
+                  selectedCustomerIsSuspended ||
+                  !formData.customerId ||
+                  !formData.assetId ||
+                  !formData.serviceId
+                }
+              >
+                {createMutation.isPending ? 'Criando...' : 'Criar ordem'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={`${ACTION_BUTTON_CLASS} w-full`}
+                onClick={() => navigate({ to: '/dashboard/jobs' })}
+                disabled={createMutation.isPending}
+              >
+                Cancelar
+              </Button>
+            </div>
+
+            <p className="mt-4 text-pretty text-xs leading-5 text-muted-foreground">
               A ordem será criada em rascunho para execução, revisão e emissão
               do certificado.
             </p>
-          </div>
+          </Panel>
         </aside>
       </div>
     </div>
@@ -658,25 +653,32 @@ export function NewJobPage() {
 }
 
 function FormSection({
+  step,
   title,
   description,
   children,
 }: {
+  step: number
   title: string
   description?: string
   children: ReactNode
 }) {
   return (
-    <section className="grid gap-5 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-balance">{title}</h2>
-        {description && (
-          <p className="text-sm leading-5 text-muted-foreground text-pretty">
-            {description}
-          </p>
-        )}
+    <section className="border-t border-border/60 pt-6 first:border-t-0 first:pt-0">
+      <div className="flex items-start gap-3">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs font-medium tabular-nums text-muted-foreground">
+          {step}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-balance text-sm font-semibold">{title}</h2>
+          {description && (
+            <p className="text-pretty text-xs leading-5 text-muted-foreground">
+              {description}
+            </p>
+          )}
+        </div>
       </div>
-      <div className="min-w-0">{children}</div>
+      <div className="mt-4 min-w-0 sm:pl-9">{children}</div>
     </section>
   )
 }

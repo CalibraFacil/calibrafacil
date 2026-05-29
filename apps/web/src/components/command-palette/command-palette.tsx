@@ -9,10 +9,12 @@ import {
   Command,
   CommandDialog,
   CommandEmpty,
+  CommandFooter,
   CommandInput,
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 
 export function CommandPalette() {
   const { open, setOpen, activePage, setPages, searchValue, setSearchValue } =
@@ -94,6 +96,25 @@ export function CommandPalette() {
               <GlobalSearchGroup searchValue={searchValue} />
             )}
           </CommandList>
+          <CommandFooter>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="flex items-center gap-1.5">
+                <KbdGroup>
+                  <Kbd>↑</Kbd>
+                  <Kbd>↓</Kbd>
+                </KbdGroup>
+                Navegar
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Kbd>↵</Kbd>
+                Selecionar
+              </span>
+            </div>
+            <span className="flex items-center gap-1.5">
+              <Kbd>esc</Kbd>
+              Fechar
+            </span>
+          </CommandFooter>
         </Command>
       </CommandDialog>
     </>

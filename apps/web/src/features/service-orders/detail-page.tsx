@@ -57,6 +57,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  Panel,
+} from '@/components/instrument-panel'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -704,25 +709,29 @@ function ServiceOrderDetailContent({
   return (
     <div className="space-y-6">
       <SyncConflictReturnNotice search={conflictReturn} />
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 space-y-1">
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Ordem de serviço
+              </p>
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-balance text-lg">
+                <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                   {order.serviceOrderNumber}
-                </CardTitle>
+                </h1>
                 <Badge>{order.statusLabel}</Badge>
               </div>
-              <CardDescription className="text-pretty">
+              <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
                 {order.customerName} · {order.assetName}
-              </CardDescription>
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="active:scale-[0.96] transition-transform"
+                className={ACTION_BUTTON_CLASS}
                 onClick={() => openServiceOrderIntakePreview(order)}
               >
                 <HugeiconsIcon icon={File02Icon} className="mr-2 size-4" />
@@ -731,7 +740,7 @@ function ServiceOrderDetailContent({
               <Button
                 variant="outline"
                 size="sm"
-                className="active:scale-[0.96] transition-transform"
+                className={ACTION_BUTTON_CLASS}
                 onClick={() => generateIntakeDocument.mutate()}
                 disabled={isDesktop || generateIntakeDocument.isPending}
               >
@@ -740,7 +749,7 @@ function ServiceOrderDetailContent({
               <Button
                 variant="outline"
                 size="sm"
-                className="active:scale-[0.96] transition-transform"
+                className={ACTION_BUTTON_CLASS}
                 onClick={() => openIntakeDocument.mutate()}
                 disabled={isDesktop || openIntakeDocument.isPending}
               >
@@ -749,7 +758,7 @@ function ServiceOrderDetailContent({
               <Button
                 variant="outline"
                 size="sm"
-                className="active:scale-[0.96] transition-transform"
+                className={ACTION_BUTTON_CLASS}
                 onClick={() => generateTag.mutate()}
                 disabled={isDesktop || generateTag.isPending}
               >
@@ -758,7 +767,7 @@ function ServiceOrderDetailContent({
               <Button
                 variant="outline"
                 size="sm"
-                className="active:scale-[0.96] transition-transform"
+                className={ACTION_BUTTON_CLASS}
                 onClick={() => openTag.mutate()}
                 disabled={isDesktop || openTag.isPending}
               >
@@ -766,53 +775,61 @@ function ServiceOrderDetailContent({
               </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg bg-muted/40 p-4">
-            <h3 className="text-sm font-medium">Recebimento</h3>
-            <p className="mt-2 text-pretty text-sm text-muted-foreground">
-              {order.claimedDefect}
-            </p>
-            <p className="mt-2 text-pretty text-sm">{order.intakeCondition}</p>
-          </div>
-          <div className="rounded-lg bg-muted/40 p-4">
-            <h3 className="text-sm font-medium">Última avaliação</h3>
-            <p className="mt-2 text-pretty text-sm text-muted-foreground">
-              {latestEvaluation?.diagnosis ?? 'Nenhuma avaliação registrada.'}
-            </p>
-            {latestEvaluation ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {RECOMMENDED_ACTION_LABELS[
-                  latestEvaluation.recommendedAction
-                ] ?? latestEvaluation.recommendedAction}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-muted/40 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Recebimento
               </p>
-            ) : null}
-          </div>
-          <div className="rounded-lg bg-muted/40 p-4">
-            <h3 className="text-sm font-medium">Orçamento atual</h3>
-            {latestQuote ? (
-              <div className="mt-2 space-y-1 text-sm">
-                <p>
-                  v{latestQuote.version} ·{' '}
-                  {QUOTE_STATUS_LABELS[latestQuote.status] ??
-                    latestQuote.status}{' '}
-                  ·{' '}
-                  <span className="tabular-nums">
-                    {money(latestQuote.totalCents)}
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Prazo: {latestQuote.deliveryEstimate || 'Não informado'}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Nenhum orçamento salvo.
+              <p className="mt-2 text-pretty text-sm text-muted-foreground">
+                {order.claimedDefect}
               </p>
-            )}
+              <p className="mt-1 text-pretty text-sm">
+                {order.intakeCondition}
+              </p>
+            </div>
+            <div className="rounded-xl bg-muted/40 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Última avaliação
+              </p>
+              <p className="mt-2 text-pretty text-sm text-muted-foreground">
+                {latestEvaluation?.diagnosis ?? 'Nenhuma avaliação registrada.'}
+              </p>
+              {latestEvaluation ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {RECOMMENDED_ACTION_LABELS[
+                    latestEvaluation.recommendedAction
+                  ] ?? latestEvaluation.recommendedAction}
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-xl bg-muted/40 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Orçamento atual
+              </p>
+              {latestQuote ? (
+                <div className="mt-2 space-y-1 text-sm">
+                  <p>
+                    v{latestQuote.version} ·{' '}
+                    {QUOTE_STATUS_LABELS[latestQuote.status] ??
+                      latestQuote.status}{' '}
+                    ·{' '}
+                    <span className="font-mono tabular-nums">
+                      {money(latestQuote.totalCents)}
+                    </span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Prazo: {latestQuote.deliveryEstimate || 'Não informado'}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Nenhum orçamento salvo.
+                </p>
+              )}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       {showFinancialStatus ? (
         <ServiceOrderFinancialStatusBlock

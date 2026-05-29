@@ -3,6 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Alert02Icon,
   ArrowRight02Icon,
+  Calendar03Icon,
   CheckmarkCircle01Icon,
   Clock01Icon,
   Notebook01Icon,
@@ -11,18 +12,21 @@ import {
   RulerIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons'
+import { useSession, useActiveOrganization } from '@calibra-facil/auth/client'
 
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
@@ -30,16 +34,22 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import {
   useDashboardIndexData,
-  type DashboardStats,
   type DashboardJob,
+  type DashboardJobStatus,
 } from '@/features/dashboard/queries'
-import { SectionCards } from '@/features/dashboard/components/section-cards'
-import { ChartCalibrations } from '@/features/dashboard/components/chart-calibrations'
 import { RecentJobsTable } from '@/features/dashboard/components/recent-jobs-table'
 
 const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
 const DASHBOARD_INDEX_DATA_READY_MARK = 'dashboard:index:data:ready'
 const DASHBOARD_INDEX_FIRST_CONTENT_MARK = 'dashboard:index:first-content'
+
+const PIPELINE: ReadonlyArray<{ status: DashboardJobStatus; label: string }> = [
+  { status: 'DRAFT', label: 'Rascunho' },
+  { status: 'IN_PROGRESS', label: 'Em execução' },
+  { status: 'REVIEW', label: 'Em revisão' },
+  { status: 'GENERATING_PDF', label: 'Emitindo PDF' },
+  { status: 'APPROVED', label: 'Aprovadas' },
+]
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -56,9 +66,26 @@ function measure(name: string, startMark: string, endMark: string) {
   }
 }
 
+function getCurrentMemberRole(
+  currentUserId: string | undefined,
+  members:
+    | ReadonlyArray<{ userId?: string; user?: { id?: string }; role?: string }>
+    | undefined,
+): string {
+  const member = members?.find(
+    (m) => m.userId === currentUserId || m.user?.id === currentUserId,
+  )
+  return typeof member?.role === 'string' ? member.role : 'member'
+}
+
 export function DashboardIndex() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
+  const { data: session } = useSession()
+  const { data: activeOrg } = useActiveOrganization()
+
+  const role = getCurrentMemberRole(session?.user?.id, activeOrg?.members)
+  const isManager = role === 'owner' || role === 'admin'
 
   const { data, isPending, isFetching, refetch, isRefetching } =
     useDashboardIndexData({
@@ -67,6 +94,11 @@ export function DashboardIndex() {
     })
 
   const isLoading = !data && (isPending || isFetching)
+
+  const statusCounts = new Map(
+    (data?.statusBreakdown ?? []).map((item) => [item.status, item.count]),
+  )
+  const reviewCount = statusCounts.get('REVIEW') ?? 0
 
   return (
     <div className="space-y-5 @container">
@@ -78,25 +110,23 @@ export function DashboardIndex() {
         </>
       ) : null}
 
-      <div className="rounded-2xl bg-card px-4 py-4 text-card-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.06)] ring-1 ring-foreground/10 sm:px-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      {/* Command header */}
+      <Panel className="relative overflow-hidden p-5 sm:p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Badge variant={data?.overdueJobs ? 'destructive' : 'outline'}>
-                {data?.overdueJobs
-                  ? `${data.overdueJobs} em atraso`
-                  : 'Operação em dia'}
-              </Badge>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                Atualiza automaticamente a cada 60s
-              </span>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Operação · atualização automática
+              </p>
             </div>
             <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
               Operação do laboratório
             </h1>
             <p className="mt-1 max-w-3xl text-pretty text-sm text-muted-foreground">
-              Priorize calibrações vencendo, libere certificados em revisão e
-              mantenha padrões rastreáveis antes de distribuir o trabalho.
+              O que precisa de ação agora: priorize o que vence, libere o que
+              está em revisão e mantenha a rastreabilidade dos padrões.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -105,7 +135,7 @@ export function DashboardIndex() {
               size="sm"
               onClick={() => refetch()}
               disabled={isRefetching}
-              className="min-h-10 active:scale-[0.96] transition-transform"
+              className="min-h-10 transition-transform active:scale-[0.96]"
             >
               <HugeiconsIcon
                 icon={RefreshIcon}
@@ -116,7 +146,7 @@ export function DashboardIndex() {
             <Button
               size="sm"
               variant="outline"
-              className="min-h-10 active:scale-[0.96] transition-transform"
+              className="min-h-10 transition-transform active:scale-[0.96]"
               render={<Link to="/dashboard/requests" />}
             >
               <HugeiconsIcon icon={Notebook01Icon} className="size-4" />
@@ -124,7 +154,7 @@ export function DashboardIndex() {
             </Button>
             <Button
               size="sm"
-              className="min-h-10 active:scale-[0.96] transition-transform"
+              className={`${ACTION_BUTTON_CLASS} min-h-10`}
               render={<Link to="/dashboard/jobs/new" />}
             >
               <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
@@ -132,181 +162,320 @@ export function DashboardIndex() {
             </Button>
           </div>
         </div>
-      </div>
+      </Panel>
 
-      <LabOperationsBoard data={data} isLoading={isLoading} />
+      {/* Operational vitals — act-now counts */}
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[...Array(5)].map((_, index) => (
+            <Skeleton key={index} className="h-[5.5rem] rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StaggerItem>
+            <SignalTile
+              icon={Alert02Icon}
+              label="Em atraso"
+              value={data?.overdueJobs ?? 0}
+              tone={(data?.overdueJobs ?? 0) > 0 ? 'critical' : 'ok'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={Clock01Icon}
+              label="Vencem hoje"
+              value={data?.dueToday ?? 0}
+              tone={(data?.dueToday ?? 0) > 0 ? 'critical' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={Calendar03Icon}
+              label="Próximos 7 dias"
+              value={data?.dueNextSevenDays ?? 0}
+              tone={(data?.dueNextSevenDays ?? 0) > 0 ? 'warning' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={CheckmarkCircle01Icon}
+              label="Em revisão"
+              value={reviewCount}
+              tone={reviewCount > 0 ? 'info' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={RulerIcon}
+              label="Padrões vencendo"
+              value={data?.expiringStandards ?? 0}
+              tone={(data?.expiringStandards ?? 0) > 0 ? 'warning' : 'ok'}
+            />
+          </StaggerItem>
+        </StaggerGroup>
+      )}
 
-      <SectionCards
-        pendingCalibrations={data?.pendingCalibrations ?? 0}
-        approvedThisMonth={data?.approvedThisMonth ?? 0}
-        expiringStandards={data?.expiringStandards ?? 0}
-        approvalRate={data?.approvalRate ?? 100}
-        overdueJobs={data?.overdueJobs ?? 0}
-        isLoading={isLoading}
-      />
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-        <ChartCalibrations
-          data={data?.calibrationTrend ?? []}
-          isLoading={isLoading}
-        />
-        <RecentJobsTable jobs={data?.recentJobs ?? []} isLoading={isLoading} />
-      </div>
-    </div>
-  )
-}
-
-function LabOperationsBoard({
-  data,
-  isLoading,
-}: {
-  data?: DashboardStats
-  isLoading: boolean
-}) {
-  const statusCounts = new Map(
-    (data?.statusBreakdown ?? []).map((item) => [item.status, item.count]),
-  )
-  const totalOpen = Math.max(data?.pendingCalibrations ?? 0, 1)
-  const reviewCount = statusCounts.get('REVIEW') ?? 0
-  const inProgressCount = statusCounts.get('IN_PROGRESS') ?? 0
-  const draftCount = statusCounts.get('DRAFT') ?? 0
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-      <Card className="rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.05)]">
-        <CardHeader className="gap-2">
-          <CardTitle className="text-balance text-lg">
-            Fila operacional
-          </CardTitle>
-          <CardDescription className="text-pretty">
-            Trabalho aberto por urgência, execução e revisão.
-          </CardDescription>
-          <CardAction>
+      {/* Calibration pipeline */}
+      <Panel className="p-5">
+        <PanelHeader
+          eyebrow="Fluxo"
+          title="Pipeline de calibração"
+          description="Trabalho em cada etapa do fluxo, do rascunho à emissão do certificado."
+          action={
             <Button
               variant="ghost"
               size="sm"
-              className="min-h-10 active:scale-[0.96] transition-transform"
+              className="min-h-10 transition-transform active:scale-[0.96]"
               render={<Link to="/dashboard/jobs" />}
             >
               Ver fila
               <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
             </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <PriorityTile
-            icon={Alert02Icon}
-            label="Vencem hoje"
-            value={data?.dueToday ?? 0}
-            tone={(data?.dueToday ?? 0) > 0 ? 'critical' : 'neutral'}
-            isLoading={isLoading}
-          />
-          <PriorityTile
-            icon={Clock01Icon}
-            label="Próximos 7 dias"
-            value={data?.dueNextSevenDays ?? 0}
-            tone={(data?.dueNextSevenDays ?? 0) > 0 ? 'warning' : 'neutral'}
-            isLoading={isLoading}
-          />
-          <PriorityTile
-            icon={CheckmarkCircle01Icon}
-            label="Aguardando revisão"
-            value={reviewCount}
-            tone={reviewCount > 0 ? 'review' : 'neutral'}
-            isLoading={isLoading}
-          />
-          <div className="space-y-3 rounded-xl bg-muted/35 p-4 md:col-span-3">
-            <QueueBar label="Rascunho" value={draftCount} total={totalOpen} />
-            <QueueBar
-              label="Em execução"
-              value={inProgressCount}
-              total={totalOpen}
-            />
-            <QueueBar
-              label="Em revisão"
-              value={reviewCount}
-              total={totalOpen}
-            />
+          }
+        />
+        {isLoading ? (
+          <div className="mt-4 flex gap-1.5">
+            {[...Array(5)].map((_, index) => (
+              <Skeleton key={index} className="h-20 flex-1 rounded-xl" />
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.05)]">
-        <CardHeader>
-          <CardTitle className="text-balance text-lg">
-            Padrões em atenção
-          </CardTitle>
-          <CardDescription className="text-pretty">
-            Rastreabilidade vencendo nos próximos 30 dias.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(4)].map((_, index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : data?.standardsWatchlist.length ? (
-            <div className="space-y-2">
-              {data.standardsWatchlist.map((standard) => (
-                <Link
-                  key={standard.id}
-                  to="/dashboard/standards/$id"
-                  params={{ id: String(standard.id) }}
-                  className="group flex min-h-14 items-center gap-3 rounded-xl px-3 py-2 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] transition-colors hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+        ) : (
+          <div className="mt-4 flex items-stretch gap-1.5 overflow-x-auto pb-1">
+            {PIPELINE.map((stage, index) => {
+              const count = statusCounts.get(stage.status) ?? 0
+              const isReview = stage.status === 'REVIEW'
+              const highlight = isReview && count > 0
+              return (
+                <div
+                  key={stage.status}
+                  className="flex flex-1 items-center gap-1.5"
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                    <HugeiconsIcon icon={RulerIcon} className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {standard.name}
+                  <Link
+                    to="/dashboard/jobs"
+                    search={{ status: stage.status }}
+                    className={cn(
+                      'flex min-w-[7rem] flex-1 flex-col rounded-xl px-3.5 py-3 transition-[background-color,box-shadow,transform] active:scale-[0.98]',
+                      highlight
+                        ? 'bg-primary/10 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]'
+                        : 'bg-muted/40 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]',
+                    )}
+                  >
+                    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      {stage.label}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {standard.serialNumber} · cert.{' '}
-                      {standard.certificateNumber}
+                    <span
+                      className={cn(
+                        'mt-1.5 font-mono text-2xl font-semibold leading-none tabular-nums',
+                        highlight && 'text-primary',
+                      )}
+                    >
+                      {count}
                     </span>
-                  </span>
-                  <span className="text-right text-xs text-muted-foreground tabular-nums">
-                    {formatDate(standard.nextCalibrationDate)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={RulerIcon}
-              title="Sem vencimentos próximos"
-              description="Nenhum padrão ativo vence nos próximos 30 dias."
-            />
-          )}
-        </CardContent>
-      </Card>
+                    {highlight && (
+                      <span className="mt-1 text-[11px] text-primary">
+                        aguardando você
+                      </span>
+                    )}
+                  </Link>
+                  {index < PIPELINE.length - 1 && (
+                    <span className="hidden shrink-0 self-center text-muted-foreground/40 sm:block">
+                      <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Panel>
 
-      <Card className="rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.05)] xl:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-balance text-lg">
-            Revisões para liberar
-          </CardTitle>
-          <CardDescription className="text-pretty">
-            Certificados prontos para análise técnica ou qualidade.
-          </CardDescription>
-          <CardAction>
+      {/* Cross-domain attention centers — managers only */}
+      {isManager && !isLoading && data && (
+        <StaggerGroup className="grid gap-4 md:grid-cols-3">
+          <StaggerItem>
+            <AttentionPanel
+              title="Qualidade"
+              to="/dashboard/nc"
+              rows={[
+                {
+                  label: 'NCs aguardando disposição',
+                  value: data.nonConformancesAwaitingDisposition,
+                  tone: 'critical',
+                  to: '/dashboard/nc',
+                  search: { status: 'open' },
+                },
+                {
+                  label: 'NCs abertas',
+                  value: data.openNonConformances,
+                  tone: 'warning',
+                  to: '/dashboard/nc',
+                  search: { status: 'open' },
+                },
+                {
+                  label: 'CAPAs atrasadas',
+                  value: data.capasOverdue,
+                  tone: 'critical',
+                  to: '/dashboard/capa',
+                },
+                {
+                  label: 'CAPAs abertas',
+                  value: data.capasOpen,
+                  tone: 'info',
+                  to: '/dashboard/capa',
+                  search: { status: 'OPEN' },
+                },
+              ]}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <AttentionPanel
+              title="Atendimento"
+              to="/dashboard/requests"
+              rows={[
+                {
+                  label: 'Solicitações p/ triagem',
+                  value: data.pendingCalibrationRequests,
+                  tone: 'warning',
+                  to: '/dashboard/requests',
+                  search: { status: 'PENDING' },
+                },
+                {
+                  label: 'Ordens de serviço em andamento',
+                  value: data.serviceOrdersInProgress,
+                  tone: 'info',
+                  to: '/dashboard/service-orders',
+                },
+              ]}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <AttentionPanel
+              title="Pessoal"
+              to="/dashboard/personnel"
+              rows={[
+                {
+                  label: 'Competências aguardando avaliação',
+                  value: data.competencesPendingEvaluation,
+                  tone: 'warning',
+                  to: '/dashboard/personnel',
+                  search: { status: 'PENDING_EVALUATION' },
+                },
+                {
+                  label: 'Competências vencendo (30d)',
+                  value: data.competencesExpiring,
+                  tone: 'critical',
+                  to: '/dashboard/personnel',
+                },
+              ]}
+            />
+          </StaggerItem>
+        </StaggerGroup>
+      )}
+
+      {/* Due agenda + traceability watch */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.8fr)]">
+        <Panel className="p-5">
+          <PanelHeader
+            eyebrow="Despache"
+            title="Vencendo em 7 dias"
+            description="Calibrações abertas a priorizar, incluindo atrasadas."
+          />
+          <div className="mt-4">
+            {isLoading ? (
+              <div className="space-y-2">
+                {[...Array(4)].map((_, index) => (
+                  <Skeleton key={index} className="h-14 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : data?.dueSoonJobs.length ? (
+              <div className="space-y-2">
+                {data.dueSoonJobs.map((job) => (
+                  <DueJobRow key={job.id} job={job} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={CheckmarkCircle01Icon}
+                title="Nada vencendo agora"
+                description="Nenhuma calibração aberta vence nos próximos 7 dias."
+              />
+            )}
+          </div>
+        </Panel>
+
+        <Panel className="p-5">
+          <PanelHeader
+            eyebrow="Rastreabilidade"
+            title="Padrões em atenção"
+            description="Vencendo nos próximos 30 dias."
+          />
+          <div className="mt-4">
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, index) => (
+                  <Skeleton key={index} className="h-14 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : data?.standardsWatchlist.length ? (
+              <div className="space-y-2">
+                {data.standardsWatchlist.map((standard) => (
+                  <Link
+                    key={standard.id}
+                    to="/dashboard/standards/$id"
+                    params={{ id: String(standard.id) }}
+                    className="group flex min-h-14 items-center gap-3 rounded-xl px-3 py-2 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] transition-colors hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                      <HugeiconsIcon icon={RulerIcon} className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {standard.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {standard.serialNumber} · cert.{' '}
+                        {standard.certificateNumber}
+                      </span>
+                    </span>
+                    <span className="text-right text-xs tabular-nums text-muted-foreground">
+                      {formatDate(standard.nextCalibrationDate)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={RulerIcon}
+                title="Sem vencimentos próximos"
+                description="Nenhum padrão ativo vence nos próximos 30 dias."
+              />
+            )}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Review queue */}
+      <Panel className="p-5">
+        <PanelHeader
+          eyebrow="Liberação"
+          title="Revisões para liberar"
+          description="Certificados prontos para análise técnica ou de qualidade."
+          action={
             <Badge variant={reviewCount > 0 ? 'default' : 'outline'}>
               <span className="tabular-nums">{reviewCount}</span> em revisão
             </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
+          }
+        />
+        <div className="mt-4">
           {isLoading ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              {[...Array(5)].map((_, index) => (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {[...Array(4)].map((_, index) => (
                 <Skeleton key={index} className="h-28 rounded-xl" />
               ))}
             </div>
           ) : data?.reviewQueue.length ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {data.reviewQueue.map((job) => (
                 <ReviewJobCard key={job.id} job={job} />
               ))}
@@ -318,9 +487,137 @@ function LabOperationsBoard({
               description="A fila de revisão está limpa para o contexto selecionado."
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
+
+      {/* Live activity */}
+      <RecentJobsTable jobs={data?.recentJobs ?? []} isLoading={isLoading} />
     </div>
+  )
+}
+
+type AttentionRow = {
+  label: string
+  value: number
+  tone: SignalTone
+  to: string
+  search?: Record<string, string>
+}
+
+const TONE_VALUE_CLASS: Record<SignalTone, string> = {
+  ok: 'text-emerald-700 dark:text-emerald-400',
+  critical: 'text-destructive',
+  warning: 'text-amber-700 dark:text-amber-400',
+  info: 'text-primary',
+  neutral: 'text-muted-foreground',
+}
+
+const TONE_DOT_CLASS: Record<SignalTone, string> = {
+  ok: 'bg-emerald-500',
+  critical: 'bg-destructive',
+  warning: 'bg-amber-500',
+  info: 'bg-primary',
+  neutral: 'bg-muted-foreground/40',
+}
+
+function AttentionPanel({
+  title,
+  to,
+  rows,
+}: {
+  title: string
+  to: string
+  rows: AttentionRow[]
+}) {
+  return (
+    <Panel className="flex h-full flex-col p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <Link
+          to={to}
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Abrir
+        </Link>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {rows.map((row) => {
+          const tone: SignalTone = row.value > 0 ? row.tone : 'neutral'
+          return (
+            <Link
+              key={row.label}
+              to={row.to}
+              search={row.search}
+              className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/50"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    'size-1.5 shrink-0 rounded-full',
+                    TONE_DOT_CLASS[tone],
+                  )}
+                />
+                <span className="truncate text-sm">{row.label}</span>
+              </span>
+              <span
+                className={cn(
+                  'font-mono text-sm font-semibold tabular-nums',
+                  TONE_VALUE_CLASS[tone],
+                )}
+              >
+                {row.value}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+    </Panel>
+  )
+}
+
+function DueJobRow({ job }: { job: DashboardJob }) {
+  const routeId = jobRouteId(job)
+  const prewarmIntentHandlers = usePathPrewarmIntent(
+    `/dashboard/jobs/${encodeURIComponent(routeId)}`,
+  )
+
+  return (
+    <Link
+      to="/dashboard/jobs/$id"
+      params={{ id: routeId }}
+      className="group flex min-h-14 items-center gap-3 rounded-xl px-3 py-2 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] transition-colors hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      <span
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-lg',
+          job.isOverdue
+            ? 'bg-destructive/10 text-destructive'
+            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        )}
+      >
+        <HugeiconsIcon
+          icon={job.isOverdue ? Alert02Icon : Clock01Icon}
+          className="size-4"
+        />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-sm font-semibold tabular-nums">
+            {job.jobId}
+          </span>
+          {job.isOverdue && <Badge variant="destructive">Atrasada</Badge>}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {job.customerName ?? 'Cliente não informado'} ·{' '}
+          {job.assetName ?? job.serviceName ?? 'Ativo não informado'}
+        </span>
+      </span>
+      <span className="text-right text-xs tabular-nums text-muted-foreground">
+        {formatDueDate(job.dueDate)}
+      </span>
+    </Link>
   )
 }
 
@@ -362,70 +659,6 @@ function ReviewJobCard({ job }: { job: DashboardJob }) {
   )
 }
 
-function PriorityTile({
-  icon,
-  label,
-  value,
-  tone,
-  isLoading,
-}: {
-  icon: Parameters<typeof HugeiconsIcon>[0]['icon']
-  label: string
-  value: number
-  tone: 'critical' | 'warning' | 'review' | 'neutral'
-  isLoading: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-xl p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]',
-        tone === 'critical' && 'bg-destructive/8 text-destructive',
-        tone === 'warning' &&
-          'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-        tone === 'review' && 'bg-primary/10 text-primary',
-        tone === 'neutral' && 'bg-muted/40 text-foreground',
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <HugeiconsIcon icon={icon} className="size-4" />
-      </div>
-      {isLoading ? (
-        <Skeleton className="mt-4 h-9 w-16" />
-      ) : (
-        <div className="mt-3 text-3xl font-semibold tabular-nums">{value}</div>
-      )}
-    </div>
-  )
-}
-
-function QueueBar({
-  label,
-  value,
-  total,
-}: {
-  label: string
-  value: number
-  total: number
-}) {
-  const percent = Math.min(100, Math.round((value / total) * 100))
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground tabular-nums">{value}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
 function EmptyState({
   icon,
   title,
@@ -452,6 +685,29 @@ function EmptyState({
 function formatDate(dateString: string | null): string {
   if (!dateString) return '-'
   return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+function formatDueDate(dateString: string | null): string {
+  if (!dateString) return '—'
+  const due = new Date(dateString)
+  const today = new Date()
+  const startOfDue = new Date(
+    due.getFullYear(),
+    due.getMonth(),
+    due.getDate(),
+  )
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  )
+  const diffDays = Math.round(
+    (startOfDue.getTime() - startOfToday.getTime()) / 86_400_000,
+  )
+  if (diffDays === 0) return 'hoje'
+  if (diffDays < 0) return `${Math.abs(diffDays)}d atrás`
+  if (diffDays === 1) return 'amanhã'
+  return `em ${diffDays}d`
 }
 
 function DashboardIndexMountMarker() {

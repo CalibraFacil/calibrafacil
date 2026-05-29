@@ -1,8 +1,15 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { parseAsInteger, useQueryState } from 'nuqs'
+import { AnimatePresence, motion } from 'motion/react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  FloppyDiskIcon,
+} from '@hugeicons/core-free-icons'
 
 import {
   Combobox,
@@ -25,14 +32,18 @@ import {
   type AssetFormData,
   type AssetFormField,
 } from '@/features/assets/forms'
+import {
+  FormSectionNav,
+  type FormNavSection,
+} from '@/features/assets/components/form-section-nav'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Field,
   FieldDescription,
   FieldError,
-  FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
 import {
@@ -44,6 +55,15 @@ import {
 import { DatePicker } from '@/components/ui/date-picker'
 import { DynamicSpecsForm } from '@/components/dynamic-specs-form'
 import {
+  ACTION_BUTTON_CLASS,
+  BlueprintField,
+  BlueprintGrid,
+  Panel,
+  PanelHeader,
+} from '@/components/instrument-panel'
+import { SpecificationsDisplay } from '@/components/specifications-display'
+import { formatDate } from '@/features/assets/detail-model'
+import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,
   type EccentricityIndicatorPosition,
@@ -52,12 +72,36 @@ import {
 } from '@/components/eccentricity-indicator'
 import { isMassAssetTypeDefinition, isMassUnit } from '@calibra-facil/shared'
 import type { CreateAssetInput } from '@calibra-facil/schemas'
+import { cn } from '@/lib/utils'
 
 const statusLabels: Record<AssetFormData['status'], string> = {
   ACTIVE: 'Ativo',
   INACTIVE: 'Inativo',
   MAINTENANCE: 'Em Manutenção',
   SCRAPPED: 'Descartado',
+}
+
+const PANEL_CLASS = 'p-4 sm:p-5'
+
+/** Which wizard step owns each form field, so we can jump to the first error. */
+const FIELD_STEP: Record<string, string> = {
+  customerId: 'sec-vinculo',
+  assetTypeId: 'sec-vinculo',
+  name: 'sec-identificacao',
+  tag: 'sec-identificacao',
+  serialNumber: 'sec-identificacao',
+  manufacturer: 'sec-identificacao',
+  model: 'sec-identificacao',
+  status: 'sec-identificacao',
+  baseMeasurementUnit: 'sec-especificacoes',
+  lastCalibrationDate: 'sec-calibracao',
+  nextCalibrationDate: 'sec-calibracao',
+  comments: 'sec-observacoes',
+}
+
+function stepForField(field: string): string {
+  if (field.startsWith('spec_')) return 'sec-especificacoes'
+  return FIELD_STEP[field] ?? 'sec-vinculo'
 }
 
 const initialFormData: AssetFormData = {
@@ -91,16 +135,13 @@ export function NewAssetPage() {
     {},
   )
   const [customerSearch, setCustomerSearch] = useState('')
+  const [activeStep, setActiveStep] = useState('sec-vinculo')
 
-  // Fetch customers for the combobox
   const { data: customersData, isLoading: customersLoading } =
     useNewAssetCustomersData(customerSearch)
-
-  // Fetch asset types for the dropdown
   const { data: assetTypesData, isLoading: assetTypesLoading } =
     useAssetTypesData()
 
-  // Get the selected customer name
   const selectedCustomerName = useMemo(() => {
     if (!formData.customerId || !customersData?.data) return ''
     const customer = customersData.data.find(
@@ -109,7 +150,6 @@ export function NewAssetPage() {
     return customer?.name || ''
   }, [formData.customerId, customersData?.data])
 
-  // Get the selected asset type
   const selectedAssetType = useMemo(() => {
     if (!formData.assetTypeId || !assetTypesData?.data) return null
     return (
@@ -136,6 +176,10 @@ export function NewAssetPage() {
   const requiresMassBaseUnit =
     selectedAssetType !== null &&
     isMassAssetTypeDefinition(selectedAssetType.definition, selectedAssetType)
+  const hasSpecsSection =
+    requiresMassBaseUnit ||
+    visibleAssetTypeDefinition.length > 0 ||
+    showEccentricityIndicator
 
   const createMutation = useMutation({
     mutationFn: (data: CreateAssetInput) => calibraApi.assets.create(data),
@@ -148,6 +192,7 @@ export function NewAssetPage() {
       toast.error(error.message)
     },
   })
+  const isSaving = createMutation.isPending
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -162,6 +207,10 @@ export function NewAssetPage() {
           parsed.fieldErrors.map((error) => [error.field, error.message]),
         ),
       )
+      const firstError = parsed.fieldErrors[0]
+      if (firstError) {
+        setActiveStep(stepForField(firstError.field))
+      }
       toast.error(parsed.message)
       return
     }
@@ -194,19 +243,17 @@ export function NewAssetPage() {
     updateField('specifications', specifications)
   }
 
-  // Handle asset type change - reset specifications when type changes
+  // Reset specifications when the asset type changes
   const handleAssetTypeChange = (typeId: number | null) => {
     setFormData((prev) => ({
       ...prev,
       assetTypeId: typeId,
       baseMeasurementUnit: null,
-      specifications: {}, // Reset specifications when type changes
+      specifications: {},
     }))
-    // Clear type error
     if (errors.assetTypeId) {
       setErrors((prev) => ({ ...prev, assetTypeId: undefined }))
     }
-    // Clear specification errors
     const specErrorKeys = Object.keys(errors).filter(
       isAssetSpecificationErrorField,
     )
@@ -221,7 +268,6 @@ export function NewAssetPage() {
     }
   }
 
-  // Get specification errors in the format expected by DynamicSpecsForm
   const specErrors = useMemo(() => {
     const result: Record<string, string> = {}
     for (const [key, value] of Object.entries(errors)) {
@@ -239,454 +285,622 @@ export function NewAssetPage() {
     }).length
   }, [formData.specifications])
 
-  const registrationSummary = [
+  const requiredSpecCount = visibleAssetTypeDefinition.filter(
+    (field) => field.required,
+  ).length
+  const specsComplete =
+    (!requiresMassBaseUnit || Boolean(formData.baseMeasurementUnit)) &&
+    filledSpecificationCount >= requiredSpecCount
+
+  const navSections: FormNavSection[] = [
     {
-      label: 'Cliente',
-      value: selectedCustomerName || 'Pendente',
-      complete: Boolean(formData.customerId),
+      id: 'sec-vinculo',
+      label: 'Vínculo',
+      complete: Boolean(formData.customerId && formData.assetTypeId),
     },
     {
-      label: 'Tipo',
-      value: selectedAssetType?.name || 'Pendente',
-      complete: Boolean(formData.assetTypeId),
-    },
-    {
+      id: 'sec-identificacao',
       label: 'Identificação',
-      value: formData.tag || formData.serialNumber || 'Pendente',
-      complete: Boolean(formData.tag.trim() && formData.serialNumber.trim()),
+      complete: Boolean(
+        formData.name.trim() &&
+        formData.tag.trim() &&
+        formData.serialNumber.trim(),
+      ),
     },
+    ...(hasSpecsSection
+      ? [
+          {
+            id: 'sec-especificacoes',
+            label: 'Especificações',
+            complete: specsComplete,
+          },
+        ]
+      : []),
+    { id: 'sec-calibracao', label: 'Calibração', optional: true },
+    { id: 'sec-observacoes', label: 'Observações', optional: true },
     {
-      label: 'Especificações',
-      value:
-        visibleAssetTypeDefinition.length > 0
-          ? `${filledSpecificationCount}/${visibleAssetTypeDefinition.length}`
-          : 'Sem campos extras',
-      complete:
-        visibleAssetTypeDefinition.length === 0 ||
-        filledSpecificationCount >=
-          visibleAssetTypeDefinition.filter((field) => field.required).length,
+      id: 'sec-revisao',
+      label: 'Revisão',
+      complete: Boolean(
+        formData.customerId &&
+        formData.assetTypeId &&
+        formData.name.trim() &&
+        formData.tag.trim() &&
+        formData.serialNumber.trim() &&
+        specsComplete,
+      ),
     },
   ]
 
+  // Wizard navigation — one step visible at a time, with transitions.
+  const stepIds = navSections.map((section) => section.id)
+  const activeStepId = stepIds.includes(activeStep) ? activeStep : stepIds[0]
+  const activeIndex = stepIds.indexOf(activeStepId)
+  const isFirstStep = activeIndex === 0
+  const isLastStep = activeIndex === stepIds.length - 1
+  const goToStep = (id: string) => setActiveStep(id)
+  const goNext = () =>
+    setActiveStep(stepIds[Math.min(activeIndex + 1, stepIds.length - 1)])
+  const goBack = () => setActiveStep(stepIds[Math.max(activeIndex - 1, 0)])
+
   return (
     <div className="space-y-6">
-      <header className="border-b pb-5">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">
-            Novo Ativo
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
-            Cadastre o instrumento, vincule ao cliente e registre as
-            especificações necessárias para calibração.
-          </p>
-        </div>
-      </header>
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Cadastro de ativo
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Novo ativo
+        </h1>
+        <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          Vincule o instrumento ao cliente, identifique-o e registre as
+          especificações necessárias para calibração.
+        </p>
+      </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <form
-          id="asset-registration-form"
-          onSubmit={handleSubmit}
-          className="min-w-0"
-        >
-          <FieldGroup className="gap-0 divide-y">
-            <FormSection
-              title="Vínculo"
-              description="Cliente proprietário e tipo técnico do instrumento."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="customer">Cliente *</FieldLabel>
-                  <Combobox
-                    value={
-                      formData.customerId ? String(formData.customerId) : ''
-                    }
-                    onValueChange={(value) => {
-                      updateField('customerId', value ? Number(value) : null)
-                    }}
-                    disabled={createMutation.isPending}
-                  >
-                    <ComboboxInput
-                      id="customer"
-                      name="customerId"
-                      placeholder="Buscar cliente…"
-                      value={selectedCustomerName || customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      autoComplete="off"
-                      showClear={!!formData.customerId}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
+          <FormSectionNav
+            sections={navSections}
+            activeId={activeStepId}
+            onSelect={goToStep}
+          />
+
+          <div className="min-w-0">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeStepId}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ type: 'spring', duration: 0.28, bounce: 0 }}
+                className="space-y-6"
+              >
+                {activeStepId === 'sec-vinculo' ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader
+                      eyebrow="Vínculo"
+                      title="Cliente e tipo"
+                      description="Definem o proprietário e as especificações técnicas do ativo."
                     />
-                    <ComboboxContent>
-                      <ComboboxList>
-                        <ComboboxEmpty>
-                          {customersLoading
-                            ? 'Carregando…'
-                            : 'Nenhum cliente encontrado'}
-                        </ComboboxEmpty>
-                        {customersData?.data?.map((customer) => (
-                          <ComboboxItem
-                            key={customer.id}
-                            value={String(customer.id)}
-                          >
-                            {customer.name}
-                            {customer.taxId && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                {customer.taxId}
-                              </span>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="customer">Cliente *</FieldLabel>
+                        <Combobox
+                          value={
+                            formData.customerId
+                              ? String(formData.customerId)
+                              : ''
+                          }
+                          onValueChange={(value) => {
+                            updateField(
+                              'customerId',
+                              value ? Number(value) : null,
+                            )
+                          }}
+                          disabled={isSaving}
+                        >
+                          <ComboboxInput
+                            id="customer"
+                            name="customerId"
+                            placeholder="Buscar cliente…"
+                            value={selectedCustomerName || customerSearch}
+                            onChange={(e) => setCustomerSearch(e.target.value)}
+                            autoComplete="off"
+                            showClear={!!formData.customerId}
+                          />
+                          <ComboboxContent>
+                            <ComboboxList>
+                              <ComboboxEmpty>
+                                {customersLoading
+                                  ? 'Carregando…'
+                                  : 'Nenhum cliente encontrado'}
+                              </ComboboxEmpty>
+                              {customersData?.data?.map((customer) => (
+                                <ComboboxItem
+                                  key={customer.id}
+                                  value={String(customer.id)}
+                                >
+                                  {customer.name}
+                                  {customer.taxId && (
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {customer.taxId}
+                                    </span>
+                                  )}
+                                </ComboboxItem>
+                              ))}
+                            </ComboboxList>
+                          </ComboboxContent>
+                        </Combobox>
+                        {errors.customerId && (
+                          <FieldError>{errors.customerId}</FieldError>
+                        )}
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="assetType">
+                          Tipo de instrumento *
+                        </FieldLabel>
+                        <Select
+                          value={
+                            formData.assetTypeId
+                              ? String(formData.assetTypeId)
+                              : ''
+                          }
+                          onValueChange={(value) => {
+                            handleAssetTypeChange(value ? Number(value) : null)
+                          }}
+                          disabled={isSaving || assetTypesLoading}
+                        >
+                          <SelectTrigger id="assetType">
+                            <span>
+                              {assetTypesLoading
+                                ? 'Carregando…'
+                                : selectedAssetType?.name ||
+                                  'Selecione o tipo…'}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assetTypesData?.data?.map((type) => (
+                              <SelectItem key={type.id} value={String(type.id)}>
+                                {type.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FieldDescription>
+                          Define as especificações técnicas do instrumento.
+                        </FieldDescription>
+                        {errors.assetTypeId && (
+                          <FieldError>{errors.assetTypeId}</FieldError>
+                        )}
+                      </Field>
+                    </div>
+                  </Panel>
+                ) : null}
+
+                {activeStepId === 'sec-identificacao' ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader
+                      eyebrow="Identificação"
+                      title="Dados do instrumento"
+                      description="Nome, rastreabilidade e estado operacional."
+                    />
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="name">Nome do ativo *</FieldLabel>
+                        <Input
+                          id="name"
+                          name="name"
+                          value={formData.name}
+                          onChange={(e) => updateField('name', e.target.value)}
+                          placeholder="Ex.: Balança Analítica…"
+                          disabled={isSaving}
+                          autoComplete="off"
+                        />
+                        {errors.name && <FieldError>{errors.name}</FieldError>}
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="tag">
+                          Tag / ID interno *
+                        </FieldLabel>
+                        <Input
+                          id="tag"
+                          name="tag"
+                          value={formData.tag}
+                          onChange={(e) => updateField('tag', e.target.value)}
+                          placeholder="Ex.: BAL-001…"
+                          className="font-mono"
+                          disabled={isSaving}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {errors.tag && <FieldError>{errors.tag}</FieldError>}
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="serialNumber">
+                          Número de série *
+                        </FieldLabel>
+                        <Input
+                          id="serialNumber"
+                          name="serialNumber"
+                          value={formData.serialNumber}
+                          onChange={(e) =>
+                            updateField('serialNumber', e.target.value)
+                          }
+                          placeholder="Número de série do fabricante…"
+                          className="font-mono"
+                          disabled={isSaving}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {errors.serialNumber && (
+                          <FieldError>{errors.serialNumber}</FieldError>
+                        )}
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="manufacturer">
+                          Fabricante
+                        </FieldLabel>
+                        <Input
+                          id="manufacturer"
+                          name="manufacturer"
+                          value={formData.manufacturer}
+                          onChange={(e) =>
+                            updateField('manufacturer', e.target.value)
+                          }
+                          placeholder="Ex.: Mettler Toledo…"
+                          disabled={isSaving}
+                          autoComplete="off"
+                        />
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="model">Modelo</FieldLabel>
+                        <Input
+                          id="model"
+                          name="model"
+                          value={formData.model}
+                          onChange={(e) => updateField('model', e.target.value)}
+                          placeholder="Ex.: XPE205…"
+                          disabled={isSaving}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </Field>
+
+                      <Field>
+                        <FieldLabel htmlFor="status">Status</FieldLabel>
+                        <Select
+                          value={formData.status}
+                          onValueChange={(value) => {
+                            if (isAssetFormStatus(value)) {
+                              updateField('status', value)
+                            }
+                          }}
+                          disabled={isSaving}
+                        >
+                          <SelectTrigger id="status">
+                            <span>{statusLabels[formData.status]}</span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACTIVE">Ativo</SelectItem>
+                            <SelectItem value="INACTIVE">Inativo</SelectItem>
+                            <SelectItem value="MAINTENANCE">
+                              Em Manutenção
+                            </SelectItem>
+                            <SelectItem value="SCRAPPED">Descartado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                  </Panel>
+                ) : null}
+
+                {activeStepId === 'sec-especificacoes' && hasSpecsSection ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader
+                      eyebrow="Características"
+                      title="Especificações técnicas"
+                      description="Dados que acompanham o ativo nas calibrações e certificados."
+                    />
+                    <div className="mt-4 space-y-6">
+                      {requiresMassBaseUnit ? (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <Field>
+                            <FieldLabel htmlFor="baseMeasurementUnit">
+                              Unidade base do instrumento *
+                            </FieldLabel>
+                            <Select
+                              value={formData.baseMeasurementUnit ?? ''}
+                              onValueChange={(value) =>
+                                updateField(
+                                  'baseMeasurementUnit',
+                                  isMassUnit(value) ? value : null,
+                                )
+                              }
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger id="baseMeasurementUnit">
+                                <span>
+                                  {formData.baseMeasurementUnit ||
+                                    'Selecione a unidade…'}
+                                </span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="kg">kg</SelectItem>
+                                <SelectItem value="g">g</SelectItem>
+                                <SelectItem value="mg">mg</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FieldDescription>
+                              Usada em todo o ciclo do ativo; não pode ser
+                              alterada após o cadastro.
+                            </FieldDescription>
+                            {errors.baseMeasurementUnit && (
+                              <FieldError>
+                                {errors.baseMeasurementUnit}
+                              </FieldError>
                             )}
-                          </ComboboxItem>
-                        ))}
-                      </ComboboxList>
-                    </ComboboxContent>
-                  </Combobox>
-                  <FieldDescription>
-                    Selecione o cliente proprietário do ativo.
-                  </FieldDescription>
-                  {errors.customerId && (
-                    <FieldError>{errors.customerId}</FieldError>
-                  )}
-                </Field>
+                          </Field>
+                        </div>
+                      ) : null}
 
-                <Field>
-                  <FieldLabel htmlFor="assetType">
-                    Tipo de Instrumento *
-                  </FieldLabel>
-                  <Select
-                    value={
-                      formData.assetTypeId ? String(formData.assetTypeId) : ''
-                    }
-                    onValueChange={(value) => {
-                      handleAssetTypeChange(value ? Number(value) : null)
-                    }}
-                    disabled={createMutation.isPending || assetTypesLoading}
-                  >
-                    <SelectTrigger id="assetType">
-                      <span>
-                        {assetTypesLoading
-                          ? 'Carregando…'
-                          : selectedAssetType?.name || 'Selecione o tipo…'}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assetTypesData?.data?.map((type) => (
-                        <SelectItem key={type.id} value={String(type.id)}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>
-                    O tipo define as especificações técnicas do instrumento.
-                  </FieldDescription>
-                  {errors.assetTypeId && (
-                    <FieldError>{errors.assetTypeId}</FieldError>
-                  )}
-                </Field>
-              </div>
-            </FormSection>
+                      {visibleAssetTypeDefinition.length > 0 ? (
+                        <DynamicSpecsForm
+                          definition={visibleAssetTypeDefinition}
+                          value={formData.specifications}
+                          onChange={(specs) =>
+                            updateField('specifications', specs)
+                          }
+                          disabled={isSaving}
+                          errors={specErrors}
+                          activeMassUnit={formData.baseMeasurementUnit}
+                        />
+                      ) : null}
 
-            <FormSection
-              title="Identificação"
-              description="Nome, rastreabilidade e estado operacional."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="name">Nome do Ativo *</FieldLabel>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={(e) => updateField('name', e.target.value)}
-                    placeholder="Ex.: Balança Analítica…"
-                    disabled={createMutation.isPending}
-                    autoComplete="off"
-                  />
-                  {errors.name && <FieldError>{errors.name}</FieldError>}
-                </Field>
+                      {showEccentricityIndicator ? (
+                        <EccentricityIndicator
+                          value={selectedIndicatorPosition}
+                          onChange={updateIndicatorPosition}
+                          disabled={isSaving}
+                          className={
+                            requiresMassBaseUnit ||
+                            visibleAssetTypeDefinition.length > 0
+                              ? undefined
+                              : 'border-t-0 pt-0'
+                          }
+                        />
+                      ) : null}
+                    </div>
+                  </Panel>
+                ) : null}
 
-                <Field>
-                  <FieldLabel htmlFor="tag">Tag / ID Interno *</FieldLabel>
-                  <Input
-                    id="tag"
-                    name="tag"
-                    value={formData.tag}
-                    onChange={(e) => updateField('tag', e.target.value)}
-                    placeholder="Ex.: BAL-001…"
-                    disabled={createMutation.isPending}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <FieldDescription>
-                    Identificador único do ativo no laboratório.
-                  </FieldDescription>
-                  {errors.tag && <FieldError>{errors.tag}</FieldError>}
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="serialNumber">
-                    Número de Série *
-                  </FieldLabel>
-                  <Input
-                    id="serialNumber"
-                    name="serialNumber"
-                    value={formData.serialNumber}
-                    onChange={(e) =>
-                      updateField('serialNumber', e.target.value)
-                    }
-                    placeholder="Número de série do fabricante…"
-                    disabled={createMutation.isPending}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  {errors.serialNumber && (
-                    <FieldError>{errors.serialNumber}</FieldError>
-                  )}
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="manufacturer">Fabricante</FieldLabel>
-                  <Input
-                    id="manufacturer"
-                    name="manufacturer"
-                    value={formData.manufacturer}
-                    onChange={(e) =>
-                      updateField('manufacturer', e.target.value)
-                    }
-                    placeholder="Ex.: Mettler Toledo…"
-                    disabled={createMutation.isPending}
-                    autoComplete="off"
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="model">Modelo</FieldLabel>
-                  <Input
-                    id="model"
-                    name="model"
-                    value={formData.model}
-                    onChange={(e) => updateField('model', e.target.value)}
-                    placeholder="Ex.: XPE205…"
-                    disabled={createMutation.isPending}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="status">Status</FieldLabel>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => {
-                      if (isAssetFormStatus(value)) {
-                        updateField('status', value)
-                      }
-                    }}
-                    disabled={createMutation.isPending}
-                  >
-                    <SelectTrigger id="status">
-                      <span>{statusLabels[formData.status]}</span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ACTIVE">Ativo</SelectItem>
-                      <SelectItem value="INACTIVE">Inativo</SelectItem>
-                      <SelectItem value="MAINTENANCE">Em Manutenção</SelectItem>
-                      <SelectItem value="SCRAPPED">Descartado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-            </FormSection>
-
-            {(requiresMassBaseUnit ||
-              visibleAssetTypeDefinition.length > 0 ||
-              showEccentricityIndicator) && (
-              <FormSection
-                title="Especificações Técnicas"
-                description="Dados que acompanham o ativo nas calibrações e certificados."
-              >
-                <div className="space-y-6">
-                  {requiresMassBaseUnit && (
-                    <Field>
-                      <FieldLabel htmlFor="baseMeasurementUnit">
-                        Unidade Base do Instrumento *
-                      </FieldLabel>
-                      <Select
-                        value={formData.baseMeasurementUnit ?? ''}
-                        onValueChange={(value) =>
-                          updateField(
-                            'baseMeasurementUnit',
-                            isMassUnit(value) ? value : null,
-                          )
-                        }
-                        disabled={createMutation.isPending}
-                      >
-                        <SelectTrigger id="baseMeasurementUnit">
-                          <span>
-                            {formData.baseMeasurementUnit ||
-                              'Selecione a unidade…'}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kg">kg</SelectItem>
-                          <SelectItem value="g">g</SelectItem>
-                          <SelectItem value="mg">mg</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FieldDescription>
-                        Esta unidade será usada em todo o ciclo do ativo e não
-                        poderá ser alterada depois do cadastro.
-                      </FieldDescription>
-                      {errors.baseMeasurementUnit && (
-                        <FieldError>{errors.baseMeasurementUnit}</FieldError>
-                      )}
-                    </Field>
-                  )}
-
-                  {visibleAssetTypeDefinition.length > 0 && (
-                    <DynamicSpecsForm
-                      definition={visibleAssetTypeDefinition}
-                      value={formData.specifications}
-                      onChange={(specs) => updateField('specifications', specs)}
-                      disabled={createMutation.isPending}
-                      errors={specErrors}
-                      activeMassUnit={formData.baseMeasurementUnit}
+                {activeStepId === 'sec-calibracao' ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader
+                      eyebrow="Programação"
+                      title="Calibração"
+                      description="Datas usadas para histórico e alertas de recalibração."
                     />
-                  )}
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="lastCalibrationDate">
+                          Última calibração
+                        </FieldLabel>
+                        <DatePicker
+                          id="lastCalibrationDate"
+                          name="lastCalibrationDate"
+                          value={formData.lastCalibrationDate}
+                          onChange={(date) =>
+                            updateField('lastCalibrationDate', date)
+                          }
+                          placeholder="Selecione a data…"
+                          disabled={isSaving}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="nextCalibrationDate">
+                          Próxima calibração
+                        </FieldLabel>
+                        <DatePicker
+                          id="nextCalibrationDate"
+                          name="nextCalibrationDate"
+                          value={formData.nextCalibrationDate}
+                          onChange={(date) =>
+                            updateField('nextCalibrationDate', date)
+                          }
+                          placeholder="Selecione a data…"
+                          disabled={isSaving}
+                        />
+                      </Field>
+                    </div>
+                  </Panel>
+                ) : null}
 
-                  {showEccentricityIndicator && (
-                    <EccentricityIndicator
-                      value={selectedIndicatorPosition}
-                      onChange={updateIndicatorPosition}
-                      disabled={createMutation.isPending}
+                {activeStepId === 'sec-observacoes' ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader eyebrow="Notas" title="Observações" />
+                    <div className="mt-4">
+                      <Field>
+                        <FieldLabel htmlFor="comments" className="sr-only">
+                          Observações
+                        </FieldLabel>
+                        <Textarea
+                          id="comments"
+                          name="comments"
+                          value={formData.comments}
+                          onChange={(e) =>
+                            updateField('comments', e.target.value)
+                          }
+                          placeholder="Observações adicionais sobre o ativo…"
+                          disabled={isSaving}
+                          rows={3}
+                        />
+                      </Field>
+                    </div>
+                  </Panel>
+                ) : null}
+
+                {activeStepId === 'sec-revisao' ? (
+                  <Panel className={PANEL_CLASS}>
+                    <PanelHeader
+                      eyebrow="Revisão"
+                      title="Confira antes de criar"
+                      description="Revise os dados do ativo. Volte a qualquer seção para ajustar."
                     />
-                  )}
-                </div>
-              </FormSection>
-            )}
+                    <div className="mt-4 space-y-5">
+                      <BlueprintGrid className="sm:grid-cols-2 lg:grid-cols-3">
+                        <BlueprintField label="Cliente">
+                          {selectedCustomerName || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Tipo de instrumento">
+                          {selectedAssetType?.name || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Status">
+                          {statusLabels[formData.status]}
+                        </BlueprintField>
+                        <BlueprintField label="Nome">
+                          {formData.name || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Tag / ID interno" mono>
+                          {formData.tag || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Número de série" mono>
+                          {formData.serialNumber || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Fabricante">
+                          {formData.manufacturer || '—'}
+                        </BlueprintField>
+                        <BlueprintField label="Modelo">
+                          {formData.model || '—'}
+                        </BlueprintField>
+                        {requiresMassBaseUnit ? (
+                          <BlueprintField label="Unidade base" mono>
+                            {formData.baseMeasurementUnit || '—'}
+                          </BlueprintField>
+                        ) : null}
+                        <BlueprintField label="Última calibração" mono>
+                          {formatDate(formData.lastCalibrationDate)}
+                        </BlueprintField>
+                        <BlueprintField label="Próxima calibração" mono>
+                          {formatDate(formData.nextCalibrationDate)}
+                        </BlueprintField>
+                      </BlueprintGrid>
 
-            <FormSection
-              title="Calendário"
-              description="Datas usadas para histórico e alertas de recalibração."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="lastCalibrationDate">
-                    Última Calibração
-                  </FieldLabel>
-                  <DatePicker
-                    id="lastCalibrationDate"
-                    name="lastCalibrationDate"
-                    value={formData.lastCalibrationDate}
-                    onChange={(date) =>
-                      updateField('lastCalibrationDate', date)
-                    }
-                    placeholder="Selecione a data…"
-                    disabled={createMutation.isPending}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="nextCalibrationDate">
-                    Próxima Calibração
-                  </FieldLabel>
-                  <DatePicker
-                    id="nextCalibrationDate"
-                    name="nextCalibrationDate"
-                    value={formData.nextCalibrationDate}
-                    onChange={(date) =>
-                      updateField('nextCalibrationDate', date)
-                    }
-                    placeholder="Selecione a data…"
-                    disabled={createMutation.isPending}
-                  />
-                </Field>
-              </div>
-            </FormSection>
+                      {visibleAssetTypeDefinition.length > 0 ? (
+                        <div>
+                          <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            Especificações técnicas
+                          </p>
+                          <SpecificationsDisplay
+                            definition={visibleAssetTypeDefinition}
+                            specifications={formData.specifications}
+                            activeMassUnit={formData.baseMeasurementUnit}
+                          />
+                        </div>
+                      ) : null}
 
-            <FormSection title="Observações">
-              <Field>
-                <FieldLabel htmlFor="comments">Observações</FieldLabel>
-                <Textarea
-                  id="comments"
-                  name="comments"
-                  value={formData.comments}
-                  onChange={(e) => updateField('comments', e.target.value)}
-                  placeholder="Observações adicionais sobre o ativo…"
-                  disabled={createMutation.isPending}
-                  rows={3}
-                />
-              </Field>
-            </FormSection>
+                      {showEccentricityIndicator &&
+                      selectedIndicatorPosition ? (
+                        <EccentricityIndicator
+                          value={selectedIndicatorPosition}
+                          readOnly
+                          className="border-t-0 pt-0"
+                        />
+                      ) : null}
 
-            <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate({ to: '/dashboard/assets' })}
-                disabled={createMutation.isPending}
-                className="active:scale-[0.96] transition-transform"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending}
-                className="active:scale-[0.96] transition-transform"
-              >
-                {createMutation.isPending ? 'Salvando…' : 'Criar Ativo'}
-              </Button>
-            </div>
-          </FieldGroup>
-        </form>
-
-        <aside className="lg:sticky lg:top-20 lg:self-start">
-          <div className="border-l pl-5">
-            <h2 className="text-sm font-medium">Resumo do Cadastro</h2>
-            <dl className="mt-4 space-y-4">
-              {registrationSummary.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <dt className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        item.complete ? 'bg-primary' : 'bg-muted-foreground/35'
-                      }`}
-                    />
-                    {item.label}
-                  </dt>
-                  <dd className="min-w-0 truncate text-sm text-foreground">
-                    {item.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-5 border-t pt-4 text-xs leading-5 text-muted-foreground text-pretty">
-              O ativo fica disponível para ordens de calibração assim que for
-              criado.
-            </p>
+                      {formData.comments.trim() ? (
+                        <div>
+                          <p className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            Observações
+                          </p>
+                          <p className="whitespace-pre-wrap text-pretty text-sm leading-6 text-muted-foreground">
+                            {formData.comments}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </Panel>
+                ) : null}
+              </motion.div>
+            </AnimatePresence>
           </div>
-        </aside>
-      </div>
-    </div>
-  )
-}
+        </div>
 
-function FormSection({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description?: string
-  children: ReactNode
-}) {
-  return (
-    <section className="grid gap-5 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-balance">{title}</h2>
-        {description && (
-          <p className="text-sm leading-5 text-muted-foreground text-pretty">
-            {description}
-          </p>
-        )}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
+        {/* Sticky wizard bar */}
+        <div className="sticky bottom-0 z-10 -mx-1 pt-2 pb-1">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-card/95 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_16px_40px_rgba(15,23,42,0.08)] ring-1 ring-foreground/10 backdrop-blur">
+            <p className="px-1 font-mono text-xs tabular-nums text-muted-foreground">
+              Passo {activeIndex + 1} de {stepIds.length}
+            </p>
+            <div className="flex items-center gap-2">
+              {isFirstStep ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate({ to: '/dashboard/assets' })}
+                  disabled={isSaving}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  Cancelar
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={goBack}
+                  disabled={isSaving}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  <HugeiconsIcon
+                    icon={ArrowLeft01Icon}
+                    className="mr-2 size-4"
+                  />
+                  Voltar
+                </Button>
+              )}
+              {isLastStep ? (
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className={cn(ACTION_BUTTON_CLASS, 'min-w-36')}
+                >
+                  {isSaving ? (
+                    <>
+                      <Spinner className="mr-2 size-4" />
+                      Salvando…
+                    </>
+                  ) : (
+                    <>
+                      <HugeiconsIcon
+                        icon={FloppyDiskIcon}
+                        className="mr-2 size-4"
+                      />
+                      Criar ativo
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={goNext}
+                  className={cn(ACTION_BUTTON_CLASS, 'min-w-28')}
+                >
+                  Próximo
+                  <HugeiconsIcon
+                    icon={ArrowRight01Icon}
+                    className="ml-2 size-4"
+                  />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
   )
 }

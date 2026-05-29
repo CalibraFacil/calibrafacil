@@ -117,14 +117,12 @@ describe('new NC route workflow', () => {
   it('submits a schema-validated NC payload and navigates to the detail page', async () => {
     renderRoute()
 
-    fireEvent.change(screen.getAllByRole('combobox')[0]!, {
-      target: { value: 'equipment' },
-    })
+    fireEvent.click(screen.getByRole('radio', { name: /Equipamento/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Selecione a data' }))
     fireEvent.change(screen.getByLabelText('Hora'), {
       target: { value: '14:35' },
     })
-    fireEvent.change(screen.getAllByRole('combobox')[1]!, {
+    fireEvent.change(screen.getByRole('combobox'), {
       target: { value: '42' },
     })
     fireEvent.change(

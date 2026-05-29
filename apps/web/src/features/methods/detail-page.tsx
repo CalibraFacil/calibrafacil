@@ -1,12 +1,15 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
+import { Fragment, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   CheckmarkCircle02Icon,
+  DistributionIcon,
   Edit02Icon,
+  FunctionIcon,
   RefreshIcon,
+  TaskDone01Icon,
+  TextFontIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
@@ -23,14 +26,27 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { RoleGate } from '@/components/permission-gate'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintField,
+  BlueprintGrid,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
 
-type VoidMethodMutation = {
-  mutate: () => void
-  isPending: boolean
-}
-
+type VoidMethodMutation = { mutate: () => void; isPending: boolean }
 type ReturnToDraftMutation = {
   mutate: (reason: string) => void
   isPending: boolean
@@ -52,6 +68,13 @@ const statusVariants: Record<string, 'default' | 'secondary' | 'outline'> = {
   ARCHIVED: 'outline',
 }
 
+const LIFECYCLE = [
+  { key: 'DRAFT', label: 'Rascunho' },
+  { key: 'PENDING_APPROVAL', label: 'Em aprovação' },
+  { key: 'TECHNICAL_REVIEWED', label: 'Revisão técnica' },
+  { key: 'PUBLISHED', label: 'Publicado' },
+] as const
+
 function getStatusLabel(status: string) {
   return statusLabels[status] ?? status
 }
@@ -61,8 +84,7 @@ function getStatusVariant(status: string) {
 }
 
 function formatDateTime(date: string | null | undefined): string {
-  if (!date) return '-'
-
+  if (!date) return '—'
   return new Date(date).toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -75,7 +97,6 @@ function formatDateTime(date: string | null | undefined): string {
 function hasCertificateContent(method: MethodDetail): boolean {
   const content = method.certificateContent
   if (!content) return false
-
   return Boolean(
     (content.procedureCode ?? '').trim() ||
     (content.referenceStandards?.length ?? 0) > 0 ||
@@ -83,26 +104,83 @@ function hasCertificateContent(method: MethodDetail): boolean {
   )
 }
 
+/** Horizontal approval-lifecycle stepper — governance at a glance. */
+function LifecycleStepper({ status }: { status: string }) {
+  const archived = status === 'ARCHIVED'
+  const currentIndex = archived
+    ? LIFECYCLE.length - 1
+    : LIFECYCLE.findIndex((stage) => stage.key === status)
+
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+      {LIFECYCLE.map((stage, index) => {
+        const done = index < currentIndex
+        const active = index === currentIndex && !archived
+        const isLast = index === LIFECYCLE.length - 1
+        return (
+          <Fragment key={stage.key}>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={cn(
+                  'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums',
+                  done
+                    ? 'bg-primary text-primary-foreground'
+                    : active
+                      ? 'bg-primary text-primary-foreground ring-4 ring-primary/15'
+                      : 'bg-muted text-muted-foreground ring-1 ring-inset ring-foreground/15',
+                )}
+              >
+                {done ? '✓' : index + 1}
+              </span>
+              <span
+                className={cn(
+                  'hidden text-xs whitespace-nowrap sm:inline',
+                  active
+                    ? 'font-medium text-foreground'
+                    : done
+                      ? 'text-foreground/70'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {stage.label}
+              </span>
+            </div>
+            {!isLast && (
+              <span
+                aria-hidden
+                className={cn(
+                  'h-px w-5 shrink-0 sm:w-8',
+                  index < currentIndex ? 'bg-primary' : 'bg-foreground/15',
+                )}
+              />
+            )}
+          </Fragment>
+        )
+      })}
+      {archived && (
+        <Badge variant="outline" className="ml-2 shrink-0">
+          Arquivado
+        </Badge>
+      )}
+    </div>
+  )
+}
+
 export function MethodDetailPage({ id }: { id: string }) {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const { data: method, isLoading, error } = useMethodDetailData(id)
-
   const { data: auditLogData } = useMethodAuditLogData(id)
 
   const technicalReviewMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.methods.technicalReview(method?.id ?? id)
-    },
+    mutationFn: async () =>
+      calibraApi.methods.technicalReview(method?.id ?? id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Revisão técnica registrada')
     },
-    onError: (error) => {
-      toast.error(error.message)
-    },
+    onError: (error) => toast.error(error.message),
   })
 
   const qualityApproveMutation = useMutation({
@@ -115,276 +193,185 @@ export function MethodDetailPage({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Método aprovado e publicado')
     },
-    onError: (error) => {
-      toast.error(error.message)
-    },
+    onError: (error) => toast.error(error.message),
   })
 
   const returnToDraftMutation = useMutation({
-    mutationFn: async (reason: string) => {
-      return calibraApi.methods.returnToDraft(method?.id ?? id, reason)
-    },
+    mutationFn: async (reason: string) =>
+      calibraApi.methods.returnToDraft(method?.id ?? id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Método retornou para rascunho')
     },
-    onError: (error) => {
-      toast.error(error.message)
-    },
+    onError: (error) => toast.error(error.message),
   })
 
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/methods' })}
-          className="-ml-2 active:scale-[0.96] transition-transform"
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-          Voltar
-        </Button>
-        <div className="rounded-lg bg-destructive/5 px-6 py-8 text-center text-sm text-destructive shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
-          Erro ao carregar método: {error.message}
-        </div>
-      </div>
-    )
-  }
-
   if (isLoading) {
+    return <MethodDetailSkeleton />
+  }
+
+  if (error || !method) {
     return (
-      <div className="space-y-6">
-        <div className="space-y-4 sm:flex sm:items-start sm:justify-between sm:gap-4 sm:space-y-0">
-          <div className="flex items-start gap-4">
-            <Skeleton className="size-9 rounded-md" />
-            <div className="space-y-2">
-              <Skeleton className="h-7 w-72" />
-              <Skeleton className="h-4 w-96 max-w-full" />
-            </div>
-          </div>
-          <Skeleton className="h-9 w-24" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="space-y-3 py-3">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-6 w-36" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-          ))}
-        </div>
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="space-y-8">
-            {Array.from({ length: 3 }).map((_, sectionIndex) => (
-              <div key={sectionIndex} className="space-y-4">
-                <Skeleton className="h-5 w-44" />
-                <div className="border-t border-border/70">
-                  {Array.from({ length: 4 }).map((_, rowIndex) => (
-                    <div key={rowIndex} className="space-y-2 border-b py-4">
-                      <Skeleton className="h-4 w-40" />
-                      <Skeleton className="h-5 w-3/4" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-8 lg:border-l lg:pl-8">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-40 w-full" />
-          </div>
-        </div>
-      </div>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          {error
+            ? `Erro ao carregar método: ${error.message}`
+            : 'Método não encontrado.'}
+        </p>
+      </Panel>
     )
   }
 
-  if (!method) {
-    return (
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/methods' })}
-          className="-ml-2 active:scale-[0.96] transition-transform"
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-          Voltar
-        </Button>
-        <div className="rounded-lg bg-muted/35 px-6 py-8 text-center text-sm text-muted-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-          Método não encontrado.
-        </div>
-      </div>
-    )
-  }
+  const auditEvents = auditLogData?.data?.length
+    ? buildAuditTimelineEvents(auditLogData.data)
+    : []
+  const hasEvidence = Boolean(
+    method.methodFingerprint || method.publicationEvidence,
+  )
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4 sm:flex sm:items-start sm:justify-between sm:gap-4 sm:space-y-0">
-        <div className="flex items-start gap-3 sm:gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate({ to: '/dashboard/methods' })}
-            className="mt-0.5 active:scale-[0.96]"
-            aria-label="Voltar para métodos"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="size-5" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <div className="space-y-3">
-              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+      {/* Hero — identity, lifecycle, key counts, workflow actions */}
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Método de calibração
+                {method.assetTypeName ? ` · ${method.assetTypeName}` : ''}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {method.name}
                 </h1>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium tabular-nums text-muted-foreground">
+                  v{method.version}
+                </span>
                 <Badge variant={getStatusVariant(method.status)}>
                   {getStatusLabel(method.status)}
                 </Badge>
               </div>
-              <p className="max-w-5xl text-pretty text-sm leading-6 text-muted-foreground">
-                {method.description || 'Sem descrição'}
-              </p>
+              {method.description ? (
+                <p className="mt-1 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground">
+                  {method.description}
+                </p>
+              ) : null}
             </div>
+
+            <MethodActions
+              method={method}
+              id={id}
+              technicalReviewMutation={technicalReviewMutation}
+              qualityApproveMutation={qualityApproveMutation}
+              returnToDraftMutation={returnToDraftMutation}
+            />
           </div>
+
+          <div className="border-t border-foreground/10 pt-4">
+            <LifecycleStepper status={method.status} />
+          </div>
+
+          <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+            <StaggerItem>
+              <SignalTile
+                icon={TextFontIcon}
+                label="Campos"
+                value={String(method.dataFields.length)}
+                hint="entradas"
+                tone="neutral"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                icon={FunctionIcon}
+                label="Fórmulas"
+                value={String(method.formulas.length)}
+                hint="cálculos"
+                tone="neutral"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                icon={TaskDone01Icon}
+                label="Critérios"
+                value={String(method.validations.length)}
+                hint="aceitação"
+                tone="neutral"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                icon={DistributionIcon}
+                label="Incerteza B"
+                value={String(method.uncertaintyParams.length)}
+                hint="componentes"
+                tone="neutral"
+              />
+            </StaggerItem>
+          </StaggerGroup>
         </div>
+      </Panel>
 
-        <MethodActions
-          method={method}
-          id={id}
-          technicalReviewMutation={technicalReviewMutation}
-          qualityApproveMutation={qualityApproveMutation}
-          returnToDraftMutation={returnToDraftMutation}
-          className="hidden sm:flex"
-        />
-      </div>
-
-      <MethodActions
-        method={method}
-        id={id}
-        technicalReviewMutation={technicalReviewMutation}
-        qualityApproveMutation={qualityApproveMutation}
-        returnToDraftMutation={returnToDraftMutation}
-        className="flex sm:hidden"
-        mobile
-      />
-
-      <dl className="grid overflow-hidden rounded-lg bg-muted/35 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] sm:grid-cols-2 xl:grid-cols-4 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-        <SummaryItem
-          label="Versão"
-          value={`v${method.version}`}
-          detail="Controle de revisão"
-          className="border-b border-border/70 sm:border-r xl:border-b-0"
-          mono
-        />
-        <SummaryItem
-          label="Tipo de instrumento"
-          value={method.assetTypeName || '-'}
-          detail="Aplicação técnica"
-          className="border-b border-border/70 xl:border-r xl:border-b-0"
-        />
-        <SummaryItem
-          label="Campos"
-          value={method.dataFields.length}
-          detail="Entradas do executor"
-          className="border-b border-border/70 sm:border-r sm:border-b-0"
-          numeric
-        />
-        <SummaryItem
-          label="Fórmulas"
-          value={method.formulas.length}
-          detail={`${method.validations.length} critérios`}
-          numeric
-        />
-      </dl>
-
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-10">
-          {hasCertificateContent(method) && (
-            <DetailSection
-              title="Conteúdo do certificado"
-              description="Textos e blocos que acompanham os certificados gerados por este método."
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <main className="min-w-0 space-y-6">
+          {/* Specification — fields / formulas / criteria / uncertainty */}
+          <Panel className="divide-y divide-foreground/10">
+            <SpecBlock
+              eyebrow="Campos de entrada"
+              count={method.dataFields.length}
             >
-              <div className="border-t border-border/70">
-                {method.certificateContent?.procedureCode ? (
-                  <DetailItem
-                    label="Procedimento"
-                    value={method.certificateContent.procedureCode}
-                    mono
-                  />
-                ) : null}
-
-                {(method.certificateContent?.referenceStandards?.length ?? 0) >
-                0 ? (
-                  <DetailItem
-                    label="Normas de referência"
-                    value={method.certificateContent?.referenceStandards?.join(
-                      ', ',
-                    )}
-                  />
-                ) : null}
-
-                {method.certificateContent?.sections?.map((section, index) => (
-                  <DetailItem
-                    key={`${section.kind}-${index}`}
-                    label={
-                      'title' in section && section.title
-                        ? section.title
-                        : 'Notas'
-                    }
-                  >
-                    <Badge variant="outline">{section.kind}</Badge>
-                  </DetailItem>
-                ))}
-              </div>
-            </DetailSection>
-          )}
-
-          <DetailSection
-            title={`Campos de entrada (${method.dataFields.length})`}
-            description="Dados solicitados durante a execução da calibração."
-          >
-            {method.dataFields.length === 0 ? (
-              <EmptyLine>Nenhum campo de entrada definido.</EmptyLine>
-            ) : (
-              <div className="border-t border-border/70">
-                {method.dataFields.map((field) => (
-                  <DetailItem key={field.key} label={field.label}>
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                        {field.key}
-                      </span>
-                      <Badge variant="outline">{field.type}</Badge>
-                      {field.unit ? (
-                        <Badge variant="secondary">{field.unit}</Badge>
-                      ) : null}
-                      {field.required ? (
-                        <span className="text-xs font-medium text-destructive">
-                          obrigatório
+              {method.dataFields.length === 0 ? (
+                <EmptyNote>Nenhum campo de entrada definido.</EmptyNote>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {method.dataFields.map((field) => (
+                    <div
+                      key={field.key}
+                      className="rounded-xl bg-muted/40 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-medium">
+                          {field.label}
                         </span>
-                      ) : null}
+                        <Badge variant="outline" className="shrink-0">
+                          {field.type}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                          {field.key}
+                        </span>
+                        {field.unit ? (
+                          <Badge variant="secondary">{field.unit}</Badge>
+                        ) : null}
+                        {field.required ? (
+                          <span className="text-[11px] font-medium text-destructive">
+                            obrigatório
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  </DetailItem>
-                ))}
-              </div>
-            )}
-          </DetailSection>
+                  ))}
+                </div>
+              )}
+            </SpecBlock>
 
-          <DetailSection
-            title={`Fórmulas (${method.formulas.length})`}
-            description="Cálculos derivados dos campos de entrada e das constantes do método."
-          >
-            {method.formulas.length === 0 ? (
-              <EmptyLine>Nenhuma fórmula definida.</EmptyLine>
-            ) : (
-              <div className="border-t border-border/70">
-                {method.formulas.map((formula) => (
-                  <DetailItem
-                    key={formula.outputKey}
-                    label={formula.label || formula.outputKey}
-                  >
-                    <div className="space-y-2">
+            <SpecBlock eyebrow="Fórmulas" count={method.formulas.length}>
+              {method.formulas.length === 0 ? (
+                <EmptyNote>Nenhuma fórmula definida.</EmptyNote>
+              ) : (
+                <div className="space-y-2.5">
+                  {method.formulas.map((formula) => (
+                    <div
+                      key={formula.outputKey}
+                      className="rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                    >
                       <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {formula.label || formula.outputKey}
+                        </span>
                         <span className="font-mono text-xs tabular-nums text-muted-foreground">
                           {formula.outputKey}
                         </span>
@@ -397,201 +384,207 @@ export function MethodDetailPage({ id }: { id: string }) {
                           </Badge>
                         ) : null}
                       </div>
-                      <code className="block max-w-full overflow-x-auto rounded-md bg-muted/45 px-2.5 py-2 font-mono text-xs leading-relaxed text-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.05)]">
+                      <code className="mt-2 block max-w-full overflow-x-auto rounded-md bg-muted/50 px-2.5 py-2 font-mono text-xs leading-relaxed">
                         {formula.expression}
                       </code>
                     </div>
-                  </DetailItem>
-                ))}
-              </div>
-            )}
-          </DetailSection>
+                  ))}
+                </div>
+              )}
+            </SpecBlock>
 
-          <DetailSection
-            title={`Critérios de aceitação (${method.validations.length})`}
-            description="Regras de conformidade avaliadas ao finalizar a calibração."
-          >
-            {method.validations.length === 0 ? (
-              <EmptyLine>Nenhum critério definido.</EmptyLine>
-            ) : (
-              <div className="border-t border-border/70">
-                {method.validations.map((validation, index) => (
-                  <DetailItem
-                    key={`${validation.leftExpression}-${validation.operator}-${validation.rightExpression}-${index}`}
-                    label={validation.severity === 'error' ? 'Erro' : 'Aviso'}
-                  >
-                    <div className="space-y-2">
-                      <code className="block max-w-full overflow-x-auto rounded-md bg-muted/45 px-2.5 py-2 font-mono text-xs leading-relaxed text-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.05)]">
-                        {validation.leftExpression} {validation.operator}{' '}
-                        {validation.rightExpression}
-                      </code>
-                      <p className="text-pretty text-sm text-muted-foreground">
-                        {validation.message}
-                      </p>
-                    </div>
-                  </DetailItem>
-                ))}
-              </div>
-            )}
-          </DetailSection>
-
-          {method.uncertaintyParams.length > 0 && (
-            <DetailSection
-              title={`Componentes tipo B (${method.uncertaintyParams.length})`}
-              description="Parâmetros de incerteza cadastrados como constantes do método."
+            <SpecBlock
+              eyebrow="Critérios de aceitação"
+              count={method.validations.length}
             >
-              <div className="border-t border-border/70">
-                {method.uncertaintyParams.map((component) => (
-                  <DetailItem key={component.name} label={component.name}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono tabular-nums">
-                        {component.value}
-                      </span>
-                      <Badge variant="outline">{component.distribution}</Badge>
-                      {component.degreesOfFreedom ? (
-                        <span className="text-xs text-muted-foreground">
-                          veff {component.degreesOfFreedom}
-                        </span>
+              {method.validations.length === 0 ? (
+                <EmptyNote>Nenhum critério definido.</EmptyNote>
+              ) : (
+                <div className="space-y-2.5">
+                  {method.validations.map((validation, index) => (
+                    <div
+                      key={`${validation.leftExpression}-${validation.operator}-${validation.rightExpression}-${index}`}
+                      className="rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-muted/50 px-2.5 py-2 font-mono text-xs leading-relaxed">
+                          {validation.leftExpression} {validation.operator}{' '}
+                          {validation.rightExpression}
+                        </code>
+                        <Badge
+                          variant={
+                            validation.severity === 'error'
+                              ? 'destructive'
+                              : 'outline'
+                          }
+                          className="shrink-0"
+                        >
+                          {validation.severity === 'error' ? 'Erro' : 'Aviso'}
+                        </Badge>
+                      </div>
+                      {validation.message ? (
+                        <p className="mt-1.5 text-pretty text-sm text-muted-foreground">
+                          {validation.message}
+                        </p>
                       ) : null}
                     </div>
-                  </DetailItem>
-                ))}
-              </div>
-            </DetailSection>
-          )}
-        </div>
+                  ))}
+                </div>
+              )}
+            </SpecBlock>
 
-        <aside className="space-y-10 lg:border-l lg:border-border/70 lg:pl-8">
-          <DetailSection title="Governança">
-            <dl className="border-t border-border/70">
-              <DetailItem label="Status">
-                <Badge variant={getStatusVariant(method.status)}>
-                  {getStatusLabel(method.status)}
-                </Badge>
-              </DetailItem>
-              <DetailItem label="Versão" value={`v${method.version}`} mono />
-              <DetailItem
-                label="Tipo de instrumento"
-                value={method.assetTypeName || '-'}
-              />
-            </dl>
-          </DetailSection>
+            {method.uncertaintyParams.length > 0 ? (
+              <SpecBlock
+                eyebrow="Componentes de incerteza (tipo B)"
+                count={method.uncertaintyParams.length}
+              >
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {method.uncertaintyParams.map((component) => (
+                    <div
+                      key={component.name}
+                      className="rounded-xl bg-muted/40 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-medium">
+                          {component.name}
+                        </span>
+                        <span className="shrink-0 font-mono text-sm tabular-nums">
+                          {component.value}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">
+                          {component.distribution}
+                        </Badge>
+                        {component.degreesOfFreedom ? (
+                          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                            veff {component.degreesOfFreedom}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SpecBlock>
+            ) : null}
+          </Panel>
 
-          <DetailSection
-            title="Evidência compilada"
-            description="Artefato usado para publicação e execução rastreável."
-          >
-            <dl className="border-t border-border/70">
-              <DetailItem
-                label="Method fingerprint"
-                value={method.methodFingerprint || '-'}
-                mono
+          {hasCertificateContent(method) ? (
+            <Panel className="p-4 sm:p-5">
+              <PanelHeader
+                eyebrow="Saída"
+                title="Conteúdo do certificado"
+                description="Textos e blocos que acompanham os certificados gerados."
               />
-              <DetailItem
-                label="Publication fingerprint"
-                value={
-                  method.publicationEvidence?.publicationFingerprint || '-'
-                }
-                mono
-              />
-              <DetailItem
-                label="Engine"
-                value={
-                  method.methodEngine?.version ||
-                  method.publicationEvidence?.engineVersion ||
-                  '-'
-                }
-                mono
-              />
-              <DetailItem
-                label="Engine options"
-                value={
-                  method.methodEngine?.optionsFingerprint ||
-                  method.publicationEvidence?.engineOptionsFingerprint ||
-                  '-'
-                }
-                mono
-              />
-              <DetailItem
-                label="Compilado em"
-                value={formatDateTime(
-                  method.methodCompiledAt ||
-                    method.publicationEvidence?.compiledAt,
-                )}
-                mono
-              />
-              <DetailItem
-                label="Previews"
-                value={String(
-                  method.publicationEvidence?.previewResults?.length ?? 0,
-                )}
-                mono
-              />
-              <DetailItem
-                label="Diagnósticos"
-                value={String(
-                  method.publicationEvidence?.diagnostics?.length ?? 0,
-                )}
-                mono
-              />
-            </dl>
-          </DetailSection>
+              <BlueprintGrid className="mt-4 sm:grid-cols-2">
+                {method.certificateContent?.procedureCode ? (
+                  <BlueprintField label="Procedimento" mono>
+                    {method.certificateContent.procedureCode}
+                  </BlueprintField>
+                ) : null}
+                {(method.certificateContent?.referenceStandards?.length ?? 0) >
+                0 ? (
+                  <BlueprintField label="Normas de referência">
+                    {method.certificateContent?.referenceStandards?.join(', ')}
+                  </BlueprintField>
+                ) : null}
+                {(method.certificateContent?.sections?.length ?? 0) > 0 ? (
+                  <BlueprintField label="Blocos de texto">
+                    {method.certificateContent?.sections?.length} seç
+                    {(method.certificateContent?.sections?.length ?? 0) === 1
+                      ? 'ão'
+                      : 'ões'}
+                  </BlueprintField>
+                ) : null}
+              </BlueprintGrid>
+            </Panel>
+          ) : null}
+        </main>
 
-          <DetailSection title="Responsáveis">
-            <dl className="border-t border-border/70">
-              <DetailItem
-                label="Criado por"
-                value={method.createdByName || '-'}
-              />
-              <DetailItem
-                label="Revisado tecnicamente por"
-                value={method.technicalReviewedByName || '-'}
-              />
-              <DetailItem
-                label="Aprovado por (Qualidade)"
-                value={method.approvedByName || '-'}
-              />
-            </dl>
-          </DetailSection>
-
-          <DetailSection title="Datas">
-            <dl className="border-t border-border/70">
-              <DetailItem
-                label="Criado em"
-                value={formatDateTime(method.createdAt)}
-                mono
-              />
-              <DetailItem
-                label="Publicado em"
-                value={formatDateTime(method.publishedAt)}
-                mono
-              />
+        <aside className="min-w-0 space-y-6">
+          <Panel className="p-4 sm:p-5">
+            <PanelHeader eyebrow="Governança" title="Responsáveis e datas" />
+            <BlueprintGrid className="mt-4">
+              <BlueprintField label="Criado por">
+                {method.createdByName || '—'}
+              </BlueprintField>
+              <BlueprintField label="Criado em" mono>
+                {formatDateTime(method.createdAt)}
+              </BlueprintField>
+              <BlueprintField label="Revisão técnica">
+                {method.technicalReviewedByName || '—'}
+              </BlueprintField>
+              <BlueprintField label="Aprovação (qualidade)">
+                {method.approvedByName || '—'}
+              </BlueprintField>
+              <BlueprintField label="Publicado em" mono>
+                {formatDateTime(method.publishedAt)}
+              </BlueprintField>
               {method.archivedAt ? (
-                <DetailItem
-                  label="Arquivado em"
-                  value={formatDateTime(method.archivedAt)}
-                  mono
-                />
+                <BlueprintField label="Arquivado em" mono>
+                  {formatDateTime(method.archivedAt)}
+                </BlueprintField>
               ) : null}
-            </dl>
-          </DetailSection>
+            </BlueprintGrid>
+          </Panel>
+
+          {hasEvidence ? (
+            <Panel className="p-4 sm:p-5">
+              <Accordion>
+                <AccordionItem value="evidence">
+                  <AccordionTrigger className="min-h-9 py-0 hover:no-underline">
+                    <div className="min-w-0 text-left">
+                      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Técnico
+                      </p>
+                      <h2 className="text-sm font-semibold">
+                        Evidência de publicação
+                      </h2>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4">
+                    <BlueprintGrid>
+                      <BlueprintField label="Method fingerprint" mono>
+                        {method.methodFingerprint || '—'}
+                      </BlueprintField>
+                      <BlueprintField label="Publication fingerprint" mono>
+                        {method.publicationEvidence?.publicationFingerprint ||
+                          '—'}
+                      </BlueprintField>
+                      <BlueprintField label="Engine" mono>
+                        {method.methodEngine?.version ||
+                          method.publicationEvidence?.engineVersion ||
+                          '—'}
+                      </BlueprintField>
+                      <BlueprintField label="Compilado em" mono>
+                        {formatDateTime(
+                          method.methodCompiledAt ||
+                            method.publicationEvidence?.compiledAt,
+                        )}
+                      </BlueprintField>
+                      <BlueprintField label="Previews / diagnósticos" mono>
+                        {method.publicationEvidence?.previewResults?.length ??
+                          0}
+                        {' / '}
+                        {method.publicationEvidence?.diagnostics?.length ?? 0}
+                      </BlueprintField>
+                    </BlueprintGrid>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </Panel>
+          ) : null}
+
+          {auditEvents.length > 0 ? (
+            <Panel className="p-4 sm:p-5">
+              <PanelHeader eyebrow="Atividade" title="Histórico" />
+              <div className="mt-4">
+                <AuditTimeline events={auditEvents} showCard={false} />
+              </div>
+            </Panel>
+          ) : null}
         </aside>
       </div>
-
-      {auditLogData?.data && auditLogData.data.length > 0 && (
-        <DetailSection
-          title="Histórico de alterações"
-          description="Registros de controle para rastreabilidade ISO 17025."
-        >
-          <div className="border-t border-border/70 pt-4">
-            <AuditTimeline
-              events={buildAuditTimelineEvents(auditLogData.data)}
-              title="Histórico de Alterações (ISO 17025)"
-              showCard={false}
-            />
-          </div>
-        </DetailSection>
-      )}
     </div>
   )
 }
@@ -602,30 +595,20 @@ function MethodActions({
   technicalReviewMutation,
   qualityApproveMutation,
   returnToDraftMutation,
-  className,
-  mobile = false,
 }: {
   method: MethodDetail
   id: string
   technicalReviewMutation: VoidMethodMutation
   qualityApproveMutation: VoidMethodMutation
   returnToDraftMutation: ReturnToDraftMutation
-  className?: string
-  mobile?: boolean
 }) {
   return (
-    <div
-      className={cn(
-        'items-center gap-2',
-        mobile && 'flex-col items-stretch',
-        className,
-      )}
-    >
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
       {method.status === 'DRAFT' && (
         <Button
           variant="outline"
           render={<Link to="/dashboard/methods/$id/edit" params={{ id }} />}
-          className={cn('active:scale-[0.96]', mobile && 'w-full')}
+          className={ACTION_BUTTON_CLASS}
         >
           <HugeiconsIcon icon={Edit02Icon} className="mr-2 size-4" />
           Editar
@@ -637,14 +620,14 @@ function MethodActions({
           <Button
             onClick={() => technicalReviewMutation.mutate()}
             disabled={technicalReviewMutation.isPending}
-            className={cn('active:scale-[0.96]', mobile && 'w-full')}
+            className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon
               icon={CheckmarkCircle02Icon}
               className="mr-2 size-4"
             />
             {technicalReviewMutation.isPending
-              ? 'Revisando...'
+              ? 'Revisando…'
               : 'Revisar tecnicamente'}
           </Button>
         )}
@@ -655,14 +638,14 @@ function MethodActions({
           <Button
             onClick={() => qualityApproveMutation.mutate()}
             disabled={qualityApproveMutation.isPending}
-            className={cn('active:scale-[0.96]', mobile && 'w-full')}
+            className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon
               icon={CheckmarkCircle02Icon}
               className="mr-2 size-4"
             />
             {qualityApproveMutation.isPending
-              ? 'Aprovando...'
+              ? 'Aprovando…'
               : 'Aprovar qualidade'}
           </Button>
         )}
@@ -689,11 +672,11 @@ function MethodActions({
               returnToDraftMutation.mutate(reason.trim())
             }}
             disabled={returnToDraftMutation.isPending}
-            className={cn('active:scale-[0.96]', mobile && 'w-full')}
+            className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon icon={RefreshIcon} className="mr-2 size-4" />
             {returnToDraftMutation.isPending
-              ? 'Retornando...'
+              ? 'Retornando…'
               : 'Retornar para rascunho'}
           </Button>
         )}
@@ -702,98 +685,59 @@ function MethodActions({
   )
 }
 
-function SummaryItem({
-  label,
-  value,
-  detail,
-  className,
-  mono = false,
-  numeric = false,
-}: {
-  label: string
-  value: ReactNode
-  detail?: string
-  className?: string
-  mono?: boolean
-  numeric?: boolean
-}) {
-  return (
-    <div className={cn('min-w-0 px-5 py-4', className)}>
-      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          'mt-2 min-w-0 truncate text-base font-medium',
-          mono && 'font-mono tabular-nums',
-          numeric && 'tabular-nums',
-        )}
-      >
-        {value}
-      </dd>
-      {detail ? (
-        <dd className="mt-1 text-pretty text-xs text-muted-foreground">
-          {detail}
-        </dd>
-      ) : null}
-    </div>
-  )
-}
-
-function DetailSection({
-  title,
-  description,
+function SpecBlock({
+  eyebrow,
+  count,
   children,
-  className,
 }: {
-  title: string
-  description?: string
+  eyebrow: string
+  count?: number
   children: ReactNode
-  className?: string
 }) {
   return (
-    <section className={cn('space-y-4', className)}>
-      <div className="max-w-4xl">
-        <h2 className="text-balance text-base font-medium">{title}</h2>
-        {description ? (
-          <p className="mt-1 text-pretty text-sm text-muted-foreground">
-            {description}
-          </p>
+    <section className="p-4 sm:p-5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          {eyebrow}
+        </p>
+        {count !== undefined ? (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            {count}
+          </span>
         ) : null}
       </div>
-      {children}
+      <div className="mt-4">{children}</div>
     </section>
   )
 }
 
-function DetailItem({
-  label,
-  value,
-  mono = false,
-  children,
-}: {
-  label: string
-  value?: ReactNode
-  mono?: boolean
-  children?: ReactNode
-}) {
-  return (
-    <div className="min-w-0 border-b border-border/70 py-4">
-      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          'mt-1 min-w-0 text-sm text-foreground',
-          mono && 'font-mono tabular-nums',
-        )}
-      >
-        {children ?? value ?? '-'}
-      </dd>
-    </div>
-  )
+function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
-function EmptyLine({ children }: { children: ReactNode }) {
+function MethodDetailSkeleton() {
   return (
-    <p className="border-t border-border/70 py-4 text-sm text-muted-foreground">
-      {children}
-    </p>
+    <div className="space-y-6">
+      <Panel className="p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3 w-44" />
+            <Skeleton className="h-7 w-80 max-w-full" />
+            <Skeleton className="h-4 w-full max-w-lg" />
+          </div>
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+        <Skeleton className="mt-5 h-6 w-full max-w-md" />
+        <div className="mt-5 grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+          {Array.from({ length: 4 }).map((_item, index) => (
+            <Skeleton key={index} className="h-[88px] rounded-xl" />
+          ))}
+        </div>
+      </Panel>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <Skeleton className="h-96 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    </div>
   )
 }

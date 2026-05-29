@@ -6,7 +6,14 @@ import {
   useQueryState,
 } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon, AlertCircleIcon } from '@hugeicons/core-free-icons'
+import {
+  PlusSignIcon,
+  AlertCircleIcon,
+  Clock01Icon,
+  Analytics01Icon,
+  CalendarRemove01Icon,
+  PercentCircleIcon,
+} from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,12 +26,12 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  ACTION_BUTTON_CLASS,
+  Panel,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -168,94 +175,94 @@ export function CAPAListPage() {
 
   if (isContextSwitching) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">
-            Carregando o contexto da organização ativa.
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Carregando o contexto da organização ativa.
+        </p>
+      </Panel>
     )
   }
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar CAPAs: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar CAPAs: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid gap-4 md:grid-cols-5">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Abertas</CardDescription>
-              <CardTitle className="text-2xl text-destructive">
-                {getStatusCount('OPEN')}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Em Investigação</CardDescription>
-              <CardTitle className="text-2xl text-yellow-600">
-                {getStatusCount('INVESTIGATION')}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Implementação</CardDescription>
-              <CardTitle className="text-2xl text-blue-600">
-                {getStatusCount('IMPLEMENTATION')}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Atrasadas</CardDescription>
-              <CardTitle className="text-2xl text-destructive">
-                {summary.overdue}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Taxa Eficácia</CardDescription>
-              <CardTitle className="text-2xl text-green-600">
-                {summary.effectivenessRate}%
-              </CardTitle>
-            </CardHeader>
-          </Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Qualidade
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Ações corretivas (CAPA)
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Investigação de causa raiz, implementação e verificação de eficácia.
+          </p>
         </div>
+        <Button
+          render={<Link to="/dashboard/capa/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Nova CAPA
+        </Button>
+      </div>
+
+      {summary && (
+        <StaggerGroup className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StaggerItem>
+            <SignalTile
+              icon={AlertCircleIcon}
+              label="Abertas"
+              value={getStatusCount('OPEN')}
+              tone={getStatusCount('OPEN') > 0 ? 'critical' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={Clock01Icon}
+              label="Em investigação"
+              value={getStatusCount('INVESTIGATION')}
+              tone="info"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={Analytics01Icon}
+              label="Implementação"
+              value={getStatusCount('IMPLEMENTATION')}
+              tone="info"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={CalendarRemove01Icon}
+              label="Atrasadas"
+              value={summary.overdue}
+              tone={summary.overdue > 0 ? 'critical' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={PercentCircleIcon}
+              label="Taxa eficácia"
+              value={`${summary.effectivenessRate}%`}
+              tone="ok"
+            />
+          </StaggerItem>
+        </StaggerGroup>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Ações Corretivas (CAPA)</CardTitle>
-            <CardDescription>
-              Ações corretivas e preventivas - ISO 17025 Cláusula 8.2
-            </CardDescription>
-          </div>
-          <Button
-            render={
-              <Link to="/dashboard/capa/new">
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                Nova CAPA
-              </Link>
-            }
-          />
-        </CardHeader>
-        <CardContent>
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex flex-wrap gap-4 mb-6">
             <Input
@@ -348,7 +355,7 @@ export function CAPAListPage() {
                 <EmptyDescription>
                   {hasFilters
                     ? 'Nenhuma CAPA encontrada para os filtros aplicados.'
-                    : 'Comece registrando sua primeira ação corretiva para atender a ISO 17025 Cláusula 8.2.'}
+                    : 'Comece registrando sua primeira ação corretiva.'}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -386,8 +393,8 @@ export function CAPAListPage() {
               onPageChange={setPage}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

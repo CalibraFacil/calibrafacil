@@ -16,13 +16,7 @@ import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
 import { calibraApi, resolveCloudApiUrl } from '@/utils/api'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Panel, PanelHeader } from '@/components/instrument-panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,15 +59,22 @@ export function AuthenticationSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Métodos de Autenticação</CardTitle>
-          <CardDescription>
-            Gerencie como você faz login na sua conta e como sua organização usa
-            autenticação corporativa.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="min-w-0">
+        <h2 className="text-balance text-lg font-semibold tracking-tight">
+          Autenticação
+        </h2>
+        <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+          Como você acessa sua conta e como a organização usa autenticação
+          corporativa e chaves de API.
+        </p>
+      </div>
+
+      <Panel className="p-5 sm:p-6">
+        <PanelHeader
+          title="Métodos de acesso"
+          description="Como você faz login na sua conta."
+        />
+        <div className="mt-4 space-y-3">
           <AuthStatusRow
             icon={CheckmarkBadge01Icon}
             title="Senha"
@@ -92,8 +93,8 @@ export function AuthenticationSettingsPage() {
               user?.emailVerified ? 'text-green-600' : 'text-yellow-600'
             }
           />
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       {organizationType === 'LAB' ? (
         <>
@@ -104,15 +105,12 @@ export function AuthenticationSettingsPage() {
           <ApiKeysCard />
         </>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>SSO Corporativo</CardTitle>
-            <CardDescription>
-              O SSO está disponível apenas para organizações do tipo
-              laboratório.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            title="SSO corporativo"
+            description="O SSO está disponível apenas para organizações do tipo laboratório."
+          />
+        </Panel>
       )}
     </div>
   )
@@ -173,22 +171,17 @@ function ApiKeysCard() {
   const apiKeys = apiKeysQuery.data?.data ?? []
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <CardTitle>API Keys</CardTitle>
-            <CardDescription>
-              Crie chaves para integrar sistemas externos à API pública do
-              laboratório.
-            </CardDescription>
-          </div>
+    <Panel className="p-5 sm:p-6">
+      <PanelHeader
+        title="API keys"
+        description="Crie chaves para integrar sistemas externos à API pública do laboratório."
+        action={
           <Badge variant={hasApi ? 'default' : 'secondary'}>
             {accessQuery.data?.planName ?? 'Plano atual'}
           </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        }
+      />
+      <div className="mt-4 space-y-6">
         {!hasApi && (
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             O entitlement de API está disponível a partir do plano Professional.
@@ -315,8 +308,8 @@ function ApiKeysCard() {
             ))
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }
 
@@ -460,14 +453,12 @@ function SsoSettingsCard({
 
   if (!activeOrganizationKey) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>SSO Corporativo</CardTitle>
-          <CardDescription>
-            Selecione uma organização para configurar autenticação corporativa.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel className="p-5 sm:p-6">
+        <PanelHeader
+          title="SSO corporativo"
+          description="Selecione uma organização para configurar autenticação corporativa."
+        />
+      </Panel>
     )
   }
 
@@ -477,16 +468,16 @@ function SsoSettingsCard({
 
   if (ssoQuery.isError) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>SSO Corporativo</CardTitle>
-          <CardDescription>
-            {ssoQuery.error instanceof Error
+      <Panel className="p-5 sm:p-6">
+        <PanelHeader
+          title="SSO corporativo"
+          description={
+            ssoQuery.error instanceof Error
               ? ssoQuery.error.message
-              : 'Falha ao carregar configuração SSO.'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+              : 'Falha ao carregar configuração SSO.'
+          }
+        />
+      </Panel>
     )
   }
 
@@ -500,15 +491,11 @@ function SsoSettingsCard({
   const hasSso = data.billing.hasSso
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
-            <CardTitle>SSO Corporativo</CardTitle>
-            <CardDescription>
-              Login corporativo via OIDC para o dashboard do laboratório.
-            </CardDescription>
-          </div>
+    <Panel className="p-5 sm:p-6">
+      <PanelHeader
+        title="SSO corporativo"
+        description="Login corporativo via OIDC para o dashboard do laboratório."
+        action={
           <div className="flex flex-wrap gap-2">
             <Badge variant={hasSso ? 'default' : 'secondary'}>
               {data.billing.planName}
@@ -517,9 +504,9 @@ function SsoSettingsCard({
               {provider?.domainVerified ? 'Domínio verificado' : 'Pendente'}
             </Badge>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        }
+      />
+      <div className="mt-4 space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
           <StatusTile
             icon={Shield01Icon}
@@ -777,8 +764,8 @@ function SsoSettingsCard({
             </div>
           </form>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }
 
@@ -837,29 +824,25 @@ function DnsRecordCard({
 function AuthenticationSkeleton() {
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="mt-2 h-4 w-72" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {[1, 2].map((item) => (
-            <div
-              key={item}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-40" />
-                </div>
+      <Skeleton className="h-10 w-56" />
+      <Panel className="space-y-4 p-5 sm:p-6">
+        <Skeleton className="h-5 w-44" />
+        {[1, 2].map((item) => (
+          <div
+            key={item}
+            className="flex items-center justify-between rounded-lg border p-4"
+          >
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-40" />
               </div>
-              <Skeleton className="h-5 w-20" />
             </div>
-          ))}
-        </CardContent>
-      </Card>
+            <Skeleton className="h-5 w-20" />
+          </div>
+        ))}
+      </Panel>
       <SsoSkeleton />
     </div>
   )
@@ -867,24 +850,19 @@ function AuthenticationSkeleton() {
 
 function SsoSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="mt-2 h-4 w-80" />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((item) => (
-            <div key={item} className="rounded-lg border p-4">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <Skeleton className="mt-4 h-4 w-24" />
-              <Skeleton className="mt-2 h-4 w-full" />
-              <Skeleton className="mt-2 h-3 w-5/6" />
-            </div>
-          ))}
-        </div>
-        <Skeleton className="h-44 w-full rounded-lg" />
-      </CardContent>
-    </Card>
+    <Panel className="space-y-4 p-5 sm:p-6">
+      <Skeleton className="h-5 w-40" />
+      <div className="grid gap-4 md:grid-cols-3">
+        {[1, 2, 3].map((item) => (
+          <div key={item} className="rounded-lg border p-4">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <Skeleton className="mt-4 h-4 w-24" />
+            <Skeleton className="mt-2 h-4 w-full" />
+            <Skeleton className="mt-2 h-3 w-5/6" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-44 w-full rounded-lg" />
+    </Panel>
   )
 }

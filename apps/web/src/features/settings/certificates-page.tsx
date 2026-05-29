@@ -10,7 +10,6 @@ import {
   Delete02Icon,
   ViewIcon,
   StarIcon,
-  ShieldKeyIcon,
   Calendar03Icon,
   Building06Icon,
 } from '@hugeicons/core-free-icons'
@@ -19,14 +18,7 @@ import type { SigningCertificate } from '@calibra-facil/client-runtime'
 
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { calibraApi } from '@/utils/api'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Panel, PanelHeader } from '@/components/instrument-panel'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -123,71 +115,68 @@ export function CertificatesSettingsPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="py-12">
-          <Empty>
-            <EmptyMedia>
-              <HugeiconsIcon
-                icon={AlertCircleIcon}
-                className="size-12 text-destructive"
-              />
-            </EmptyMedia>
-            <EmptyHeader>
-              <EmptyTitle>Erro ao carregar certificados</EmptyTitle>
-              <EmptyDescription>
-                Não foi possível carregar os certificados. Tente novamente.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </CardContent>
-      </Card>
+      <Panel className="p-6">
+        <Empty>
+          <EmptyMedia>
+            <HugeiconsIcon
+              icon={AlertCircleIcon}
+              className="size-12 text-destructive"
+            />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>Erro ao carregar certificados</EmptyTitle>
+            <EmptyDescription>
+              Não foi possível carregar os certificados. Tente novamente.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Escopo dos Certificados de Assinatura</CardTitle>
-          <CardDescription>
-            Cada unidade mantém sua própria carteira de certificados ICP-Brasil
-            e define o padrão usado nas emissões daquela unidade.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isConsolidated ? (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              A visão consolidada está ativa. Selecione uma unidade específica
-              no switcher para revisar, enviar ou trocar o certificado padrão
-              daquela unidade.
-            </div>
-          ) : selectedUnit ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{selectedUnit.name}</Badge>
-              <Badge variant="outline">Pool de assinatura ativo</Badge>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Nenhuma unidade ativa encontrada para esta organização.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-balance text-lg font-semibold tracking-tight">
+            Certificados ICP-Brasil
+          </h2>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Cada unidade mantém sua carteira de certificados A1 (.p12/.pfx) e
+            define o padrão usado para assinar os certificados de calibração.
+          </p>
+        </div>
+        {selectedUnit && !isConsolidated ? (
+          <Badge variant="secondary" className="shrink-0">
+            {selectedUnit.name}
+          </Badge>
+        ) : null}
+      </div>
 
-      {!selectedUnit ? null : (
+      {isConsolidated ? (
+        <Panel className="p-5 sm:p-6">
+          <p className="text-sm text-muted-foreground">
+            A visão consolidada está ativa. Selecione uma unidade específica no
+            switcher para revisar, enviar ou trocar o certificado padrão.
+          </p>
+        </Panel>
+      ) : !selectedUnit ? (
+        <Panel className="p-5 sm:p-6">
+          <p className="text-sm text-muted-foreground">
+            Nenhuma unidade ativa encontrada para esta organização.
+          </p>
+        </Panel>
+      ) : (
         <>
-          {/* Header card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Certificados ICP-Brasil</CardTitle>
-              <CardDescription>
-                Gerencie os certificados digitais A1 para assinatura de
-                certificados de calibração conforme NIT-DICLA-083.
-              </CardDescription>
-              <CardAction>
+          {/* Certificates */}
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              title="Carteira de certificados"
+              description="Certificados digitais A1 (.p12/.pfx) para assinar os certificados de calibração."
+              action={
                 <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
                   <DialogTrigger render={<Button size="sm" />}>
-                    <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1.5" />
+                    <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
                     Adicionar certificado
                   </DialogTrigger>
                   <UploadCertificateDialog
@@ -199,10 +188,9 @@ export function CertificatesSettingsPage() {
                     }}
                   />
                 </Dialog>
-              </CardAction>
-            </CardHeader>
-
-            <CardContent>
+              }
+            />
+            <div className="mt-4">
               {certificates.length === 0 ? (
                 <Empty className="py-8">
                   <EmptyMedia>
@@ -238,53 +226,8 @@ export function CertificatesSettingsPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Info card */}
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle className="text-sm">
-                Sobre assinatura digital
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
-                <div className="flex items-start gap-3">
-                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <HugeiconsIcon
-                      icon={ShieldKeyIcon}
-                      className="size-4 text-primary"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      Conformidade RBC
-                    </p>
-                    <p className="mt-0.5 text-xs">
-                      Atende NIT-DICLA-083 para certificados eletrônicos
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <HugeiconsIcon
-                      icon={Certificate01Icon}
-                      className="size-4 text-primary"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      Certificado A1
-                    </p>
-                    <p className="mt-0.5 text-xs">
-                      Arquivo PKCS#12 (.p12 ou .pfx) com validade de 1 ano
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
           {/* Certificate detail dialog */}
           <Dialog
@@ -725,15 +668,9 @@ function RevokeDialog({
 
 function CertificatesSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-44" />
-        <Skeleton className="h-4 w-80" />
-        <CardAction>
-          <Skeleton className="h-9 w-40" />
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-64" />
+      <Panel className="space-y-3 p-5 sm:p-6">
         {[1, 2].map((i) => (
           <div key={i} className="rounded-xl border p-4">
             <div className="flex items-start gap-4">
@@ -746,7 +683,7 @@ function CertificatesSkeleton() {
             </div>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </Panel>
+    </div>
   )
 }

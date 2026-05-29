@@ -25,13 +25,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -143,36 +137,39 @@ export function MethodsListPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar métodos: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar métodos: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Métodos de Calibração</CardTitle>
-            <CardDescription>
-              Gerencie os métodos validados para calibração de instrumentos
-            </CardDescription>
-          </div>
-          <Button
-            render={
-              <Link to="/dashboard/methods/new">
-                <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
-                Novo Método
-              </Link>
-            }
-          />
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Cadastro
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Métodos de calibração
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gerencie os métodos validados para calibração de instrumentos.
+          </p>
+        </div>
+        <Button
+          render={<Link to="/dashboard/methods/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
+          Novo Método
+        </Button>
+      </div>
+
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
@@ -259,8 +256,8 @@ export function MethodsListPage() {
               meta={tableMeta}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

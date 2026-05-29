@@ -10,7 +10,5 @@ export const Route = createFileRoute('/dashboard/assets/$id')({
 })
 
 function AssetDetailRoute() {
-  const { id } = Route.useParams()
-
-  return <AssetDetailLayout id={id} />
+  return <AssetDetailLayout />
 }

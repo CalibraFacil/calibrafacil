@@ -5,13 +5,6 @@ import { toast } from 'sonner'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -21,6 +14,21 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  BlueprintField,
+  BlueprintGrid,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
+import {
+  ToolsIcon,
+  CheckmarkCircle02Icon,
+  Calendar03Icon,
+} from '@hugeicons/core-free-icons'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,
@@ -250,11 +258,13 @@ function CalibrationRequestTriagePanel({
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Ativos solicitados</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Panel className="p-4 sm:p-5">
+        <PanelHeader
+          eyebrow="Itens"
+          title="Ativos solicitados"
+          description="Selecione o serviço, técnico e prazo para converter cada ativo em ordem de serviço."
+        />
+        <div className="mt-4 space-y-3">
           {request.items.map((item) => {
             const draft = conversionDrafts[item.id] ?? {
               serviceId: '',
@@ -264,7 +274,10 @@ function CalibrationRequestTriagePanel({
             const compatibleServices = getCompatibleServices(services, item)
 
             return (
-              <div key={item.id} className="rounded-lg border p-4">
+              <div
+                key={item.id}
+                className="rounded-xl bg-background p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+              >
                 <div className="space-y-1">
                   <div className="font-medium">
                     {item.assetName} ({item.assetTag})
@@ -391,17 +404,16 @@ function CalibrationRequestTriagePanel({
               </div>
             )
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Triagem</CardTitle>
-          <CardDescription>
-            Registre notas internas e escolha a próxima ação para a solicitação.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Panel className="p-4 sm:p-5">
+        <PanelHeader
+          eyebrow="Triagem"
+          title="Ação da solicitação"
+          description="Registre notas internas e escolha a próxima ação."
+        />
+        <div className="mt-4 space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Notas internas</label>
             <Textarea
@@ -471,8 +483,8 @@ function CalibrationRequestTriagePanel({
               {conversionBlockedReason}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </>
   )
 }
@@ -535,11 +547,11 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
 
   if (detailQuery.error || !request) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-destructive">
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
           Erro ao carregar solicitação.
-        </CardContent>
-      </Card>
+        </p>
+      </Panel>
     )
   }
 
@@ -550,61 +562,102 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
     servicesQuery.dataUpdatedAt,
   ].join(':')
 
+  const itemsTotal = request.items.length
+  const convertedItems = request.items.filter(
+    (item) => item.convertedJobId !== null,
+  ).length
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Solicitação #{request.id}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Cliente {request.customerName} · enviada em{' '}
-            {formatDate(request.submittedAt)}
-          </p>
-        </div>
-        <Badge variant={statusVariants[request.status]}>
-          {statusLabels[request.status]}
-        </Badge>
-      </div>
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Solicitação de calibração
+              </p>
+              <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight tabular-nums">
+                #{request.id}
+              </h1>
+              <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                {request.customerName} · enviada em{' '}
+                {formatDate(request.submittedAt)}
+              </p>
+            </div>
+            <Badge
+              variant={statusVariants[request.status]}
+              className="shrink-0"
+            >
+              {statusLabels[request.status]}
+            </Badge>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo</CardTitle>
-          <CardDescription>
-            Contexto enviado pelo cliente e histórico da triagem.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="text-sm text-muted-foreground">
-              Prazo solicitado
-            </div>
-            <div className="font-medium">
-              {formatDate(request.requestedDueDate)}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Solicitado por</div>
-            <div className="font-medium">{request.submittedByName || '-'}</div>
-          </div>
-          <div className="sm:col-span-2">
-            <div className="text-sm text-muted-foreground">
-              Observações do cliente
-            </div>
-            <div className="font-medium">
-              {request.observations?.trim() || 'Sem observações informadas.'}
-            </div>
-          </div>
-          {request.rejectionReason && (
-            <div className="sm:col-span-2">
-              <div className="text-sm text-muted-foreground">
-                Motivo da rejeição
-              </div>
-              <div className="font-medium">{request.rejectionReason}</div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">
+            <StaggerItem>
+              <SignalTile
+                icon={ToolsIcon}
+                label="Itens solicitados"
+                value={String(itemsTotal)}
+                hint="ativos"
+                tone="neutral"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                icon={CheckmarkCircle02Icon}
+                label="Convertidos"
+                value={`${convertedItems}/${itemsTotal}`}
+                hint="em OS"
+                tone={
+                  convertedItems === itemsTotal && itemsTotal > 0
+                    ? 'ok'
+                    : 'neutral'
+                }
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                icon={Calendar03Icon}
+                label="Prazo solicitado"
+                value={formatDate(request.requestedDueDate)}
+                hint="cliente"
+                tone="neutral"
+              />
+            </StaggerItem>
+          </StaggerGroup>
+        </div>
+      </Panel>
+
+      <Panel className="p-4 sm:p-5">
+        <PanelHeader
+          eyebrow="Contexto"
+          title="Resumo"
+          description="Contexto enviado pelo cliente e histórico da triagem."
+        />
+        <BlueprintGrid className="mt-4 sm:grid-cols-2">
+          <BlueprintField label="Prazo solicitado" mono>
+            {formatDate(request.requestedDueDate)}
+          </BlueprintField>
+          <BlueprintField label="Solicitado por">
+            {request.submittedByName || '—'}
+          </BlueprintField>
+          <BlueprintField
+            label="Observações do cliente"
+            className="sm:col-span-2"
+          >
+            {request.observations?.trim() || 'Sem observações informadas.'}
+          </BlueprintField>
+          {request.rejectionReason ? (
+            <BlueprintField
+              label="Motivo da rejeição"
+              className="sm:col-span-2"
+            >
+              {request.rejectionReason}
+            </BlueprintField>
+          ) : null}
+        </BlueprintGrid>
+      </Panel>
 
       <CalibrationRequestTriagePanel
         key={triagePanelKey}

@@ -20,14 +20,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { DataTable } from '@/components/ui/data-table'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,
@@ -144,11 +138,11 @@ export function RequestsPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-destructive">
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
           Erro ao carregar solicitações: {error.message}
-        </CardContent>
-      </Card>
+        </p>
+      </Panel>
     )
   }
 
@@ -158,28 +152,30 @@ export function RequestsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Solicitações de Calibração</CardTitle>
-              <CardDescription>
-                Revise, aprove e converta as solicitações enviadas pelos
-                clientes.
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              render={
-                <Link to="/dashboard/jobs/new">
-                  <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                  Nova Calibração Manual
-                </Link>
-              }
-            ></Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Atendimento
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Solicitações de calibração
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Revise, aprove e converta as solicitações enviadas pelos clientes.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          render={<Link to="/dashboard/jobs/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Nova calibração manual
+        </Button>
+      </div>
+
+      <Panel className="p-4 sm:p-5">
+        <div className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row">
             <Input
               placeholder="Buscar por observações..."
@@ -265,8 +261,8 @@ export function RequestsPage() {
               onPageChange={setPage}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

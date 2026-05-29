@@ -18,13 +18,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -75,48 +69,49 @@ export function JobsListPage() {
 
   if (isContextSwitching) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">
-            Carregando o contexto da organização ativa.
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Carregando o contexto da organização ativa.
+        </p>
+      </Panel>
     )
   }
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar calibrações: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar calibrações: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Calibrações</CardTitle>
-            <CardDescription>
-              Gerencie jobs de calibração e emissão de certificados
-            </CardDescription>
-          </div>
-          <Button
-            render={
-              <Link to="/dashboard/jobs/new">
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                Nova Calibração
-              </Link>
-            }
-          />
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Calibração
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Calibrações
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gerencie ordens de calibração e a emissão de certificados.
+          </p>
+        </div>
+        <Button
+          render={<Link to="/dashboard/jobs/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Nova Calibração
+        </Button>
+      </div>
+
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
@@ -201,8 +196,8 @@ export function JobsListPage() {
               onPageChange={setPage}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

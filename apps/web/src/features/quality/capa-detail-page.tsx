@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -177,24 +178,31 @@ export function CAPADetailPage({ id }: { id: string }) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{capa.capaNumber}</h1>
-            <Badge
-              variant="outline"
-              className={statusVariants[capa.status] ?? ''}
-            >
-              {statusLabels[capa.status] ?? capa.status}
-            </Badge>
-            {capa.isOverdue && <Badge variant="destructive">Atrasada</Badge>}
+      <Panel className="relative overflow-hidden p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Ação corretiva / preventiva
+            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-3">
+              <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+                {capa.capaNumber}
+              </h1>
+              <Badge
+                variant="outline"
+                className={statusVariants[capa.status] ?? ''}
+              >
+                {statusLabels[capa.status] ?? capa.status}
+              </Badge>
+              {capa.isOverdue && <Badge variant="destructive">Atrasada</Badge>}
+            </div>
+            <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
+              {capa.title}
+            </p>
           </div>
-          <p className="text-muted-foreground mt-1">{capa.title}</p>
         </div>
-        <Button variant="outline" render={<Link to="/dashboard/capa" />}>
-          Voltar
-        </Button>
-      </div>
+      </Panel>
 
       {/* Details Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -515,7 +523,7 @@ export function CAPADetailPage({ id }: { id: string }) {
       {auditLog && auditLog.data.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Historico de Auditoria</CardTitle>
+            <CardTitle>Histórico de alterações</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

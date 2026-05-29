@@ -16,13 +16,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Empty,
   EmptyContent,
@@ -123,22 +117,29 @@ export function AssetsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Ativos</CardTitle>
-              <CardDescription>
-                Gerencie os ativos e instrumentos do laboratório.
-              </CardDescription>
-            </div>
-            <Button render={<Link to="/dashboard/assets/new" />}>
-              <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-              Novo Ativo
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Cadastro
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Ativos
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gerencie os ativos e instrumentos do laboratório.
+          </p>
+        </div>
+        <Button
+          render={<Link to="/dashboard/assets/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Novo Ativo
+        </Button>
+      </div>
+
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Search and filters */}
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <div className="relative flex-1 min-w-50">
@@ -303,8 +304,8 @@ export function AssetsPage() {
           {isLoading && !data && (
             <DataTable columns={assetsColumns} data={[]} isLoading={true} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

@@ -73,6 +73,7 @@ const routeLabels: Record<string, string> = {
   '/dashboard/clients': 'Clientes',
   '/dashboard/clients/new': 'Novo Cliente',
   '/dashboard/clients/$id': 'Cliente',
+  '/dashboard/clients/$id/overview': 'Visão geral',
   '/dashboard/clients/$id/info': 'Informações',
   '/dashboard/clients/$id/users': 'Usuários',
   '/dashboard/clients/$id/assets': 'Ativos',
@@ -99,6 +100,9 @@ const routeLabels: Record<string, string> = {
   '/dashboard/jobs/new': 'Nova Calibração',
   '/dashboard/jobs/$id': 'Calibração',
   '/dashboard/jobs/$id/execute': 'Executar',
+
+  // Reports
+  '/dashboard/reports': 'Relatórios',
 
   // Calibration Requests
   '/dashboard/requests': 'Solicitações de Calibração',
@@ -132,6 +136,9 @@ const routeLabels: Record<string, string> = {
   '/dashboard/personnel/$id': 'Competência',
   '/dashboard/personnel/$id/training': 'Treinamentos',
   '/dashboard/personnel/$id/audit': 'Histórico',
+
+  // Certificate Templates
+  '/dashboard/certificate-templates': 'Templates de Certificados',
 }
 
 function getCachedLabel(

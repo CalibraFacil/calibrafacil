@@ -259,6 +259,80 @@ export async function prewarmCustomerUsers(
   ])
 }
 
+export async function loadCustomerOverviewData(
+  queryClient: QueryClient,
+  id: string,
+) {
+  // Land on a fully-populated overview (no skeleton pop): resolve the customer
+  // first to get the numeric id the asset/job lists need, then fan out.
+  const customer = await queryClient.ensureQueryData(
+    customerDetailQueryOptions(id),
+  )
+  await ensureRouteQueries(queryClient, [
+    customerAssetsQueryOptions({
+      customerId: customer.id,
+      page: 1,
+      limit: 100,
+      search: '',
+    }),
+    customerJobsQueryOptions({
+      customerId: customer.id,
+      page: 1,
+      limit: 5,
+      search: '',
+      statusFilter: '',
+    }),
+    customerMembersQueryOptions(id),
+    customerInvitationsQueryOptions(id),
+  ])
+}
+
+export async function loadCustomerAssetsData(
+  queryClient: QueryClient,
+  id: string,
+) {
+  const customer = await queryClient.ensureQueryData(
+    customerDetailQueryOptions(id),
+  )
+  await ensureRouteQueries(queryClient, [
+    customerAssetsQueryOptions({
+      customerId: customer.id,
+      page: 1,
+      limit: CUSTOMERS_LIST_LIMIT,
+      search: '',
+    }),
+  ])
+}
+
+export async function loadCustomerCalibrationsData(
+  queryClient: QueryClient,
+  id: string,
+) {
+  const customer = await queryClient.ensureQueryData(
+    customerDetailQueryOptions(id),
+  )
+  await ensureRouteQueries(queryClient, [
+    customerJobsQueryOptions({
+      customerId: customer.id,
+      page: 1,
+      limit: CUSTOMERS_LIST_LIMIT,
+      search: '',
+      statusFilter: '',
+    }),
+  ])
+}
+
+export async function prewarmCustomerOverview(
+  queryClient: QueryClient,
+  id: string,
+) {
+  await prewarmRouteQueries(queryClient, [
+    customerDetailQueryOptions(id),
+    customerMembersQueryOptions(id),
+    customerInvitationsQueryOptions(id),
+  ])
+}
+
 export async function loadCustomerComplianceData(
   queryClient: QueryClient,
   id: string,

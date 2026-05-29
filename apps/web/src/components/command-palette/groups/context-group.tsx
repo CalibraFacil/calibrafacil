@@ -14,11 +14,7 @@ import {
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 
-import {
-  CommandGroup,
-  CommandItem,
-  CommandShortcut,
-} from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
 import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
@@ -27,7 +23,6 @@ type ContextAction = {
   id: string
   label: string
   icon: React.ReactNode
-  shortcut?: string
   onSelect: () => void
   disabled?: boolean
 }
@@ -70,7 +65,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
             className="text-green-500"
           />
         ),
-        shortcut: '⌘⏎',
         onSelect: async () => {
           if (!jobId) return
 
@@ -110,7 +104,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'print-label',
         label: 'Imprimir Etiqueta',
         icon: <HugeiconsIcon icon={PrinterIcon} />,
-        shortcut: '⌘P',
         onSelect: async () => {
           if (!jobId) return
 
@@ -174,7 +167,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'download-last-cert',
         label: 'Baixar Último Certificado',
         icon: <HugeiconsIcon icon={Download01Icon} />,
-        shortcut: '⌘D',
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -216,7 +208,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'download-standard-cert',
         label: 'Baixar Certificado do Padrão',
         icon: <HugeiconsIcon icon={Download01Icon} />,
-        shortcut: '⌘D',
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -257,9 +248,6 @@ export function ContextGroup() {
         >
           {action.icon}
           <span>{action.label}</span>
-          {action.shortcut && (
-            <CommandShortcut>{action.shortcut}</CommandShortcut>
-          )}
         </CommandItem>
       ))}
     </CommandGroup>

@@ -2,24 +2,22 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  Alert02Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
   ArrowRight02Icon,
-  PieChartIcon,
+  Building02Icon,
+  Calendar03Icon,
+  CheckmarkCircle02Icon,
+  Clock01Icon,
+  MultiplicationSignIcon,
+  Target02Icon,
 } from '@hugeicons/core-free-icons'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { SectionCards } from '@/features/dashboard/components/section-cards'
 import { ChartCalibrations } from '@/features/dashboard/components/chart-calibrations'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -30,6 +28,16 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,
@@ -124,27 +132,23 @@ export function ConsolidatedReportsPage() {
 
   if (isContextSwitching) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">
-            Carregando o contexto da organização ativa.
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Carregando o contexto da organização ativa.
+        </p>
+      </Panel>
     )
   }
 
   if (!canAccessReports) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Acesso restrito</CardTitle>
-          <CardDescription>
-            Relatórios consolidados ficam disponíveis apenas para
-            administradores globais da organização.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel className="p-6 sm:p-8">
+        <PanelHeader
+          eyebrow="Acesso restrito"
+          title="Relatórios consolidados"
+          description="Disponíveis apenas para administradores globais da organização."
+        />
+      </Panel>
     )
   }
 
@@ -157,16 +161,14 @@ export function ConsolidatedReportsPage() {
       executiveQuery.error ?? comparisonQuery.error ?? trendQuery.error ?? null
 
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Falha ao carregar relatórios</CardTitle>
-          <CardDescription>
-            {error instanceof Error
-              ? error.message
-              : 'Não foi possível carregar o consolidado multiunidade.'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm font-medium">Falha ao carregar relatórios</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar o consolidado multiunidade.'}
+        </p>
+      </Panel>
     )
   }
 
@@ -202,135 +204,170 @@ export function ConsolidatedReportsPage() {
     await navigate({ to: '/dashboard' })
   }
 
+  const metrics = executiveQuery.data?.metrics
+  const scope = executiveQuery.data?.scopeSummary
+
+  const metricTiles: Array<{
+    icon: Parameters<typeof HugeiconsIcon>[0]['icon']
+    label: string
+    value: string
+    hint?: string
+    tone: SignalTone
+  }> = [
+    {
+      icon: Clock01Icon,
+      label: 'Pendentes',
+      value: String(metrics?.pendingCalibrations ?? 0),
+      hint: 'agora',
+      tone: 'neutral',
+    },
+    {
+      icon: CheckmarkCircle02Icon,
+      label: 'Aprovadas',
+      value: String(metrics?.approvedInPeriod ?? 0),
+      hint: 'no período',
+      tone: 'neutral',
+    },
+    {
+      icon: MultiplicationSignIcon,
+      label: 'Rejeitadas',
+      value: String(metrics?.rejectedInPeriod ?? 0),
+      hint: 'no período',
+      tone: (metrics?.rejectedInPeriod ?? 0) > 0 ? 'critical' : 'neutral',
+    },
+    {
+      icon: Target02Icon,
+      label: 'Taxa de aprovação',
+      value: `${(metrics?.approvalRate ?? 0).toFixed(0)}%`,
+      hint: 'aprovação',
+      tone: 'ok',
+    },
+    {
+      icon: Alert02Icon,
+      label: 'Atrasadas',
+      value: String(metrics?.overdueJobs ?? 0),
+      hint: 'jobs',
+      tone: (metrics?.overdueJobs ?? 0) > 0 ? 'warning' : 'neutral',
+    },
+    {
+      icon: Calendar03Icon,
+      label: 'Padrões vencendo',
+      value: String(metrics?.expiringStandards ?? 0),
+      hint: 'em breve',
+      tone: (metrics?.expiringStandards ?? 0) > 0 ? 'warning' : 'neutral',
+    },
+    {
+      icon: Building02Icon,
+      label: 'Unidades em risco',
+      value: String(metrics?.atRiskUnitsCount ?? 0),
+      hint: `de ${metrics?.unitsIncluded ?? 0}`,
+      tone: (metrics?.atRiskUnitsCount ?? 0) > 0 ? 'critical' : 'neutral',
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Relatórios Consolidados
-          </h1>
-          <p className="text-muted-foreground">
-            Visão executiva multiunidade para{' '}
-            {executiveQuery.data?.label ?? 'o período selecionado'}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {REPORT_PERIOD_OPTIONS.map((value) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={period === value ? 'default' : 'outline'}
-              onClick={() => setPeriod(value)}
-            >
-              {REPORT_PERIOD_LABELS[value]}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <HugeiconsIcon icon={PieChartIcon} className="size-5" />
-            Recorte executivo
-          </CardTitle>
-          <CardDescription>
-            Compare todas as unidades ou reduza o consolidado para um
-            subconjunto específico.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading && availableUnits.length === 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {[1, 2, 3].map((item) => (
-                <Skeleton key={item} className="h-9 w-28" />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableUnits.map((unit) => {
-                const isSelected = effectiveSelectedUnitIds.includes(unit.id)
-
-                return (
-                  <Button
-                    key={unit.id}
-                    type="button"
-                    size="sm"
-                    variant={isSelected ? 'default' : 'outline'}
-                    onClick={() => toggleUnit(unit.id)}
-                  >
-                    {unit.name}
-                  </Button>
-                )
-              })}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <span>
-              {selectedUnitIds.length === 0
-                ? 'Comparando todas as unidades ativas.'
-                : `Comparando ${effectiveSelectedUnitIds.length} unidade(s).`}
-            </span>
-            {selectedUnitIds.length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={clearUnitFilter}
-              >
-                Limpar filtro
-              </Button>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div className="rounded-xl border p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">
-                  {executiveQuery.data?.scopeSummary.label ?? 'Consolidado'}
-                </Badge>
-                <Badge variant="outline">
-                  {executiveQuery.data?.metrics.unitsIncluded ?? 0} unidade(s)
-                </Badge>
-                <Badge
-                  variant={
-                    (executiveQuery.data?.metrics.atRiskUnitsCount ?? 0) > 0
-                      ? 'destructive'
-                      : 'outline'
-                  }
-                >
-                  {executiveQuery.data?.metrics.atRiskUnitsCount ?? 0} em risco
-                </Badge>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                {executiveQuery.data?.scopeSummary.description ??
-                  'Leitura gerencial do recorte consolidado atual.'}
+      {/* Hero: scope, period, unit filter, and the canonical metrics (shown once) */}
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Relatórios consolidados
               </p>
-            </div>
-
-            <div className="rounded-xl border p-4">
-              <p className="text-sm font-medium">Janela analisada</p>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <h1 className="text-balance text-2xl font-semibold tracking-tight">
+                Visão executiva multiunidade
+              </h1>
+              <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                {scope?.label ?? 'Consolidado'} ·{' '}
                 {formatReportRange(executiveQuery.data?.range)}
               </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {REPORT_PERIOD_OPTIONS.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={period === value ? 'default' : 'outline'}
+                  onClick={() => setPeriod(value)}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  {REPORT_PERIOD_LABELS[value]}
+                </Button>
+              ))}
+            </div>
           </div>
-        </CardContent>
-      </Card>
 
-      <SectionCards
-        pendingCalibrations={
-          executiveQuery.data?.metrics.pendingCalibrations ?? 0
-        }
-        approvedThisMonth={executiveQuery.data?.metrics.approvedInPeriod ?? 0}
-        expiringStandards={executiveQuery.data?.metrics.expiringStandards ?? 0}
-        approvalRate={executiveQuery.data?.metrics.approvalRate ?? 0}
-        overdueJobs={executiveQuery.data?.metrics.overdueJobs ?? 0}
-        isLoading={isLoading}
-      />
+          <div className="space-y-2 border-t border-foreground/10 pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Unidades
+              </span>
+              {isLoading && availableUnits.length === 0
+                ? [1, 2, 3].map((item) => (
+                    <Skeleton key={item} className="h-8 w-24 rounded-lg" />
+                  ))
+                : availableUnits.map((unit) => {
+                    const isSelected = effectiveSelectedUnitIds.includes(
+                      unit.id,
+                    )
+                    return (
+                      <Button
+                        key={unit.id}
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? 'default' : 'outline'}
+                        onClick={() => toggleUnit(unit.id)}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {unit.name}
+                      </Button>
+                    )
+                  })}
+              {selectedUnitIds.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearUnitFilter}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  Limpar
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedUnitIds.length === 0
+                ? `Comparando todas as ${metrics?.unitsIncluded ?? availableUnits.length} unidade(s) ativas.`
+                : `Comparando ${effectiveSelectedUnitIds.length} unidade(s).`}
+            </p>
+          </div>
+
+          {isLoading ? (
+            <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+              {Array.from({ length: 7 }).map((_item, index) => (
+                <Skeleton key={index} className="h-[88px] rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+              {metricTiles.map((tile) => (
+                <StaggerItem key={tile.label}>
+                  <SignalTile
+                    icon={tile.icon}
+                    label={tile.label}
+                    value={tile.value}
+                    hint={tile.hint}
+                    tone={tile.tone}
+                  />
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+          )}
+        </div>
+      </Panel>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <ExecutiveHighlightCard
@@ -383,67 +420,18 @@ export function ConsolidatedReportsPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <ChartCalibrations
-          data={trendQuery.data?.data ?? []}
-          isLoading={isLoading}
+      <ChartCalibrations
+        data={trendQuery.data?.data ?? []}
+        isLoading={isLoading}
+      />
+
+      <Panel className="p-4 sm:p-5">
+        <PanelHeader
+          eyebrow="Ranking"
+          title="Comparativo por unidade"
+          description="Estado de saúde por unidade no período, com drill-down direto."
         />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Leitura do período</CardTitle>
-            <CardDescription>
-              Corte de {executiveQuery.data?.label ?? 'período selecionado'} com
-              foco em throughput, risco e qualidade.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4].map((item) => (
-                  <Skeleton key={item} className="h-14 w-full" />
-                ))}
-              </div>
-            ) : (
-              <>
-                <SummaryMetric
-                  label="Aprovadas no período"
-                  value={executiveQuery.data?.metrics.approvedInPeriod ?? 0}
-                  tone="positive"
-                />
-                <SummaryMetric
-                  label="Rejeitadas no período"
-                  value={executiveQuery.data?.metrics.rejectedInPeriod ?? 0}
-                  tone="critical"
-                />
-                <SummaryMetric
-                  label="Pendentes agora"
-                  value={executiveQuery.data?.metrics.pendingCalibrations ?? 0}
-                />
-                <SummaryMetric
-                  label="Unidades em risco"
-                  value={executiveQuery.data?.metrics.atRiskUnitsCount ?? 0}
-                  tone={
-                    (executiveQuery.data?.metrics.atRiskUnitsCount ?? 0) > 0
-                      ? 'warning'
-                      : 'default'
-                  }
-                />
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Comparativo por Unidade</CardTitle>
-          <CardDescription>
-            Ranking executivo do período selecionado com estado de saúde por
-            unidade e drill-down direto.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <div className="mt-4">
           <ComparisonTable
             rows={sortedRows}
             sortDirection={sortDirection}
@@ -452,73 +440,43 @@ export function ConsolidatedReportsPage() {
             onSort={handleSort}
             onDrilldown={handleDrilldown}
           />
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function SummaryMetric({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number
-  tone?: 'default' | 'positive' | 'warning' | 'critical'
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border p-4">
-      <div>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p
-          className={cn(
-            'text-2xl font-semibold tabular-nums',
-            tone === 'positive' && 'text-green-600 dark:text-green-500',
-            tone === 'warning' && 'text-amber-600 dark:text-amber-500',
-            tone === 'critical' && 'text-destructive',
-          )}
-        >
-          {value}
-        </p>
-      </div>
+        </div>
+      </Panel>
     </div>
   )
 }
 
 function ExecutiveHighlightCard({
   title,
-  description,
   value,
   supporting,
   tone = 'default',
 }: {
   title: string
-  description: string
+  description?: string
   value: string
   supporting: string
   tone?: 'default' | 'positive' | 'warning' | 'critical'
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p
-          className={cn(
-            'text-xl font-semibold',
-            tone === 'positive' && 'text-green-600 dark:text-green-500',
-            tone === 'warning' && 'text-amber-600 dark:text-amber-500',
-            tone === 'critical' && 'text-destructive',
-          )}
-        >
-          {value}
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">{supporting}</p>
-      </CardContent>
-    </Card>
+    <Panel className="p-4 sm:p-5">
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        {title}
+      </p>
+      <p
+        className={cn(
+          'mt-2 text-lg font-semibold',
+          tone === 'positive' && 'text-emerald-600 dark:text-emerald-400',
+          tone === 'warning' && 'text-amber-600 dark:text-amber-400',
+          tone === 'critical' && 'text-destructive',
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-pretty text-sm text-muted-foreground">
+        {supporting}
+      </p>
+    </Panel>
   )
 }
 

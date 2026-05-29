@@ -8,10 +8,17 @@ import {
   Calendar03Icon,
   Edit02Icon,
   CheckmarkCircle02Icon,
+  CheckmarkBadge02Icon,
   Cancel01Icon,
   MultiplicationSignIcon,
   UserAdd01Icon,
   Alert02Icon,
+  Target02Icon,
+  TaskDone01Icon,
+  ThermometerIcon,
+  RulerIcon,
+  Clock01Icon,
+  FunctionIcon,
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
@@ -71,10 +78,11 @@ import {
   getFinancialVariant,
   JOB_STATUS_LABELS,
   JOB_STATUS_VARIANTS,
-  REVIEW_ACTION_BUTTON_CLASS,
   REVIEW_SURFACE_CLASS,
   type ApprovedJobRecordData,
   type JobStatus,
+  type JobVerdict,
+  type JobVerdictLevel,
   type ReviewFormula,
   type ReviewMethodField,
 } from '@/features/jobs/detail-model'
@@ -82,6 +90,162 @@ import {
   buildJobApprovalInput,
   isJobApprovalBlockedByEnvironment,
 } from '@/features/jobs/approval-model'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  InfoHint,
+  Panel,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
+
+type HugeIcon = Parameters<typeof HugeiconsIcon>[0]['icon']
+
+const VERDICT_PRESENTATION: Record<
+  JobVerdictLevel,
+  {
+    label: string
+    description: string
+    tone: SignalTone
+    icon: HugeIcon
+  }
+> = {
+  conforme: {
+    label: 'Conforme',
+    description: 'Todos os critérios e pontos dentro da tolerância.',
+    tone: 'ok',
+    icon: CheckmarkBadge02Icon,
+  },
+  nao_conforme: {
+    label: 'Não conforme',
+    description: 'Há critérios reprovados ou pontos fora da tolerância.',
+    tone: 'critical',
+    icon: Alert02Icon,
+  },
+  atencao: {
+    label: 'Conforme com ressalvas',
+    description: 'Avisos ou condições ambientais exigem justificativa.',
+    tone: 'warning',
+    icon: Alert02Icon,
+  },
+  incompleto: {
+    label: 'Evidência incompleta',
+    description: 'Faltam leituras ou resultados calculados.',
+    tone: 'neutral',
+    icon: Clock01Icon,
+  },
+}
+
+const VERDICT_EMBLEM_CLASS: Record<SignalTone, string> = {
+  ok: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400',
+  critical: 'bg-destructive/12 text-destructive',
+  warning: 'bg-amber-500/12 text-amber-700 dark:text-amber-400',
+  info: 'bg-primary/12 text-primary',
+  neutral: 'bg-muted text-muted-foreground',
+}
+
+const VERDICT_TEXT_CLASS: Record<SignalTone, string> = {
+  ok: 'text-emerald-700 dark:text-emerald-400',
+  critical: 'text-destructive',
+  warning: 'text-amber-700 dark:text-amber-400',
+  info: 'text-primary',
+  neutral: 'text-foreground',
+}
+
+function buildVerdictTiles(verdict: JobVerdict): Array<{
+  key: string
+  icon: HugeIcon
+  label: string
+  value: string
+  hint?: string
+  tone: SignalTone
+}> {
+  const tiles: Array<{
+    key: string
+    icon: HugeIcon
+    label: string
+    value: string
+    hint?: string
+    tone: SignalTone
+  }> = [
+    {
+      key: 'points',
+      icon: Target02Icon,
+      label: 'Pontos na tolerância',
+      value:
+        verdict.pointsTotal > 0
+          ? `${verdict.pointsWithin}/${verdict.pointsTotal}`
+          : '-',
+      hint: verdict.pointsTotal > 0 ? 'pontos' : 'sem pontos',
+      tone:
+        verdict.pointsTotal === 0
+          ? 'neutral'
+          : verdict.pointsOutOfTolerance > 0
+            ? 'critical'
+            : 'ok',
+    },
+    {
+      key: 'criteria',
+      icon: TaskDone01Icon,
+      label: 'Critérios atendidos',
+      value:
+        verdict.criteriaTotal > 0
+          ? `${verdict.criteriaPassed}/${verdict.criteriaTotal}`
+          : '-',
+      hint: verdict.criteriaTotal > 0 ? 'critérios' : 'nenhum',
+      tone:
+        verdict.criteriaTotal === 0
+          ? 'neutral'
+          : verdict.criteriaFailed > 0
+            ? 'critical'
+            : verdict.criteriaWarning > 0
+              ? 'warning'
+              : 'ok',
+    },
+    {
+      key: 'environment',
+      icon: ThermometerIcon,
+      label: 'Ambiente',
+      value:
+        verdict.environment === 'within'
+          ? 'Dentro'
+          : verdict.environment === 'out'
+            ? 'Fora'
+            : '-',
+      hint: 'condições',
+      tone:
+        verdict.environment === 'within'
+          ? 'ok'
+          : verdict.environment === 'out'
+            ? 'warning'
+            : 'neutral',
+    },
+    {
+      key: 'traceability',
+      icon: RulerIcon,
+      label: 'Rastreabilidade',
+      value: String(verdict.standardsCount),
+      hint: 'padrões',
+      tone: verdict.standardsCount > 0 ? 'info' : 'critical',
+    },
+  ]
+
+  if (verdict.expandedUncertainty) {
+    tiles.push({
+      key: 'uncertainty',
+      icon: FunctionIcon,
+      label: 'Incerteza U (máx.)',
+      value: verdict.expandedUncertainty,
+      hint: 'expandida',
+      tone: 'neutral',
+    })
+  }
+
+  return tiles
+}
 
 type JobDetailPageProps = {
   id: string
@@ -120,7 +284,9 @@ function isNullableRecord(value: unknown) {
   )
 }
 
-function isApprovedJobRecordData(value: unknown): value is ApprovedJobRecordData {
+function isApprovedJobRecordData(
+  value: unknown,
+): value is ApprovedJobRecordData {
   const job = toRecord(value)
   const methodSnapshot = toRecord(job.methodSnapshot)
 
@@ -320,6 +486,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     orderedReviewFormulas,
     adjustmentSummaryRows,
     quickAlertItems,
+    verdict,
   } = reviewModel
 
   if (isLoading) {
@@ -369,7 +536,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       const columns = field.columns
       return (
-        <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+        <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
           <Table className="min-w-max text-[13px]">
             <TableHeader className="bg-muted/50">
               <TableRow>
@@ -419,7 +586,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     }
 
     return (
-      <div className="rounded-lg bg-background p-3 font-mono text-sm tabular-nums shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="rounded-lg bg-background p-3 font-mono text-sm tabular-nums shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
         {formatReviewValue(value, displayUnitForReview(field.unit))}
       </div>
     )
@@ -472,50 +639,48 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
 
     const isInside = margin >= 0
     return (
-      <Badge
-        variant={isInside ? 'outline' : 'destructive'}
-        className="font-mono tabular-nums"
+      <span
+        className={cn(
+          'inline-flex items-center rounded-md px-2 py-0.5 font-mono text-xs font-medium tabular-nums shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]',
+          isInside
+            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'bg-destructive/10 text-destructive',
+        )}
       >
         {isInside ? '+' : ''}
-        {formatCalibrationValue(margin)} {unit ?? ''}
-      </Badge>
+        {formatCalibrationValue(margin)}
+        {unit ? ` ${unit}` : ''}
+      </span>
     )
   }
 
   const renderAcceptanceBadge = (
     status: 'ok' | 'error' | 'warning' | 'unknown',
   ) => {
-    if (status === 'ok') {
-      return (
-        <Badge variant="outline" className="shrink-0 text-green-700">
-          OK
-        </Badge>
-      )
-    }
-
-    if (status === 'error') {
-      return (
-        <Badge variant="destructive" className="shrink-0">
-          Atenção
-        </Badge>
-      )
-    }
-
-    if (status === 'warning') {
-      return (
-        <Badge
-          variant="outline"
-          className="shrink-0 border-amber-300 bg-amber-50 text-amber-700"
-        >
-          Aviso
-        </Badge>
-      )
-    }
+    const presentation: Record<typeof status, { label: string; cls: string }> =
+      {
+        ok: {
+          label: 'OK',
+          cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+        },
+        error: { label: 'Atenção', cls: 'bg-destructive/10 text-destructive' },
+        warning: {
+          label: 'Aviso',
+          cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        },
+        unknown: { label: 'Verificar', cls: 'bg-muted text-muted-foreground' },
+      }
+    const item = presentation[status]
 
     return (
-      <Badge variant="secondary" className="shrink-0">
-        Verificar
-      </Badge>
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]',
+          item.cls,
+        )}
+      >
+        {item.label}
+      </span>
     )
   }
 
@@ -575,46 +740,188 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
         </Card>
       )}
 
-      {/* Job identity */}
-      <section className="flex flex-col gap-3 border-b border-black/5 px-1 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-white/10">
-        <div className="min-w-0">
-          <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
-            {job.jobId}
-          </h1>
-          <p className="mt-1 text-pretty text-sm text-muted-foreground">
-            {job.serviceName}
-            {job.methodSnapshot.methodName && (
-              <span className="ml-2 text-xs">
-                ({job.methodSnapshot.methodName} v
-                {job.methodSnapshot.methodVersion})
+      {/* Verdict band — identity, conformance summary and the decision */}
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+                {job.jobId}
+              </h1>
+              <p className="mt-1 text-pretty text-sm text-muted-foreground">
+                {job.serviceName}
+                {job.methodSnapshot.methodName && (
+                  <span className="ml-2 text-xs">
+                    ({job.methodSnapshot.methodName} v
+                    {job.methodSnapshot.methodVersion})
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <Badge
+                variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}
+                className={
+                  job.status === 'GENERATING_PDF'
+                    ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
+                    : ''
+                }
+              >
+                {job.status === 'GENERATING_PDF' ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Spinner className="size-3" />
+                    Gerando PDF...
+                  </span>
+                ) : (
+                  JOB_STATUS_LABELS[normalizedJobStatus]
+                )}
+              </Badge>
+              {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
+              <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
+                {getFinancialStatusLabel(normalizedFinancialStatus)}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="flex items-start gap-4">
+              <span
+                className={cn(
+                  'flex size-14 shrink-0 items-center justify-center rounded-2xl',
+                  VERDICT_EMBLEM_CLASS[
+                    VERDICT_PRESENTATION[verdict.level].tone
+                  ],
+                )}
+              >
+                <HugeiconsIcon
+                  icon={VERDICT_PRESENTATION[verdict.level].icon}
+                  className="size-7"
+                />
               </span>
-            )}
-          </p>
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Veredito de conformidade
+                </p>
+                <p
+                  className={cn(
+                    'text-balance text-2xl font-semibold',
+                    VERDICT_TEXT_CLASS[
+                      VERDICT_PRESENTATION[verdict.level].tone
+                    ],
+                  )}
+                >
+                  {VERDICT_PRESENTATION[verdict.level].label}
+                </p>
+                <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                  {VERDICT_PRESENTATION[verdict.level].description}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+              {isGeneratingPdf ? (
+                <div className="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-400">
+                  <Spinner className="size-4" />
+                  Gerando certificado…
+                </div>
+              ) : canApprove ? (
+                <>
+                  <Button
+                    className={cn(
+                      ACTION_BUTTON_CLASS,
+                      'bg-emerald-600 text-white hover:bg-emerald-600/90',
+                    )}
+                    onClick={() => setApproveDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={CheckmarkCircle02Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Aprovar certificado
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => setRejectDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={MultiplicationSignIcon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Rejeitar
+                  </Button>
+                </>
+              ) : canExecute ? (
+                <>
+                  <Button
+                    className={ACTION_BUTTON_CLASS}
+                    render={
+                      <Link to="/dashboard/jobs/$id/execute" params={{ id }} />
+                    }
+                  >
+                    <HugeiconsIcon
+                      icon={Calendar03Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    {job.status === 'DRAFT'
+                      ? 'Iniciar execução'
+                      : 'Continuar execução'}
+                  </Button>
+                  {canAssign && (
+                    <Button
+                      variant="outline"
+                      className={ACTION_BUTTON_CLASS}
+                      onClick={() => setAssignDialogOpen(true)}
+                    >
+                      <HugeiconsIcon
+                        icon={UserAdd01Icon}
+                        className="mr-2 h-4 w-4"
+                      />
+                      Atribuir técnico
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="max-w-xs text-pretty text-sm text-muted-foreground">
+                  Nenhuma ação disponível neste estado.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+            {buildVerdictTiles(verdict).map((tile) => (
+              <StaggerItem key={tile.key}>
+                <SignalTile
+                  icon={tile.icon}
+                  label={tile.label}
+                  value={tile.value}
+                  hint={tile.hint}
+                  tone={tile.tone}
+                />
+              </StaggerItem>
+            ))}
+          </StaggerGroup>
+
+          {canCancel && (
+            <div className="border-t border-foreground/10 pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  ACTION_BUTTON_CLASS,
+                  'text-destructive hover:bg-destructive/10 hover:text-destructive',
+                )}
+                onClick={() => setCancelDialogOpen(true)}
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
+                Cancelar job
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Badge
-            variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}
-            className={
-              job.status === 'GENERATING_PDF'
-                ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-                : ''
-            }
-          >
-            {job.status === 'GENERATING_PDF' ? (
-              <span className="inline-flex items-center gap-1">
-                <Spinner className="size-3" />
-                Gerando PDF...
-              </span>
-            ) : (
-              JOB_STATUS_LABELS[normalizedJobStatus]
-            )}
-          </Badge>
-          {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
-          <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
-            {getFinancialStatusLabel(normalizedFinancialStatus)}
-          </Badge>
-        </div>
-      </section>
+      </Panel>
 
       {canShowReviewEvidence ? (
         <>
@@ -648,7 +955,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                         type="button"
                         variant="secondary"
                         size="sm"
-                        className={REVIEW_ACTION_BUTTON_CLASS}
+                        className={ACTION_BUTTON_CLASS}
                         onClick={() => saveLocalCertificatePdfMutation.mutate()}
                         disabled={saveLocalCertificatePdfMutation.isPending}
                       >
@@ -733,37 +1040,57 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                   </Badge>
                 </div>
                 {adjustmentSummaryRows.length > 0 ? (
-                  <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
                     <Table className="min-w-max text-[13px]">
                       <TableHeader className="bg-muted/50">
-                        <TableRow>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead
+                            rowSpan={2}
+                            className="h-9 whitespace-nowrap border-r border-foreground/10 px-3 align-bottom text-[11px] font-semibold uppercase tracking-wider"
+                          >
                             Ponto
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Leituras antes
+                          <TableHead
+                            colSpan={3}
+                            className="h-9 whitespace-nowrap px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                          >
+                            Antes do ajuste
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Erro antes
+                          <TableHead
+                            colSpan={3}
+                            className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                          >
+                            Após o ajuste
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Margem antes
+                        </TableRow>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                            Leituras
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Leituras após
+                          <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                            Erro
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Erro após
+                          <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                            Margem
                           </TableHead>
-                          <TableHead className="h-11 whitespace-nowrap px-3 text-xs">
-                            Margem após
+                          <TableHead className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-xs">
+                            Leituras
+                          </TableHead>
+                          <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                            Erro
+                          </TableHead>
+                          <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                            Margem
                           </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {adjustmentSummaryRows.map((row) => (
-                          <TableRow key={row.key} className="hover:bg-muted/30">
-                            <TableCell className="whitespace-nowrap px-3 font-mono tabular-nums">
+                          <TableRow
+                            key={row.key}
+                            className="even:bg-muted/20 hover:bg-muted/40"
+                          >
+                            <TableCell className="whitespace-nowrap border-r border-foreground/10 px-3 font-mono font-medium tabular-nums">
                               {formatReviewValue(
                                 row.point,
                                 displayUnitForReview('g'),
@@ -791,7 +1118,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                                 displayUnitForReview('g'),
                               )}
                             </TableCell>
-                            <TableCell className="min-w-36 px-3 font-mono text-xs tabular-nums text-muted-foreground">
+                            <TableCell className="min-w-36 border-l border-foreground/10 px-3 font-mono text-xs tabular-nums text-muted-foreground">
                               {row.afterReadings
                                 .map((reading) =>
                                   formatReviewValue(
@@ -860,56 +1187,6 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 )}
               </section>
 
-              {reviewStandards.length > 0 && (
-                <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-                  <div className="mb-4">
-                    <h2 className="text-balance text-base font-semibold">
-                      Padrões Utilizados
-                    </h2>
-                    <p className="text-pretty text-sm text-muted-foreground">
-                      Evidência de rastreabilidade usada nesta calibração.
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    {reviewStandards.map((standard) => (
-                      <div
-                        key={standard.id}
-                        className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20"
-                      >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-balance">
-                              {standard.name}
-                            </p>
-                            {standard.type && (
-                              <p className="text-xs text-muted-foreground">
-                                {standard.type}
-                              </p>
-                            )}
-                            <p className="break-all text-sm text-muted-foreground">
-                              Certificado: {standard.certificateNumber}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-left text-sm sm:text-right">
-                            <p className="font-mono tabular-nums">
-                              {formatDate(standard.calibrationDate)}
-                            </p>
-                            {standard.uncertainty != null && (
-                              <p className="font-mono tabular-nums text-muted-foreground">
-                                U ={' '}
-                                {formatCalibrationValue(standard.uncertainty)}{' '}
-                                {standard.uncertaintyUnit || ''} (k=
-                                {standard.coverageFactor})
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
               <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
                 <Accordion>
                   <AccordionItem value="calculated-results">
@@ -941,76 +1218,88 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                   </AccordionItem>
                 </Accordion>
               </section>
+
+              {reviewStandards.length > 0 && (
+                <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h2 className="inline-flex items-center gap-1.5 text-balance text-base font-semibold">
+                        Padrões utilizados
+                        <InfoHint label="Sobre rastreabilidade metrológica">
+                          Cada medição se liga a referências reconhecidas por
+                          uma cadeia contínua e documentada de calibrações, e
+                          cada elo contribui para a incerteza do resultado.
+                        </InfoHint>
+                      </h2>
+                      <p className="text-pretty text-sm text-muted-foreground">
+                        Cada padrão tem certificado e incerteza próprios, que
+                        alimentam o orçamento de incerteza.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="w-fit">
+                      <span className="tabular-nums">
+                        {reviewStandards.length}
+                      </span>
+                      {reviewStandards.length === 1 ? ' padrão' : ' padrões'}
+                    </Badge>
+                  </div>
+                  <div className="grid gap-2">
+                    {reviewStandards.map((standard) => (
+                      <div
+                        key={standard.id}
+                        className="rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-muted/20"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-balance">
+                              {standard.name}
+                            </p>
+                            {standard.type && (
+                              <p className="text-xs text-muted-foreground">
+                                {standard.type}
+                              </p>
+                            )}
+                            <p className="inline-flex flex-wrap items-center gap-1 break-all text-sm text-muted-foreground">
+                              Certificado: {standard.certificateNumber}
+                              <InfoHint label="Sobre o certificado do padrão">
+                                Número do certificado de calibração do padrão,
+                                que comprova documentalmente a rastreabilidade.
+                              </InfoHint>
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-left text-sm sm:text-right">
+                            <p className="font-mono tabular-nums">
+                              {formatDate(standard.calibrationDate)}
+                            </p>
+                            {standard.uncertainty != null && (
+                              <p className="inline-flex flex-wrap items-center gap-1 font-mono tabular-nums text-muted-foreground sm:justify-end">
+                                U ={' '}
+                                {formatCalibrationValue(standard.uncertainty)}{' '}
+                                {standard.uncertaintyUnit || ''} (k=
+                                {standard.coverageFactor})
+                                <InfoHint
+                                  label="Sobre incerteza e fator de abrangência"
+                                  side="left"
+                                >
+                                  <span className="font-medium">U</span>:
+                                  incerteza expandida do padrão.{' '}
+                                  <span className="font-medium">k</span>: fator
+                                  de abrangência; k = 2 corresponde a cerca de
+                                  95% de confiança. Soma-se ao orçamento de
+                                  incerteza desta calibração.
+                                </InfoHint>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </main>
 
             <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
-              <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Decisão do responsável técnico
-                </p>
-                <h2 className="mt-1 text-balance text-lg font-semibold">
-                  {isGeneratingPdf
-                    ? 'Certificado em geração'
-                    : 'Aprovar ou devolver para correção'}
-                </h2>
-                <div className="mt-4 grid gap-2">
-                  {isGeneratingPdf ? (
-                    <>
-                      <Button
-                        variant="default"
-                        className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start bg-amber-500 text-white hover:bg-amber-500`}
-                        disabled
-                      >
-                        <Spinner className="mr-2 size-4" />
-                        Gerando PDF...
-                      </Button>
-                      <p className="text-pretty text-sm text-muted-foreground">
-                        Assim que o arquivo estiver pronto, esta tela muda para
-                        a prévia do certificado e registro aprovado.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="default"
-                        className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start bg-green-600 hover:bg-green-700`}
-                        onClick={() => setApproveDialogOpen(true)}
-                      >
-                        <HugeiconsIcon
-                          icon={CheckmarkCircle02Icon}
-                          className="mr-2 h-4 w-4"
-                        />
-                        Aprovar certificado
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start`}
-                        onClick={() => setRejectDialogOpen(true)}
-                      >
-                        <HugeiconsIcon
-                          icon={MultiplicationSignIcon}
-                          className="mr-2 h-4 w-4"
-                        />
-                        Rejeitar e devolver
-                      </Button>
-                      {canCancel && (
-                        <Button
-                          variant="ghost"
-                          className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start text-destructive hover:bg-destructive/10 hover:text-destructive`}
-                          onClick={() => setCancelDialogOpen(true)}
-                        >
-                          <HugeiconsIcon
-                            icon={Cancel01Icon}
-                            className="mr-2 h-4 w-4"
-                          />
-                          Cancelar job
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </section>
-
               <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
                 <div className="mb-3 flex items-center gap-2">
                   <HugeiconsIcon
@@ -1026,7 +1315,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     {quickAlertItems.map((item) => (
                       <div
                         key={item.key}
-                        className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]"
+                        className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
                       >
                         <div className="flex min-w-0 items-start justify-between gap-3">
                           <p className="min-w-0 text-pretty text-sm leading-snug">
@@ -1227,7 +1516,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
                   <p className="text-xs font-medium text-muted-foreground">
                     Campos de entrada
                   </p>
@@ -1235,7 +1524,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     {reviewDataFields.length}
                   </p>
                 </div>
-                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
                   <p className="text-xs font-medium text-muted-foreground">
                     Fórmulas
                   </p>
@@ -1243,7 +1532,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     {reviewFormulas.length}
                   </p>
                 </div>
-                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
                   <p className="text-xs font-medium text-muted-foreground">
                     Critérios de aceitação
                   </p>
@@ -1332,63 +1621,6 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
           </main>
 
           <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
-            <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Próxima ação
-              </p>
-              <h2 className="mt-1 text-balance text-lg font-semibold">
-                {job.status === 'DRAFT'
-                  ? 'Iniciar execução'
-                  : job.status === 'IN_PROGRESS'
-                    ? 'Continuar a execução'
-                    : 'Retomar a correção'}
-              </h2>
-              <div className="mt-4 grid gap-2">
-                {canExecute && (
-                  <Button
-                    className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start`}
-                    render={
-                      <Link to="/dashboard/jobs/$id/execute" params={{ id }} />
-                    }
-                  >
-                    <HugeiconsIcon
-                      icon={Calendar03Icon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    {job.status === 'DRAFT'
-                      ? 'Iniciar execução'
-                      : 'Continuar execução'}
-                  </Button>
-                )}
-                {canAssign && (
-                  <Button
-                    variant="outline"
-                    className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start`}
-                    onClick={() => setAssignDialogOpen(true)}
-                  >
-                    <HugeiconsIcon
-                      icon={UserAdd01Icon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    Atribuir técnico
-                  </Button>
-                )}
-                {canCancel && !canApprove && (
-                  <Button
-                    variant="ghost"
-                    className={`${REVIEW_ACTION_BUTTON_CLASS} justify-start text-destructive hover:bg-destructive/10 hover:text-destructive`}
-                    onClick={() => setCancelDialogOpen(true)}
-                  >
-                    <HugeiconsIcon
-                      icon={Cancel01Icon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    Cancelar job
-                  </Button>
-                )}
-              </div>
-            </section>
-
             <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
               <h2 className="mb-3 text-base font-semibold">
                 Contexto operacional

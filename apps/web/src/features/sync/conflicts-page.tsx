@@ -93,22 +93,26 @@ export function SyncConflictsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>Conflitos de sincronização</CardTitle>
-              <CardDescription>
-                Revise alterações locais que precisam de decisão antes de a
-                sincronização voltar ao estado normal.
-              </CardDescription>
-            </div>
-            <Badge variant={conflicts.length > 0 ? 'destructive' : 'secondary'}>
-              {conflicts.length} aberto{conflicts.length === 1 ? '' : 's'}
-            </Badge>
-          </div>
-        </CardHeader>
-      </Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Sincronização
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Conflitos de sincronização
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Revise alterações locais que precisam de decisão antes de a
+            sincronização voltar ao estado normal.
+          </p>
+        </div>
+        <Badge
+          variant={conflicts.length > 0 ? 'destructive' : 'secondary'}
+          className="shrink-0"
+        >
+          {conflicts.length} aberto{conflicts.length === 1 ? '' : 's'}
+        </Badge>
+      </div>
 
       {conflicts.length === 0 ? (
         <Card>

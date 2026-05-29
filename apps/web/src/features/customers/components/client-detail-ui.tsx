@@ -1,12 +1,25 @@
 import { type ReactNode } from 'react'
 
+import {
+  Panel,
+  PanelHeader,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
 
+/**
+ * Shared building blocks for the client detail tabs, in the metrology-console
+ * aesthetic (flat panels, inset signal tiles, mono numerics) — see
+ * `@/components/instrument-panel`. The exported API is intentionally stable so
+ * the individual tab pages don't need to change when the skin evolves.
+ */
+
+/** A titled console card. `icon` is accepted for back-compat but not rendered. */
 function ClientPanel({
   eyebrow,
   title,
   description,
-  icon,
   action,
   children,
   className,
@@ -20,39 +33,15 @@ function ClientPanel({
   className?: string
 }) {
   return (
-    <section className={cn('space-y-6', className)}>
-      <div className="px-1">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            {icon && (
-              <span
-                aria-hidden="true"
-                className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"
-              >
-                {icon}
-              </span>
-            )}
-            <div className="min-w-0">
-              {eyebrow && (
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {eyebrow}
-                </p>
-              )}
-              <h2 className="text-xl font-semibold tracking-tight text-balance">
-                {title}
-              </h2>
-              {description && (
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground text-pretty">
-                  {description}
-                </p>
-              )}
-            </div>
-          </div>
-          {action}
-        </div>
-      </div>
-      {children}
-    </section>
+    <Panel className={cn('p-4 sm:p-5', className)}>
+      <PanelHeader
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+        action={action}
+      />
+      <div className="mt-5 space-y-6">{children}</div>
+    </Panel>
   )
 }
 
@@ -63,7 +52,7 @@ function ClientPanelBody({
   children: ReactNode
   className?: string
 }) {
-  return <div className={cn('px-1', className)}>{children}</div>
+  return <div className={className}>{children}</div>
 }
 
 function ClientMetricStrip({
@@ -74,17 +63,34 @@ function ClientMetricStrip({
   className?: string
 }) {
   return (
-    <div
+    <StaggerGroup
       className={cn(
-        'grid divide-y divide-border/70 border-y border-border/70 bg-background/50 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4',
+        'grid gap-3 grid-cols-[repeat(auto-fit,minmax(170px,1fr))]',
         className,
       )}
     >
       {children}
-    </div>
+    </StaggerGroup>
   )
 }
 
+const METRIC_TONE: Record<
+  'default' | 'danger',
+  { surface: string; value: string; icon: string }
+> = {
+  default: {
+    surface: 'bg-muted/45',
+    value: 'text-foreground',
+    icon: 'text-muted-foreground',
+  },
+  danger: {
+    surface: 'bg-destructive/10',
+    value: 'text-destructive',
+    icon: 'text-destructive',
+  },
+}
+
+/** Inset signal tile mirroring `SignalTile`, but accepting a rendered icon node. */
 function ClientMetric({
   icon,
   label,
@@ -96,31 +102,39 @@ function ClientMetric({
   value: string
   tone?: 'default' | 'danger'
 }) {
+  const palette = METRIC_TONE[tone]
   return (
-    <div className="min-w-0 px-4 py-4 sm:px-5">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {icon && (
-          <span
-            aria-hidden="true"
-            className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground ring-1 ring-foreground/10"
-          >
-            {icon}
-          </span>
-        )}
-        <span className="truncate">{label}</span>
-      </div>
+    <StaggerItem>
       <div
         className={cn(
-          'mt-3 truncate text-lg font-semibold tabular-nums',
-          tone === 'danger' && 'text-destructive',
+          'rounded-xl p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]',
+          palette.surface,
         )}
       >
-        {value}
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            {label}
+          </span>
+          {icon && (
+            <span className={cn('shrink-0', palette.icon)} aria-hidden="true">
+              {icon}
+            </span>
+          )}
+        </div>
+        <div
+          className={cn(
+            'mt-2 truncate font-mono text-2xl font-semibold leading-none tabular-nums',
+            palette.value,
+          )}
+        >
+          {value}
+        </div>
       </div>
-    </div>
+    </StaggerItem>
   )
 }
 
+/** A labelled sub-section: description rail on the left, content on the right. */
 function ClientSection({
   icon,
   title,
@@ -136,13 +150,13 @@ function ClientSection({
 }) {
   return (
     <section
-      className={cn('grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]', className)}
+      className={cn('grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]', className)}
     >
       <div className="flex gap-3">
         {icon && (
           <span
             aria-hidden="true"
-            className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-foreground/10"
+            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
           >
             {icon}
           </span>
@@ -150,7 +164,7 @@ function ClientSection({
         <div className="min-w-0">
           <h3 className="text-sm font-medium text-balance">{title}</h3>
           {description && (
-            <p className="mt-1 text-sm leading-6 text-muted-foreground text-pretty">
+            <p className="mt-1 text-pretty text-sm leading-6 text-muted-foreground">
               {description}
             </p>
           )}
@@ -161,6 +175,7 @@ function ClientSection({
   )
 }
 
+/** Inset frame for tables/lists nested inside a console panel. */
 function TableFrame({
   children,
   className,
@@ -171,7 +186,7 @@ function TableFrame({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl bg-background ring-1 ring-foreground/10',
+        'overflow-hidden rounded-xl bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]',
         className,
       )}
     >
@@ -188,7 +203,7 @@ function Toolbar({
   className?: string
 }) {
   return (
-    <div className={cn('mb-6 flex flex-col gap-3 sm:flex-row', className)}>
+    <div className={cn('mb-4 flex flex-col gap-3 sm:flex-row', className)}>
       {children}
     </div>
   )

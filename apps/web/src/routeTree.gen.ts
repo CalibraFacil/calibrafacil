@@ -62,6 +62,7 @@ import { Route as BackofficeOrganizationsIndexRouteImport } from './routes/backo
 import { Route as BackofficeCustomerSuccessIndexRouteImport } from './routes/backoffice/customer-success/index'
 import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
+import { Route as DashboardSettingsUnitsRouteImport } from './routes/dashboard/settings/units'
 import { Route as DashboardSettingsSubscriptionRouteImport } from './routes/dashboard/settings/subscription'
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
@@ -69,6 +70,7 @@ import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard
 import { Route as DashboardSettingsPortalDomainRouteImport } from './routes/dashboard/settings/portal-domain'
 import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
 import { Route as DashboardSettingsNotificationsRouteImport } from './routes/dashboard/settings/notifications'
+import { Route as DashboardSettingsMembersRouteImport } from './routes/dashboard/settings/members'
 import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dashboard/settings/integrations'
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
@@ -132,6 +134,7 @@ import { Route as DashboardFinanceDocumentsIdRouteImport } from './routes/dashbo
 import { Route as DashboardFinanceContractsNewRouteImport } from './routes/dashboard/finance/contracts/new'
 import { Route as DashboardFinanceContractsIdRouteImport } from './routes/dashboard/finance/contracts/$id'
 import { Route as DashboardClientsIdUsersRouteImport } from './routes/dashboard/clients/$id/users'
+import { Route as DashboardClientsIdOverviewRouteImport } from './routes/dashboard/clients/$id/overview'
 import { Route as DashboardClientsIdInfoRouteImport } from './routes/dashboard/clients/$id/info'
 import { Route as DashboardClientsIdComplianceRouteImport } from './routes/dashboard/clients/$id/compliance'
 import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/dashboard/clients/$id/calibrations'
@@ -413,6 +416,11 @@ const DashboardStandardsNewRoute = DashboardStandardsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardStandardsRouteRoute,
 } as any)
+const DashboardSettingsUnitsRoute = DashboardSettingsUnitsRouteImport.update({
+  id: '/units',
+  path: '/units',
+  getParentRoute: () => DashboardSettingsRouteRoute,
+} as any)
 const DashboardSettingsSubscriptionRoute =
   DashboardSettingsSubscriptionRouteImport.update({
     id: '/subscription',
@@ -453,6 +461,12 @@ const DashboardSettingsNotificationsRoute =
   DashboardSettingsNotificationsRouteImport.update({
     id: '/notifications',
     path: '/notifications',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsMembersRoute =
+  DashboardSettingsMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsIntegrationsRoute =
@@ -811,6 +825,12 @@ const DashboardClientsIdUsersRoute = DashboardClientsIdUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => DashboardClientsIdRouteRoute,
 } as any)
+const DashboardClientsIdOverviewRoute =
+  DashboardClientsIdOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => DashboardClientsIdRouteRoute,
+  } as any)
 const DashboardClientsIdInfoRoute = DashboardClientsIdInfoRouteImport.update({
   id: '/info',
   path: '/info',
@@ -922,6 +942,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
+  '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -929,6 +950,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
+  '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
@@ -951,6 +973,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
+  '/dashboard/clients/$id/overview': typeof DashboardClientsIdOverviewRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
   '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
@@ -1032,6 +1055,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
+  '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -1039,6 +1063,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
+  '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessIndexRoute
@@ -1061,6 +1086,7 @@ export interface FileRoutesByTo {
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
+  '/dashboard/clients/$id/overview': typeof DashboardClientsIdOverviewRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
   '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
@@ -1164,6 +1190,7 @@ export interface FileRoutesById {
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
+  '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -1171,6 +1198,7 @@ export interface FileRoutesById {
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
+  '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
@@ -1193,6 +1221,7 @@ export interface FileRoutesById {
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
+  '/dashboard/clients/$id/overview': typeof DashboardClientsIdOverviewRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
   '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
@@ -1297,6 +1326,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
+    | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/portal-domain'
@@ -1304,6 +1334,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
+    | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success/'
@@ -1326,6 +1357,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
     | '/dashboard/clients/$id/info'
+    | '/dashboard/clients/$id/overview'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
     | '/dashboard/finance/contracts/new'
@@ -1407,6 +1439,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
+    | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/portal-domain'
@@ -1414,6 +1447,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
+    | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success'
@@ -1436,6 +1470,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
     | '/dashboard/clients/$id/info'
+    | '/dashboard/clients/$id/overview'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
     | '/dashboard/finance/contracts/new'
@@ -1538,6 +1573,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
+    | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/portal-domain'
@@ -1545,6 +1581,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
+    | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success/'
@@ -1567,6 +1604,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
     | '/dashboard/clients/$id/info'
+    | '/dashboard/clients/$id/overview'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
     | '/dashboard/finance/contracts/new'
@@ -1981,6 +2019,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardStandardsNewRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
     }
+    '/dashboard/settings/units': {
+      id: '/dashboard/settings/units'
+      path: '/units'
+      fullPath: '/dashboard/settings/units'
+      preLoaderRoute: typeof DashboardSettingsUnitsRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
     '/dashboard/settings/subscription': {
       id: '/dashboard/settings/subscription'
       path: '/subscription'
@@ -2028,6 +2073,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/dashboard/settings/notifications'
       preLoaderRoute: typeof DashboardSettingsNotificationsRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/members': {
+      id: '/dashboard/settings/members'
+      path: '/members'
+      fullPath: '/dashboard/settings/members'
+      preLoaderRoute: typeof DashboardSettingsMembersRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/integrations': {
@@ -2471,6 +2523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClientsIdUsersRouteImport
       parentRoute: typeof DashboardClientsIdRouteRoute
     }
+    '/dashboard/clients/$id/overview': {
+      id: '/dashboard/clients/$id/overview'
+      path: '/overview'
+      fullPath: '/dashboard/clients/$id/overview'
+      preLoaderRoute: typeof DashboardClientsIdOverviewRouteImport
+      parentRoute: typeof DashboardClientsIdRouteRoute
+    }
     '/dashboard/clients/$id/info': {
       id: '/dashboard/clients/$id/info'
       path: '/info'
@@ -2631,6 +2690,7 @@ interface DashboardClientsIdRouteRouteChildren {
   DashboardClientsIdCalibrationsRoute: typeof DashboardClientsIdCalibrationsRoute
   DashboardClientsIdComplianceRoute: typeof DashboardClientsIdComplianceRoute
   DashboardClientsIdInfoRoute: typeof DashboardClientsIdInfoRoute
+  DashboardClientsIdOverviewRoute: typeof DashboardClientsIdOverviewRoute
   DashboardClientsIdUsersRoute: typeof DashboardClientsIdUsersRoute
   DashboardClientsIdIndexRoute: typeof DashboardClientsIdIndexRoute
 }
@@ -2641,6 +2701,7 @@ const DashboardClientsIdRouteRouteChildren: DashboardClientsIdRouteRouteChildren
     DashboardClientsIdCalibrationsRoute: DashboardClientsIdCalibrationsRoute,
     DashboardClientsIdComplianceRoute: DashboardClientsIdComplianceRoute,
     DashboardClientsIdInfoRoute: DashboardClientsIdInfoRoute,
+    DashboardClientsIdOverviewRoute: DashboardClientsIdOverviewRoute,
     DashboardClientsIdUsersRoute: DashboardClientsIdUsersRoute,
     DashboardClientsIdIndexRoute: DashboardClientsIdIndexRoute,
   }
@@ -2925,6 +2986,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
   DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRouteWithChildren
+  DashboardSettingsMembersRoute: typeof DashboardSettingsMembersRoute
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
   DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
   DashboardSettingsPortalDomainRoute: typeof DashboardSettingsPortalDomainRoute
@@ -2932,6 +2994,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
   DashboardSettingsSignatureRoute: typeof DashboardSettingsSignatureRoute
   DashboardSettingsSubscriptionRoute: typeof DashboardSettingsSubscriptionRoute
+  DashboardSettingsUnitsRoute: typeof DashboardSettingsUnitsRoute
 }
 
 const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
@@ -2950,6 +3013,7 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,
     DashboardSettingsIntegrationsRoute:
       DashboardSettingsIntegrationsRouteWithChildren,
+    DashboardSettingsMembersRoute: DashboardSettingsMembersRoute,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
     DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
     DashboardSettingsPortalDomainRoute: DashboardSettingsPortalDomainRoute,
@@ -2957,6 +3021,7 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,
     DashboardSettingsSignatureRoute: DashboardSettingsSignatureRoute,
     DashboardSettingsSubscriptionRoute: DashboardSettingsSubscriptionRoute,
+    DashboardSettingsUnitsRoute: DashboardSettingsUnitsRoute,
   }
 
 const DashboardSettingsRouteRouteWithChildren =

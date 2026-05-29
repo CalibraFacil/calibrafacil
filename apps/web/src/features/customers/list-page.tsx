@@ -9,13 +9,7 @@ import { parseAsInteger, parseAsString, useQueryState } from 'nuqs'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Empty,
   EmptyContent,
@@ -63,22 +57,29 @@ export function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Clientes</CardTitle>
-              <CardDescription>
-                Gerencie os clientes do laboratório.
-              </CardDescription>
-            </div>
-            <Button render={<Link to="/dashboard/clients/new" />}>
-              <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-              Novo Cliente
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Cadastro
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Clientes
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gerencie os clientes do laboratório.
+          </p>
+        </div>
+        <Button
+          render={<Link to="/dashboard/clients/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Novo Cliente
+        </Button>
+      </div>
+
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-sm">
@@ -149,8 +150,8 @@ export function ClientsPage() {
           {isLoading && !data && (
             <DataTable columns={clientsColumns} data={[]} isLoading={true} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useTheme } from 'next-themes'
 import {
+  CheckmarkCircle02Icon,
   Moon01Icon,
   Settings02Icon,
   Sun01Icon,
@@ -16,38 +17,84 @@ import {
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
+type ThemeValue = 'light' | 'dark' | 'system'
+
 interface ThemeOption {
-  value: string
+  value: ThemeValue
   label: string
-  description: string
-  icon: React.ReactNode
+  icon: typeof Sun01Icon
 }
 
 const themeOptions: Array<ThemeOption> = [
-  {
-    value: 'light',
-    label: 'Claro',
-    description: 'Tema claro para uso diurno',
-    icon: <HugeiconsIcon icon={Sun01Icon} className="h-6 w-6" />,
-  },
-  {
-    value: 'dark',
-    label: 'Escuro',
-    description: 'Tema escuro para reduzir o cansaço visual',
-    icon: <HugeiconsIcon icon={Moon01Icon} className="h-6 w-6" />,
-  },
-  {
-    value: 'system',
-    label: 'Sistema',
-    description: 'Usar a configuração do sistema operacional',
-    icon: <HugeiconsIcon icon={Settings02Icon} className="h-6 w-6" />,
-  },
+  { value: 'light', label: 'Claro', icon: Sun01Icon },
+  { value: 'dark', label: 'Escuro', icon: Moon01Icon },
+  { value: 'system', label: 'Sistema', icon: Settings02Icon },
 ]
+
+/** A miniature window that always renders its OWN theme, not the active one. */
+function ThemeSwatch({ variant }: { variant: ThemeValue }) {
+  if (variant === 'system') {
+    return (
+      <div className="flex h-20 overflow-hidden rounded-lg ring-1 ring-black/10 dark:ring-white/10">
+        <div className="w-1/2 space-y-1.5 bg-white p-2.5">
+          <div className="h-1.5 w-10 rounded bg-slate-200" />
+          <div className="h-1.5 w-7 rounded bg-slate-200" />
+          <div className="h-5 rounded bg-blue-500/20" />
+        </div>
+        <div className="w-1/2 space-y-1.5 bg-slate-900 p-2.5">
+          <div className="h-1.5 w-10 rounded bg-slate-700" />
+          <div className="h-1.5 w-7 rounded bg-slate-700" />
+          <div className="h-5 rounded bg-blue-400/40" />
+        </div>
+      </div>
+    )
+  }
+
+  const dark = variant === 'dark'
+  return (
+    <div
+      className={cn(
+        'h-20 space-y-1.5 overflow-hidden rounded-lg p-2.5 ring-1',
+        dark ? 'bg-slate-900 ring-white/10' : 'bg-white ring-black/10',
+      )}
+    >
+      <div className="flex gap-1">
+        {[0, 1, 2].map((dot) => (
+          <span
+            key={dot}
+            className={cn(
+              'size-1.5 rounded-full',
+              dark ? 'bg-slate-700' : 'bg-slate-300',
+            )}
+          />
+        ))}
+      </div>
+      <div
+        className={cn(
+          'h-1.5 w-3/4 rounded',
+          dark ? 'bg-slate-700' : 'bg-slate-200',
+        )}
+      />
+      <div
+        className={cn(
+          'h-1.5 w-1/2 rounded',
+          dark ? 'bg-slate-700' : 'bg-slate-200',
+        )}
+      />
+      <div
+        className={cn(
+          'h-5 rounded',
+          dark ? 'bg-blue-400/40' : 'bg-blue-500/20',
+        )}
+      />
+    </div>
+  )
+}
 
 export function AppearanceSettingsPage() {
   const { theme, setTheme } = useTheme()
 
-  const handleThemeChange = (newTheme: string) => {
+  const handleThemeChange = (newTheme: ThemeValue) => {
     setTheme(newTheme)
     const option = themeOptions.find((item) => item.value === newTheme)
     if (option) {
@@ -56,111 +103,54 @@ export function AppearanceSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Tema do dashboard</CardTitle>
-          <CardDescription>
-            Ajuste apenas a aparência da interface interna. Branding de
-            certificados e domínio do portal agora ficam em superfícies
-            dedicadas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {themeOptions.map((option) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Tema</CardTitle>
+        <CardDescription>
+          A interface muda na hora. O branding de certificados e o domínio do
+          portal ficam em superfícies dedicadas.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div
+          role="radiogroup"
+          aria-label="Tema da interface"
+          className="grid gap-3 sm:grid-cols-3"
+        >
+          {themeOptions.map((option) => {
+            const selected = theme === option.value
+            return (
               <button
                 key={option.value}
                 type="button"
+                role="radio"
+                aria-checked={selected}
                 onClick={() => handleThemeChange(option.value)}
                 className={cn(
-                  'flex flex-col items-center gap-3 rounded-lg border p-4 text-center transition-colors hover:bg-muted',
-                  theme === option.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border',
+                  'rounded-xl p-2 text-left transition-[background-color,box-shadow,transform] active:scale-[0.98]',
+                  selected
+                    ? 'bg-primary/5 shadow-[0_0_0_1.5px_hsl(var(--primary))]'
+                    : 'shadow-[inset_0_0_0_1px_rgba(15,23,42,0.1)] hover:bg-muted/40 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]',
                 )}
               >
-                <div
-                  className={cn(
-                    'flex h-12 w-12 items-center justify-center rounded-lg',
-                    theme === option.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted',
+                <ThemeSwatch variant={option.value} />
+                <div className="mt-2.5 flex items-center justify-between gap-2 px-1 pb-1">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <HugeiconsIcon icon={option.icon} className="size-4" />
+                    {option.label}
+                  </span>
+                  {selected && (
+                    <HugeiconsIcon
+                      icon={CheckmarkCircle02Icon}
+                      className="size-4 text-primary"
+                    />
                   )}
-                >
-                  {option.icon}
-                </div>
-                <div>
-                  <p className="font-medium">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {option.description}
-                  </p>
                 </div>
               </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Visualização</CardTitle>
-          <CardDescription>
-            Prévia rápida de como a interface aparece com o tema selecionado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border p-4">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-primary" />
-                  <div>
-                    <p className="text-sm font-medium">CalibraFácil</p>
-                    <p className="text-xs text-muted-foreground">
-                      Gestão de Calibrações
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="h-8 w-8 rounded-md bg-muted" />
-                  <div className="h-8 w-8 rounded-md bg-muted" />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                {['Ordens', 'Solicitações', 'Clientes'].map((label) => (
-                  <div key={label} className="rounded-lg border bg-card p-3">
-                    <div className="h-2 w-20 rounded bg-muted-foreground/20" />
-                    <div className="mt-2 h-8 w-full rounded bg-muted" />
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-lg border">
-                <div className="flex items-center gap-4 border-b bg-muted/50 px-4 py-2">
-                  <div className="h-3 w-24 rounded bg-muted-foreground/30" />
-                  <div className="h-3 w-20 rounded bg-muted-foreground/30" />
-                  <div className="h-3 w-16 rounded bg-muted-foreground/30" />
-                </div>
-                {[1, 2, 3].map((row) => (
-                  <div
-                    key={row}
-                    className="flex items-center gap-4 border-b px-4 py-3 last:border-0"
-                  >
-                    <div className="h-3 w-24 rounded bg-muted" />
-                    <div className="h-3 w-20 rounded bg-muted" />
-                    <div className="h-5 w-16 rounded-full bg-primary/20" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

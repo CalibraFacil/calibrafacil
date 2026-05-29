@@ -12,9 +12,14 @@ import {
   Mail01Icon,
   Edit02Icon,
   CheckmarkCircle02Icon,
+  CheckmarkBadge02Icon,
   ArrowLeft01Icon,
   MoreVerticalIcon,
   Alert02Icon,
+  Target02Icon,
+  RulerIcon,
+  FunctionIcon,
+  Calendar03Icon,
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
@@ -76,9 +81,20 @@ import {
   formatDate,
   formatReviewValue,
   REVIEW_ACTION_BUTTON_CLASS,
-  REVIEW_SURFACE_CLASS,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
+import {
+  BlueprintField,
+  BlueprintGrid,
+  BlueprintOverlay,
+  InfoHint,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
 import { CertificateReleaseControl } from '@/features/finance/certificate-release'
 
 interface ApprovedJobRecordProps {
@@ -94,14 +110,20 @@ export function ApprovedJobRecord({
 }: ApprovedJobRecordProps) {
   const { methodSnapshot, standardsSnapshot } = job
   const {
-    approvedContextItems,
+    equipmentSpecItems,
+    supportContextItems,
     assetBaseMeasurementUnit,
     displayData,
     displayResults,
     displayUnitFor,
     measurementFields,
     validations,
+    pointsTotal,
+    pointsWithin,
+    expandedUncertainty,
   } = useMemo(() => buildApprovedJobRecordModel(job), [job])
+  const isSuperseded = job.status === 'SUPERSEDED'
+  const standardsCount = standardsSnapshot?.length ?? 0
   const navigate = useNavigate()
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
@@ -205,7 +227,7 @@ export function ApprovedJobRecord({
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       return (
-        <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+        <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
           <Table className="min-w-max text-[13px]">
             <TableHeader className="bg-muted/50">
               <TableRow>
@@ -228,7 +250,9 @@ export function ApprovedJobRecord({
               {(Array.isArray(value) ? value : [])
                 .filter(
                   (row): row is Record<string, unknown> =>
-                    row !== null && typeof row === 'object' && !Array.isArray(row),
+                    row !== null &&
+                    typeof row === 'object' &&
+                    !Array.isArray(row),
                 )
                 .map((row, idx) => (
                   <TableRow key={idx} className="hover:bg-muted/30">
@@ -278,7 +302,7 @@ export function ApprovedJobRecord({
     const isPassed = value !== undefined && value !== null
 
     return (
-      <div className="flex flex-col gap-3 rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <span className="text-sm font-medium">
             {formula.label || formula.outputKey}
@@ -386,41 +410,115 @@ export function ApprovedJobRecord({
         </DropdownMenu>
       </div>
 
-      <section className="flex flex-col gap-3 border-b border-black/5 px-1 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-white/10">
-        <div className="min-w-0">
-          <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
-            {job.jobId}
-          </h1>
-          <p className="mt-1 text-pretty text-sm text-muted-foreground">
-            {job.serviceName}
-            {methodSnapshot.methodName && (
-              <span className="ml-2 text-xs">
-                ({methodSnapshot.methodName} v{methodSnapshot.methodVersion})
+      {/* Quality-record seal hero */}
+      <Panel className="relative overflow-hidden">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <span
+                className={cn(
+                  'relative flex size-16 shrink-0 items-center justify-center rounded-full',
+                  isSuperseded
+                    ? 'bg-amber-500/12 text-amber-700 dark:text-amber-400'
+                    : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400',
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute inset-1 rounded-full border border-dashed',
+                    isSuperseded
+                      ? 'border-amber-500/40'
+                      : 'border-emerald-500/40',
+                  )}
+                />
+                <HugeiconsIcon icon={CheckmarkBadge02Icon} className="size-8" />
               </span>
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Registro de qualidade · ISO/IEC 17025
+                </p>
+                <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+                  {job.jobId}
+                </h1>
+                <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                  {job.serviceName}
+                  {methodSnapshot.methodName && (
+                    <span className="ml-2 text-xs">
+                      ({methodSnapshot.methodName} v
+                      {methodSnapshot.methodVersion})
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+              <Badge
+                variant={isSuperseded ? 'outline' : 'default'}
+                className={cn(
+                  isSuperseded
+                    ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                    : 'bg-emerald-600 text-white',
+                )}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="mr-1 h-3 w-3"
+                />
+                {isSuperseded ? 'Retificado' : 'Aprovado'}
+              </Badge>
+              <CertificateReleaseControl
+                calibrationJobId={job.id}
+                jobStatus={job.status}
+              />
+            </div>
+          </div>
+
+          <StaggerGroup className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+            {pointsTotal > 0 && (
+              <StaggerItem>
+                <SignalTile
+                  icon={Target02Icon}
+                  label="Pontos na tolerância"
+                  value={`${pointsWithin}/${pointsTotal}`}
+                  hint="pontos"
+                  tone={pointsWithin === pointsTotal ? 'ok' : 'warning'}
+                />
+              </StaggerItem>
             )}
-          </p>
+            <StaggerItem>
+              <SignalTile
+                icon={RulerIcon}
+                label="Rastreabilidade"
+                value={String(standardsCount)}
+                hint="padrões"
+                tone={standardsCount > 0 ? 'info' : 'neutral'}
+              />
+            </StaggerItem>
+            {expandedUncertainty && (
+              <StaggerItem>
+                <SignalTile
+                  icon={FunctionIcon}
+                  label="Incerteza U (máx.)"
+                  value={expandedUncertainty}
+                  hint="expandida"
+                  tone="neutral"
+                />
+              </StaggerItem>
+            )}
+            <StaggerItem>
+              <SignalTile
+                icon={Calendar03Icon}
+                label="Aprovado em"
+                value={formatDate(job.approvedAt)}
+                hint={job.approverName ?? undefined}
+                tone="neutral"
+              />
+            </StaggerItem>
+          </StaggerGroup>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <Badge
-            variant={job.status === 'SUPERSEDED' ? 'outline' : 'default'}
-            className={
-              job.status === 'SUPERSEDED'
-                ? 'shrink-0 border-amber-500 bg-amber-50 text-amber-700'
-                : 'shrink-0 bg-green-600 text-white'
-            }
-          >
-            <HugeiconsIcon
-              icon={CheckmarkCircle02Icon}
-              className="mr-1 h-3 w-3"
-            />
-            {job.status === 'SUPERSEDED' ? 'Retificado' : 'Aprovado'}
-          </Badge>
-          <CertificateReleaseControl
-            calibrationJobId={job.id}
-            jobStatus={job.status}
-          />
-        </div>
-      </section>
+      </Panel>
 
       {/* Amendment Dialog - ISO 17025 Clause 7.8.4.1 */}
       <Dialog open={isAmendDialogOpen} onOpenChange={setIsAmendDialogOpen}>
@@ -556,147 +654,83 @@ export function ApprovedJobRecord({
 
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main className="min-w-0 space-y-6">
-          <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Registro aprovado
+          <Panel className="p-4 sm:p-5">
+            <PanelHeader
+              eyebrow="Identificação"
+              title="Cliente, ativo e método"
+              description="Dados congelados no momento da aprovação, que formam a base imutável deste certificado."
+            />
+            <BlueprintGrid className="mt-4 sm:grid-cols-2 lg:grid-cols-4">
+              <BlueprintField label="Cliente">
+                <span className="font-medium">{job.customerName || '-'}</span>
+              </BlueprintField>
+              <BlueprintField label="Ativo">
+                {job.assetName || '-'}
+                {job.assetTag && (
+                  <span className="ml-1 font-mono text-muted-foreground">
+                    ({job.assetTag})
+                  </span>
+                )}
+              </BlueprintField>
+              <BlueprintField label="Serviço">
+                {job.serviceName || '-'}
+              </BlueprintField>
+              <BlueprintField label="Método" mono>
+                {methodSnapshot.methodName} v{methodSnapshot.methodVersion}
+              </BlueprintField>
+            </BlueprintGrid>
+
+            {equipmentSpecItems.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Especificações do equipamento
                 </p>
-                <h2 className="text-balance text-lg font-semibold">
-                  Revisão técnica pronta para distribuição
-                </h2>
-              </div>
-              <Badge variant="outline" className="w-fit">
-                ISO 17025
-              </Badge>
-            </div>
-            <div className="grid gap-px overflow-hidden rounded-lg bg-black/5 md:grid-cols-4">
-              <div className="bg-background p-3">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Cliente
-                </Label>
-                <p className="mt-1 text-sm font-medium">
-                  {job.customerName || '-'}
-                </p>
-              </div>
-              <div className="bg-background p-3">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Ativo
-                </Label>
-                <p className="mt-1 text-sm">
-                  {job.assetName || '-'}
-                  {job.assetTag && (
-                    <span className="ml-1 font-mono text-muted-foreground">
-                      ({job.assetTag})
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="bg-background p-3">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Serviço
-                </Label>
-                <p className="mt-1 text-sm">{job.serviceName || '-'}</p>
-              </div>
-              <div className="bg-background p-3">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Método
-                </Label>
-                <p className="mt-1 text-sm">
-                  {methodSnapshot.methodName} v{methodSnapshot.methodVersion}
-                </p>
-              </div>
-            </div>
-            {approvedContextItems.length > 0 && (
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {approvedContextItems.map((item) => (
-                  <div
-                    key={item.key}
-                    className={`min-w-0 rounded-md bg-muted/20 px-3 py-3 ${
-                      item.key.toLowerCase().includes('observ') ||
-                      item.key.toLowerCase().includes('local')
-                        ? 'md:col-span-2 xl:col-span-3'
-                        : ''
-                    }`}
-                  >
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {item.label}
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap break-words font-mono text-sm leading-snug tabular-nums">
+                <BlueprintGrid className="sm:grid-cols-2">
+                  {equipmentSpecItems.map((item) => (
+                    <BlueprintField
+                      key={item.key}
+                      label={item.label}
+                      mono
+                      className={item.value.length > 36 ? 'sm:col-span-2' : ''}
+                    >
                       {item.value}
-                    </p>
-                  </div>
-                ))}
+                    </BlueprintField>
+                  ))}
+                </BlueprintGrid>
               </div>
             )}
-          </section>
 
-          {standardsSnapshot && standardsSnapshot.length > 0 && (
-            <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-              <div className="mb-4">
-                <h2 className="text-balance text-base font-semibold">
-                  Padrões de Referência Utilizados
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Rastreabilidade metrológica conforme ISO 17025
+            {supportContextItems.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Dados complementares
                 </p>
-              </div>
-              <div className="grid gap-2">
-                {standardsSnapshot.map((std) => (
-                  <div
-                    key={std.id}
-                    className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20"
-                  >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <span className="font-medium break-words">
-                          {std.name}
-                        </span>
-                        {std.type && (
-                          <p className="text-xs text-muted-foreground">
-                            {std.type}
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground break-all">
-                          Certificado: {std.certificateNumber}
-                        </p>
-                      </div>
-                      <div className="text-left sm:text-right text-sm shrink-0">
-                        <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
-                        {std.uncertainty != null && (
-                          <p className="font-mono tabular-nums text-muted-foreground">
-                            U ={' '}
-                            {formatCalibrationValue(
-                              assetBaseMeasurementUnit && std.uncertaintyUnit
-                                ? (convertMassValue(
-                                    std.uncertainty,
-                                    std.uncertaintyUnit,
-                                    assetBaseMeasurementUnit,
-                                  ) ?? std.uncertainty)
-                                : std.uncertainty,
-                            )}{' '}
-                            {displayUnitFor(std.uncertaintyUnit) || ''} (k=
-                            {std.coverageFactor})
-                          </p>
-                        )}
-                      </div>
+                <div className="grid gap-2">
+                  {supportContextItems.map((item) => (
+                    <div
+                      key={item.key}
+                      className="min-w-0 rounded-xl bg-muted/30 px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                    >
+                      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-snug">
+                        {item.value}
+                      </p>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </section>
-          )}
+            )}
+          </Panel>
 
-          <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-            <div className="mb-4">
-              <h2 className="text-balance text-base font-semibold">
-                Dados de Medição
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Valores registrados durante a calibração
-              </p>
-            </div>
-            <div className="space-y-5">
+          <Panel className="p-4 sm:p-5">
+            <PanelHeader
+              eyebrow="Evidência registrada"
+              title="Dados de medição"
+              description="Valores capturados durante a calibração."
+            />
+            <div className="mt-4 space-y-5">
               {measurementFields.map((field) => (
                 <div key={field.key}>
                   <Label className="mb-2 block text-sm font-medium text-muted-foreground">
@@ -707,15 +741,15 @@ export function ApprovedJobRecord({
                       </span>
                     )}
                   </Label>
-                  <div className="min-w-0 rounded-lg bg-muted/20 p-2">
+                  <div className="min-w-0 rounded-xl bg-muted/20 p-2">
                     {renderFieldValue(field)}
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          </Panel>
 
-          <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
+          <Panel className="p-4 sm:p-5">
             <Accordion>
               <AccordionItem value="approved-calculated-results">
                 <AccordionTrigger className="min-h-10 py-0 hover:no-underline">
@@ -737,18 +771,101 @@ export function ApprovedJobRecord({
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-          </section>
+          </Panel>
+
+          {standardsSnapshot && standardsSnapshot.length > 0 && (
+            <Panel className="p-4 sm:p-5">
+              <PanelHeader
+                eyebrow="Rastreabilidade metrológica"
+                title={
+                  <span className="inline-flex items-center gap-1.5">
+                    Padrões de referência utilizados
+                    <InfoHint label="Sobre rastreabilidade metrológica">
+                      Cada medição se liga a referências reconhecidas por uma
+                      cadeia contínua e documentada de calibrações, e cada elo
+                      contribui para a incerteza do resultado.
+                    </InfoHint>
+                  </span>
+                }
+                description="Cada padrão tem certificado e incerteza próprios, que alimentam o orçamento de incerteza da calibração."
+                action={
+                  <Badge variant="outline">
+                    <span className="tabular-nums">
+                      {standardsSnapshot.length}
+                    </span>
+                    {standardsSnapshot.length === 1 ? ' padrão' : ' padrões'}
+                  </Badge>
+                }
+              />
+              <div className="mt-4 grid gap-2">
+                {standardsSnapshot.map((std) => (
+                  <div
+                    key={std.id}
+                    className="rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] hover:bg-muted/20"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <span className="font-medium break-words">
+                          {std.name}
+                        </span>
+                        {std.type && (
+                          <p className="text-xs text-muted-foreground">
+                            {std.type}
+                          </p>
+                        )}
+                        <p className="inline-flex flex-wrap items-center gap-1 break-all text-sm text-muted-foreground">
+                          Certificado: {std.certificateNumber}
+                          <InfoHint label="Sobre o certificado do padrão">
+                            Número do certificado de calibração do padrão, que
+                            comprova documentalmente a rastreabilidade.
+                          </InfoHint>
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-left text-sm sm:text-right">
+                        <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
+                        {std.uncertainty != null && (
+                          <p className="inline-flex flex-wrap items-center gap-1 font-mono tabular-nums text-muted-foreground sm:justify-end">
+                            U ={' '}
+                            {formatCalibrationValue(
+                              assetBaseMeasurementUnit && std.uncertaintyUnit
+                                ? (convertMassValue(
+                                    std.uncertainty,
+                                    std.uncertaintyUnit,
+                                    assetBaseMeasurementUnit,
+                                  ) ?? std.uncertainty)
+                                : std.uncertainty,
+                            )}{' '}
+                            {displayUnitFor(std.uncertaintyUnit) || ''} (k=
+                            {std.coverageFactor})
+                            <InfoHint
+                              label="Sobre incerteza e fator de abrangência"
+                              side="left"
+                            >
+                              <span className="font-medium">U</span>: incerteza
+                              expandida do padrão.{' '}
+                              <span className="font-medium">k</span>: fator de
+                              abrangência; k = 2 corresponde a cerca de 95% de
+                              confiança. Soma-se ao orçamento de incerteza desta
+                              calibração.
+                            </InfoHint>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
         </main>
 
         <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
-          <section className={`${REVIEW_SURFACE_CLASS} overflow-hidden`}>
-            <div className="border-b border-black/5 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Próxima ação
-              </p>
-              <h2 className="text-balance text-base font-semibold">
-                Distribuir certificado
-              </h2>
+          <Panel className="overflow-hidden">
+            <div className="border-b border-foreground/10 p-4">
+              <PanelHeader
+                eyebrow="Próxima ação"
+                title="Distribuir certificado"
+              />
             </div>
             <div className="space-y-3 p-4">
               {job.certificateUrl ? (
@@ -844,13 +961,16 @@ export function ApprovedJobRecord({
                 )}
               </div>
             </div>
-          </section>
+          </Panel>
 
-          <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-            <h2 className="mb-3 text-base font-semibold">Responsáveis</h2>
-            <div className="space-y-4">
+          <Panel className="p-4 sm:p-5">
+            <PanelHeader
+              eyebrow="Responsabilidade técnica"
+              title="Responsáveis"
+            />
+            <div className="mt-4 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-medium">
                   {job.technicianName?.charAt(0).toUpperCase() || '?'}
                 </div>
                 <div className="min-w-0">
@@ -864,7 +984,7 @@ export function ApprovedJobRecord({
               </div>
               <Separator />
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-400">
                   <HugeiconsIcon
                     icon={CheckmarkCircle02Icon}
                     className="h-4 w-4"
@@ -880,9 +1000,17 @@ export function ApprovedJobRecord({
                 </div>
               </div>
             </div>
-          </section>
+          </Panel>
 
-          <AuditTimeline events={buildJobTimelineEvents(job)} />
+          <Panel className="p-4 sm:p-5">
+            <PanelHeader eyebrow="Trilha de auditoria" title="Histórico" />
+            <div className="mt-4">
+              <AuditTimeline
+                events={buildJobTimelineEvents(job)}
+                showCard={false}
+              />
+            </div>
+          </Panel>
         </aside>
       </div>
     </div>

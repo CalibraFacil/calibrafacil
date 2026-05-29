@@ -10,13 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -27,6 +21,12 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useAssetTypesData } from '@/features/assets/queries'
 import { FormField as Field } from '@/shared/forms/form-field'
+import {
+  ACTION_BUTTON_CLASS,
+  Panel,
+  PanelHeader,
+} from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
 
 import { cloneMethodDraft } from './adapters'
 import {
@@ -98,6 +98,35 @@ const validationOperators: Array<MethodDraftValidation['operator']> = [
 const distributionOptions: Array<
   MethodDraftUncertaintyComponent['distribution']
 > = ['normal', 'rectangular', 'triangular', 'u-shaped']
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Rascunho',
+  PENDING_APPROVAL: 'Em aprovação',
+  TECHNICAL_REVIEWED: 'Revisão técnica',
+  PUBLISHED: 'Publicado',
+  ARCHIVED: 'Arquivado',
+}
+
+const SECTION_NAV = [
+  { id: 'mb-identificacao', label: 'Identificação' },
+  { id: 'mb-campos', label: 'Campos' },
+  { id: 'mb-variaveis', label: 'Variáveis' },
+  { id: 'mb-formulas', label: 'Fórmulas' },
+  { id: 'mb-validacoes', label: 'Validações' },
+  { id: 'mb-modelos', label: 'Modelos GUM' },
+  { id: 'mb-incerteza', label: 'Incerteza' },
+  { id: 'mb-certificado', label: 'Certificado' },
+]
+
+/** Inset surface for inline editor rows (validations, uncertainty). */
+const INSET_ROW =
+  'rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
+
+function jumpToSection(id: string) {
+  document
+    .getElementById(id)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 function parseValidationOperator(
   value: string | null,
@@ -335,28 +364,43 @@ export function MethodBuilder({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">
-            {isNew ? 'Novo método' : 'Editar método'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Method Builder edita rascunhos, compila fórmulas e valida o preview
-            no servidor.
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Method Builder
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {isNew ? 'Novo método' : 'Editar método'}
+            </h1>
+            {!isNew ? (
+              <Badge variant="secondary">
+                {STATUS_LABELS[draft.status] ?? draft.status}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+            Edite o rascunho, compile as fórmulas e valide o preview no
+            servidor.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={onCancel}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={onCancel}
+            className={ACTION_BUTTON_CLASS}
+          >
             Cancelar
           </Button>
           <Button
             variant="outline"
             onClick={() => compileMutation.mutate(draft)}
             disabled={compileMutation.isPending}
+            className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon
               icon={CheckmarkCircle02Icon}
-              className="mr-2 h-4 w-4"
+              className="mr-2 size-4"
             />
             Compilar
           </Button>
@@ -364,8 +408,9 @@ export function MethodBuilder({
             variant="outline"
             onClick={() => previewMutation.mutate()}
             disabled={previewMutation.isPending}
+            className={ACTION_BUTTON_CLASS}
           >
-            <HugeiconsIcon icon={PlayIcon} className="mr-2 h-4 w-4" />
+            <HugeiconsIcon icon={PlayIcon} className="mr-2 size-4" />
             Preview
           </Button>
           <Button
@@ -374,11 +419,16 @@ export function MethodBuilder({
             disabled={
               !draft.id || publishMutation.isPending || hasCompileErrors
             }
+            className={ACTION_BUTTON_CLASS}
           >
             {draft.status === 'DRAFT' ? 'Enviar para revisão' : 'Publicar'}
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
-            <HugeiconsIcon icon={FloppyDiskIcon} className="mr-2 h-4 w-4" />
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={cn(ACTION_BUTTON_CLASS, 'min-w-28')}
+          >
+            <HugeiconsIcon icon={FloppyDiskIcon} className="mr-2 size-4" />
             Salvar
           </Button>
         </div>
@@ -386,15 +436,26 @@ export function MethodBuilder({
 
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
         <div className="min-h-0 overflow-auto pr-1">
+          <nav className="sticky top-0 z-10 -mx-1 mb-3 flex gap-1 overflow-x-auto bg-background/85 px-1 py-2 backdrop-blur">
+            {SECTION_NAV.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpToSection(section.id)}
+                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                {section.label}
+              </button>
+            ))}
+          </nav>
           <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Identificação</CardTitle>
-                <CardDescription>
-                  Dados persistidos no rascunho do método.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
+            <Panel id="mb-identificacao" className="scroll-mt-16 p-4 sm:p-5">
+              <PanelHeader
+                eyebrow="Identificação"
+                title="Dados do método"
+                description="Dados persistidos no rascunho."
+              />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <Field label="Nome">
                   <Input
                     value={draft.name}
@@ -435,32 +496,37 @@ export function MethodBuilder({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Descrição">
-                  <Textarea
-                    value={draft.description ?? ''}
-                    onChange={(event) =>
-                      updateDraft({ description: event.target.value })
-                    }
-                    rows={3}
-                    className="md:col-span-2"
-                  />
-                </Field>
-              </CardContent>
-            </Card>
+                <div className="md:col-span-2">
+                  <Field label="Descrição">
+                    <Textarea
+                      value={draft.description ?? ''}
+                      onChange={(event) =>
+                        updateDraft({ description: event.target.value })
+                      }
+                      rows={3}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Panel>
 
-            <InputsSection
-              inputs={draft.inputs}
-              onAddInput={addInput}
-              onInputChange={updateInput}
-              onInputTypeChange={updateInputType}
-              onInputsChange={(inputs) => updateDraft({ inputs })}
-            />
+            <div id="mb-campos" className="scroll-mt-16">
+              <InputsSection
+                inputs={draft.inputs}
+                onAddInput={addInput}
+                onInputChange={updateInput}
+                onInputTypeChange={updateInputType}
+                onInputsChange={(inputs) => updateDraft({ inputs })}
+              />
+            </div>
 
             <SectionCard
+              id="mb-variaveis"
               title="Variáveis"
               description="Bindings usados pelas fórmulas compiladas."
               actionLabel="Adicionar variável"
               onAction={addVariable}
+              count={draft.variables.length}
             >
               {draft.variables.map((variable, index) => (
                 <VariableEditor
@@ -480,10 +546,12 @@ export function MethodBuilder({
             </SectionCard>
 
             <SectionCard
+              id="mb-formulas"
               title="Fórmulas"
               description="Expressões que serão normalizadas pelo compilador."
               actionLabel="Adicionar fórmula"
               onAction={addFormula}
+              count={draft.formulas.length}
             >
               {draft.formulas.map((formula, index) => (
                 <FormulaEditor
@@ -503,15 +571,17 @@ export function MethodBuilder({
             </SectionCard>
 
             <SectionCard
+              id="mb-validacoes"
               title="Validações"
               description="Critérios avaliados pelo servidor."
               actionLabel="Adicionar validação"
               onAction={addValidation}
+              count={draft.validations.length}
             >
               {draft.validations.map((validation, index) => (
                 <div
                   key={`${validation.message}-${index}`}
-                  className="rounded-md border p-3"
+                  className={INSET_ROW}
                 >
                   <div className="grid gap-3 md:grid-cols-[1fr_90px_1fr_120px_auto]">
                     <Field label="Esquerda">
@@ -600,10 +670,12 @@ export function MethodBuilder({
             </SectionCard>
 
             <SectionCard
+              id="mb-modelos"
               title="Modelos GUM"
               description="Modelos explícitos de mensurando, fontes de incerteza, fator de abrangência e orçamento."
               actionLabel="Adicionar modelo"
               onAction={addMeasurementModel}
+              count={draft.measurementModels.length}
             >
               {draft.measurementModels.map((model, index) => (
                 <MeasurementModelEditor
@@ -624,13 +696,15 @@ export function MethodBuilder({
             </SectionCard>
 
             <SectionCard
+              id="mb-incerteza"
               title="Incerteza Tipo B"
               description="Componentes padrão do orçamento de incerteza."
               actionLabel="Adicionar componente"
               onAction={addUncertainty}
+              count={draft.uncertainty.length}
             >
               {draft.uncertainty.length > 0 ? (
-                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-800 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] dark:text-amber-200">
                   Componentes Type B legados exigem modelo GUM explícito antes
                   da publicação regulada.
                 </div>
@@ -638,7 +712,10 @@ export function MethodBuilder({
               {draft.uncertainty.map((component, index) => (
                 <div
                   key={`${component.name}-${index}`}
-                  className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_120px_160px_120px_auto]"
+                  className={cn(
+                    'grid gap-3 md:grid-cols-[1fr_120px_160px_120px_auto]',
+                    INSET_ROW,
+                  )}
                 >
                   <Field label="Nome">
                     <Input
@@ -708,13 +785,15 @@ export function MethodBuilder({
               ))}
             </SectionCard>
 
-            <CertificateContentSection
-              certificate={draft.certificate}
-              onCertificateChange={updateCertificate}
-              onAddSection={addCertificateSection}
-              onSectionChange={updateCertificateSection}
-              onSectionRemove={removeCertificateSection}
-            />
+            <div id="mb-certificado" className="scroll-mt-16">
+              <CertificateContentSection
+                certificate={draft.certificate}
+                onCertificateChange={updateCertificate}
+                onAddSection={addCertificateSection}
+                onSectionChange={updateCertificateSection}
+                onSectionRemove={removeCertificateSection}
+              />
+            </div>
           </div>
         </div>
 

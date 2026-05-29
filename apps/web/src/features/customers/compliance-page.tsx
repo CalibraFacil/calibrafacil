@@ -443,9 +443,8 @@ function ClientComplianceForm({
                   <DialogHeader>
                     <DialogTitle>Justificativa da Alteração</DialogTitle>
                     <DialogDescription>
-                      Conforme ISO 17025:2017 (cláusula 8.4), alterações em
-                      dados de conformidade devem ser justificadas para
-                      rastreabilidade.
+                      Alterações em dados de conformidade devem ser justificadas
+                      para garantir a rastreabilidade.
                     </DialogDescription>
                   </DialogHeader>
                   <FieldGroup>
@@ -487,8 +486,8 @@ function ClientComplianceForm({
 
         <ClientSection
           icon={<HugeiconsIcon icon={Clock01Icon} className="size-4" />}
-          title="Histórico de Alterações"
-          description="Registro de auditoria conforme ISO 17025:2017 (cláusula 8.4)."
+          title="Histórico de alterações"
+          description="Registro de alterações em dados de conformidade."
         >
           {auditLoading ? (
             <AuditLogSkeleton />

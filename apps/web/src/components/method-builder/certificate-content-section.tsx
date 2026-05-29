@@ -2,13 +2,7 @@ import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Panel, PanelHeader } from '@/components/instrument-panel'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -43,14 +37,13 @@ export function CertificateContentSection({
   onSectionRemove: (index: number) => void
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Certificado</CardTitle>
-        <CardDescription>
-          Conteúdo persistido no rascunho para emissão.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Panel className="p-4 sm:p-5">
+      <PanelHeader
+        eyebrow="Saída"
+        title="Certificado"
+        description="Conteúdo persistido no rascunho para emissão."
+      />
+      <div className="mt-4 space-y-4">
         <Field label="Código do procedimento">
           <Input
             value={certificate?.procedureCode ?? ''}
@@ -119,8 +112,8 @@ export function CertificateContentSection({
             />
           ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }
 

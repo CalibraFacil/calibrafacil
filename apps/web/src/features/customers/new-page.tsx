@@ -1,8 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { Copy01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import {
+  Copy01Icon,
+  FloppyDiskIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { CreateCustomerInput } from '@calibra-facil/schemas'
 
@@ -21,7 +25,6 @@ import {
   Field,
   FieldDescription,
   FieldError,
-  FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
 import {
@@ -32,12 +35,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  ACTION_BUTTON_CLASS,
+  Panel,
+  PanelHeader,
+} from '@/components/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
 import {
   mergeViaCepAddress,
   type ViaCepAddress,
   useViaCepLookup,
 } from '@/lib/viacep'
+import { cn } from '@/lib/utils'
 
 const initialFormData: CustomerFormData = {
   name: '',
@@ -55,6 +64,8 @@ const initialFormData: CustomerFormData = {
   },
 }
 
+const PANEL_CLASS = 'p-4 sm:p-5'
+
 export function NewClientPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -64,12 +75,10 @@ export function NewClientPage() {
     Partial<Record<CustomerFormField, string>>
   >({})
 
-  // Invitation dialog state
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [invitationId, setInvitationId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Generate the invitation URL for the portal
   const getInviteUrl = () => {
     if (!invitationId) return ''
     return `${getPortalBaseUrl()}/accept-invite?token=${invitationId}`
@@ -94,7 +103,6 @@ export function NewClientPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
 
-      // Check if the response contains an invitationId
       const newInvitationId = getCustomerInvitationId(data)
       if (newInvitationId) {
         setInvitationId(newInvitationId)
@@ -108,6 +116,7 @@ export function NewClientPage() {
       toast.error(error.message)
     },
   })
+  const isSaving = createMutation.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,64 +165,44 @@ export function NewClientPage() {
 
   const cepLookup = useViaCepLookup({
     cep: formData.address.cep,
-    disabled: createMutation.isPending,
+    disabled: isSaving,
     onResolved: handleViaCepResolved,
   })
 
-  const hasAddress = Object.values(formData.address).some(Boolean)
-  const registrationSummary = [
-    {
-      label: 'Identificação',
-      value: formData.name || 'Nome pendente',
-      complete: formData.name.trim().length >= 2,
-    },
-    {
-      label: 'Portal',
-      value: formData.email ? 'Convite será enviado' : 'Sem convite automático',
-      complete: Boolean(formData.email),
-    },
-    {
-      label: 'Endereço',
-      value: hasAddress ? 'Endereço informado' : 'Opcional',
-      complete: hasAddress,
-    },
-  ]
-
   return (
     <div className="space-y-6">
-      <header className="border-b pb-5">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">
-            Novo Cliente
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
-            Cadastre os dados do cliente. Quando um email é informado, o convite
-            para o portal é enviado automaticamente.
-          </p>
-        </div>
-      </header>
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Cadastro de cliente
+        </p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight">
+          Novo cliente
+        </h1>
+        <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          Cadastre os dados do cliente. Quando um email é informado, o convite
+          para o portal é enviado automaticamente.
+        </p>
+      </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <form
-          id="client-registration-form"
-          onSubmit={handleSubmit}
-          className="min-w-0"
-        >
-          <FieldGroup className="gap-0 divide-y">
-            <FormSection
-              title="Identificação"
-              description="Nome público e documentos usados em ordens, ativos e certificados."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="name">Nome / Razão Social *</FieldLabel>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Panel className={PANEL_CLASS}>
+          <div className="divide-y divide-foreground/10">
+            <section className="pb-6">
+              <PanelHeader
+                eyebrow="Identificação"
+                title="Dados do cliente"
+                description="Nome público e documento usados em ordens, ativos e certificados."
+              />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="name">Nome / Razão social *</FieldLabel>
                   <Input
                     id="name"
                     name="name"
                     value={formData.name}
                     onChange={(e) => updateField('name', e.target.value)}
                     placeholder="Ex.: Empresa ACME…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="organization"
                     aria-invalid={Boolean(errors.name)}
                     aria-describedby={errors.name ? 'name-error' : undefined}
@@ -232,19 +221,21 @@ export function NewClientPage() {
                     value={formData.taxId}
                     onInput={(e) => updateField('taxId', e.currentTarget.value)}
                     placeholder="Ex.: 00.000.000/0000-00…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
+                    className="font-mono"
                     autoComplete="off"
                     spellCheck={false}
                   />
                 </Field>
               </div>
-            </FormSection>
-
-            <FormSection
-              title="Contato e Portal"
-              description="Canal principal de atendimento e convite de acesso do cliente."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
+            </section>
+            <section className="py-6">
+              <PanelHeader
+                eyebrow="Contato"
+                title="Contato e portal"
+                description="Canal principal de atendimento e convite de acesso do cliente."
+              />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
@@ -254,7 +245,7 @@ export function NewClientPage() {
                     value={formData.email}
                     onChange={(e) => updateField('email', e.target.value)}
                     placeholder="Ex.: contato@empresa.com…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="email"
                     spellCheck={false}
                     aria-invalid={Boolean(errors.email)}
@@ -281,18 +272,19 @@ export function NewClientPage() {
                     value={formData.phone}
                     onInput={(e) => updateField('phone', e.currentTarget.value)}
                     placeholder="Ex.: (11) 99999-9999…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="tel"
                   />
                 </Field>
               </div>
-            </FormSection>
-
-            <FormSection
-              title="Endereço"
-              description="Opcional, mas útil para documentos comerciais e entregas."
-            >
-              <div className="grid gap-5 md:grid-cols-2">
+            </section>
+            <section className="pt-6">
+              <PanelHeader
+                eyebrow="Localização"
+                title="Endereço"
+                description="Opcional, mas útil para documentos comerciais e entregas."
+              />
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="cep">CEP</FieldLabel>
                   <MaskedInput
@@ -306,7 +298,7 @@ export function NewClientPage() {
                       cepLookup.lookupCep(nextCep)
                     }}
                     placeholder="Ex.: 00000-000…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="postal-code"
                     spellCheck={false}
                     aria-describedby={
@@ -333,46 +325,17 @@ export function NewClientPage() {
                 </Field>
 
                 <Field>
-                  <FieldLabel htmlFor="state">Estado</FieldLabel>
+                  <FieldLabel htmlFor="number">Número</FieldLabel>
                   <Input
-                    id="state"
-                    name="state"
-                    value={formData.address.state}
+                    id="number"
+                    name="addressNumber"
+                    value={formData.address.number}
                     onChange={(e) =>
-                      updateAddressField('state', e.target.value)
+                      updateAddressField('number', e.target.value)
                     }
-                    placeholder="Ex.: SP…"
-                    disabled={createMutation.isPending}
-                    autoComplete="address-level1"
-                    spellCheck={false}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="city">Cidade</FieldLabel>
-                  <Input
-                    id="city"
-                    name="city"
-                    value={formData.address.city}
-                    onChange={(e) => updateAddressField('city', e.target.value)}
-                    placeholder="Ex.: São Paulo…"
-                    disabled={createMutation.isPending}
-                    autoComplete="address-level2"
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="neighbourhood">Bairro</FieldLabel>
-                  <Input
-                    id="neighbourhood"
-                    name="neighbourhood"
-                    value={formData.address.neighbourhood}
-                    onChange={(e) =>
-                      updateAddressField('neighbourhood', e.target.value)
-                    }
-                    placeholder="Ex.: Centro…"
-                    disabled={createMutation.isPending}
-                    autoComplete="address-level3"
+                    placeholder="Ex.: 123…"
+                    disabled={isSaving}
+                    autoComplete="address-line2"
                   />
                 </Field>
 
@@ -386,23 +349,8 @@ export function NewClientPage() {
                       updateAddressField('street', e.target.value)
                     }
                     placeholder="Ex.: Rua das Flores…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="address-line1"
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="number">Número</FieldLabel>
-                  <Input
-                    id="number"
-                    name="addressNumber"
-                    value={formData.address.number}
-                    onChange={(e) =>
-                      updateAddressField('number', e.target.value)
-                    }
-                    placeholder="Ex.: 123…"
-                    disabled={createMutation.isPending}
-                    autoComplete="address-line2"
                   />
                 </Field>
 
@@ -416,62 +364,107 @@ export function NewClientPage() {
                       updateAddressField('complement', e.target.value)
                     }
                     placeholder="Ex.: Sala 4, bloco B…"
-                    disabled={createMutation.isPending}
+                    disabled={isSaving}
                     autoComplete="address-line2"
                   />
                 </Field>
-              </div>
-            </FormSection>
 
-            <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end">
+                <Field>
+                  <FieldLabel htmlFor="neighbourhood">Bairro</FieldLabel>
+                  <Input
+                    id="neighbourhood"
+                    name="neighbourhood"
+                    value={formData.address.neighbourhood}
+                    onChange={(e) =>
+                      updateAddressField('neighbourhood', e.target.value)
+                    }
+                    placeholder="Ex.: Centro…"
+                    disabled={isSaving}
+                    autoComplete="address-level3"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="city">Cidade</FieldLabel>
+                  <Input
+                    id="city"
+                    name="city"
+                    value={formData.address.city}
+                    onChange={(e) => updateAddressField('city', e.target.value)}
+                    placeholder="Ex.: São Paulo…"
+                    disabled={isSaving}
+                    autoComplete="address-level2"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="state">Estado</FieldLabel>
+                  <Input
+                    id="state"
+                    name="state"
+                    value={formData.address.state}
+                    onChange={(e) =>
+                      updateAddressField('state', e.target.value.toUpperCase())
+                    }
+                    placeholder="Ex.: SP…"
+                    disabled={isSaving}
+                    autoComplete="address-level1"
+                    spellCheck={false}
+                    maxLength={2}
+                  />
+                </Field>
+              </div>
+            </section>
+          </div>
+        </Panel>
+
+        {/* Sticky save bar */}
+        <div className="sticky bottom-0 z-10 -mx-1 pt-2 pb-1">
+          <div className="flex flex-col gap-3 rounded-2xl bg-card/95 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_16px_40px_rgba(15,23,42,0.08)] ring-1 ring-foreground/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+            <p className="px-1 text-pretty text-xs text-muted-foreground">
+              Com email informado, o convite do portal é enviado
+              automaticamente.
+            </p>
+            <div className="flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => navigate({ to: '/dashboard/clients' })}
-                disabled={createMutation.isPending}
+                disabled={isSaving}
+                className={ACTION_BUTTON_CLASS}
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Salvando…' : 'Criar Cliente'}
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className={cn(ACTION_BUTTON_CLASS, 'min-w-36')}
+              >
+                {isSaving ? (
+                  <>
+                    <Spinner className="mr-2 size-4" />
+                    Salvando…
+                  </>
+                ) : (
+                  <>
+                    <HugeiconsIcon
+                      icon={FloppyDiskIcon}
+                      className="mr-2 size-4"
+                    />
+                    Criar cliente
+                  </>
+                )}
               </Button>
             </div>
-          </FieldGroup>
-        </form>
-
-        <aside className="lg:sticky lg:top-20 lg:self-start">
-          <div className="border-l pl-5">
-            <h2 className="text-sm font-medium">Resumo do Cadastro</h2>
-            <dl className="mt-4 space-y-4">
-              {registrationSummary.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <dt className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        item.complete ? 'bg-primary' : 'bg-muted-foreground/35'
-                      }`}
-                    />
-                    {item.label}
-                  </dt>
-                  <dd className="min-w-0 truncate text-sm text-foreground">
-                    {item.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-5 border-t pt-4 text-xs leading-5 text-muted-foreground text-pretty">
-              O cadastro fica disponível para ativos, ordens e acesso ao portal
-              assim que for criado.
-            </p>
           </div>
-        </aside>
-      </div>
+        </div>
+      </form>
 
       {/* Invitation Link Dialog */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Cliente Criado com Sucesso</DialogTitle>
+            <DialogTitle>Cliente criado com sucesso</DialogTitle>
             <DialogDescription>
               Um link de convite foi gerado para o cliente acessar o portal.
               Copie e envie para o cliente.
@@ -480,7 +473,7 @@ export function NewClientPage() {
 
           <div className="space-y-4">
             <Field>
-              <FieldLabel htmlFor="invite-link">Link de Convite</FieldLabel>
+              <FieldLabel htmlFor="invite-link">Link de convite</FieldLabel>
               <div className="flex min-w-0 gap-2">
                 <Input
                   id="invite-link"
@@ -527,28 +520,4 @@ function getCustomerInvitationId(data: unknown) {
   }
 
   return typeof data.invitationId === 'string' ? data.invitationId : null
-}
-
-function FormSection({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description?: string
-  children: ReactNode
-}) {
-  return (
-    <section className="grid gap-5 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-balance">{title}</h2>
-        {description && (
-          <p className="text-sm leading-5 text-muted-foreground text-pretty">
-            {description}
-          </p>
-        )}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  )
 }

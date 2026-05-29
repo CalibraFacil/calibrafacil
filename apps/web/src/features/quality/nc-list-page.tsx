@@ -6,7 +6,12 @@ import {
   useQueryState,
 } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon, AlertCircleIcon } from '@hugeicons/core-free-icons'
+import {
+  PlusSignIcon,
+  AlertCircleIcon,
+  Clock01Icon,
+  CalendarRemove01Icon,
+} from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,12 +24,12 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  ACTION_BUTTON_CLASS,
+  Panel,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -129,98 +134,81 @@ export function NCListPage() {
 
   if (isContextSwitching) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">
-            Carregando o contexto da organização ativa.
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Carregando o contexto da organização ativa.
+        </p>
+      </Panel>
     )
   }
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar não conformidades: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar não conformidades: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Abertas</CardDescription>
-              <CardTitle className="text-2xl text-destructive">
-                {openCount}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Em Análise</CardDescription>
-              <CardTitle className="text-2xl text-orange-600">
-                {reviewCount}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Abertas &gt; 30 dias</CardDescription>
-              <CardTitle className="text-2xl text-destructive">
-                {summary.ageBrackets.moreThan30Days}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Abertas por Tipo</CardDescription>
-              <CardTitle className="text-sm">
-                {summary.byType.map((t) => (
-                  <span key={t.type} className="mr-3">
-                    {t.type === 'work'
-                      ? 'Trabalho'
-                      : t.type === 'equipment'
-                        ? 'Equipamento'
-                        : 'Doc'}{' '}
-                    ({t.count})
-                  </span>
-                ))}
-                {summary.byType.length === 0 && (
-                  <span className="text-muted-foreground">Nenhuma</span>
-                )}
-              </CardTitle>
-            </CardHeader>
-          </Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Qualidade
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Não conformidades
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Controle de trabalhos não conformes: registro, disposição e
+            resolução.
+          </p>
         </div>
+        <Button
+          render={<Link to="/dashboard/nc/new" />}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Registrar NC
+        </Button>
+      </div>
+
+      {summary && (
+        <StaggerGroup className="grid gap-3 sm:grid-cols-3">
+          <StaggerItem>
+            <SignalTile
+              icon={AlertCircleIcon}
+              label="Abertas"
+              value={openCount}
+              tone={openCount > 0 ? 'critical' : 'ok'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={Clock01Icon}
+              label="Em análise"
+              value={reviewCount}
+              tone={reviewCount > 0 ? 'warning' : 'neutral'}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SignalTile
+              icon={CalendarRemove01Icon}
+              label="Abertas > 30 dias"
+              value={summary.ageBrackets.moreThan30Days}
+              tone={
+                summary.ageBrackets.moreThan30Days > 0 ? 'critical' : 'neutral'
+              }
+            />
+          </StaggerItem>
+        </StaggerGroup>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Não Conformidades</CardTitle>
-            <CardDescription>
-              Controle de trabalhos não conformes - ISO 17025 Cláusula 8.7
-            </CardDescription>
-          </div>
-          <Button
-            render={
-              <Link to="/dashboard/nc/new">
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                Registrar NC
-              </Link>
-            }
-          />
-        </CardHeader>
-        <CardContent>
+      <Panel className="p-4 sm:p-5">
+        <div>
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
@@ -332,8 +320,8 @@ export function NCListPage() {
               onPageChange={setPage}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

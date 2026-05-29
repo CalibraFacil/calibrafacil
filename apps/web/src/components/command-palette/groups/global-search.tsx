@@ -18,11 +18,7 @@ import {
   useCommandSearchJobsData,
   useCommandSearchStandardsData,
 } from '@/features/command-palette/global-search'
-import {
-  CommandGroup,
-  CommandItem,
-  CommandShortcut,
-} from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@/components/ui/command'
 import {
   assetRouteId,
   clientRouteId,
@@ -333,7 +329,6 @@ export function GlobalSearchGroup({
       >
         <HugeiconsIcon icon={Wrench01Icon} />
         <span>Buscar Ativo por ID/NS...</span>
-        <CommandShortcut>⌘1</CommandShortcut>
       </CommandItem>
 
       <CommandItem
@@ -344,7 +339,6 @@ export function GlobalSearchGroup({
       >
         <HugeiconsIcon icon={UserIcon} />
         <span>Buscar Cliente...</span>
-        <CommandShortcut>⌘2</CommandShortcut>
       </CommandItem>
 
       <CommandItem
@@ -355,7 +349,6 @@ export function GlobalSearchGroup({
       >
         <HugeiconsIcon icon={RulerIcon} />
         <span>Buscar Padrão...</span>
-        <CommandShortcut>⌘3</CommandShortcut>
       </CommandItem>
 
       <CommandItem
@@ -366,7 +359,6 @@ export function GlobalSearchGroup({
       >
         <HugeiconsIcon icon={ClipboardIcon} />
         <span>Buscar Ordem de Serviço...</span>
-        <CommandShortcut>⌘4</CommandShortcut>
       </CommandItem>
     </CommandGroup>
   )

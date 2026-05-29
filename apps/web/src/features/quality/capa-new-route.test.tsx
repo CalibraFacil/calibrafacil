@@ -136,7 +136,7 @@ describe('new CAPA route workflow', () => {
         },
       },
     )
-    fireEvent.change(screen.getAllByRole('combobox')[5]!, {
+    fireEvent.change(screen.getAllByRole('combobox')[3]!, {
       target: { value: 'user-1' },
     })
     fireEvent.click(

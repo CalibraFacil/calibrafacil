@@ -13,13 +13,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   Select,
   SelectContent,
@@ -106,52 +100,57 @@ export function PersonnelPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-red-500">
-            Erro ao carregar competências: {error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar competências: {error.message}
+        </p>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Competências do Pessoal</CardTitle>
-            <CardDescription>Gestão de qualificações</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-md border">
-              <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-              >
-                Lista
-              </Button>
-              <Button
-                variant={viewMode === 'matrix' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('matrix')}
-              >
-                Matriz
-              </Button>
-            </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Pessoal
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Competências do pessoal
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Gestão de qualificações e matriz de competências dos técnicos.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex rounded-md border">
             <Button
-              render={
-                <Link to="/dashboard/personnel/new">
-                  <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                  Nova Solicitação
-                </Link>
-              }
-            />
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+            >
+              Lista
+            </Button>
+            <Button
+              variant={viewMode === 'matrix' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('matrix')}
+            >
+              Matriz
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="min-w-0">
+          <Button
+            render={<Link to="/dashboard/personnel/new" />}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+            Nova Solicitação
+          </Button>
+        </div>
+      </div>
+
+      <Panel className="min-w-0 p-4 sm:p-5">
+        <div className="min-w-0">
           {viewMode === 'list' ? (
             <>
               {/* Filters */}
@@ -244,8 +243,8 @@ export function PersonnelPage() {
             /* Matrix View */
             <MatrixView data={matrixData} isLoading={matrixLoading} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   )
 }

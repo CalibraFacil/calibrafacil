@@ -2,13 +2,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 import { toast } from 'sonner'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
 import { useMethodEditData } from '@/features/methods/queries'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import {
   draftToMethodSavePayload,
   methodDataToDraft,
@@ -43,9 +42,11 @@ export function EditMethodPage({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div className="p-6">
-        <p className="text-red-500">Erro ao carregar método: {error.message}</p>
-      </div>
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
+          Erro ao carregar método: {error.message}
+        </p>
+      </Panel>
     )
   }
 
@@ -63,36 +64,28 @@ export function EditMethodPage({ id }: { id: string }) {
 
   if (method.status !== 'DRAFT') {
     return (
-      <div className="p-6">
-        <p>
-          Este método não está em rascunho e não pode ser editado diretamente.
-          Crie uma nova versão para fazer alterações.
-        </p>
+      <Panel className="space-y-4 p-6 sm:p-8">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold">Método não editável</h2>
+          <p className="max-w-prose text-pretty text-sm leading-6 text-muted-foreground">
+            Este método não está em rascunho e não pode ser editado diretamente.
+            Crie uma nova versão para fazer alterações.
+          </p>
+        </div>
         <Button
           variant="outline"
           onClick={() => navigate({ to: '/dashboard/methods' })}
-          className="mt-4"
+          className={ACTION_BUTTON_CLASS}
         >
-          Voltar
+          Ver métodos
         </Button>
-      </div>
+      </Panel>
     )
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/methods' })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-      </div>
-
-      <div className="flex-1 min-h-0">
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
         <Suspense fallback={<MethodBuilderSkeleton />}>
           <MethodBuilder
             initialDraft={methodDataToDraft(method)}

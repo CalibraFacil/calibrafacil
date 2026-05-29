@@ -1341,6 +1341,16 @@ export type DashboardStats = {
   }>;
   calibrationTrend: Array<{ date: string; approved: number; rejected: number }>;
   recentJobs: DashboardJob[];
+  // Cross-domain operational signals (org-scoped)
+  openNonConformances: number;
+  nonConformancesAwaitingDisposition: number;
+  capasOpen: number;
+  capasOverdue: number;
+  pendingCalibrationRequests: number;
+  serviceOrdersInProgress: number;
+  competencesExpiring: number;
+  competencesPendingEvaluation: number;
+  dueSoonJobs: DashboardJob[];
 };
 
 export interface DashboardApi {

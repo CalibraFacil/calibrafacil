@@ -3,15 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
+import { FloppyDiskIcon, RefreshIcon } from '@hugeicons/core-free-icons'
 
-import {
-  AuditTimeline,
-  buildAuditTimelineEvents,
-  type AuditLogRecord,
-} from '@/components/audit-timeline'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Dialog,
   DialogContent,
@@ -28,6 +23,11 @@ import { calibraApi } from '@/utils/api'
 import { StandardFormSections } from '@/features/standards/components/standard-form-sections'
 import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
 import {
+  ACTION_BUTTON_CLASS,
+  Panel,
+  PanelHeader,
+} from '@/components/instrument-panel'
+import {
   createStandardFormData,
   createStandardRenewFormData,
   parseStandardEditForm,
@@ -37,15 +37,13 @@ import {
   type StandardRenewFormData,
   type StandardRenewFormField,
 } from '@/features/standards/forms'
-import {
-  useStandardAuditLogData,
-  useStandardDetailData,
-} from '@/features/standards/queries'
+import { useStandardDetailData } from '@/features/standards/queries'
 import type { StandardDetail } from '@/features/standards/types'
 import type {
   RenewCertificateInput,
   UpdateReferenceStandardInput,
 } from '@calibra-facil/schemas'
+import { cn } from '@/lib/utils'
 
 function toStandardWriteInput(
   input: UpdateReferenceStandardInput | RenewCertificateInput,
@@ -55,44 +53,33 @@ function toStandardWriteInput(
 
 export function EditStandardPage({ id }: { id: string }) {
   const { data: standard, isLoading } = useStandardDetailData(id)
-  const { data: auditLogData } = useStandardAuditLogData(id)
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-9 w-28" />
-        <Skeleton className="h-80 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-7 w-52" />
+        </div>
+        <Skeleton className="h-80 w-full rounded-2xl" />
       </div>
     )
   }
 
   if (!standard) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-destructive">
+      <Panel className="p-8 text-center">
+        <p className="text-sm text-destructive">
           Erro ao carregar padrão. Tente novamente.
-        </CardContent>
-      </Card>
+        </p>
+      </Panel>
     )
   }
 
-  return (
-    <EditStandardForm
-      key={standard.id}
-      standard={standard}
-      auditLogData={auditLogData?.data ?? []}
-    />
-  )
+  return <EditStandardForm key={standard.id} standard={standard} />
 }
 
-function EditStandardForm({
-  standard,
-  auditLogData,
-}: {
-  standard: StandardDetail
-  auditLogData: Array<AuditLogRecord>
-}) {
+function EditStandardForm({ standard }: { standard: StandardDetail }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<StandardFormData>(
@@ -134,6 +121,7 @@ function EditStandardForm({
       toast.error(error.message)
     },
   })
+  const isSaving = updateMutation.isPending
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -180,63 +168,85 @@ function EditStandardForm({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Voltar"
-            onClick={() => navigate({ to: '/dashboard/standards' })}
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Editar padrão
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {formData.name}
-            </p>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Padrão de referência
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Editar padrão
+          </h1>
+          <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+            {formData.name}
+          </p>
         </div>
-        <Button variant="outline" onClick={openRenewDialog}>
+        <Button
+          variant="outline"
+          onClick={openRenewDialog}
+          className={`${ACTION_BUTTON_CLASS} shrink-0`}
+        >
           <HugeiconsIcon icon={RefreshIcon} className="mr-2 size-4" />
           Renovar certificado
         </Button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <StandardCertificateDocumentPanel standard={standard} />
+        <Panel className="p-4 sm:p-5">
+          <PanelHeader eyebrow="Rastreabilidade" title="Certificado atual" />
+          <div className="mt-4">
+            <StandardCertificateDocumentPanel standard={standard} />
+          </div>
+        </Panel>
 
-        <StandardFormSections
-          formData={formData}
-          errors={errors}
-          disabled={updateMutation.isPending}
-          onChange={(nextData) => {
-            setFormData(nextData)
-            setErrors({})
-          }}
-        />
-
-        {auditLogData.length > 0 && (
-          <AuditTimeline
-            events={buildAuditTimelineEvents(auditLogData)}
-            title="Histórico de alterações"
+        <Panel className="p-4 sm:p-5">
+          <StandardFormSections
+            formData={formData}
+            errors={errors}
+            disabled={isSaving}
+            onChange={(nextData) => {
+              setFormData(nextData)
+              setErrors({})
+            }}
           />
-        )}
+        </Panel>
 
-        <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate({ to: '/dashboard/standards' })}
-            disabled={updateMutation.isPending}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
-          </Button>
+        <div className="sticky bottom-0 z-10 -mx-1 pt-2 pb-1">
+          <div className="flex flex-col gap-3 rounded-2xl bg-card/95 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_16px_40px_rgba(15,23,42,0.08)] ring-1 ring-foreground/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+            <p className="px-1 text-pretty text-xs text-muted-foreground">
+              As alterações são registradas no histórico do padrão.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate({ to: '/dashboard/standards' })}
+                disabled={isSaving}
+                className={ACTION_BUTTON_CLASS}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className={cn(ACTION_BUTTON_CLASS, 'min-w-40')}
+              >
+                {isSaving ? (
+                  <>
+                    <Spinner className="mr-2 size-4" />
+                    Salvando…
+                  </>
+                ) : (
+                  <>
+                    <HugeiconsIcon
+                      icon={FloppyDiskIcon}
+                      className="mr-2 size-4"
+                    />
+                    Salvar alterações
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </form>
 

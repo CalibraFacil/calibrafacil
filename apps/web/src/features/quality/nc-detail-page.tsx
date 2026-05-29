@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -199,22 +200,30 @@ export function NCDetailPage({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{nc.ncNumber}</h1>
-          <p className="text-muted-foreground">
-            Nao Conformidade - ISO 17025 Clausula 8.7
-          </p>
+      <Panel className="relative overflow-hidden p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Não conformidade
+            </p>
+            <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+              {nc.ncNumber}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+            {nc.capaId && (
+              <Badge
+                variant="outline"
+                className="border-blue-500 text-blue-600"
+              >
+                CAPA Vinculada
+              </Badge>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
-          {nc.capaId && (
-            <Badge variant="outline" className="border-blue-500 text-blue-600">
-              CAPA Vinculada
-            </Badge>
-          )}
-        </div>
-      </div>
+      </Panel>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* NC Details */}
@@ -444,9 +453,9 @@ export function NCDetailPage({ id }: { id: string }) {
       {auditLog && auditLog.data.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Historico de Alteracoes</CardTitle>
+            <CardTitle>Histórico de alterações</CardTitle>
             <CardDescription>
-              Registro de auditoria - ISO 17025 Clausula 8.4
+              Registro de atividades desta não conformidade
             </CardDescription>
           </CardHeader>
           <CardContent>

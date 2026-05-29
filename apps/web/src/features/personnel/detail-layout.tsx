@@ -1,6 +1,5 @@
-import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import {
-  ArrowLeft02Icon,
   InformationCircleIcon,
   Certificate01Icon,
   TimeQuarterPassIcon,
@@ -10,7 +9,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useCompetenceDetailData } from '@/features/personnel/queries'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -64,17 +63,9 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          render={<Link to="/dashboard/personnel" />}
-          className="mt-0.5"
-        >
-          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-5" />
-        </Button>
-
-        <div className="flex-1 min-w-0">
+      <Panel className="relative overflow-hidden p-6">
+        <BlueprintOverlay />
+        <div className="relative min-w-0">
           {isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-7 w-48" />
@@ -82,11 +73,13 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
             </div>
           ) : competence ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight truncate">
-                {competence.userName ?? 'Técnico'}
-              </h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{competence.assetTypeName ?? 'Escopo geral'}</span>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Competência
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-3">
+                <h1 className="text-balance text-2xl font-semibold tracking-tight">
+                  {competence.userName ?? 'Técnico'}
+                </h1>
                 {competence.status &&
                   (() => {
                     const badge = getStatusBadge(competence.status)
@@ -100,6 +93,9 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
                     )
                   })()}
               </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {competence.assetTypeName ?? 'Escopo geral'}
+              </p>
             </>
           ) : (
             <h1 className="text-2xl font-semibold text-destructive">
@@ -107,7 +103,7 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
             </h1>
           )}
         </div>
-      </div>
+      </Panel>
 
       {/* Tabs */}
       {isMobile ? (
