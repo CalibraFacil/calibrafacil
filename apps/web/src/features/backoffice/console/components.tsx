@@ -336,7 +336,7 @@ export function SegmentedFilter<T extends string>({
             onClick={() => onChange(option.value)}
             aria-pressed={active}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-[background-color,color,box-shadow] active:scale-[0.97]',
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-[background-color,color,box-shadow] active:scale-[0.96]',
               active
                 ? 'bg-foreground text-background shadow-sm'
                 : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
