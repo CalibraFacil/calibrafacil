@@ -170,7 +170,10 @@ export function supportSlaStatus(value: SupportSlaStatus): StatusDescriptor {
 }
 
 export function supportPriority(value: SupportPriority): StatusDescriptor {
-  return { label: requestPriorityLabels[value], tone: supportPriorityTone[value] }
+  return {
+    label: requestPriorityLabels[value],
+    tone: supportPriorityTone[value],
+  }
 }
 
 export function requestStatus(value: SupportRequestStatus): StatusDescriptor {
@@ -190,7 +193,9 @@ export function supportWorkflowState(
   }
 }
 
-export function ownershipStatus(value: AccountOwnershipStatus): StatusDescriptor {
+export function ownershipStatus(
+  value: AccountOwnershipStatus,
+): StatusDescriptor {
   return { label: ownershipStatusLabels[value], tone: ownershipTone[value] }
 }
 

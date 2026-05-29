@@ -6,7 +6,7 @@ import {
   Alert02Icon,
   AlertDiamondIcon,
   ArrowRight02Icon,
-   ArrowUp01Icon,
+  ArrowUp01Icon,
   CheckmarkCircle01Icon,
   DatabaseSync01Icon,
   Hold05Icon,
@@ -252,7 +252,11 @@ export function BackofficeCommandCenter() {
             <Skeleton className="h-28 w-full rounded-xl" />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <SupportStat label="Em aberto" value={vitals.openTickets} tone="info" />
+              <SupportStat
+                label="Em aberto"
+                value={vitals.openTickets}
+                tone="info"
+              />
               <SupportStat
                 label="SLA estourado"
                 value={vitals.breachedTickets}
@@ -460,7 +464,9 @@ function PipelineStrip({
             <span
               className={cn(
                 'mt-1 block font-mono text-lg font-semibold tabular-nums',
-                bucket.count > 0 && bucket.status === 'BLOCKED' && 'text-destructive',
+                bucket.count > 0 &&
+                  bucket.status === 'BLOCKED' &&
+                  'text-destructive',
                 bucket.count > 0 &&
                   bucket.status !== 'BLOCKED' &&
                   tone === 'info' &&
@@ -500,7 +506,9 @@ function RiskAccountRow({ account }: { account: OrganizationQueueItem }) {
         <Link to="/backoffice/accounts/$id" params={{ id: account.id }} />
       }
       tone={health.tone}
-      icon={summary.healthStatus === 'CRITICAL' ? AlertDiamondIcon : Alert02Icon}
+      icon={
+        summary.healthStatus === 'CRITICAL' ? AlertDiamondIcon : Alert02Icon
+      }
       title={
         <>
           <span className="truncate">{account.name}</span>

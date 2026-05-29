@@ -31,7 +31,11 @@ describe('computePlatformVitals', () => {
     const vitals = computePlatformVitals(accounts, [])
 
     expect(vitals.totalAccounts).toBe(3)
-    expect(vitals.healthCounts).toEqual({ HEALTHY: 1, ATTENTION: 1, CRITICAL: 1 })
+    expect(vitals.healthCounts).toEqual({
+      HEALTHY: 1,
+      ATTENTION: 1,
+      CRITICAL: 1,
+    })
     expect(vitals.accountsNeedingAttention).toBe(2)
     expect(vitals.escalationAccounts).toBe(1)
     expect(vitals.overdueNextActions).toBe(1)

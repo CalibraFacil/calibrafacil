@@ -36,13 +36,22 @@ type NavItem = {
 }
 
 const operationsItems: ReadonlyArray<NavItem> = [
-  { title: 'Comando', url: '/backoffice', icon: DashboardSquare01Icon, exact: true },
+  {
+    title: 'Comando',
+    url: '/backoffice',
+    icon: DashboardSquare01Icon,
+    exact: true,
+  },
   { title: 'Contas', url: '/backoffice/accounts', icon: Building02Icon },
   { title: 'Suporte', url: '/backoffice/support', icon: CustomerSupportIcon },
 ]
 
 const platformItems: ReadonlyArray<NavItem> = [
-  { title: 'Receita', url: '/backoffice/commercial-checkouts', icon: Invoice02Icon },
+  {
+    title: 'Receita',
+    url: '/backoffice/commercial-checkouts',
+    icon: Invoice02Icon,
+  },
   { title: 'Equipe', url: '/backoffice/users', icon: UserGroupIcon },
 ]
 

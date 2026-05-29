@@ -160,7 +160,9 @@ export function ProvisionDrawer({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="owner-email">Email do proprietário</FieldLabel>
+              <FieldLabel htmlFor="owner-email">
+                Email do proprietário
+              </FieldLabel>
               <Input
                 id="owner-email"
                 type="email"
@@ -200,7 +202,9 @@ export function ProvisionDrawer({
                 onChange={(event) => update({ planId: event.target.value })}
               >
                 <NativeSelectOption value="FREE">Free</NativeSelectOption>
-                <NativeSelectOption value="STANDARD">Standard</NativeSelectOption>
+                <NativeSelectOption value="STANDARD">
+                  Standard
+                </NativeSelectOption>
                 <NativeSelectOption value="PROFESSIONAL">
                   Professional
                 </NativeSelectOption>

@@ -82,7 +82,8 @@ export function filterTickets(
         ticketMatchesQuery(request, normalizedQuery),
     )
     .sort((a, b) => {
-      const severityDelta = SLA_SEVERITY[a.slaStatus] - SLA_SEVERITY[b.slaStatus]
+      const severityDelta =
+        SLA_SEVERITY[a.slaStatus] - SLA_SEVERITY[b.slaStatus]
       if (severityDelta !== 0) return severityDelta
       return b.attentionScore - a.attentionScore
     })

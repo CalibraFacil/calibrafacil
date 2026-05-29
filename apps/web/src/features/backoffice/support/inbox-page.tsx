@@ -45,13 +45,14 @@ import { filterTickets, ticketViewCounts, TICKET_VIEWS } from './selectors'
 
 type SupportView = 'list' | 'board'
 
-const VIEW_TONE: Partial<Record<TicketFilter, SegmentedOption<TicketFilter>['tone']>> =
-  {
-    breached: 'critical',
-    due: 'warning',
-    unassigned: 'warning',
-    escalation: 'critical',
-  }
+const VIEW_TONE: Partial<
+  Record<TicketFilter, SegmentedOption<TicketFilter>['tone']>
+> = {
+  breached: 'critical',
+  due: 'warning',
+  unassigned: 'warning',
+  escalation: 'critical',
+}
 
 export function SupportInboxPage({
   filter,
@@ -131,7 +132,10 @@ export function SupportInboxPage({
             >
               <HugeiconsIcon
                 icon={RefreshIcon}
-                className={cn('size-4', queueQuery.isFetching && 'animate-spin')}
+                className={cn(
+                  'size-4',
+                  queueQuery.isFetching && 'animate-spin',
+                )}
               />
               Atualizar
             </Button>

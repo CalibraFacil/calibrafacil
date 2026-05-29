@@ -30,6 +30,7 @@ import {
 import { CommercialOfferSummaryCard } from '@/components/backoffice/commercial/summary-card'
 import { CommercialOfferHistoryTable } from '@/components/backoffice/commercial/history-table'
 import { CommercialStatusBadge } from '@/components/backoffice/commercial/status-badge'
+import { ConsolePageHeader } from '@/features/backoffice/console'
 import { brazilPhoneMask } from '@/lib/input-masks'
 
 type OfferKind = 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
@@ -111,6 +112,9 @@ function organizationIdFromSearch(value: unknown) {
 }
 
 export const Route = createFileRoute('/backoffice/commercial-checkouts')({
+  head: () => ({
+    meta: [{ title: 'Receita | Backoffice | CalibraFácil' }],
+  }),
   component: BackofficeCommercialCheckoutsPage,
 })
 
@@ -362,14 +366,12 @@ function BackofficeCommercialCheckoutsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Checkout Comercial</h1>
-        <p className="text-sm text-muted-foreground">
-          Emissão interna de propostas e links de pagamento personalizados via
-          Asaas.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <ConsolePageHeader
+        eyebrow="Receita"
+        title="Comercial"
+        description="Emissão interna de propostas e links de pagamento personalizados via Asaas."
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1.3fr_1fr]">
         <div className="space-y-6">

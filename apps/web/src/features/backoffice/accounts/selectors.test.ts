@@ -10,7 +10,10 @@ import { makeQueueAccount } from '../customer-success/test-fixtures'
 describe('accountMatchesFilter', () => {
   it('matches critical health', () => {
     expect(
-      accountMatchesFilter(makeQueueAccount({ health: 'CRITICAL' }), 'critical'),
+      accountMatchesFilter(
+        makeQueueAccount({ health: 'CRITICAL' }),
+        'critical',
+      ),
     ).toBe(true)
     expect(
       accountMatchesFilter(makeQueueAccount({ health: 'HEALTHY' }), 'critical'),

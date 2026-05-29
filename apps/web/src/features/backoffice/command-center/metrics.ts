@@ -39,7 +39,11 @@ export type PlatformVitals = {
   escalationTickets: number
 }
 
-const OPEN_TICKET_STATUSES = new Set(['OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER'])
+const OPEN_TICKET_STATUSES = new Set([
+  'OPEN',
+  'IN_PROGRESS',
+  'WAITING_ON_CUSTOMER',
+])
 
 export function computePlatformVitals(
   accounts: ReadonlyArray<OrganizationQueueItem>,

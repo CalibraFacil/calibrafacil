@@ -11,9 +11,9 @@ describe('filterTickets', () => {
       makeSupportRequest({ id: 3, slaStatus: 'DUE_SOON', attentionScore: 99 }),
       makeSupportRequest({ id: 4, slaStatus: 'BREACHED', attentionScore: 80 }),
     ]
-    expect(filterTickets(tickets, 'all', undefined, '').map((t) => t.id)).toEqual(
-      [4, 2, 3, 1],
-    )
+    expect(
+      filterTickets(tickets, 'all', undefined, '').map((t) => t.id),
+    ).toEqual([4, 2, 3, 1])
   })
 
   it('filters "mine" by assignee id', () => {
@@ -21,9 +21,9 @@ describe('filterTickets', () => {
       makeSupportRequest({ id: 1, assigned: true }),
       makeSupportRequest({ id: 2, assigned: false }),
     ]
-    expect(
-      filterTickets(tickets, 'mine', 'op-1', '').map((t) => t.id),
-    ).toEqual([1])
+    expect(filterTickets(tickets, 'mine', 'op-1', '').map((t) => t.id)).toEqual(
+      [1],
+    )
   })
 
   it('filters unassigned tickets', () => {

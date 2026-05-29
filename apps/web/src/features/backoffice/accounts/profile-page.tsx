@@ -326,9 +326,7 @@ function AccountProfile({
                 />
                 <LifecycleCell
                   label="Go-live"
-                  descriptor={status.goLiveStatus(
-                    payload.profile.goLiveStatus,
-                  )}
+                  descriptor={status.goLiveStatus(payload.profile.goLiveStatus)}
                 />
               </div>
 

@@ -37,6 +37,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { ConsolePageHeader } from '@/features/backoffice/console'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -59,6 +60,9 @@ export const Route = createFileRoute('/backoffice/users')({
       typeof search.impersonationError === 'string'
         ? search.impersonationError
         : undefined,
+  }),
+  head: () => ({
+    meta: [{ title: 'Equipe | Backoffice | CalibraFácil' }],
   }),
   loader: ({ context }) => loadBackofficeUsersData(context.queryClient),
   component: BackofficeUsersPage,
@@ -148,9 +152,7 @@ function getSessionRole(sessionUser: unknown) {
   return typeof role === 'string' ? role : null
 }
 
-function toNewPlatformUserRole(
-  value: string,
-): NewPlatformUserDraft['role'] {
+function toNewPlatformUserRole(value: string): NewPlatformUserDraft['role'] {
   return value === 'platform_admin' ? 'platform_admin' : 'platform_operator'
 }
 
@@ -481,17 +483,15 @@ function BackofficeUsersPage() {
   })
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {impersonationError ? (
         <ToastOnMount key={impersonationError} message={impersonationError} />
       ) : null}
-      <div>
-        <h1 className="text-2xl font-semibold">Usuários</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestão de usuários de plataforma com contexto operacional por
-          laboratório.
-        </p>
-      </div>
+      <ConsolePageHeader
+        eyebrow="Governança"
+        title="Equipe"
+        description="Usuários de plataforma, papéis e acesso — com contexto operacional por laboratório."
+      />
 
       {canManageRoles ? (
         <Card>
@@ -545,12 +545,12 @@ function BackofficeUsersPage() {
                   <NativeSelect
                     id="platformUserRole"
                     value={draft.role}
-	                    onChange={(event) =>
-	                      setDraft((current) => ({
-	                        ...current,
-	                        role: toNewPlatformUserRole(event.target.value),
-	                      }))
-	                    }
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        role: toNewPlatformUserRole(event.target.value),
+                      }))
+                    }
                   >
                     <NativeSelectOption value="platform_operator">
                       platform_operator
@@ -961,12 +961,10 @@ function UserTableRow({
                       <NativeSelect
                         value={assignableRole}
                         onChange={(event) =>
-	                          setRoleMutation.mutate({
-	                            userId: user.id,
-	                            role: toAssignablePlatformRole(
-	                              event.target.value,
-	                            ),
-	                          })
+                          setRoleMutation.mutate({
+                            userId: user.id,
+                            role: toAssignablePlatformRole(event.target.value),
+                          })
                         }
                         disabled={!canManageRoles}
                       >

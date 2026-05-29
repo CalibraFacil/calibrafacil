@@ -38,20 +38,17 @@ import {
   type OrganizationQueueItem,
 } from '@/features/backoffice/customer-success/model'
 import { ProvisionDrawer } from './provision-drawer'
-import {
-  ACCOUNT_VIEWS,
-  accountViewCounts,
-  filterAccounts,
-} from './selectors'
+import { ACCOUNT_VIEWS, accountViewCounts, filterAccounts } from './selectors'
 
-const VIEW_TONE: Partial<Record<OrganizationFilter, SegmentedOption<OrganizationFilter>['tone']>> =
-  {
-    critical: 'critical',
-    attention: 'warning',
-    escalation: 'critical',
-    overdue: 'warning',
-    unassigned: 'warning',
-  }
+const VIEW_TONE: Partial<
+  Record<OrganizationFilter, SegmentedOption<OrganizationFilter>['tone']>
+> = {
+  critical: 'critical',
+  attention: 'warning',
+  escalation: 'critical',
+  overdue: 'warning',
+  unassigned: 'warning',
+}
 
 const HEALTH_VALUES: ReadonlyArray<HealthStatus> = [
   'HEALTHY',
@@ -451,25 +448,24 @@ function AccountPreview({
                 const descriptor = status.healthStatus(value)
                 const active = summary.healthStatus === value
                 return (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant={active ? 'default' : 'outline'}
-                      disabled={updateHealth.isPending}
-                      onClick={() =>
-                        updateHealth.mutate({
-                          organizationId: account.id,
-                          healthStatus: value,
-                        })
-                      }
-                      className="min-h-9 flex-1 transition-transform active:scale-[0.96]"
-                    >
-                      {!active ? <HealthDot tone={descriptor.tone} /> : null}
-                      {descriptor.label}
-                    </Button>
-                  )
-                },
-              )}
+                  <Button
+                    key={value}
+                    size="sm"
+                    variant={active ? 'default' : 'outline'}
+                    disabled={updateHealth.isPending}
+                    onClick={() =>
+                      updateHealth.mutate({
+                        organizationId: account.id,
+                        healthStatus: value,
+                      })
+                    }
+                    className="min-h-9 flex-1 transition-transform active:scale-[0.96]"
+                  >
+                    {!active ? <HealthDot tone={descriptor.tone} /> : null}
+                    {descriptor.label}
+                  </Button>
+                )
+              })}
             </div>
           </div>
 
@@ -480,8 +476,8 @@ function AccountPreview({
                 className="mt-0.5 size-4 shrink-0"
               />
               <span>
-                Esta conta está sinalizada para atenção. Abra a conta para tratar
-                próximos passos, bloqueios e tickets.
+                Esta conta está sinalizada para atenção. Abra a conta para
+                tratar próximos passos, bloqueios e tickets.
               </span>
             </div>
           ) : null}
@@ -491,13 +487,7 @@ function AccountPreview({
   )
 }
 
-function PreviewFact({
-  label,
-  value,
-}: {
-  label: string
-  value: ReactNode
-}) {
+function PreviewFact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-lg bg-muted/40 p-3">
       <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
