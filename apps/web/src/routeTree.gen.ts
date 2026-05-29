@@ -60,6 +60,7 @@ import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as BackofficeOrganizationsIndexRouteImport } from './routes/backoffice/organizations/index'
 import { Route as BackofficeCustomerSuccessIndexRouteImport } from './routes/backoffice/customer-success/index'
+import { Route as BackofficeAccountsIndexRouteImport } from './routes/backoffice/accounts/index'
 import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
 import { Route as DashboardSettingsUnitsRouteImport } from './routes/dashboard/settings/units'
@@ -104,6 +105,7 @@ import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/ne
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
 import { Route as BackofficeOrganizationsIdRouteImport } from './routes/backoffice/organizations/$id'
 import { Route as BackofficeCustomerSuccessTicketsRouteImport } from './routes/backoffice/customer-success/tickets'
+import { Route as BackofficeAccountsIdRouteImport } from './routes/backoffice/accounts/$id'
 import { Route as DashboardPersonnelIdRouteRouteImport } from './routes/dashboard/personnel/$id/route'
 import { Route as DashboardFinanceDocumentsRouteRouteImport } from './routes/dashboard/finance/documents/route'
 import { Route as DashboardFinanceContractsRouteRouteImport } from './routes/dashboard/finance/contracts/route'
@@ -406,6 +408,11 @@ const BackofficeCustomerSuccessIndexRoute =
     path: '/',
     getParentRoute: () => BackofficeCustomerSuccessRouteRoute,
   } as any)
+const BackofficeAccountsIndexRoute = BackofficeAccountsIndexRouteImport.update({
+  id: '/accounts/',
+  path: '/accounts/',
+  getParentRoute: () => BackofficeRouteRoute,
+} as any)
 const DashboardSyncConflictsRoute = DashboardSyncConflictsRouteImport.update({
   id: '/sync/conflicts',
   path: '/sync/conflicts',
@@ -657,6 +664,11 @@ const BackofficeCustomerSuccessTicketsRoute =
     path: '/tickets',
     getParentRoute: () => BackofficeCustomerSuccessRouteRoute,
   } as any)
+const BackofficeAccountsIdRoute = BackofficeAccountsIdRouteImport.update({
+  id: '/accounts/$id',
+  path: '/accounts/$id',
+  getParentRoute: () => BackofficeRouteRoute,
+} as any)
 const DashboardPersonnelIdRouteRoute =
   DashboardPersonnelIdRouteRouteImport.update({
     id: '/$id',
@@ -909,6 +921,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
   '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteRouteWithChildren
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
+  '/backoffice/accounts/$id': typeof BackofficeAccountsIdRoute
   '/backoffice/customer-success/tickets': typeof BackofficeCustomerSuccessTicketsRoute
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
@@ -953,6 +966,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
+  '/backoffice/accounts': typeof BackofficeAccountsIndexRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations/': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -1022,6 +1036,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/reset-password': typeof ResetPasswordIndexRoute
   '/sign-in': typeof SignInIndexRoute
+  '/backoffice/accounts/$id': typeof BackofficeAccountsIdRoute
   '/backoffice/customer-success/tickets': typeof BackofficeCustomerSuccessTicketsRoute
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
@@ -1066,6 +1081,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
+  '/backoffice/accounts': typeof BackofficeAccountsIndexRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
@@ -1157,6 +1173,7 @@ export interface FileRoutesById {
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
   '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteRouteWithChildren
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
+  '/backoffice/accounts/$id': typeof BackofficeAccountsIdRoute
   '/backoffice/customer-success/tickets': typeof BackofficeCustomerSuccessTicketsRoute
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
@@ -1201,6 +1218,7 @@ export interface FileRoutesById {
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
+  '/backoffice/accounts/': typeof BackofficeAccountsIndexRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations/': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -1293,6 +1311,7 @@ export interface FileRouteTypes {
     | '/dashboard/finance/contracts'
     | '/dashboard/finance/documents'
     | '/dashboard/personnel/$id'
+    | '/backoffice/accounts/$id'
     | '/backoffice/customer-success/tickets'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
@@ -1337,6 +1356,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
+    | '/backoffice/accounts'
     | '/backoffice/customer-success/'
     | '/backoffice/organizations/'
     | '/dashboard/assets/'
@@ -1406,6 +1426,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/reset-password'
     | '/sign-in'
+    | '/backoffice/accounts/$id'
     | '/backoffice/customer-success/tickets'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
@@ -1450,6 +1471,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
+    | '/backoffice/accounts'
     | '/backoffice/customer-success'
     | '/backoffice/organizations'
     | '/dashboard/assets'
@@ -1540,6 +1562,7 @@ export interface FileRouteTypes {
     | '/dashboard/finance/contracts'
     | '/dashboard/finance/documents'
     | '/dashboard/personnel/$id'
+    | '/backoffice/accounts/$id'
     | '/backoffice/customer-success/tickets'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
@@ -1584,6 +1607,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/units'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
+    | '/backoffice/accounts/'
     | '/backoffice/customer-success/'
     | '/backoffice/organizations/'
     | '/dashboard/assets/'
@@ -2005,6 +2029,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeCustomerSuccessIndexRouteImport
       parentRoute: typeof BackofficeCustomerSuccessRouteRoute
     }
+    '/backoffice/accounts/': {
+      id: '/backoffice/accounts/'
+      path: '/accounts'
+      fullPath: '/backoffice/accounts'
+      preLoaderRoute: typeof BackofficeAccountsIndexRouteImport
+      parentRoute: typeof BackofficeRouteRoute
+    }
     '/dashboard/sync/conflicts': {
       id: '/dashboard/sync/conflicts'
       path: '/sync/conflicts'
@@ -2313,6 +2344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeCustomerSuccessTicketsRouteImport
       parentRoute: typeof BackofficeCustomerSuccessRouteRoute
     }
+    '/backoffice/accounts/$id': {
+      id: '/backoffice/accounts/$id'
+      path: '/accounts/$id'
+      fullPath: '/backoffice/accounts/$id'
+      preLoaderRoute: typeof BackofficeAccountsIdRouteImport
+      parentRoute: typeof BackofficeRouteRoute
+    }
     '/dashboard/personnel/$id': {
       id: '/dashboard/personnel/$id'
       path: '/$id'
@@ -2620,6 +2658,8 @@ interface BackofficeRouteRouteChildren {
   BackofficeSupportRoute: typeof BackofficeSupportRoute
   BackofficeUsersRoute: typeof BackofficeUsersRoute
   BackofficeIndexRoute: typeof BackofficeIndexRoute
+  BackofficeAccountsIdRoute: typeof BackofficeAccountsIdRoute
+  BackofficeAccountsIndexRoute: typeof BackofficeAccountsIndexRoute
 }
 
 const BackofficeRouteRouteChildren: BackofficeRouteRouteChildren = {
@@ -2633,6 +2673,8 @@ const BackofficeRouteRouteChildren: BackofficeRouteRouteChildren = {
   BackofficeSupportRoute: BackofficeSupportRoute,
   BackofficeUsersRoute: BackofficeUsersRoute,
   BackofficeIndexRoute: BackofficeIndexRoute,
+  BackofficeAccountsIdRoute: BackofficeAccountsIdRoute,
+  BackofficeAccountsIndexRoute: BackofficeAccountsIndexRoute,
 }
 
 const BackofficeRouteRouteWithChildren = BackofficeRouteRoute._addFileChildren(

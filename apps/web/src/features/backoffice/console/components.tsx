@@ -243,7 +243,7 @@ export function AttentionRow({
   className,
   render,
   ...props
-}: useRender.ComponentProps<'div'> & {
+}: Omit<useRender.ComponentProps<'div'>, 'title'> & {
   icon?: IconType
   tone?: SignalTone
   title: ReactNode

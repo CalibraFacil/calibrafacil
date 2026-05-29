@@ -1,22 +1,13 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { useBackofficeSession } from '@calibra-facil/auth/client'
-import { AccountWorkspace } from '@/features/backoffice/customer-success/account-workspace'
-
+// Customer-success account workspace folded into the unified Account profile.
 export const Route = createFileRoute(
   '/backoffice/customer-success/accounts/$id',
 )({
-  head: () => ({
-    meta: [{ title: 'Customer Success | Conta | CalibraFácil' }],
-  }),
-  component: CustomerSuccessAccountPage,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/backoffice/accounts/$id',
+      params: { id: params.id },
+    })
+  },
 })
-
-function CustomerSuccessAccountPage() {
-  const { id } = Route.useParams()
-  const { data: session } = useBackofficeSession()
-
-  return (
-    <AccountWorkspace organizationId={id} sessionUserId={session?.user?.id} />
-  )
-}
