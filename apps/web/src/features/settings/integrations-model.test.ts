@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getProviderCapabilities,
   getDefaultIntegrationMappings,
+  normalizeGenericFinancialErpConfig,
   type IntegrationTargetCoverageSummary,
 } from '@calibra-facil/shared'
 
@@ -22,11 +24,13 @@ import {
   getIntegrationMappingDraft,
   getIntegrationSettingsRole,
   getIntegrationTargetSummary,
+  getIntegrationVisibleTargets,
   integrationCoveragePercentage,
   integrationReadinessBadgeVariant,
   integrationRunTriggerLabel,
   integrationScheduleStatusLabel,
   integrationScheduleStatusVariant,
+  integrationStatusBadgeMeta,
   removeIntegrationMappingRule,
   updateIntegrationMappingDrafts,
   updateIntegrationMappingRule,
@@ -47,15 +51,14 @@ function createIntegrationSummary(): IntegrationSummary {
     connection: {
       id: 'connection-1',
       credentialType: 'bearer',
-      config: {
+      config: normalizeGenericFinancialErpConfig({
         baseUrl: 'https://erp.example.com',
         healthPath: '/health',
         customerPath: '/customers',
         serviceOrderPath: '/service-orders',
         billingDocumentPath: '/billing-documents',
-        authType: 'bearer',
         mappings: getDefaultIntegrationMappings(),
-      },
+      }),
     },
     recentRuns: [],
     recentEvents: [],
@@ -63,6 +66,7 @@ function createIntegrationSummary(): IntegrationSummary {
       readiness: {
         setupStatus: 'CONFIGURED',
         readinessStatus: 'READY',
+        capabilities: getProviderCapabilities('generic_http'),
         validationRequired: false,
         canSync: true,
         lastValidatedAt: null,
@@ -70,6 +74,15 @@ function createIntegrationSummary(): IntegrationSummary {
         dependencyWarnings: [],
       },
       targets: [],
+      remoteDocuments: {
+        totalCount: 0,
+        availableCount: 0,
+        unavailableCount: 0,
+        salePdfCount: 0,
+        fiscalXmlCount: 0,
+        otherCount: 0,
+        lastSyncedAt: null,
+      },
       syncSummary: {
         lastRunAt: null,
         lastSuccessfulRunAt: null,
@@ -117,6 +130,22 @@ describe('integrations-model', () => {
       total: 2,
       atRisk: 1,
       scheduledTargets: 1,
+    })
+  })
+
+  it('surfaces action-required integrations as reconnect states', () => {
+    const integration = createIntegrationSummary()
+
+    expect(integrationStatusBadgeMeta(integration)).toEqual({
+      label: 'Ativa',
+      variant: 'default',
+    })
+
+    integration.status = 'ACTION_REQUIRED'
+
+    expect(integrationStatusBadgeMeta(integration)).toEqual({
+      label: 'Reconectar',
+      variant: 'destructive',
     })
   })
 
@@ -253,6 +282,28 @@ describe('integrations-model', () => {
         unlinkedCount: 0,
       }),
     ).toBe(0)
+  })
+
+  it('keeps service orders visible for Conta Azul native sales and budget sync', () => {
+    const genericIntegration = createIntegrationSummary()
+    const contaAzulIntegration = createIntegrationSummary()
+    contaAzulIntegration.provider = 'conta_azul'
+
+    expect(getIntegrationVisibleTargets(genericIntegration)).toEqual([
+      'customer',
+      'service_order',
+      'billing_document',
+    ])
+    expect(getIntegrationVisibleTargets(contaAzulIntegration)).toEqual([
+      'catalog_item',
+      'contract',
+      'customer',
+      'supplier',
+      'transporter',
+      'service_order',
+      'billing_document',
+      'payable',
+    ])
   })
 
   it('builds the readiness checklist from integration state', () => {

@@ -152,6 +152,7 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.canceled",
   "service_order.certificate_linked",
   "service_order.certificate_unlinked",
+  "service_order.sent_to_finance",
   "service_order.email_sent",
   "service_order.portal_viewed",
   "service_order.public_link_viewed",
@@ -172,6 +173,47 @@ export const SERVICE_ORDER_FINAL_STATUSES = [
   "closed",
   "canceled",
 ] satisfies ServiceOrderStatus[];
+
+/**
+ * Statuses where the technical work is complete enough that the order can be
+ * considered for billing (the "billable milestone" in the finance strategy).
+ */
+export const SERVICE_ORDER_BILLABLE_STATUSES = [
+  "ready_for_pickup",
+  "delivered",
+  "closed",
+] satisfies ServiceOrderStatus[];
+
+/**
+ * Closing reasons that mean no revenue was produced, so the order must never
+ * enter the billing readiness queue even if it reached a billable status.
+ */
+export const SERVICE_ORDER_NON_BILLABLE_CLOSING_REASONS = [
+  "quote_rejected_returned",
+  "condemned_returned",
+  "canceled_before_execution",
+] satisfies ServiceOrderClosingReason[];
+
+/**
+ * Whether a service order represents completed, billable work. Provider-neutral
+ * and used by the billing readiness queue.
+ */
+export function isServiceOrderBillable(
+  status: ServiceOrderStatus,
+  closingReason: ServiceOrderClosingReason | null | undefined,
+) {
+  const billable: readonly ServiceOrderStatus[] =
+    SERVICE_ORDER_BILLABLE_STATUSES;
+  if (!billable.includes(status)) {
+    return false;
+  }
+  if (!closingReason) {
+    return true;
+  }
+  const nonBillable: readonly ServiceOrderClosingReason[] =
+    SERVICE_ORDER_NON_BILLABLE_CLOSING_REASONS;
+  return !nonBillable.includes(closingReason);
+}
 
 export const SERVICE_ORDER_ALLOWED_TRANSITIONS: Record<
   ServiceOrderStatus,

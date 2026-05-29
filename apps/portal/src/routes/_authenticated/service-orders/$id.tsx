@@ -12,6 +12,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  FinancialSummaryCard,
+  isFinancialSummary,
+  type PortalFinancialSummary,
+} from "@/features/service-orders/financial-summary-card";
 import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/service-orders/$id")({
@@ -129,6 +134,30 @@ function ServiceOrderDetailPage() {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- portal service-order endpoint returns the ServiceOrderDetail DTO.
       const result = (await response.json()) as { data: ServiceOrderDetail };
       return result.data;
+    },
+  });
+
+  const financialSummaryQuery = useQuery({
+    queryKey: ["portal-service-order", id, "financial-summary"],
+    queryFn: async (): Promise<PortalFinancialSummary> => {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/service-orders/${id}/financial-summary`,
+        { credentials: "include" },
+      );
+
+      if (!response.ok) {
+        throw new Error("Falha ao carregar informações financeiras.");
+      }
+
+      const result: unknown = await response.json();
+      const data =
+        result && typeof result === "object" && "data" in result
+          ? result.data
+          : null;
+      if (!isFinancialSummary(data)) {
+        throw new Error("Resposta financeira inválida.");
+      }
+      return data;
     },
   });
 
@@ -406,6 +435,12 @@ function ServiceOrderDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <FinancialSummaryCard
+            summary={financialSummaryQuery.data}
+            isLoading={financialSummaryQuery.isLoading}
+            isError={financialSummaryQuery.isError}
+          />
         </div>
       </div>
     </div>

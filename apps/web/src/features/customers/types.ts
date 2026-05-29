@@ -1,4 +1,5 @@
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
+import type { CustomerFinancialTimeline } from '@calibra-facil/shared'
 
 export type CustomerListItem =
   ClientRuntimeCustomersListData['data'][number] & {
@@ -32,6 +33,10 @@ export type CustomerFinancialSummary = {
   openBalanceCents: number
   overdueBalanceCents: number
   overdueBalanceFlag: boolean
+}
+
+export type CustomerFinancialTimelineResponse = {
+  data: CustomerFinancialTimeline
 }
 
 export type CustomerCompliance = {

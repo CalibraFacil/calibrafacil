@@ -1,3 +1,9 @@
+import type {
+  IntegrationProvider,
+  IntegrationSyncTarget,
+  IntegrationSyncTrigger,
+} from "./integrations";
+
 export type DocumentBackgroundJobMessage =
   | {
       type?: "CERTIFICATE" | "LABEL";
@@ -19,12 +25,13 @@ export type DocumentBackgroundJobMessage =
 
 export type IntegrationSyncBackgroundJobMessage = {
   type: "INTEGRATION_SYNC";
+  provider?: IntegrationProvider;
   integrationId: string;
   organizationId: string;
   runId: string;
-  target: "customer" | "service_order" | "billing_document";
+  target: IntegrationSyncTarget;
   limit: number;
-  trigger: "manual" | "event" | "scheduled" | "retry";
+  trigger: IntegrationSyncTrigger;
 };
 
 export type ScheduledNotificationsBackgroundJobMessage = {

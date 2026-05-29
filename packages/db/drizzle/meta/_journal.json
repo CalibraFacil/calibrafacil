@@ -183,6 +183,76 @@
       "when": 1779552000000,
       "tag": "0025_auth_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779638400000,
+      "tag": "0026_integration_object_link_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1779724800000,
+      "tag": "0027_integration_sync_cursor",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779811200000,
+      "tag": "0028_integration_sync_item",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1780358400000,
+      "tag": "0029_payment_aware_certificate_release",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0030_integration_drift_acknowledgement",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780531200000,
+      "tag": "0031_automatic_send_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1780617600000,
+      "tag": "0032_outsourced_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1780704000000,
+      "tag": "0033_supplier",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780790400000,
+      "tag": "0034_billing_group",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1780876800000,
+      "tag": "0035_billing_document_public_id",
+      "breakpoints": true
     }
   ]
 }

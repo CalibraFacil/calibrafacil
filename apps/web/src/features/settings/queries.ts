@@ -15,16 +15,35 @@ import type {
   SettingsCertificateNumberingData,
   SettingsEnvironmentalLimitsData,
   SettingsIntegrationsData,
+  ContaAzulCatalogResponse,
   SettingsNotificationPreferencesData,
   SettingsPortalDomainData,
   SettingsSigningCertificatesData,
   SettingsSignatureData,
   SettingsSsoData,
+  IntegrationRunItemsResponse,
   SyncPreviewResponse,
   SyncTarget,
   UnitContextResponse,
 } from './types'
 import type { IntegrationMappingsConfig } from '@calibra-facil/shared'
+
+export type ContaAzulCatalogKey =
+  | 'accounts'
+  | 'balances'
+  | 'categories'
+  | 'cost-centers'
+  | 'dre-categories'
+  | 'product-categories'
+  | 'product-cest'
+  | 'product-ecommerce-brands'
+  | 'product-ecommerce-categories'
+  | 'product-ncm'
+  | 'products'
+  | 'product-units'
+  | 'sellers'
+  | 'services'
+  | 'transfers'
 
 function trustedApiResult<T>(promise: Promise<unknown>): Promise<T> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- typed API facade methods lag behind the route-specific response contracts.
@@ -144,6 +163,64 @@ export function integrationsQueryOptions() {
   return queryOptions({
     queryKey: ['integrations'],
     queryFn: () => calibraApi.integrations.list<SettingsIntegrationsData>(),
+  })
+}
+
+export function integrationRunItemsQueryOptions({
+  integrationId,
+  runId,
+}: {
+  integrationId: string | null
+  runId: string | null
+}) {
+  return queryOptions({
+    queryKey: [
+      'integrations',
+      integrationId ?? 'no-integration',
+      'runs',
+      runId ?? 'no-run',
+      'items',
+    ],
+    queryFn: () => {
+      if (!integrationId || !runId) {
+        return Promise.resolve({
+          runId: '',
+          target: 'customer',
+          data: [],
+          summary: {
+            returnedCount: 0,
+            statusCounts: {},
+          },
+        } satisfies IntegrationRunItemsResponse)
+      }
+
+      return calibraApi.integrations.listRunItems<IntegrationRunItemsResponse>(
+        integrationId,
+        runId,
+      )
+    },
+    enabled: Boolean(integrationId && runId),
+  })
+}
+
+export function contaAzulCatalogQueryOptions({
+  catalog,
+  enabled,
+  id,
+}: {
+  catalog: ContaAzulCatalogKey
+  enabled: boolean
+  id: string
+}) {
+  return queryOptions({
+    queryKey: ['integrations', id, 'conta-azul', 'catalog', catalog],
+    queryFn: () =>
+      calibraApi.integrations.listContaAzulCatalog<ContaAzulCatalogResponse>(
+        id,
+        catalog,
+      ),
+    enabled,
+    staleTime: 5 * 60_000,
   })
 }
 

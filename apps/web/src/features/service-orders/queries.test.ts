@@ -4,6 +4,7 @@ import {
   newServiceOrderAssetsQueryOptions,
   newServiceOrderCustomersQueryOptions,
   serviceOrderDetailQueryOptions,
+  serviceOrderFinancialStatusQueryOptions,
   serviceOrdersListQueryInputFromUrl,
   serviceOrdersListQueryOptions,
 } from './queries'
@@ -31,6 +32,11 @@ describe('service orders feature queries', () => {
     expect(serviceOrderDetailQueryOptions('42').queryKey).toEqual([
       'service-order',
       '42',
+    ])
+    expect(serviceOrderFinancialStatusQueryOptions('42').queryKey).toEqual([
+      'service-order',
+      '42',
+      'financial-status',
     ])
   })
 

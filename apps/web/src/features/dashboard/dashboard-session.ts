@@ -6,6 +6,12 @@ import { hasDesktopSession } from '@/runtime/desktop-auth'
 import { isDesktopRuntime } from '@/runtime/desktop'
 import { readSessionWithRetry } from '@/lib/auth-session'
 
+// Inference through readSessionWithRetry's naked type parameter widens
+// TSession to `{}`, so name it explicitly off the auth client.
+type DashboardSession = NonNullable<
+  Awaited<ReturnType<typeof authClient.getSession>>['data']
+>
+
 let dashboardSessionPromise: ReturnType<typeof authClient.getSession> | null =
   null
 
@@ -27,7 +33,8 @@ export async function dashboardBeforeLoad({
     })
   }
 
-  const { data: session } = await readSessionWithRetry(getDashboardSession)
+  const { data: session } =
+    await readSessionWithRetry<DashboardSession>(getDashboardSession)
 
   if (!session) {
     throw redirect({

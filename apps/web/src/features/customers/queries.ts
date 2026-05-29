@@ -14,6 +14,7 @@ import type {
   CustomerDetail,
   CustomerJobsData,
   CustomerJobStatus,
+  CustomerFinancialTimelineResponse,
   CustomersListData,
   CustomersListQueryInput,
   PortalInvitation,
@@ -72,6 +73,16 @@ export function customerDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer', id],
     queryFn: () => calibraApi.customers.get<CustomerDetail>(id),
+  })
+}
+
+export function customerFinancialTimelineQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['customer', id, 'financial-timeline'],
+    queryFn: () =>
+      calibraApi.finance.getCustomerTimeline<CustomerFinancialTimelineResponse>(
+        id,
+      ),
   })
 }
 
@@ -309,6 +320,19 @@ export function useCustomersSearchData({
 
 export function useCustomerDetailData(id: string) {
   return useQuery(customerDetailQueryOptions(id))
+}
+
+export function useCustomerFinancialTimelineData({
+  enabled,
+  id,
+}: {
+  enabled: boolean
+  id: string
+}) {
+  return useQuery({
+    ...customerFinancialTimelineQueryOptions(id),
+    enabled,
+  })
 }
 
 export function useCustomerAssetsData({

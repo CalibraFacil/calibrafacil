@@ -2,6 +2,8 @@ import {
   INTEGRATION_CANONICAL_FIELDS,
   getDefaultIntegrationMappings,
   normalizeIntegrationBaseUrl,
+  type IntegrationDependencyWarning,
+  type IntegrationDependencyWarningCode,
   type IntegrationFieldMappingRule,
   type IntegrationMappingFormatter,
   type IntegrationMappingsConfig,
@@ -45,21 +47,72 @@ export const integrationTargetMeta: Record<
     syncLabel: string
   }
 > = {
+  catalog_item: {
+    label: 'Catálogo',
+    description: 'Produtos e serviços usados em vendas, contratos e OS.',
+    syncLabel: 'Sincronizar catálogo',
+  },
+  contract: {
+    label: 'Contratos',
+    description: 'Acordos recorrentes com venda/receita gerada no ERP.',
+    syncLabel: 'Sincronizar contratos',
+  },
   customer: {
     label: 'Clientes',
     description: 'Base mínima para liberar ordens e faturamento.',
     syncLabel: 'Sincronizar clientes',
   },
+  supplier: {
+    label: 'Fornecedores',
+    description: 'Terceiros e laboratórios externos usados nas OS.',
+    syncLabel: 'Sincronizar fornecedores',
+  },
+  transporter: {
+    label: 'Transportadoras',
+    description: 'Transportadoras registradas no recebimento das OS.',
+    syncLabel: 'Sincronizar transportadoras',
+  },
   service_order: {
     label: 'Ordens de serviço',
-    description: 'Depende de clientes vinculados remotamente.',
-    syncLabel: 'Sincronizar ordens',
+    description:
+      'Depende de cliente remoto; na Conta Azul exporta venda ou orçamento.',
+    syncLabel: 'Sincronizar OS',
   },
   billing_document: {
     label: 'Documentos financeiros',
     description: 'Depende de clientes e ordens já resolvidos no ERP.',
     syncLabel: 'Sincronizar faturamento',
   },
+  payable: {
+    label: 'Contas a pagar',
+    description: 'Custos de terceiros dependem de fornecedor remoto.',
+    syncLabel: 'Sincronizar contas a pagar',
+  },
+}
+
+const genericHttpTargets = [
+  'customer',
+  'service_order',
+  'billing_document',
+] as const satisfies readonly SyncTarget[]
+
+const contaAzulTargets = [
+  'catalog_item',
+  'contract',
+  'customer',
+  'supplier',
+  'transporter',
+  'service_order',
+  'billing_document',
+  'payable',
+] as const satisfies readonly SyncTarget[]
+
+export function getIntegrationVisibleTargets(
+  integration: Pick<IntegrationSummary, 'provider'>,
+): readonly SyncTarget[] {
+  return integration.provider === 'conta_azul'
+    ? contaAzulTargets
+    : genericHttpTargets
 }
 
 export function getIntegrationSettingsRole(
@@ -93,6 +146,18 @@ export function buildIntegrationActiveSummaries(
   }
 }
 
+export function integrationStatusBadgeMeta(
+  integration: Pick<IntegrationSummary, 'status'>,
+) {
+  if (integration.status === 'ACTIVE') {
+    return { label: 'Ativa', variant: 'default' as const }
+  }
+  if (integration.status === 'ACTION_REQUIRED') {
+    return { label: 'Reconectar', variant: 'destructive' as const }
+  }
+  return { label: 'Desativada', variant: 'secondary' as const }
+}
+
 export const integrationFormatterOptions: Array<{
   value: IntegrationMappingFormatter
   label: string
@@ -113,14 +178,29 @@ export function cloneIntegrationMappings(
   mappings: IntegrationMappingsConfig,
 ): IntegrationMappingsConfig {
   return {
+    catalog_item: {
+      fields: mappings.catalog_item.fields.map((field) => ({ ...field })),
+    },
+    contract: {
+      fields: mappings.contract.fields.map((field) => ({ ...field })),
+    },
     customer: {
       fields: mappings.customer.fields.map((field) => ({ ...field })),
+    },
+    supplier: {
+      fields: mappings.supplier.fields.map((field) => ({ ...field })),
+    },
+    transporter: {
+      fields: mappings.transporter.fields.map((field) => ({ ...field })),
     },
     service_order: {
       fields: mappings.service_order.fields.map((field) => ({ ...field })),
     },
     billing_document: {
       fields: mappings.billing_document.fields.map((field) => ({ ...field })),
+    },
+    payable: {
+      fields: mappings.payable.fields.map((field) => ({ ...field })),
     },
   }
 }
@@ -445,4 +525,48 @@ export function validateIntegrationBaseUrl(baseUrl: string) {
   } catch (error) {
     return error instanceof Error ? error.message : 'Base URL inválida'
   }
+}
+
+/**
+ * Global preconditions that the backend tags onto every target (e.g. "validate
+ * the connection first"). We surface these once instead of repeating them on
+ * each pipeline.
+ */
+export const GLOBAL_INTEGRATION_WARNING_CODES: ReadonlySet<IntegrationDependencyWarningCode> =
+  new Set(['VALIDATION_REQUIRED', 'INTEGRATION_DISABLED'])
+
+export function isGlobalIntegrationWarning(
+  warning: IntegrationDependencyWarning,
+) {
+  return GLOBAL_INTEGRATION_WARNING_CODES.has(warning.code)
+}
+
+/** Deduped global warnings for the connection, shown once at the top. */
+export function getSharedIntegrationWarnings(
+  integration: IntegrationSummary,
+): IntegrationDependencyWarning[] {
+  const seen = new Set<string>()
+  const shared: IntegrationDependencyWarning[] = []
+  for (const warning of integration.overview.readiness.dependencyWarnings) {
+    if (!isGlobalIntegrationWarning(warning)) continue
+    if (seen.has(warning.message)) continue
+    seen.add(warning.message)
+    shared.push(warning)
+  }
+  return shared
+}
+
+/** Target-specific warnings, excluding the globals surfaced at panel level. */
+export function getTargetSpecificWarnings(
+  summary: IntegrationTargetSyncSummary,
+): IntegrationDependencyWarning[] {
+  const seen = new Set<string>()
+  const specific: IntegrationDependencyWarning[] = []
+  for (const warning of summary.warnings) {
+    if (isGlobalIntegrationWarning(warning)) continue
+    if (seen.has(warning.message)) continue
+    seen.add(warning.message)
+    specific.push(warning)
+  }
+  return specific
 }

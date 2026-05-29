@@ -73,9 +73,11 @@ import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dash
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dashboard/settings/certificates'
+import { Route as DashboardSettingsCertificateReleaseRouteImport } from './routes/dashboard/settings/certificate-release'
 import { Route as DashboardSettingsCertificateNumberingRouteImport } from './routes/dashboard/settings/certificate-numbering'
 import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
+import { Route as DashboardSettingsAutomaticSendRouteImport } from './routes/dashboard/settings/automatic-send'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
@@ -86,8 +88,15 @@ import { Route as DashboardNcNewRouteImport } from './routes/dashboard/nc/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
 import { Route as DashboardJobsNewRouteImport } from './routes/dashboard/jobs/new'
 import { Route as DashboardInternalCustomerSuccessRouteImport } from './routes/dashboard/internal/customer-success'
+import { Route as DashboardFinanceRevenueLeakageRouteImport } from './routes/dashboard/finance/revenue-leakage'
 import { Route as DashboardFinanceReceiptsRouteImport } from './routes/dashboard/finance/receipts'
+import { Route as DashboardFinanceOperationsToCashRouteImport } from './routes/dashboard/finance/operations-to-cash'
+import { Route as DashboardFinanceMarginDashboardsRouteImport } from './routes/dashboard/finance/margin-dashboards'
 import { Route as DashboardFinanceErpRouteImport } from './routes/dashboard/finance/erp'
+import { Route as DashboardFinanceCashForecastRouteImport } from './routes/dashboard/finance/cash-forecast'
+import { Route as DashboardFinanceBillingReadinessRouteImport } from './routes/dashboard/finance/billing-readiness'
+import { Route as DashboardFinanceAutomationRouteImport } from './routes/dashboard/finance/automation'
+import { Route as DashboardFinanceAnalyticsRouteImport } from './routes/dashboard/finance/analytics'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
 import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/new'
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
@@ -105,12 +114,14 @@ import { Route as DashboardPersonnelIdIndexRouteImport } from './routes/dashboar
 import { Route as DashboardNcIdIndexRouteImport } from './routes/dashboard/nc/$id/index'
 import { Route as DashboardMethodsIdIndexRouteImport } from './routes/dashboard/methods/$id/index'
 import { Route as DashboardJobsIdIndexRouteImport } from './routes/dashboard/jobs/$id/index'
+import { Route as DashboardFinanceReceivablesIndexRouteImport } from './routes/dashboard/finance/receivables/index'
 import { Route as DashboardFinanceDocumentsIndexRouteImport } from './routes/dashboard/finance/documents/index'
 import { Route as DashboardFinanceContractsIndexRouteImport } from './routes/dashboard/finance/contracts/index'
 import { Route as DashboardClientsIdIndexRouteImport } from './routes/dashboard/clients/$id/index'
 import { Route as DashboardCapaIdIndexRouteImport } from './routes/dashboard/capa/$id/index'
 import { Route as DashboardAssetsIdIndexRouteImport } from './routes/dashboard/assets/$id/index'
 import { Route as DashboardStandardsIdEditRouteImport } from './routes/dashboard/standards/$id/edit'
+import { Route as DashboardSettingsIntegrationsDriftRouteImport } from './routes/dashboard/settings/integrations/drift'
 import { Route as DashboardServicesIdEditRouteImport } from './routes/dashboard/services/$id/edit'
 import { Route as DashboardPersonnelIdTrainingRouteImport } from './routes/dashboard/personnel/$id/training'
 import { Route as DashboardPersonnelIdAuditRouteImport } from './routes/dashboard/personnel/$id/audit'
@@ -467,6 +478,12 @@ const DashboardSettingsCertificatesRoute =
     path: '/certificates',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsCertificateReleaseRoute =
+  DashboardSettingsCertificateReleaseRouteImport.update({
+    id: '/certificate-release',
+    path: '/certificate-release',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 const DashboardSettingsCertificateNumberingRoute =
   DashboardSettingsCertificateNumberingRouteImport.update({
     id: '/certificate-numbering',
@@ -483,6 +500,12 @@ const DashboardSettingsBillingRoute =
   DashboardSettingsBillingRouteImport.update({
     id: '/billing',
     path: '/billing',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsAutomaticSendRoute =
+  DashboardSettingsAutomaticSendRouteImport.update({
+    id: '/automatic-send',
+    path: '/automatic-send',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsAuthenticationRoute =
@@ -540,10 +563,28 @@ const DashboardInternalCustomerSuccessRoute =
     path: '/customer-success',
     getParentRoute: () => DashboardInternalRouteRoute,
   } as any)
+const DashboardFinanceRevenueLeakageRoute =
+  DashboardFinanceRevenueLeakageRouteImport.update({
+    id: '/revenue-leakage',
+    path: '/revenue-leakage',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
 const DashboardFinanceReceiptsRoute =
   DashboardFinanceReceiptsRouteImport.update({
     id: '/receipts',
     path: '/receipts',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceOperationsToCashRoute =
+  DashboardFinanceOperationsToCashRouteImport.update({
+    id: '/operations-to-cash',
+    path: '/operations-to-cash',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceMarginDashboardsRoute =
+  DashboardFinanceMarginDashboardsRouteImport.update({
+    id: '/margin-dashboards',
+    path: '/margin-dashboards',
     getParentRoute: () => DashboardFinanceRouteRoute,
   } as any)
 const DashboardFinanceErpRoute = DashboardFinanceErpRouteImport.update({
@@ -551,6 +592,30 @@ const DashboardFinanceErpRoute = DashboardFinanceErpRouteImport.update({
   path: '/erp',
   getParentRoute: () => DashboardFinanceRouteRoute,
 } as any)
+const DashboardFinanceCashForecastRoute =
+  DashboardFinanceCashForecastRouteImport.update({
+    id: '/cash-forecast',
+    path: '/cash-forecast',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceBillingReadinessRoute =
+  DashboardFinanceBillingReadinessRouteImport.update({
+    id: '/billing-readiness',
+    path: '/billing-readiness',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceAutomationRoute =
+  DashboardFinanceAutomationRouteImport.update({
+    id: '/automation',
+    path: '/automation',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceAnalyticsRoute =
+  DashboardFinanceAnalyticsRouteImport.update({
+    id: '/analytics',
+    path: '/analytics',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
 const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -645,6 +710,12 @@ const DashboardJobsIdIndexRoute = DashboardJobsIdIndexRouteImport.update({
   path: '/$id/',
   getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
+const DashboardFinanceReceivablesIndexRoute =
+  DashboardFinanceReceivablesIndexRouteImport.update({
+    id: '/receivables/',
+    path: '/receivables/',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
 const DashboardFinanceDocumentsIndexRoute =
   DashboardFinanceDocumentsIndexRouteImport.update({
     id: '/',
@@ -677,6 +748,12 @@ const DashboardStandardsIdEditRoute =
     id: '/$id/edit',
     path: '/$id/edit',
     getParentRoute: () => DashboardStandardsRouteRoute,
+  } as any)
+const DashboardSettingsIntegrationsDriftRoute =
+  DashboardSettingsIntegrationsDriftRouteImport.update({
+    id: '/drift',
+    path: '/drift',
+    getParentRoute: () => DashboardSettingsIntegrationsRoute,
   } as any)
 const DashboardServicesIdEditRoute = DashboardServicesIdEditRouteImport.update({
   id: '/$id/edit',
@@ -817,8 +894,15 @@ export interface FileRoutesByFullPath {
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
+  '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
+  '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
+  '/dashboard/finance/billing-readiness': typeof DashboardFinanceBillingReadinessRoute
+  '/dashboard/finance/cash-forecast': typeof DashboardFinanceCashForecastRoute
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
+  '/dashboard/finance/margin-dashboards': typeof DashboardFinanceMarginDashboardsRoute
+  '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
+  '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
@@ -829,13 +913,15 @@ export interface FileRoutesByFullPath {
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
+  '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
+  '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
-  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -875,12 +961,14 @@ export interface FileRoutesByFullPath {
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
   '/dashboard/personnel/$id/training': typeof DashboardPersonnelIdTrainingRoute
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
+  '/dashboard/settings/integrations/drift': typeof DashboardSettingsIntegrationsDriftRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
   '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
+  '/dashboard/finance/receivables': typeof DashboardFinanceReceivablesIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
@@ -916,8 +1004,15 @@ export interface FileRoutesByTo {
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
+  '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
+  '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
+  '/dashboard/finance/billing-readiness': typeof DashboardFinanceBillingReadinessRoute
+  '/dashboard/finance/cash-forecast': typeof DashboardFinanceCashForecastRoute
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
+  '/dashboard/finance/margin-dashboards': typeof DashboardFinanceMarginDashboardsRoute
+  '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
+  '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
@@ -928,13 +1023,15 @@ export interface FileRoutesByTo {
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
+  '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
+  '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
-  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -974,12 +1071,14 @@ export interface FileRoutesByTo {
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
   '/dashboard/personnel/$id/training': typeof DashboardPersonnelIdTrainingRoute
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
+  '/dashboard/settings/integrations/drift': typeof DashboardSettingsIntegrationsDriftRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id': typeof DashboardClientsIdIndexRoute
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents': typeof DashboardFinanceDocumentsIndexRoute
+  '/dashboard/finance/receivables': typeof DashboardFinanceReceivablesIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
@@ -1037,8 +1136,15 @@ export interface FileRoutesById {
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
+  '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
+  '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
+  '/dashboard/finance/billing-readiness': typeof DashboardFinanceBillingReadinessRoute
+  '/dashboard/finance/cash-forecast': typeof DashboardFinanceCashForecastRoute
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
+  '/dashboard/finance/margin-dashboards': typeof DashboardFinanceMarginDashboardsRoute
+  '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
+  '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
@@ -1049,13 +1155,15 @@ export interface FileRoutesById {
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
+  '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
+  '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
-  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
@@ -1095,12 +1203,14 @@ export interface FileRoutesById {
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
   '/dashboard/personnel/$id/training': typeof DashboardPersonnelIdTrainingRoute
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
+  '/dashboard/settings/integrations/drift': typeof DashboardSettingsIntegrationsDriftRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
   '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
+  '/dashboard/finance/receivables/': typeof DashboardFinanceReceivablesIndexRoute
   '/dashboard/jobs/$id/': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
@@ -1159,8 +1269,15 @@ export interface FileRouteTypes {
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
+    | '/dashboard/finance/analytics'
+    | '/dashboard/finance/automation'
+    | '/dashboard/finance/billing-readiness'
+    | '/dashboard/finance/cash-forecast'
     | '/dashboard/finance/erp'
+    | '/dashboard/finance/margin-dashboards'
+    | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
+    | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
@@ -1171,9 +1288,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
+    | '/dashboard/settings/automatic-send'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
+    | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1217,12 +1336,14 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id/audit'
     | '/dashboard/personnel/$id/training'
     | '/dashboard/services/$id/edit'
+    | '/dashboard/settings/integrations/drift'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id'
     | '/dashboard/clients/$id/'
     | '/dashboard/finance/contracts/'
     | '/dashboard/finance/documents/'
+    | '/dashboard/finance/receivables'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
     | '/dashboard/nc/$id'
@@ -1258,8 +1379,15 @@ export interface FileRouteTypes {
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
+    | '/dashboard/finance/analytics'
+    | '/dashboard/finance/automation'
+    | '/dashboard/finance/billing-readiness'
+    | '/dashboard/finance/cash-forecast'
     | '/dashboard/finance/erp'
+    | '/dashboard/finance/margin-dashboards'
+    | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
+    | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
@@ -1270,9 +1398,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
+    | '/dashboard/settings/automatic-send'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
+    | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1316,12 +1446,14 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id/audit'
     | '/dashboard/personnel/$id/training'
     | '/dashboard/services/$id/edit'
+    | '/dashboard/settings/integrations/drift'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id'
     | '/dashboard/capa/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/finance/contracts'
     | '/dashboard/finance/documents'
+    | '/dashboard/finance/receivables'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
     | '/dashboard/nc/$id'
@@ -1378,8 +1510,15 @@ export interface FileRouteTypes {
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
+    | '/dashboard/finance/analytics'
+    | '/dashboard/finance/automation'
+    | '/dashboard/finance/billing-readiness'
+    | '/dashboard/finance/cash-forecast'
     | '/dashboard/finance/erp'
+    | '/dashboard/finance/margin-dashboards'
+    | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
+    | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
@@ -1390,9 +1529,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
+    | '/dashboard/settings/automatic-send'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
+    | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1436,12 +1577,14 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id/audit'
     | '/dashboard/personnel/$id/training'
     | '/dashboard/services/$id/edit'
+    | '/dashboard/settings/integrations/drift'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
     | '/dashboard/finance/contracts/'
     | '/dashboard/finance/documents/'
+    | '/dashboard/finance/receivables/'
     | '/dashboard/jobs/$id/'
     | '/dashboard/methods/$id/'
     | '/dashboard/nc/$id/'
@@ -1915,6 +2058,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsCertificatesRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/settings/certificate-release': {
+      id: '/dashboard/settings/certificate-release'
+      path: '/certificate-release'
+      fullPath: '/dashboard/settings/certificate-release'
+      preLoaderRoute: typeof DashboardSettingsCertificateReleaseRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
     '/dashboard/settings/certificate-numbering': {
       id: '/dashboard/settings/certificate-numbering'
       path: '/certificate-numbering'
@@ -1934,6 +2084,13 @@ declare module '@tanstack/react-router' {
       path: '/billing'
       fullPath: '/dashboard/settings/billing'
       preLoaderRoute: typeof DashboardSettingsBillingRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/automatic-send': {
+      id: '/dashboard/settings/automatic-send'
+      path: '/automatic-send'
+      fullPath: '/dashboard/settings/automatic-send'
+      preLoaderRoute: typeof DashboardSettingsAutomaticSendRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/authentication': {
@@ -2006,6 +2163,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardInternalCustomerSuccessRouteImport
       parentRoute: typeof DashboardInternalRouteRoute
     }
+    '/dashboard/finance/revenue-leakage': {
+      id: '/dashboard/finance/revenue-leakage'
+      path: '/revenue-leakage'
+      fullPath: '/dashboard/finance/revenue-leakage'
+      preLoaderRoute: typeof DashboardFinanceRevenueLeakageRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
     '/dashboard/finance/receipts': {
       id: '/dashboard/finance/receipts'
       path: '/receipts'
@@ -2013,11 +2177,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardFinanceReceiptsRouteImport
       parentRoute: typeof DashboardFinanceRouteRoute
     }
+    '/dashboard/finance/operations-to-cash': {
+      id: '/dashboard/finance/operations-to-cash'
+      path: '/operations-to-cash'
+      fullPath: '/dashboard/finance/operations-to-cash'
+      preLoaderRoute: typeof DashboardFinanceOperationsToCashRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/margin-dashboards': {
+      id: '/dashboard/finance/margin-dashboards'
+      path: '/margin-dashboards'
+      fullPath: '/dashboard/finance/margin-dashboards'
+      preLoaderRoute: typeof DashboardFinanceMarginDashboardsRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
     '/dashboard/finance/erp': {
       id: '/dashboard/finance/erp'
       path: '/erp'
       fullPath: '/dashboard/finance/erp'
       preLoaderRoute: typeof DashboardFinanceErpRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/cash-forecast': {
+      id: '/dashboard/finance/cash-forecast'
+      path: '/cash-forecast'
+      fullPath: '/dashboard/finance/cash-forecast'
+      preLoaderRoute: typeof DashboardFinanceCashForecastRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/billing-readiness': {
+      id: '/dashboard/finance/billing-readiness'
+      path: '/billing-readiness'
+      fullPath: '/dashboard/finance/billing-readiness'
+      preLoaderRoute: typeof DashboardFinanceBillingReadinessRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/automation': {
+      id: '/dashboard/finance/automation'
+      path: '/automation'
+      fullPath: '/dashboard/finance/automation'
+      preLoaderRoute: typeof DashboardFinanceAutomationRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/analytics': {
+      id: '/dashboard/finance/analytics'
+      path: '/analytics'
+      fullPath: '/dashboard/finance/analytics'
+      preLoaderRoute: typeof DashboardFinanceAnalyticsRouteImport
       parentRoute: typeof DashboardFinanceRouteRoute
     }
     '/dashboard/clients/new': {
@@ -2139,6 +2345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardJobsIdIndexRouteImport
       parentRoute: typeof DashboardJobsRouteRoute
     }
+    '/dashboard/finance/receivables/': {
+      id: '/dashboard/finance/receivables/'
+      path: '/receivables'
+      fullPath: '/dashboard/finance/receivables'
+      preLoaderRoute: typeof DashboardFinanceReceivablesIndexRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
     '/dashboard/finance/documents/': {
       id: '/dashboard/finance/documents/'
       path: '/'
@@ -2180,6 +2393,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/standards/$id/edit'
       preLoaderRoute: typeof DashboardStandardsIdEditRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
+    }
+    '/dashboard/settings/integrations/drift': {
+      id: '/dashboard/settings/integrations/drift'
+      path: '/drift'
+      fullPath: '/dashboard/settings/integrations/drift'
+      preLoaderRoute: typeof DashboardSettingsIntegrationsDriftRouteImport
+      parentRoute: typeof DashboardSettingsIntegrationsRoute
     }
     '/dashboard/services/$id/edit': {
       id: '/dashboard/services/$id/edit'
@@ -2486,9 +2706,17 @@ const DashboardFinanceDocumentsRouteRouteWithChildren =
 interface DashboardFinanceRouteRouteChildren {
   DashboardFinanceContractsRouteRoute: typeof DashboardFinanceContractsRouteRouteWithChildren
   DashboardFinanceDocumentsRouteRoute: typeof DashboardFinanceDocumentsRouteRouteWithChildren
+  DashboardFinanceAnalyticsRoute: typeof DashboardFinanceAnalyticsRoute
+  DashboardFinanceAutomationRoute: typeof DashboardFinanceAutomationRoute
+  DashboardFinanceBillingReadinessRoute: typeof DashboardFinanceBillingReadinessRoute
+  DashboardFinanceCashForecastRoute: typeof DashboardFinanceCashForecastRoute
   DashboardFinanceErpRoute: typeof DashboardFinanceErpRoute
+  DashboardFinanceMarginDashboardsRoute: typeof DashboardFinanceMarginDashboardsRoute
+  DashboardFinanceOperationsToCashRoute: typeof DashboardFinanceOperationsToCashRoute
   DashboardFinanceReceiptsRoute: typeof DashboardFinanceReceiptsRoute
+  DashboardFinanceRevenueLeakageRoute: typeof DashboardFinanceRevenueLeakageRoute
   DashboardFinanceIndexRoute: typeof DashboardFinanceIndexRoute
+  DashboardFinanceReceivablesIndexRoute: typeof DashboardFinanceReceivablesIndexRoute
 }
 
 const DashboardFinanceRouteRouteChildren: DashboardFinanceRouteRouteChildren = {
@@ -2496,9 +2724,17 @@ const DashboardFinanceRouteRouteChildren: DashboardFinanceRouteRouteChildren = {
     DashboardFinanceContractsRouteRouteWithChildren,
   DashboardFinanceDocumentsRouteRoute:
     DashboardFinanceDocumentsRouteRouteWithChildren,
+  DashboardFinanceAnalyticsRoute: DashboardFinanceAnalyticsRoute,
+  DashboardFinanceAutomationRoute: DashboardFinanceAutomationRoute,
+  DashboardFinanceBillingReadinessRoute: DashboardFinanceBillingReadinessRoute,
+  DashboardFinanceCashForecastRoute: DashboardFinanceCashForecastRoute,
   DashboardFinanceErpRoute: DashboardFinanceErpRoute,
+  DashboardFinanceMarginDashboardsRoute: DashboardFinanceMarginDashboardsRoute,
+  DashboardFinanceOperationsToCashRoute: DashboardFinanceOperationsToCashRoute,
   DashboardFinanceReceiptsRoute: DashboardFinanceReceiptsRoute,
+  DashboardFinanceRevenueLeakageRoute: DashboardFinanceRevenueLeakageRoute,
   DashboardFinanceIndexRoute: DashboardFinanceIndexRoute,
+  DashboardFinanceReceivablesIndexRoute: DashboardFinanceReceivablesIndexRoute,
 }
 
 const DashboardFinanceRouteRouteWithChildren =
@@ -2662,16 +2898,33 @@ const DashboardServicesRouteRouteWithChildren =
     DashboardServicesRouteRouteChildren,
   )
 
+interface DashboardSettingsIntegrationsRouteChildren {
+  DashboardSettingsIntegrationsDriftRoute: typeof DashboardSettingsIntegrationsDriftRoute
+}
+
+const DashboardSettingsIntegrationsRouteChildren: DashboardSettingsIntegrationsRouteChildren =
+  {
+    DashboardSettingsIntegrationsDriftRoute:
+      DashboardSettingsIntegrationsDriftRoute,
+  }
+
+const DashboardSettingsIntegrationsRouteWithChildren =
+  DashboardSettingsIntegrationsRoute._addFileChildren(
+    DashboardSettingsIntegrationsRouteChildren,
+  )
+
 interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
+  DashboardSettingsAutomaticSendRoute: typeof DashboardSettingsAutomaticSendRoute
   DashboardSettingsBillingRoute: typeof DashboardSettingsBillingRoute
   DashboardSettingsBrandingRoute: typeof DashboardSettingsBrandingRoute
   DashboardSettingsCertificateNumberingRoute: typeof DashboardSettingsCertificateNumberingRoute
+  DashboardSettingsCertificateReleaseRoute: typeof DashboardSettingsCertificateReleaseRoute
   DashboardSettingsCertificatesRoute: typeof DashboardSettingsCertificatesRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
-  DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRoute
+  DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRouteWithChildren
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
   DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
   DashboardSettingsPortalDomainRoute: typeof DashboardSettingsPortalDomainRoute
@@ -2685,14 +2938,18 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
   {
     DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
+    DashboardSettingsAutomaticSendRoute: DashboardSettingsAutomaticSendRoute,
     DashboardSettingsBillingRoute: DashboardSettingsBillingRoute,
     DashboardSettingsBrandingRoute: DashboardSettingsBrandingRoute,
     DashboardSettingsCertificateNumberingRoute:
       DashboardSettingsCertificateNumberingRoute,
+    DashboardSettingsCertificateReleaseRoute:
+      DashboardSettingsCertificateReleaseRoute,
     DashboardSettingsCertificatesRoute: DashboardSettingsCertificatesRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,
-    DashboardSettingsIntegrationsRoute: DashboardSettingsIntegrationsRoute,
+    DashboardSettingsIntegrationsRoute:
+      DashboardSettingsIntegrationsRouteWithChildren,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
     DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
     DashboardSettingsPortalDomainRoute: DashboardSettingsPortalDomainRoute,

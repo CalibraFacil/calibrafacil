@@ -76,6 +76,7 @@ async function getDocumentById(organizationId: string, documentId: number) {
   const [document] = await db
     .select({
       id: billingDocument.id,
+      publicId: billingDocument.publicId,
       organizationId: billingDocument.organizationId,
       customerId: billingDocument.customerId,
       customerName: customer.name,
@@ -189,6 +190,25 @@ async function getDocumentById(organizationId: string, documentId: number) {
   };
 }
 
+async function getDocumentByPublicId(organizationId: string, publicId: string) {
+  const [row] = await db
+    .select({ id: billingDocument.id })
+    .from(billingDocument)
+    .where(
+      and(
+        eq(billingDocument.publicId, publicId),
+        eq(billingDocument.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return getDocumentById(organizationId, row.id);
+}
+
 function isDocumentOutsideActiveUnitScope(
   member: AuthVariables["member"],
   unitId: number,
@@ -230,6 +250,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       const documents = await db
         .select({
           id: billingDocument.id,
+          publicId: billingDocument.publicId,
           documentNumber: billingDocument.documentNumber,
           status: billingDocument.status,
           customerId: billingDocument.customerId,
@@ -565,13 +586,12 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("financial"),
     async (c) => {
       const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const publicId = c.req.param("id");
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const document = await getDocumentById(member.organizationId, id);
+      const document = await getDocumentByPublicId(
+        member.organizationId,
+        publicId,
+      );
       if (!document) {
         return c.json({ error: "Documento nao encontrado" }, 404);
       }

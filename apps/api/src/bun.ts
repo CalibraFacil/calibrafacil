@@ -198,6 +198,8 @@ const hostname = Bun.env.HOST ?? "0.0.0.0";
 const server = Bun.serve({
   hostname,
   port,
+  // @ts-expect-error Bun supports idleTimeout, but the bundled type in this workspace has not caught up.
+  idleTimeout: 120,
   fetch(request) {
     return app.fetch(request, env);
   },

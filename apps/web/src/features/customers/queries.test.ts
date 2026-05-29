@@ -4,6 +4,7 @@ import {
   customerAssetsQueryOptions,
   customerAuditLogQueryOptions,
   customerDetailQueryOptions,
+  customerFinancialTimelineQueryOptions,
   customerInvitationsQueryOptions,
   customerJobsQueryOptions,
   customerMembersQueryOptions,
@@ -55,6 +56,11 @@ describe('customers feature queries', () => {
     expect(customerDetailQueryOptions('42').queryKey).toEqual([
       'customer',
       '42',
+    ])
+    expect(customerFinancialTimelineQueryOptions('42').queryKey).toEqual([
+      'customer',
+      '42',
+      'financial-timeline',
     ])
     expect(
       customerAssetsQueryOptions({

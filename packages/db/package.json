@@ -18,6 +18,7 @@
     "db:seed:exemplo-balance-method": "tsx ./scripts/seed-exemplo-balance-method.mjs",
     "db:seed:exemplo-reference-standards": "node ./scripts/seed-exemplo-reference-standards.mjs",
     "db:seed:exemplo-modelo-demo-job": "node ./scripts/seed-exemplo-modelo-demo-job.mjs",
+    "db:seed:calibrafacil-conta-azul-demo": "node ./scripts/seed-calibrafacil-conta-azul-demo.mjs",
     "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs"
   },
   "keywords": [],

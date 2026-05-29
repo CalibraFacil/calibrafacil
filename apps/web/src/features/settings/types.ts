@@ -11,10 +11,13 @@ import type {
   SsoSettingsResponse,
 } from '@calibra-facil/client-runtime'
 import type {
+  ContaAzulConnectionConfig,
+  FinancialErpConnectionConfig,
   IntegrationDependencyWarning,
   IntegrationMappedPreviewSample,
   IntegrationMappingsConfig,
   IntegrationReadinessSummary,
+  IntegrationRemoteDocumentSummary,
   IntegrationTargetCoverageSummary,
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
@@ -161,7 +164,15 @@ export type OrganizationGovernanceActivityData = {
   viewer: GovernanceViewer
 }
 
-export type SyncTarget = 'customer' | 'service_order' | 'billing_document'
+export type SyncTarget =
+  | 'catalog_item'
+  | 'contract'
+  | 'customer'
+  | 'supplier'
+  | 'transporter'
+  | 'service_order'
+  | 'billing_document'
+  | 'payable'
 
 export type IntegrationConfig = {
   baseUrl: string
@@ -172,6 +183,8 @@ export type IntegrationConfig = {
   authType: 'bearer'
   mappings: IntegrationMappingsConfig
 }
+
+export type ContaAzulConfig = ContaAzulConnectionConfig
 
 export type IntegrationRun = {
   id: string
@@ -192,6 +205,39 @@ export type IntegrationRun = {
   } | null
 }
 
+export type IntegrationSyncItem = {
+  id: string
+  runId: string
+  target: SyncTarget
+  localEntityId: string
+  remoteEntityId: string | null
+  operation:
+    | 'create'
+    | 'update'
+    | 'upsert'
+    | 'poll'
+    | 'reconcile'
+    | 'link'
+    | 'validate'
+    | 'delete'
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'DEAD_LETTER'
+  attemptCount: number
+  lastErrorCode: string | null
+  lastErrorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type IntegrationRunItemsResponse = {
+  runId: string
+  target: SyncTarget
+  data: IntegrationSyncItem[]
+  summary: {
+    returnedCount: number
+    statusCounts: Record<string, number>
+  }
+}
+
 export type IntegrationEvent = {
   id: number
   level: 'info' | 'warning' | 'error'
@@ -203,6 +249,7 @@ export type IntegrationEvent = {
 export type IntegrationOverview = {
   readiness: IntegrationReadinessSummary
   targets: IntegrationTargetSyncSummary[]
+  remoteDocuments: IntegrationRemoteDocumentSummary
   syncSummary: {
     lastRunAt: string | null
     lastSuccessfulRunAt: string | null
@@ -214,21 +261,57 @@ export type IntegrationOverview = {
 export type IntegrationSummary = {
   id: string
   type: 'financial_erp'
-  provider: 'generic_http'
+  provider: 'generic_http' | 'conta_azul'
   name: string
-  status: 'ACTIVE' | 'DISABLED'
+  status: 'ACTIVE' | 'DISABLED' | 'ACTION_REQUIRED'
   lastValidatedAt: string | null
   lastValidationError: string | null
   createdAt: string
   updatedAt: string
   connection: {
     id: string | null
-    credentialType: 'bearer'
-    config: IntegrationConfig | null
+    credentialType: 'bearer' | 'oauth2'
+    config: FinancialErpConnectionConfig | null
   }
   recentRuns: IntegrationRun[]
   recentEvents: IntegrationEvent[]
   overview: IntegrationOverview
+}
+
+export type ContaAzulCatalogItem = {
+  id: string
+  name: string
+  code: string | null
+  active: boolean | null
+  type: string | null
+}
+
+export type ContaAzulCatalogResponse = {
+  domain?: string
+  items: ContaAzulCatalogItem[]
+  nextCursor?: string | null
+}
+
+export type ContaAzulOAuthStartResponse = {
+  authorizationUrl: string
+  expiresInSeconds: number
+}
+
+export type ContaAzulScheduleRow = {
+  enabled: boolean
+  lastSuccessAt: string | null
+  lastErrorAt: string | null
+  lastErrorMessage: string | null
+  nextDueAt: string | null
+  intervalMinutes: number
+}
+
+export type ContaAzulScheduleResponse = {
+  paymentStatusPolling: ContaAzulScheduleRow
+  payables: ContaAzulScheduleRow
+  fiscalDocuments: ContaAzulScheduleRow
+  protocols: ContaAzulScheduleRow
+  driftChecks: ContaAzulScheduleRow
 }
 
 export type SettingsIntegrationsData = {
@@ -236,7 +319,7 @@ export type SettingsIntegrationsData = {
     planId: string
     planName: string
     status: string
-    hasCustomIntegrations: boolean
+    hasFinancialIntegrations: boolean
   }
   data: IntegrationSummary[]
 }

@@ -1,12 +1,13 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { FinanceReceiptsPage } from '@/features/finance/receipts-page'
-import { loadFinanceReceiptsData } from '@/features/finance/queries'
+import { getDashboardRedirectPath } from '@/app/router/route-meta'
 
 export const Route = createFileRoute('/dashboard/finance/receipts')({
-  loader: ({ context }) => loadFinanceReceiptsData(context.queryClient),
-  head: () => ({
-    meta: [{ title: 'Recebimentos | CalibraFácil' }],
-  }),
-  component: FinanceReceiptsPage,
+  beforeLoad: () => {
+    throw redirect({
+      to:
+        getDashboardRedirectPath('/dashboard/finance/receipts') ??
+        '/dashboard/finance/receivables',
+    })
+  },
 })

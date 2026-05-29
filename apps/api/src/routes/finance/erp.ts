@@ -56,8 +56,8 @@ export const financeErpRouter = new Hono<{
         billing: {
           planId: access.planId,
           planName: access.planName,
-          hasCustomIntegrations: access.entitlements.includes(
-            "custom_integrations",
+          hasFinancialIntegrations: access.entitlements.includes(
+            "financial_integrations",
           ),
         },
         data: documents,
@@ -68,7 +68,7 @@ export const financeErpRouter = new Hono<{
     "/documents/:id/export",
     ...withLabPermission({ financial: ["export"] }),
     requireFeature("financial"),
-    requireFeature("custom_integrations"),
+    requireFeature("financial_integrations"),
     withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");

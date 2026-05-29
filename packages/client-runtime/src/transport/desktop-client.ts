@@ -222,6 +222,54 @@ export function createDesktopApiClient(
       async exportErpDocument() {
         throw desktopUnsupportedAuthAction("Financeiro");
       },
+      async listBillingReadiness() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async sendBillingReadiness() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getServiceOrderStatus() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getCustomerTimeline() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getCertificateRelease() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async releaseCertificateByException() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async listCertificateReleasePolicies() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async createCertificateReleasePolicy() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async updateCertificateReleasePolicy() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async listAutomaticSendRules() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async createAutomaticSendRule() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async updateAutomaticSendRule() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getOperationsToCash() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getRevenueLeakage() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getCashForecast() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
+      async getMarginDashboards() {
+        throw desktopUnsupportedAuthAction("Financeiro");
+      },
     },
     billing: {
       async getSubscription() {
@@ -1124,7 +1172,7 @@ export function createDesktopApiClient(
             planId: "desktop-local",
             planName: "Desktop local",
             status: "active",
-            hasCustomIntegrations: false,
+            hasFinancialIntegrations: false,
           },
           data: [],
         });
@@ -1132,10 +1180,46 @@ export function createDesktopApiClient(
       async create() {
         throw desktopUnsupportedAuthAction("Integrações");
       },
+      async startContaAzulOAuth() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
       async validate() {
         throw desktopUnsupportedAuthAction("Integrações");
       },
       async update() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async updateContaAzulConfig() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async listContaAzulCatalog() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async pollContaAzul() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async pollContaAzulFiscal() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async linkContaAzulInvoicesToMdfe() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async pollContaAzulPayables() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async pollContaAzulProtocols() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async pollContaAzulDrift() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async getContaAzulSchedule() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async refreshContaAzul() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async disconnectContaAzul() {
         throw desktopUnsupportedAuthAction("Integrações");
       },
       async toggle() {
@@ -1150,7 +1234,16 @@ export function createDesktopApiClient(
       async schedule() {
         throw desktopUnsupportedAuthAction("Integrações");
       },
+      async listRunItems() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
       async retryRun() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async listDrift() {
+        throw desktopUnsupportedAuthAction("Integrações");
+      },
+      async acknowledgeDrift() {
         throw desktopUnsupportedAuthAction("Integrações");
       },
     },
@@ -2350,7 +2443,7 @@ function desktopFinanceAccess(): FinanceAccessResponse {
     status: "active",
     entitlements: ["desktop_local"],
     hasFinancialModule: false,
-    hasCustomIntegrations: false,
+    hasFinancialIntegrations: false,
     canReadFinancial: false,
     canManageFinancial: false,
     canExportFinancial: false,

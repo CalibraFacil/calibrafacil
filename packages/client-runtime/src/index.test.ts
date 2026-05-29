@@ -224,6 +224,86 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listBillingReadiness",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "sendBillingReadiness",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getServiceOrderStatus",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getCustomerTimeline",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getCertificateRelease",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "releaseCertificateByException",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listCertificateReleasePolicies",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createCertificateReleasePolicy",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateCertificateReleasePolicy",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listAutomaticSendRules",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createAutomaticSendRule",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateAutomaticSendRule",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getOperationsToCash",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getRevenueLeakage",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getCashForecast",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getMarginDashboards",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
           "method": "getSubscription",
           "namespace": "billing",
           "policy": "cloud-only",
@@ -1249,12 +1329,72 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "startContaAzulOAuth",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
           "method": "validate",
           "namespace": "integrations",
           "policy": "cloud-only",
         },
         {
           "method": "update",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateContaAzulConfig",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listContaAzulCatalog",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "pollContaAzul",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "pollContaAzulFiscal",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "linkContaAzulInvoicesToMdfe",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "pollContaAzulPayables",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "pollContaAzulProtocols",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "pollContaAzulDrift",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getContaAzulSchedule",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "refreshContaAzul",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "disconnectContaAzul",
           "namespace": "integrations",
           "policy": "cloud-only",
         },
@@ -1279,7 +1419,22 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listRunItems",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
           "method": "retryRun",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listDrift",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "acknowledgeDrift",
           "namespace": "integrations",
           "policy": "cloud-only",
         },
@@ -1563,7 +1718,7 @@ describe("access runtime adapter", () => {
         status: "active",
         entitlements: ["financial"],
         hasFinancialModule: true,
-        hasCustomIntegrations: false,
+        hasFinancialIntegrations: false,
         canReadFinancial: true,
         canManageFinancial: true,
         canExportFinancial: true,
@@ -3444,8 +3599,126 @@ describe("integrations runtime adapter", () => {
         return Response.json({ target: "customer", previewCount: 1 });
       }
 
+      if (url.endsWith("/conta-azul/oauth/start")) {
+        return Response.json({
+          authorizationUrl: "https://auth.example.test/oauth",
+        });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/accounts")) {
+        return Response.json({ items: [{ id: "account-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/balances")) {
+        return Response.json({ items: [{ id: "account-1", balance: 1200 }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/categories")) {
+        return Response.json({ items: [{ id: "category-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/cost-centers")) {
+        return Response.json({ items: [{ id: "cost-center-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-categories")) {
+        return Response.json({ items: [{ id: "product-category-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-cest")) {
+        return Response.json({ items: [{ id: "cest-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/products")) {
+        return Response.json({ items: [{ id: "product-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-ncm")) {
+        return Response.json({ items: [{ id: "ncm-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-units")) {
+        return Response.json({ items: [{ id: "unit-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-ecommerce-categories")) {
+        return Response.json({ items: [{ id: "ecommerce-category-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/product-ecommerce-brands")) {
+        return Response.json({ items: [{ id: "ecommerce-brand-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/services")) {
+        return Response.json({ items: [{ id: "service-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/sellers")) {
+        return Response.json({ items: [{ id: "seller-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/dre-categories")) {
+        return Response.json({ items: [{ id: "dre-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/catalog/transfers")) {
+        return Response.json({ items: [{ id: "transfer-1" }] });
+      }
+
+      if (url.endsWith("/conta-azul/poll")) {
+        return Response.json({ scanned: 1 });
+      }
+
+      if (url.endsWith("/conta-azul/poll-fiscal")) {
+        return Response.json({ scannedFiscalDocuments: 1 });
+      }
+
+      if (url.endsWith("/conta-azul/link-mdfe")) {
+        return Response.json({ remoteEntityId: "MDFE-345345" });
+      }
+
+      if (url.endsWith("/conta-azul/poll-payables")) {
+        return Response.json({ scannedPayables: 1 });
+      }
+
+      if (url.endsWith("/conta-azul/poll-protocols")) {
+        return Response.json({ scannedProtocols: 1 });
+      }
+
+      if (url.endsWith("/conta-azul/poll-drift")) {
+        return Response.json({ scannedDriftLinks: 1 });
+      }
+
+      if (url.endsWith("/conta-azul/schedule")) {
+        return Response.json({
+          paymentStatusPolling: {
+            enabled: true,
+            intervalMinutes: 30,
+            lastErrorAt: null,
+            lastErrorMessage: null,
+            lastSuccessAt: "2026-05-26T12:00:00.000Z",
+            nextDueAt: "2026-05-26T12:30:00.000Z",
+          },
+        });
+      }
+
+      if (url.endsWith("/conta-azul/refresh")) {
+        return Response.json({ refreshed: true });
+      }
+
+      if (url.endsWith("/conta-azul/disconnect")) {
+        return Response.json({ disconnected: true });
+      }
+
       if (url.endsWith("/runs/run-1/retry")) {
         return Response.json({ queued: true });
+      }
+
+      if (url.endsWith("/runs/run-1/items")) {
+        return Response.json({
+          data: [{ id: "item-1", status: "FAILED" }],
+          summary: { returnedCount: 1 },
+        });
       }
 
       if (url.endsWith("/validate")) {
@@ -3473,7 +3746,7 @@ describe("integrations runtime adapter", () => {
       }
 
       return Response.json({
-        billing: { hasCustomIntegrations: true },
+        billing: { hasFinancialIntegrations: true },
         data: [{ id: "integration-1" }],
       });
     };
@@ -3489,11 +3762,127 @@ describe("integrations runtime adapter", () => {
       id: "integration-1",
     });
     await expect(
+      client.integrations.startContaAzulOAuth({
+        returnTo: "/dashboard/settings/integrations",
+      }),
+    ).resolves.toMatchObject({
+      authorizationUrl: "https://auth.example.test/oauth",
+    });
+    await expect(
       client.integrations.validate("integration-1"),
     ).resolves.toEqual({ ok: true });
     await expect(
       client.integrations.update("integration-1", { mappings: {} }),
     ).resolves.toMatchObject({ updated: true });
+    await expect(
+      client.integrations.updateContaAzulConfig("integration-1", {
+        defaultFinancialAccountId: "account-1",
+      }),
+    ).resolves.toMatchObject({ updated: true });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "accounts"),
+    ).resolves.toMatchObject({ items: [{ id: "account-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "balances"),
+    ).resolves.toMatchObject({
+      items: [{ id: "account-1", balance: 1200 }],
+    });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "categories"),
+    ).resolves.toMatchObject({ items: [{ id: "category-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "cost-centers"),
+    ).resolves.toMatchObject({ items: [{ id: "cost-center-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog(
+        "integration-1",
+        "product-categories",
+      ),
+    ).resolves.toMatchObject({ items: [{ id: "product-category-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "product-cest"),
+    ).resolves.toMatchObject({ items: [{ id: "cest-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "products"),
+    ).resolves.toMatchObject({ items: [{ id: "product-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "product-ncm"),
+    ).resolves.toMatchObject({ items: [{ id: "ncm-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog(
+        "integration-1",
+        "product-units",
+      ),
+    ).resolves.toMatchObject({ items: [{ id: "unit-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog(
+        "integration-1",
+        "product-ecommerce-categories",
+      ),
+    ).resolves.toMatchObject({ items: [{ id: "ecommerce-category-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog(
+        "integration-1",
+        "product-ecommerce-brands",
+      ),
+    ).resolves.toMatchObject({ items: [{ id: "ecommerce-brand-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "services"),
+    ).resolves.toMatchObject({ items: [{ id: "service-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "sellers"),
+    ).resolves.toMatchObject({ items: [{ id: "seller-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog(
+        "integration-1",
+        "dre-categories",
+      ),
+    ).resolves.toMatchObject({ items: [{ id: "dre-1" }] });
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "transfers"),
+    ).resolves.toMatchObject({ items: [{ id: "transfer-1" }] });
+    await expect(
+      client.integrations.pollContaAzul("integration-1", { limit: 100 }),
+    ).resolves.toMatchObject({ scanned: 1 });
+    await expect(
+      client.integrations.pollContaAzulFiscal("integration-1", { limit: 100 }),
+    ).resolves.toMatchObject({ scannedFiscalDocuments: 1 });
+    await expect(
+      client.integrations.linkContaAzulInvoicesToMdfe("integration-1", {
+        externalId: "mdfe:1",
+        fiscalDocumentAccessKeys: [
+          "42250323643586000108550010000001151606401726",
+        ],
+        mdfeIdentifier: "MDFE-345345",
+        status: "ENCERRADO",
+      }),
+    ).resolves.toMatchObject({ remoteEntityId: "MDFE-345345" });
+    await expect(
+      client.integrations.pollContaAzulPayables("integration-1", {
+        limit: 100,
+      }),
+    ).resolves.toMatchObject({ scannedPayables: 1 });
+    await expect(
+      client.integrations.pollContaAzulProtocols("integration-1", {
+        limit: 100,
+      }),
+    ).resolves.toMatchObject({ scannedProtocols: 1 });
+    await expect(
+      client.integrations.pollContaAzulDrift("integration-1", { limit: 100 }),
+    ).resolves.toMatchObject({ scannedDriftLinks: 1 });
+    await expect(
+      client.integrations.getContaAzulSchedule("integration-1"),
+    ).resolves.toMatchObject({
+      paymentStatusPolling: {
+        enabled: true,
+      },
+    });
+    await expect(
+      client.integrations.refreshContaAzul("integration-1"),
+    ).resolves.toMatchObject({ refreshed: true });
+    await expect(
+      client.integrations.disconnectContaAzul("integration-1"),
+    ).resolves.toMatchObject({ disconnected: true });
     await expect(
       client.integrations.toggle("integration-1", { enabled: false }),
     ).resolves.toMatchObject({ status: "DISABLED" });
@@ -3507,18 +3896,51 @@ describe("integrations runtime adapter", () => {
       client.integrations.schedule("integration-1", { mode: "manual" }),
     ).resolves.toMatchObject({ schedule: { mode: "manual" } });
     await expect(
+      client.integrations.listRunItems("integration-1", "run-1"),
+    ).resolves.toMatchObject({
+      data: [{ id: "item-1", status: "FAILED" }],
+      summary: { returnedCount: 1 },
+    });
+    await expect(
       client.integrations.retryRun("integration-1", "run-1"),
     ).resolves.toMatchObject({ queued: true });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/integrations",
       "https://api.example.test/api/integrations",
+      "https://api.example.test/api/integrations/conta-azul/oauth/start",
       "https://api.example.test/api/integrations/integration-1/validate",
       "https://api.example.test/api/integrations/integration-1",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/config",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/accounts",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/balances",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/categories",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/cost-centers",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-categories",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-cest",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/products",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-ncm",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-units",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-ecommerce-categories",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/product-ecommerce-brands",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/services",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/sellers",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/dre-categories",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/catalog/transfers",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/poll",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/poll-fiscal",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/link-mdfe",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/poll-payables",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/poll-protocols",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/poll-drift",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/schedule",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/refresh",
+      "https://api.example.test/api/integrations/integration-1/conta-azul/disconnect",
       "https://api.example.test/api/integrations/integration-1/toggle",
       "https://api.example.test/api/integrations/integration-1/sync/preview",
       "https://api.example.test/api/integrations/integration-1/sync",
       "https://api.example.test/api/integrations/integration-1/schedule",
+      "https://api.example.test/api/integrations/integration-1/runs/run-1/items",
       "https://api.example.test/api/integrations/integration-1/runs/run-1/retry",
     ]);
   });
@@ -3532,12 +3954,51 @@ describe("integrations runtime adapter", () => {
     });
 
     await expect(client.integrations.list()).resolves.toMatchObject({
-      billing: { hasCustomIntegrations: false },
+      billing: { hasFinancialIntegrations: false },
       data: [],
     });
     await expect(client.integrations.create({ name: "ERP" })).rejects.toThrow(
       "Integrações requer a API web/nuvem",
     );
+    await expect(client.integrations.startContaAzulOAuth({})).rejects.toThrow(
+      "Integrações requer a API web/nuvem",
+    );
+    await expect(
+      client.integrations.updateContaAzulConfig("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.listContaAzulCatalog("integration-1", "accounts"),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.pollContaAzul("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.pollContaAzulFiscal("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.linkContaAzulInvoicesToMdfe("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.pollContaAzulPayables("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.pollContaAzulProtocols("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.pollContaAzulDrift("integration-1", {}),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.getContaAzulSchedule("integration-1"),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.refreshContaAzul("integration-1"),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.disconnectContaAzul("integration-1"),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
+    await expect(
+      client.integrations.listRunItems("integration-1", "run-1"),
+    ).rejects.toThrow("Integrações requer a API web/nuvem");
   });
 });
 

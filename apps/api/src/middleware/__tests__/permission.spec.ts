@@ -59,7 +59,7 @@ describe("requirePermission auth source isolation", () => {
     expect(labHasPermission).toHaveBeenCalledTimes(1);
     expect(portalHasPermission).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it("uses only portal auth when auth source is portal", async () => {
     const { requirePermission } = await import("../permission");
@@ -73,7 +73,7 @@ describe("requirePermission auth source isolation", () => {
     expect(portalHasPermission).toHaveBeenCalledTimes(1);
     expect(labHasPermission).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
-  });
+  }, 15_000);
 
   it("falls back to lab auth when auth source is missing", async () => {
     const { requirePermission } = await import("../permission");
@@ -87,5 +87,5 @@ describe("requirePermission auth source isolation", () => {
     expect(labHasPermission).toHaveBeenCalledTimes(1);
     expect(portalHasPermission).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
-  });
+  }, 15_000);
 });

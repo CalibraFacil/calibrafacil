@@ -43,10 +43,7 @@ import {
   PortalServiceAccountError,
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
-import {
-  parseLegacyNumericIdentifier,
-  slugifyRouteIdentifier,
-} from "../lib/route-identifiers";
+import { resolveCustomerRouteId } from "../lib/customer-route-id";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -101,51 +98,6 @@ function portalErrorStatus(
     default:
       return 500;
   }
-}
-
-async function resolveCustomerRouteId(
-  identifier: string,
-  labOrganizationId: string,
-): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
-  const directConditions = [eq(customer.taxId, identifier)];
-
-  if (legacyId !== null) {
-    directConditions.unshift(eq(customer.id, legacyId));
-  }
-
-  const [directMatch] = await db
-    .select({ id: customer.id })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.labOrganizationId, labOrganizationId),
-        or(...directConditions)!,
-      ),
-    )
-    .limit(1);
-
-  if (directMatch) {
-    return directMatch.id;
-  }
-
-  const scopedCustomers = await db
-    .select({
-      id: customer.id,
-      name: customer.name,
-      taxId: customer.taxId,
-    })
-    .from(customer)
-    .where(eq(customer.labOrganizationId, labOrganizationId));
-
-  const match = scopedCustomers.find(
-    (candidate) =>
-      (candidate.taxId &&
-        slugifyRouteIdentifier(candidate.taxId) === identifier) ||
-      slugifyRouteIdentifier(candidate.name) === identifier,
-  );
-
-  return match?.id ?? null;
 }
 
 export const customersRouter = new Hono<{ Variables: AuthVariables }>()

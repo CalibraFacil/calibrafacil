@@ -4,6 +4,11 @@ import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
+  findServiceOrdersForCalibrationJob,
+  triggerAutomaticSendForMilestone,
+} from "../lib/automatic-send";
+import { sendServiceOrdersToFinance } from "../lib/finance";
+import {
   calibrationJob,
   jobAuditLog,
   asset,
@@ -2418,6 +2423,64 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       notifyJobApproved(id, session.user.id).catch((err) => {
         console.error("[Jobs] Failed to send approval notification:", err);
       });
+
+      // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
+      // to this job. Fire-and-forget — never block the approval response
+      // on the financial-send pathway. Engine writes an audit row per
+      // call regardless of outcome.
+      void (async () => {
+        try {
+          const orgId = memberData.organizationId;
+          const linkedSoIds = await findServiceOrdersForCalibrationJob(
+            id,
+            orgId,
+          );
+          for (const serviceOrderId of linkedSoIds) {
+            await triggerAutomaticSendForMilestone({
+              event: {
+                event: "certificate_approved",
+                serviceOrderId,
+                organizationId: orgId,
+              },
+              actorUserId: session.user.id,
+              invoker: async (params) => {
+                try {
+                  const results = await sendServiceOrdersToFinance({
+                    organizationId: params.organizationId,
+                    serviceOrderIds: [params.serviceOrderId],
+                    actorUserId: params.actorUserId,
+                    scope: memberData,
+                    env: c.env as never,
+                  });
+                  const first = results[0];
+                  if (!first) {
+                    return { ok: false, reason: "no_result" };
+                  }
+                  return {
+                    ok: first.ok,
+                    summary: {
+                      ok: first.ok,
+                      billingDocumentId: first.billingDocumentId ?? null,
+                    },
+                    reason: first.ok ? undefined : (first.error ?? "send_failed"),
+                  };
+                } catch (error) {
+                  return {
+                    ok: false,
+                    reason:
+                      error instanceof Error ? error.message : "send_threw",
+                  };
+                }
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            "[Jobs] Automatic-send wire-up failed:",
+            error,
+          );
+        }
+      })();
 
       return c.json({
         message: "Gerando certificado...",

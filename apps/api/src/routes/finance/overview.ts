@@ -76,6 +76,7 @@ export const financeOverviewRouter = new Hono<{
     const recentDocuments = await db
       .select({
         id: billingDocument.id,
+        publicId: billingDocument.publicId,
         documentNumber: billingDocument.documentNumber,
         status: billingDocument.status,
         exportStatus: billingDocument.exportStatus,

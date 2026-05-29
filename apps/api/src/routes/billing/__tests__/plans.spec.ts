@@ -20,6 +20,14 @@ describe("shared plan contracts", () => {
     expect(hasEntitlement("PROFESSIONAL", "custom_domain")).toBe(true);
   });
 
+  it("includes native financial ERP integrations from Professional up", () => {
+    expect(hasEntitlement("FREE", "financial_integrations")).toBe(false);
+    expect(hasEntitlement("STANDARD", "financial_integrations")).toBe(false);
+    expect(hasEntitlement("PROFESSIONAL", "financial_integrations")).toBe(true);
+    expect(hasFeature("PROFESSIONAL", "financial_integrations")).toBe(true);
+    expect(hasEntitlement("ENTERPRISE", "financial_integrations")).toBe(true);
+  });
+
   it("keeps enterprise-only scale features restricted", () => {
     expect(hasEntitlement("PROFESSIONAL", "multi_unit")).toBe(false);
     expect(hasEntitlement("ENTERPRISE", "multi_unit")).toBe(true);

@@ -40,6 +40,10 @@ import {
 } from "../lib/storage";
 import { denormalizeAssetSpecificationsForResponse } from "../lib/asset-measurement";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
+import {
+  applyPortalCertificateReleaseGate,
+  loadPortalReleaseStatuses,
+} from "../lib/portal-certificate-release-gate";
 
 type PortalReferenceStandardDocument = {
   documentId: number;
@@ -547,7 +551,7 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const certificates = await db
+        const certificatesRaw = await db
           .select({
             id: calibrationJob.id,
             jobId: calibrationJob.jobId,
@@ -575,6 +579,12 @@ export const portalRouter = new Hono<{
           )
           .orderBy(desc(calibrationJob.approvedAt))
           .limit(5);
+
+        // Phase 2 slice 1: hide certificateUrl for held releases.
+        const certificates = await applyPortalCertificateReleaseGate(
+          certificatesRaw,
+          linkedCustomer.labOrganizationId,
+        );
 
         return c.json({
           data: {
@@ -694,7 +704,7 @@ export const portalRouter = new Hono<{
       const total = totalResult?.count ?? 0;
 
       // Get certificates with pagination
-      const certificates = await db
+      const certificatesRaw = await db
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
@@ -724,6 +734,12 @@ export const portalRouter = new Hono<{
         .orderBy(desc(calibrationJob.approvedAt))
         .limit(limit)
         .offset(offset);
+
+      // Phase 2 slice 1: hide certificateUrl for held releases.
+      const certificates = await applyPortalCertificateReleaseGate(
+        certificatesRaw,
+        portalLabScope.labOrganizationId,
+      );
 
       return c.json({
         data: certificates,
@@ -841,8 +857,20 @@ export const portalRouter = new Hono<{
         normalizePortalReferenceStandards(certificate.standardsSnapshot),
       );
 
+      // Phase 2 slice 1: hide certificateUrl when the release is held.
+      const [gated] = await applyPortalCertificateReleaseGate(
+        [certificate],
+        portalLabScope.labOrganizationId,
+      );
+      const releaseStatus = gated?.releaseStatus ?? "RELEASED";
+
       return c.json({
         ...certificate,
+        certificateUrl:
+          releaseStatus === "PAYMENT_PENDING"
+            ? null
+            : certificate.certificateUrl,
+        releaseStatus,
         standardsSnapshot: undefined,
         referenceStandards,
       });
@@ -925,6 +953,20 @@ export const portalRouter = new Hono<{
 
       if (!certificate) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
+      }
+
+      // Phase 2 slice 1: deny download when the release is held for billing
+      // or for payment. Customer-facing copy is provider-neutral.
+      const releaseStatuses = await loadPortalReleaseStatuses({
+        organizationId: portalLabScope.labOrganizationId,
+        calibrationJobIds: [id],
+      });
+      const portalReleaseStatus = releaseStatuses.get(id) ?? "RELEASED";
+      if (portalReleaseStatus === "PAYMENT_PENDING") {
+        return c.json(
+          { error: "Certificado aguardando confirmação financeira" },
+          409,
+        );
       }
 
       if (!certificate.certificateUrl) {

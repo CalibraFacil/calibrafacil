@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApprovedJobRecordData } from '@/features/jobs/detail-model'
@@ -123,12 +124,17 @@ describe('ApprovedJobRecord certificate distribution', () => {
 function renderApprovedJobRecord(
   overrides: Partial<ApprovedJobRecordData> = {},
 ) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
-    <ApprovedJobRecord
-      job={approvedJob(overrides)}
-      onBack={vi.fn()}
-      onRefresh={vi.fn()}
-    />,
+    <QueryClientProvider client={client}>
+      <ApprovedJobRecord
+        job={approvedJob(overrides)}
+        onBack={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    </QueryClientProvider>,
   )
 }
 

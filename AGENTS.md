@@ -65,3 +65,22 @@
 
 - Local secrets live in `.env` files under `apps/api` and `apps/worker`.
 - API and worker run locally with Bun; keep secrets out of git.
+
+## Agent Workflow
+
+- Claude owns planning, implementation (backend/API/worker + UI/frontend), repair, and self-review for product-spec work.
+- The `.agent/` directory is a working journal, not a hand-off protocol:
+  - `.agent/goal.md`: the durable objective for the current multi-phase product-spec push.
+  - `.agent/goal-state.md`: per-slice progress, completed phases, current phase result, next phase objective.
+  - `.agent/brief.md`: the contract for the slice currently being implemented (scope, non-scope, acceptance criteria, tests/checks).
+  - `.agent/status.md`: dated record of checks run and their outcomes.
+  - `.agent/review.md`: Claude's self-review of the slice before declaring it done.
+  - `.agent/decisions.md`: accepted/deferred/rejected design choices that bind future slices.
+- Do not mark `.agent/goal.md` complete until the requested product scope is actually implemented, reviewed, and covered by relevant checks.
+- For Conta Azul work, use `docs/plans/conta-azul-product-strategy.md` as required product context.
+- Preserve tenant, organization, and unit scoping.
+- Preserve Better Auth patterns and permission boundaries.
+- Preserve entitlement and plan-limit enforcement.
+- Avoid broad rewrites; keep each slice scoped to its brief.
+- Run affected checks and record results in `.agent/status.md`.
+- Do not touch secrets, `.env` files, production credentials, billing credentials, deployment tokens, or unrelated app features.

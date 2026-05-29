@@ -142,6 +142,19 @@ function isProductionLikeUrl(value: string | undefined): boolean {
 
 function isProductionRuntime(): boolean {
   const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
+
+  // Explicit env always wins. A common dev workflow runs the local API behind a
+  // Cloudflare/ngrok tunnel so `API_URL`/`APP_URL` look production-like
+  // (`https://dev-api.calibrafacil.com`) even though the process is the local
+  // one with `NODE_ENV=development`. URL-based inference must not override that.
+  if (runtimeEnv === "development" || runtimeEnv === "test") {
+    return false;
+  }
+  if (runtimeEnv === "production") {
+    return true;
+  }
+
+  // No explicit runtime env: fall back to URL inference.
   const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")];
 
   if (configuredUrls.some(isLocalDevelopmentUrl)) {
@@ -191,6 +204,24 @@ function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
     return hostname.endsWith(".calibrafacil.com") ? ".calibrafacil.com" : null;
   } catch {
     return null;
+  }
+}
+
+function shouldUseCrossSubDomainCookies(
+  isProduction: boolean,
+  apiUrl: string | undefined,
+  cookieDomain: string | null,
+) {
+  if (!cookieDomain || !apiUrl) return false;
+  if (isProduction) return true;
+
+  try {
+    const url = new URL(apiUrl);
+    return (
+      url.protocol === "https:" && url.hostname.endsWith(".calibrafacil.com")
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -252,6 +283,9 @@ const DEV_TRUSTED_ORIGINS = [
   "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "https://dev-web.calibrafacil.com",
+  "https://dev-portal.calibrafacil.com",
+  "https://dev-api.calibrafacil.com",
   "http://192.168.0.10:5173",
   "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
@@ -1012,12 +1046,17 @@ function createSharedConfig(surface: AuthSurface) {
   const configuredApiUrl = readEnv("API_URL");
   const crossSubDomainCookieDomain =
     getCookieDomainFromApiUrl(configuredApiUrl);
-  // Enable whenever the configured API host is a .calibrafacil.com subdomain,
-  // regardless of production/dev. In dev, this lets the lab_session /
-  // portal_session cookies be shared across dev-web and dev-portal tunnels;
-  // in prod, it preserves the existing api.calibrafacil.com → frontends
-  // behavior.
-  const useCrossSubDomainCookies = Boolean(crossSubDomainCookieDomain);
+  // Enable cross-sub-domain cookies whenever the API host is on the
+  // .calibrafacil.com zone. In dev, this lets the lab_session / portal_session
+  // cookies be shared across dev-web and dev-portal tunnels; in prod, it
+  // preserves the existing api.calibrafacil.com → frontends behavior.
+  // shouldUseCrossSubDomainCookies adds an extra https/protocol guard so that
+  // plaintext .calibrafacil.com hosts cannot opt in by accident.
+  const useCrossSubDomainCookies = shouldUseCrossSubDomainCookies(
+    isProduction,
+    configuredApiUrl,
+    crossSubDomainCookieDomain,
+  );
   const useSecureCookies =
     isProduction || configuredApiUrl?.startsWith("https://") === true;
   const authSecret = resolveAuthSecret(isProduction);

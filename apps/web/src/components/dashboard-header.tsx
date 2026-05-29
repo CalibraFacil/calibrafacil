@@ -56,6 +56,8 @@ const routeLabels: Record<string, string> = {
   '/dashboard/internal': 'Operação Interna',
   '/dashboard/internal/customer-success': 'Customer Success',
   '/dashboard/finance': 'Financeiro',
+  '/dashboard/finance/billing-readiness': 'Pronto para faturar',
+  '/dashboard/finance/receivables': 'Recebíveis',
   '/dashboard/finance/documents': 'Documentos financeiros',
   '/dashboard/finance/documents/new': 'Nova cobrança',
   '/dashboard/finance/documents/$id': 'Documento financeiro',
@@ -63,6 +65,8 @@ const routeLabels: Record<string, string> = {
   '/dashboard/finance/contracts': 'Contratos comerciais',
   '/dashboard/finance/contracts/new': 'Novo contrato comercial',
   '/dashboard/finance/contracts/$id': 'Contrato comercial',
+  '/dashboard/finance/analytics': 'Análises financeiras',
+  '/dashboard/finance/automation': 'Automação financeira',
   '/dashboard/finance/erp': 'ERP financeiro',
 
   // Clients

@@ -79,6 +79,7 @@ import {
   REVIEW_SURFACE_CLASS,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
+import { CertificateReleaseControl } from '@/features/finance/certificate-release'
 
 interface ApprovedJobRecordProps {
   job: ApprovedJobRecordData
@@ -399,7 +400,7 @@ export function ApprovedJobRecord({
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <Badge
             variant={job.status === 'SUPERSEDED' ? 'outline' : 'default'}
             className={
@@ -414,6 +415,10 @@ export function ApprovedJobRecord({
             />
             {job.status === 'SUPERSEDED' ? 'Retificado' : 'Aprovado'}
           </Badge>
+          <CertificateReleaseControl
+            calibrationJobId={job.id}
+            jobStatus={job.status}
+          />
         </div>
       </section>
 

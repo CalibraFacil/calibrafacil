@@ -1,16 +1,29 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
-import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
+import { formatFinanceDate } from '@/lib/finance-formatters'
+import { Money } from '@/features/finance/finance-display'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintField,
+  BlueprintGrid,
+  BlueprintOverlay,
+  InfoHint,
+  Panel,
+  PanelHeader,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -19,231 +32,238 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { calibraApi } from '@/utils/api'
-import { useFinanceContractDetailData } from '@/features/finance/queries'
+import {
+  useFinanceContractDetailData,
+  useFinanceContractServiceOptionsData,
+} from '@/features/finance/queries'
+import {
+  useActivateContractMutation,
+  useCancelContractMutation,
+} from '@/features/finance/mutations'
 import type { FinanceContractDetails } from '@/features/finance/types'
 
+const QUALIFICATION_LABELS: Record<string, string> = {
+  qualified: 'Qualificado',
+  suspended: 'Suspenso',
+  expired: 'Expirado',
+}
+
 export function FinanceContractDetailsPage({ id }: { id: string }) {
-  const queryClient = useQueryClient()
+  const [cancelOpen, setCancelOpen] = useState(false)
 
   const contractQuery = useFinanceContractDetailData<{
     data: FinanceContractDetails
   }>(id)
+  const serviceOptionsQuery = useFinanceContractServiceOptionsData()
 
-  const activateMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.finance.activateContract(id)
-    },
-    onSuccess: () => {
-      toast.success('Contrato ativado')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'contracts'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.finance.cancelContract(id)
-    },
-    onSuccess: () => {
-      toast.success('Contrato cancelado')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'contracts'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
+  const activateMutation = useActivateContractMutation()
+  const cancelMutation = useCancelContractMutation()
 
   const contract = contractQuery.data?.data
 
   if (!contract) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Contrato comercial</CardTitle>
-          <CardDescription>
-            {contractQuery.isPending
-              ? 'Carregando contrato...'
-              : 'Contrato não encontrado.'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel className="p-6">
+        <PanelHeader
+          eyebrow="Contrato comercial"
+          title={
+            contractQuery.isPending
+              ? 'Carregando contrato…'
+              : 'Contrato não encontrado'
+          }
+        />
+      </Panel>
     )
   }
 
+  const serviceName = (serviceId: number) =>
+    serviceOptionsQuery.data?.data.find((option) => option.id === serviceId)
+      ?.name ?? `Serviço #${serviceId}`
+
+  const compliance = contract.customerCompliance
+  const qualification = compliance?.qualificationStatus
+    ? (QUALIFICATION_LABELS[compliance.qualificationStatus] ?? 'Pendente')
+    : 'Pendente'
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <CardTitle>{contract.title}</CardTitle>
-              <CommercialAgreementStatusBadge status={contract.status} />
+    <StaggerGroup className="space-y-6">
+      <StaggerItem>
+        <Panel className="relative overflow-hidden p-5 sm:p-6">
+          <BlueprintOverlay />
+          <div className="relative flex flex-col gap-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Contrato comercial
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                    {contract.title}
+                  </h1>
+                  <CommercialAgreementStatusBadge status={contract.status} />
+                </div>
+                <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                  {contract.customerName} ·{' '}
+                  {contract.agreementCode || `#${contract.id}`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {contract.status === 'DRAFT' ? (
+                  <Button
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() =>
+                      activateMutation.mutate(id, {
+                        onSuccess: () => toast.success('Contrato ativado'),
+                      })
+                    }
+                    disabled={activateMutation.isPending}
+                  >
+                    {activateMutation.isPending ? 'Ativando…' : 'Ativar contrato'}
+                  </Button>
+                ) : null}
+                {contract.status === 'ACTIVE' ? (
+                  <Button
+                    variant="outline"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => setCancelOpen(true)}
+                  >
+                    Cancelar contrato
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <CardDescription>
-              {contract.customerName} ·{' '}
-              {contract.agreementCode || `#${contract.id}`}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {contract.status === 'DRAFT' && (
-              <Button
-                onClick={() => activateMutation.mutate()}
-                disabled={activateMutation.isPending}
-              >
-                {activateMutation.isPending ? 'Ativando...' : 'Ativar contrato'}
-              </Button>
-            )}
-            {contract.status === 'ACTIVE' && (
-              <Button
-                variant="outline"
-                onClick={() => cancelMutation.mutate()}
-                disabled={cancelMutation.isPending}
-              >
-                {cancelMutation.isPending
-                  ? 'Cancelando...'
-                  : 'Cancelar contrato'}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem
-            label="Moeda"
-            value={contract.currency === 'BRL' ? 'R$' : contract.currency}
-          />
-          <InfoItem
-            label="Vigência inicial"
-            value={formatFinanceDate(contract.effectiveFrom)}
-          />
-          <InfoItem
-            label="Vigência final"
-            value={
-              contract.effectiveTo
-                ? formatFinanceDate(contract.effectiveTo)
-                : 'Sem término'
-            }
-          />
-          <InfoItem
-            label="Prazo padrão"
-            value={`${contract.defaultPaymentTermDays} dias`}
-          />
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Compatibilidade com Compliance</CardTitle>
-          <CardDescription>
-            O contrato ativo alimenta o cadastro de conformidade do cliente.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem
-            label="Status de qualificação"
-            value={
-              contract.customerCompliance?.qualificationStatus === 'qualified'
-                ? 'Qualificado'
-                : contract.customerCompliance?.qualificationStatus ===
-                    'suspended'
-                  ? 'Suspenso'
-                  : contract.customerCompliance?.qualificationStatus ===
-                      'expired'
-                    ? 'Expirado'
-                    : 'Pendente'
-            }
-          />
-          <InfoItem
-            label="Requisitos reconhecidos"
-            value={
-              contract.customerCompliance?.qualityRequirementsAcknowledged
-                ? 'Sim'
-                : 'Não'
-            }
-          />
-          <InfoItem
-            label="Reconhecimento do cliente"
-            value={
-              contract.customerCompliance?.contractSignedAt
-                ? formatFinanceDate(
-                    contract.customerCompliance.contractSignedAt,
-                  )
-                : 'Não registrado'
-            }
-          />
-          <InfoItem
-            label="Contrato sincronizado"
-            value={
-              contract.customerCompliance?.contractNumber ||
-              `Contrato #${contract.id}`
-            }
-          />
-        </CardContent>
-      </Card>
+            <BlueprintGrid className="grid-cols-2 xl:grid-cols-4">
+              <BlueprintField label="Moeda">
+                {contract.currency === 'BRL' ? 'R$ (BRL)' : contract.currency}
+              </BlueprintField>
+              <BlueprintField label="Vigência inicial">
+                {formatFinanceDate(contract.effectiveFrom)}
+              </BlueprintField>
+              <BlueprintField label="Vigência final">
+                {contract.effectiveTo
+                  ? formatFinanceDate(contract.effectiveTo)
+                  : 'Sem término'}
+              </BlueprintField>
+              <BlueprintField label="Prazo padrão" mono>
+                {contract.defaultPaymentTermDays} dias
+              </BlueprintField>
+            </BlueprintGrid>
+          </div>
+        </Panel>
+      </StaggerItem>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tabela negociada</CardTitle>
-          <CardDescription>
-            Estes valores alimentam o snapshot comercial dos jobs novos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Serviço</TableHead>
-                <TableHead>Unidade</TableHead>
-                <TableHead>Moeda</TableHead>
-                <TableHead className="text-right">Preço</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {contract.serviceTerms.map(
-                (term: {
-                  id: number
-                  serviceId: number
-                  unitId: number | null
-                  priceCents: number
-                  currency: string
-                }) => (
+      <StaggerItem>
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            eyebrow="Conformidade"
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Compatibilidade com Compliance
+                <InfoHint>
+                  Um contrato ativo alimenta o cadastro de conformidade do
+                  cliente (qualificação, requisitos e datas de reconhecimento).
+                </InfoHint>
+              </span>
+            }
+            description="Reflete o estado de qualificação do cliente vinculado."
+          />
+          <BlueprintGrid className="mt-4 grid-cols-2 xl:grid-cols-4">
+            <BlueprintField label="Qualificação">{qualification}</BlueprintField>
+            <BlueprintField label="Requisitos reconhecidos">
+              {compliance?.qualityRequirementsAcknowledged ? 'Sim' : 'Não'}
+            </BlueprintField>
+            <BlueprintField label="Reconhecimento do cliente">
+              {compliance?.contractSignedAt
+                ? formatFinanceDate(compliance.contractSignedAt)
+                : 'Não registrado'}
+            </BlueprintField>
+            <BlueprintField label="Contrato sincronizado">
+              {compliance?.contractNumber || `Contrato #${contract.id}`}
+            </BlueprintField>
+          </BlueprintGrid>
+        </Panel>
+      </StaggerItem>
+
+      <StaggerItem>
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            eyebrow="Tabela negociada"
+            title="Preços por serviço"
+            description="Estes valores alimentam o snapshot comercial dos jobs novos."
+          />
+          <div className="mt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Serviço</TableHead>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead className="text-right">Preço</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contract.serviceTerms.map((term) => (
                   <TableRow key={term.id}>
-                    <TableCell>Serviço #{term.serviceId}</TableCell>
-                    <TableCell>
-                      {term.unitId ? `Unidade #${term.unitId}` : 'Geral'}
+                    <TableCell className="font-medium">
+                      {serviceName(term.serviceId)}
                     </TableCell>
-                    <TableCell>{term.currency}</TableCell>
+                    <TableCell>
+                      {term.unitId ? `Unidade #${term.unitId}` : 'Todas'}
+                    </TableCell>
                     <TableCell className="text-right">
-                      {formatFinanceMoney(term.priceCents, term.currency)}
+                      <Money cents={term.priceCents} currency={term.currency} />
                     </TableCell>
                   </TableRow>
-                ),
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Panel>
+      </StaggerItem>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Observações</CardTitle>
-          <CardDescription>
-            Notas internas e condições vinculadas ao contrato.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {contract.notes || 'Sem observações registradas.'}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+      <StaggerItem>
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader eyebrow="Notas" title="Observações" />
+          <p className="mt-3 text-pretty text-sm text-muted-foreground">
+            {contract.notes || 'Sem observações registradas.'}
+          </p>
+        </Panel>
+      </StaggerItem>
 
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs uppercase tracking-wide">
-        {label}
-      </div>
-      <div className="mt-2 font-medium">{value}</div>
-    </div>
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar contrato</DialogTitle>
+            <DialogDescription>
+              O cancelamento encerra o contrato e interrompe novos snapshots
+              comerciais a partir dele. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCancelOpen(false)}
+            >
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              disabled={cancelMutation.isPending}
+              onClick={() =>
+                cancelMutation.mutate(id, {
+                  onSuccess: () => {
+                    toast.success('Contrato cancelado')
+                    setCancelOpen(false)
+                  },
+                })
+              }
+            >
+              {cancelMutation.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StaggerGroup>
   )
 }

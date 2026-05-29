@@ -337,7 +337,7 @@ type OrganizationFixture = {
   name: string
   slug: string
   type: 'LAB' | 'CLIENT'
-  members: Array<{ role: string }>
+  members: Array<{ role: string; userId?: string; user?: { id: string } }>
 }
 
 async function readJsonPayload(data: string | null) {

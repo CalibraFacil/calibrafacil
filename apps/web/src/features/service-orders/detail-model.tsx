@@ -10,6 +10,10 @@ import {
 import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
 import type { EventTimelineItem } from '@/components/event-timeline'
 import type {
+  FinancialContinuityStatus,
+  ServiceOrderFinancialStatus,
+} from '@calibra-facil/shared'
+import type {
   ServiceOrderDetail,
   ServiceOrderExecutionResult,
   ServiceOrderItemType,
@@ -127,12 +131,87 @@ export function money(cents: number) {
   }).format(cents / 100)
 }
 
+type FinancialStatusBadgeVariant =
+  | 'default'
+  | 'secondary'
+  | 'destructive'
+  | 'outline'
+
+export function financialStatusBadgeVariant(
+  status: FinancialContinuityStatus,
+): FinancialStatusBadgeVariant {
+  switch (status) {
+    case 'OVERDUE':
+    case 'BLOCKED':
+      return 'destructive'
+    case 'SYNCHRONIZED_WITH_WARNINGS':
+    case 'STATUS_UNAVAILABLE':
+      return 'outline'
+    case 'PAID':
+      return 'default'
+    case 'READY_FOR_BILLING':
+    case 'INVOICE_AVAILABLE':
+    case 'SENT_TO_FINANCE':
+    case 'AWAITING_PAYMENT':
+    case 'PARTIALLY_PAID':
+      return 'secondary'
+    case 'NOT_CONFIGURED':
+    case 'NOT_SENT':
+    case 'VOID':
+      return 'outline'
+  }
+}
+
 export function formatDateTime(value?: string | null) {
   if (!value) return 'Não informado'
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+export function formatDate(value?: string | null) {
+  if (!value) return 'Não informado'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+  }).format(new Date(value))
+}
+
+export function serviceOrderFinancialStatusSummary(
+  status: ServiceOrderFinancialStatus,
+) {
+  const openCents = status.installments
+    .filter((installment) => installment.status === 'OPEN')
+    .reduce((sum, installment) => sum + installment.amountCents, 0)
+  const overdueCents = status.installments
+    .filter((installment) => installment.status === 'OVERDUE')
+    .reduce((sum, installment) => sum + installment.amountCents, 0)
+  const receivedCents = status.receipts.reduce(
+    (sum, receipt) => sum + receipt.amountCents,
+    0,
+  )
+  const lastUpdateLabel = status.freshness.lastSyncedAt
+    ? formatDateTime(status.freshness.lastSyncedAt)
+    : status.freshness.label
+  const evidenceBaseLabel =
+    status.providerEvidence?.label ?? status.freshness.label
+  const evidenceReconnectPath = status.providerEvidence?.reconnectPath ?? null
+
+  return {
+    badgeVariant: financialStatusBadgeVariant(status.status),
+    totalLabel: money(status.billingDocument?.totalCents ?? status.amountCents),
+    dueDateLabel: status.billingDocument
+      ? formatDate(status.billingDocument.dueDate)
+      : 'Sem vencimento',
+    fiscalLabel: status.fiscalDocument.label,
+    openLabel: money(openCents),
+    overdueCents,
+    overdueLabel: money(overdueCents),
+    receivedLabel: money(receivedCents),
+    lastUpdateLabel,
+    evidenceLabel: evidenceReconnectPath ? 'Reconectar' : evidenceBaseLabel,
+    evidenceReconnectPath,
+  }
 }
 
 export function parseMoneyToCents(value: string) {
@@ -308,7 +387,8 @@ export function buildServiceOrderIntakeHtml(
 }
 
 export function getPublicUrl(result: unknown) {
-  if (!result || typeof result !== 'object' || Array.isArray(result)) return null
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    return null
   const record = Object.fromEntries(Object.entries(result))
   if (typeof record.publicUrl === 'string') return record.publicUrl
   const data = record.data

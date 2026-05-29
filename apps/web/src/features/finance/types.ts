@@ -1,3 +1,20 @@
+import type {
+  BillingIntegrationState,
+  BillingReadinessItem,
+  BillingReadinessSummary,
+} from '@calibra-facil/shared'
+
+export type BillingReadinessResponse = {
+  billing: {
+    planId: string
+    planName: string
+    hasFinancialIntegrations: boolean
+    integrationState: BillingIntegrationState
+  }
+  summary: BillingReadinessSummary
+  data: BillingReadinessItem[]
+}
+
 export type FinanceOverviewResponse = {
   totals: {
     issuedCents: number
@@ -14,6 +31,7 @@ export type FinanceOverviewResponse = {
   aging: Record<string, number>
   recentDocuments: Array<{
     id: number
+    publicId: string
     documentNumber: string | null
     status: string
     exportStatus: string
@@ -28,6 +46,7 @@ export type FinanceOverviewResponse = {
 
 export type BillingDocumentListItem = {
   id: number
+  publicId: string
   documentNumber: string | null
   status: string
   customerId: number
@@ -50,6 +69,7 @@ export type BillingDocumentsListData = {
 
 export type BillingDocumentDetails = {
   id: number
+  publicId: string
   documentNumber: string | null
   status: string
   customerName: string
@@ -202,7 +222,7 @@ export type ErpExportsResponse = {
   billing: {
     planId: string
     planName: string
-    hasCustomIntegrations: boolean
+    hasFinancialIntegrations: boolean
   }
   data: Array<{
     id: number

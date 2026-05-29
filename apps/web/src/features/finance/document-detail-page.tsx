@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { ColumnDef } from '@tanstack/react-table'
+
+import { getReceivableInstallmentStatusLabel } from '@calibra-facil/shared'
 
 import { useFinanceAccess } from '@/hooks/use-finance-access'
 import {
@@ -8,14 +10,22 @@ import {
   ExportStatusBadge,
 } from '@/components/finance-status-badges'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
-import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Money,
+  billingDocumentToneOf,
+  installmentToneOf,
+} from '@/features/finance/finance-display'
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+} from '@/components/instrument-panel'
+import { Button } from '@/components/ui/button'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import {
   Dialog,
   DialogContent,
@@ -26,21 +36,137 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+import { FinanceDataTable } from '@/features/finance/components/finance-data-table'
 import { Textarea } from '@/components/ui/textarea'
-import { calibraApi } from '@/utils/api'
 import { useFinanceDocumentDetailData } from '@/features/finance/queries'
+import {
+  useExportErpDocumentMutation,
+  useIssueDocumentMutation,
+  useUpdateDocumentMutation,
+  useVoidDocumentMutation,
+} from '@/features/finance/mutations'
+import { DocumentTimeline } from '@/features/finance/document-timeline'
 import type { BillingDocumentDetails } from '@/features/finance/types'
 
+function installmentStatusLabel(value: string): string {
+  switch (value) {
+    case 'OPEN':
+    case 'PAID':
+    case 'OVERDUE':
+    case 'VOID':
+      return getReceivableInstallmentStatusLabel(value)
+    default:
+      return value
+  }
+}
+
+type DocumentItem = BillingDocumentDetails['items'][number]
+type DocumentInstallment = BillingDocumentDetails['installments'][number]
+
+function makeItemColumns(currency: string): ColumnDef<DocumentItem, unknown>[] {
+  return [
+    {
+      accessorKey: 'description',
+      id: 'description',
+      header: 'Descrição',
+      enableHiding: false,
+      cell: ({ row }) => row.original.description,
+    },
+    {
+      accessorKey: 'jobDisplayId',
+      id: 'jobDisplayId',
+      header: 'OS',
+      meta: { label: 'OS' },
+      cell: ({ row }) => row.original.jobDisplayId ?? 'Manual',
+    },
+    {
+      accessorKey: 'quantity',
+      id: 'quantity',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Qtd." />
+      ),
+      meta: { label: 'Qtd.' },
+      cell: ({ row }) => (
+        <span className="font-mono tabular-nums">{row.original.quantity}</span>
+      ),
+    },
+    {
+      accessorKey: 'unitPriceCents',
+      id: 'unitPriceCents',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Unitário" />
+      ),
+      meta: { label: 'Unitário' },
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Money cents={row.original.unitPriceCents} currency={currency} />
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'totalCents',
+      id: 'totalCents',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Total" />
+      ),
+      meta: { label: 'Total' },
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Money cents={row.original.totalCents} currency={currency} />
+        </div>
+      ),
+    },
+  ]
+}
+
+const installmentColumns: ColumnDef<DocumentInstallment, unknown>[] = [
+  {
+    accessorKey: 'installmentNumber',
+    id: 'installmentNumber',
+    header: 'Parcela',
+    enableHiding: false,
+    cell: ({ row }) => (
+      <span className="font-mono tabular-nums">
+        {row.original.installmentNumber}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'status',
+    id: 'status',
+    header: 'Status',
+    cell: ({ row }) => installmentStatusLabel(row.original.status),
+  },
+  {
+    accessorKey: 'dueDate',
+    id: 'dueDate',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Vencimento" />
+    ),
+    meta: { label: 'Vencimento' },
+    cell: ({ row }) => formatFinanceDate(row.original.dueDate),
+  },
+  {
+    accessorKey: 'amountCents',
+    id: 'amountCents',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Valor" />
+    ),
+    meta: { label: 'Valor' },
+    cell: ({ row }) => (
+      <div className="text-right">
+        <Money
+          cents={row.original.amountCents}
+          currency={row.original.currency}
+          tone={installmentToneOf(row.original.status)}
+        />
+      </div>
+    ),
+  },
+]
+
 export function FinanceDocumentDetailsPage({ id }: { id: string }) {
-  const queryClient = useQueryClient()
   const financeAccess = useFinanceAccess()
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [voidReason, setVoidReason] = useState('')
@@ -48,328 +174,212 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
   const documentQuery = useFinanceDocumentDetailData<{
     data: BillingDocumentDetails
   }>(id)
-
   const document = documentQuery.data?.data
 
-  const updateMutation = useMutation({
-    mutationFn: async (draft: {
-      dueDate: string
-      discountCents: string
-      notes: string
-    }) => {
-      return calibraApi.finance.updateDocument(id, {
-        dueDate: draft.dueDate
-          ? new Date(draft.dueDate).toISOString()
-          : undefined,
-        notes: draft.notes,
-        discountCents: Number(draft.discountCents) || 0,
-      })
-    },
-    onSuccess: () => {
-      toast.success('Documento atualizado')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents', id] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'overview'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-
-  const issueMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.finance.issueDocument(id)
-    },
-    onSuccess: () => {
-      toast.success('Documento emitido')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents', id] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'overview'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-
-  const voidMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.finance.voidDocument(id, { reason: voidReason })
-    },
-    onSuccess: () => {
-      toast.success('Documento anulado')
-      setVoidDialogOpen(false)
-      setVoidReason('')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents', id] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'overview'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-
-  const exportMutation = useMutation({
-    mutationFn: async () => {
-      return calibraApi.finance.exportErpDocument(id)
-    },
-    onSuccess: () => {
-      toast.success('Documento exportado para o ERP')
-      queryClient.invalidateQueries({ queryKey: ['finance', 'documents', id] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'erp'] })
-      queryClient.invalidateQueries({ queryKey: ['finance', 'overview'] })
-    },
-    onError: (error) => toast.error(error.message),
-  })
+  const issueMutation = useIssueDocumentMutation()
+  const exportMutation = useExportErpDocumentMutation()
+  const updateMutation = useUpdateDocumentMutation()
+  const voidMutation = useVoidDocumentMutation()
 
   if (!document) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Documento financeiro</CardTitle>
-          <CardDescription>
-            {documentQuery.isPending
-              ? 'Carregando documento...'
-              : 'Documento não encontrado.'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel className="p-6">
+        <PanelHeader
+          eyebrow="Documento financeiro"
+          title={
+            documentQuery.isPending
+              ? 'Carregando documento…'
+              : 'Documento não encontrado'
+          }
+        />
+      </Panel>
     )
   }
 
   const canExport =
     financeAccess.data?.canExportFinancial &&
     ['ISSUED', 'PAID', 'OVERDUE'].includes(document.status)
+  const isDraft = document.status === 'DRAFT'
+  const itemColumns = makeItemColumns(document.currency)
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <CardTitle>
-                {document.documentNumber ?? `Rascunho #${document.id}`}
-              </CardTitle>
-              <BillingDocumentStatusBadge status={document.status} />
-              <ExportStatusBadge status={document.exportStatus} />
+    <StaggerGroup className="space-y-6">
+      <StaggerItem>
+        <Panel className="relative overflow-hidden p-5 sm:p-6">
+          <BlueprintOverlay />
+          <div className="relative flex flex-col gap-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Documento financeiro
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+                    {document.documentNumber ?? `Rascunho #${document.id}`}
+                  </h1>
+                  <BillingDocumentStatusBadge status={document.status} />
+                  <ExportStatusBadge status={document.exportStatus} />
+                </div>
+                <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
+                  {document.customerName} · {document.unitName}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {isDraft ? (
+                  <Button
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() =>
+                      issueMutation.mutate(document.id, {
+                        onSuccess: () => toast.success('Documento emitido'),
+                      })
+                    }
+                    disabled={issueMutation.isPending}
+                  >
+                    {issueMutation.isPending ? 'Emitindo…' : 'Emitir documento'}
+                  </Button>
+                ) : null}
+                {document.status !== 'VOID' ? (
+                  <Button
+                    variant="outline"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => setVoidDialogOpen(true)}
+                  >
+                    Anular documento
+                  </Button>
+                ) : null}
+                {canExport ? (
+                  <Button
+                    variant="outline"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() =>
+                      exportMutation.mutate(document.id, {
+                        onSuccess: () =>
+                          toast.success('Documento exportado para o ERP'),
+                      })
+                    }
+                    disabled={exportMutation.isPending}
+                  >
+                    {exportMutation.isPending ? 'Exportando…' : 'Exportar ERP'}
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <CardDescription>
-              {document.customerName} · {document.unitName}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {document.status === 'DRAFT' && (
-              <>
-                <Button
-                  onClick={() => issueMutation.mutate()}
-                  disabled={issueMutation.isPending}
-                >
-                  {issueMutation.isPending ? 'Emitindo...' : 'Emitir documento'}
-                </Button>
-              </>
-            )}
-            {document.status !== 'VOID' && (
-              <Button variant="outline" onClick={() => setVoidDialogOpen(true)}>
-                Anular documento
-              </Button>
-            )}
-            {canExport && (
-              <Button
-                variant="outline"
-                onClick={() => exportMutation.mutate()}
-                disabled={exportMutation.isPending}
-              >
-                {exportMutation.isPending ? 'Exportando...' : 'Exportar ERP'}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem
-            label="Emissão"
-            value={formatFinanceDate(document.issueDate)}
-          />
-          <InfoItem
-            label="Vencimento"
-            value={formatFinanceDate(document.dueDate)}
-          />
-          <InfoItem
-            label="Subtotal"
-            value={formatFinanceMoney(
-              document.subtotalCents,
-              document.currency,
-            )}
-          />
-          <InfoItem
-            label="Total"
-            value={formatFinanceMoney(document.totalCents, document.currency)}
-          />
-        </CardContent>
-      </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Itens do documento</CardTitle>
-            <CardDescription>
-              Cada item foi materializado a partir do snapshot comercial da OS.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>OS</TableHead>
-                  <TableHead>Qtd.</TableHead>
-                  <TableHead className="text-right">Unitário</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {document.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.description}</TableCell>
-                    <TableCell>{item.jobDisplayId ?? 'Manual'}</TableCell>
-                    <TableCell>{item.quantity}</TableCell>
-                    <TableCell className="text-right">
-                      {formatFinanceMoney(
-                        item.unitPriceCents,
-                        document.currency,
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatFinanceMoney(item.totalCents, document.currency)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Parâmetros do documento</CardTitle>
-            <CardDescription>
-              Rascunhos permitem ajustar vencimento, desconto e observações.
-            </CardDescription>
-          </CardHeader>
-          <DocumentParametersCard
-            key={`${document.id}:${document.dueDate}:${document.discountCents}:${document.notes ?? ''}`}
-            document={document}
-            isSaving={updateMutation.isPending}
-            onSave={(draft) => updateMutation.mutate(draft)}
-          />
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Parcela e recebimentos</CardTitle>
-            <CardDescription>
-              O MVP trabalha com parcela única e baixa integral manual.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Parcela</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {document.installments.map((installment) => (
-                  <TableRow key={installment.id}>
-                    <TableCell>{installment.installmentNumber}</TableCell>
-                    <TableCell>{installment.status}</TableCell>
-                    <TableCell>
-                      {formatFinanceDate(installment.dueDate)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatFinanceMoney(
-                        installment.amountCents,
-                        installment.currency,
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Recebido em</TableHead>
-                  <TableHead>Método</TableHead>
-                  <TableHead>Referência</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {document.receipts.length > 0 ? (
-                  document.receipts.map((receipt) => (
-                    <TableRow key={receipt.id}>
-                      <TableCell>
-                        {formatFinanceDate(receipt.receivedAt)}
-                      </TableCell>
-                      <TableCell>{receipt.paymentMethod}</TableCell>
-                      <TableCell>
-                        {receipt.reference || 'Sem referência'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatFinanceMoney(
-                          receipt.amountCents,
-                          document.currency,
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="text-muted-foreground text-center"
-                    >
-                      Nenhuma baixa registrada.
-                    </TableCell>
-                  </TableRow>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SignalTile
+                label="Total"
+                value={formatFinanceMoney(document.totalCents, document.currency)}
+                tone={billingDocumentToneOf(document.status)}
+              />
+              <SignalTile
+                label="Subtotal"
+                value={formatFinanceMoney(
+                  document.subtotalCents,
+                  document.currency,
                 )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                tone="neutral"
+              />
+              <SignalTile
+                label="Desconto"
+                value={formatFinanceMoney(
+                  document.discountCents,
+                  document.currency,
+                )}
+                tone={document.discountCents > 0 ? 'info' : 'neutral'}
+              />
+              <SignalTile
+                label="Vencimento"
+                value={formatFinanceDate(document.dueDate)}
+                hint={`emissão ${formatFinanceDate(document.issueDate)}`}
+                tone={document.status === 'OVERDUE' ? 'critical' : 'neutral'}
+              />
+            </div>
+          </div>
+        </Panel>
+      </StaggerItem>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Auditoria</CardTitle>
-            <CardDescription>
-              Trilha das ações aplicadas ao documento financeiro.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ação</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Motivo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {document.audit.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>{entry.action}</TableCell>
-                    <TableCell>
-                      {formatFinanceDate(entry.performedAt)}
-                    </TableCell>
-                    <TableCell>{entry.reason || 'Sem motivo'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+      <StaggerItem>
+        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              eyebrow="Composição"
+              title="Itens do documento"
+              description="Materializados a partir do snapshot comercial da OS."
+            />
+            <div className="mt-4">
+              <FinanceDataTable
+                columns={itemColumns}
+                data={document.items}
+                getRowId={(item) => String(item.id)}
+                searchPlaceholder="Buscar item"
+                emptyState="Sem itens."
+              />
+            </div>
+          </Panel>
+
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              eyebrow="Parâmetros"
+              title="Ajustes do rascunho"
+              description="Rascunhos permitem ajustar vencimento, desconto e observações."
+            />
+            <DocumentParametersCard
+              key={`${document.id}:${document.dueDate}:${document.discountCents}:${document.notes ?? ''}`}
+              document={document}
+              isSaving={updateMutation.isPending}
+              onSave={(draft) =>
+                updateMutation.mutate(
+                  {
+                    id: document.id,
+                    dueDate: draft.dueDate
+                      ? new Date(draft.dueDate).toISOString()
+                      : undefined,
+                    notes: draft.notes,
+                    discountCents: draft.discountCents,
+                  },
+                  { onSuccess: () => toast.success('Documento atualizado') },
+                )
+              }
+            />
+          </Panel>
+        </div>
+      </StaggerItem>
+
+      <StaggerItem>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              eyebrow="Recebíveis"
+              title="Parcelas"
+              description="Parcela única com baixa integral manual no MVP."
+            />
+            <div className="mt-4">
+              <FinanceDataTable
+                columns={installmentColumns}
+                data={document.installments}
+                getRowId={(installment) => String(installment.id)}
+                enableSearch={false}
+                emptyState="Sem parcelas."
+              />
+            </div>
+          </Panel>
+
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              eyebrow="Histórico"
+              title="Linha do tempo"
+              description="Auditoria e baixas em ordem cronológica."
+            />
+            <div className="mt-4">
+              <DocumentTimeline
+                audit={document.audit}
+                receipts={document.receipts}
+                currency={document.currency}
+              />
+            </div>
+          </Panel>
+        </div>
+      </StaggerItem>
 
       <Dialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
         <DialogContent>
@@ -385,7 +395,7 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
             <Textarea
               value={voidReason}
               onChange={(event) => setVoidReason(event.target.value)}
-              placeholder="Descreva o motivo..."
+              placeholder="Descreva o motivo…"
             />
           </Field>
           <DialogFooter>
@@ -398,15 +408,26 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
             </Button>
             <Button
               type="button"
-              onClick={() => voidMutation.mutate()}
-              disabled={voidMutation.isPending}
+              disabled={voidMutation.isPending || voidReason.trim().length === 0}
+              onClick={() =>
+                voidMutation.mutate(
+                  { id: document.id, reason: voidReason },
+                  {
+                    onSuccess: () => {
+                      toast.success('Documento anulado')
+                      setVoidDialogOpen(false)
+                      setVoidReason('')
+                    },
+                  },
+                )
+              }
             >
-              {voidMutation.isPending ? 'Anulando...' : 'Confirmar anulação'}
+              {voidMutation.isPending ? 'Anulando…' : 'Confirmar anulação'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaggerGroup>
   )
 }
 
@@ -419,18 +440,17 @@ function DocumentParametersCard({
   isSaving: boolean
   onSave: (draft: {
     dueDate: string
-    discountCents: string
+    discountCents: number
     notes: string
   }) => void
 }) {
   const [dueDate, setDueDate] = useState(document.dueDate.slice(0, 10))
-  const [discountCents, setDiscountCents] = useState(
-    String(document.discountCents),
-  )
+  const [discountCents, setDiscountCents] = useState(document.discountCents)
   const [notes, setNotes] = useState(document.notes ?? '')
+  const isDraft = document.status === 'DRAFT'
 
   return (
-    <CardContent className="space-y-4">
+    <div className="mt-4 space-y-4">
       <FieldGroup>
         <Field>
           <FieldLabel>Vencimento</FieldLabel>
@@ -438,17 +458,16 @@ function DocumentParametersCard({
             type="date"
             value={dueDate}
             onChange={(event) => setDueDate(event.target.value)}
-            disabled={document.status !== 'DRAFT'}
+            disabled={!isDraft}
           />
         </Field>
         <Field>
-          <FieldLabel>Desconto (centavos)</FieldLabel>
-          <Input
-            type="number"
-            min={0}
-            value={discountCents}
-            onChange={(event) => setDiscountCents(event.target.value)}
-            disabled={document.status !== 'DRAFT'}
+          <FieldLabel>Desconto</FieldLabel>
+          <CurrencyInput
+            valueCents={discountCents}
+            onValueChange={setDiscountCents}
+            currency={document.currency}
+            disabled={!isDraft}
           />
         </Field>
         <Field>
@@ -456,29 +475,19 @@ function DocumentParametersCard({
           <Textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            disabled={document.status !== 'DRAFT'}
+            disabled={!isDraft}
           />
         </Field>
       </FieldGroup>
-      {document.status === 'DRAFT' ? (
+      {isDraft ? (
         <Button
+          className={ACTION_BUTTON_CLASS}
           onClick={() => onSave({ dueDate, discountCents, notes })}
           disabled={isSaving}
         >
-          {isSaving ? 'Salvando...' : 'Salvar rascunho'}
+          {isSaving ? 'Salvando…' : 'Salvar rascunho'}
         </Button>
       ) : null}
-    </CardContent>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs uppercase tracking-wide">
-        {label}
-      </div>
-      <div className="mt-2 font-medium">{value}</div>
     </div>
   )
 }

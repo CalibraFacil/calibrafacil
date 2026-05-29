@@ -77,7 +77,7 @@ function OrganizationOnboardingPage() {
     (labOrganizations.length === 1 ? labOrganizations[0] : null)
   const isPending = isLoadingOrganizations || isLoadingActiveOrganization
 
-  async function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!labOrganization) return
 

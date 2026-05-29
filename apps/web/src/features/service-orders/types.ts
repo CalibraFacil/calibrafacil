@@ -1,4 +1,5 @@
 import type { ServiceOrdersListData as ClientRuntimeServiceOrdersListData } from '@calibra-facil/client-runtime'
+import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
 
 export const SERVICE_ORDER_STATUSES = [
   'opened',
@@ -41,6 +42,10 @@ export type ServiceOrdersListQueryInput = {
   limit: number
   search: string
   statusFilter: ServiceOrderStatus | ''
+}
+
+export type ServiceOrderFinancialStatusResponse = {
+  data: ServiceOrderFinancialStatus
 }
 
 export type ServiceOrderItemType =

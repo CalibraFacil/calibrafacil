@@ -45,6 +45,7 @@ import {
   issueTag,
   type ServiceOrderDocumentEnv,
 } from "../modules/service-orders/service-order.documents";
+import { createR2Client, generatePresignedUrl } from "../lib/storage";
 import { getScopedServiceOrder } from "../modules/service-orders/service-order.queries";
 import {
   getPortalCustomerForAuthOrganization,
@@ -56,6 +57,7 @@ import {
   getServiceOrderDetail,
   toClientVisibleServiceOrderDetail,
 } from "../modules/service-orders/service-order.read-model";
+import { buildPortalServiceOrderFinancialSummary } from "../lib/portal-financial-summary";
 import {
   approveQuoteWithPublicServiceOrderAccess,
   rejectQuoteWithPublicServiceOrderAccess,
@@ -769,6 +771,7 @@ export const serviceOrdersRouter = new Hono<{
   );
 
 export const portalServiceOrdersRouter = new Hono<{
+  Bindings: ServiceOrderEnv;
   Variables: AuthVariables;
 }>()
   .get(
@@ -790,6 +793,58 @@ export const portalServiceOrdersRouter = new Hono<{
       return c.json(
         await listServiceOrdersForPortalCustomer(linkedCustomer.id, query),
       );
+    },
+  )
+  .get(
+    "/:id/financial-summary",
+    ...requirePortalProtected,
+    requirePermission({ service_order: ["read"] }),
+    zValidator("param", IdParamSchema),
+    async (c) => {
+      if (c.get("authSource") !== "portal") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+
+      const member = c.get("member");
+      const linkedCustomer = await getPortalCustomerForAuthOrganization(
+        member.organizationId,
+      );
+      if (!linkedCustomer) return c.json({ error: "OS nao encontrada" }, 404);
+
+      const { id } = c.req.valid("param");
+      const detail = await getServiceOrderDetail(
+        id,
+        linkedCustomer.labOrganizationId,
+      );
+      if (!detail || detail.customerId !== linkedCustomer.id) {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (detail.unitId == null) {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+
+      let r2Client: ReturnType<typeof createR2Client> | null = null;
+
+      const summary = await buildPortalServiceOrderFinancialSummary({
+        organizationId: linkedCustomer.labOrganizationId,
+        serviceOrderId: id,
+        // The portal route has already scoped the order by org and linked
+        // customer. The shared financial read model still requires a unit
+        // scope, so keep it limited to the visible order's unit instead of
+        // inventing a broader client-side unit scope for portal users.
+        scope: {
+          activeUnitId: detail.unitId,
+          accessibleUnitIds: [detail.unitId],
+          selectedUnitScope: "unit",
+        },
+        documentHrefSigner: (r2Key) => {
+          r2Client ??= createR2Client(c.env);
+          return generatePresignedUrl(r2Client, c.env.R2_BUCKET_NAME, r2Key);
+        },
+      });
+
+      if (!summary) return c.json({ error: "OS nao encontrada" }, 404);
+      return c.json({ data: summary });
     },
   )
   .get(

@@ -9,6 +9,9 @@ const allowedOrigins = new Set([
   "https://portal.calibrafacil.com",
   "https://verify.calibrafacil.com",
   "https://api.calibrafacil.com",
+  "https://dev-web.calibrafacil.com",
+  "https://dev-portal.calibrafacil.com",
+  "https://dev-api.calibrafacil.com",
 ]);
 
 function isPrivateDevOrigin(origin: string, nodeEnv?: string): boolean {

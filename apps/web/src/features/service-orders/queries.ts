@@ -12,6 +12,7 @@ import {
   type NewServiceOrderCustomersData,
   SERVICE_ORDER_STATUSES,
   type ServiceOrderDetail,
+  type ServiceOrderFinancialStatusResponse,
   type ServiceOrdersListData,
   type ServiceOrdersListQueryInput,
   type ServiceOrderStatus,
@@ -64,6 +65,16 @@ export function serviceOrderDetailQueryOptions(id: string) {
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order detail DTOs need a runtime normalizer before this view-model cast can be removed.
       calibraApi.serviceOrders.get(id) as Promise<ServiceOrderDetail>,
+  })
+}
+
+export function serviceOrderFinancialStatusQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['service-order', id, 'financial-status'],
+    queryFn: () =>
+      calibraApi.finance.getServiceOrderStatus<ServiceOrderFinancialStatusResponse>(
+        id,
+      ),
   })
 }
 
@@ -215,6 +226,19 @@ export function useServiceOrdersListData({
 
 export function useServiceOrderDetailData(id: string) {
   return useQuery(serviceOrderDetailQueryOptions(id))
+}
+
+export function useServiceOrderFinancialStatusData({
+  enabled,
+  id,
+}: {
+  enabled: boolean
+  id: string
+}) {
+  return useQuery({
+    ...serviceOrderFinancialStatusQueryOptions(id),
+    enabled,
+  })
 }
 
 export function useNewServiceOrderCustomersData(search = '') {

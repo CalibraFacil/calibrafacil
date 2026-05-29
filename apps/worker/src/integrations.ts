@@ -12,13 +12,16 @@ import type {
   IntegrationDependencyWarning,
   IntegrationBillingDocumentPayload,
   IntegrationCustomerPayload,
+  IntegrationPayablePayload,
   IntegrationScheduleFrequency,
   IntegrationServiceOrderPayload,
+  IntegrationSupplierPayload,
   IntegrationSyncStatus,
   IntegrationSyncTarget,
   IntegrationSyncTrigger,
   IntegrationTargetCoverageSummary,
   IntegrationTargetScheduleConfig,
+  IntegrationTransporterPayload,
 } from "@calibra-facil/shared";
 
 export interface IntegrationSyncQueueMessage {
@@ -42,6 +45,9 @@ interface IntegrationWorkerEnv {
 
 type SyncPayload =
   | IntegrationCustomerPayload
+  | IntegrationSupplierPayload
+  | IntegrationTransporterPayload
+  | IntegrationPayablePayload
   | IntegrationServiceOrderPayload
   | IntegrationBillingDocumentPayload;
 
@@ -52,6 +58,14 @@ const INTEGRATION_TARGETS = [
 ] as const satisfies readonly IntegrationSyncTarget[];
 
 const DEFAULT_SYNC_LIMIT = 50;
+
+function isGenericHttpSyncTarget(
+  target: IntegrationSyncTarget,
+): target is (typeof INTEGRATION_TARGETS)[number] {
+  return INTEGRATION_TARGETS.includes(
+    target as (typeof INTEGRATION_TARGETS)[number],
+  );
+}
 
 function toIso(value: unknown): string | null {
   if (!value) return null;
@@ -255,6 +269,7 @@ async function fetchRuntime(
         INNER JOIN integration_connection ic ON ic.integration_id = oi.id
         WHERE oi.id = $1
           AND oi.organization_id = $2
+          AND oi.provider = 'generic_http'
         LIMIT 1
         `,
     [integrationId, organizationId],
@@ -299,6 +314,7 @@ async function loadPayloads(
       email: row.email,
       phone: row.phone,
       address: formatIntegrationCustomerAddress(row.address),
+      addressParts: row.address,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
     }));
@@ -315,6 +331,7 @@ async function loadPayloads(
               ou.name AS unit_name,
               c.id AS customer_id,
               c.name AS customer_name,
+              s.id AS service_id,
               a.name AS asset_name,
               a.tag AS asset_tag,
               s.name AS service_name,
@@ -347,6 +364,7 @@ async function loadPayloads(
         ? `customer:${row.customer_id}`
         : null,
       customerName: row.customer_name ?? null,
+      serviceExternalId: row.service_id ? `service:${row.service_id}` : null,
       assetName: row.asset_name ?? null,
       assetTag: row.asset_tag ?? null,
       serviceName: row.service_name ?? null,
@@ -567,6 +585,17 @@ function getTargetPath(
   target: IntegrationSyncTarget,
 ) {
   if (target === "customer") return config.customerPath;
+  if (
+    target === "catalog_item" ||
+    target === "contract" ||
+    target === "supplier" ||
+    target === "transporter" ||
+    target === "payable"
+  ) {
+    throw new Error(
+      "Este alvo é suportado apenas pelo provider Conta Azul",
+    );
+  }
   if (target === "service_order") return config.serviceOrderPath;
   return config.billingDocumentPath;
 }
@@ -798,6 +827,7 @@ export async function processScheduledIntegrationSyncs(
             FROM organization_integration oi
             INNER JOIN integration_connection ic ON ic.integration_id = oi.id
             WHERE oi.status = 'ACTIVE'
+              AND oi.provider = 'generic_http'
             `,
     );
 
@@ -933,6 +963,11 @@ export async function processIntegrationSync(
       if (!env.INTEGRATIONS_MASTER_KEY) {
         throw new Error("INTEGRATIONS_MASTER_KEY não configurada");
       }
+      if (!isGenericHttpSyncTarget(message.target)) {
+        throw new Error(
+          "Alvo de sincronização não suportado pelo worker generic_http",
+        );
+      }
 
       const validated =
         Boolean(runtime.lastValidatedAt) && !runtime.lastValidationError;
@@ -959,9 +994,14 @@ export async function processIntegrationSync(
           unlinkedCount: 0,
         };
       const coverageByTarget = {
+        catalog_item: getCoverage("catalog_item"),
+        contract: getCoverage("contract"),
         customer: getCoverage("customer"),
+        supplier: getCoverage("supplier"),
+        transporter: getCoverage("transporter"),
         service_order: getCoverage("service_order"),
         billing_document: getCoverage("billing_document"),
+        payable: getCoverage("payable"),
       } satisfies Record<
         IntegrationSyncTarget,
         IntegrationTargetCoverageSummary

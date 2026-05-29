@@ -31,6 +31,7 @@ export type FeatureFlag =
   | "math_engine" // Standard+: Advanced uncertainty calculations
   | "portal" // Standard+: Client portal access
   | "financial" // Professional+: Financial module (invoicing, payments)
+  | "financial_integrations" // Professional+: Native financial ERP integration (Conta Azul + connectors)
   | "api" // Professional+: API access for integrations
   | "custom_domain" // Professional+: Custom domain support
   | "sso" // Enterprise: SSO for lab dashboard access
@@ -50,6 +51,7 @@ export interface PlanEntitlements {
     | "math_engine"
     | "portal"
     | "financial"
+    | "financial_integrations"
     | "api"
     | "custom_domain"
     | "sso"
@@ -155,6 +157,11 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
     name: "Módulo Financeiro",
     description: "Faturamento e gestão de pagamentos",
   },
+  financial_integrations: {
+    category: "capabilities",
+    name: "Integrações Financeiras (ERP)",
+    description: "Continuidade financeira com ERPs como a Conta Azul",
+  },
   api: {
     category: "capabilities",
     name: "Acesso à API",
@@ -206,6 +213,7 @@ const FEATURE_FLAGS = [
   "math_engine",
   "portal",
   "financial",
+  "financial_integrations",
   "api",
   "custom_domain",
   "sso",
@@ -221,6 +229,7 @@ const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   math_engine: ["math_engine"],
   portal: ["portal"],
   financial: ["financial"],
+  financial_integrations: ["financial_integrations"],
   api: ["api"],
   custom_domain: ["custom_domain"],
   sso: ["sso"],
@@ -240,6 +249,7 @@ function createEntitlements(enabled: FeatureFlag[]): PlanEntitlements {
       math_engine: has("math_engine"),
       portal: has("portal"),
       financial: has("financial"),
+      financial_integrations: has("financial_integrations"),
       api: has("api"),
       custom_domain: has("custom_domain"),
       sso: has("sso"),
@@ -300,6 +310,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "math_engine",
       "portal",
       "financial",
+      "financial_integrations",
       "api",
       "custom_domain",
       "approval_workflow",
@@ -322,6 +333,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "math_engine",
       "portal",
       "financial",
+      "financial_integrations",
       "api",
       "custom_domain",
       "sso",

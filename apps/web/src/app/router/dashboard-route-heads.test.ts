@@ -11,6 +11,8 @@ const dashboardRoutesDir = join(
 
 const redirectOnlyDashboardRoutes = new Set([
   'clients/$id/index.tsx',
+  'finance/documents/index.tsx',
+  'finance/receipts.tsx',
   'internal/customer-success.tsx',
   'settings/billing.tsx',
   'settings/branding.tsx',

@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "lint": "oxlint",
+    "check-types": "tsgo --noEmit",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"
   },

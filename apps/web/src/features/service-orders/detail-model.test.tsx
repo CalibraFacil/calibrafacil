@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
 import type { ServiceOrderDetail } from './types'
 import {
   buildServiceOrderDetailFormKey,
   buildServiceOrderIntakeHtml,
   buildServiceOrderTimelineItems,
   createEmptyQuoteItem,
+  financialStatusBadgeVariant,
   getPublicUrl,
   parseMoneyToCents,
   quoteItemsTotal,
+  serviceOrderFinancialStatusSummary,
   toApiItems,
 } from './detail-model'
 
@@ -196,7 +199,194 @@ describe('service order detail model', () => {
     expect(html).toContain('Balança snapshot')
     consoleError.mockRestore()
   })
+
+  it('maps financial status to provider-neutral labels', () => {
+    expect(financialStatusBadgeVariant('OVERDUE')).toBe('destructive')
+    expect(financialStatusBadgeVariant('PAID')).toBe('default')
+    expect(financialStatusBadgeVariant('STATUS_UNAVAILABLE')).toBe('outline')
+
+    const summary = serviceOrderFinancialStatusSummary({
+      serviceOrderId: 1,
+      serviceOrderNumber: 'OS-1',
+      status: 'AWAITING_PAYMENT',
+      label: 'Aguardando confirmação de pagamento',
+      description: 'Sincronizado',
+      readinessStatus: 'SENT',
+      blockers: [],
+      amountCents: 50000,
+      currency: 'BRL',
+      billingDocument: {
+        id: 10,
+        documentNumber: 'FIN-10',
+        status: 'ISSUED',
+        exportStatus: 'EXPORTED',
+        issuedAt: '2026-05-20T00:00:00.000Z',
+        dueDate: '2026-06-20T00:00:00.000Z',
+        totalCents: 50000,
+        currency: 'BRL',
+      },
+      installments: [
+        {
+          id: 70,
+          installmentNumber: 1,
+          status: 'OPEN',
+          label: 'Aguardando pagamento',
+          amountCents: 30000,
+          currency: 'BRL',
+          dueDate: '2026-06-20T00:00:00.000Z',
+          paidAt: null,
+          paymentMethod: null,
+        },
+        {
+          id: 71,
+          installmentNumber: 2,
+          status: 'OVERDUE',
+          label: 'Em atraso',
+          amountCents: 20000,
+          currency: 'BRL',
+          dueDate: '2026-06-21T00:00:00.000Z',
+          paidAt: null,
+          paymentMethod: null,
+        },
+      ],
+      installmentsSummary: {
+        total: 2,
+        totalCents: 50000,
+        paidCents: 0,
+        openCents: 50000,
+        overdueCents: 20000,
+        paidCount: 0,
+        openCount: 1,
+        overdueCount: 1,
+        voidCount: 0,
+      },
+      receipts: [
+        {
+          id: 80,
+          installmentId: 70,
+          receivedAt: '2026-06-01T00:00:00.000Z',
+          amountCents: 10000,
+          paymentMethod: 'PIX',
+          reference: null,
+        },
+      ],
+      fiscalDocument: {
+        availability: 'AVAILABLE',
+        label: 'Documento fiscal disponível',
+        number: '123',
+        issuedAt: '2026-05-20T00:00:00.000Z',
+        accessKey: null,
+        xmlAvailable: false,
+        consultationOnly: true,
+        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+      },
+      freshness: {
+        status: 'fresh',
+        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        label: 'Sincronizado',
+      },
+      providerEvidence: null,
+    })
+
+    expect(summary).toMatchObject({
+      fiscalLabel: 'Documento fiscal disponível',
+      totalLabel: 'R$ 500,00',
+      openLabel: 'R$ 300,00',
+      overdueCents: 20000,
+      overdueLabel: 'R$ 200,00',
+      receivedLabel: 'R$ 100,00',
+      evidenceLabel: 'Sincronizado',
+      evidenceReconnectPath: null,
+    })
+  })
+
+  it('keeps reconnect labels generic and avoids duplicate stale timestamps', () => {
+    const reconnectSummary = serviceOrderFinancialStatusSummary({
+      ...financialStatusFixture(),
+      providerEvidence: {
+        label: 'Reconecte Conta Azul para atualizar o status',
+        integrationState: 'disconnected',
+        reconnectPath: '/dashboard/settings/integrations#financial-erp',
+      },
+    })
+
+    expect(reconnectSummary).toMatchObject({
+      evidenceLabel: 'Reconectar',
+      evidenceReconnectPath: '/dashboard/settings/integrations#financial-erp',
+    })
+
+    const staleSummary = serviceOrderFinancialStatusSummary({
+      ...financialStatusFixture(),
+      freshness: {
+        status: 'stale',
+        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        label: 'Status desatualizado',
+      },
+      providerEvidence: {
+        label: 'Conta Azul sem atualização recente',
+        integrationState: 'connected',
+        reconnectPath: null,
+      },
+    })
+
+    expect(staleSummary.evidenceLabel).toBe(
+      'Conta Azul sem atualização recente',
+    )
+  })
 })
+
+function financialStatusFixture(): ServiceOrderFinancialStatus {
+  return {
+    serviceOrderId: 1,
+    serviceOrderNumber: 'OS-1',
+    status: 'AWAITING_PAYMENT' as const,
+    label: 'Aguardando confirmação de pagamento',
+    description: 'Sincronizado',
+    readinessStatus: 'SENT' as const,
+    blockers: [],
+    amountCents: 50000,
+    currency: 'BRL',
+    billingDocument: {
+      id: 10,
+      documentNumber: 'FIN-10',
+      status: 'ISSUED' as const,
+      exportStatus: 'EXPORTED' as const,
+      issuedAt: '2026-05-20T00:00:00.000Z',
+      dueDate: '2026-06-20T00:00:00.000Z',
+      totalCents: 50000,
+      currency: 'BRL',
+    },
+    installments: [],
+    installmentsSummary: {
+      total: 0,
+      totalCents: 0,
+      paidCents: 0,
+      openCents: 0,
+      overdueCents: 0,
+      paidCount: 0,
+      openCount: 0,
+      overdueCount: 0,
+      voidCount: 0,
+    },
+    receipts: [],
+    fiscalDocument: {
+      availability: 'NONE' as const,
+      label: 'Sem documento fiscal vinculado',
+      number: null,
+      issuedAt: null,
+      accessKey: null,
+      xmlAvailable: false,
+      consultationOnly: true,
+      lastSyncedAt: null,
+    },
+    freshness: {
+      status: 'fresh' as const,
+      lastSyncedAt: '2026-05-20T00:00:00.000Z',
+      label: 'Sincronizado',
+    },
+    providerEvidence: null,
+  }
+}
 
 function serviceOrderDetail(): ServiceOrderDetail {
   return {

@@ -7,6 +7,7 @@
     "dev:bun": "bun node_modules/vite/bin/vite.js dev --port 5174 --host",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
     "check-types": "tsgo --noEmit",
     "deploy": "pnpm dlx vercel deploy --prod"
@@ -40,11 +41,14 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
+    "@testing-library/react": "^16.2.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^27.0.0",
     "typescript": "^5.7.2",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vitest": "^3.0.5"
   }
 }

@@ -58,6 +58,15 @@ export const dashboardRedirectRouteMeta = [
     from: '/dashboard/settings/branding',
     to: '/dashboard/certificate-templates',
   },
+  {
+    // Documents + receipts merged into the unified Recebíveis workspace.
+    from: '/dashboard/finance/documents',
+    to: '/dashboard/finance/receivables',
+  },
+  {
+    from: '/dashboard/finance/receipts',
+    to: '/dashboard/finance/receivables',
+  },
 ] satisfies DashboardRedirectRouteMeta[]
 
 export const dashboardPrimaryNavItems = [
@@ -148,24 +157,34 @@ export const dashboardPrimaryNavItems = [
     requiredRole: 'admin-or-owner',
     items: [
       {
-        title: 'Visão geral',
+        title: 'Painel',
         url: '/dashboard/finance',
         icon: 'analytics',
       },
       {
-        title: 'Documentos',
-        url: '/dashboard/finance/documents',
-        icon: 'file',
+        title: 'Pronto para faturar',
+        url: '/dashboard/finance/billing-readiness',
+        icon: 'wallet',
       },
       {
-        title: 'Recebimentos',
-        url: '/dashboard/finance/receipts',
+        title: 'Recebíveis',
+        url: '/dashboard/finance/receivables',
         icon: 'creditCard',
       },
       {
         title: 'Contratos',
         url: '/dashboard/finance/contracts',
         icon: 'clipboard',
+      },
+      {
+        title: 'Análises',
+        url: '/dashboard/finance/analytics',
+        icon: 'analytics',
+      },
+      {
+        title: 'Automação',
+        url: '/dashboard/finance/automation',
+        icon: 'ruler',
       },
       {
         title: 'ERP',

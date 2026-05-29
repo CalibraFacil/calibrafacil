@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -14,12 +14,24 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { formatMoney } from '@calibra-facil/shared'
+import type {
+  CustomerFinancialTimelineDocument,
+  CustomerFinancialTimeline,
+  FinancialFreshness,
+} from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
-import { useCustomerDetailData } from '@/features/customers/queries'
+import {
+  useCustomerDetailData,
+  useCustomerFinancialTimelineData,
+} from '@/features/customers/queries'
 import type {
   CustomerAddress,
   CustomerDetail,
 } from '@/features/customers/types'
+import {
+  customerFinancialTimelineRow,
+  customerTimelineFreshnessLabel,
+} from '@/features/customers/financial-timeline-model'
 import {
   Field,
   FieldDescription,
@@ -56,6 +68,7 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 
 export function ClientInfoTab({
   id,
@@ -88,6 +101,174 @@ export function ClientInfoTab({
   )
 }
 
+export function CustomerFinancialTimelineBlock({
+  documents,
+  summary,
+  freshness,
+  loading,
+  error,
+  onRetry,
+}: {
+  documents: CustomerFinancialTimelineDocument[]
+  summary: CustomerFinancialTimeline['summary'] | null
+  freshness: FinancialFreshness | null
+  loading: boolean
+  error: Error | null
+  onRetry: () => void
+}) {
+  if (loading) {
+    return (
+      <ClientPanelBody>
+        <div
+          aria-live="polite"
+          className="border-b border-border/70 py-5 text-sm text-muted-foreground"
+        >
+          Carregando linha do tempo financeira...
+        </div>
+      </ClientPanelBody>
+    )
+  }
+
+  if (error) {
+    return (
+      <ClientPanelBody>
+        <div
+          aria-live="polite"
+          className="flex flex-col gap-3 border-b border-border/70 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>Linha do tempo financeira indisponível no momento.</span>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Tentar novamente
+          </Button>
+        </div>
+      </ClientPanelBody>
+    )
+  }
+
+  return (
+    <ClientPanelBody>
+      <section className="border-b border-border/70 py-6">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-foreground/10"
+          >
+            <HugeiconsIcon icon={Invoice01Icon} className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium">Linha do tempo financeira</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {customerTimelineFreshnessLabel(freshness)}
+            </p>
+            {documents.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Nenhum documento financeiro registrado para este cliente.
+              </p>
+            ) : (
+              <>
+                {summary ? (
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5">
+                      <p className="text-xs text-muted-foreground">
+                        Documentos
+                      </p>
+                      <p className="mt-1 text-sm font-medium tabular-nums">
+                        {summary.totalDocuments === summary.documents
+                          ? summary.documents
+                          : `${summary.documents} de ${summary.totalDocuments}`}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5">
+                      <p className="text-xs text-muted-foreground">Em aberto</p>
+                      <p className="mt-1 text-sm font-medium tabular-nums">
+                        {formatMoney(summary.openCents)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5">
+                      <p className="text-xs text-muted-foreground">Vencido</p>
+                      <p
+                        className={`mt-1 text-sm font-medium tabular-nums ${
+                          summary.overdueCents > 0 ? 'text-destructive' : ''
+                        }`}
+                      >
+                        {formatMoney(summary.overdueCents)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5">
+                      <p className="text-xs text-muted-foreground">Recebido</p>
+                      <p className="mt-1 text-sm font-medium tabular-nums">
+                        {formatMoney(summary.receivedCents)}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {summary?.scopeLabel ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Resumo financeiro: {summary.scopeLabel}.
+                  </p>
+                ) : null}
+                <div className="mt-4 divide-y divide-border/70 border-y border-border/70">
+                  {documents.map((document) => {
+                    const row = customerFinancialTimelineRow(document)
+                    return (
+                      <article
+                        key={document.id}
+                        className="grid gap-3 py-4 lg:grid-cols-[minmax(0,1fr)_9rem_9rem]"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-sm">{row.title}</p>
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              {row.statusLabel}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {row.fiscalLabel ? `${row.fiscalLabel} · ` : ''}
+                            {row.evidenceLabel}
+                          </p>
+                          {row.evidenceReconnectPath &&
+                          row.evidenceReconnectLabel ? (
+                            <p className="mt-1 text-xs">
+                              <Button
+                                render={<Link to={row.evidenceReconnectPath} />}
+                                variant="link"
+                                size="xs"
+                                className="h-auto p-0 text-xs"
+                              >
+                                {row.evidenceReconnectLabel}
+                              </Button>
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="text-sm tabular-nums">
+                          <p className="text-muted-foreground">Vencimento</p>
+                          <p>{row.dueDateLabel}</p>
+                        </div>
+                        <div className="text-sm tabular-nums">
+                          <p className="text-muted-foreground">Total / pago</p>
+                          <p>
+                            {row.amountLabel} / {row.paidLabel}
+                          </p>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+                {summary?.isTruncated ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Mostrando os {summary.documents} de {summary.totalDocuments}{' '}
+                    documentos financeiros mais recentes.
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    </ClientPanelBody>
+  )
+}
+
 function ClientInfoForm({
   customer,
   customerId,
@@ -99,6 +280,13 @@ function ClientInfoForm({
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const accessQuery = usePlanAccess()
+  const hasFinancial =
+    accessQuery.data?.entitlements.includes('financial') ?? false
+  const financialTimelineQuery = useCustomerFinancialTimelineData({
+    enabled: hasFinancial,
+    id: customerId,
+  })
   const [addressOpen, setAddressOpen] = useState(false)
 
   const [name, setName] = useState(customer.name || '')
@@ -228,6 +416,19 @@ function ClientInfoForm({
             value={formatMoney(financialSummary?.overdueBalanceCents ?? 0)}
           />
         </ClientMetricStrip>
+
+        {hasFinancial ? (
+          <CustomerFinancialTimelineBlock
+            loading={financialTimelineQuery.isLoading}
+            error={financialTimelineQuery.error}
+            documents={financialTimelineQuery.data?.data.data ?? []}
+            summary={financialTimelineQuery.data?.data.summary ?? null}
+            freshness={financialTimelineQuery.data?.data.freshness ?? null}
+            onRetry={() => {
+              void financialTimelineQuery.refetch()
+            }}
+          />
+        ) : null}
 
         <form id="client-info-form" onSubmit={handleSubmit}>
           <ClientPanelBody className="space-y-8">

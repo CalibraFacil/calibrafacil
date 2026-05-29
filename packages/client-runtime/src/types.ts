@@ -1181,8 +1181,59 @@ export interface CalibrationRequestsApi {
 export interface IntegrationsApi {
   list<TResponse = unknown>(): Promise<TResponse>;
   create<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  startContaAzulOAuth<TResponse = unknown>(input: unknown): Promise<TResponse>;
   validate<TResponse = unknown>(id: string): Promise<TResponse>;
   update<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
+  updateContaAzulConfig<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  listContaAzulCatalog<TResponse = unknown>(
+    id: string,
+    catalog:
+      | "accounts"
+      | "balances"
+      | "categories"
+      | "cost-centers"
+      | "dre-categories"
+      | "product-categories"
+      | "product-cest"
+      | "product-ecommerce-brands"
+      | "product-ecommerce-categories"
+      | "product-ncm"
+      | "products"
+      | "product-units"
+      | "sellers"
+      | "services"
+      | "transfers",
+  ): Promise<TResponse>;
+  pollContaAzul<TResponse = unknown>(
+    id: string,
+    input?: unknown,
+  ): Promise<TResponse>;
+  pollContaAzulFiscal<TResponse = unknown>(
+    id: string,
+    input?: unknown,
+  ): Promise<TResponse>;
+  linkContaAzulInvoicesToMdfe<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  pollContaAzulPayables<TResponse = unknown>(
+    id: string,
+    input?: unknown,
+  ): Promise<TResponse>;
+  pollContaAzulProtocols<TResponse = unknown>(
+    id: string,
+    input?: unknown,
+  ): Promise<TResponse>;
+  pollContaAzulDrift<TResponse = unknown>(
+    id: string,
+    input?: unknown,
+  ): Promise<TResponse>;
+  getContaAzulSchedule<TResponse = unknown>(id: string): Promise<TResponse>;
+  refreshContaAzul<TResponse = unknown>(id: string): Promise<TResponse>;
+  disconnectContaAzul<TResponse = unknown>(id: string): Promise<TResponse>;
   toggle<TResponse = unknown>(
     id: string,
     input: { enabled: boolean },
@@ -1193,7 +1244,16 @@ export interface IntegrationsApi {
   ): Promise<TResponse>;
   sync<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
   schedule<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
+  listRunItems<TResponse = unknown>(
+    id: string,
+    runId: string,
+  ): Promise<TResponse>;
   retryRun<TResponse = unknown>(id: string, runId: string): Promise<TResponse>;
+  listDrift<TResponse = unknown>(input?: { target?: string }): Promise<TResponse>;
+  acknowledgeDrift<TResponse = unknown>(
+    linkId: string,
+    input: { reason: string },
+  ): Promise<TResponse>;
 }
 
 export interface ServiceOrdersApi {
@@ -1370,7 +1430,7 @@ export type FinanceAccessResponse = {
   status: string;
   entitlements: string[];
   hasFinancialModule: boolean;
-  hasCustomIntegrations: boolean;
+  hasFinancialIntegrations: boolean;
   canReadFinancial: boolean;
   canManageFinancial: boolean;
   canExportFinancial: boolean;
@@ -1421,6 +1481,57 @@ export interface FinanceApi {
   exportErpDocument<TResponse = unknown>(
     id: string | number,
   ): Promise<TResponse>;
+  listBillingReadiness<TResponse = unknown>(input?: {
+    status?: string;
+    customerId?: string | number;
+  }): Promise<TResponse>;
+  sendBillingReadiness<TResponse = unknown>(input: {
+    serviceOrderIds: number[];
+  }): Promise<TResponse>;
+  getServiceOrderStatus<TResponse = unknown>(
+    serviceOrderId: string | number,
+  ): Promise<TResponse>;
+  getCustomerTimeline<TResponse = unknown>(
+    customerId: string | number,
+    input?: { limit?: string | number },
+  ): Promise<TResponse>;
+  getCertificateRelease<TResponse = unknown>(
+    calibrationJobId: string | number,
+  ): Promise<TResponse>;
+  releaseCertificateByException<TResponse = unknown>(
+    calibrationJobId: string | number,
+    input: { reason: string },
+  ): Promise<TResponse>;
+  listCertificateReleasePolicies<TResponse = unknown>(): Promise<TResponse>;
+  createCertificateReleasePolicy<TResponse = unknown>(input: {
+    mode: string;
+    customerId?: number | null;
+    commercialAgreementId?: number | null;
+    serviceCategory?: string | null;
+    priority?: number;
+  }): Promise<TResponse>;
+  updateCertificateReleasePolicy<TResponse = unknown>(
+    id: string | number,
+    input: { mode?: string; archived?: boolean; priority?: number },
+  ): Promise<TResponse>;
+  listAutomaticSendRules<TResponse = unknown>(): Promise<TResponse>;
+  createAutomaticSendRule<TResponse = unknown>(input: {
+    milestone: string;
+    customerId?: number | null;
+    commercialAgreementId?: number | null;
+    serviceCategory?: string | null;
+    priority?: number;
+  }): Promise<TResponse>;
+  updateAutomaticSendRule<TResponse = unknown>(
+    id: string | number,
+    input: { milestone?: string; archived?: boolean; priority?: number },
+  ): Promise<TResponse>;
+  getOperationsToCash<TResponse = unknown>(input?: {
+    stage?: string;
+  }): Promise<TResponse>;
+  getRevenueLeakage<TResponse = unknown>(): Promise<TResponse>;
+  getCashForecast<TResponse = unknown>(): Promise<TResponse>;
+  getMarginDashboards<TResponse = unknown>(): Promise<TResponse>;
 }
 
 export interface SessionsApi {

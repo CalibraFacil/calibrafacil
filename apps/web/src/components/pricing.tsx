@@ -29,6 +29,7 @@ const ALL_FEATURES: FeatureFlag[] = [
   'math_engine',
   'portal',
   'financial',
+  'financial_integrations',
   'api',
   'custom_domain',
   'sso',
@@ -47,6 +48,7 @@ const PLAN_HIGHLIGHTS: Record<LandingPlanId, string[]> = {
     'Suporte padrão',
   ],
   PROFESSIONAL: [
+    'Integração financeira com ERP (Conta Azul)',
     'Fluxo de revisão e aprovação',
     'Templates personalizados',
     'Suporte prioritário',

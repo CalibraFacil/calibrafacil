@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -18,6 +18,7 @@ import {
   getServiceOrderIntakeDocumentUrl,
   getServiceOrderTagDocumentUrl,
   useServiceOrderDetailData,
+  useServiceOrderFinancialStatusData,
 } from '@/features/service-orders/queries'
 import type {
   ServiceOrderDetail,
@@ -39,6 +40,7 @@ import {
   QUOTE_STATUS_LABELS,
   quoteItemsTotal,
   RECOMMENDED_ACTION_LABELS,
+  serviceOrderFinancialStatusSummary,
   toApiItems,
   WORKFLOW_TABS,
   type QuoteDraftItem,
@@ -60,11 +62,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { isDesktopRuntime } from '@calibra-facil/client-runtime'
+import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
+import { InstallmentsBlock } from '@/features/finance/installments-block'
 import {
   shouldReturnToSyncConflicts,
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 
 function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   const previewWindow = window.open('', '_blank')
@@ -97,6 +102,12 @@ type ServiceOrderDetailPageProps = {
 
 type WorkflowTabValue = (typeof WORKFLOW_TABS)[number]['value']
 type DeliveryMethod = keyof typeof DELIVERY_METHOD_LABELS
+const FINANCIAL_STATUS_SKELETON_TILES = [
+  'open',
+  'overdue',
+  'paid',
+  'updated',
+] as const
 
 function toWorkflowTabValue(value: string): WorkflowTabValue {
   switch (value) {
@@ -163,11 +174,156 @@ function toDeliveryMethod(value: string): DeliveryMethod {
   }
 }
 
+export function ServiceOrderFinancialStatusBlock({
+  status,
+  loading,
+  error,
+  onRetry,
+}: {
+  status: ServiceOrderFinancialStatus | null
+  loading: boolean
+  error: Error | null
+  onRetry: () => void
+}) {
+  if (loading) {
+    return (
+      <Card aria-live="polite">
+        <CardHeader className="border-b border-border/70">
+          <span className="sr-only">Carregando status financeiro...</span>
+          <div className="h-5 w-48 rounded bg-muted" />
+          <div className="mt-3 h-4 w-72 rounded bg-muted/70" />
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4">
+            {FINANCIAL_STATUS_SKELETON_TILES.map((tile) => (
+              <div
+                key={tile}
+                className="border-b border-border/70 px-4 py-4 sm:border-r lg:border-b-0"
+              >
+                <div className="h-3 w-20 rounded bg-muted/70" />
+                <div className="mt-3 h-5 w-24 rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card aria-live="polite">
+        <CardContent className="flex flex-col gap-3 pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>Status financeiro indisponível no momento.</span>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Tentar novamente
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!status) return null
+
+  const summary = serviceOrderFinancialStatusSummary(status)
+  const mainBlocker = status.blockers[0]
+  const shouldShowMetrics =
+    status.billingDocument !== null &&
+    ![
+      'NOT_CONFIGURED',
+      'NOT_SENT',
+      'READY_FOR_BILLING',
+      'BLOCKED',
+      'STATUS_UNAVAILABLE',
+    ].includes(status.status)
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="border-b border-border/70">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold leading-none tracking-tight">
+              Status financeiro
+              <Badge variant={summary.badgeVariant}>{status.label}</Badge>
+            </h3>
+            <CardDescription className="text-pretty">
+              {mainBlocker?.label ?? status.description}
+            </CardDescription>
+          </div>
+          <div className="text-left text-xs text-muted-foreground sm:text-right">
+            {summary.evidenceReconnectPath ? (
+              <Button
+                render={<Link to={summary.evidenceReconnectPath} />}
+                variant="link"
+                size="xs"
+                className="h-auto p-0 text-xs"
+              >
+                {summary.evidenceLabel}
+              </Button>
+            ) : (
+              summary.evidenceLabel
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {shouldShowMetrics ? (
+        <CardContent className="p-0">
+          <dl className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="border-b border-border/70 px-4 py-4 sm:border-r lg:border-b-0">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Em aberto
+              </dt>
+              <dd className="mt-2 text-lg font-semibold tabular-nums">
+                {summary.openLabel}
+              </dd>
+            </div>
+            <div className="border-b border-border/70 px-4 py-4 lg:border-r lg:border-b-0">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Vencido
+              </dt>
+              <dd
+                className={`mt-2 text-lg font-semibold tabular-nums ${
+                  summary.overdueCents > 0 ? 'text-destructive' : ''
+                }`}
+              >
+                {summary.overdueLabel}
+              </dd>
+            </div>
+            <div className="border-b border-border/70 px-4 py-4 sm:border-r sm:border-b-0">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Recebido
+              </dt>
+              <dd className="mt-2 text-lg font-semibold tabular-nums">
+                {summary.receivedLabel}
+              </dd>
+            </div>
+            <div className="px-4 py-4">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Última atualização
+              </dt>
+              <dd className="mt-2 text-sm tabular-nums">
+                {summary.lastUpdateLabel}
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      ) : null}
+    </Card>
+  )
+}
+
 export function ServiceOrderDetailPage({
   id,
   conflictReturn,
 }: ServiceOrderDetailPageProps) {
   const orderQuery = useServiceOrderDetailData(id)
+  const accessQuery = usePlanAccess()
+  const hasFinancial =
+    accessQuery.data?.entitlements.includes('financial') ?? false
+  const financialStatusQuery = useServiceOrderFinancialStatusData({
+    enabled: hasFinancial,
+    id,
+  })
 
   if (!orderQuery.data) {
     return (
@@ -182,6 +338,13 @@ export function ServiceOrderDetailPage({
       key={buildServiceOrderDetailFormKey(orderQuery.data)}
       id={id}
       order={orderQuery.data}
+      showFinancialStatus={hasFinancial}
+      financialStatus={financialStatusQuery.data?.data ?? null}
+      financialStatusLoading={financialStatusQuery.isLoading}
+      financialStatusError={financialStatusQuery.error}
+      financialStatusRetry={() => {
+        void financialStatusQuery.refetch()
+      }}
       conflictReturn={conflictReturn}
     />
   )
@@ -190,10 +353,20 @@ export function ServiceOrderDetailPage({
 function ServiceOrderDetailContent({
   id,
   order,
+  showFinancialStatus,
+  financialStatus,
+  financialStatusLoading,
+  financialStatusError,
+  financialStatusRetry,
   conflictReturn,
 }: {
   id: string
   order: ServiceOrderDetail
+  showFinancialStatus: boolean
+  financialStatus: ServiceOrderFinancialStatus | null
+  financialStatusLoading: boolean
+  financialStatusError: Error | null
+  financialStatusRetry: () => void
   conflictReturn: SyncConflictReturnSearch
 }) {
   const queryClient = useQueryClient()
@@ -641,6 +814,22 @@ function ServiceOrderDetailContent({
         </CardContent>
       </Card>
 
+      {showFinancialStatus ? (
+        <ServiceOrderFinancialStatusBlock
+          status={financialStatus}
+          loading={financialStatusLoading}
+          error={financialStatusError}
+          onRetry={financialStatusRetry}
+        />
+      ) : null}
+
+      {showFinancialStatus && financialStatus?.installmentsSummary?.total ? (
+        <InstallmentsBlock
+          installments={financialStatus.installments}
+          summary={financialStatus.installmentsSummary}
+        />
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Tabs
           value={activeTab}
@@ -687,12 +876,12 @@ function ServiceOrderDetailContent({
                     <Label>Ação recomendada</Label>
                     <NativeSelect
                       className="w-full"
-	                      value={recommendedAction}
-	                      onChange={(event) =>
-	                        setRecommendedAction(
-	                          toRecommendedAction(event.target.value),
-	                        )
-	                      }
+                      value={recommendedAction}
+                      onChange={(event) =>
+                        setRecommendedAction(
+                          toRecommendedAction(event.target.value),
+                        )
+                      }
                     >
                       {Object.entries(RECOMMENDED_ACTION_LABELS).map(
                         ([value, label]) => (
@@ -796,13 +985,11 @@ function ServiceOrderDetailContent({
                         <NativeSelect
                           className="w-full"
                           value={item.type}
-	                          onChange={(event) =>
-	                            updateQuoteItem(item.id, {
-	                              type: toServiceOrderItemType(
-	                                event.target.value,
-	                              ),
-	                            })
-	                          }
+                          onChange={(event) =>
+                            updateQuoteItem(item.id, {
+                              type: toServiceOrderItemType(event.target.value),
+                            })
+                          }
                         >
                           {Object.entries(ITEM_TYPE_LABELS).map(
                             ([value, label]) => (
@@ -1098,12 +1285,12 @@ function ServiceOrderDetailContent({
                     <Label>Resultado</Label>
                     <NativeSelect
                       className="w-full"
-	                      value={executionResult}
-	                      onChange={(event) =>
-	                        setExecutionResult(
-	                          toExecutionResult(event.target.value),
-	                        )
-	                      }
+                      value={executionResult}
+                      onChange={(event) =>
+                        setExecutionResult(
+                          toExecutionResult(event.target.value),
+                        )
+                      }
                     >
                       {Object.entries(EXECUTION_RESULT_LABELS).map(
                         ([value, label]) => (
@@ -1180,10 +1367,10 @@ function ServiceOrderDetailContent({
                     <Label>Forma de entrega</Label>
                     <NativeSelect
                       className="w-full"
-	                      value={deliveryMethod}
-	                      onChange={(event) =>
-	                        setDeliveryMethod(toDeliveryMethod(event.target.value))
-	                      }
+                      value={deliveryMethod}
+                      onChange={(event) =>
+                        setDeliveryMethod(toDeliveryMethod(event.target.value))
+                      }
                     >
                       {Object.entries(DELIVERY_METHOD_LABELS).map(
                         ([value, label]) => (

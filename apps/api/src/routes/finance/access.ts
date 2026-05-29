@@ -22,8 +22,8 @@ export const financeAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
       status: access.status,
       entitlements: access.entitlements,
       hasFinancialModule: access.entitlements.includes("financial"),
-      hasCustomIntegrations: access.entitlements.includes(
-        "custom_integrations",
+      hasFinancialIntegrations: access.entitlements.includes(
+        "financial_integrations",
       ),
       canReadFinancial: canManageFinancial,
       canManageFinancial,

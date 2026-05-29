@@ -3,6 +3,7 @@ import { CreditCardIcon, ShieldKeyIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useFinanceAccess } from '@/hooks/use-finance-access'
+import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
 import { Button } from '@/components/ui/button'
 import {
   Empty,
@@ -20,12 +21,21 @@ export function FinanceLayout() {
   if (accessQuery.isPending) {
     return (
       <div className="space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-96 max-w-full" />
+        <Panel className="relative overflow-hidden p-5 sm:p-6">
+          <BlueprintOverlay />
+          <div className="relative space-y-2">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </div>
+        </Panel>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
         </div>
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-80 w-full" />
+        <Skeleton className="h-80 w-full rounded-2xl" />
       </div>
     )
   }
@@ -87,13 +97,21 @@ export function FinanceLayout() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
-        <p className="text-muted-foreground">
-          Contratos comerciais, documentos de cobrança, recebimentos e
-          exportação ERP.
-        </p>
-      </div>
+      <Panel className="relative overflow-hidden p-5 sm:p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-1.5">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Operação financeira
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Financeiro
+          </h1>
+          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+            Cobrança, recebíveis, contratos e exportação para o ERP — o estado
+            financeiro do laboratório em um só painel.
+          </p>
+        </div>
+      </Panel>
 
       <Outlet />
     </div>

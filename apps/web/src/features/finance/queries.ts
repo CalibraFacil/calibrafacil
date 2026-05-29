@@ -4,6 +4,7 @@ import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
 import type {
   BillingDocumentsListData,
+  BillingReadinessResponse,
   ErpExportsResponse,
   FinanceBillingMode,
   FinanceContractCustomerOptionsData,
@@ -81,6 +82,18 @@ export function financeErpQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'erp'],
     queryFn: () => calibraApi.finance.listErpExports<ErpExportsResponse>(),
+  })
+}
+
+export function financeBillingReadinessQueryOptions(
+  input: { status?: string } = {},
+) {
+  return queryOptions({
+    queryKey: ['finance', 'billing-readiness', input.status ?? 'all'],
+    queryFn: () =>
+      calibraApi.finance.listBillingReadiness<BillingReadinessResponse>({
+        status: input.status || undefined,
+      }),
   })
 }
 
@@ -203,6 +216,18 @@ export async function prewarmFinanceErp(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [financeErpQueryOptions()])
 }
 
+export async function loadFinanceBillingReadinessData(
+  queryClient: QueryClient,
+) {
+  await ensureRouteQueries(queryClient, [financeBillingReadinessQueryOptions()])
+}
+
+export async function prewarmFinanceBillingReadiness(queryClient: QueryClient) {
+  await prewarmRouteQueries(queryClient, [
+    financeBillingReadinessQueryOptions(),
+  ])
+}
+
 export async function prewarmNewFinanceDocument(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [
     financeEligibleJobsQueryOptions({ mode: 'single', search: '' }),
@@ -246,6 +271,12 @@ export function useFinanceReceiptsData() {
 
 export function useFinanceErpData() {
   return useQuery(financeErpQueryOptions())
+}
+
+export function useFinanceBillingReadinessData(
+  input: { status?: string } = {},
+) {
+  return useQuery(financeBillingReadinessQueryOptions(input))
 }
 
 export function useFinanceEligibleJobsData({
