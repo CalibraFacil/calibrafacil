@@ -4182,9 +4182,10 @@ export const automaticSendAuditLog = pgTable(
       onDelete: "set null",
     }),
     reason: text("reason"),
-    providerResponseSummary: jsonb(
-      "provider_response_summary",
-    ).$type<Record<string, unknown> | null>(),
+    providerResponseSummary: jsonb("provider_response_summary").$type<Record<
+      string,
+      unknown
+    > | null>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -4208,7 +4209,10 @@ export const billingGroup = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
-    status: text("status").$type<BillingGroupStatus>().default("OPEN").notNull(),
+    status: text("status")
+      .$type<BillingGroupStatus>()
+      .default("OPEN")
+      .notNull(),
     paymentTermDays: integer("payment_term_days").default(28).notNull(),
     currency: text("currency").default("BRL").notNull(),
     billingPeriodFrom: timestamp("billing_period_from"),
@@ -4222,7 +4226,10 @@ export const billingGroup = pgTable(
   },
   (table) => [
     index("billing_group_org_idx").on(table.organizationId),
-    index("billing_group_customer_idx").on(table.organizationId, table.customerId),
+    index("billing_group_customer_idx").on(
+      table.organizationId,
+      table.customerId,
+    ),
     index("billing_group_status_idx").on(table.organizationId, table.status),
   ],
 );
@@ -6196,6 +6203,7 @@ export type NotificationType =
   | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
   | "CUSTOMER_SUCCESS_SLA_BREACHED"
   | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED"
+  | "SUPPORT_REQUEST_REPLIED" // Backoffice operator replied to a lab's support request
   | "CALIBRATION_REQUEST_SUBMITTED"
   | "CALIBRATION_REQUEST_UNDER_REVIEW"
   | "CALIBRATION_REQUEST_APPROVED"

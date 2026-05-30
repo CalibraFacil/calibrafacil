@@ -47,6 +47,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
   CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
   CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
+  SUPPORT_REQUEST_REPLIED: { inApp: true, email: true },
   CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
   CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
   CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
