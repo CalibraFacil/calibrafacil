@@ -283,6 +283,22 @@ export type BackofficeOrganizationActivity = {
   requests: BackofficeActivitySection
 }
 
+export type BackofficeImportRun = {
+  id: number
+  entity: string
+  fileName: string | null
+  status: string
+  totalRows: number
+  validRows: number
+  errorRows: number
+  createdAt: string
+  createdByName: string | null
+}
+
+export type BackofficeImportRunsData = {
+  data: BackofficeImportRun[]
+}
+
 export type BackofficeApprovalKind = 'refund' | 'credit' | 'adjustment' | 'other'
 export type BackofficeApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 

@@ -195,6 +195,22 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao carregar atividade",
       );
     },
+    async listImportRuns<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].$get({ param: { id } }),
+        "Falha ao carregar importações",
+      );
+    },
+    async validateImportRun<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].validate.$post({ param: { id }, json: input }),
+        "Falha ao validar importação",
+      );
+    },
     async listApprovals<TResponse = unknown>(input = {}) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.approvals.$get({ query: input }),

@@ -21,6 +21,7 @@ import type {
   BackofficeApprovalFilters,
   BackofficeApprovalsData,
   BackofficeOrganizationActivity,
+  BackofficeImportRunsData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -393,4 +394,19 @@ export function backofficeOrganizationActivityQueryOptions(
 
 export function useBackofficeOrganizationActivityData(organizationId: string) {
   return useQuery(backofficeOrganizationActivityQueryOptions(organizationId))
+}
+
+export function backofficeImportRunsQueryOptions(organizationId: string) {
+  return queryOptions({
+    queryKey: ['backoffice', 'import-runs', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.listImportRuns<BackofficeImportRunsData>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeImportRunsData(organizationId: string) {
+  return useQuery(backofficeImportRunsQueryOptions(organizationId))
 }

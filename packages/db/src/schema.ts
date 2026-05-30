@@ -690,6 +690,10 @@ export type AccountTaskType =
 export type ApprovalRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ApprovalRequestKind = "refund" | "credit" | "adjustment" | "other";
 
+// VALIDATED = dry-run preview persisted as an audit record (current scope).
+// COMMITTED is reserved for the gated follow-up that writes real domain rows.
+export type ImportRunStatus = "VALIDATED" | "COMMITTED";
+
 export const accountTask = pgTable(
   "account_task",
   {
@@ -784,6 +788,42 @@ export const approvalRequest = pgTable(
   (table) => [
     index("approval_request_org_idx").on(table.organizationId),
     index("approval_request_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Backoffice migration-importer audit (operations-console gap #12, preview-only).
+ * Each dry-run validation of an uploaded spreadsheet persists one row — what was
+ * imported, by whom, against which entity, and how many rows passed/failed. The
+ * actual domain-write commit is a gated follow-up (status would advance to
+ * COMMITTED); this scope never writes domain records.
+ */
+export const importRun = pgTable(
+  "import_run",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entity: text("entity").notNull(),
+    fileName: text("file_name"),
+    status: text("status")
+      .$type<ImportRunStatus>()
+      .default("VALIDATED")
+      .notNull(),
+    totalRows: integer("total_rows").default(0).notNull(),
+    validRows: integer("valid_rows").default(0).notNull(),
+    errorRows: integer("error_rows").default(0).notNull(),
+    mapping: jsonb("mapping").$type<Record<string, string>>(),
+    errorsSample: jsonb("errors_sample").$type<unknown>(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("import_run_org_idx").on(table.organizationId),
+    index("import_run_created_idx").on(table.createdAt),
   ],
 );
 

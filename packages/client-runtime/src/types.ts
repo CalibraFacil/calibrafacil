@@ -1679,6 +1679,11 @@ export interface BackofficeApi {
   getOrganizationActivity<TResponse = unknown>(
     id: string,
   ): Promise<TResponse>;
+  listImportRuns<TResponse = unknown>(id: string): Promise<TResponse>;
+  validateImportRun<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
   listApprovals<TResponse = unknown>(
     input?: Record<string, unknown>,
   ): Promise<TResponse>;

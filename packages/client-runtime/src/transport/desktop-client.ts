@@ -357,6 +357,12 @@ export function createDesktopApiClient(
       async getOrganizationActivity() {
         throw desktopUnsupportedBackofficeAction("Atividade backoffice");
       },
+      async listImportRuns() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
+      async validateImportRun() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
       async listApprovals() {
         throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
       },

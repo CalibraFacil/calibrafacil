@@ -39,6 +39,7 @@ import {
 } from '@/features/backoffice/console'
 import { AccountTasksCard } from '@/features/backoffice/tasks/components'
 import { RequestApprovalCard } from '@/features/backoffice/approvals/components'
+import { ImporterCard } from '@/features/backoffice/imports/importer-card'
 import { AccountActivityCard } from './activity-card'
 import { AccountLifecycleCard } from './lifecycle-card'
 import { EntitlementOverridesCard } from './entitlements-card'
@@ -436,6 +437,9 @@ function AccountProfile({
 
           {/* Account tasks */}
           <AccountTasksCard organizationId={organizationId} />
+
+          {/* Migration importer (gap #12, preview-only) */}
+          <ImporterCard organizationId={organizationId} />
 
           {/* Posture editor */}
           <SectionPanel

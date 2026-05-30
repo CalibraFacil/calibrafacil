@@ -38,6 +38,7 @@ import {
   calibrationRequest,
   certificateRelease,
   entitlementOverride,
+  importRun,
   member,
   organization,
   organizationIntegration,
@@ -50,6 +51,11 @@ import {
   user as userTable,
 } from "@calibra-facil/db/schema";
 import { FEATURE_FLAGS } from "@calibra-facil/shared";
+import {
+  IMPORT_FIELDS,
+  ImportValidateInputSchema,
+  validateImportRows,
+} from "@calibra-facil/schemas";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -2096,6 +2102,109 @@ export const backofficeRouter = new Hono<{
       certificates: certificatesSection,
       requests: requestsSection,
     });
+  })
+  // Migration importer (gap #12, preview-only). The client parses the spreadsheet
+  // and maps columns; the server runs the pure dry-run validation, persists an
+  // `import_run` audit row and returns the result + field contract. No domain
+  // records are written — the commit is a gated follow-up.
+  .post(
+    "/organizations/:id/import-runs/validate",
+    zValidator("json", ImportValidateInputSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const result = validateImportRows(input.entity, input.rows);
+
+      const inserted = await db
+        .insert(importRun)
+        .values({
+          organizationId: id,
+          entity: input.entity,
+          fileName: input.fileName ?? null,
+          status: "VALIDATED",
+          totalRows: result.totalRows,
+          validRows: result.validRows,
+          errorRows: result.errorRows,
+          mapping: input.mapping ?? null,
+          errorsSample: result.errors,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const run = inserted[0];
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.import_run.validated",
+        entityType: "organization",
+        entityId: id,
+        details: {
+          entity: input.entity,
+          fileName: input.fileName ?? null,
+          totalRows: result.totalRows,
+          validRows: result.validRows,
+          errorRows: result.errorRows,
+        },
+      });
+
+      return c.json({
+        importRunId: run?.id ?? null,
+        fields: IMPORT_FIELDS[input.entity],
+        result,
+      });
+    },
+  )
+  .get("/organizations/:id/import-runs", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: importRun.id,
+        entity: importRun.entity,
+        fileName: importRun.fileName,
+        status: importRun.status,
+        totalRows: importRun.totalRows,
+        validRows: importRun.validRows,
+        errorRows: importRun.errorRows,
+        createdAt: importRun.createdAt,
+        createdByUserId: importRun.createdByUserId,
+      })
+      .from(importRun)
+      .where(eq(importRun.organizationId, id))
+      .orderBy(desc(importRun.createdAt))
+      .limit(20);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
   })
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
