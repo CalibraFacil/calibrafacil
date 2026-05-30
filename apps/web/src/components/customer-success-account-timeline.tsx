@@ -1,8 +1,12 @@
 import {
   AlertCircleIcon,
+  Certificate01Icon,
   CheckmarkCircle02Icon,
   Clock01Icon,
+  CloudUploadIcon,
+  Delete02Icon,
   Edit02Icon,
+  Image01Icon,
   RefreshIcon,
   SentIcon,
   Settings02Icon,
@@ -213,6 +217,98 @@ const actionConfig: Record<string, ActionConfig> = {
     icon: Settings02Icon,
     dotClassName: 'border-amber-200 bg-amber-50 text-amber-700',
   },
+  'certificate_template.xlsx_uploaded': {
+    label: 'Modelo de certificado enviado',
+    icon: CloudUploadIcon,
+    dotClassName: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  'certificate_template.xlsx_validated': {
+    label: 'Modelo de certificado validado',
+    icon: CheckmarkCircle02Icon,
+    dotClassName: 'border-green-200 bg-green-50 text-green-700',
+  },
+  'certificate_template.xlsx_published': {
+    label: 'Modelo de certificado publicado',
+    icon: Certificate01Icon,
+    dotClassName: 'border-green-200 bg-green-50 text-green-700',
+  },
+  'certificate_template.xlsx_assigned': {
+    label: 'Modelo de certificado atribuído',
+    icon: Certificate01Icon,
+    dotClassName: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  'certificate.render_preview_requested': {
+    label: 'Pré-visualização de certificado gerada',
+    icon: Certificate01Icon,
+    dotClassName: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  'organization.logo.uploaded': {
+    label: 'Logo da organização enviado',
+    icon: Image01Icon,
+    dotClassName: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  'organization.logo.deleted': {
+    label: 'Logo da organização removido',
+    icon: Delete02Icon,
+    dotClassName: 'border-amber-200 bg-amber-50 text-amber-700',
+  },
+}
+
+// Technical detail keys that should never be shown to operators (hashes, storage
+// keys, internal ids). Keeps the fallback description human-readable.
+const HIDDEN_DETAIL_KEYS = new Set([
+  'automated',
+  'key',
+  'contentType',
+  'size',
+  'manifest',
+  'warnings',
+  'idempotencyKey',
+  'previewId',
+])
+
+const DETAIL_KEY_LABELS: Record<string, string> = {
+  versionId: 'versão',
+  version: 'versão',
+  templateId: 'modelo',
+  methodId: 'método',
+  serviceId: 'serviço',
+  certificateType: 'tipo',
+  warningCount: 'avisos',
+  ok: 'válido',
+}
+
+function isNoisyDetailKey(key: string): boolean {
+  return HIDDEN_DETAIL_KEYS.has(key) || /sha256$|r2key$/i.test(key)
+}
+
+/** Last-resort human label for an action we don't have an explicit config for. */
+function humanizeAction(action: string): string {
+  const text = action
+    .replace(/[._]+/g, ' ')
+    .replace(/\bxlsx\b/gi, 'XLSX')
+    .trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function describeCertificateEvent(
+  details: Record<string, unknown>,
+): string | null {
+  const parts: string[] = []
+  if (details.templateId !== null && details.templateId !== undefined) {
+    parts.push(`Modelo #${formatUnknownValue(details.templateId)}`)
+  }
+  const version = details.versionId ?? details.version
+  if (version !== null && version !== undefined) {
+    parts.push(`versão ${formatUnknownValue(version)}`)
+  }
+  if (typeof details.certificateType === 'string' && details.certificateType) {
+    parts.push(details.certificateType)
+  }
+  if (typeof details.warningCount === 'number' && details.warningCount > 0) {
+    parts.push(`${details.warningCount} aviso(s)`)
+  }
+  return parts.length ? parts.join(' · ') : null
 }
 
 function formatUnknownValue(value: unknown) {
@@ -392,12 +488,28 @@ function describeTimelineEvent(event: CustomerSuccessTimelineEvent) {
       return typeof details.reason === 'string' && details.reason
         ? `Ticket #${event.entityId} escalado: ${details.reason}.`
         : `Ticket #${event.entityId} escalado para tratamento prioritário.`
+    case 'certificate_template.xlsx_uploaded':
+    case 'certificate_template.xlsx_validated':
+    case 'certificate_template.xlsx_published':
+    case 'certificate_template.xlsx_assigned':
+    case 'certificate.render_preview_requested':
+      return describeCertificateEvent(details)
+    case 'organization.logo.uploaded':
+    case 'organization.logo.deleted':
+      return null
     default: {
       const parts = Object.entries(details)
         .filter(
-          ([, value]) => value !== null && value !== undefined && value !== '',
+          ([key, value]) =>
+            !isNoisyDetailKey(key) &&
+            value !== null &&
+            value !== undefined &&
+            value !== '',
         )
-        .map(([key, value]) => `${key}: ${formatUnknownValue(value)}`)
+        .map(
+          ([key, value]) =>
+            `${DETAIL_KEY_LABELS[key] ?? key}: ${formatUnknownValue(value)}`,
+        )
 
       return parts.length ? parts.join(' • ') : null
     }
@@ -417,6 +529,14 @@ function getEntityLabel(event: CustomerSuccessTimelineEvent) {
     return 'Domínio do portal'
   }
 
+  if (event.entityType.startsWith('certificate_template')) {
+    return 'Modelo de certificado'
+  }
+
+  if (event.entityType === 'organization') {
+    return 'Organização'
+  }
+
   return event.entityType
 }
 
@@ -427,7 +547,7 @@ export function CustomerSuccessAccountTimeline({
 }) {
   const items: EventTimelineItem[] = events.map((event, index) => {
     const config = actionConfig[event.action] ?? {
-      label: event.action,
+      label: humanizeAction(event.action),
       icon: Clock01Icon,
       dotClassName: 'border-border bg-muted text-muted-foreground',
     }
