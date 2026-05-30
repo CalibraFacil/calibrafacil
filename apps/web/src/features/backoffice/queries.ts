@@ -18,6 +18,8 @@ import type {
   BackofficeAccountTaskFilters,
   BackofficeAccountTasksData,
   BackofficeEntitlementOverridesData,
+  BackofficeApprovalFilters,
+  BackofficeApprovalsData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -353,4 +355,24 @@ export function backofficeEntitlementOverridesQueryOptions(
 
 export function useBackofficeEntitlementOverridesData(organizationId: string) {
   return useQuery(backofficeEntitlementOverridesQueryOptions(organizationId))
+}
+
+export function backofficeApprovalsQueryOptions(
+  filters: BackofficeApprovalFilters = {},
+) {
+  const query: Record<string, string> = {}
+  if (filters.status) query.status = filters.status
+  if (filters.organizationId) query.organizationId = filters.organizationId
+
+  return queryOptions({
+    queryKey: ['backoffice', 'approvals', query],
+    queryFn: () =>
+      calibraApi.backoffice.listApprovals<BackofficeApprovalsData>(query),
+  })
+}
+
+export function useBackofficeApprovalsData(
+  filters: BackofficeApprovalFilters = {},
+) {
+  return useQuery(backofficeApprovalsQueryOptions(filters))
 }

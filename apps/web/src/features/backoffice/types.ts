@@ -269,3 +269,32 @@ export type BackofficeEntitlementOverride = {
 export type BackofficeEntitlementOverridesData = {
   data: BackofficeEntitlementOverride[]
 }
+
+export type BackofficeApprovalKind = 'refund' | 'credit' | 'adjustment' | 'other'
+export type BackofficeApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export type BackofficeApprovalRequest = {
+  id: number
+  organizationId: string
+  organizationName: string
+  kind: BackofficeApprovalKind
+  summary: string
+  amountCents: number | null
+  status: BackofficeApprovalStatus
+  requestedByUserId: string | null
+  requestedByName: string | null
+  decidedByUserId: string | null
+  decidedByName: string | null
+  decisionReason: string | null
+  createdAt: string
+  decidedAt: string | null
+}
+
+export type BackofficeApprovalsData = {
+  data: BackofficeApprovalRequest[]
+}
+
+export type BackofficeApprovalFilters = {
+  status?: 'pending' | 'approved' | 'rejected' | 'all'
+  organizationId?: string
+}

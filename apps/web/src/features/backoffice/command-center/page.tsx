@@ -59,6 +59,7 @@ import { IntegrationHealthPanel } from './integration-health-panel'
 import { RevenuePanel } from './revenue-panel'
 import { ReliabilityPanel } from './reliability-panel'
 import { MyTasksPanel } from '@/features/backoffice/tasks/components'
+import { ApprovalsQueuePanel } from '@/features/backoffice/approvals/components'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
   'CRITICAL',
@@ -289,8 +290,11 @@ export function BackofficeCommandCenter() {
         </SectionPanel>
       </div>
 
-      {/* Operator worklist */}
-      <MyTasksPanel />
+      {/* Operator worklist & governance queue */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <MyTasksPanel />
+        <ApprovalsQueuePanel />
+      </div>
 
       {/* Revenue, reliability & integration health */}
       <RevenuePanel />

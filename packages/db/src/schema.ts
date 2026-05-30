@@ -687,6 +687,9 @@ export type AccountTaskType =
   | "CHECK_IN"
   | "GENERAL";
 
+export type ApprovalRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ApprovalRequestKind = "refund" | "credit" | "adjustment" | "other";
+
 export const accountTask = pgTable(
   "account_task",
   {
@@ -745,6 +748,43 @@ export const entitlementOverride = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [index("entitlement_override_org_idx").on(table.organizationId)],
+);
+
+/**
+ * Backoffice approval requests — maker-checker / dual-control over sensitive,
+ * money-touching actions (refunds, credits, adjustments). One operator opens a
+ * request; a *different* platform admin approves or rejects it. The decision
+ * record is the governance artifact; downstream execution (e.g. an Asaas refund)
+ * happens separately and references this request.
+ */
+export const approvalRequest = pgTable(
+  "approval_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<ApprovalRequestKind>().default("other").notNull(),
+    summary: text("summary").notNull(),
+    amountCents: integer("amount_cents"),
+    status: text("status")
+      .$type<ApprovalRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: text("decided_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decisionReason: text("decision_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    decidedAt: timestamp("decided_at"),
+  },
+  (table) => [
+    index("approval_request_org_idx").on(table.organizationId),
+    index("approval_request_status_idx").on(table.status),
+  ],
 );
 
 export const invitation = pgTable(

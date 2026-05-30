@@ -187,6 +187,30 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao revogar acesso",
       );
     },
+    async listApprovals<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals.$get({ query: input }),
+        "Falha ao carregar aprovações",
+      );
+    },
+    async createApprovalRequest<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals.$post({ json: input }),
+        "Falha ao abrir solicitação",
+      );
+    },
+    async decideApproval<TResponse = unknown>(
+      id: string | number,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals[":id"].decide.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Falha ao decidir solicitação",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(

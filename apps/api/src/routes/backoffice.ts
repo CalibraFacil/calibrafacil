@@ -31,6 +31,7 @@ import { db } from "@calibra-facil/db";
 import {
   accountTask,
   appQueueJob,
+  approvalRequest,
   entitlementOverride,
   member,
   organization,
@@ -712,6 +713,25 @@ const AuditLogQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   cursor: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const ApprovalKindEnum = z.enum(["refund", "credit", "adjustment", "other"]);
+
+const ApprovalListQuerySchema = z.object({
+  status: z.enum(["pending", "approved", "rejected", "all"]).optional(),
+  organizationId: z.string().trim().optional(),
+});
+
+const CreateApprovalRequestSchema = z.object({
+  organizationId: z.string().trim().min(1),
+  kind: ApprovalKindEnum.optional(),
+  summary: z.string().trim().min(3).max(500),
+  amountCents: z.number().int().optional(),
+});
+
+const DecideApprovalSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export const backofficeRouter = new Hono<{
@@ -1822,6 +1842,190 @@ export const backofficeRouter = new Hono<{
       });
 
       return c.json({ ok: true });
+    },
+  )
+  // Maker-checker approval queue — dual-control over sensitive, money-touching
+  // actions (refunds, credits, adjustments). Any operator can open a request and
+  // view the queue; only a platform admin who is NOT the requester may decide it.
+  .get("/approvals", zValidator("query", ApprovalListQuerySchema), async (c) => {
+    const input = c.req.valid("query");
+
+    const conditions = [];
+    if (input.status && input.status !== "all") {
+      const statusByFilter = {
+        pending: "PENDING",
+        approved: "APPROVED",
+        rejected: "REJECTED",
+      } as const;
+      conditions.push(eq(approvalRequest.status, statusByFilter[input.status]));
+    }
+    if (input.organizationId) {
+      conditions.push(eq(approvalRequest.organizationId, input.organizationId));
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id: approvalRequest.id,
+        organizationId: approvalRequest.organizationId,
+        organizationName: organization.name,
+        kind: approvalRequest.kind,
+        summary: approvalRequest.summary,
+        amountCents: approvalRequest.amountCents,
+        status: approvalRequest.status,
+        requestedByUserId: approvalRequest.requestedByUserId,
+        decidedByUserId: approvalRequest.decidedByUserId,
+        decisionReason: approvalRequest.decisionReason,
+        createdAt: approvalRequest.createdAt,
+        decidedAt: approvalRequest.decidedAt,
+      })
+      .from(approvalRequest)
+      .leftJoin(
+        organization,
+        eq(organization.id, approvalRequest.organizationId),
+      )
+      .where(where)
+      .orderBy(desc(approvalRequest.createdAt))
+      .limit(200);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .flatMap((row) => [row.requestedByUserId, row.decidedByUserId])
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      organizationName: row.organizationName ?? "—",
+      requestedByName: row.requestedByUserId
+        ? (nameById.get(row.requestedByUserId) ?? null)
+        : null,
+      decidedByName: row.decidedByUserId
+        ? (nameById.get(row.decidedByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/approvals",
+    zValidator("json", CreateApprovalRequestSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, input.organizationId),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(approvalRequest)
+        .values({
+          organizationId: input.organizationId,
+          kind: input.kind ?? "other",
+          summary: input.summary,
+          amountCents: input.amountCents ?? null,
+          requestedByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao abrir solicitação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.approval.requested",
+        entityType: "approval_request",
+        entityId: String(created.id),
+        details: {
+          organizationId: input.organizationId,
+          kind: created.kind,
+          amountCents: created.amountCents,
+          summary: created.summary,
+        },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post(
+    "/approvals/:id/decide",
+    requirePlatformAdmin,
+    zValidator("json", DecideApprovalSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Solicitação inválida" }, 400);
+      }
+      const input = c.req.valid("json");
+
+      const existing = await db.query.approvalRequest.findFirst({
+        where: eq(approvalRequest.id, id),
+      });
+      if (!existing) {
+        return c.json({ error: "Solicitação não encontrada" }, 404);
+      }
+      if (existing.status !== "PENDING") {
+        return c.json({ error: "Solicitação já decidida" }, 409);
+      }
+      // Dual-control: the approver must be a different person than the requester.
+      if (existing.requestedByUserId === session.user.id) {
+        return c.json(
+          {
+            error:
+              "Controle duplo: a aprovação precisa ser feita por outra pessoa.",
+          },
+          403,
+        );
+      }
+
+      const nextStatus = input.decision === "approve" ? "APPROVED" : "REJECTED";
+      const updated = await db
+        .update(approvalRequest)
+        .set({
+          status: nextStatus,
+          decidedByUserId: session.user.id,
+          decisionReason: input.reason || null,
+          decidedAt: new Date(),
+        })
+        .where(eq(approvalRequest.id, id))
+        .returning();
+      const decided = updated[0];
+      if (!decided) {
+        return c.json({ error: "Falha ao decidir solicitação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action:
+          input.decision === "approve"
+            ? "backoffice.approval.approved"
+            : "backoffice.approval.rejected",
+        entityType: "approval_request",
+        entityId: String(id),
+        details: {
+          organizationId: existing.organizationId,
+          requestedByUserId: existing.requestedByUserId,
+          reason: input.reason ?? null,
+        },
+      });
+
+      return c.json(decided);
     },
   )
   .get("/support/queue", async (c) => {

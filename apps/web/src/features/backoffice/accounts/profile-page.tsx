@@ -38,6 +38,7 @@ import {
   status,
 } from '@/features/backoffice/console'
 import { AccountTasksCard } from '@/features/backoffice/tasks/components'
+import { RequestApprovalCard } from '@/features/backoffice/approvals/components'
 import { AccountLifecycleCard } from './lifecycle-card'
 import { EntitlementOverridesCard } from './entitlements-card'
 import {
@@ -717,6 +718,9 @@ function AccountProfile({
 
           {/* Entitlement overrides */}
           <EntitlementOverridesCard organizationId={organizationId} />
+
+          {/* Maker-checker: request a sensitive money action */}
+          <RequestApprovalCard organizationId={organizationId} />
 
           {/* Commercial snapshot */}
           <SectionPanel
