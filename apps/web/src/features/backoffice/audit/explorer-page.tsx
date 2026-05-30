@@ -1,5 +1,7 @@
 import { useDeferredValue, useState } from 'react'
 import Papa from 'papaparse'
+import { differenceInCalendarDays, format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Download01Icon,
@@ -9,6 +11,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 import { type SignalTone } from '@/components/instrument-panel'
 import {
@@ -24,6 +27,37 @@ import { formatDateTime } from '@/features/backoffice/customer-success/model'
 import type { BackofficeAuditLogEntry } from '@/features/backoffice/types'
 
 const PAGE_SIZE = 50
+
+/** Quick categories — each is an ilike-on-action search preset. */
+const AUDIT_CATEGORIES = [
+  { label: 'Tudo', keyword: '' },
+  { label: 'Impersonação', keyword: 'impersonation' },
+  { label: 'Comercial', keyword: 'commercial' },
+  { label: 'Aprovações', keyword: 'approval' },
+  { label: 'Assinaturas', keyword: 'subscription' },
+  { label: 'Acessos', keyword: 'entitlement' },
+  { label: 'Contas', keyword: 'organization' },
+] as const
+
+function formatDayLabel(iso: string): string {
+  const date = new Date(iso)
+  const diff = differenceInCalendarDays(new Date(), date)
+  if (diff === 0) return 'Hoje'
+  if (diff === 1) return 'Ontem'
+  return format(date, "d 'de' MMMM 'de' yyyy", { locale: ptBR })
+}
+
+/** Group time-ordered entries into consecutive day buckets for scannability. */
+function groupByDay(entries: ReadonlyArray<BackofficeAuditLogEntry>) {
+  const groups: Array<{ day: string; entries: BackofficeAuditLogEntry[] }> = []
+  for (const entry of entries) {
+    const day = formatDayLabel(entry.createdAt)
+    const last = groups.at(-1)
+    if (last && last.day === day) last.entries.push(entry)
+    else groups.push({ day, entries: [entry] })
+  }
+  return groups
+}
 
 function downloadAuditCsv(entries: ReadonlyArray<BackofficeAuditLogEntry>) {
   const csv = Papa.unparse({
@@ -82,15 +116,18 @@ function actionTone(action: string): SignalTone {
 
 export function AuditLogExplorerPage() {
   const [search, setSearch] = useState('')
+  const [entityType, setEntityType] = useState('')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const deferredSearch = useDeferredValue(search.trim())
 
   const query = useBackofficeAuditLogData({
     search: deferredSearch || undefined,
+    entityType: entityType || undefined,
     limit,
   })
 
   const entries = query.data?.data ?? []
+  const groups = groupByDay(entries)
   const hasMore = query.data?.nextCursor != null
   const isForbidden =
     query.isError &&
@@ -142,11 +179,40 @@ export function AuditLogExplorerPage() {
         }
         contentClassName="space-y-4"
       >
-        <ConsoleSearch
-          value={search}
-          onChange={setSearch}
-          placeholder="Buscar por ação, tipo de entidade ou ID…"
-        />
+        <div className="flex flex-wrap gap-1.5">
+          {AUDIT_CATEGORIES.map((category) => (
+            <Button
+              key={category.label}
+              type="button"
+              size="xs"
+              variant={search === category.keyword ? 'default' : 'outline'}
+              onClick={() => setSearch(category.keyword)}
+              className="transition-transform active:scale-[0.96]"
+            >
+              {category.label}
+            </Button>
+          ))}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <ConsoleSearch
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por ação, tipo de entidade ou ID…"
+          />
+          <NativeSelect
+            className="sm:w-56"
+            value={entityType}
+            onChange={(event) => setEntityType(event.target.value)}
+          >
+            <NativeSelectOption value="">Todas as entidades</NativeSelectOption>
+            {Object.entries(AUDIT_ENTITY_LABELS).map(([value, label]) => (
+              <NativeSelectOption key={value} value={value}>
+                {label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
 
         {query.isPending ? (
           <ConsoleLoadingRows count={8} />
@@ -160,16 +226,25 @@ export function AuditLogExplorerPage() {
           <ConsoleEmpty
             icon={SecurityCheckIcon}
             title="Nenhum evento neste recorte"
-            description="Ajuste a busca para ver outros eventos da trilha de auditoria."
+            description="Ajuste os filtros para ver outros eventos da trilha de auditoria."
           />
         ) : (
           <>
-            <div className="overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-              <div className="divide-y">
-                {entries.map((entry) => (
-                  <AuditRow key={entry.id} entry={entry} />
-                ))}
-              </div>
+            <div className="space-y-4">
+              {groups.map((group) => (
+                <div key={group.day} className="space-y-1.5">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {group.day}
+                  </p>
+                  <div className="overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                    <div className="divide-y">
+                      {group.entries.map((entry) => (
+                        <AuditRow key={entry.id} entry={entry} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
             {hasMore ? (
               <div className="flex justify-center">
@@ -191,6 +266,75 @@ export function AuditLogExplorerPage() {
   )
 }
 
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'backoffice.impersonation.start': 'Impersonação iniciada',
+  'backoffice.impersonation.stop': 'Impersonação encerrada',
+  'backoffice.impersonation.handoff.started':
+    'Impersonação — transferência iniciada',
+  'backoffice.bootstrap.completed': 'Bootstrap do backoffice concluído',
+  'backoffice.entitlement_override.granted': 'Acesso concedido (comp/trial)',
+  'backoffice.entitlement_override.revoked': 'Acesso revogado',
+  'backoffice.subscription.plan_changed': 'Plano da assinatura alterado',
+  'backoffice.subscription.canceled': 'Assinatura cancelada',
+  'backoffice.subscription.reactivated': 'Assinatura reativada',
+  'backoffice.approval.requested': 'Aprovação solicitada',
+  'backoffice.approval.approved': 'Aprovação concedida',
+  'backoffice.approval.rejected': 'Aprovação recusada',
+  'backoffice.interaction.recorded': 'Interação registrada',
+  'backoffice.operator_alert.acknowledged': 'Alerta reconhecido',
+  'backoffice.operator_alerts.recomputed': 'Alertas recalculados',
+  'backoffice.import_run.validated': 'Importação validada (simulação)',
+  'backoffice.account_task.created': 'Tarefa criada',
+  'backoffice.account_task.completed': 'Tarefa concluída',
+  'backoffice.user.role_updated': 'Papel de plataforma atualizado',
+  'backoffice.user.banned': 'Usuário banido',
+  'backoffice.user.unbanned': 'Usuário reabilitado',
+  'commercial.offer.issued': 'Oferta emitida',
+  'commercial.offer.canceled': 'Oferta cancelada',
+  'commercial.offer.reissued': 'Oferta reemitida',
+  'commercial.billing_contact.created': 'Contato de cobrança criado',
+  'commercial.billing_customer.synced': 'Cliente de cobrança sincronizado',
+}
+
+const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  user: 'Usuário',
+  organization: 'Organização',
+  commercial_offer: 'Oferta comercial',
+  billing_contact: 'Contato de cobrança',
+  billing_customer: 'Cliente de cobrança',
+  approval_request: 'Aprovação',
+  operator_alert: 'Alerta',
+  import_run: 'Importação',
+  account_task: 'Tarefa',
+  entitlement_override: 'Concessão de acesso',
+  subscription: 'Assinatura',
+  platform: 'Plataforma',
+  portal_domain: 'Domínio do portal',
+}
+
+/** Friendly label for an audit action, humanizing anything not mapped. */
+function friendlyAuditAction(action: string): string {
+  const mapped = AUDIT_ACTION_LABELS[action]
+  if (mapped) return mapped
+  const text = action
+    .replace(/^(backoffice|commercial)\./, '')
+    .replace(/[._]+/g, ' ')
+    .trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function friendlyEntityType(entityType: string): string {
+  return (
+    AUDIT_ENTITY_LABELS[entityType] ??
+    entityType.replace(/[._]+/g, ' ').trim()
+  )
+}
+
+/** Short, de-noised id for display (raw ids/UUIDs are noise in the feed). */
+function shortId(id: string): string {
+  return id.length > 14 ? `${id.slice(0, 8)}…` : id
+}
+
 function AuditRow({ entry }: { entry: BackofficeAuditLogEntry }) {
   const actor = entry.actorUser
   const target = entry.targetUser
@@ -204,11 +348,16 @@ function AuditRow({ entry }: { entry: BackofficeAuditLogEntry }) {
       </span>
 
       <span className="min-w-0">
-        <StatusChip tone={actionTone(entry.action)}>{entry.action}</StatusChip>
+        <StatusChip tone={actionTone(entry.action)}>
+          {friendlyAuditAction(entry.action)}
+        </StatusChip>
         <span className="mt-1 block truncate text-xs text-muted-foreground">
-          {entry.entityType}
-          {entry.entityId ? ` · ${entry.entityId}` : ''}
-          {target ? ` → ${target.name}` : ''}
+          {friendlyEntityType(entry.entityType)}
+          {target
+            ? ` → ${target.name}`
+            : entry.entityId
+              ? ` · ${shortId(entry.entityId)}`
+              : ''}
         </span>
         {hasDetails ? (
           <details className="group mt-1">
