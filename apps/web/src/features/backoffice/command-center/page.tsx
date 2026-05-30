@@ -57,6 +57,7 @@ import {
 } from './metrics'
 import { IntegrationHealthPanel } from './integration-health-panel'
 import { RevenuePanel } from './revenue-panel'
+import { MyTasksPanel } from '@/features/backoffice/tasks/components'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
   'CRITICAL',
@@ -286,6 +287,9 @@ export function BackofficeCommandCenter() {
           )}
         </SectionPanel>
       </div>
+
+      {/* Operator worklist */}
+      <MyTasksPanel />
 
       {/* Revenue & integration health */}
       <RevenuePanel />

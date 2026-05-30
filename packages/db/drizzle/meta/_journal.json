@@ -253,6 +253,13 @@
       "when": 1780876800000,
       "tag": "0035_billing_document_public_id",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "0036_account_task",
+      "breakpoints": true
     }
   ]
 }

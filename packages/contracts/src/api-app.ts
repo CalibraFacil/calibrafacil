@@ -44,6 +44,8 @@ type ApiRoutePath =
   | "/api/assets/:id"
   | "/api/assets/:id/audit-log"
   | "/api/backoffice/access"
+  | "/api/backoffice/account-tasks"
+  | "/api/backoffice/account-tasks/:id/complete"
   | "/api/backoffice/audit-log"
   | "/api/backoffice/bootstrap"
   | "/api/backoffice/commercial/billing-contacts"

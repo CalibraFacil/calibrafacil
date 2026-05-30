@@ -15,6 +15,8 @@ import type {
   BackofficeUserFilters,
   BackofficeUsersData,
   BackofficeVitalsData,
+  BackofficeAccountTaskFilters,
+  BackofficeAccountTasksData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -312,4 +314,25 @@ export function backofficeVitalsQueryOptions() {
 
 export function useBackofficeVitalsData() {
   return useQuery(backofficeVitalsQueryOptions())
+}
+
+export function backofficeAccountTasksQueryOptions(
+  filters: BackofficeAccountTaskFilters,
+) {
+  const query: Record<string, string> = {}
+  if (filters.organizationId) query.organizationId = filters.organizationId
+  if (filters.scope) query.scope = filters.scope
+  if (filters.status) query.status = filters.status
+
+  return queryOptions({
+    queryKey: ['backoffice', 'account-tasks', query],
+    queryFn: () =>
+      calibraApi.backoffice.listAccountTasks<BackofficeAccountTasksData>(query),
+  })
+}
+
+export function useBackofficeAccountTasksData(
+  filters: BackofficeAccountTaskFilters,
+) {
+  return useQuery(backofficeAccountTasksQueryOptions(filters))
 }

@@ -661,6 +661,57 @@ export const organizationSupportRequestEvent = pgTable(
   ],
 );
 
+/**
+ * Backoffice account tasks — first-class, assignable, due-dated operator tasks
+ * per account, superseding the single free-text `nextAction` field. The
+ * substrate for onboarding / migration / dunning / go-live playbook motions and
+ * an operator "my day" worklist.
+ */
+export type AccountTaskStatus = "OPEN" | "DONE" | "CANCELED";
+export type AccountTaskType =
+  | "ONBOARDING"
+  | "MIGRATION"
+  | "GO_LIVE"
+  | "DUNNING"
+  | "CHECK_IN"
+  | "GENERAL";
+
+export const accountTask = pgTable(
+  "account_task",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    type: text("type").$type<AccountTaskType>().default("GENERAL").notNull(),
+    status: text("status").$type<AccountTaskStatus>().default("OPEN").notNull(),
+    ownerUserId: text("owner_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at"),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    completedAt: timestamp("completed_at"),
+    completedByUserId: text("completed_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("account_task_org_id_idx").on(table.organizationId),
+    index("account_task_status_idx").on(table.status),
+    index("account_task_owner_idx").on(table.ownerUserId),
+    index("account_task_due_idx").on(table.dueAt),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {

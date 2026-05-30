@@ -120,6 +120,32 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao carregar os indicadores da plataforma",
       );
     },
+    async listAccountTasks<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"].$get({
+          query: input,
+        }),
+        "Falha ao carregar tarefas",
+      );
+    },
+    async createAccountTask<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"].$post({
+          json: input,
+        }),
+        "Falha ao criar tarefa",
+      );
+    },
+    async completeAccountTask<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"][
+          ":id"
+        ].complete.$post({
+          param: { id: String(id) },
+        }),
+        "Falha ao concluir tarefa",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(

@@ -215,3 +215,28 @@ export type BackofficeVitalsData = {
     byPlan: Record<string, number>
   }
 }
+
+export type BackofficeAccountTask = {
+  id: number
+  organizationId: string
+  organizationName: string
+  title: string
+  type: string
+  status: string
+  ownerUserId: string | null
+  ownerName: string | null
+  dueAt: string | null
+  notes: string | null
+  completedAt: string | null
+  createdAt: string
+}
+
+export type BackofficeAccountTasksData = {
+  data: BackofficeAccountTask[]
+}
+
+export type BackofficeAccountTaskFilters = {
+  organizationId?: string
+  scope?: 'mine' | 'all'
+  status?: 'open' | 'done' | 'all'
+}

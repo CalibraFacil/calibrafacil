@@ -29,6 +29,7 @@ import {
 } from "@calibra-facil/auth/lab-access";
 import { db } from "@calibra-facil/db";
 import {
+  accountTask,
   member,
   organization,
   organizationIntegration,
@@ -659,6 +660,30 @@ async function cleanupFailedLabProvisioning(params: {
   }
 }
 
+const AccountTaskListQuerySchema = z.object({
+  organizationId: z.string().trim().optional(),
+  scope: z.enum(["mine", "all"]).optional(),
+  status: z.enum(["open", "done", "all"]).optional(),
+});
+
+const AccountTaskTypeEnum = z.enum([
+  "ONBOARDING",
+  "MIGRATION",
+  "GO_LIVE",
+  "DUNNING",
+  "CHECK_IN",
+  "GENERAL",
+]);
+
+const CreateAccountTaskSchema = z.object({
+  organizationId: z.string().trim().min(1),
+  title: z.string().trim().min(2).max(300),
+  type: AccountTaskTypeEnum.optional(),
+  ownerUserId: z.string().trim().optional(),
+  dueAt: z.string().datetime().optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
 const AuditLogQuerySchema = z.object({
   action: z.string().trim().min(1).optional(),
   entityType: z.string().trim().min(1).optional(),
@@ -901,6 +926,158 @@ export const backofficeRouter = new Hono<{
         byPlan,
       },
     });
+  })
+  // Account tasks — first-class operator tasks per account (and a cross-account
+  // "my day" worklist via scope=mine), superseding the single free-text
+  // nextAction field. Substrate for onboarding / migration / dunning playbooks.
+  .get(
+    "/account-tasks",
+    zValidator("query", AccountTaskListQuerySchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("query");
+      const statusFilter = input.status ?? "open";
+
+      const conditions = [];
+      if (input.organizationId) {
+        conditions.push(eq(accountTask.organizationId, input.organizationId));
+      }
+      if (input.scope === "mine") {
+        conditions.push(eq(accountTask.ownerUserId, session.user.id));
+      }
+      if (statusFilter === "open") {
+        conditions.push(eq(accountTask.status, "OPEN"));
+      } else if (statusFilter === "done") {
+        conditions.push(eq(accountTask.status, "DONE"));
+      }
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const rows = await db
+        .select({
+          id: accountTask.id,
+          organizationId: accountTask.organizationId,
+          organizationName: organization.name,
+          title: accountTask.title,
+          type: accountTask.type,
+          status: accountTask.status,
+          ownerUserId: accountTask.ownerUserId,
+          dueAt: accountTask.dueAt,
+          notes: accountTask.notes,
+          completedAt: accountTask.completedAt,
+          createdAt: accountTask.createdAt,
+        })
+        .from(accountTask)
+        .innerJoin(
+          organization,
+          eq(organization.id, accountTask.organizationId),
+        )
+        .where(where)
+        .orderBy(asc(accountTask.dueAt), desc(accountTask.createdAt))
+        .limit(200);
+
+      const ownerIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.ownerUserId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const owners =
+        ownerIds.length > 0
+          ? await db
+              .select({ id: userTable.id, name: userTable.name })
+              .from(userTable)
+              .where(inArray(userTable.id, ownerIds))
+          : [];
+      const ownerById = new Map(owners.map((entry) => [entry.id, entry.name]));
+
+      const data = rows.map((row) => ({
+        ...row,
+        ownerName: row.ownerUserId
+          ? (ownerById.get(row.ownerUserId) ?? null)
+          : null,
+      }));
+
+      return c.json({ data });
+    },
+  )
+  .post(
+    "/account-tasks",
+    zValidator("json", CreateAccountTaskSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, input.organizationId),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(accountTask)
+        .values({
+          organizationId: input.organizationId,
+          title: input.title,
+          type: input.type ?? "GENERAL",
+          ownerUserId: input.ownerUserId || null,
+          dueAt: input.dueAt ? new Date(input.dueAt) : null,
+          notes: input.notes || null,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao criar tarefa" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.account_task.created",
+        entityType: "account_task",
+        entityId: String(created.id),
+        details: {
+          organizationId: input.organizationId,
+          title: created.title,
+          type: created.type,
+        },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post("/account-tasks/:id/complete", async (c) => {
+    const session = c.get("session");
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (!Number.isInteger(id)) {
+      return c.json({ error: "Tarefa inválida" }, 400);
+    }
+
+    const updatedRows = await db
+      .update(accountTask)
+      .set({
+        status: "DONE",
+        completedAt: new Date(),
+        completedByUserId: session.user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(accountTask.id, id))
+      .returning();
+    const updated = updatedRows[0];
+    if (!updated) {
+      return c.json({ error: "Tarefa não encontrada" }, 404);
+    }
+
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.account_task.completed",
+      entityType: "account_task",
+      entityId: String(id),
+      details: { organizationId: updated.organizationId },
+    });
+
+    return c.json(updated);
   })
   // Queryable audit-log surface over platformEventLog (admin-only). The table is
   // written for every sensitive backoffice action but previously had no read path.

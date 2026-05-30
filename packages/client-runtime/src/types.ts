@@ -1657,6 +1657,13 @@ export interface BackofficeApi {
   ): Promise<TResponse>;
   getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
   getVitals<TResponse = unknown>(): Promise<TResponse>;
+  listAccountTasks<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  createAccountTask<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  completeAccountTask<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

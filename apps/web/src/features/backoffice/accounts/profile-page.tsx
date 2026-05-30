@@ -37,6 +37,7 @@ import {
   StatusChip,
   status,
 } from '@/features/backoffice/console'
+import { AccountTasksCard } from '@/features/backoffice/tasks/components'
 import {
   useBackofficeOrganizationDetailData,
   useBackofficeCommercialContextData,
@@ -428,6 +429,9 @@ function AccountProfile({
               ) : null}
             </div>
           </SectionPanel>
+
+          {/* Account tasks */}
+          <AccountTasksCard organizationId={organizationId} />
 
           {/* Posture editor */}
           <SectionPanel
