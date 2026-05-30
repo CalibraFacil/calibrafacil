@@ -1680,6 +1680,10 @@ export interface BackofficeApi {
     id: string,
   ): Promise<TResponse>;
   listImportRuns<TResponse = unknown>(id: string): Promise<TResponse>;
+  parseImportFile<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
   validateImportRun<TResponse = unknown>(
     id: string,
     input: unknown,

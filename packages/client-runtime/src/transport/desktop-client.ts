@@ -360,6 +360,9 @@ export function createDesktopApiClient(
       async listImportRuns() {
         throw desktopUnsupportedBackofficeAction("Importações backoffice");
       },
+      async parseImportFile() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
       async validateImportRun() {
         throw desktopUnsupportedBackofficeAction("Importações backoffice");
       },

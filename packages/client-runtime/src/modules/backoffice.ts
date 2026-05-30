@@ -203,6 +203,14 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao carregar importações",
       );
     },
+    async parseImportFile<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].parse.$post({ param: { id }, json: input }),
+        "Falha ao ler a planilha",
+      );
+    },
     async validateImportRun<TResponse = unknown>(id: string, input: unknown) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.organizations[":id"][

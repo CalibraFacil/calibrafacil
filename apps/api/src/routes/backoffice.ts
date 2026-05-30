@@ -56,6 +56,7 @@ import {
   ImportValidateInputSchema,
   validateImportRows,
 } from "@calibra-facil/schemas";
+import { parseSpreadsheet } from "../lib/import-parse";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -743,6 +744,12 @@ const CreateApprovalRequestSchema = z.object({
 const DecideApprovalSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   reason: z.string().trim().max(500).optional(),
+});
+
+const ImportParseSchema = z.object({
+  // base64 of the uploaded spreadsheet; ~14M chars ≈ a 10MB file.
+  fileBase64: z.string().min(1).max(14_000_000),
+  fileName: z.string().trim().max(300).optional(),
 });
 
 export const backofficeRouter = new Hono<{
@@ -2103,10 +2110,34 @@ export const backofficeRouter = new Hono<{
       requests: requestsSection,
     });
   })
-  // Migration importer (gap #12, preview-only). The client parses the spreadsheet
-  // and maps columns; the server runs the pure dry-run validation, persists an
-  // `import_run` audit row and returns the result + field contract. No domain
-  // records are written — the commit is a gated follow-up.
+  // Migration importer (gap #12, preview-only). The client uploads a spreadsheet
+  // (CSV is parsed in the browser; .xlsx is parsed here via excelts) and maps
+  // columns; the server runs the pure dry-run validation, persists an `import_run`
+  // audit row and returns the result + field contract. No domain records are
+  // written — the commit is a gated follow-up.
+  .post(
+    "/organizations/:id/import-runs/parse",
+    zValidator("json", ImportParseSchema),
+    async (c) => {
+      const input = c.req.valid("json");
+      let bytes: Uint8Array;
+      try {
+        bytes = Uint8Array.from(Buffer.from(input.fileBase64, "base64"));
+      } catch {
+        return c.json({ error: "Arquivo inválido" }, 400);
+      }
+      if (bytes.length === 0) {
+        return c.json({ error: "Arquivo vazio" }, 400);
+      }
+      try {
+        const parsed = await parseSpreadsheet(bytes);
+        return c.json(parsed);
+      } catch (error) {
+        console.error("Failed to parse import spreadsheet", error);
+        return c.json({ error: "Não foi possível ler a planilha" }, 422);
+      }
+    },
+  )
   .post(
     "/organizations/:id/import-runs/validate",
     zValidator("json", ImportValidateInputSchema),

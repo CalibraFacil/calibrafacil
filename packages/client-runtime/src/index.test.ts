@@ -439,6 +439,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "parseImportFile",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "validateImportRun",
           "namespace": "backoffice",
           "policy": "cloud-only",

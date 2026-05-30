@@ -18,7 +18,6 @@ import {
 
 import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -62,6 +61,44 @@ function autoMap(
   return mapping
 }
 
+type ParseResponse = {
+  sheetName: string
+  headers: string[]
+  rows: string[][]
+}
+
+/** Read a File as base64 (no data: prefix) — works for large binary uploads. */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('Falha ao ler'))
+    reader.onload = () => {
+      const result = reader.result
+      if (typeof result !== 'string') {
+        reject(new Error('Falha ao ler'))
+        return
+      }
+      const comma = result.indexOf(',')
+      resolve(comma === -1 ? result : result.slice(comma + 1))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function useParseImportFile(organizationId: string) {
+  return useMutation({
+    mutationFn: (input: { fileBase64: string; fileName: string }) =>
+      calibraApi.backoffice.parseImportFile<ParseResponse>(
+        organizationId,
+        input,
+      ),
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao ler a planilha',
+      ),
+  })
+}
+
 function useValidateImportRun(organizationId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -94,23 +131,68 @@ function useValidateImportRun(organizationId: string) {
  */
 export function ImporterCard({ organizationId }: { organizationId: string }) {
   const fields = IMPORT_FIELDS[ENTITY]
+  const parseFile = useParseImportFile(organizationId)
   const validate = useValidateImportRun(organizationId)
   const runs = useBackofficeImportRunsData(organizationId)
 
   const [csvText, setCsvText] = useState('')
   const [fileName, setFileName] = useState('')
+  const [sourceLabel, setSourceLabel] = useState('')
   const [parsed, setParsed] = useState<ParsedCsv | null>(null)
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [result, setResult] = useState<ValidateResponse | null>(null)
 
-  const analyze = () => {
-    const next = parseCsv(csvText)
+  const adopt = (next: ParsedCsv, label: string) => {
     setParsed(next)
+    setSourceLabel(label)
     setMapping(autoMap(next.headers, fields))
     setResult(null)
+  }
+
+  const analyze = () => {
+    const next = parseCsv(csvText)
     if (next.headers.length === 0) {
       toast.error('Não foi possível ler nenhuma coluna do conteúdo colado.')
+      return
     }
+    const sep = next.delimiter === '\t' ? 'tab' : next.delimiter
+    adopt(next, `CSV colado · separador "${sep}"`)
+  }
+
+  const onPickFile = (file: File) => {
+    setFileName(file.name)
+    const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv'
+    if (isCsv) {
+      void file.text().then((text) => {
+        setCsvText(text)
+        const next = parseCsv(text)
+        if (next.headers.length === 0) {
+          toast.error('Arquivo CSV vazio ou ilegível.')
+          return
+        }
+        const sep = next.delimiter === '\t' ? 'tab' : next.delimiter
+        adopt(next, `${file.name} · separador "${sep}"`)
+      })
+      return
+    }
+    void fileToBase64(file).then((fileBase64) => {
+      parseFile.mutate(
+        { fileBase64, fileName: file.name },
+        {
+          onSuccess: (response) => {
+            if (response.headers.length === 0) {
+              toast.error('A planilha não tem cabeçalho legível.')
+              return
+            }
+            setCsvText('')
+            adopt(
+              { headers: response.headers, rows: response.rows, delimiter: '' },
+              `${file.name}${response.sheetName ? ` · aba "${response.sheetName}"` : ''}`,
+            )
+          },
+        },
+      )
+    })
   }
 
   const requiredFields = fields.filter((field) => field.required)
@@ -157,12 +239,7 @@ export function ImporterCard({ organizationId }: { organizationId: string }) {
           placeholder={`Cole o CSV aqui (vírgula, ponto-e-vírgula ou tab)…\n\ntag,name,serialNumber,manufacturer,model\nBAL-001,Balança analítica,SN-123,Mettler,XPE205`}
           className="min-h-28 font-mono text-xs"
         />
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-          <Input
-            value={fileName}
-            onChange={(event) => setFileName(event.target.value)}
-            placeholder="Nome do arquivo (opcional)"
-          />
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -171,8 +248,23 @@ export function ImporterCard({ organizationId }: { organizationId: string }) {
             className="min-h-10 transition-transform active:scale-[0.96]"
           >
             <HugeiconsIcon icon={Upload01Icon} className="size-4" />
-            Analisar
+            Analisar colado
           </Button>
+          <span className="text-xs text-muted-foreground">ou</span>
+          <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm font-medium shadow-[inset_0_0_0_1px_rgba(15,23,42,0.12)] transition-[background-color,transform] hover:bg-muted active:scale-[0.96] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]">
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) onPickFile(file)
+                event.target.value = ''
+              }}
+            />
+            <HugeiconsIcon icon={Database01Icon} className="size-4" />
+            {parseFile.isPending ? 'Lendo…' : 'Enviar .xlsx / .csv'}
+          </label>
         </div>
       </div>
 
@@ -180,11 +272,8 @@ export function ImporterCard({ organizationId }: { organizationId: string }) {
       {parsed && parsed.headers.length > 0 ? (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            {parsed.rows.length} linha(s) · separador{' '}
-            <code className="rounded bg-muted px-1">
-              {parsed.delimiter === '\t' ? 'tab' : parsed.delimiter}
-            </code>{' '}
-            · mapeie as colunas:
+            {parsed.rows.length} linha(s)
+            {sourceLabel ? ` · ${sourceLabel}` : ''} · mapeie as colunas:
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {fields.map((field) => (

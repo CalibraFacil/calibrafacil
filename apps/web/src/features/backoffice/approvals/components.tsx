@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { formatDistanceToNow } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -54,14 +56,7 @@ function formatBRL(cents: number | null): string | null {
 }
 
 function relativeTime(value: string): string {
-  const diffMs = Date.now() - new Date(value).getTime()
-  const minutes = Math.round(diffMs / 60_000)
-  if (minutes < 1) return 'agora'
-  if (minutes < 60) return `${minutes}min atrás`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h atrás`
-  const days = Math.round(hours / 24)
-  return `${days}d atrás`
+  return formatDistanceToNow(new Date(value), { addSuffix: true, locale: ptBR })
 }
 
 function useCreateApprovalRequest() {

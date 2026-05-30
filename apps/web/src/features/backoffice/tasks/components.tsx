@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { differenceInCalendarDays } from 'date-fns'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -44,19 +45,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 
 function dueLabel(dueAt: string | null): { label: string; overdue: boolean } {
   if (!dueAt) return { label: '', overdue: false }
-  const due = new Date(dueAt)
-  const today = new Date()
-  const startOfDue = new Date(
-    due.getFullYear(),
-    due.getMonth(),
-    due.getDate(),
-  ).getTime()
-  const startOfToday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime()
-  const diffDays = Math.round((startOfDue - startOfToday) / 86_400_000)
+  const diffDays = differenceInCalendarDays(new Date(dueAt), new Date())
   if (diffDays < 0)
     return { label: `${Math.abs(diffDays)}d atrás`, overdue: true }
   if (diffDays === 0) return { label: 'vence hoje', overdue: true }

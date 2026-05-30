@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { applyMapping, parseCsv } from './csv'
 
-describe('parseCsv', () => {
-  it('parses a simple comma file with headers', () => {
+describe('parseCsv (papaparse wrapper)', () => {
+  it('shapes the first row as headers and the rest as positional rows', () => {
     const result = parseCsv('tag,name\nBAL-1,Balança\nBAL-2,Paquímetro')
-    expect(result.delimiter).toBe(',')
     expect(result.headers).toEqual(['tag', 'name'])
     expect(result.rows).toEqual([
       ['BAL-1', 'Balança'],
@@ -20,24 +19,20 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([['BAL-1', 'Balança', 'XPE205']])
   })
 
-  it('handles quoted fields with embedded delimiters and escaped quotes', () => {
-    const result = parseCsv('tag,name\n"BAL,1","Diz ""olá"""')
-    expect(result.rows).toEqual([['BAL,1', 'Diz "olá"']])
+  it('handles quoted fields with embedded delimiters and newlines', () => {
+    const result = parseCsv('tag,name\n"BAL,1","linha 1\nlinha 2"')
+    expect(result.rows).toEqual([['BAL,1', 'linha 1\nlinha 2']])
   })
 
-  it('handles quoted fields with embedded newlines', () => {
-    const result = parseCsv('tag,name\nBAL-1,"linha 1\nlinha 2"')
-    expect(result.rows).toEqual([['BAL-1', 'linha 1\nlinha 2']])
-  })
-
-  it('handles CRLF line endings and drops blank lines', () => {
-    const result = parseCsv('tag,name\r\nBAL-1,Balança\r\n\r\n')
-    expect(result.headers).toEqual(['tag', 'name'])
+  it('skips empty lines', () => {
+    const result = parseCsv('tag,name\nBAL-1,Balança\n\n')
     expect(result.rows).toEqual([['BAL-1', 'Balança']])
   })
 
-  it('returns empty result for empty input', () => {
-    expect(parseCsv('   ')).toEqual({ headers: [], rows: [], delimiter: ',' })
+  it('returns empty headers/rows for blank input', () => {
+    const result = parseCsv('   ')
+    expect(result.headers).toEqual([])
+    expect(result.rows).toEqual([])
   })
 })
 

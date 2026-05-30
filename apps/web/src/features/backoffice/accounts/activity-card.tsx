@@ -1,3 +1,5 @@
+import { differenceInCalendarDays, formatDistanceToNow } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import {
   Calendar03Icon,
   Certificate01Icon,
@@ -11,20 +13,15 @@ import { SectionPanel, StatusChip } from '@/features/backoffice/console'
 import { useBackofficeOrganizationActivityData } from '@/features/backoffice/queries'
 import type { BackofficeActivitySection } from '@/features/backoffice/types'
 
-/** Days since an ISO timestamp, or null when never. */
+/** Calendar days since an ISO timestamp, or null when never. */
 function daysSince(value: string | null): number | null {
   if (!value) return null
-  return Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000)
+  return differenceInCalendarDays(new Date(), new Date(value))
 }
 
 function lastSeenLabel(value: string | null): string {
-  const days = daysSince(value)
-  if (days === null) return 'nunca'
-  if (days <= 0) return 'hoje'
-  if (days === 1) return 'ontem'
-  if (days < 30) return `há ${days}d`
-  if (days < 365) return `há ${Math.floor(days / 30)} meses`
-  return `há ${Math.floor(days / 365)} ano(s)`
+  if (!value) return 'nunca'
+  return formatDistanceToNow(new Date(value), { addSuffix: true, locale: ptBR })
 }
 
 /** active < 7d · em risco 7–30d · dormente > 30d / nunca. */
@@ -89,21 +86,21 @@ export function AccountActivityCard({
             icon={Calendar03Icon}
             label="Calibrações (30d)"
             value={activity.jobs.last30d}
-            hint={`última ${lastSeenLabel(activity.jobs.lastAt)} · ${activity.jobs.total} no total`}
+            hint={`${lastSeenLabel(activity.jobs.lastAt)} · ${activity.jobs.total} no total`}
             tone={sectionTone(activity.jobs)}
           />
           <SignalTile
             icon={Certificate01Icon}
             label="Certificados (30d)"
             value={activity.certificates.last30d}
-            hint={`última ${lastSeenLabel(activity.certificates.lastAt)} · ${activity.certificates.total} no total`}
+            hint={`${lastSeenLabel(activity.certificates.lastAt)} · ${activity.certificates.total} no total`}
             tone={sectionTone(activity.certificates)}
           />
           <SignalTile
             icon={InboxIcon}
             label="Solicitações (30d)"
             value={activity.requests.last30d}
-            hint={`última ${lastSeenLabel(activity.requests.lastAt)} · ${activity.requests.total} no total`}
+            hint={`${lastSeenLabel(activity.requests.lastAt)} · ${activity.requests.total} no total`}
             tone={sectionTone(activity.requests)}
           />
         </div>
