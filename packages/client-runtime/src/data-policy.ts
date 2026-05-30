@@ -130,6 +130,7 @@ export const calibraApiPolicyRegistry = {
     listEntitlementOverrides: "cloud-only",
     grantEntitlementOverride: "cloud-only",
     revokeEntitlementOverride: "cloud-only",
+    getOrganizationActivity: "cloud-only",
     listApprovals: "cloud-only",
     createApprovalRequest: "cloud-only",
     decideApproval: "cloud-only",

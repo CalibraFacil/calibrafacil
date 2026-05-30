@@ -270,6 +270,19 @@ export type BackofficeEntitlementOverridesData = {
   data: BackofficeEntitlementOverride[]
 }
 
+export type BackofficeActivitySection = {
+  lastAt: string | null
+  total: number
+  last30d: number
+}
+
+export type BackofficeOrganizationActivity = {
+  lastActiveAt: string | null
+  jobs: BackofficeActivitySection
+  certificates: BackofficeActivitySection
+  requests: BackofficeActivitySection
+}
+
 export type BackofficeApprovalKind = 'refund' | 'credit' | 'adjustment' | 'other'
 export type BackofficeApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 

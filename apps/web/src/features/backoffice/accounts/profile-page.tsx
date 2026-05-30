@@ -39,6 +39,7 @@ import {
 } from '@/features/backoffice/console'
 import { AccountTasksCard } from '@/features/backoffice/tasks/components'
 import { RequestApprovalCard } from '@/features/backoffice/approvals/components'
+import { AccountActivityCard } from './activity-card'
 import { AccountLifecycleCard } from './lifecycle-card'
 import { EntitlementOverridesCard } from './entitlements-card'
 import {
@@ -710,6 +711,9 @@ function AccountProfile({
         </div>
 
         <div className="min-w-0 space-y-5">
+          {/* Product-usage evidence (gap #1 core) */}
+          <AccountActivityCard organizationId={organizationId} />
+
           {/* Tenant lifecycle */}
           <AccountLifecycleCard
             organizationId={organizationId}

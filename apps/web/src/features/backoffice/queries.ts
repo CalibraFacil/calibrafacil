@@ -20,6 +20,7 @@ import type {
   BackofficeEntitlementOverridesData,
   BackofficeApprovalFilters,
   BackofficeApprovalsData,
+  BackofficeOrganizationActivity,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -375,4 +376,21 @@ export function useBackofficeApprovalsData(
   filters: BackofficeApprovalFilters = {},
 ) {
   return useQuery(backofficeApprovalsQueryOptions(filters))
+}
+
+export function backofficeOrganizationActivityQueryOptions(
+  organizationId: string,
+) {
+  return queryOptions({
+    queryKey: ['backoffice', 'organization-activity', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.getOrganizationActivity<BackofficeOrganizationActivity>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeOrganizationActivityData(organizationId: string) {
+  return useQuery(backofficeOrganizationActivityQueryOptions(organizationId))
 }

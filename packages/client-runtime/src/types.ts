@@ -1676,6 +1676,9 @@ export interface BackofficeApi {
   revokeEntitlementOverride<TResponse = unknown>(
     id: string | number,
   ): Promise<TResponse>;
+  getOrganizationActivity<TResponse = unknown>(
+    id: string,
+  ): Promise<TResponse>;
   listApprovals<TResponse = unknown>(
     input?: Record<string, unknown>,
   ): Promise<TResponse>;

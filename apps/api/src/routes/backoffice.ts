@@ -6,6 +6,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gte,
@@ -14,6 +15,7 @@ import {
   like,
   lt,
   lte,
+  max,
   not,
   or,
   sql,
@@ -32,6 +34,9 @@ import {
   accountTask,
   appQueueJob,
   approvalRequest,
+  calibrationJob,
+  calibrationRequest,
+  certificateRelease,
   entitlementOverride,
   member,
   organization,
@@ -2028,6 +2033,70 @@ export const backofficeRouter = new Hono<{
       return c.json(decided);
     },
   )
+  // Derived product-usage telemetry (gap #1 core) — operator evidence of whether
+  // a lab is *actually* producing work, read live off existing domain tables (no
+  // event spine / instrumentation yet). Jobs, certificate releases and portal
+  // calibration requests are the load-bearing "is this account alive" signals.
+  .get("/organizations/:id/activity", async (c) => {
+    const id = c.req.param("id");
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sinceIso = since.toISOString();
+
+    const [jobs, certificates, requests] = await Promise.all([
+      db
+        .select({
+          last: max(calibrationJob.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${calibrationJob.createdAt} >= ${sinceIso})`,
+        })
+        .from(calibrationJob)
+        .where(eq(calibrationJob.organizationId, id)),
+      db
+        .select({
+          last: max(certificateRelease.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${certificateRelease.createdAt} >= ${sinceIso})`,
+        })
+        .from(certificateRelease)
+        .where(eq(certificateRelease.organizationId, id)),
+      db
+        .select({
+          last: max(calibrationRequest.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${calibrationRequest.createdAt} >= ${sinceIso})`,
+        })
+        .from(calibrationRequest)
+        .where(eq(calibrationRequest.organizationId, id)),
+    ]);
+
+    const section = (
+      row: { last: Date | null; total: number; recent: number } | undefined,
+    ) => ({
+      lastAt: row?.last ? row.last.toISOString() : null,
+      total: Number(row?.total ?? 0),
+      last30d: Number(row?.recent ?? 0),
+    });
+
+    const jobsSection = section(jobs[0]);
+    const certificatesSection = section(certificates[0]);
+    const requestsSection = section(requests[0]);
+
+    const lastActiveAt = [
+      jobsSection.lastAt,
+      certificatesSection.lastAt,
+      requestsSection.lastAt,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+
+    return c.json({
+      lastActiveAt: lastActiveAt ?? null,
+      jobs: jobsSection,
+      certificates: certificatesSection,
+      requests: requestsSection,
+    });
+  })
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
       with: {

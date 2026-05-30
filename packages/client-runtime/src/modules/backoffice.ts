@@ -187,6 +187,14 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao revogar acesso",
       );
     },
+    async getOrganizationActivity<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"].activity.$get({
+          param: { id },
+        }),
+        "Falha ao carregar atividade",
+      );
+    },
     async listApprovals<TResponse = unknown>(input = {}) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.approvals.$get({ query: input }),

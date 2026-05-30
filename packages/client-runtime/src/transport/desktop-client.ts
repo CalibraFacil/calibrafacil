@@ -354,6 +354,9 @@ export function createDesktopApiClient(
       async revokeEntitlementOverride() {
         throw desktopUnsupportedBackofficeAction("Concessões backoffice");
       },
+      async getOrganizationActivity() {
+        throw desktopUnsupportedBackofficeAction("Atividade backoffice");
+      },
       async listApprovals() {
         throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
       },
