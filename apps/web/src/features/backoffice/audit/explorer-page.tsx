@@ -1,4 +1,5 @@
 import { useDeferredValue, useState } from 'react'
+import Papa from 'papaparse'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Download01Icon,
@@ -24,23 +25,19 @@ import type { BackofficeAuditLogEntry } from '@/features/backoffice/types'
 
 const PAGE_SIZE = 50
 
-function csvCell(value: unknown): string {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
 function downloadAuditCsv(entries: ReadonlyArray<BackofficeAuditLogEntry>) {
-  const header = [
-    'Quando',
-    'Ação',
-    'Entidade',
-    'ID da entidade',
-    'Ator',
-    'Email do ator',
-    'Alvo',
-    'Detalhes',
-  ]
-  const rows = entries.map((entry) =>
-    [
+  const csv = Papa.unparse({
+    fields: [
+      'Quando',
+      'Ação',
+      'Entidade',
+      'ID da entidade',
+      'Ator',
+      'Email do ator',
+      'Alvo',
+      'Detalhes',
+    ],
+    data: entries.map((entry) => [
       entry.createdAt,
       entry.action,
       entry.entityType,
@@ -49,11 +46,9 @@ function downloadAuditCsv(entries: ReadonlyArray<BackofficeAuditLogEntry>) {
       entry.actorUser?.email ?? '',
       entry.targetUser?.name ?? '',
       entry.details ? JSON.stringify(entry.details) : '',
-    ]
-      .map(csvCell)
-      .join(','),
-  )
-  const csv = [header.map(csvCell).join(','), ...rows].join('\r\n')
+    ]),
+  })
+  // Prepend a BOM so Excel opens UTF-8 accents correctly.
   const blob = new Blob([`﻿${csv}`], {
     type: 'text/csv;charset=utf-8;',
   })
