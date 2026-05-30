@@ -38,6 +38,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ConsolePageHeader } from '@/features/backoffice/console'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -275,9 +286,16 @@ function BackofficeUsersPage() {
   })
 
   const impersonateMutation = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({
+      userId,
+      reason,
+    }: {
+      userId: string
+      reason: string
+    }) => {
       return calibraApi.backoffice.impersonateUser<{ redirectPath: string }>(
         userId,
+        reason,
       )
     },
     onSuccess: (data) => {
@@ -836,6 +854,57 @@ function ToastOnMount({ message }: { message: string }) {
   return null
 }
 
+/**
+ * Impersonation is governed: it requires a justification (min. 5 chars) that is
+ * recorded in the immutable platform audit log and visible to the whole team.
+ */
+function ImpersonateButton({
+  userId,
+  mutation,
+}: {
+  userId: string
+  mutation: EntityMutation<{ userId: string; reason: string }>
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const isValid = reason.trim().length >= 5
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        Impersonar
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Impersonar usuário</DialogTitle>
+          <DialogDescription>
+            Informe o motivo do acesso. Ele é registrado na trilha de auditoria
+            e fica visível para toda a equipe.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          rows={3}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Ex.: investigar o ticket #1234 a pedido do laboratório"
+        />
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancelar
+          </DialogClose>
+          <Button
+            disabled={!isValid || mutation.isPending}
+            onClick={() => mutation.mutate({ userId, reason: reason.trim() })}
+            className="transition-transform active:scale-[0.96]"
+          >
+            {mutation.isPending ? 'Iniciando…' : 'Confirmar impersonação'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function UserTableRow({
   row,
   user,
@@ -853,7 +922,7 @@ function UserTableRow({
   canManageRoles: boolean
   banMutation: EntityMutation<string>
   unbanMutation: EntityMutation<string>
-  impersonateMutation: EntityMutation<string>
+  impersonateMutation: EntityMutation<{ userId: string; reason: string }>
   requestPasswordSetupMutation: EntityMutation<string>
   setRoleMutation: EntityMutation<{
     userId: string
@@ -981,14 +1050,10 @@ function UserTableRow({
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => impersonateMutation.mutate(user.id)}
-                        disabled={impersonateMutation.isPending}
-                      >
-                        Impersonar
-                      </Button>
+                      <ImpersonateButton
+                        userId={user.id}
+                        mutation={impersonateMutation}
+                      />
                       {user.banned ? (
                         <Button
                           variant="outline"

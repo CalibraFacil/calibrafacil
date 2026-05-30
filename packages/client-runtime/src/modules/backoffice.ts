@@ -71,10 +71,11 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao reabilitar usuário",
       );
     },
-    async impersonateUser<TResponse = unknown>(id: string) {
+    async impersonateUser<TResponse = unknown>(id: string, reason: string) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.users[":id"].impersonate.$post({
           param: { id },
+          json: { reason },
         }),
         "Falha ao iniciar impersonação",
       );

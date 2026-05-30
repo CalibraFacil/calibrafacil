@@ -1645,7 +1645,10 @@ export interface BackofficeApi {
   ): Promise<TResponse>;
   banUser<TResponse = unknown>(id: string): Promise<TResponse>;
   unbanUser<TResponse = unknown>(id: string): Promise<TResponse>;
-  impersonateUser<TResponse = unknown>(id: string): Promise<TResponse>;
+  impersonateUser<TResponse = unknown>(
+    id: string,
+    reason: string,
+  ): Promise<TResponse>;
   createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
   provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
   requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;

@@ -158,6 +158,10 @@ const ImpersonationBridgeSchema = z.object({
   targetUserId: z.string().trim().min(1),
 });
 
+const ImpersonateUserSchema = z.object({
+  reason: z.string().trim().min(5).max(500),
+});
+
 function recordFromUnknown(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -1776,42 +1780,51 @@ export const backofficeRouter = new Hono<{
       });
     },
   )
-  .post("/users/:id/impersonate", async (c) => {
-    const backofficeAuth = createBackofficeAuth();
-    const session = c.get("session");
-    const targetUserId = c.req.param("id");
-    const targetUser = await db.query.user.findFirst({
-      where: eq(userTable.id, targetUserId),
-    });
+  .post(
+    "/users/:id/impersonate",
+    zValidator("json", ImpersonateUserSchema),
+    async (c) => {
+      const backofficeAuth = createBackofficeAuth();
+      const session = c.get("session");
+      const targetUserId = c.req.param("id");
+      // Governance: impersonation requires a recorded justification (LGPD / trust).
+      // The reason is written to the immutable platformEventLog and is visible in
+      // the backoffice Audit Log.
+      const { reason } = c.req.valid("json");
+      const targetUser = await db.query.user.findFirst({
+        where: eq(userTable.id, targetUserId),
+      });
 
-    if (!targetUser) {
-      return c.json({ error: "Usuário alvo não encontrado" }, 404);
-    }
+      if (!targetUser) {
+        return c.json({ error: "Usuário alvo não encontrado" }, 404);
+      }
 
-    const handoff = await backofficeAuth.api.generateOneTimeToken({
-      headers: c.req.raw.headers,
-    });
+      const handoff = await backofficeAuth.api.generateOneTimeToken({
+        headers: c.req.raw.headers,
+      });
 
-    await logPlatformEvent({
-      actorUserId: session.user.id,
-      targetUserId,
-      action: "backoffice.impersonation.handoff.started",
-      entityType: "user",
-      entityId: targetUserId,
-      details: {
-        email: targetUser.email,
-      },
-    });
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId,
+        action: "backoffice.impersonation.handoff.started",
+        entityType: "user",
+        entityId: targetUserId,
+        details: {
+          email: targetUser.email,
+          reason,
+        },
+      });
 
-    const bridgeSearch = new URLSearchParams({
-      token: handoff.token,
-      targetUserId,
-    });
+      const bridgeSearch = new URLSearchParams({
+        token: handoff.token,
+        targetUserId,
+      });
 
-    return c.json({
-      redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
-    });
-  })
+      return c.json({
+        redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
+      });
+    },
+  )
   .use("/users/:id/request-password-reset", requirePlatformAdmin)
   .use("/users/:id/role", requirePlatformAdmin)
   .use("/users/:id/ban", requirePlatformAdmin)
