@@ -223,6 +223,13 @@ export type BackofficeVitalsData = {
     byStatus: Record<string, number>
     byPlan: Record<string, number>
   }
+  queue: {
+    pending: number
+    processing: number
+    failed: number
+    completed: number
+    stuck: number
+  }
 }
 
 export type BackofficeAccountTask = {

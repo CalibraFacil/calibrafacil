@@ -30,6 +30,7 @@ import {
 import { db } from "@calibra-facil/db";
 import {
   accountTask,
+  appQueueJob,
   entitlementOverride,
   member,
   organization,
@@ -933,6 +934,41 @@ export const backofficeRouter = new Hono<{
       byPlan[row.planId] = row.count;
     }
 
+    // Worker queue health — a wedged certificate/notification queue is invisible
+    // to operators today. "Stuck" = PENDING jobs whose availableAt is >15min past
+    // (the worker should have drained them).
+    const queueByStatus = await db
+      .select({
+        status: appQueueJob.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(appQueueJob)
+      .groupBy(appQueueJob.status);
+
+    const queueStuckRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(appQueueJob)
+      .where(
+        and(
+          eq(appQueueJob.status, "PENDING"),
+          lt(appQueueJob.availableAt, new Date(now.getTime() - 15 * 60 * 1000)),
+        ),
+      );
+
+    const queue = {
+      pending: 0,
+      processing: 0,
+      failed: 0,
+      completed: 0,
+      stuck: queueStuckRows[0]?.count ?? 0,
+    };
+    for (const row of queueByStatus) {
+      if (row.status === "PENDING") queue.pending = row.count;
+      else if (row.status === "PROCESSING") queue.processing = row.count;
+      else if (row.status === "FAILED") queue.failed = row.count;
+      else if (row.status === "COMPLETED") queue.completed = row.count;
+    }
+
     return c.json({
       subscriptions: {
         total,
@@ -944,6 +980,7 @@ export const backofficeRouter = new Hono<{
         byStatus,
         byPlan,
       },
+      queue,
     });
   })
   // Account tasks — first-class operator tasks per account (and a cross-account

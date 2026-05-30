@@ -57,6 +57,7 @@ import {
 } from './metrics'
 import { IntegrationHealthPanel } from './integration-health-panel'
 import { RevenuePanel } from './revenue-panel'
+import { ReliabilityPanel } from './reliability-panel'
 import { MyTasksPanel } from '@/features/backoffice/tasks/components'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
@@ -291,8 +292,9 @@ export function BackofficeCommandCenter() {
       {/* Operator worklist */}
       <MyTasksPanel />
 
-      {/* Revenue & integration health */}
+      {/* Revenue, reliability & integration health */}
       <RevenuePanel />
+      <ReliabilityPanel />
       <IntegrationHealthPanel />
 
       {/* Lifecycle pipelines */}
