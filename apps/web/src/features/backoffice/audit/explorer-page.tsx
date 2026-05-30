@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  Download01Icon,
   RefreshIcon,
   SecurityCheckIcon,
   ShieldKeyIcon,
@@ -22,6 +23,49 @@ import { formatDateTime } from '@/features/backoffice/customer-success/model'
 import type { BackofficeAuditLogEntry } from '@/features/backoffice/types'
 
 const PAGE_SIZE = 50
+
+function csvCell(value: unknown): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function downloadAuditCsv(entries: ReadonlyArray<BackofficeAuditLogEntry>) {
+  const header = [
+    'Quando',
+    'Ação',
+    'Entidade',
+    'ID da entidade',
+    'Ator',
+    'Email do ator',
+    'Alvo',
+    'Detalhes',
+  ]
+  const rows = entries.map((entry) =>
+    [
+      entry.createdAt,
+      entry.action,
+      entry.entityType,
+      entry.entityId ?? '',
+      entry.actorUser?.name ?? 'Sistema',
+      entry.actorUser?.email ?? '',
+      entry.targetUser?.name ?? '',
+      entry.details ? JSON.stringify(entry.details) : '',
+    ]
+      .map(csvCell)
+      .join(','),
+  )
+  const csv = [header.map(csvCell).join(','), ...rows].join('\r\n')
+  const blob = new Blob([`﻿${csv}`], {
+    type: 'text/csv;charset=utf-8;',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `auditoria-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 function actionTone(action: string): SignalTone {
   if (/(banned|failed|cancel|escalat|void|delete)/i.test(action)) {
@@ -65,19 +109,31 @@ export function AuditLogExplorerPage() {
         title="Auditoria"
         description="Trilha imutável de toda ação sensível do backoffice — impersonação, banimentos, provisionamentos, ofertas e mudanças de conta — com ator, alvo e contexto."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-            className="min-h-10 transition-transform active:scale-[0.96]"
-          >
-            <HugeiconsIcon
-              icon={RefreshIcon}
-              className={cn('size-4', query.isFetching && 'animate-spin')}
-            />
-            Atualizar
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadAuditCsv(entries)}
+              disabled={entries.length === 0}
+              className="min-h-10 transition-transform active:scale-[0.96]"
+            >
+              <HugeiconsIcon icon={Download01Icon} className="size-4" />
+              Exportar CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => query.refetch()}
+              disabled={query.isFetching}
+              className="min-h-10 transition-transform active:scale-[0.96]"
+            >
+              <HugeiconsIcon
+                icon={RefreshIcon}
+                className={cn('size-4', query.isFetching && 'animate-spin')}
+              />
+              Atualizar
+            </Button>
+          </>
         }
       />
 
