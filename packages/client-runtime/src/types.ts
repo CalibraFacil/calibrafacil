@@ -1657,6 +1657,13 @@ export interface BackofficeApi {
   ): Promise<TResponse>;
   getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
   getVitals<TResponse = unknown>(): Promise<TResponse>;
+  listOperatorAlerts<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  recomputeOperatorAlerts<TResponse = unknown>(): Promise<TResponse>;
+  acknowledgeOperatorAlert<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
   listAccountTasks<TResponse = unknown>(
     input?: Record<string, unknown>,
   ): Promise<TResponse>;

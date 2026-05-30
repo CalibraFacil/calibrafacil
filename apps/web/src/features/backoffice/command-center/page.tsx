@@ -60,6 +60,7 @@ import { RevenuePanel } from './revenue-panel'
 import { ReliabilityPanel } from './reliability-panel'
 import { MyTasksPanel } from '@/features/backoffice/tasks/components'
 import { ApprovalsQueuePanel } from '@/features/backoffice/approvals/components'
+import { OperatorAlertsPanel } from './operator-alerts-panel'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
   'CRITICAL',
@@ -289,6 +290,9 @@ export function BackofficeCommandCenter() {
           )}
         </SectionPanel>
       </div>
+
+      {/* Operator-addressed alerts (gap #5) */}
+      <OperatorAlertsPanel />
 
       {/* Operator worklist & governance queue */}
       <div className="grid gap-5 xl:grid-cols-2">

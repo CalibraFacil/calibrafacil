@@ -41,6 +41,7 @@ import {
   entitlementOverride,
   importRun,
   member,
+  operatorAlert,
   organization,
   organizationIntegration,
   organizationSuccessProfile,
@@ -58,6 +59,7 @@ import {
   validateImportRows,
 } from "@calibra-facil/schemas";
 import { parseSpreadsheet } from "../lib/import-parse";
+import { recomputeOperatorAlerts } from "../lib/operator-alerts";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -764,6 +766,10 @@ const CreateInteractionSchema = z.object({
   direction: z.enum(["outbound", "inbound", "internal"]).optional(),
   summary: z.string().trim().min(2).max(2000),
   occurredAt: z.string().datetime().optional(),
+});
+
+const OperatorAlertQuerySchema = z.object({
+  status: z.enum(["open", "acknowledged", "all"]).optional(),
 });
 
 export const backofficeRouter = new Hono<{
@@ -2464,6 +2470,121 @@ export const backofficeRouter = new Hono<{
       return c.json(created);
     },
   )
+  // Operator-addressed alerting (gap #5). The `operator-alerts` cron recomputes
+  // proactive risk signals into `operator_alert`; operators read and acknowledge
+  // them here. A manual recompute is exposed so the cockpit isn't empty between
+  // cron runs.
+  .get(
+    "/operator-alerts",
+    zValidator("query", OperatorAlertQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
+      const status = input.status ?? "open";
+      const where =
+        status === "open"
+          ? eq(operatorAlert.status, "OPEN")
+          : status === "acknowledged"
+            ? eq(operatorAlert.status, "ACKNOWLEDGED")
+            : undefined;
+
+      const rows = await db
+        .select({
+          id: operatorAlert.id,
+          organizationId: operatorAlert.organizationId,
+          organizationName: organization.name,
+          kind: operatorAlert.kind,
+          severity: operatorAlert.severity,
+          title: operatorAlert.title,
+          detail: operatorAlert.detail,
+          status: operatorAlert.status,
+          acknowledgedByUserId: operatorAlert.acknowledgedByUserId,
+          acknowledgedAt: operatorAlert.acknowledgedAt,
+          firstSeenAt: operatorAlert.firstSeenAt,
+          lastSeenAt: operatorAlert.lastSeenAt,
+        })
+        .from(operatorAlert)
+        .leftJoin(
+          organization,
+          eq(organization.id, operatorAlert.organizationId),
+        )
+        .where(where)
+        // critical → warning → info, then most-recent first.
+        .orderBy(
+          sql`case ${operatorAlert.severity} when 'critical' then 0 when 'warning' then 1 else 2 end`,
+          desc(operatorAlert.lastSeenAt),
+        )
+        .limit(200);
+
+      const userIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.acknowledgedByUserId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({ id: userTable.id, name: userTable.name })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+      const data = rows.map((row) => ({
+        ...row,
+        acknowledgedByName: row.acknowledgedByUserId
+          ? (nameById.get(row.acknowledgedByUserId) ?? null)
+          : null,
+      }));
+
+      return c.json({ data });
+    },
+  )
+  .post("/operator-alerts/recompute", async (c) => {
+    const session = c.get("session");
+    const result = await recomputeOperatorAlerts();
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.operator_alerts.recomputed",
+      entityType: "platform",
+      entityId: null,
+      details: result,
+    });
+    return c.json(result);
+  })
+  .post("/operator-alerts/:id/acknowledge", async (c) => {
+    const session = c.get("session");
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (!Number.isInteger(id)) {
+      return c.json({ error: "Alerta inválido" }, 400);
+    }
+
+    const updated = await db
+      .update(operatorAlert)
+      .set({
+        status: "ACKNOWLEDGED",
+        acknowledgedByUserId: session.user.id,
+        acknowledgedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(operatorAlert.id, id))
+      .returning();
+    const alert = updated[0];
+    if (!alert) {
+      return c.json({ error: "Alerta não encontrado" }, 404);
+    }
+
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.operator_alert.acknowledged",
+      entityType: "operator_alert",
+      entityId: String(id),
+      details: { kind: alert.kind, organizationId: alert.organizationId },
+    });
+
+    return c.json(alert);
+  })
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
       with: {

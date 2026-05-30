@@ -333,6 +333,15 @@ export function createDesktopApiClient(
       async getVitals() {
         throw desktopUnsupportedBackofficeAction("Indicadores backoffice");
       },
+      async listOperatorAlerts() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
+      async recomputeOperatorAlerts() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
+      async acknowledgeOperatorAlert() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
       async listAccountTasks() {
         throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
       },

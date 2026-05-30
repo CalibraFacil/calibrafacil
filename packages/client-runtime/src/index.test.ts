@@ -394,6 +394,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listOperatorAlerts",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "recomputeOperatorAlerts",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "acknowledgeOperatorAlert",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "listAccountTasks",
           "namespace": "backoffice",
           "policy": "cloud-only",

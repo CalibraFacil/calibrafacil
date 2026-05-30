@@ -703,6 +703,9 @@ export type AccountInteractionChannel =
   | "other";
 export type AccountInteractionDirection = "outbound" | "inbound" | "internal";
 
+export type OperatorAlertSeverity = "info" | "warning" | "critical";
+export type OperatorAlertStatus = "OPEN" | "ACKNOWLEDGED";
+
 export const accountTask = pgTable(
   "account_task",
   {
@@ -868,6 +871,51 @@ export const accountInteraction = pgTable(
   (table) => [
     index("account_interaction_org_idx").on(table.organizationId),
     index("account_interaction_occurred_idx").on(table.occurredAt),
+  ],
+);
+
+/**
+ * Operator-addressed alerts (operations-console gap #5). A scheduler-driven engine
+ * (the `operator-alerts` cron) recomputes proactive risk signals and upserts them
+ * here so the *team* is notified — until now only labs were. `dedupeKey` makes
+ * recompute idempotent; alerts whose condition clears are swept on the next run;
+ * acknowledgement persists while the condition holds.
+ */
+export const operatorAlert = pgTable(
+  "operator_alert",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    dedupeKey: text("dedupe_key").notNull().unique(),
+    kind: text("kind").notNull(),
+    severity: text("severity")
+      .$type<OperatorAlertSeverity>()
+      .default("warning")
+      .notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    status: text("status")
+      .$type<OperatorAlertStatus>()
+      .default("OPEN")
+      .notNull(),
+    acknowledgedByUserId: text("acknowledged_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("operator_alert_status_idx").on(table.status),
+    index("operator_alert_org_idx").on(table.organizationId),
   ],
 );
 

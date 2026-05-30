@@ -23,6 +23,7 @@ import type {
   BackofficeOrganizationActivity,
   BackofficeImportRunsData,
   BackofficeInteractionsData,
+  BackofficeOperatorAlertsData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -316,6 +317,20 @@ export function backofficeVitalsQueryOptions() {
     queryKey: ['backoffice', 'vitals'],
     queryFn: () => calibraApi.backoffice.getVitals<BackofficeVitalsData>(),
   })
+}
+
+export function backofficeOperatorAlertsQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'operator-alerts'],
+    queryFn: () =>
+      calibraApi.backoffice.listOperatorAlerts<BackofficeOperatorAlertsData>({
+        status: 'open',
+      }),
+  })
+}
+
+export function useBackofficeOperatorAlertsData() {
+  return useQuery(backofficeOperatorAlertsQueryOptions())
 }
 
 export function useBackofficeVitalsData() {

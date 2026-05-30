@@ -283,6 +283,25 @@ export type BackofficeOrganizationActivity = {
   requests: BackofficeActivitySection
 }
 
+export type BackofficeOperatorAlert = {
+  id: number
+  organizationId: string | null
+  organizationName: string | null
+  kind: string
+  severity: string
+  title: string
+  detail: string | null
+  status: string
+  acknowledgedByName: string | null
+  acknowledgedAt: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export type BackofficeOperatorAlertsData = {
+  data: BackofficeOperatorAlert[]
+}
+
 export type BackofficeInteraction = {
   id: number
   channel: string

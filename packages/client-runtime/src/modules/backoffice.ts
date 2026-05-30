@@ -120,6 +120,28 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao carregar os indicadores da plataforma",
       );
     },
+    async listOperatorAlerts<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"].$get({
+          query: input,
+        }),
+        "Falha ao carregar alertas",
+      );
+    },
+    async recomputeOperatorAlerts<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"].recompute.$post(),
+        "Falha ao recalcular alertas",
+      );
+    },
+    async acknowledgeOperatorAlert<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"][
+          ":id"
+        ].acknowledge.$post({ param: { id: String(id) } }),
+        "Falha ao reconhecer alerta",
+      );
+    },
     async listAccountTasks<TResponse = unknown>(input = {}) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice["account-tasks"].$get({
