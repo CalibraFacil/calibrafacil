@@ -752,6 +752,12 @@ const ImportParseSchema = z.object({
   fileName: z.string().trim().max(300).optional(),
 });
 
+const ManageSubscriptionSchema = z.object({
+  action: z.enum(["change_plan", "cancel", "reactivate"]),
+  planId: z.enum(["FREE", "STANDARD", "PROFESSIONAL", "ENTERPRISE"]).optional(),
+  reason: z.string().trim().max(500).optional(),
+});
+
 export const backofficeRouter = new Hono<{
   Variables: AuthVariables;
 }>()
@@ -1860,6 +1866,132 @@ export const backofficeRouter = new Hono<{
       });
 
       return c.json({ ok: true });
+    },
+  )
+  // Managed subscription lifecycle (gap #10 core) — operator-driven plan change,
+  // cancel-with-reason and reactivate over the local `subscription` row, audited.
+  // Entitlements follow `getOrganizationPlanAccess` immediately. The Asaas billing
+  // sync (proration, provider state) is the external follow-up — the operator
+  // reconciles billing separately; this never touches billing credentials.
+  .post(
+    "/organizations/:id/subscription",
+    requirePlatformAdmin,
+    zValidator("json", ManageSubscriptionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const existing = await db.query.subscription.findFirst({
+        where: eq(subscription.organizationId, id),
+      });
+
+      const summarize = (row: typeof subscription.$inferSelect | undefined) =>
+        row
+          ? {
+              planId: row.planId,
+              status: row.status,
+              canceledAt: row.canceledAt,
+              cancelReason: row.cancelReason,
+              currentPeriodEnd: row.currentPeriodEnd,
+            }
+          : null;
+
+      if (input.action === "change_plan") {
+        if (!input.planId) {
+          return c.json({ error: "Plano é obrigatório" }, 400);
+        }
+        const rows = existing
+          ? await db
+              .update(subscription)
+              .set({
+                planId: input.planId,
+                status: "ACTIVE",
+                canceledAt: null,
+                cancelReason: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(subscription.id, existing.id))
+              .returning()
+          : await db
+              .insert(subscription)
+              .values({
+                organizationId: id,
+                planId: input.planId,
+                status: "ACTIVE",
+              })
+              .returning();
+
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          action: "backoffice.subscription.plan_changed",
+          entityType: "organization",
+          entityId: id,
+          details: {
+            planId: input.planId,
+            previousPlanId: existing?.planId ?? null,
+          },
+        });
+        return c.json(summarize(rows[0]));
+      }
+
+      if (!existing) {
+        return c.json({ error: "Organização sem assinatura" }, 404);
+      }
+
+      if (input.action === "cancel") {
+        const reason = input.reason?.trim() ?? "";
+        if (reason.length < 5) {
+          return c.json({ error: "Informe o motivo do cancelamento" }, 400);
+        }
+        const rows = await db
+          .update(subscription)
+          .set({
+            status: "CANCELED",
+            canceledAt: new Date(),
+            cancelReason: reason,
+            updatedAt: new Date(),
+          })
+          .where(eq(subscription.id, existing.id))
+          .returning();
+
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          action: "backoffice.subscription.canceled",
+          entityType: "organization",
+          entityId: id,
+          details: { planId: existing.planId, reason },
+        });
+        return c.json(summarize(rows[0]));
+      }
+
+      // reactivate
+      const rows = await db
+        .update(subscription)
+        .set({
+          status: "ACTIVE",
+          canceledAt: null,
+          cancelReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscription.id, existing.id))
+        .returning();
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.subscription.reactivated",
+        entityType: "organization",
+        entityId: id,
+        details: { planId: existing.planId },
+      });
+      return c.json(summarize(rows[0]));
     },
   )
   // Maker-checker approval queue — dual-control over sensitive, money-touching

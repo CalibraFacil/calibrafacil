@@ -43,6 +43,7 @@ import { ImporterCard } from '@/features/backoffice/imports/importer-card'
 import { AccountActivityCard } from './activity-card'
 import { AccountLifecycleCard } from './lifecycle-card'
 import { EntitlementOverridesCard } from './entitlements-card'
+import { SubscriptionManagementCard } from './subscription-card'
 import {
   useBackofficeOrganizationDetailData,
   useBackofficeCommercialContextData,
@@ -821,6 +822,12 @@ function AccountProfile({
               </div>
             </div>
           </SectionPanel>
+
+          {/* Managed subscription lifecycle (gap #10 core) */}
+          <SubscriptionManagementCard
+            organizationId={organizationId}
+            subscription={commercial?.subscription ?? null}
+          />
 
           {/* Timeline */}
           <SectionPanel

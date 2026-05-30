@@ -160,6 +160,14 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao atualizar a conta",
       );
     },
+    async manageSubscription<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].subscription.$post({ param: { id }, json: input }),
+        "Falha ao atualizar assinatura",
+      );
+    },
     async listEntitlementOverrides<TResponse = unknown>(id: string) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.organizations[":id"][

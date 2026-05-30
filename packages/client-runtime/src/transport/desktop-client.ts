@@ -345,6 +345,9 @@ export function createDesktopApiClient(
       async updateOrganizationLifecycle() {
         throw desktopUnsupportedBackofficeAction("Ciclo de vida backoffice");
       },
+      async manageSubscription() {
+        throw desktopUnsupportedBackofficeAction("Assinatura backoffice");
+      },
       async listEntitlementOverrides() {
         throw desktopUnsupportedBackofficeAction("Concessões backoffice");
       },
