@@ -14,6 +14,7 @@ import type {
   BackofficeSupportQueueData,
   BackofficeUserFilters,
   BackofficeUsersData,
+  BackofficeVitalsData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -300,4 +301,15 @@ export function backofficeIntegrationHealthQueryOptions() {
 
 export function useBackofficeIntegrationHealthData() {
   return useQuery(backofficeIntegrationHealthQueryOptions())
+}
+
+export function backofficeVitalsQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'vitals'],
+    queryFn: () => calibraApi.backoffice.getVitals<BackofficeVitalsData>(),
+  })
+}
+
+export function useBackofficeVitalsData() {
+  return useQuery(backofficeVitalsQueryOptions())
 }

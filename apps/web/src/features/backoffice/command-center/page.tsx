@@ -56,6 +56,7 @@ import {
   type PipelineBucket,
 } from './metrics'
 import { IntegrationHealthPanel } from './integration-health-panel'
+import { RevenuePanel } from './revenue-panel'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
   'CRITICAL',
@@ -286,7 +287,8 @@ export function BackofficeCommandCenter() {
         </SectionPanel>
       </div>
 
-      {/* Integration health */}
+      {/* Revenue & integration health */}
+      <RevenuePanel />
       <IntegrationHealthPanel />
 
       {/* Lifecycle pipelines */}

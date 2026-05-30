@@ -1653,6 +1653,7 @@ export interface BackofficeApi {
     input?: Record<string, unknown>,
   ): Promise<TResponse>;
   getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
+  getVitals<TResponse = unknown>(): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

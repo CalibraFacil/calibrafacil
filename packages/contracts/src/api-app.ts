@@ -74,6 +74,7 @@ type ApiRoutePath =
   | "/api/backoffice/users/:id/password-reset"
   | "/api/backoffice/users/:id/role"
   | "/api/backoffice/users/:id/unban"
+  | "/api/backoffice/vitals"
   | "/api/billing/access"
   | "/api/billing/payments"
   | "/api/billing/subscription"

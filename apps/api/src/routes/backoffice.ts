@@ -8,10 +8,12 @@ import {
   asc,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   like,
   lt,
+  lte,
   not,
   or,
   sql,
@@ -830,6 +832,71 @@ export const backofficeRouter = new Hono<{
     }
 
     return c.json({ providers: Object.values(providersMap), affected });
+  })
+  // Server-side revenue/subscription vitals — the operator cockpit was blind to
+  // its own commercial state. Simple column aggregates over `subscription`
+  // (status + plan distribution + renewals due), computed in SQL rather than
+  // shipped to the browser. First domain of a growing /vitals metrics endpoint.
+  .get("/vitals", async (c) => {
+    const now = new Date();
+    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const byStatusRows = await db
+      .select({
+        status: subscription.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(subscription)
+      .groupBy(subscription.status);
+
+    const byPlanRows = await db
+      .select({
+        planId: subscription.planId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(subscription)
+      .groupBy(subscription.planId);
+
+    const renewalRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(subscription)
+      .where(
+        and(
+          eq(subscription.status, "ACTIVE"),
+          gte(subscription.nextBillingDate, now),
+          lte(subscription.nextBillingDate, in30Days),
+        ),
+      );
+
+    const byStatus: Record<string, number> = {
+      ACTIVE: 0,
+      PAST_DUE: 0,
+      CANCELED: 0,
+      TRIAL: 0,
+    };
+    let total = 0;
+    for (const row of byStatusRows) {
+      byStatus[row.status] = row.count;
+      total += row.count;
+    }
+
+    const byPlan: Record<string, number> = {};
+    for (const row of byPlanRows) {
+      byPlan[row.planId] = row.count;
+    }
+
+    return c.json({
+      subscriptions: {
+        total,
+        active: byStatus.ACTIVE ?? 0,
+        trialing: byStatus.TRIAL ?? 0,
+        pastDue: byStatus.PAST_DUE ?? 0,
+        canceled: byStatus.CANCELED ?? 0,
+        renewalsDue30d: renewalRows[0]?.count ?? 0,
+        byStatus,
+        byPlan,
+      },
+    });
   })
   // Queryable audit-log surface over platformEventLog (admin-only). The table is
   // written for every sensitive backoffice action but previously had no read path.

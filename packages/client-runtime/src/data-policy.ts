@@ -122,6 +122,7 @@ export const calibraApiPolicyRegistry = {
     requestUserPasswordReset: "cloud-only",
     listAuditLog: "cloud-only",
     getIntegrationHealth: "cloud-only",
+    getVitals: "cloud-only",
     stopImpersonation: "cloud-only",
   },
   sso: {

@@ -113,6 +113,12 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao carregar a saúde das integrações",
       );
     },
+    async getVitals<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.vitals.$get(),
+        "Falha ao carregar os indicadores da plataforma",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(

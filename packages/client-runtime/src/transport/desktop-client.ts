@@ -330,6 +330,9 @@ export function createDesktopApiClient(
       async getIntegrationHealth() {
         throw desktopUnsupportedBackofficeAction("Integrações backoffice");
       },
+      async getVitals() {
+        throw desktopUnsupportedBackofficeAction("Indicadores backoffice");
+      },
       commercial: {
         async listOrganizations() {
           throw desktopUnsupportedBackofficeAction("Comercial backoffice");

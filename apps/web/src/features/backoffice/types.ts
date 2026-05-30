@@ -202,3 +202,16 @@ export type BackofficeIntegrationHealthData = {
   providers: BackofficeIntegrationProviderHealth[]
   affected: BackofficeIntegrationAffected[]
 }
+
+export type BackofficeVitalsData = {
+  subscriptions: {
+    total: number
+    active: number
+    trialing: number
+    pastDue: number
+    canceled: number
+    renewalsDue30d: number
+    byStatus: Record<string, number>
+    byPlan: Record<string, number>
+  }
+}

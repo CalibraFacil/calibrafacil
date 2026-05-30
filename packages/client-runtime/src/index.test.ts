@@ -389,6 +389,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getVitals",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "stopImpersonation",
           "namespace": "backoffice",
           "policy": "cloud-only",
