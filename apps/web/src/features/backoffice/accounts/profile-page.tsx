@@ -303,7 +303,7 @@ function AccountProfile({
       </StaggerGroup>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {/* Operational state */}
           <SectionPanel
             eyebrow="Workflow"
@@ -467,6 +467,7 @@ function AccountProfile({
                 <Field>
                   <FieldLabel>Owner interno</FieldLabel>
                   <NativeSelect
+                    className="w-full"
                     value={draft.internalOwnerUserId}
                     onChange={(event) =>
                       patch({ internalOwnerUserId: event.target.value })
@@ -701,7 +702,7 @@ function AccountProfile({
           </SectionPanel>
         </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {/* Commercial snapshot */}
           <SectionPanel
             eyebrow="Receita"
@@ -1052,6 +1053,7 @@ function DraftSelect<TValue extends string>({
     <Field>
       <FieldLabel>{label}</FieldLabel>
       <NativeSelect
+        className="w-full"
         value={value}
         onChange={(event) => {
           const nextValue = Object.keys(options).find(
