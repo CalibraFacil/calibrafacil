@@ -9,6 +9,7 @@ import {
   InboxIcon,
   Invoice02Icon,
   PlusSignIcon,
+  ShieldKeyIcon,
   TimeHalfPassIcon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
@@ -42,6 +43,7 @@ const NAV_ITEMS: ReadonlyArray<{ title: string; url: string; icon: IconType }> =
       icon: Invoice02Icon,
     },
     { title: 'Equipe', url: '/backoffice/users', icon: UserGroupIcon },
+    { title: 'Auditoria', url: '/backoffice/audit', icon: ShieldKeyIcon },
   ]
 
 export function BackofficeCommandPalette() {

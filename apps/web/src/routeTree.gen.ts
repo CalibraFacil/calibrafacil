@@ -29,6 +29,7 @@ import { Route as BackofficeSupportRouteImport } from './routes/backoffice/suppo
 import { Route as BackofficeSignInRouteImport } from './routes/backoffice/sign-in'
 import { Route as BackofficeCommercialCheckoutsRouteImport } from './routes/backoffice/commercial-checkouts'
 import { Route as BackofficeBootstrapRouteImport } from './routes/backoffice/bootstrap'
+import { Route as BackofficeAuditRouteImport } from './routes/backoffice/audit'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
@@ -245,6 +246,11 @@ const BackofficeCommercialCheckoutsRoute =
 const BackofficeBootstrapRoute = BackofficeBootstrapRouteImport.update({
   id: '/bootstrap',
   path: '/bootstrap',
+  getParentRoute: () => BackofficeRouteRoute,
+} as any)
+const BackofficeAuditRoute = BackofficeAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => BackofficeRouteRoute,
 } as any)
 const AcceptInvitationIdRoute = AcceptInvitationIdRouteImport.update({
@@ -902,6 +908,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
+  '/backoffice/audit': typeof BackofficeAuditRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
   '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
@@ -1022,6 +1029,7 @@ export interface FileRoutesByTo {
   '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
+  '/backoffice/audit': typeof BackofficeAuditRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
   '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
@@ -1154,6 +1162,7 @@ export interface FileRoutesById {
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
+  '/backoffice/audit': typeof BackofficeAuditRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
   '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
@@ -1292,6 +1301,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
+    | '/backoffice/audit'
     | '/backoffice/bootstrap'
     | '/backoffice/commercial-checkouts'
     | '/backoffice/sign-in'
@@ -1412,6 +1422,7 @@ export interface FileRouteTypes {
     | '/dashboard/internal'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
+    | '/backoffice/audit'
     | '/backoffice/bootstrap'
     | '/backoffice/commercial-checkouts'
     | '/backoffice/sign-in'
@@ -1543,6 +1554,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
+    | '/backoffice/audit'
     | '/backoffice/bootstrap'
     | '/backoffice/commercial-checkouts'
     | '/backoffice/sign-in'
@@ -1810,6 +1822,13 @@ declare module '@tanstack/react-router' {
       path: '/bootstrap'
       fullPath: '/backoffice/bootstrap'
       preLoaderRoute: typeof BackofficeBootstrapRouteImport
+      parentRoute: typeof BackofficeRouteRoute
+    }
+    '/backoffice/audit': {
+      id: '/backoffice/audit'
+      path: '/audit'
+      fullPath: '/backoffice/audit'
+      preLoaderRoute: typeof BackofficeAuditRouteImport
       parentRoute: typeof BackofficeRouteRoute
     }
     '/accept-invitation/$id': {
@@ -2652,6 +2671,7 @@ const BackofficeOrganizationsRouteRouteWithChildren =
 interface BackofficeRouteRouteChildren {
   BackofficeCustomerSuccessRouteRoute: typeof BackofficeCustomerSuccessRouteRouteWithChildren
   BackofficeOrganizationsRouteRoute: typeof BackofficeOrganizationsRouteRouteWithChildren
+  BackofficeAuditRoute: typeof BackofficeAuditRoute
   BackofficeBootstrapRoute: typeof BackofficeBootstrapRoute
   BackofficeCommercialCheckoutsRoute: typeof BackofficeCommercialCheckoutsRoute
   BackofficeSignInRoute: typeof BackofficeSignInRoute
@@ -2667,6 +2687,7 @@ const BackofficeRouteRouteChildren: BackofficeRouteRouteChildren = {
     BackofficeCustomerSuccessRouteRouteWithChildren,
   BackofficeOrganizationsRouteRoute:
     BackofficeOrganizationsRouteRouteWithChildren,
+  BackofficeAuditRoute: BackofficeAuditRoute,
   BackofficeBootstrapRoute: BackofficeBootstrapRoute,
   BackofficeCommercialCheckoutsRoute: BackofficeCommercialCheckoutsRoute,
   BackofficeSignInRoute: BackofficeSignInRoute,

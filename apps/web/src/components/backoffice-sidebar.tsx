@@ -4,6 +4,7 @@ import {
   DashboardSquare01Icon,
   Invoice02Icon,
   LeftToRightListDashIcon,
+  ShieldKeyIcon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -53,6 +54,7 @@ const platformItems: ReadonlyArray<NavItem> = [
     icon: Invoice02Icon,
   },
   { title: 'Equipe', url: '/backoffice/users', icon: UserGroupIcon },
+  { title: 'Auditoria', url: '/backoffice/audit', icon: ShieldKeyIcon },
 ]
 
 export function BackofficeSidebar() {

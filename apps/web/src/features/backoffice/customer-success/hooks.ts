@@ -24,7 +24,10 @@ export function useCustomerSuccessAccess() {
   })
 }
 
-export function useCustomerSuccessOrganizations(enabled = true) {
+export function useCustomerSuccessOrganizations(
+  enabled = true,
+  options?: { refetchInterval?: number },
+) {
   return useQuery({
     queryKey: ['backoffice', 'customer-success', 'organizations'],
     queryFn: async () => {
@@ -33,16 +36,23 @@ export function useCustomerSuccessOrganizations(enabled = true) {
       }>()
     },
     enabled,
+    // Pauses automatically while the tab is blurred (refetchIntervalInBackground
+    // defaults to false), so the cockpit stays live without burning requests.
+    refetchInterval: options?.refetchInterval,
   })
 }
 
-export function useSupportQueue(enabled = true) {
+export function useSupportQueue(
+  enabled = true,
+  options?: { refetchInterval?: number },
+) {
   return useQuery({
     queryKey: ['backoffice', 'support', 'queue', 'customer-success'],
     queryFn: async () => {
       return calibraApi.backoffice.getSupportQueue<SupportQueueResponse>()
     },
     enabled,
+    refetchInterval: options?.refetchInterval,
   })
 }
 

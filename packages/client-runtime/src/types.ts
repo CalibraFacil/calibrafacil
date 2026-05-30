@@ -1249,7 +1249,9 @@ export interface IntegrationsApi {
     runId: string,
   ): Promise<TResponse>;
   retryRun<TResponse = unknown>(id: string, runId: string): Promise<TResponse>;
-  listDrift<TResponse = unknown>(input?: { target?: string }): Promise<TResponse>;
+  listDrift<TResponse = unknown>(input?: {
+    target?: string;
+  }): Promise<TResponse>;
   acknowledgeDrift<TResponse = unknown>(
     linkId: string,
     input: { reason: string },
@@ -1647,6 +1649,10 @@ export interface BackofficeApi {
   createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
   provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
   requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;
+  listAuditLog<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

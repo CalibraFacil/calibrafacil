@@ -55,6 +55,7 @@ import {
   topAttentionTickets,
   type PipelineBucket,
 } from './metrics'
+import { IntegrationHealthPanel } from './integration-health-panel'
 
 const HEALTH_ORDER: ReadonlyArray<HealthStatus> = [
   'CRITICAL',
@@ -68,9 +69,17 @@ const HEALTH_BAR_TONE: Record<HealthStatus, string> = {
   HEALTHY: 'bg-emerald-500',
 }
 
+// Keeps the "tempo real" cockpit honest — refetches on a clock while mounted and
+// the tab is focused (React Query pauses the interval on blur by default).
+const COCKPIT_REFRESH_MS = 30_000
+
 export function BackofficeCommandCenter() {
-  const accountsQuery = useCustomerSuccessOrganizations()
-  const ticketsQuery = useSupportQueue()
+  const accountsQuery = useCustomerSuccessOrganizations(true, {
+    refetchInterval: COCKPIT_REFRESH_MS,
+  })
+  const ticketsQuery = useSupportQueue(true, {
+    refetchInterval: COCKPIT_REFRESH_MS,
+  })
   const refresh = useRefreshCustomerSuccess()
 
   const accounts = useMemo(
@@ -276,6 +285,9 @@ export function BackofficeCommandCenter() {
           )}
         </SectionPanel>
       </div>
+
+      {/* Integration health */}
+      <IntegrationHealthPanel />
 
       {/* Lifecycle pipelines */}
       <SectionPanel

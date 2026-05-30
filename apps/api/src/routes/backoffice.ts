@@ -11,6 +11,7 @@ import {
   ilike,
   inArray,
   like,
+  lt,
   not,
   or,
   sql,
@@ -652,6 +653,16 @@ async function cleanupFailedLabProvisioning(params: {
   }
 }
 
+const AuditLogQuerySchema = z.object({
+  action: z.string().trim().min(1).optional(),
+  entityType: z.string().trim().min(1).optional(),
+  entityId: z.string().trim().min(1).optional(),
+  actorUserId: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
 export const backofficeRouter = new Hono<{
   Variables: AuthVariables;
 }>()
@@ -756,6 +767,164 @@ export const backofficeRouter = new Hono<{
     return response;
   })
   .use("*", requireBackofficeAccess)
+  // Fleet-wide integration health roll-up. The half-hourly integrations cron
+  // already writes per-org status/lastValidatedAt/lastValidationError; this just
+  // aggregates it so operators can see broken Asaas/Conta Azul connections at a
+  // glance instead of drilling into each account.
+  .get("/integrations/health", async (c) => {
+    const grouped = await db
+      .select({
+        provider: organizationIntegration.provider,
+        status: organizationIntegration.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(organizationIntegration)
+      .groupBy(
+        organizationIntegration.provider,
+        organizationIntegration.status,
+      );
+
+    const affected = await db
+      .select({
+        organizationId: organizationIntegration.organizationId,
+        organizationName: organization.name,
+        provider: organizationIntegration.provider,
+        name: organizationIntegration.name,
+        status: organizationIntegration.status,
+        lastValidatedAt: organizationIntegration.lastValidatedAt,
+        lastValidationError: organizationIntegration.lastValidationError,
+      })
+      .from(organizationIntegration)
+      .innerJoin(
+        organization,
+        eq(organization.id, organizationIntegration.organizationId),
+      )
+      .where(not(eq(organizationIntegration.status, "ACTIVE")))
+      .orderBy(asc(organization.name))
+      .limit(200);
+
+    const providersMap: Record<
+      string,
+      {
+        provider: string;
+        total: number;
+        active: number;
+        actionRequired: number;
+        disabled: number;
+      }
+    > = {};
+    for (const row of grouped) {
+      const bucket = providersMap[row.provider] ?? {
+        provider: row.provider,
+        total: 0,
+        active: 0,
+        actionRequired: 0,
+        disabled: 0,
+      };
+      bucket.total += row.count;
+      if (row.status === "ACTIVE") bucket.active += row.count;
+      else if (row.status === "ACTION_REQUIRED")
+        bucket.actionRequired += row.count;
+      else if (row.status === "DISABLED") bucket.disabled += row.count;
+      providersMap[row.provider] = bucket;
+    }
+
+    return c.json({ providers: Object.values(providersMap), affected });
+  })
+  // Queryable audit-log surface over platformEventLog (admin-only). The table is
+  // written for every sensitive backoffice action but previously had no read path.
+  .get(
+    "/audit-log",
+    requirePlatformAdmin,
+    zValidator("query", AuditLogQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
+      const limit = input.limit ?? 50;
+
+      const conditions = [];
+      if (input.action)
+        conditions.push(eq(platformEventLog.action, input.action));
+      if (input.entityType)
+        conditions.push(eq(platformEventLog.entityType, input.entityType));
+      if (input.entityId)
+        conditions.push(eq(platformEventLog.entityId, input.entityId));
+      if (input.actorUserId)
+        conditions.push(eq(platformEventLog.actorUserId, input.actorUserId));
+      if (input.search) {
+        const term = `%${input.search}%`;
+        conditions.push(
+          or(
+            ilike(platformEventLog.action, term),
+            ilike(platformEventLog.entityType, term),
+            ilike(platformEventLog.entityId, term),
+          ),
+        );
+      }
+      if (input.cursor) conditions.push(lt(platformEventLog.id, input.cursor));
+
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const rows = await db
+        .select({
+          id: platformEventLog.id,
+          action: platformEventLog.action,
+          entityType: platformEventLog.entityType,
+          entityId: platformEventLog.entityId,
+          details: platformEventLog.details,
+          createdAt: platformEventLog.createdAt,
+          actorUserId: platformEventLog.actorUserId,
+          targetUserId: platformEventLog.targetUserId,
+        })
+        .from(platformEventLog)
+        .where(where)
+        .orderBy(desc(platformEventLog.id))
+        .limit(limit + 1);
+
+      const userIds = Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            [row.actorUserId, row.targetUserId].filter(
+              (value): value is string => Boolean(value),
+            ),
+          ),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({
+                id: userTable.id,
+                name: userTable.name,
+                email: userTable.email,
+              })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const usersById = new Map(users.map((entry) => [entry.id, entry]));
+
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit);
+      const data = page.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        details: row.details,
+        createdAt: row.createdAt,
+        actorUser: row.actorUserId
+          ? (usersById.get(row.actorUserId) ?? null)
+          : null,
+        targetUser: row.targetUserId
+          ? (usersById.get(row.targetUserId) ?? null)
+          : null,
+      }));
+
+      const last = page.at(-1);
+      const nextCursor = hasMore && last ? last.id : null;
+
+      return c.json({ data, nextCursor });
+    },
+  )
   .get(
     "/impersonation/bridge",
     zValidator("query", ImpersonationBridgeSchema),

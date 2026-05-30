@@ -25,6 +25,7 @@ const routeLabels: Record<string, string> = {
   '/backoffice/support': 'Suporte',
   '/backoffice/commercial-checkouts': 'Receita',
   '/backoffice/users': 'Equipe',
+  '/backoffice/audit': 'Auditoria',
 }
 
 function normalizePath(pathname: string) {

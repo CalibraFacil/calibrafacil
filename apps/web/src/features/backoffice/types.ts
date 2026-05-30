@@ -149,3 +149,56 @@ export type BackofficeCommercialContext = {
   }>
   deals: Array<{ id: string; title: string; status: string }>
 }
+
+export type BackofficeAuditActor = {
+  id: string
+  name: string
+  email: string
+}
+
+export type BackofficeAuditLogEntry = {
+  id: number
+  action: string
+  entityType: string
+  entityId: string | null
+  details: Record<string, unknown> | null
+  createdAt: string
+  actorUser: BackofficeAuditActor | null
+  targetUser: BackofficeAuditActor | null
+}
+
+export type BackofficeAuditLogData = {
+  data: BackofficeAuditLogEntry[]
+  nextCursor: number | null
+}
+
+export type BackofficeAuditLogFilters = {
+  search?: string
+  entityType?: string
+  action?: string
+  actorUserId?: string
+  limit?: number
+}
+
+export type BackofficeIntegrationProviderHealth = {
+  provider: string
+  total: number
+  active: number
+  actionRequired: number
+  disabled: number
+}
+
+export type BackofficeIntegrationAffected = {
+  organizationId: string
+  organizationName: string
+  provider: string
+  name: string
+  status: string
+  lastValidatedAt: string | null
+  lastValidationError: string | null
+}
+
+export type BackofficeIntegrationHealthData = {
+  providers: BackofficeIntegrationProviderHealth[]
+  affected: BackofficeIntegrationAffected[]
+}

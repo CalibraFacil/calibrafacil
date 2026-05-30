@@ -324,6 +324,12 @@ export function createDesktopApiClient(
       async requestUserPasswordReset() {
         throw desktopUnsupportedBackofficeAction("Usuários backoffice");
       },
+      async listAuditLog() {
+        throw desktopUnsupportedBackofficeAction("Auditoria backoffice");
+      },
+      async getIntegrationHealth() {
+        throw desktopUnsupportedBackofficeAction("Integrações backoffice");
+      },
       commercial: {
         async listOrganizations() {
           throw desktopUnsupportedBackofficeAction("Comercial backoffice");

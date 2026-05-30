@@ -3,8 +3,11 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
 import type {
+  BackofficeAuditLogData,
+  BackofficeAuditLogFilters,
   BackofficeCommercialContext,
   BackofficeCommercialOrganizationsData,
+  BackofficeIntegrationHealthData,
   BackofficeOrganizationDetail,
   BackofficeOrganizationOptionsData,
   BackofficeOrganizationsData,
@@ -264,4 +267,37 @@ export function useBackofficeCommercialContextData(
   organizationId: string | null,
 ) {
   return useQuery(backofficeCommercialContextQueryOptions(organizationId ?? ''))
+}
+
+export function backofficeAuditLogQueryOptions(
+  filters: BackofficeAuditLogFilters,
+) {
+  const query: Record<string, string | number> = {}
+  if (filters.search) query.search = filters.search
+  if (filters.entityType) query.entityType = filters.entityType
+  if (filters.action) query.action = filters.action
+  if (filters.actorUserId) query.actorUserId = filters.actorUserId
+  if (filters.limit) query.limit = filters.limit
+
+  return queryOptions({
+    queryKey: ['backoffice', 'audit-log', query],
+    queryFn: () =>
+      calibraApi.backoffice.listAuditLog<BackofficeAuditLogData>(query),
+  })
+}
+
+export function useBackofficeAuditLogData(filters: BackofficeAuditLogFilters) {
+  return useQuery(backofficeAuditLogQueryOptions(filters))
+}
+
+export function backofficeIntegrationHealthQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'integrations', 'health'],
+    queryFn: () =>
+      calibraApi.backoffice.getIntegrationHealth<BackofficeIntegrationHealthData>(),
+  })
+}
+
+export function useBackofficeIntegrationHealthData() {
+  return useQuery(backofficeIntegrationHealthQueryOptions())
 }

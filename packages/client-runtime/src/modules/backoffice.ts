@@ -101,6 +101,18 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao solicitar definição de senha",
       );
     },
+    async listAuditLog<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["audit-log"].$get({ query: input }),
+        "Falha ao carregar o log de auditoria",
+      );
+    },
+    async getIntegrationHealth<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.integrations.health.$get(),
+        "Falha ao carregar a saúde das integrações",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(
