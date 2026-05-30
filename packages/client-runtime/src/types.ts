@@ -1668,6 +1668,11 @@ export interface BackofficeApi {
     id: string,
     input: unknown,
   ): Promise<TResponse>;
+  listInteractions<TResponse = unknown>(id: string): Promise<TResponse>;
+  createInteraction<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
   manageSubscription<TResponse = unknown>(
     id: string,
     input: unknown,

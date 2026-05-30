@@ -31,6 +31,7 @@ import {
 } from "@calibra-facil/auth/lab-access";
 import { db } from "@calibra-facil/db";
 import {
+  accountInteraction,
   accountTask,
   appQueueJob,
   approvalRequest,
@@ -756,6 +757,13 @@ const ManageSubscriptionSchema = z.object({
   action: z.enum(["change_plan", "cancel", "reactivate"]),
   planId: z.enum(["FREE", "STANDARD", "PROFESSIONAL", "ENTERPRISE"]).optional(),
   reason: z.string().trim().max(500).optional(),
+});
+
+const CreateInteractionSchema = z.object({
+  channel: z.enum(["whatsapp", "email", "phone", "meeting", "note", "other"]),
+  direction: z.enum(["outbound", "inbound", "internal"]).optional(),
+  summary: z.string().trim().min(2).max(2000),
+  occurredAt: z.string().datetime().optional(),
 });
 
 export const backofficeRouter = new Hono<{
@@ -2369,6 +2377,93 @@ export const backofficeRouter = new Hono<{
 
     return c.json({ data });
   })
+  // Account interaction log (gap #14, omnichannel core) — a unified, manually
+  // recorded timeline of operator↔tenant touchpoints. Auto-capture from the
+  // channels (WhatsApp/email providers) is the external follow-up.
+  .get("/organizations/:id/interactions", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: accountInteraction.id,
+        channel: accountInteraction.channel,
+        direction: accountInteraction.direction,
+        summary: accountInteraction.summary,
+        occurredAt: accountInteraction.occurredAt,
+        createdByUserId: accountInteraction.createdByUserId,
+        createdAt: accountInteraction.createdAt,
+      })
+      .from(accountInteraction)
+      .where(eq(accountInteraction.organizationId, id))
+      .orderBy(desc(accountInteraction.occurredAt))
+      .limit(100);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/organizations/:id/interactions",
+    zValidator("json", CreateInteractionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(accountInteraction)
+        .values({
+          organizationId: id,
+          channel: input.channel,
+          direction: input.direction ?? "outbound",
+          summary: input.summary,
+          occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao registrar interação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.interaction.recorded",
+        entityType: "organization",
+        entityId: id,
+        details: { channel: input.channel, direction: created.direction },
+      });
+
+      return c.json(created);
+    },
+  )
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
       with: {

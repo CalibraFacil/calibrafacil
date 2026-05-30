@@ -160,6 +160,22 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao atualizar a conta",
       );
     },
+    async listInteractions<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].interactions.$get({ param: { id } }),
+        "Falha ao carregar interações",
+      );
+    },
+    async createInteraction<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].interactions.$post({ param: { id }, json: input }),
+        "Falha ao registrar interação",
+      );
+    },
     async manageSubscription<TResponse = unknown>(id: string, input: unknown) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.organizations[

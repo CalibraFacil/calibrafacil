@@ -283,6 +283,21 @@ export type BackofficeOrganizationActivity = {
   requests: BackofficeActivitySection
 }
 
+export type BackofficeInteraction = {
+  id: number
+  channel: string
+  direction: string
+  summary: string
+  occurredAt: string
+  createdByUserId: string | null
+  createdByName: string | null
+  createdAt: string
+}
+
+export type BackofficeInteractionsData = {
+  data: BackofficeInteraction[]
+}
+
 export type BackofficeImportRun = {
   id: number
   entity: string

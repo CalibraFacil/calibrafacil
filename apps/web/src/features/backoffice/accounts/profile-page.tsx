@@ -44,6 +44,7 @@ import { AccountActivityCard } from './activity-card'
 import { AccountLifecycleCard } from './lifecycle-card'
 import { EntitlementOverridesCard } from './entitlements-card'
 import { SubscriptionManagementCard } from './subscription-card'
+import { InteractionLogCard } from './interaction-log-card'
 import {
   useBackofficeOrganizationDetailData,
   useBackofficeCommercialContextData,
@@ -828,6 +829,9 @@ function AccountProfile({
             organizationId={organizationId}
             subscription={commercial?.subscription ?? null}
           />
+
+          {/* Account interaction log (gap #14 core) */}
+          <InteractionLogCard organizationId={organizationId} />
 
           {/* Timeline */}
           <SectionPanel

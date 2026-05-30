@@ -414,6 +414,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listInteractions",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createInteraction",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "manageSubscription",
           "namespace": "backoffice",
           "policy": "cloud-only",

@@ -694,6 +694,15 @@ export type ApprovalRequestKind = "refund" | "credit" | "adjustment" | "other";
 // COMMITTED is reserved for the gated follow-up that writes real domain rows.
 export type ImportRunStatus = "VALIDATED" | "COMMITTED";
 
+export type AccountInteractionChannel =
+  | "whatsapp"
+  | "email"
+  | "phone"
+  | "meeting"
+  | "note"
+  | "other";
+export type AccountInteractionDirection = "outbound" | "inbound" | "internal";
+
 export const accountTask = pgTable(
   "account_task",
   {
@@ -824,6 +833,41 @@ export const importRun = pgTable(
   (table) => [
     index("import_run_org_idx").on(table.organizationId),
     index("import_run_created_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Account interaction log (operations-console gap #14, omnichannel core). A
+ * unified, manually-recorded timeline of operator↔tenant touchpoints (WhatsApp,
+ * email, call, meeting, internal note) so context lives in one place. Auto-capture
+ * from the actual channels (WhatsApp/email providers) is the external follow-up;
+ * this is the in-repo log + surface.
+ */
+export const accountInteraction = pgTable(
+  "account_interaction",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    channel: text("channel")
+      .$type<AccountInteractionChannel>()
+      .default("note")
+      .notNull(),
+    direction: text("direction")
+      .$type<AccountInteractionDirection>()
+      .default("outbound")
+      .notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("account_interaction_org_idx").on(table.organizationId),
+    index("account_interaction_occurred_idx").on(table.occurredAt),
   ],
 );
 
