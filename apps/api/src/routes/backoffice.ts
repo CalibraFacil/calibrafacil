@@ -30,6 +30,7 @@ import {
 import { db } from "@calibra-facil/db";
 import {
   accountTask,
+  entitlementOverride,
   member,
   organization,
   organizationIntegration,
@@ -41,6 +42,7 @@ import {
   subscription,
   user as userTable,
 } from "@calibra-facil/db/schema";
+import { FEATURE_FLAGS } from "@calibra-facil/shared";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -682,6 +684,12 @@ const CreateAccountTaskSchema = z.object({
   ownerUserId: z.string().trim().optional(),
   dueAt: z.string().datetime().optional(),
   notes: z.string().trim().max(2000).optional(),
+});
+
+const GrantEntitlementOverrideSchema = z.object({
+  feature: z.enum(FEATURE_FLAGS),
+  reason: z.string().trim().max(500).optional(),
+  expiresAt: z.string().datetime().optional(),
 });
 
 const OrganizationLifecycleSchema = z.object({
@@ -1658,6 +1666,125 @@ export const backofficeRouter = new Hono<{
       });
 
       return c.json(updated);
+    },
+  )
+  // Entitlement overrides — grant-only feature access on top of the plan (comps,
+  // upsell trials). Merged into getOrganizationPlanAccess; list is operator-
+  // visible, grant/revoke are admin-only. All recorded in the audit log.
+  .get("/organizations/:id/entitlement-overrides", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: entitlementOverride.id,
+        feature: entitlementOverride.feature,
+        reason: entitlementOverride.reason,
+        expiresAt: entitlementOverride.expiresAt,
+        createdAt: entitlementOverride.createdAt,
+        createdByUserId: entitlementOverride.createdByUserId,
+      })
+      .from(entitlementOverride)
+      .where(eq(entitlementOverride.organizationId, id))
+      .orderBy(desc(entitlementOverride.createdAt));
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/organizations/:id/entitlement-overrides",
+    requirePlatformAdmin,
+    zValidator("json", GrantEntitlementOverrideSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(entitlementOverride)
+        .values({
+          organizationId: id,
+          feature: input.feature,
+          reason: input.reason || null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao conceder acesso" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.entitlement_override.granted",
+        entityType: "organization",
+        entityId: id,
+        details: { feature: input.feature, reason: input.reason ?? null },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post(
+    "/entitlement-overrides/:id/revoke",
+    requirePlatformAdmin,
+    async (c) => {
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Concessão inválida" }, 400);
+      }
+
+      const deletedRows = await db
+        .delete(entitlementOverride)
+        .where(eq(entitlementOverride.id, id))
+        .returning({
+          id: entitlementOverride.id,
+          organizationId: entitlementOverride.organizationId,
+          feature: entitlementOverride.feature,
+        });
+      const deleted = deletedRows[0];
+      if (!deleted) {
+        return c.json({ error: "Concessão não encontrada" }, 404);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.entitlement_override.revoked",
+        entityType: "organization",
+        entityId: deleted.organizationId,
+        details: { feature: deleted.feature },
+      });
+
+      return c.json({ ok: true });
     },
   )
   .get("/support/queue", async (c) => {

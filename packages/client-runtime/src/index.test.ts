@@ -414,6 +414,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listEntitlementOverrides",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "grantEntitlementOverride",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "revokeEntitlementOverride",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "stopImpersonation",
           "namespace": "backoffice",
           "policy": "cloud-only",

@@ -160,6 +160,33 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao atualizar a conta",
       );
     },
+    async listEntitlementOverrides<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "entitlement-overrides"
+        ].$get({ param: { id } }),
+        "Falha ao carregar concessões",
+      );
+    },
+    async grantEntitlementOverride<TResponse = unknown>(
+      id: string,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "entitlement-overrides"
+        ].$post({ param: { id }, json: input }),
+        "Falha ao conceder acesso",
+      );
+    },
+    async revokeEntitlementOverride<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["entitlement-overrides"][
+          ":id"
+        ].revoke.$post({ param: { id: String(id) } }),
+        "Falha ao revogar acesso",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(

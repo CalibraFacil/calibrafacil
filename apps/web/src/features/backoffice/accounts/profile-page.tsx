@@ -39,6 +39,7 @@ import {
 } from '@/features/backoffice/console'
 import { AccountTasksCard } from '@/features/backoffice/tasks/components'
 import { AccountLifecycleCard } from './lifecycle-card'
+import { EntitlementOverridesCard } from './entitlements-card'
 import {
   useBackofficeOrganizationDetailData,
   useBackofficeCommercialContextData,
@@ -713,6 +714,9 @@ function AccountProfile({
             organizationId={organizationId}
             organization={detail?.organization}
           />
+
+          {/* Entitlement overrides */}
+          <EntitlementOverridesCard organizationId={organizationId} />
 
           {/* Commercial snapshot */}
           <SectionPanel

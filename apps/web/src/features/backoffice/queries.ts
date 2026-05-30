@@ -17,6 +17,7 @@ import type {
   BackofficeVitalsData,
   BackofficeAccountTaskFilters,
   BackofficeAccountTasksData,
+  BackofficeEntitlementOverridesData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -335,4 +336,21 @@ export function useBackofficeAccountTasksData(
   filters: BackofficeAccountTaskFilters,
 ) {
   return useQuery(backofficeAccountTasksQueryOptions(filters))
+}
+
+export function backofficeEntitlementOverridesQueryOptions(
+  organizationId: string,
+) {
+  return queryOptions({
+    queryKey: ['backoffice', 'entitlement-overrides', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.listEntitlementOverrides<BackofficeEntitlementOverridesData>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeEntitlementOverridesData(organizationId: string) {
+  return useQuery(backofficeEntitlementOverridesQueryOptions(organizationId))
 }

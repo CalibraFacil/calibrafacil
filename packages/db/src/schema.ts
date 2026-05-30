@@ -723,6 +723,30 @@ export const accountTask = pgTable(
   ],
 );
 
+/**
+ * Backoffice entitlement overrides — per-org GRANTS layered on top of the plan
+ * (comps, upsell trials, one-off feature access). Grant-only and optionally
+ * time-boxed; merged into `getOrganizationPlanAccess` so the override never
+ * removes a plan entitlement, only adds. `feature` is a `FeatureFlag` string.
+ */
+export const entitlementOverride = pgTable(
+  "entitlement_override",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    reason: text("reason"),
+    expiresAt: timestamp("expires_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("entitlement_override_org_idx").on(table.organizationId)],
+);
+
 export const invitation = pgTable(
   "invitation",
   {

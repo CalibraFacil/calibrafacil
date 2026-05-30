@@ -267,6 +267,13 @@
       "when": 1781049600000,
       "tag": "0037_organization_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781136000000,
+      "tag": "0038_entitlement_override",
+      "breakpoints": true
     }
   ]
 }

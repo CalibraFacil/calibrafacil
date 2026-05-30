@@ -1668,6 +1668,14 @@ export interface BackofficeApi {
     id: string,
     input: unknown,
   ): Promise<TResponse>;
+  listEntitlementOverrides<TResponse = unknown>(id: string): Promise<TResponse>;
+  grantEntitlementOverride<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  revokeEntitlementOverride<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

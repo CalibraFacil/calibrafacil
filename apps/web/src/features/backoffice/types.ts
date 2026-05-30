@@ -249,3 +249,16 @@ export type BackofficeAccountTaskFilters = {
   scope?: 'mine' | 'all'
   status?: 'open' | 'done' | 'all'
 }
+
+export type BackofficeEntitlementOverride = {
+  id: number
+  feature: string
+  reason: string | null
+  expiresAt: string | null
+  createdAt: string
+  createdByName: string | null
+}
+
+export type BackofficeEntitlementOverridesData = {
+  data: BackofficeEntitlementOverride[]
+}
