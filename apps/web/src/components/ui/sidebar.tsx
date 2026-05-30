@@ -541,7 +541,14 @@ const SidebarMenuButton = React.forwardRef<
         },
         props,
       ),
-      render: !tooltip ? render : TooltipTrigger,
+      // When a tooltip is present the trigger must still render the caller's
+      // element (e.g. a router <Link>), otherwise navigation is lost — compose
+      // the link INTO the TooltipTrigger instead of replacing it.
+      render: !tooltip
+        ? render
+        : render
+          ? React.createElement(TooltipTrigger, { render })
+          : TooltipTrigger,
       ref, // <--- IMPORTANT: Pass the forwarded ref here
       state: {
         slot: 'sidebar-menu-button',
