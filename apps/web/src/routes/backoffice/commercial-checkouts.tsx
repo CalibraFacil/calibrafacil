@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react'
-import { HelpCircleIcon } from '@hugeicons/core-free-icons'
+import {
+  ArrowLeft01Icon,
+  Building01Icon,
+  CheckmarkCircle01Icon,
+  HelpCircleIcon,
+  PlusSignIcon,
+  RefreshIcon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -11,13 +18,6 @@ import {
 } from '@/features/backoffice/queries'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -30,6 +30,13 @@ import {
 import { CommercialOfferSummaryCard } from '@/components/backoffice/commercial/summary-card'
 import { CommercialOfferHistoryTable } from '@/components/backoffice/commercial/history-table'
 import { CommercialStatusBadge } from '@/components/backoffice/commercial/status-badge'
+import {
+  ConsoleEmpty,
+  ConsolePageHeader,
+  ConsoleSearch,
+  SectionPanel,
+} from '@/features/backoffice/console'
+import { cn } from '@/lib/utils'
 import { brazilPhoneMask } from '@/lib/input-masks'
 
 type OfferKind = 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
@@ -111,6 +118,9 @@ function organizationIdFromSearch(value: unknown) {
 }
 
 export const Route = createFileRoute('/backoffice/commercial-checkouts')({
+  head: () => ({
+    meta: [{ title: 'Receita | Backoffice | CalibraFácil' }],
+  }),
   component: BackofficeCommercialCheckoutsPage,
 })
 
@@ -141,6 +151,7 @@ function BackofficeCommercialCheckoutsPage() {
     role: '',
     notes: '',
   })
+  const [showNewContact, setShowNewContact] = useState(false)
 
   const organizationsQuery =
     useBackofficeCommercialOrganizationsData(searchTerm)
@@ -362,140 +373,175 @@ function BackofficeCommercialCheckoutsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Checkout Comercial</h1>
-        <p className="text-sm text-muted-foreground">
-          Emissão interna de propostas e links de pagamento personalizados via
-          Asaas.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <ConsolePageHeader
+        eyebrow="Receita"
+        title="Comercial"
+        description="Emissão interna de propostas e links de pagamento personalizados via Asaas."
+      />
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_1.3fr_1fr]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Organização</CardTitle>
-              <CardDescription>
-                Pesquise e selecione a conta alvo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar por nome, slug ou CNPJ"
-              />
-              <div className="space-y-2">
-                {organizationsQuery.data?.data.map((org) => (
-                  <button
-                    key={org.id}
-                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
-                      selectedOrganizationId === org.id
-                        ? 'border-primary bg-primary/5'
-                        : ''
-                    }`}
-                    onClick={() => {
-                      setSelectedOrganizationId(org.id)
-                      setIssuedOffer(null)
-                    }}
-                    type="button"
-                  >
-                    <p className="font-medium">{org.name}</p>
-                    <p className="text-muted-foreground">
-                      {org.slug} · {org.cnpj || 'Sem CNPJ'}
-                    </p>
-                  </button>
-                ))}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(340px,0.95fr)]">
+        <div className="space-y-5">
+          <SectionPanel
+            eyebrow="Passo 1"
+            title="Conta"
+            description="Pesquise e selecione a organização alvo."
+            contentClassName="space-y-3"
+          >
+            {selectedOrganizationId ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">
+                    {selectedOrg?.name ?? 'Carregando…'}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {selectedOrg?.cnpj || 'CNPJ não informado'}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 transition-transform active:scale-[0.96]"
+                  onClick={() => {
+                    setSelectedOrganizationId(null)
+                    setIssuedOffer(null)
+                    setPreview(null)
+                  }}
+                >
+                  <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                  Trocar
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Perfil de cobrança</CardTitle>
-              <CardDescription>
-                Cliente de cobrança e contatos usados na emissão.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedOrg ? (
-                <>
-                  <div className="rounded-lg border p-4 text-sm">
-                    <p className="font-medium">{selectedOrg.name}</p>
-                    <p className="text-muted-foreground">
-                      {selectedOrg.cnpj || 'CNPJ não informado'}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <CommercialStatusBadge
-                        status={contextQuery.data?.subscription?.status}
-                      />
-                      {contextQuery.data?.subscription && (
-                        <span className="text-muted-foreground">
-                          {contextQuery.data.subscription.planId} ·{' '}
-                          {contextQuery.data.subscription.billingCycle ||
-                            'Sem ciclo'}
+            ) : (
+              <>
+                <ConsoleSearch
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Buscar por nome, slug ou CNPJ…"
+                />
+                {(organizationsQuery.data?.data?.length ?? 0) === 0 ? (
+                  <ConsoleEmpty
+                    icon={Building01Icon}
+                    title="Nenhuma organização"
+                    description="Refine a busca para encontrar a conta."
+                  />
+                ) : (
+                  <div className="space-y-1.5">
+                    {organizationsQuery.data?.data.map((org) => (
+                      <button
+                        key={org.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedOrganizationId(org.id)
+                          setIssuedOffer(null)
+                          setPreview(null)
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] transition-[background-color,transform] hover:bg-muted/50 active:scale-[0.99] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]"
+                      >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold uppercase">
+                          {org.name.trim().charAt(0) || '?'}
                         </span>
-                      )}
-                    </div>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {org.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {org.slug} · {org.cnpj || 'Sem CNPJ'}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
                   </div>
+                )}
+              </>
+            )}
+          </SectionPanel>
 
-                  {contextQuery.data?.billingCustomer ? (
-                    <div className="rounded-lg border p-4 text-sm">
-                      <p className="font-medium">Cliente Asaas sincronizado</p>
-                      <p>{contextQuery.data.billingCustomer.name}</p>
-                      <p className="text-muted-foreground">
-                        {contextQuery.data.billingCustomer.email || 'Sem email'}{' '}
-                        ·{' '}
-                        {contextQuery.data.billingCustomer.phone ||
-                          'Sem telefone'}
-                      </p>
-                    </div>
-                  ) : (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => syncBillingCustomerMutation.mutate()}
-                      disabled={syncBillingCustomerMutation.isPending}
-                    >
-                      {syncBillingCustomerMutation.isPending
-                        ? 'Sincronizando...'
-                        : 'Sincronizar cliente de cobrança'}
-                    </Button>
-                  )}
+          <SectionPanel
+            eyebrow="Passo 2"
+            title="Cobrança"
+            description="Cliente de cobrança e contato usados na emissão."
+            contentClassName="space-y-4"
+          >
+            {selectedOrganizationId ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <CommercialStatusBadge
+                    status={contextQuery.data?.subscription?.status}
+                  />
+                  {contextQuery.data?.subscription ? (
+                    <span className="text-muted-foreground">
+                      {contextQuery.data.subscription.planId} ·{' '}
+                      {contextQuery.data.subscription.billingCycle ||
+                        'Sem ciclo'}
+                    </span>
+                  ) : null}
+                </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Contato de cobrança</p>
-                    <NativeSelect
-                      className="w-full"
-                      value={
-                        resolvedBillingContactId
-                          ? String(resolvedBillingContactId)
-                          : ''
-                      }
-                      onChange={(event) =>
-                        setBillingContactId(
-                          event.target.value
-                            ? Number(event.target.value)
-                            : undefined,
-                        )
-                      }
-                    >
-                      <NativeSelectOption value="">
-                        Selecione um contato
+                {contextQuery.data?.billingCustomer ? (
+                  <div className="rounded-xl px-3.5 py-3 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                    <p className="flex items-center gap-1.5 font-medium">
+                      <HugeiconsIcon
+                        icon={CheckmarkCircle01Icon}
+                        className="size-4 text-emerald-600 dark:text-emerald-400"
+                      />
+                      Cliente Asaas sincronizado
+                    </p>
+                    <p className="mt-0.5">
+                      {contextQuery.data.billingCustomer.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {contextQuery.data.billingCustomer.email || 'Sem email'} ·{' '}
+                      {contextQuery.data.billingCustomer.phone || 'Sem telefone'}
+                    </p>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full transition-transform active:scale-[0.98]"
+                    variant="outline"
+                    onClick={() => syncBillingCustomerMutation.mutate()}
+                    disabled={syncBillingCustomerMutation.isPending}
+                  >
+                    <HugeiconsIcon icon={RefreshIcon} className="size-4" />
+                    {syncBillingCustomerMutation.isPending
+                      ? 'Sincronizando…'
+                      : 'Sincronizar cliente de cobrança'}
+                  </Button>
+                )}
+
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">Contato de cobrança</p>
+                  <NativeSelect
+                    className="w-full"
+                    value={
+                      resolvedBillingContactId
+                        ? String(resolvedBillingContactId)
+                        : ''
+                    }
+                    onChange={(event) =>
+                      setBillingContactId(
+                        event.target.value
+                          ? Number(event.target.value)
+                          : undefined,
+                      )
+                    }
+                  >
+                    <NativeSelectOption value="">
+                      Selecione um contato
+                    </NativeSelectOption>
+                    {contextQuery.data?.billingContacts.map((contact) => (
+                      <NativeSelectOption
+                        key={contact.id}
+                        value={String(contact.id)}
+                      >
+                        {contact.name} · {contact.email}
                       </NativeSelectOption>
-                      {contextQuery.data?.billingContacts.map((contact) => (
-                        <NativeSelectOption
-                          key={contact.id}
-                          value={String(contact.id)}
-                        >
-                          {contact.name} · {contact.email}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </div>
+                    ))}
+                  </NativeSelect>
+                </div>
 
-                  <div className="grid gap-3">
+                {showNewContact ? (
+                  <div className="grid gap-2 rounded-xl p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
                     <Input
                       value={newContact.name}
                       onChange={(event) =>
@@ -549,34 +595,57 @@ function BackofficeCommercialCheckoutsPage() {
                       }
                       placeholder="Observações internas do contato"
                     />
-                    <Button
-                      variant="outline"
-                      onClick={() => createBillingContactMutation.mutate()}
-                      disabled={createBillingContactMutation.isPending}
-                    >
-                      {createBillingContactMutation.isPending
-                        ? 'Criando contato...'
-                        : 'Criar contato de cobrança'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => createBillingContactMutation.mutate()}
+                        disabled={createBillingContactMutation.isPending}
+                      >
+                        {createBillingContactMutation.isPending
+                          ? 'Criando…'
+                          : 'Criar contato'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowNewContact(false)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Selecione uma organização para carregar o contexto comercial.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-muted-foreground"
+                    onClick={() => setShowNewContact(true)}
+                  >
+                    <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
+                    Novo contato de cobrança
+                  </Button>
+                )}
+              </>
+            ) : (
+              <ConsoleEmpty
+                icon={Building01Icon}
+                title="Selecione uma conta"
+                description="Escolha uma organização no passo 1 para carregar o contexto comercial."
+              />
+            )}
+          </SectionPanel>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Oferta</CardTitle>
-            <CardDescription>
-              Defina o snapshot comercial antes da emissão.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <SectionPanel
+          eyebrow="Passo 3"
+          title="Oferta"
+          description="Defina o snapshot comercial antes da emissão."
+          contentClassName={cn(
+            'space-y-4',
+            !selectedOrganizationId && 'pointer-events-none opacity-60',
+          )}
+        >
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <FieldLabel
@@ -821,65 +890,65 @@ function BackofficeCommercialCheckoutsPage() {
               />
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
               <Button
-                onClick={() => previewMutation.mutate()}
-                disabled={!selectedOrganizationId}
+                onClick={() => issueMutation.mutate()}
+                disabled={!selectedOrganizationId || issueMutation.isPending}
+                className="transition-transform active:scale-[0.97]"
               >
-                Pré-visualizar
+                {issueMutation.isPending ? 'Emitindo…' : 'Emitir oferta'}
               </Button>
               <Button
                 variant="outline"
-                onClick={() => issueMutation.mutate()}
-                disabled={!selectedOrganizationId || issueMutation.isPending}
+                onClick={() => previewMutation.mutate()}
+                disabled={!selectedOrganizationId || previewMutation.isPending}
+                className="transition-transform active:scale-[0.97]"
               >
-                {issueMutation.isPending ? 'Emitindo...' : 'Emitir oferta'}
+                Pré-visualizar
               </Button>
             </div>
-          </CardContent>
-        </Card>
+        </SectionPanel>
 
-        <CommercialOfferSummaryCard
-          preview={preview}
-          issuedOffer={issuedOffer}
-          offerTypeLabel={offerTypeLabel}
-          onCopyLink={() => copyLink(issuedOffer)}
-        />
+        <div className="xl:sticky xl:top-4">
+          <CommercialOfferSummaryCard
+            preview={preview}
+            issuedOffer={issuedOffer}
+            offerTypeLabel={offerTypeLabel}
+            onCopyLink={() => copyLink(issuedOffer)}
+          />
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Ofertas emitidas</CardTitle>
-          <CardDescription>
-            Histórico recente da organização selecionada.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {selectedOrganizationId && contextQuery.data?.deals?.[0] ? (
-            <div className="rounded-lg border p-4 text-sm">
-              <p className="font-medium">Deal mais recente</p>
-              <p>{contextQuery.data.deals[0].title}</p>
-              <p className="text-muted-foreground">
-                {contextQuery.data.deals[0].status} ·{' '}
-                <Link
-                  className="underline"
-                  to="/backoffice/commercial-checkouts"
-                  search={{ organizationId: selectedOrganizationId }}
-                >
-                  manter contexto
-                </Link>
-              </p>
-            </div>
-          ) : null}
+      <SectionPanel
+        eyebrow="Receita"
+        title="Ofertas emitidas"
+        description="Histórico recente da organização selecionada."
+        contentClassName="space-y-4"
+      >
+        {selectedOrganizationId && contextQuery.data?.deals?.[0] ? (
+          <div className="rounded-xl px-3.5 py-3 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+            <p className="font-medium">Deal mais recente</p>
+            <p>{contextQuery.data.deals[0].title}</p>
+            <p className="text-xs text-muted-foreground">
+              {contextQuery.data.deals[0].status} ·{' '}
+              <Link
+                className="underline"
+                to="/backoffice/commercial-checkouts"
+                search={{ organizationId: selectedOrganizationId }}
+              >
+                manter contexto
+              </Link>
+            </p>
+          </div>
+        ) : null}
 
-          <CommercialOfferHistoryTable
-            offers={contextQuery.data?.recentOffers || []}
-            onCopyLink={(offer) => void copyLink(offer)}
-            onCancel={(offerId) => cancelMutation.mutate(offerId)}
-            onReissue={(offerId) => reissueMutation.mutate(offerId)}
-          />
-        </CardContent>
-      </Card>
+        <CommercialOfferHistoryTable
+          offers={contextQuery.data?.recentOffers || []}
+          onCopyLink={(offer) => void copyLink(offer)}
+          onCancel={(offerId) => cancelMutation.mutate(offerId)}
+          onReissue={(offerId) => reissueMutation.mutate(offerId)}
+        />
+      </SectionPanel>
     </div>
   )
 }

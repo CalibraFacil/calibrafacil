@@ -209,7 +209,7 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
   },
 } as const;
 
-const FEATURE_FLAGS = [
+export const FEATURE_FLAGS = [
   "math_engine",
   "portal",
   "financial",
@@ -224,6 +224,11 @@ const FEATURE_FLAGS = [
   "multi_unit",
   "custom_integrations",
 ] as const satisfies readonly FeatureFlag[];
+
+/** Runtime guard for an arbitrary string being a known feature flag. */
+export function isFeatureFlag(value: string): value is FeatureFlag {
+  return FEATURE_FLAGS.some((flag) => flag === value);
+}
 
 const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   math_engine: ["math_engine"],

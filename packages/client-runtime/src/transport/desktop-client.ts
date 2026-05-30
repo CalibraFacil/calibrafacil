@@ -324,6 +324,75 @@ export function createDesktopApiClient(
       async requestUserPasswordReset() {
         throw desktopUnsupportedBackofficeAction("Usuários backoffice");
       },
+      async listAuditLog() {
+        throw desktopUnsupportedBackofficeAction("Auditoria backoffice");
+      },
+      async getIntegrationHealth() {
+        throw desktopUnsupportedBackofficeAction("Integrações backoffice");
+      },
+      async getVitals() {
+        throw desktopUnsupportedBackofficeAction("Indicadores backoffice");
+      },
+      async listOperatorAlerts() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
+      async recomputeOperatorAlerts() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
+      async acknowledgeOperatorAlert() {
+        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
+      },
+      async listAccountTasks() {
+        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
+      },
+      async createAccountTask() {
+        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
+      },
+      async completeAccountTask() {
+        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
+      },
+      async updateOrganizationLifecycle() {
+        throw desktopUnsupportedBackofficeAction("Ciclo de vida backoffice");
+      },
+      async listInteractions() {
+        throw desktopUnsupportedBackofficeAction("Interações backoffice");
+      },
+      async createInteraction() {
+        throw desktopUnsupportedBackofficeAction("Interações backoffice");
+      },
+      async manageSubscription() {
+        throw desktopUnsupportedBackofficeAction("Assinatura backoffice");
+      },
+      async listEntitlementOverrides() {
+        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
+      },
+      async grantEntitlementOverride() {
+        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
+      },
+      async revokeEntitlementOverride() {
+        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
+      },
+      async getOrganizationActivity() {
+        throw desktopUnsupportedBackofficeAction("Atividade backoffice");
+      },
+      async listImportRuns() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
+      async parseImportFile() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
+      async validateImportRun() {
+        throw desktopUnsupportedBackofficeAction("Importações backoffice");
+      },
+      async listApprovals() {
+        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
+      },
+      async createApprovalRequest() {
+        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
+      },
+      async decideApproval() {
+        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
+      },
       commercial: {
         async listOrganizations() {
           throw desktopUnsupportedBackofficeAction("Comercial backoffice");

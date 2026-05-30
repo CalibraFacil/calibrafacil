@@ -379,6 +379,121 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listAuditLog",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getIntegrationHealth",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getVitals",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listOperatorAlerts",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "recomputeOperatorAlerts",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "acknowledgeOperatorAlert",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listAccountTasks",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createAccountTask",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "completeAccountTask",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateOrganizationLifecycle",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listInteractions",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createInteraction",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "manageSubscription",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listEntitlementOverrides",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "grantEntitlementOverride",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "revokeEntitlementOverride",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getOrganizationActivity",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listImportRuns",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "parseImportFile",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "validateImportRun",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listApprovals",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createApprovalRequest",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "decideApproval",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "stopImpersonation",
           "namespace": "backoffice",
           "policy": "cloud-only",

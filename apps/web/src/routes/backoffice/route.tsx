@@ -13,6 +13,8 @@ import {
 import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BackofficeHeader } from '@/components/backoffice-header'
 import { BackofficeSidebar } from '@/components/backoffice-sidebar'
+import { BackofficeCommandPaletteProvider } from '@/features/backoffice/command-palette/context'
+import { BackofficeCommandPalette } from '@/features/backoffice/command-palette/palette'
 import { Button } from '@/components/ui/button'
 import { readSessionWithRetry } from '@/lib/auth-session'
 import {
@@ -101,14 +103,17 @@ function BackofficeLayout() {
   }
 
   return (
-    <SidebarProvider>
-      <BackofficeSidebar />
-      <SidebarInset>
-        <BackofficeHeader />
-        <main className="flex-1 p-4">
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <BackofficeCommandPaletteProvider>
+      <SidebarProvider>
+        <BackofficeSidebar />
+        <SidebarInset>
+          <BackofficeHeader />
+          <main className="flex-1 p-4 sm:p-5">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+      <BackofficeCommandPalette />
+    </BackofficeCommandPaletteProvider>
   )
 }

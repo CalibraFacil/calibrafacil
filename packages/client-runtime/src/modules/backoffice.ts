@@ -71,10 +71,11 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao reabilitar usuário",
       );
     },
-    async impersonateUser<TResponse = unknown>(id: string) {
+    async impersonateUser<TResponse = unknown>(id: string, reason: string) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.users[":id"].impersonate.$post({
           param: { id },
+          json: { reason },
         }),
         "Falha ao iniciar impersonação",
       );
@@ -99,6 +100,193 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
           param: { id },
         }),
         "Falha ao solicitar definição de senha",
+      );
+    },
+    async listAuditLog<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["audit-log"].$get({ query: input }),
+        "Falha ao carregar o log de auditoria",
+      );
+    },
+    async getIntegrationHealth<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.integrations.health.$get(),
+        "Falha ao carregar a saúde das integrações",
+      );
+    },
+    async getVitals<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.vitals.$get(),
+        "Falha ao carregar os indicadores da plataforma",
+      );
+    },
+    async listOperatorAlerts<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"].$get({
+          query: input,
+        }),
+        "Falha ao carregar alertas",
+      );
+    },
+    async recomputeOperatorAlerts<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"].recompute.$post(),
+        "Falha ao recalcular alertas",
+      );
+    },
+    async acknowledgeOperatorAlert<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["operator-alerts"][
+          ":id"
+        ].acknowledge.$post({ param: { id: String(id) } }),
+        "Falha ao reconhecer alerta",
+      );
+    },
+    async listAccountTasks<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"].$get({
+          query: input,
+        }),
+        "Falha ao carregar tarefas",
+      );
+    },
+    async createAccountTask<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"].$post({
+          json: input,
+        }),
+        "Falha ao criar tarefa",
+      );
+    },
+    async completeAccountTask<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["account-tasks"][
+          ":id"
+        ].complete.$post({
+          param: { id: String(id) },
+        }),
+        "Falha ao concluir tarefa",
+      );
+    },
+    async updateOrganizationLifecycle<TResponse = unknown>(
+      id: string,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].lifecycle.$post({
+          param: { id },
+          json: input,
+        }),
+        "Falha ao atualizar a conta",
+      );
+    },
+    async listInteractions<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].interactions.$get({ param: { id } }),
+        "Falha ao carregar interações",
+      );
+    },
+    async createInteraction<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].interactions.$post({ param: { id }, json: input }),
+        "Falha ao registrar interação",
+      );
+    },
+    async manageSubscription<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].subscription.$post({ param: { id }, json: input }),
+        "Falha ao atualizar assinatura",
+      );
+    },
+    async listEntitlementOverrides<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "entitlement-overrides"
+        ].$get({ param: { id } }),
+        "Falha ao carregar concessões",
+      );
+    },
+    async grantEntitlementOverride<TResponse = unknown>(
+      id: string,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "entitlement-overrides"
+        ].$post({ param: { id }, json: input }),
+        "Falha ao conceder acesso",
+      );
+    },
+    async revokeEntitlementOverride<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice["entitlement-overrides"][
+          ":id"
+        ].revoke.$post({ param: { id: String(id) } }),
+        "Falha ao revogar acesso",
+      );
+    },
+    async getOrganizationActivity<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"].activity.$get({
+          param: { id },
+        }),
+        "Falha ao carregar atividade",
+      );
+    },
+    async listImportRuns<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].$get({ param: { id } }),
+        "Falha ao carregar importações",
+      );
+    },
+    async parseImportFile<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].parse.$post({ param: { id }, json: input }),
+        "Falha ao ler a planilha",
+      );
+    },
+    async validateImportRun<TResponse = unknown>(id: string, input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[":id"][
+          "import-runs"
+        ].validate.$post({ param: { id }, json: input }),
+        "Falha ao validar importação",
+      );
+    },
+    async listApprovals<TResponse = unknown>(input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals.$get({ query: input }),
+        "Falha ao carregar aprovações",
+      );
+    },
+    async createApprovalRequest<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals.$post({ json: input }),
+        "Falha ao abrir solicitação",
+      );
+    },
+    async decideApproval<TResponse = unknown>(
+      id: string | number,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.approvals[":id"].decide.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Falha ao decidir solicitação",
       );
     },
     commercial: {

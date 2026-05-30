@@ -3,10 +3,13 @@ import {
   CheckmarkBadge01Icon,
   CreditCardIcon,
   Logout01Icon,
+  Moon01Icon,
   Notification02Icon,
+  Sun01Icon,
   UnfoldMoreIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useTheme } from 'next-themes'
 
 import {
   backofficeSignOut,
@@ -48,6 +51,7 @@ function getStringProperty(source: unknown, key: string) {
 
 export function NavUser() {
   const { isMobile } = useSidebar()
+  const { resolvedTheme, setTheme } = useTheme()
   const location = useLocation()
   const isBackofficePath = location.pathname.startsWith('/backoffice')
   const labSessionQuery = useSession()
@@ -153,23 +157,44 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              {showBackoffice ? (
-                <DropdownMenuItem>
-                  <HugeiconsIcon icon={BriefcaseIcon} />
-                  <Link to="/backoffice">Backoffice</Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={CheckmarkBadge01Icon} />
-                <Link to="/dashboard/settings/profile">Conta</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={CreditCardIcon} />
-                <Link to="/dashboard/settings/subscription">Assinatura</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={Notification02Icon} />
-                <Link to="/dashboard/settings/notifications">Notificações</Link>
+              {isBackofficePath ? null : (
+                <>
+                  {showBackoffice ? (
+                    <DropdownMenuItem render={<Link to="/backoffice" />}>
+                      <HugeiconsIcon icon={BriefcaseIcon} />
+                      Backoffice
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuItem
+                    render={<Link to="/dashboard/settings/profile" />}
+                  >
+                    <HugeiconsIcon icon={CheckmarkBadge01Icon} />
+                    Conta
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    render={<Link to="/dashboard/settings/subscription" />}
+                  >
+                    <HugeiconsIcon icon={CreditCardIcon} />
+                    Assinatura
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    render={<Link to="/dashboard/settings/notifications" />}
+                  >
+                    <HugeiconsIcon icon={Notification02Icon} />
+                    Notificações
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem
+                closeOnClick={false}
+                onClick={() =>
+                  setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+                }
+              >
+                <HugeiconsIcon
+                  icon={resolvedTheme === 'dark' ? Sun01Icon : Moon01Icon}
+                />
+                {resolvedTheme === 'dark' ? 'Tema claro' : 'Tema escuro'}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

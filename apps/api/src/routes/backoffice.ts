@@ -6,11 +6,16 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   like,
+  lt,
+  lte,
+  max,
   not,
   or,
   sql,
@@ -26,7 +31,17 @@ import {
 } from "@calibra-facil/auth/lab-access";
 import { db } from "@calibra-facil/db";
 import {
+  accountInteraction,
+  accountTask,
+  appQueueJob,
+  approvalRequest,
+  calibrationJob,
+  calibrationRequest,
+  certificateRelease,
+  entitlementOverride,
+  importRun,
   member,
+  operatorAlert,
   organization,
   organizationIntegration,
   organizationSuccessProfile,
@@ -37,6 +52,14 @@ import {
   subscription,
   user as userTable,
 } from "@calibra-facil/db/schema";
+import { FEATURE_FLAGS } from "@calibra-facil/shared";
+import {
+  IMPORT_FIELDS,
+  ImportValidateInputSchema,
+  validateImportRows,
+} from "@calibra-facil/schemas";
+import { parseSpreadsheet } from "../lib/import-parse";
+import { recomputeOperatorAlerts } from "../lib/operator-alerts";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -153,6 +176,10 @@ const BanUserSchema = z.object({
 const ImpersonationBridgeSchema = z.object({
   token: z.string().trim().min(1),
   targetUserId: z.string().trim().min(1),
+});
+
+const ImpersonateUserSchema = z.object({
+  reason: z.string().trim().min(5).max(500),
 });
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
@@ -652,6 +679,99 @@ async function cleanupFailedLabProvisioning(params: {
   }
 }
 
+const AccountTaskListQuerySchema = z.object({
+  organizationId: z.string().trim().optional(),
+  scope: z.enum(["mine", "all"]).optional(),
+  status: z.enum(["open", "done", "all"]).optional(),
+});
+
+const AccountTaskTypeEnum = z.enum([
+  "ONBOARDING",
+  "MIGRATION",
+  "GO_LIVE",
+  "DUNNING",
+  "CHECK_IN",
+  "GENERAL",
+]);
+
+const CreateAccountTaskSchema = z.object({
+  organizationId: z.string().trim().min(1),
+  title: z.string().trim().min(2).max(300),
+  type: AccountTaskTypeEnum.optional(),
+  ownerUserId: z.string().trim().optional(),
+  dueAt: z.string().datetime().optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+const GrantEntitlementOverrideSchema = z.object({
+  feature: z.enum(FEATURE_FLAGS),
+  reason: z.string().trim().max(500).optional(),
+  expiresAt: z.string().datetime().optional(),
+});
+
+const OrganizationLifecycleSchema = z.object({
+  action: z.enum([
+    "suspend",
+    "reactivate",
+    "schedule_offboard",
+    "cancel_offboard",
+  ]),
+  reason: z.string().trim().max(500).optional(),
+  graceDays: z.number().int().min(0).max(365).optional(),
+});
+
+const AuditLogQuerySchema = z.object({
+  action: z.string().trim().min(1).optional(),
+  entityType: z.string().trim().min(1).optional(),
+  entityId: z.string().trim().min(1).optional(),
+  actorUserId: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const ApprovalKindEnum = z.enum(["refund", "credit", "adjustment", "other"]);
+
+const ApprovalListQuerySchema = z.object({
+  status: z.enum(["pending", "approved", "rejected", "all"]).optional(),
+  organizationId: z.string().trim().optional(),
+});
+
+const CreateApprovalRequestSchema = z.object({
+  organizationId: z.string().trim().min(1),
+  kind: ApprovalKindEnum.optional(),
+  summary: z.string().trim().min(3).max(500),
+  amountCents: z.number().int().optional(),
+});
+
+const DecideApprovalSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  reason: z.string().trim().max(500).optional(),
+});
+
+const ImportParseSchema = z.object({
+  // base64 of the uploaded spreadsheet; ~14M chars ≈ a 10MB file.
+  fileBase64: z.string().min(1).max(14_000_000),
+  fileName: z.string().trim().max(300).optional(),
+});
+
+const ManageSubscriptionSchema = z.object({
+  action: z.enum(["change_plan", "cancel", "reactivate"]),
+  planId: z.enum(["FREE", "STANDARD", "PROFESSIONAL", "ENTERPRISE"]).optional(),
+  reason: z.string().trim().max(500).optional(),
+});
+
+const CreateInteractionSchema = z.object({
+  channel: z.enum(["whatsapp", "email", "phone", "meeting", "note", "other"]),
+  direction: z.enum(["outbound", "inbound", "internal"]).optional(),
+  summary: z.string().trim().min(2).max(2000),
+  occurredAt: z.string().datetime().optional(),
+});
+
+const OperatorAlertQuerySchema = z.object({
+  status: z.enum(["open", "acknowledged", "all"]).optional(),
+});
+
 export const backofficeRouter = new Hono<{
   Variables: AuthVariables;
 }>()
@@ -756,6 +876,417 @@ export const backofficeRouter = new Hono<{
     return response;
   })
   .use("*", requireBackofficeAccess)
+  // Fleet-wide integration health roll-up. The half-hourly integrations cron
+  // already writes per-org status/lastValidatedAt/lastValidationError; this just
+  // aggregates it so operators can see broken Asaas/Conta Azul connections at a
+  // glance instead of drilling into each account.
+  .get("/integrations/health", async (c) => {
+    const grouped = await db
+      .select({
+        provider: organizationIntegration.provider,
+        status: organizationIntegration.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(organizationIntegration)
+      .groupBy(
+        organizationIntegration.provider,
+        organizationIntegration.status,
+      );
+
+    const affected = await db
+      .select({
+        organizationId: organizationIntegration.organizationId,
+        organizationName: organization.name,
+        provider: organizationIntegration.provider,
+        name: organizationIntegration.name,
+        status: organizationIntegration.status,
+        lastValidatedAt: organizationIntegration.lastValidatedAt,
+        lastValidationError: organizationIntegration.lastValidationError,
+      })
+      .from(organizationIntegration)
+      .innerJoin(
+        organization,
+        eq(organization.id, organizationIntegration.organizationId),
+      )
+      .where(not(eq(organizationIntegration.status, "ACTIVE")))
+      .orderBy(asc(organization.name))
+      .limit(200);
+
+    const providersMap: Record<
+      string,
+      {
+        provider: string;
+        total: number;
+        active: number;
+        actionRequired: number;
+        disabled: number;
+      }
+    > = {};
+    for (const row of grouped) {
+      const bucket = providersMap[row.provider] ?? {
+        provider: row.provider,
+        total: 0,
+        active: 0,
+        actionRequired: 0,
+        disabled: 0,
+      };
+      bucket.total += row.count;
+      if (row.status === "ACTIVE") bucket.active += row.count;
+      else if (row.status === "ACTION_REQUIRED")
+        bucket.actionRequired += row.count;
+      else if (row.status === "DISABLED") bucket.disabled += row.count;
+      providersMap[row.provider] = bucket;
+    }
+
+    return c.json({ providers: Object.values(providersMap), affected });
+  })
+  // Server-side revenue/subscription vitals — the operator cockpit was blind to
+  // its own commercial state. Simple column aggregates over `subscription`
+  // (status + plan distribution + renewals due), computed in SQL rather than
+  // shipped to the browser. First domain of a growing /vitals metrics endpoint.
+  .get("/vitals", async (c) => {
+    const now = new Date();
+    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const byStatusRows = await db
+      .select({
+        status: subscription.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(subscription)
+      .groupBy(subscription.status);
+
+    const byPlanRows = await db
+      .select({
+        planId: subscription.planId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(subscription)
+      .groupBy(subscription.planId);
+
+    const renewalRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(subscription)
+      .where(
+        and(
+          eq(subscription.status, "ACTIVE"),
+          gte(subscription.nextBillingDate, now),
+          lte(subscription.nextBillingDate, in30Days),
+        ),
+      );
+
+    const byStatus: Record<string, number> = {
+      ACTIVE: 0,
+      PAST_DUE: 0,
+      CANCELED: 0,
+      TRIAL: 0,
+    };
+    let total = 0;
+    for (const row of byStatusRows) {
+      byStatus[row.status] = row.count;
+      total += row.count;
+    }
+
+    const byPlan: Record<string, number> = {};
+    for (const row of byPlanRows) {
+      byPlan[row.planId] = row.count;
+    }
+
+    // Worker queue health — a wedged certificate/notification queue is invisible
+    // to operators today. "Stuck" = PENDING jobs whose availableAt is >15min past
+    // (the worker should have drained them).
+    const queueByStatus = await db
+      .select({
+        status: appQueueJob.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(appQueueJob)
+      .groupBy(appQueueJob.status);
+
+    const queueStuckRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(appQueueJob)
+      .where(
+        and(
+          eq(appQueueJob.status, "PENDING"),
+          lt(appQueueJob.availableAt, new Date(now.getTime() - 15 * 60 * 1000)),
+        ),
+      );
+
+    const queue = {
+      pending: 0,
+      processing: 0,
+      failed: 0,
+      completed: 0,
+      stuck: queueStuckRows[0]?.count ?? 0,
+    };
+    for (const row of queueByStatus) {
+      if (row.status === "PENDING") queue.pending = row.count;
+      else if (row.status === "PROCESSING") queue.processing = row.count;
+      else if (row.status === "FAILED") queue.failed = row.count;
+      else if (row.status === "COMPLETED") queue.completed = row.count;
+    }
+
+    return c.json({
+      subscriptions: {
+        total,
+        active: byStatus.ACTIVE ?? 0,
+        trialing: byStatus.TRIAL ?? 0,
+        pastDue: byStatus.PAST_DUE ?? 0,
+        canceled: byStatus.CANCELED ?? 0,
+        renewalsDue30d: renewalRows[0]?.count ?? 0,
+        byStatus,
+        byPlan,
+      },
+      queue,
+    });
+  })
+  // Account tasks — first-class operator tasks per account (and a cross-account
+  // "my day" worklist via scope=mine), superseding the single free-text
+  // nextAction field. Substrate for onboarding / migration / dunning playbooks.
+  .get(
+    "/account-tasks",
+    zValidator("query", AccountTaskListQuerySchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("query");
+      const statusFilter = input.status ?? "open";
+
+      const conditions = [];
+      if (input.organizationId) {
+        conditions.push(eq(accountTask.organizationId, input.organizationId));
+      }
+      if (input.scope === "mine") {
+        conditions.push(eq(accountTask.ownerUserId, session.user.id));
+      }
+      if (statusFilter === "open") {
+        conditions.push(eq(accountTask.status, "OPEN"));
+      } else if (statusFilter === "done") {
+        conditions.push(eq(accountTask.status, "DONE"));
+      }
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const rows = await db
+        .select({
+          id: accountTask.id,
+          organizationId: accountTask.organizationId,
+          organizationName: organization.name,
+          title: accountTask.title,
+          type: accountTask.type,
+          status: accountTask.status,
+          ownerUserId: accountTask.ownerUserId,
+          dueAt: accountTask.dueAt,
+          notes: accountTask.notes,
+          completedAt: accountTask.completedAt,
+          createdAt: accountTask.createdAt,
+        })
+        .from(accountTask)
+        .innerJoin(
+          organization,
+          eq(organization.id, accountTask.organizationId),
+        )
+        .where(where)
+        .orderBy(asc(accountTask.dueAt), desc(accountTask.createdAt))
+        .limit(200);
+
+      const ownerIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.ownerUserId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const owners =
+        ownerIds.length > 0
+          ? await db
+              .select({ id: userTable.id, name: userTable.name })
+              .from(userTable)
+              .where(inArray(userTable.id, ownerIds))
+          : [];
+      const ownerById = new Map(owners.map((entry) => [entry.id, entry.name]));
+
+      const data = rows.map((row) => ({
+        ...row,
+        ownerName: row.ownerUserId
+          ? (ownerById.get(row.ownerUserId) ?? null)
+          : null,
+      }));
+
+      return c.json({ data });
+    },
+  )
+  .post(
+    "/account-tasks",
+    zValidator("json", CreateAccountTaskSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, input.organizationId),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(accountTask)
+        .values({
+          organizationId: input.organizationId,
+          title: input.title,
+          type: input.type ?? "GENERAL",
+          ownerUserId: input.ownerUserId || null,
+          dueAt: input.dueAt ? new Date(input.dueAt) : null,
+          notes: input.notes || null,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao criar tarefa" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.account_task.created",
+        entityType: "account_task",
+        entityId: String(created.id),
+        details: {
+          organizationId: input.organizationId,
+          title: created.title,
+          type: created.type,
+        },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post("/account-tasks/:id/complete", async (c) => {
+    const session = c.get("session");
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (!Number.isInteger(id)) {
+      return c.json({ error: "Tarefa inválida" }, 400);
+    }
+
+    const updatedRows = await db
+      .update(accountTask)
+      .set({
+        status: "DONE",
+        completedAt: new Date(),
+        completedByUserId: session.user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(accountTask.id, id))
+      .returning();
+    const updated = updatedRows[0];
+    if (!updated) {
+      return c.json({ error: "Tarefa não encontrada" }, 404);
+    }
+
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.account_task.completed",
+      entityType: "account_task",
+      entityId: String(id),
+      details: { organizationId: updated.organizationId },
+    });
+
+    return c.json(updated);
+  })
+  // Queryable audit-log surface over platformEventLog (admin-only). The table is
+  // written for every sensitive backoffice action but previously had no read path.
+  .get(
+    "/audit-log",
+    requirePlatformAdmin,
+    zValidator("query", AuditLogQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
+      const limit = input.limit ?? 50;
+
+      const conditions = [];
+      if (input.action)
+        conditions.push(eq(platformEventLog.action, input.action));
+      if (input.entityType)
+        conditions.push(eq(platformEventLog.entityType, input.entityType));
+      if (input.entityId)
+        conditions.push(eq(platformEventLog.entityId, input.entityId));
+      if (input.actorUserId)
+        conditions.push(eq(platformEventLog.actorUserId, input.actorUserId));
+      if (input.search) {
+        const term = `%${input.search}%`;
+        conditions.push(
+          or(
+            ilike(platformEventLog.action, term),
+            ilike(platformEventLog.entityType, term),
+            ilike(platformEventLog.entityId, term),
+          ),
+        );
+      }
+      if (input.cursor) conditions.push(lt(platformEventLog.id, input.cursor));
+
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const rows = await db
+        .select({
+          id: platformEventLog.id,
+          action: platformEventLog.action,
+          entityType: platformEventLog.entityType,
+          entityId: platformEventLog.entityId,
+          details: platformEventLog.details,
+          createdAt: platformEventLog.createdAt,
+          actorUserId: platformEventLog.actorUserId,
+          targetUserId: platformEventLog.targetUserId,
+        })
+        .from(platformEventLog)
+        .where(where)
+        .orderBy(desc(platformEventLog.id))
+        .limit(limit + 1);
+
+      const userIds = Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            [row.actorUserId, row.targetUserId].filter(
+              (value): value is string => Boolean(value),
+            ),
+          ),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({
+                id: userTable.id,
+                name: userTable.name,
+                email: userTable.email,
+              })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const usersById = new Map(users.map((entry) => [entry.id, entry]));
+
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit);
+      const data = page.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        details: row.details,
+        createdAt: row.createdAt,
+        actorUser: row.actorUserId
+          ? (usersById.get(row.actorUserId) ?? null)
+          : null,
+        targetUser: row.targetUserId
+          ? (usersById.get(row.targetUserId) ?? null)
+          : null,
+      }));
+
+      const last = page.at(-1);
+      const nextCursor = hasMore && last ? last.id : null;
+
+      return c.json({ data, nextCursor });
+    },
+  )
   .get(
     "/impersonation/bridge",
     zValidator("query", ImpersonationBridgeSchema),
@@ -1155,6 +1686,905 @@ export const backofficeRouter = new Hono<{
       plan: planAccess,
     });
   })
+  // Tenant lifecycle (admin-only): suspend / reactivate / schedule offboarding
+  // from the console instead of editing the DB. A SUSPENDED org is blocked at
+  // `requireOrganization`; OFFBOARDING records a deletion grace window.
+  .post(
+    "/organizations/:id/lifecycle",
+    requirePlatformAdmin,
+    zValidator("json", OrganizationLifecycleSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const now = new Date();
+      const setValues: Partial<typeof organization.$inferInsert> = {};
+      switch (input.action) {
+        case "suspend":
+          setValues.status = "SUSPENDED";
+          setValues.suspendedAt = now;
+          setValues.suspensionReason = input.reason ?? null;
+          break;
+        case "reactivate":
+          setValues.status = "ACTIVE";
+          setValues.suspendedAt = null;
+          setValues.suspensionReason = null;
+          setValues.deletionScheduledAt = null;
+          break;
+        case "schedule_offboard":
+          setValues.status = "OFFBOARDING";
+          setValues.deletionScheduledAt = new Date(
+            now.getTime() + (input.graceDays ?? 30) * 24 * 60 * 60 * 1000,
+          );
+          if (input.reason) setValues.suspensionReason = input.reason;
+          break;
+        case "cancel_offboard":
+          setValues.status =
+            org.status === "OFFBOARDING" ? "ACTIVE" : org.status;
+          setValues.deletionScheduledAt = null;
+          break;
+      }
+
+      const updatedRows = await db
+        .update(organization)
+        .set(setValues)
+        .where(eq(organization.id, id))
+        .returning({
+          id: organization.id,
+          status: organization.status,
+          suspendedAt: organization.suspendedAt,
+          suspensionReason: organization.suspensionReason,
+          deletionScheduledAt: organization.deletionScheduledAt,
+        });
+      const updated = updatedRows[0];
+      if (!updated) {
+        return c.json({ error: "Falha ao atualizar a conta" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: `backoffice.organization.${input.action}`,
+        entityType: "organization",
+        entityId: id,
+        details: {
+          reason: input.reason ?? null,
+          status: updated.status,
+        },
+      });
+
+      return c.json(updated);
+    },
+  )
+  // Entitlement overrides — grant-only feature access on top of the plan (comps,
+  // upsell trials). Merged into getOrganizationPlanAccess; list is operator-
+  // visible, grant/revoke are admin-only. All recorded in the audit log.
+  .get("/organizations/:id/entitlement-overrides", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: entitlementOverride.id,
+        feature: entitlementOverride.feature,
+        reason: entitlementOverride.reason,
+        expiresAt: entitlementOverride.expiresAt,
+        createdAt: entitlementOverride.createdAt,
+        createdByUserId: entitlementOverride.createdByUserId,
+      })
+      .from(entitlementOverride)
+      .where(eq(entitlementOverride.organizationId, id))
+      .orderBy(desc(entitlementOverride.createdAt));
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/organizations/:id/entitlement-overrides",
+    requirePlatformAdmin,
+    zValidator("json", GrantEntitlementOverrideSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(entitlementOverride)
+        .values({
+          organizationId: id,
+          feature: input.feature,
+          reason: input.reason || null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao conceder acesso" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.entitlement_override.granted",
+        entityType: "organization",
+        entityId: id,
+        details: { feature: input.feature, reason: input.reason ?? null },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post(
+    "/entitlement-overrides/:id/revoke",
+    requirePlatformAdmin,
+    async (c) => {
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Concessão inválida" }, 400);
+      }
+
+      const deletedRows = await db
+        .delete(entitlementOverride)
+        .where(eq(entitlementOverride.id, id))
+        .returning({
+          id: entitlementOverride.id,
+          organizationId: entitlementOverride.organizationId,
+          feature: entitlementOverride.feature,
+        });
+      const deleted = deletedRows[0];
+      if (!deleted) {
+        return c.json({ error: "Concessão não encontrada" }, 404);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.entitlement_override.revoked",
+        entityType: "organization",
+        entityId: deleted.organizationId,
+        details: { feature: deleted.feature },
+      });
+
+      return c.json({ ok: true });
+    },
+  )
+  // Managed subscription lifecycle (gap #10 core) — operator-driven plan change,
+  // cancel-with-reason and reactivate over the local `subscription` row, audited.
+  // Entitlements follow `getOrganizationPlanAccess` immediately. The Asaas billing
+  // sync (proration, provider state) is the external follow-up — the operator
+  // reconciles billing separately; this never touches billing credentials.
+  .post(
+    "/organizations/:id/subscription",
+    requirePlatformAdmin,
+    zValidator("json", ManageSubscriptionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const existing = await db.query.subscription.findFirst({
+        where: eq(subscription.organizationId, id),
+      });
+
+      const summarize = (row: typeof subscription.$inferSelect | undefined) =>
+        row
+          ? {
+              planId: row.planId,
+              status: row.status,
+              canceledAt: row.canceledAt,
+              cancelReason: row.cancelReason,
+              currentPeriodEnd: row.currentPeriodEnd,
+            }
+          : null;
+
+      if (input.action === "change_plan") {
+        if (!input.planId) {
+          return c.json({ error: "Plano é obrigatório" }, 400);
+        }
+        const rows = existing
+          ? await db
+              .update(subscription)
+              .set({
+                planId: input.planId,
+                status: "ACTIVE",
+                canceledAt: null,
+                cancelReason: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(subscription.id, existing.id))
+              .returning()
+          : await db
+              .insert(subscription)
+              .values({
+                organizationId: id,
+                planId: input.planId,
+                status: "ACTIVE",
+              })
+              .returning();
+
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          action: "backoffice.subscription.plan_changed",
+          entityType: "organization",
+          entityId: id,
+          details: {
+            planId: input.planId,
+            previousPlanId: existing?.planId ?? null,
+          },
+        });
+        return c.json(summarize(rows[0]));
+      }
+
+      if (!existing) {
+        return c.json({ error: "Organização sem assinatura" }, 404);
+      }
+
+      if (input.action === "cancel") {
+        const reason = input.reason?.trim() ?? "";
+        if (reason.length < 5) {
+          return c.json({ error: "Informe o motivo do cancelamento" }, 400);
+        }
+        const rows = await db
+          .update(subscription)
+          .set({
+            status: "CANCELED",
+            canceledAt: new Date(),
+            cancelReason: reason,
+            updatedAt: new Date(),
+          })
+          .where(eq(subscription.id, existing.id))
+          .returning();
+
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          action: "backoffice.subscription.canceled",
+          entityType: "organization",
+          entityId: id,
+          details: { planId: existing.planId, reason },
+        });
+        return c.json(summarize(rows[0]));
+      }
+
+      // reactivate
+      const rows = await db
+        .update(subscription)
+        .set({
+          status: "ACTIVE",
+          canceledAt: null,
+          cancelReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscription.id, existing.id))
+        .returning();
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.subscription.reactivated",
+        entityType: "organization",
+        entityId: id,
+        details: { planId: existing.planId },
+      });
+      return c.json(summarize(rows[0]));
+    },
+  )
+  // Maker-checker approval queue — dual-control over sensitive, money-touching
+  // actions (refunds, credits, adjustments). Any operator can open a request and
+  // view the queue; only a platform admin who is NOT the requester may decide it.
+  .get("/approvals", zValidator("query", ApprovalListQuerySchema), async (c) => {
+    const input = c.req.valid("query");
+
+    const conditions = [];
+    if (input.status && input.status !== "all") {
+      const statusByFilter = {
+        pending: "PENDING",
+        approved: "APPROVED",
+        rejected: "REJECTED",
+      } as const;
+      conditions.push(eq(approvalRequest.status, statusByFilter[input.status]));
+    }
+    if (input.organizationId) {
+      conditions.push(eq(approvalRequest.organizationId, input.organizationId));
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id: approvalRequest.id,
+        organizationId: approvalRequest.organizationId,
+        organizationName: organization.name,
+        kind: approvalRequest.kind,
+        summary: approvalRequest.summary,
+        amountCents: approvalRequest.amountCents,
+        status: approvalRequest.status,
+        requestedByUserId: approvalRequest.requestedByUserId,
+        decidedByUserId: approvalRequest.decidedByUserId,
+        decisionReason: approvalRequest.decisionReason,
+        createdAt: approvalRequest.createdAt,
+        decidedAt: approvalRequest.decidedAt,
+      })
+      .from(approvalRequest)
+      .leftJoin(
+        organization,
+        eq(organization.id, approvalRequest.organizationId),
+      )
+      .where(where)
+      .orderBy(desc(approvalRequest.createdAt))
+      .limit(200);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .flatMap((row) => [row.requestedByUserId, row.decidedByUserId])
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      organizationName: row.organizationName ?? "—",
+      requestedByName: row.requestedByUserId
+        ? (nameById.get(row.requestedByUserId) ?? null)
+        : null,
+      decidedByName: row.decidedByUserId
+        ? (nameById.get(row.decidedByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/approvals",
+    zValidator("json", CreateApprovalRequestSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, input.organizationId),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(approvalRequest)
+        .values({
+          organizationId: input.organizationId,
+          kind: input.kind ?? "other",
+          summary: input.summary,
+          amountCents: input.amountCents ?? null,
+          requestedByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao abrir solicitação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.approval.requested",
+        entityType: "approval_request",
+        entityId: String(created.id),
+        details: {
+          organizationId: input.organizationId,
+          kind: created.kind,
+          amountCents: created.amountCents,
+          summary: created.summary,
+        },
+      });
+
+      return c.json(created);
+    },
+  )
+  .post(
+    "/approvals/:id/decide",
+    requirePlatformAdmin,
+    zValidator("json", DecideApprovalSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Solicitação inválida" }, 400);
+      }
+      const input = c.req.valid("json");
+
+      const existing = await db.query.approvalRequest.findFirst({
+        where: eq(approvalRequest.id, id),
+      });
+      if (!existing) {
+        return c.json({ error: "Solicitação não encontrada" }, 404);
+      }
+      if (existing.status !== "PENDING") {
+        return c.json({ error: "Solicitação já decidida" }, 409);
+      }
+      // Dual-control: the approver must be a different person than the requester.
+      if (existing.requestedByUserId === session.user.id) {
+        return c.json(
+          {
+            error:
+              "Controle duplo: a aprovação precisa ser feita por outra pessoa.",
+          },
+          403,
+        );
+      }
+
+      const nextStatus = input.decision === "approve" ? "APPROVED" : "REJECTED";
+      const updated = await db
+        .update(approvalRequest)
+        .set({
+          status: nextStatus,
+          decidedByUserId: session.user.id,
+          decisionReason: input.reason || null,
+          decidedAt: new Date(),
+        })
+        .where(eq(approvalRequest.id, id))
+        .returning();
+      const decided = updated[0];
+      if (!decided) {
+        return c.json({ error: "Falha ao decidir solicitação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action:
+          input.decision === "approve"
+            ? "backoffice.approval.approved"
+            : "backoffice.approval.rejected",
+        entityType: "approval_request",
+        entityId: String(id),
+        details: {
+          organizationId: existing.organizationId,
+          requestedByUserId: existing.requestedByUserId,
+          reason: input.reason ?? null,
+        },
+      });
+
+      return c.json(decided);
+    },
+  )
+  // Derived product-usage telemetry (gap #1 core) — operator evidence of whether
+  // a lab is *actually* producing work, read live off existing domain tables (no
+  // event spine / instrumentation yet). Jobs, certificate releases and portal
+  // calibration requests are the load-bearing "is this account alive" signals.
+  .get("/organizations/:id/activity", async (c) => {
+    const id = c.req.param("id");
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sinceIso = since.toISOString();
+
+    const [jobs, certificates, requests] = await Promise.all([
+      db
+        .select({
+          last: max(calibrationJob.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${calibrationJob.createdAt} >= ${sinceIso})`,
+        })
+        .from(calibrationJob)
+        .where(eq(calibrationJob.organizationId, id)),
+      db
+        .select({
+          last: max(certificateRelease.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${certificateRelease.createdAt} >= ${sinceIso})`,
+        })
+        .from(certificateRelease)
+        .where(eq(certificateRelease.organizationId, id)),
+      db
+        .select({
+          last: max(calibrationRequest.createdAt),
+          total: count(),
+          recent: sql<number>`count(*) filter (where ${calibrationRequest.createdAt} >= ${sinceIso})`,
+        })
+        .from(calibrationRequest)
+        .where(eq(calibrationRequest.organizationId, id)),
+    ]);
+
+    const section = (
+      row: { last: Date | null; total: number; recent: number } | undefined,
+    ) => ({
+      lastAt: row?.last ? row.last.toISOString() : null,
+      total: Number(row?.total ?? 0),
+      last30d: Number(row?.recent ?? 0),
+    });
+
+    const jobsSection = section(jobs[0]);
+    const certificatesSection = section(certificates[0]);
+    const requestsSection = section(requests[0]);
+
+    const lastActiveAt = [
+      jobsSection.lastAt,
+      certificatesSection.lastAt,
+      requestsSection.lastAt,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+
+    return c.json({
+      lastActiveAt: lastActiveAt ?? null,
+      jobs: jobsSection,
+      certificates: certificatesSection,
+      requests: requestsSection,
+    });
+  })
+  // Migration importer (gap #12, preview-only). The client uploads a spreadsheet
+  // (CSV is parsed in the browser; .xlsx is parsed here via excelts) and maps
+  // columns; the server runs the pure dry-run validation, persists an `import_run`
+  // audit row and returns the result + field contract. No domain records are
+  // written — the commit is a gated follow-up.
+  .post(
+    "/organizations/:id/import-runs/parse",
+    zValidator("json", ImportParseSchema),
+    async (c) => {
+      const input = c.req.valid("json");
+      let bytes: Uint8Array;
+      try {
+        bytes = Uint8Array.from(Buffer.from(input.fileBase64, "base64"));
+      } catch {
+        return c.json({ error: "Arquivo inválido" }, 400);
+      }
+      if (bytes.length === 0) {
+        return c.json({ error: "Arquivo vazio" }, 400);
+      }
+      try {
+        const parsed = await parseSpreadsheet(bytes);
+        return c.json(parsed);
+      } catch (error) {
+        console.error("Failed to parse import spreadsheet", error);
+        return c.json({ error: "Não foi possível ler a planilha" }, 422);
+      }
+    },
+  )
+  .post(
+    "/organizations/:id/import-runs/validate",
+    zValidator("json", ImportValidateInputSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const result = validateImportRows(input.entity, input.rows);
+
+      const inserted = await db
+        .insert(importRun)
+        .values({
+          organizationId: id,
+          entity: input.entity,
+          fileName: input.fileName ?? null,
+          status: "VALIDATED",
+          totalRows: result.totalRows,
+          validRows: result.validRows,
+          errorRows: result.errorRows,
+          mapping: input.mapping ?? null,
+          errorsSample: result.errors,
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const run = inserted[0];
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.import_run.validated",
+        entityType: "organization",
+        entityId: id,
+        details: {
+          entity: input.entity,
+          fileName: input.fileName ?? null,
+          totalRows: result.totalRows,
+          validRows: result.validRows,
+          errorRows: result.errorRows,
+        },
+      });
+
+      return c.json({
+        importRunId: run?.id ?? null,
+        fields: IMPORT_FIELDS[input.entity],
+        result,
+      });
+    },
+  )
+  .get("/organizations/:id/import-runs", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: importRun.id,
+        entity: importRun.entity,
+        fileName: importRun.fileName,
+        status: importRun.status,
+        totalRows: importRun.totalRows,
+        validRows: importRun.validRows,
+        errorRows: importRun.errorRows,
+        createdAt: importRun.createdAt,
+        createdByUserId: importRun.createdByUserId,
+      })
+      .from(importRun)
+      .where(eq(importRun.organizationId, id))
+      .orderBy(desc(importRun.createdAt))
+      .limit(20);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  // Account interaction log (gap #14, omnichannel core) — a unified, manually
+  // recorded timeline of operator↔tenant touchpoints. Auto-capture from the
+  // channels (WhatsApp/email providers) is the external follow-up.
+  .get("/organizations/:id/interactions", async (c) => {
+    const id = c.req.param("id");
+    const rows = await db
+      .select({
+        id: accountInteraction.id,
+        channel: accountInteraction.channel,
+        direction: accountInteraction.direction,
+        summary: accountInteraction.summary,
+        occurredAt: accountInteraction.occurredAt,
+        createdByUserId: accountInteraction.createdByUserId,
+        createdAt: accountInteraction.createdAt,
+      })
+      .from(accountInteraction)
+      .where(eq(accountInteraction.organizationId, id))
+      .orderBy(desc(accountInteraction.occurredAt))
+      .limit(100);
+
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.createdByUserId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const users =
+      userIds.length > 0
+        ? await db
+            .select({ id: userTable.id, name: userTable.name })
+            .from(userTable)
+            .where(inArray(userTable.id, userIds))
+        : [];
+    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+    const data = rows.map((row) => ({
+      ...row,
+      createdByName: row.createdByUserId
+        ? (nameById.get(row.createdByUserId) ?? null)
+        : null,
+    }));
+
+    return c.json({ data });
+  })
+  .post(
+    "/organizations/:id/interactions",
+    zValidator("json", CreateInteractionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const inserted = await db
+        .insert(accountInteraction)
+        .values({
+          organizationId: id,
+          channel: input.channel,
+          direction: input.direction ?? "outbound",
+          summary: input.summary,
+          occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
+          createdByUserId: session.user.id,
+        })
+        .returning();
+      const created = inserted[0];
+      if (!created) {
+        return c.json({ error: "Falha ao registrar interação" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: "backoffice.interaction.recorded",
+        entityType: "organization",
+        entityId: id,
+        details: { channel: input.channel, direction: created.direction },
+      });
+
+      return c.json(created);
+    },
+  )
+  // Operator-addressed alerting (gap #5). The `operator-alerts` cron recomputes
+  // proactive risk signals into `operator_alert`; operators read and acknowledge
+  // them here. A manual recompute is exposed so the cockpit isn't empty between
+  // cron runs.
+  .get(
+    "/operator-alerts",
+    zValidator("query", OperatorAlertQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
+      const status = input.status ?? "open";
+      const where =
+        status === "open"
+          ? eq(operatorAlert.status, "OPEN")
+          : status === "acknowledged"
+            ? eq(operatorAlert.status, "ACKNOWLEDGED")
+            : undefined;
+
+      const rows = await db
+        .select({
+          id: operatorAlert.id,
+          organizationId: operatorAlert.organizationId,
+          organizationName: organization.name,
+          kind: operatorAlert.kind,
+          severity: operatorAlert.severity,
+          title: operatorAlert.title,
+          detail: operatorAlert.detail,
+          status: operatorAlert.status,
+          acknowledgedByUserId: operatorAlert.acknowledgedByUserId,
+          acknowledgedAt: operatorAlert.acknowledgedAt,
+          firstSeenAt: operatorAlert.firstSeenAt,
+          lastSeenAt: operatorAlert.lastSeenAt,
+        })
+        .from(operatorAlert)
+        .leftJoin(
+          organization,
+          eq(organization.id, operatorAlert.organizationId),
+        )
+        .where(where)
+        // critical → warning → info, then most-recent first.
+        .orderBy(
+          sql`case ${operatorAlert.severity} when 'critical' then 0 when 'warning' then 1 else 2 end`,
+          desc(operatorAlert.lastSeenAt),
+        )
+        .limit(200);
+
+      const userIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.acknowledgedByUserId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({ id: userTable.id, name: userTable.name })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+
+      const data = rows.map((row) => ({
+        ...row,
+        acknowledgedByName: row.acknowledgedByUserId
+          ? (nameById.get(row.acknowledgedByUserId) ?? null)
+          : null,
+      }));
+
+      return c.json({ data });
+    },
+  )
+  .post("/operator-alerts/recompute", async (c) => {
+    const session = c.get("session");
+    const result = await recomputeOperatorAlerts();
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.operator_alerts.recomputed",
+      entityType: "platform",
+      entityId: null,
+      details: result,
+    });
+    return c.json(result);
+  })
+  .post("/operator-alerts/:id/acknowledge", async (c) => {
+    const session = c.get("session");
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (!Number.isInteger(id)) {
+      return c.json({ error: "Alerta inválido" }, 400);
+    }
+
+    const updated = await db
+      .update(operatorAlert)
+      .set({
+        status: "ACKNOWLEDGED",
+        acknowledgedByUserId: session.user.id,
+        acknowledgedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(operatorAlert.id, id))
+      .returning();
+    const alert = updated[0];
+    if (!alert) {
+      return c.json({ error: "Alerta não encontrado" }, 404);
+    }
+
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      action: "backoffice.operator_alert.acknowledged",
+      entityType: "operator_alert",
+      entityId: String(id),
+      details: { kind: alert.kind, organizationId: alert.organizationId },
+    });
+
+    return c.json(alert);
+  })
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
       with: {
@@ -1540,42 +2970,51 @@ export const backofficeRouter = new Hono<{
       });
     },
   )
-  .post("/users/:id/impersonate", async (c) => {
-    const backofficeAuth = createBackofficeAuth();
-    const session = c.get("session");
-    const targetUserId = c.req.param("id");
-    const targetUser = await db.query.user.findFirst({
-      where: eq(userTable.id, targetUserId),
-    });
+  .post(
+    "/users/:id/impersonate",
+    zValidator("json", ImpersonateUserSchema),
+    async (c) => {
+      const backofficeAuth = createBackofficeAuth();
+      const session = c.get("session");
+      const targetUserId = c.req.param("id");
+      // Governance: impersonation requires a recorded justification (LGPD / trust).
+      // The reason is written to the immutable platformEventLog and is visible in
+      // the backoffice Audit Log.
+      const { reason } = c.req.valid("json");
+      const targetUser = await db.query.user.findFirst({
+        where: eq(userTable.id, targetUserId),
+      });
 
-    if (!targetUser) {
-      return c.json({ error: "Usuário alvo não encontrado" }, 404);
-    }
+      if (!targetUser) {
+        return c.json({ error: "Usuário alvo não encontrado" }, 404);
+      }
 
-    const handoff = await backofficeAuth.api.generateOneTimeToken({
-      headers: c.req.raw.headers,
-    });
+      const handoff = await backofficeAuth.api.generateOneTimeToken({
+        headers: c.req.raw.headers,
+      });
 
-    await logPlatformEvent({
-      actorUserId: session.user.id,
-      targetUserId,
-      action: "backoffice.impersonation.handoff.started",
-      entityType: "user",
-      entityId: targetUserId,
-      details: {
-        email: targetUser.email,
-      },
-    });
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId,
+        action: "backoffice.impersonation.handoff.started",
+        entityType: "user",
+        entityId: targetUserId,
+        details: {
+          email: targetUser.email,
+          reason,
+        },
+      });
 
-    const bridgeSearch = new URLSearchParams({
-      token: handoff.token,
-      targetUserId,
-    });
+      const bridgeSearch = new URLSearchParams({
+        token: handoff.token,
+        targetUserId,
+      });
 
-    return c.json({
-      redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
-    });
-  })
+      return c.json({
+        redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
+      });
+    },
+  )
   .use("/users/:id/request-password-reset", requirePlatformAdmin)
   .use("/users/:id/role", requirePlatformAdmin)
   .use("/users/:id/ban", requirePlatformAdmin)

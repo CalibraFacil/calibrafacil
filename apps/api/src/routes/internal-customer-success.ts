@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { sendNotification } from "@calibra-facil/notifications";
 import {
   organization,
   organizationEventLog,
@@ -1246,6 +1247,36 @@ export const internalCustomerSuccessRouter = new Hono<{
         message: input.message,
         publicVisible: input.publicVisible,
       });
+
+      // Notify the lab that the operator replied. Without this the "first
+      // response" SLA is cosmetic — the requester only sees the answer if they
+      // happen to open the dashboard. Best-effort: a notification failure must
+      // not roll back the reply that already persisted.
+      if (input.publicVisible && existing.requestedByUserId) {
+        try {
+          await sendNotification({
+            recipientUserId: existing.requestedByUserId,
+            organizationId: existing.organizationId,
+            type: "SUPPORT_REQUEST_REPLIED",
+            priority: "HIGH",
+            title: "Resposta da equipe CalibraFácil",
+            message:
+              input.message.length > 160
+                ? `${input.message.slice(0, 157)}...`
+                : input.message,
+            relatedEntity: {
+              entityType: "request",
+              entityId: id,
+            },
+            actionUrl: "/dashboard/customer-success",
+          });
+        } catch (error) {
+          console.error(
+            "Failed to notify lab of backoffice support reply",
+            error,
+          );
+        }
+      }
 
       await writeOrganizationCustomerSuccessEvent({
         organizationId: existing.organizationId,

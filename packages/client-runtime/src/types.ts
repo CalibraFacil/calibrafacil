@@ -1249,7 +1249,9 @@ export interface IntegrationsApi {
     runId: string,
   ): Promise<TResponse>;
   retryRun<TResponse = unknown>(id: string, runId: string): Promise<TResponse>;
-  listDrift<TResponse = unknown>(input?: { target?: string }): Promise<TResponse>;
+  listDrift<TResponse = unknown>(input?: {
+    target?: string;
+  }): Promise<TResponse>;
   acknowledgeDrift<TResponse = unknown>(
     linkId: string,
     input: { reason: string },
@@ -1643,10 +1645,75 @@ export interface BackofficeApi {
   ): Promise<TResponse>;
   banUser<TResponse = unknown>(id: string): Promise<TResponse>;
   unbanUser<TResponse = unknown>(id: string): Promise<TResponse>;
-  impersonateUser<TResponse = unknown>(id: string): Promise<TResponse>;
+  impersonateUser<TResponse = unknown>(
+    id: string,
+    reason: string,
+  ): Promise<TResponse>;
   createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
   provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
   requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;
+  listAuditLog<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
+  getVitals<TResponse = unknown>(): Promise<TResponse>;
+  listOperatorAlerts<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  recomputeOperatorAlerts<TResponse = unknown>(): Promise<TResponse>;
+  acknowledgeOperatorAlert<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  listAccountTasks<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  createAccountTask<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  completeAccountTask<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  updateOrganizationLifecycle<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  listInteractions<TResponse = unknown>(id: string): Promise<TResponse>;
+  createInteraction<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  manageSubscription<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  listEntitlementOverrides<TResponse = unknown>(id: string): Promise<TResponse>;
+  grantEntitlementOverride<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  revokeEntitlementOverride<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  getOrganizationActivity<TResponse = unknown>(
+    id: string,
+  ): Promise<TResponse>;
+  listImportRuns<TResponse = unknown>(id: string): Promise<TResponse>;
+  parseImportFile<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  validateImportRun<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
+  listApprovals<TResponse = unknown>(
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  createApprovalRequest<TResponse = unknown>(
+    input: unknown,
+  ): Promise<TResponse>;
+  decideApproval<TResponse = unknown>(
+    id: string | number,
+    input: unknown,
+  ): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

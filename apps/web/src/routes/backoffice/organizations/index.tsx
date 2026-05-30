@@ -1,9 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { BackofficeOrganizationsPage } from '@/features/backoffice/organizations-page'
-import { loadBackofficeOrganizationsData } from '@/features/backoffice/queries'
-
+// Organizations folded into the unified Accounts directory.
 export const Route = createFileRoute('/backoffice/organizations/')({
-  loader: ({ context }) => loadBackofficeOrganizationsData(context.queryClient),
-  component: BackofficeOrganizationsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/backoffice/accounts' })
+  },
 })

@@ -3,14 +3,27 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
 import type {
+  BackofficeAuditLogData,
+  BackofficeAuditLogFilters,
   BackofficeCommercialContext,
   BackofficeCommercialOrganizationsData,
+  BackofficeIntegrationHealthData,
   BackofficeOrganizationDetail,
   BackofficeOrganizationOptionsData,
   BackofficeOrganizationsData,
   BackofficeSupportQueueData,
   BackofficeUserFilters,
   BackofficeUsersData,
+  BackofficeVitalsData,
+  BackofficeAccountTaskFilters,
+  BackofficeAccountTasksData,
+  BackofficeEntitlementOverridesData,
+  BackofficeApprovalFilters,
+  BackofficeApprovalsData,
+  BackofficeOrganizationActivity,
+  BackofficeImportRunsData,
+  BackofficeInteractionsData,
+  BackofficeOperatorAlertsData,
 } from './types'
 
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
@@ -264,4 +277,167 @@ export function useBackofficeCommercialContextData(
   organizationId: string | null,
 ) {
   return useQuery(backofficeCommercialContextQueryOptions(organizationId ?? ''))
+}
+
+export function backofficeAuditLogQueryOptions(
+  filters: BackofficeAuditLogFilters,
+) {
+  const query: Record<string, string | number> = {}
+  if (filters.search) query.search = filters.search
+  if (filters.entityType) query.entityType = filters.entityType
+  if (filters.action) query.action = filters.action
+  if (filters.actorUserId) query.actorUserId = filters.actorUserId
+  if (filters.limit) query.limit = filters.limit
+
+  return queryOptions({
+    queryKey: ['backoffice', 'audit-log', query],
+    queryFn: () =>
+      calibraApi.backoffice.listAuditLog<BackofficeAuditLogData>(query),
+  })
+}
+
+export function useBackofficeAuditLogData(filters: BackofficeAuditLogFilters) {
+  return useQuery(backofficeAuditLogQueryOptions(filters))
+}
+
+export function backofficeIntegrationHealthQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'integrations', 'health'],
+    queryFn: () =>
+      calibraApi.backoffice.getIntegrationHealth<BackofficeIntegrationHealthData>(),
+  })
+}
+
+export function useBackofficeIntegrationHealthData() {
+  return useQuery(backofficeIntegrationHealthQueryOptions())
+}
+
+export function backofficeVitalsQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'vitals'],
+    queryFn: () => calibraApi.backoffice.getVitals<BackofficeVitalsData>(),
+  })
+}
+
+export function backofficeOperatorAlertsQueryOptions() {
+  return queryOptions({
+    queryKey: ['backoffice', 'operator-alerts'],
+    queryFn: () =>
+      calibraApi.backoffice.listOperatorAlerts<BackofficeOperatorAlertsData>({
+        status: 'open',
+      }),
+  })
+}
+
+export function useBackofficeOperatorAlertsData() {
+  return useQuery(backofficeOperatorAlertsQueryOptions())
+}
+
+export function useBackofficeVitalsData() {
+  return useQuery(backofficeVitalsQueryOptions())
+}
+
+export function backofficeAccountTasksQueryOptions(
+  filters: BackofficeAccountTaskFilters,
+) {
+  const query: Record<string, string> = {}
+  if (filters.organizationId) query.organizationId = filters.organizationId
+  if (filters.scope) query.scope = filters.scope
+  if (filters.status) query.status = filters.status
+
+  return queryOptions({
+    queryKey: ['backoffice', 'account-tasks', query],
+    queryFn: () =>
+      calibraApi.backoffice.listAccountTasks<BackofficeAccountTasksData>(query),
+  })
+}
+
+export function useBackofficeAccountTasksData(
+  filters: BackofficeAccountTaskFilters,
+) {
+  return useQuery(backofficeAccountTasksQueryOptions(filters))
+}
+
+export function backofficeEntitlementOverridesQueryOptions(
+  organizationId: string,
+) {
+  return queryOptions({
+    queryKey: ['backoffice', 'entitlement-overrides', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.listEntitlementOverrides<BackofficeEntitlementOverridesData>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeEntitlementOverridesData(organizationId: string) {
+  return useQuery(backofficeEntitlementOverridesQueryOptions(organizationId))
+}
+
+export function backofficeApprovalsQueryOptions(
+  filters: BackofficeApprovalFilters = {},
+) {
+  const query: Record<string, string> = {}
+  if (filters.status) query.status = filters.status
+  if (filters.organizationId) query.organizationId = filters.organizationId
+
+  return queryOptions({
+    queryKey: ['backoffice', 'approvals', query],
+    queryFn: () =>
+      calibraApi.backoffice.listApprovals<BackofficeApprovalsData>(query),
+  })
+}
+
+export function useBackofficeApprovalsData(
+  filters: BackofficeApprovalFilters = {},
+) {
+  return useQuery(backofficeApprovalsQueryOptions(filters))
+}
+
+export function backofficeOrganizationActivityQueryOptions(
+  organizationId: string,
+) {
+  return queryOptions({
+    queryKey: ['backoffice', 'organization-activity', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.getOrganizationActivity<BackofficeOrganizationActivity>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeOrganizationActivityData(organizationId: string) {
+  return useQuery(backofficeOrganizationActivityQueryOptions(organizationId))
+}
+
+export function backofficeImportRunsQueryOptions(organizationId: string) {
+  return queryOptions({
+    queryKey: ['backoffice', 'import-runs', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.listImportRuns<BackofficeImportRunsData>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeImportRunsData(organizationId: string) {
+  return useQuery(backofficeImportRunsQueryOptions(organizationId))
+}
+
+export function backofficeInteractionsQueryOptions(organizationId: string) {
+  return queryOptions({
+    queryKey: ['backoffice', 'interactions', organizationId],
+    queryFn: () =>
+      calibraApi.backoffice.listInteractions<BackofficeInteractionsData>(
+        organizationId,
+      ),
+    enabled: Boolean(organizationId),
+  })
+}
+
+export function useBackofficeInteractionsData(organizationId: string) {
+  return useQuery(backofficeInteractionsQueryOptions(organizationId))
 }

@@ -208,6 +208,9 @@ export const passkey = pgTable(
   ],
 );
 
+/** Backoffice-managed tenant lifecycle state. */
+export type OrganizationStatus = "ACTIVE" | "SUSPENDED" | "OFFBOARDING";
+
 export const organization = pgTable(
   "organization",
   {
@@ -218,6 +221,14 @@ export const organization = pgTable(
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
     type: text("type").default("LAB"),
+    // Backoffice-managed tenant lifecycle (suspend / offboard).
+    status: text("status")
+      .$type<OrganizationStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    suspendedAt: timestamp("suspended_at"),
+    suspensionReason: text("suspension_reason"),
+    deletionScheduledAt: timestamp("deletion_scheduled_at"),
     // ISO 17025 / RBC compliance fields
     cnpj: text("cnpj"),
     accreditationNumber: text("accreditation_number"),
@@ -658,6 +669,253 @@ export const organizationSupportRequestEvent = pgTable(
     index("organization_support_request_event_created_at_idx").on(
       table.createdAt,
     ),
+  ],
+);
+
+/**
+ * Backoffice account tasks — first-class, assignable, due-dated operator tasks
+ * per account, superseding the single free-text `nextAction` field. The
+ * substrate for onboarding / migration / dunning / go-live playbook motions and
+ * an operator "my day" worklist.
+ */
+export type AccountTaskStatus = "OPEN" | "DONE" | "CANCELED";
+export type AccountTaskType =
+  | "ONBOARDING"
+  | "MIGRATION"
+  | "GO_LIVE"
+  | "DUNNING"
+  | "CHECK_IN"
+  | "GENERAL";
+
+export type ApprovalRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ApprovalRequestKind = "refund" | "credit" | "adjustment" | "other";
+
+// VALIDATED = dry-run preview persisted as an audit record (current scope).
+// COMMITTED is reserved for the gated follow-up that writes real domain rows.
+export type ImportRunStatus = "VALIDATED" | "COMMITTED";
+
+export type AccountInteractionChannel =
+  | "whatsapp"
+  | "email"
+  | "phone"
+  | "meeting"
+  | "note"
+  | "other";
+export type AccountInteractionDirection = "outbound" | "inbound" | "internal";
+
+export type OperatorAlertSeverity = "info" | "warning" | "critical";
+export type OperatorAlertStatus = "OPEN" | "ACKNOWLEDGED";
+
+export const accountTask = pgTable(
+  "account_task",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    type: text("type").$type<AccountTaskType>().default("GENERAL").notNull(),
+    status: text("status").$type<AccountTaskStatus>().default("OPEN").notNull(),
+    ownerUserId: text("owner_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at"),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    completedAt: timestamp("completed_at"),
+    completedByUserId: text("completed_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("account_task_org_id_idx").on(table.organizationId),
+    index("account_task_status_idx").on(table.status),
+    index("account_task_owner_idx").on(table.ownerUserId),
+    index("account_task_due_idx").on(table.dueAt),
+  ],
+);
+
+/**
+ * Backoffice entitlement overrides — per-org GRANTS layered on top of the plan
+ * (comps, upsell trials, one-off feature access). Grant-only and optionally
+ * time-boxed; merged into `getOrganizationPlanAccess` so the override never
+ * removes a plan entitlement, only adds. `feature` is a `FeatureFlag` string.
+ */
+export const entitlementOverride = pgTable(
+  "entitlement_override",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    reason: text("reason"),
+    expiresAt: timestamp("expires_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("entitlement_override_org_idx").on(table.organizationId)],
+);
+
+/**
+ * Backoffice approval requests — maker-checker / dual-control over sensitive,
+ * money-touching actions (refunds, credits, adjustments). One operator opens a
+ * request; a *different* platform admin approves or rejects it. The decision
+ * record is the governance artifact; downstream execution (e.g. an Asaas refund)
+ * happens separately and references this request.
+ */
+export const approvalRequest = pgTable(
+  "approval_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<ApprovalRequestKind>().default("other").notNull(),
+    summary: text("summary").notNull(),
+    amountCents: integer("amount_cents"),
+    status: text("status")
+      .$type<ApprovalRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: text("decided_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decisionReason: text("decision_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    decidedAt: timestamp("decided_at"),
+  },
+  (table) => [
+    index("approval_request_org_idx").on(table.organizationId),
+    index("approval_request_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Backoffice migration-importer audit (operations-console gap #12, preview-only).
+ * Each dry-run validation of an uploaded spreadsheet persists one row — what was
+ * imported, by whom, against which entity, and how many rows passed/failed. The
+ * actual domain-write commit is a gated follow-up (status would advance to
+ * COMMITTED); this scope never writes domain records.
+ */
+export const importRun = pgTable(
+  "import_run",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entity: text("entity").notNull(),
+    fileName: text("file_name"),
+    status: text("status")
+      .$type<ImportRunStatus>()
+      .default("VALIDATED")
+      .notNull(),
+    totalRows: integer("total_rows").default(0).notNull(),
+    validRows: integer("valid_rows").default(0).notNull(),
+    errorRows: integer("error_rows").default(0).notNull(),
+    mapping: jsonb("mapping").$type<Record<string, string>>(),
+    errorsSample: jsonb("errors_sample").$type<unknown>(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("import_run_org_idx").on(table.organizationId),
+    index("import_run_created_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Account interaction log (operations-console gap #14, omnichannel core). A
+ * unified, manually-recorded timeline of operator↔tenant touchpoints (WhatsApp,
+ * email, call, meeting, internal note) so context lives in one place. Auto-capture
+ * from the actual channels (WhatsApp/email providers) is the external follow-up;
+ * this is the in-repo log + surface.
+ */
+export const accountInteraction = pgTable(
+  "account_interaction",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    channel: text("channel")
+      .$type<AccountInteractionChannel>()
+      .default("note")
+      .notNull(),
+    direction: text("direction")
+      .$type<AccountInteractionDirection>()
+      .default("outbound")
+      .notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("account_interaction_org_idx").on(table.organizationId),
+    index("account_interaction_occurred_idx").on(table.occurredAt),
+  ],
+);
+
+/**
+ * Operator-addressed alerts (operations-console gap #5). A scheduler-driven engine
+ * (the `operator-alerts` cron) recomputes proactive risk signals and upserts them
+ * here so the *team* is notified — until now only labs were. `dedupeKey` makes
+ * recompute idempotent; alerts whose condition clears are swept on the next run;
+ * acknowledgement persists while the condition holds.
+ */
+export const operatorAlert = pgTable(
+  "operator_alert",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    dedupeKey: text("dedupe_key").notNull().unique(),
+    kind: text("kind").notNull(),
+    severity: text("severity")
+      .$type<OperatorAlertSeverity>()
+      .default("warning")
+      .notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    status: text("status")
+      .$type<OperatorAlertStatus>()
+      .default("OPEN")
+      .notNull(),
+    acknowledgedByUserId: text("acknowledged_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("operator_alert_status_idx").on(table.status),
+    index("operator_alert_org_idx").on(table.organizationId),
   ],
 );
 
@@ -4182,9 +4440,10 @@ export const automaticSendAuditLog = pgTable(
       onDelete: "set null",
     }),
     reason: text("reason"),
-    providerResponseSummary: jsonb(
-      "provider_response_summary",
-    ).$type<Record<string, unknown> | null>(),
+    providerResponseSummary: jsonb("provider_response_summary").$type<Record<
+      string,
+      unknown
+    > | null>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -4208,7 +4467,10 @@ export const billingGroup = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
-    status: text("status").$type<BillingGroupStatus>().default("OPEN").notNull(),
+    status: text("status")
+      .$type<BillingGroupStatus>()
+      .default("OPEN")
+      .notNull(),
     paymentTermDays: integer("payment_term_days").default(28).notNull(),
     currency: text("currency").default("BRL").notNull(),
     billingPeriodFrom: timestamp("billing_period_from"),
@@ -4222,7 +4484,10 @@ export const billingGroup = pgTable(
   },
   (table) => [
     index("billing_group_org_idx").on(table.organizationId),
-    index("billing_group_customer_idx").on(table.organizationId, table.customerId),
+    index("billing_group_customer_idx").on(
+      table.organizationId,
+      table.customerId,
+    ),
     index("billing_group_status_idx").on(table.organizationId, table.status),
   ],
 );
@@ -6196,6 +6461,7 @@ export type NotificationType =
   | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
   | "CUSTOMER_SUCCESS_SLA_BREACHED"
   | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED"
+  | "SUPPORT_REQUEST_REPLIED" // Backoffice operator replied to a lab's support request
   | "CALIBRATION_REQUEST_SUBMITTED"
   | "CALIBRATION_REQUEST_UNDER_REVIEW"
   | "CALIBRATION_REQUEST_APPROVED"

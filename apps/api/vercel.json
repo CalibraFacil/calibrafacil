@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/notifications",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/operator-alerts",
+      "schedule": "*/30 * * * *"
     }
   ],
   "rewrites": [
@@ -47,6 +51,10 @@
     {
       "source": "/api/cron/notifications",
       "destination": "/api/cron/notifications"
+    },
+    {
+      "source": "/api/cron/operator-alerts",
+      "destination": "/api/cron/operator-alerts"
     },
     {
       "source": "/api/(.*)",
