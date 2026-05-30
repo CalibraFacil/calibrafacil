@@ -23,6 +23,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   SignalTile,
   StaggerGroup,
@@ -88,6 +89,16 @@ const COMMERCIAL_STATUS_TONE: Record<string, SignalTone> = {
   CANCELLED: 'neutral',
   REJECTED: 'critical',
 }
+
+const TIMELINE_PREVIEW_COUNT = 8
+
+const ACCOUNT_TABS = [
+  { value: 'overview', label: 'Visão geral' },
+  { value: 'commercial', label: 'Comercial' },
+  { value: 'lifecycle', label: 'Ciclo de vida' },
+  { value: 'ops', label: 'Operação' },
+  { value: 'history', label: 'Histórico' },
+] as const
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -185,17 +196,25 @@ function AccountProfile({
   const updateStatus = useUpdateRequestStatus(organizationId)
   const escalate = useEscalateRequest(organizationId)
 
+  const [tab, setTab] = useState<string>('overview')
   const [draft, setDraft] = useState<ProfileDraft>(() =>
     createProfileDraft(payload),
   )
   const [blockerScope, setBlockerScope] = useState<BlockerScope>('ONBOARDING')
   const [blockerReason, setBlockerReason] = useState('')
   const [responses, setResponses] = useState<Record<number, string>>({})
+  const [showAllTimeline, setShowAllTimeline] = useState(false)
 
   const summary = payload.operationalSummary
   const health = status.healthStatus(summary.healthStatus)
   const patch = (next: Partial<ProfileDraft>) =>
     setDraft((current) => ({ ...current, ...next }))
+
+  const ticketsCount = requests.length
+  const timelineCount = payload.timeline.length
+  const visibleTimeline = showAllTimeline
+    ? payload.timeline
+    : payload.timeline.slice(0, TIMELINE_PREVIEW_COUNT)
 
   return (
     <div className="space-y-5">
@@ -272,651 +291,742 @@ function AccountProfile({
         <StatusChip tone="neutral">{payload.plan.name}</StatusChip>
       </div>
 
-      <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StaggerItem>
-          <SignalTile
-            label="Abertos"
-            value={summary.openRequestsCount}
-            tone={summary.openRequestsCount > 0 ? 'info' : 'neutral'}
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <SignalTile
-            label="SLA vencendo"
-            value={summary.dueSoonRequestsCount}
-            tone={summary.dueSoonRequestsCount > 0 ? 'warning' : 'neutral'}
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <SignalTile
-            label="SLA estourado"
-            value={summary.breachedRequestsCount}
-            tone={summary.breachedRequestsCount > 0 ? 'critical' : 'ok'}
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <SignalTile
-            label="Escalados"
-            value={summary.escalatedRequestsCount}
-            tone={summary.escalatedRequestsCount > 0 ? 'critical' : 'neutral'}
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <SignalTile
-            label="Bloqueios"
-            value={summary.activeBlockersCount}
-            tone={summary.activeBlockersCount > 0 ? 'warning' : 'ok'}
-          />
-        </StaggerItem>
-      </StaggerGroup>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="w-full justify-start overflow-x-auto">
+          {ACCOUNT_TABS.map((entry) => (
+            <TabsTrigger key={entry.value} value={entry.value}>
+              {entry.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div className="min-w-0 space-y-5">
-          {/* Operational state */}
-          <SectionPanel
-            eyebrow="Workflow"
-            title="Estado operacional"
-            description="Owner, ciclo de vida, próxima ação e bloqueios."
-          >
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <LifecycleCell
-                  label="Onboarding"
-                  descriptor={status.onboardingStatus(
-                    payload.profile.onboardingStatus,
-                  )}
-                />
-                <LifecycleCell
-                  label="Migração"
-                  descriptor={status.migrationStatus(
-                    payload.profile.migrationStatus,
-                  )}
-                />
-                <LifecycleCell
-                  label="Go-live"
-                  descriptor={status.goLiveStatus(payload.profile.goLiveStatus)}
-                />
-              </div>
+        {/* ── Visão geral ─────────────────────────────────────────── */}
+        <TabsContent value="overview" className="space-y-5">
+          <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <StaggerItem>
+              <SignalTile
+                label="Abertos"
+                value={summary.openRequestsCount}
+                tone={summary.openRequestsCount > 0 ? 'info' : 'neutral'}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                label="SLA vencendo"
+                value={summary.dueSoonRequestsCount}
+                tone={summary.dueSoonRequestsCount > 0 ? 'warning' : 'neutral'}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                label="SLA estourado"
+                value={summary.breachedRequestsCount}
+                tone={summary.breachedRequestsCount > 0 ? 'critical' : 'ok'}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                label="Escalados"
+                value={summary.escalatedRequestsCount}
+                tone={summary.escalatedRequestsCount > 0 ? 'critical' : 'neutral'}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <SignalTile
+                label="Bloqueios"
+                value={summary.activeBlockersCount}
+                tone={summary.activeBlockersCount > 0 ? 'warning' : 'ok'}
+              />
+            </StaggerItem>
+          </StaggerGroup>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl bg-muted/40 p-3.5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    Próxima ação
-                  </p>
-                  <p className="mt-1 text-sm">
-                    {payload.profile.nextAction ?? 'Nenhuma ação definida'}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <StatusChip
-                      status={status.nextActionStatus(summary.nextActionStatus)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {formatDateTime(payload.profile.nextActionDueAt)}
-                    </span>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <SectionPanel
+              eyebrow="Workflow"
+              title="Estado operacional"
+              description="Ciclo de vida, próximo passo e bloqueios."
+            >
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <LifecycleCell
+                    label="Onboarding"
+                    descriptor={status.onboardingStatus(
+                      payload.profile.onboardingStatus,
+                    )}
+                  />
+                  <LifecycleCell
+                    label="Migração"
+                    descriptor={status.migrationStatus(
+                      payload.profile.migrationStatus,
+                    )}
+                  />
+                  <LifecycleCell
+                    label="Go-live"
+                    descriptor={status.goLiveStatus(
+                      payload.profile.goLiveStatus,
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl bg-muted/40 p-3.5">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Próximo passo (CS)
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {payload.profile.nextAction ?? 'Nenhum passo definido'}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <StatusChip
+                        status={status.nextActionStatus(
+                          summary.nextActionStatus,
+                        )}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(payload.profile.nextActionDueAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-muted/40 p-3.5">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Responsável interno (CS)
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {payload.internalOwnerUser?.name ?? 'Não definido'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      No cliente: {payload.profile.accountOwnerName ?? '—'}
+                    </p>
                   </div>
                 </div>
-                <div className="rounded-xl bg-muted/40 p-3.5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    Owner interno
-                  </p>
-                  <p className="mt-1 text-sm">
-                    {payload.internalOwnerUser?.name ?? 'Não definido'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Externo: {payload.profile.accountOwnerName ?? '—'}
-                  </p>
-                </div>
-              </div>
 
-              {payload.workflowViolations.length > 0 ? (
-                <Notice tone="critical" title="Ações requeridas">
-                  {payload.workflowViolations.map((issue) => (
-                    <p key={issue.code}>{issue.message}</p>
-                  ))}
-                </Notice>
-              ) : null}
-              {payload.workflowWarnings.length > 0 ? (
-                <Notice tone="warning" title="Alertas do workflow">
-                  {payload.workflowWarnings.map((issue) => (
-                    <p key={issue.code}>{issue.message}</p>
-                  ))}
-                </Notice>
-              ) : null}
+                {payload.workflowViolations.length > 0 ? (
+                  <Notice tone="critical" title="Ações requeridas">
+                    {payload.workflowViolations.map((issue) => (
+                      <p key={issue.code}>{issue.message}</p>
+                    ))}
+                  </Notice>
+                ) : null}
+                {payload.workflowWarnings.length > 0 ? (
+                  <Notice tone="warning" title="Alertas do workflow">
+                    {payload.workflowWarnings.map((issue) => (
+                      <p key={issue.code}>{issue.message}</p>
+                    ))}
+                  </Notice>
+                ) : null}
 
-              {summary.blockers.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    Bloqueios ativos
-                  </p>
-                  {summary.blockers.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-3"
-                    >
-                      <div className="min-w-0">
-                        <StatusChip status={status.blockerScope(item.scope)} />
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {item.reason}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          blocker.mutate({ scope: item.scope, mode: 'RESOLVE' })
-                        }
-                        disabled={blocker.isPending}
-                        className="min-h-9"
+                {summary.blockers.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Bloqueios ativos
+                    </p>
+                    {summary.blockers.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-3"
                       >
-                        Resolver
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+                        <div className="min-w-0">
+                          <StatusChip status={status.blockerScope(item.scope)} />
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {item.reason}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            blocker.mutate({
+                              scope: item.scope,
+                              mode: 'RESOLVE',
+                            })
+                          }
+                          disabled={blocker.isPending}
+                          className="min-h-9"
+                        >
+                          Resolver
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
-              {payload.profile.nextAction ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    nextAction.mutate({
-                      nextAction: draft.nextAction,
-                      nextActionDueAt: draft.nextActionDueAt,
-                      markCompleted: true,
-                    })
-                  }
-                  disabled={nextAction.isPending}
-                  className="min-h-9"
-                >
-                  Concluir próxima ação
-                </Button>
-              ) : null}
-            </div>
-          </SectionPanel>
-
-          {/* Account tasks */}
-          <AccountTasksCard organizationId={organizationId} />
-
-          {/* Migration importer (gap #12, preview-only) */}
-          <ImporterCard organizationId={organizationId} />
-
-          {/* Posture editor */}
-          <SectionPanel
-            eyebrow="Edição"
-            title="Postura da conta"
-            description="Campos que governam workflow, saúde e comunicação."
-          >
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                updateProfile.mutate(draft)
-              }}
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <DraftInput
-                  label="Owner da conta"
-                  value={draft.accountOwnerName}
-                  onChange={(accountOwnerName) => patch({ accountOwnerName })}
-                />
-                <DraftInput
-                  label="Email do owner"
-                  type="email"
-                  value={draft.accountOwnerEmail}
-                  onChange={(accountOwnerEmail) => patch({ accountOwnerEmail })}
-                />
+                {payload.profile.nextAction ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      nextAction.mutate({
+                        nextAction: draft.nextAction,
+                        nextActionDueAt: draft.nextActionDueAt,
+                        markCompleted: true,
+                      })
+                    }
+                    disabled={nextAction.isPending}
+                    className="min-h-9"
+                  >
+                    Concluir próximo passo
+                  </Button>
+                ) : null}
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <DraftInput
-                  label="Contato de suporte"
-                  type="email"
-                  value={draft.supportContactEmail}
-                  onChange={(supportContactEmail) =>
-                    patch({ supportContactEmail })
-                  }
-                />
-                <Field>
-                  <FieldLabel>Owner interno</FieldLabel>
-                  <NativeSelect
-                    className="w-full"
-                    value={draft.internalOwnerUserId}
-                    onChange={(event) =>
-                      patch({ internalOwnerUserId: event.target.value })
+            </SectionPanel>
+
+            <AccountActivityCard organizationId={organizationId} />
+          </div>
+        </TabsContent>
+
+        {/* ── Comercial ───────────────────────────────────────────── */}
+        <TabsContent value="commercial" className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-2">
+            <div className="min-w-0 space-y-5">
+              <SectionPanel
+                eyebrow="Receita"
+                title="Cobrança & comercial"
+                description="Assinatura, cobrança e ofertas recentes."
+                action={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-9 transition-transform active:scale-[0.96]"
+                    render={
+                      <Link
+                        to="/backoffice/commercial-checkouts"
+                        search={{ organizationId }}
+                      />
                     }
                   >
-                    <NativeSelectOption value="">Sem owner</NativeSelectOption>
-                    {payload.operators.map((operator) => (
-                      <NativeSelectOption key={operator.id} value={operator.id}>
-                        {operator.name}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </Field>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <DraftSelect
-                  label="Onboarding"
-                  options={onboardingLabels}
-                  value={draft.onboardingStatus}
-                  onChange={(onboardingStatus) => patch({ onboardingStatus })}
-                />
-                <DraftSelect
-                  label="Migração"
-                  options={migrationLabels}
-                  value={draft.migrationStatus}
-                  onChange={(migrationStatus) => patch({ migrationStatus })}
-                />
-                <DraftSelect
-                  label="Go-live"
-                  options={goLiveLabels}
-                  value={draft.goLiveStatus}
-                  onChange={(goLiveStatus) => patch({ goLiveStatus })}
-                />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <DraftSelect
-                  label="Saúde"
-                  options={healthLabels}
-                  value={draft.healthStatus}
-                  onChange={(healthStatus) => patch({ healthStatus })}
-                />
-                <DraftSelect
-                  label="SLA da conta"
-                  options={slaTierLabels}
-                  value={draft.slaTier}
-                  onChange={(slaTier) => patch({ slaTier })}
-                />
-              </div>
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                <DraftInput
-                  label="Próxima ação"
-                  value={draft.nextAction}
-                  onChange={(value) => patch({ nextAction: value })}
-                  placeholder="Ex.: validar migração e reagendar treinamento"
-                />
-                <DraftInput
-                  label="Prazo"
-                  type="date"
-                  value={draft.nextActionDueAt}
-                  onChange={(nextActionDueAt) => patch({ nextActionDueAt })}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => nextAction.mutate(draft)}
-                  disabled={nextAction.isPending}
-                  className="min-h-9"
-                >
-                  Atualizar próxima ação
-                </Button>
-              </div>
-              <div className="grid gap-4 md:grid-cols-[0.7fr_1.3fr_auto] md:items-end">
-                <DraftSelect
-                  label="Bloqueio"
-                  options={blockerScopeLabels}
-                  value={blockerScope}
-                  onChange={setBlockerScope}
-                />
-                <DraftInput
-                  label="Motivo do bloqueio"
-                  value={blockerReason}
-                  onChange={setBlockerReason}
-                  placeholder="Ex.: aguardando base validada"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    blocker.mutate({
-                      scope: blockerScope,
-                      mode: 'ADD',
-                      reason: blockerReason,
-                    })
-                  }
-                  disabled={blocker.isPending || !blockerReason.trim()}
-                  className="min-h-9"
-                >
-                  Registrar
-                </Button>
-              </div>
-              <Field orientation="horizontal">
-                <Switch
-                  checked={draft.prioritySupport}
-                  onCheckedChange={(prioritySupport) =>
-                    patch({ prioritySupport })
-                  }
-                />
-                <div>
-                  <FieldLabel>Priority support</FieldLabel>
-                  <FieldDescription>
-                    Antecipa o tratamento e destaca a conta no comando.
-                  </FieldDescription>
-                </div>
-              </Field>
-              <Field>
-                <FieldLabel>Status público</FieldLabel>
-                <Textarea
-                  rows={3}
-                  value={draft.publicStatusNote}
-                  onChange={(event) =>
-                    patch({ publicStatusNote: event.target.value })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Notas internas</FieldLabel>
-                <Textarea
-                  rows={4}
-                  value={draft.internalNotes}
-                  onChange={(event) =>
-                    patch({ internalNotes: event.target.value })
-                  }
-                />
-              </Field>
-              <Button
-                type="submit"
-                disabled={updateProfile.isPending}
-                className="min-h-10 transition-transform active:scale-[0.96]"
-              >
-                {updateProfile.isPending ? 'Salvando…' : 'Salvar postura'}
-              </Button>
-            </form>
-          </SectionPanel>
-
-          {/* Structure */}
-          <SectionPanel
-            eyebrow="Estrutura"
-            title="Unidades & integrações"
-            description="Topologia operacional da conta."
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <p className="mb-2 flex items-center gap-2 text-sm font-medium">
-                  <HugeiconsIcon
-                    icon={Structure01Icon}
-                    className="size-4 text-muted-foreground"
-                  />
-                  Unidades
-                </p>
-                {detail?.units.length ? (
-                  <div className="space-y-1.5">
-                    {detail.units.map((unit) => (
-                      <div
-                        key={unit.id}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm">
-                            {unit.name}
-                          </span>
-                          <span className="block truncate font-mono text-xs text-muted-foreground">
-                            {unit.slug}
-                          </span>
-                        </span>
-                        <StatusChip
-                          tone={unit.status === 'active' ? 'ok' : 'neutral'}
-                        >
-                          {unit.status === 'active' ? 'Ativa' : 'Arquivada'}
-                        </StatusChip>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Sem unidades cadastradas.
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="mb-2 flex items-center gap-2 text-sm font-medium">
-                  <HugeiconsIcon
-                    icon={PlugSocketIcon}
-                    className="size-4 text-muted-foreground"
-                  />
-                  Integrações
-                </p>
-                {detail?.integrations.length ? (
-                  <div className="space-y-1.5">
-                    {detail.integrations.map((integration) => (
-                      <div
-                        key={integration.id}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                      >
-                        <span className="truncate text-sm">
-                          {integration.name}
-                        </span>
-                        <StatusChip
-                          tone={
-                            integration.status === 'ACTIVE'
-                              ? 'ok'
-                              : integration.status === 'ERROR'
-                                ? 'critical'
-                                : 'neutral'
-                          }
-                        >
-                          {integration.status}
-                        </StatusChip>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma integração conectada.
-                  </p>
-                )}
-              </div>
-            </div>
-          </SectionPanel>
-        </div>
-
-        <div className="min-w-0 space-y-5">
-          {/* Product-usage evidence (gap #1 core) */}
-          <AccountActivityCard organizationId={organizationId} />
-
-          {/* Tenant lifecycle */}
-          <AccountLifecycleCard
-            organizationId={organizationId}
-            organization={detail?.organization}
-          />
-
-          {/* Entitlement overrides */}
-          <EntitlementOverridesCard organizationId={organizationId} />
-
-          {/* Maker-checker: request a sensitive money action */}
-          <RequestApprovalCard organizationId={organizationId} />
-
-          {/* Commercial snapshot */}
-          <SectionPanel
-            eyebrow="Receita"
-            title="Cobrança & comercial"
-            description="Assinatura, cobrança e ofertas recentes."
-            action={
-              <Button
-                variant="ghost"
-                size="sm"
-                className="min-h-9 transition-transform active:scale-[0.96]"
-                render={
-                  <Link
-                    to="/backoffice/commercial-checkouts"
-                    search={{ organizationId }}
-                  />
+                    Abrir
+                    <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+                  </Button>
                 }
               >
-                Abrir
-                <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
-              </Button>
-            }
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-muted/40 p-3.5">
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    <HugeiconsIcon icon={Coins01Icon} className="size-3.5" />
-                    Assinatura
-                  </p>
-                  <p className="mt-1 text-sm">
-                    {commercial?.subscription?.planId ?? payload.plan.name}
-                  </p>
-                  {commercial?.subscription?.status ? (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {commercial.subscription.status}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="rounded-xl bg-muted/40 p-3.5">
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    <HugeiconsIcon icon={Database01Icon} className="size-3.5" />
-                    Cliente cobrança
-                  </p>
-                  <p className="mt-1 truncate text-sm">
-                    {commercial?.billingCustomer?.name ?? 'Não sincronizado'}
-                  </p>
-                  {commercial?.billingCustomer?.email ? (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {commercial.billingCustomer.email}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Ofertas recentes
-                </p>
-                {commercial?.recentOffers.length ? (
-                  <div className="space-y-1.5">
-                    {commercial.recentOffers.slice(0, 5).map((offer) => (
-                      <div
-                        key={offer.id}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm">
-                            {offer.kind}
-                          </span>
-                          <span className="block font-mono text-xs tabular-nums text-muted-foreground">
-                            {formatMoney(offer.totalAmount)}
-                          </span>
-                        </span>
-                        <StatusChip
-                          tone={
-                            COMMERCIAL_STATUS_TONE[offer.status] ?? 'neutral'
-                          }
-                        >
-                          {offer.status}
-                        </StatusChip>
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-muted/40 p-3.5">
+                      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                        <HugeiconsIcon icon={Coins01Icon} className="size-3.5" />
+                        Assinatura
+                      </p>
+                      <p className="mt-1 text-sm">
+                        {commercial?.subscription?.planId ?? payload.plan.name}
+                      </p>
+                      {commercial?.subscription?.status ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {commercial.subscription.status}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-xl bg-muted/40 p-3.5">
+                      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                        <HugeiconsIcon
+                          icon={Database01Icon}
+                          className="size-3.5"
+                        />
+                        Cliente cobrança
+                      </p>
+                      <p className="mt-1 truncate text-sm">
+                        {commercial?.billingCustomer?.name ?? 'Não sincronizado'}
+                      </p>
+                      {commercial?.billingCustomer?.email ? (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {commercial.billingCustomer.email}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma oferta emitida.
-                  </p>
-                )}
-              </div>
+
+                  <div>
+                    <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Ofertas recentes
+                    </p>
+                    {commercial?.recentOffers.length ? (
+                      <div className="space-y-1.5">
+                        {commercial.recentOffers.slice(0, 5).map((offer) => (
+                          <div
+                            key={offer.id}
+                            className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm">
+                                {offer.kind}
+                              </span>
+                              <span className="block font-mono text-xs tabular-nums text-muted-foreground">
+                                {formatMoney(offer.totalAmount)}
+                              </span>
+                            </span>
+                            <StatusChip
+                              tone={
+                                COMMERCIAL_STATUS_TONE[offer.status] ?? 'neutral'
+                              }
+                            >
+                              {offer.status}
+                            </StatusChip>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma oferta emitida.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </SectionPanel>
+
+              <SubscriptionManagementCard
+                organizationId={organizationId}
+                subscription={commercial?.subscription ?? null}
+              />
             </div>
-          </SectionPanel>
 
-          {/* Managed subscription lifecycle (gap #10 core) */}
-          <SubscriptionManagementCard
-            organizationId={organizationId}
-            subscription={commercial?.subscription ?? null}
-          />
+            <div className="min-w-0 space-y-5">
+              <RequestApprovalCard organizationId={organizationId} />
+              <EntitlementOverridesCard organizationId={organizationId} />
+            </div>
+          </div>
+        </TabsContent>
 
-          {/* Account interaction log (gap #14 core) */}
-          <InteractionLogCard organizationId={organizationId} />
+        {/* ── Ciclo de vida ───────────────────────────────────────── */}
+        <TabsContent value="lifecycle" className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+            <SectionPanel
+              eyebrow="Edição"
+              title="Postura da conta"
+              description="Responsáveis, ciclo de vida, saúde e comunicação."
+            >
+              <form
+                className="space-y-5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  updateProfile.mutate(draft)
+                }}
+              >
+                <div className="space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Responsáveis
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <DraftInput
+                      label="Responsável no laboratório (cliente)"
+                      value={draft.accountOwnerName}
+                      onChange={(accountOwnerName) =>
+                        patch({ accountOwnerName })
+                      }
+                      placeholder="Nome do contato no cliente"
+                    />
+                    <DraftInput
+                      label="Email do responsável (cliente)"
+                      type="email"
+                      value={draft.accountOwnerEmail}
+                      onChange={(accountOwnerEmail) =>
+                        patch({ accountOwnerEmail })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Responsável interno (CS)</FieldLabel>
+                      <NativeSelect
+                        className="w-full"
+                        value={draft.internalOwnerUserId}
+                        onChange={(event) =>
+                          patch({ internalOwnerUserId: event.target.value })
+                        }
+                      >
+                        <NativeSelectOption value="">
+                          Sem responsável
+                        </NativeSelectOption>
+                        {payload.operators.map((operator) => (
+                          <NativeSelectOption
+                            key={operator.id}
+                            value={operator.id}
+                          >
+                            {operator.name}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                      <FieldDescription>
+                        Operador do nosso time dono da conta.
+                      </FieldDescription>
+                    </Field>
+                    <DraftInput
+                      label="Contato de suporte"
+                      type="email"
+                      value={draft.supportContactEmail}
+                      onChange={(supportContactEmail) =>
+                        patch({ supportContactEmail })
+                      }
+                    />
+                  </div>
+                </div>
 
-          {/* Timeline */}
-          <SectionPanel
-            eyebrow="Histórico"
-            title="Timeline"
-            description="Mudanças de onboarding, suporte e postura."
-          >
-            {payload.timeline.length ? (
-              <CustomerSuccessAccountTimeline events={payload.timeline} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma atividade operacional registrada.
-              </p>
-            )}
-          </SectionPanel>
+                <div className="space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Ciclo de vida & saúde
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <DraftSelect
+                      label="Onboarding"
+                      options={onboardingLabels}
+                      value={draft.onboardingStatus}
+                      onChange={(onboardingStatus) =>
+                        patch({ onboardingStatus })
+                      }
+                    />
+                    <DraftSelect
+                      label="Migração"
+                      options={migrationLabels}
+                      value={draft.migrationStatus}
+                      onChange={(migrationStatus) => patch({ migrationStatus })}
+                    />
+                    <DraftSelect
+                      label="Go-live"
+                      options={goLiveLabels}
+                      value={draft.goLiveStatus}
+                      onChange={(goLiveStatus) => patch({ goLiveStatus })}
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <DraftSelect
+                      label="Saúde"
+                      options={healthLabels}
+                      value={draft.healthStatus}
+                      onChange={(healthStatus) => patch({ healthStatus })}
+                    />
+                    <DraftSelect
+                      label="SLA da conta"
+                      options={slaTierLabels}
+                      value={draft.slaTier}
+                      onChange={(slaTier) => patch({ slaTier })}
+                    />
+                  </div>
+                </div>
 
-          {/* Tickets */}
-          <SectionPanel
-            eyebrow="Suporte"
-            title="Tickets da conta"
-            description="Responda, atribua, mova status ou escale no contexto."
-          >
-            {requestsLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <Skeleton key={index} className="h-28 w-full rounded-xl" />
-                ))}
-              </div>
-            ) : requests.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhum ticket registrado para esta conta.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {requests.map((request) => (
-                  <TicketCard
-                    key={request.id}
-                    request={request}
-                    response={responses[request.id] ?? ''}
-                    onResponseChange={(value) =>
-                      setResponses((current) => ({
-                        ...current,
-                        [request.id]: value,
-                      }))
-                    }
-                    onAssign={() =>
-                      assign.mutate({
-                        requestId: request.id,
-                        assignedToUserId: userId ?? null,
-                      })
-                    }
-                    onRespond={() =>
-                      respond.mutate({
-                        requestId: request.id,
-                        message: responses[request.id] ?? '',
-                      })
-                    }
-                    onStatus={(value) =>
-                      updateStatus.mutate({
-                        requestId: request.id,
-                        status: value,
-                      })
-                    }
-                    onEscalate={() =>
-                      escalate.mutate({
-                        requestId: request.id,
-                        reason:
-                          request.slaStatus === 'BREACHED'
-                            ? 'Escalação automática do operador: ticket fora do SLA.'
-                            : 'Escalação manual do operador para tratamento prioritário.',
-                      })
-                    }
-                    busy={
-                      assign.isPending ||
-                      respond.isPending ||
-                      updateStatus.isPending ||
-                      escalate.isPending
+                <div className="space-y-2 rounded-xl bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Próximo passo (CS)
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                    <DraftInput
+                      label="O que a equipe fará a seguir"
+                      value={draft.nextAction}
+                      onChange={(value) => patch({ nextAction: value })}
+                      placeholder="Ex.: validar migração e reagendar treinamento"
+                    />
+                    <DraftInput
+                      label="Prazo"
+                      type="date"
+                      value={draft.nextActionDueAt}
+                      onChange={(nextActionDueAt) => patch({ nextActionDueAt })}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => nextAction.mutate(draft)}
+                    disabled={nextAction.isPending}
+                    className="min-h-9"
+                  >
+                    Salvar próximo passo
+                  </Button>
+                </div>
+
+                <div className="space-y-2 rounded-xl bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Registrar bloqueio
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-[0.7fr_1.3fr_auto] md:items-end">
+                    <DraftSelect
+                      label="Bloqueio"
+                      options={blockerScopeLabels}
+                      value={blockerScope}
+                      onChange={setBlockerScope}
+                    />
+                    <DraftInput
+                      label="Motivo do bloqueio"
+                      value={blockerReason}
+                      onChange={setBlockerReason}
+                      placeholder="Ex.: aguardando base validada"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        blocker.mutate({
+                          scope: blockerScope,
+                          mode: 'ADD',
+                          reason: blockerReason,
+                        })
+                      }
+                      disabled={blocker.isPending || !blockerReason.trim()}
+                      className="min-h-9"
+                    >
+                      Registrar
+                    </Button>
+                  </div>
+                </div>
+
+                <Field orientation="horizontal">
+                  <Switch
+                    checked={draft.prioritySupport}
+                    onCheckedChange={(prioritySupport) =>
+                      patch({ prioritySupport })
                     }
                   />
-                ))}
-              </div>
-            )}
-          </SectionPanel>
-        </div>
-      </div>
+                  <div>
+                    <FieldLabel>Priority support</FieldLabel>
+                    <FieldDescription>
+                      Antecipa o tratamento e destaca a conta no comando.
+                    </FieldDescription>
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel>Status público</FieldLabel>
+                  <Textarea
+                    rows={3}
+                    value={draft.publicStatusNote}
+                    onChange={(event) =>
+                      patch({ publicStatusNote: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Notas internas</FieldLabel>
+                  <Textarea
+                    rows={4}
+                    value={draft.internalNotes}
+                    onChange={(event) =>
+                      patch({ internalNotes: event.target.value })
+                    }
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  disabled={updateProfile.isPending}
+                  className="min-h-10 transition-transform active:scale-[0.96]"
+                >
+                  {updateProfile.isPending ? 'Salvando…' : 'Salvar postura'}
+                </Button>
+              </form>
+            </SectionPanel>
+
+            <AccountLifecycleCard
+              organizationId={organizationId}
+              organization={detail?.organization}
+            />
+          </div>
+        </TabsContent>
+
+        {/* ── Operação ────────────────────────────────────────────── */}
+        <TabsContent value="ops" className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-2">
+            <div className="min-w-0 space-y-5">
+              <AccountTasksCard organizationId={organizationId} />
+              <InteractionLogCard organizationId={organizationId} />
+            </div>
+            <div className="min-w-0 space-y-5">
+              <ImporterCard organizationId={organizationId} />
+              <SectionPanel
+                eyebrow="Estrutura"
+                title="Unidades & integrações"
+                description="Topologia operacional da conta."
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+                      <HugeiconsIcon
+                        icon={Structure01Icon}
+                        className="size-4 text-muted-foreground"
+                      />
+                      Unidades
+                    </p>
+                    {detail?.units.length ? (
+                      <div className="space-y-1.5">
+                        {detail.units.map((unit) => (
+                          <div
+                            key={unit.id}
+                            className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm">
+                                {unit.name}
+                              </span>
+                              <span className="block truncate font-mono text-xs text-muted-foreground">
+                                {unit.slug}
+                              </span>
+                            </span>
+                            <StatusChip
+                              tone={unit.status === 'active' ? 'ok' : 'neutral'}
+                            >
+                              {unit.status === 'active' ? 'Ativa' : 'Arquivada'}
+                            </StatusChip>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Sem unidades cadastradas.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+                      <HugeiconsIcon
+                        icon={PlugSocketIcon}
+                        className="size-4 text-muted-foreground"
+                      />
+                      Integrações
+                    </p>
+                    {detail?.integrations.length ? (
+                      <div className="space-y-1.5">
+                        {detail.integrations.map((integration) => (
+                          <div
+                            key={integration.id}
+                            className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
+                          >
+                            <span className="truncate text-sm">
+                              {integration.name}
+                            </span>
+                            <StatusChip
+                              tone={
+                                integration.status === 'ACTIVE'
+                                  ? 'ok'
+                                  : integration.status === 'ERROR'
+                                    ? 'critical'
+                                    : 'neutral'
+                              }
+                            >
+                              {integration.status}
+                            </StatusChip>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma integração conectada.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </SectionPanel>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Histórico ───────────────────────────────────────────── */}
+        <TabsContent value="history" className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-2">
+            <SectionPanel
+              eyebrow="Histórico"
+              title="Timeline"
+              description="Mudanças de onboarding, suporte e postura."
+              action={
+                timelineCount > 0 ? (
+                  <StatusChip tone="neutral">{timelineCount}</StatusChip>
+                ) : null
+              }
+            >
+              {timelineCount > 0 ? (
+                <div className="space-y-3">
+                  <CustomerSuccessAccountTimeline events={visibleTimeline} />
+                  {timelineCount > TIMELINE_PREVIEW_COUNT ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllTimeline((value) => !value)}
+                      className="w-full"
+                    >
+                      {showAllTimeline
+                        ? 'Ver menos'
+                        : `Ver tudo (${timelineCount})`}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma atividade operacional registrada.
+                </p>
+              )}
+            </SectionPanel>
+
+            <SectionPanel
+              eyebrow="Suporte"
+              title="Tickets da conta"
+              description="Responda, atribua, mova status ou escale no contexto."
+              action={
+                ticketsCount > 0 ? (
+                  <StatusChip tone="info">{ticketsCount}</StatusChip>
+                ) : null
+              }
+            >
+              {requestsLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <Skeleton key={index} className="h-28 w-full rounded-xl" />
+                  ))}
+                </div>
+              ) : requests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum ticket registrado para esta conta.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {requests.map((request) => (
+                    <TicketCard
+                      key={request.id}
+                      request={request}
+                      response={responses[request.id] ?? ''}
+                      onResponseChange={(value) =>
+                        setResponses((current) => ({
+                          ...current,
+                          [request.id]: value,
+                        }))
+                      }
+                      onAssign={() =>
+                        assign.mutate({
+                          requestId: request.id,
+                          assignedToUserId: userId ?? null,
+                        })
+                      }
+                      onRespond={() =>
+                        respond.mutate({
+                          requestId: request.id,
+                          message: responses[request.id] ?? '',
+                        })
+                      }
+                      onStatus={(value) =>
+                        updateStatus.mutate({
+                          requestId: request.id,
+                          status: value,
+                        })
+                      }
+                      onEscalate={() =>
+                        escalate.mutate({
+                          requestId: request.id,
+                          reason:
+                            request.slaStatus === 'BREACHED'
+                              ? 'Escalação automática do operador: ticket fora do SLA.'
+                              : 'Escalação manual do operador para tratamento prioritário.',
+                        })
+                      }
+                      busy={
+                        assign.isPending ||
+                        respond.isPending ||
+                        updateStatus.isPending ||
+                        escalate.isPending
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </SectionPanel>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
