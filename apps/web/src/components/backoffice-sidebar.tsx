@@ -11,6 +11,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation } from '@tanstack/react-router'
 
 import { NavUser } from './nav-user'
+import { BrandMark } from '@/components/brand'
 
 import {
   Sidebar,
@@ -61,11 +62,19 @@ export function BackofficeSidebar() {
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="px-2 pt-2">
-        <div className="rounded-lg border bg-sidebar-accent/40 px-3 py-2">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Centro de operações
-          </p>
-          <p className="text-sm font-semibold">Backoffice</p>
+        {/* Expanded: logo + wordmark; the box hides on the icon rail. */}
+        <div className="flex items-center gap-2.5 overflow-hidden rounded-lg border bg-sidebar-accent/40 px-3 py-2 group-data-[collapsible=icon]:hidden">
+          <BrandMark className="size-8 shrink-0" alt="" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Centro de operações
+            </p>
+            <p className="truncate text-sm font-semibold">Backoffice</p>
+          </div>
+        </div>
+        {/* Collapsed: just the centered logo mark, sized to the rail. */}
+        <div className="hidden justify-center group-data-[collapsible=icon]:flex">
+          <BrandMark className="size-8" alt="Backoffice" />
         </div>
       </SidebarHeader>
       <SidebarContent>
