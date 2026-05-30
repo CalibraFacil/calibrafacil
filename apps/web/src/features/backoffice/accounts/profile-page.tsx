@@ -38,6 +38,7 @@ import {
   status,
 } from '@/features/backoffice/console'
 import { AccountTasksCard } from '@/features/backoffice/tasks/components'
+import { AccountLifecycleCard } from './lifecycle-card'
 import {
   useBackofficeOrganizationDetailData,
   useBackofficeCommercialContextData,
@@ -707,6 +708,12 @@ function AccountProfile({
         </div>
 
         <div className="min-w-0 space-y-5">
+          {/* Tenant lifecycle */}
+          <AccountLifecycleCard
+            organizationId={organizationId}
+            organization={detail?.organization}
+          />
+
           {/* Commercial snapshot */}
           <SectionPanel
             eyebrow="Receita"

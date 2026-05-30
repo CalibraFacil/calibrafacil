@@ -69,6 +69,7 @@ type ApiRoutePath =
   | "/api/backoffice/labs"
   | "/api/backoffice/organizations"
   | "/api/backoffice/organizations/:id"
+  | "/api/backoffice/organizations/:id/lifecycle"
   | "/api/backoffice/support/queue"
   | "/api/backoffice/users"
   | "/api/backoffice/users/:id/ban"

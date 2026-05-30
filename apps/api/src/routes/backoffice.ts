@@ -684,6 +684,17 @@ const CreateAccountTaskSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+const OrganizationLifecycleSchema = z.object({
+  action: z.enum([
+    "suspend",
+    "reactivate",
+    "schedule_offboard",
+    "cancel_offboard",
+  ]),
+  reason: z.string().trim().max(500).optional(),
+  graceDays: z.number().int().min(0).max(365).optional(),
+});
+
 const AuditLogQuerySchema = z.object({
   action: z.string().trim().min(1).optional(),
   entityType: z.string().trim().min(1).optional(),
@@ -1572,6 +1583,83 @@ export const backofficeRouter = new Hono<{
       plan: planAccess,
     });
   })
+  // Tenant lifecycle (admin-only): suspend / reactivate / schedule offboarding
+  // from the console instead of editing the DB. A SUSPENDED org is blocked at
+  // `requireOrganization`; OFFBOARDING records a deletion grace window.
+  .post(
+    "/organizations/:id/lifecycle",
+    requirePlatformAdmin,
+    zValidator("json", OrganizationLifecycleSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const org = await db.query.organization.findFirst({
+        where: eq(organization.id, id),
+      });
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const now = new Date();
+      const setValues: Partial<typeof organization.$inferInsert> = {};
+      switch (input.action) {
+        case "suspend":
+          setValues.status = "SUSPENDED";
+          setValues.suspendedAt = now;
+          setValues.suspensionReason = input.reason ?? null;
+          break;
+        case "reactivate":
+          setValues.status = "ACTIVE";
+          setValues.suspendedAt = null;
+          setValues.suspensionReason = null;
+          setValues.deletionScheduledAt = null;
+          break;
+        case "schedule_offboard":
+          setValues.status = "OFFBOARDING";
+          setValues.deletionScheduledAt = new Date(
+            now.getTime() + (input.graceDays ?? 30) * 24 * 60 * 60 * 1000,
+          );
+          if (input.reason) setValues.suspensionReason = input.reason;
+          break;
+        case "cancel_offboard":
+          setValues.status =
+            org.status === "OFFBOARDING" ? "ACTIVE" : org.status;
+          setValues.deletionScheduledAt = null;
+          break;
+      }
+
+      const updatedRows = await db
+        .update(organization)
+        .set(setValues)
+        .where(eq(organization.id, id))
+        .returning({
+          id: organization.id,
+          status: organization.status,
+          suspendedAt: organization.suspendedAt,
+          suspensionReason: organization.suspensionReason,
+          deletionScheduledAt: organization.deletionScheduledAt,
+        });
+      const updated = updatedRows[0];
+      if (!updated) {
+        return c.json({ error: "Falha ao atualizar a conta" }, 500);
+      }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        action: `backoffice.organization.${input.action}`,
+        entityType: "organization",
+        entityId: id,
+        details: {
+          reason: input.reason ?? null,
+          status: updated.status,
+        },
+      });
+
+      return c.json(updated);
+    },
+  )
   .get("/support/queue", async (c) => {
     const rows = await db.query.organizationSupportRequest.findMany({
       with: {

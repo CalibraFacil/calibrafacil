@@ -146,6 +146,20 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao concluir tarefa",
       );
     },
+    async updateOrganizationLifecycle<TResponse = unknown>(
+      id: string,
+      input: unknown,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.organizations[
+          ":id"
+        ].lifecycle.$post({
+          param: { id },
+          json: input,
+        }),
+        "Falha ao atualizar a conta",
+      );
+    },
     commercial: {
       async listOrganizations<TResponse = unknown>(search?: string) {
         return readJsonResponse<TResponse>(

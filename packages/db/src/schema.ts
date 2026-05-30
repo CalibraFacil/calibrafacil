@@ -208,6 +208,9 @@ export const passkey = pgTable(
   ],
 );
 
+/** Backoffice-managed tenant lifecycle state. */
+export type OrganizationStatus = "ACTIVE" | "SUSPENDED" | "OFFBOARDING";
+
 export const organization = pgTable(
   "organization",
   {
@@ -218,6 +221,14 @@ export const organization = pgTable(
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
     type: text("type").default("LAB"),
+    // Backoffice-managed tenant lifecycle (suspend / offboard).
+    status: text("status")
+      .$type<OrganizationStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    suspendedAt: timestamp("suspended_at"),
+    suspensionReason: text("suspension_reason"),
+    deletionScheduledAt: timestamp("deletion_scheduled_at"),
     // ISO 17025 / RBC compliance fields
     cnpj: text("cnpj"),
     accreditationNumber: text("accreditation_number"),

@@ -1664,6 +1664,10 @@ export interface BackofficeApi {
   completeAccountTask<TResponse = unknown>(
     id: string | number,
   ): Promise<TResponse>;
+  updateOrganizationLifecycle<TResponse = unknown>(
+    id: string,
+    input: unknown,
+  ): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
     getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;

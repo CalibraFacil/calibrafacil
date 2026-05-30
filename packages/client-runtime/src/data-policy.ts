@@ -126,6 +126,7 @@ export const calibraApiPolicyRegistry = {
     listAccountTasks: "cloud-only",
     createAccountTask: "cloud-only",
     completeAccountTask: "cloud-only",
+    updateOrganizationLifecycle: "cloud-only",
     stopImpersonation: "cloud-only",
   },
   sso: {

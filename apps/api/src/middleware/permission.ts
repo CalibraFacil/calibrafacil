@@ -583,6 +583,7 @@ export const requireOrganization = createMiddleware<{
       memberId: memberTable.id,
       memberRole: memberTable.role,
       orgType: organizationTable.type,
+      orgStatus: organizationTable.status,
     })
     .from(memberTable)
     .innerJoin(
@@ -602,6 +603,16 @@ export const requireOrganization = createMiddleware<{
   if (!memberInfo) {
     throw new HTTPException(403, {
       message: "Not a member of this organization",
+    });
+  }
+
+  // Tenant lifecycle: a backoffice-suspended organization is blocked from all
+  // authenticated lab access (the operator can reactivate it). Free check — the
+  // organization row is already joined above.
+  if (memberInfo.orgStatus === "SUSPENDED") {
+    throw new HTTPException(403, {
+      message:
+        "Conta suspensa. Entre em contato com o suporte da CalibraFácil.",
     });
   }
 

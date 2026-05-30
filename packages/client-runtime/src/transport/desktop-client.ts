@@ -342,6 +342,9 @@ export function createDesktopApiClient(
       async completeAccountTask() {
         throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
       },
+      async updateOrganizationLifecycle() {
+        throw desktopUnsupportedBackofficeAction("Ciclo de vida backoffice");
+      },
       commercial: {
         async listOrganizations() {
           throw desktopUnsupportedBackofficeAction("Comercial backoffice");

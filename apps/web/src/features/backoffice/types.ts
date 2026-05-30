@@ -29,7 +29,16 @@ export type BackofficeOrganizationOptionsData = {
 }
 
 export type BackofficeOrganizationDetail = {
-  organization: { id: string; name: string; slug: string; cnpj: string | null }
+  organization: {
+    id: string
+    name: string
+    slug: string
+    cnpj: string | null
+    status?: string | null
+    suspendedAt?: string | null
+    suspensionReason?: string | null
+    deletionScheduledAt?: string | null
+  }
   plan: { planName: string; status: string }
   successProfile: {
     onboardingStatus?: string | null
