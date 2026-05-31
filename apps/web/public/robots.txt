@@ -4,6 +4,5 @@ Allow: /
 Disallow: /dashboard
 Disallow: /accept-invitation
 Disallow: /sign-in
-Disallow: /sign-up
 
 Sitemap: https://calibrafacil.com/sitemap.xml

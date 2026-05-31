@@ -1,0 +1,59 @@
+---
+title: Rastreabilidade
+description: O que é registrado, quem registrou, quando e por quê — a trilha de auditoria que sustenta a ISO/IEC 17025 e a defesa de auditorias.
+---
+
+A rastreabilidade no CalibraFácil é o conjunto de registros que permite responder, para qualquer ação realizada na plataforma: **o quê, quem, quando, e (quando aplicável) por quê**. Esses registros são imutáveis e cobrem todas as áreas reguladas pela **ISO/IEC 17025:2017, cláusula 8.4**.
+
+## O que é registrado
+
+Cada entidade regulada tem uma trilha de auditoria dedicada:
+
+| Entidade | Ações típicas registradas |
+| :--- | :--- |
+| Ordem de calibração | criação, execução, submissão, aprovação, rejeição, substituição |
+| Método de calibração | rascunho, submissão, revisão técnica, aprovação, publicação, arquivamento |
+| Não conformidade | criação, disposição, aprovação de disposição, resolução, escalonamento para CAPA |
+| CAPA | abertura, análise de causa raiz, implementação, verificação, fechamento |
+| Padrão de referência | criação, atualização, renovação, mudança de status, exclusão |
+| Competência | solicitação, atribuição de treinamento, avaliação, ativação, suspensão, expiração |
+| Cliente | criação, atualização, alteração de compliance, convite ao portal, remoção |
+
+## O que cada registro contém
+
+Cada entrada da trilha registra:
+
+- **Ação** — por exemplo: criação, atualização, aprovação, rejeição, definição de disposição, escalonamento para CAPA.
+- **Responsável** — usuário que executou a ação.
+- **Carimbo de tempo** — UTC, imutável.
+- **Alterações** — antes/depois quando aplicável.
+- **Motivo** — texto livre obrigatório em ações sensíveis (alterações de compliance, disposições críticas de NC, retificações).
+
+## Onde a trilha aparece
+
+- **Na interface da entidade** — cada cadastro mostra a aba "Histórico" ou "Auditoria" com a lista de eventos.
+- **Em relatórios** — exportações por período e por tipo de evento.
+- **Via API** — os endpoints públicos retornam metadados de criação/atualização; trilhas detalhadas exigem autenticação administrativa.
+
+## Imutabilidade dos registros aprovados
+
+A rastreabilidade da trilha é complementada pela **imutabilidade dos registros aprovados**:
+
+- Uma ordem de calibração aprovada não pode ser excluída nem editada.
+- Um certificado emitido permanece referenciado, mesmo após [retificação](/certificados/retificacao) — a nova versão liga-se à anterior pela cadeia de substituição.
+- Padrões de referência são apagados de forma lógica (soft delete) — o histórico continua acessível.
+
+## O que isso significa para auditorias
+
+Um auditor com acesso ao laboratório pode reconstruir, para qualquer calibração emitida:
+
+- quem realizou cada etapa;
+- quando cada etapa aconteceu;
+- qual versão do método foi aplicada (via [snapshot](/conceitos/snapshots-e-imutabilidade));
+- quais padrões foram utilizados, com seus certificados associados;
+- quais condições ambientais estavam vigentes;
+- se a separação de responsabilidades foi respeitada.
+
+<Aside type="tip">
+  A trilha de auditoria é a evidência primária em auditorias ISO/IEC 17025 e RBC. Mantenha o campo "motivo" preenchido com informação operacional útil — relatos vagos perdem força em uma inspeção.
+</Aside>

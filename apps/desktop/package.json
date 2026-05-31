@@ -1,0 +1,38 @@
+{
+  "name": "@calibra-facil/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "productName": "CalibraFácil",
+  "description": "CalibraFácil desktop host",
+  "homepage": "https://calibrafacil.com",
+  "author": {
+    "name": "CalibraFácil",
+    "email": "contato@calibrafacil.com"
+  },
+  "type": "module",
+  "main": "./dist/main/main.cjs",
+  "scripts": {
+    "dev": "pnpm run build && electron .",
+    "start": "electron .",
+    "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
+    "check-types": "tsgo --noEmit",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests",
+    "package": "node ../../scripts/build-desktop-artifact.mjs --dir",
+    "make": "node ../../scripts/build-desktop-artifact.mjs"
+  },
+  "dependencies": {
+    "@calibra-facil/contracts": "workspace:^",
+    "better-sqlite3": "^12.0.0",
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^22.10.2",
+    "electron": "^39.8.9",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7",
+    "vitest": "^4.0.17"
+  }
+}

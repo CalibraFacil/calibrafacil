@@ -1,0 +1,61 @@
+---
+title: Verificação Pública de Certificados
+description: Como auditores, clientes e terceiros confirmam a autenticidade de um certificado emitido pelo CalibraFácil — sem login, com base em um token único por certificado.
+---
+
+Cada certificado emitido pelo CalibraFácil carrega um **token de verificação** único e não previsível. Esse token é impresso no PDF (texto e QR code) e dá acesso a uma página pública de verificação. Qualquer pessoa com o certificado em mãos pode confirmar sua autenticidade sem credenciais.
+
+## O fluxo de verificação
+
+```
+Pessoa lê o token (texto ou QR code) → acessa a página pública /v/<token>
+   ↓
+A página exibe:
+   - identidade do laboratório emissor
+   - cliente, instrumento, serviço
+   - data de aprovação e responsável técnico
+   - número de versão do certificado
+   - status: emitido, substituído ou anulado
+   - metadados da assinatura digital (se aplicável)
+   - link de download do PDF
+```
+
+Não há cadastro, login ou cookie envolvido. A verificação é projetada para ser usada por auditores e clientes em campo.
+
+## O que confirma a autenticidade
+
+A página de verificação atesta:
+
+| Informação | Significado |
+| :--- | :--- |
+| **Laboratório emissor** | O certificado realmente foi emitido por essa organização — não falsificado |
+| **Status** | Se está vigente, substituído ou anulado |
+| **Data de aprovação** | Carimbo de tempo da aprovação original |
+| **Assinatura digital** | Se houve assinatura ICP-Brasil, exibe o titular e a autoridade certificadora |
+| **Cadeia de substituição** | Se houve [retificação](/certificados/retificacao), mostra a versão atual e o link para versões anteriores |
+| **Hash do PDF** | Quando aplicável, comparável com o PDF baixado |
+
+## Segurança do token
+
+- O token é um identificador único gerado aleatoriamente (UUID v4) — não previsível por enumeração.
+- Não há rate-limit por token; o controle de exposição é a propriedade do PDF (quem tem o PDF tem o token, e vice-versa).
+- Tokens não expiram — certificados de calibração antigos continuam verificáveis indefinidamente.
+
+## O que a verificação **não** faz
+
+- **Não** decodifica nem refaz cálculos. Os resultados no PDF são definitivos; o motor matemático congela o cálculo na aprovação.
+- **Não** dá acesso a outros certificados do mesmo cliente — cada token resolve exatamente um certificado.
+- **Não** revela dados sensíveis do laboratório (preços, planos, configurações internas) — apenas o conteúdo necessário para autenticar.
+
+## Para auditores
+
+A página de verificação é a evidência primária para auditorias **ISO/IEC 17025** e **RBC/Inmetro**:
+
+1. o auditor lê o QR code do certificado impresso ou recebido digitalmente;
+2. confirma na página pública que o emissor é o laboratório auditado;
+3. baixa o PDF diretamente da página, evitando dependência da cópia local;
+4. verifica a assinatura digital ICP-Brasil quando aplicável.
+
+<Aside type="tip">
+  Para reduzir fricção em auditorias, oriente os clientes a sempre baixarem o certificado mais recente diretamente da página de verificação, em vez de circular cópias locais. A página sempre aponta para a versão corrente da cadeia de substituição.
+</Aside>

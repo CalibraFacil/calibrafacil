@@ -15,6 +15,7 @@ import {
   CreateCalibrationRequestSchema,
   ListCalibrationRequestsQuerySchema,
 } from "@calibra-facil/schemas";
+import { notifyCalibrationRequestSubmitted } from "@calibra-facil/notifications";
 import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
   requirePermission,
@@ -23,7 +24,9 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 
-function getPortalHostOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+function getPortalHostOrigin(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
   return c.req.header("origin") ?? c.req.header("referer") ?? null;
 }
 
@@ -218,6 +221,12 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           status: calibrationRequest.status,
           observations: calibrationRequest.observations,
           requestedDueDate: calibrationRequest.requestedDueDate,
+          deliveryMethod: calibrationRequest.deliveryMethod,
+          invoiceRemittanceNumber: calibrationRequest.invoiceRemittanceNumber,
+          invoiceRemittanceKey: calibrationRequest.invoiceRemittanceKey,
+          invoiceRemittanceIssuedAt:
+            calibrationRequest.invoiceRemittanceIssuedAt,
+          carrierName: calibrationRequest.carrierName,
           submittedAt: calibrationRequest.submittedAt,
           reviewedAt: calibrationRequest.reviewedAt,
           approvedAt: calibrationRequest.approvedAt,
@@ -311,8 +320,18 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         ? new Date(input.requestedDueDate)
         : null;
 
+      // Remittance details only apply when shipping via a carrier; drop them
+      // otherwise so a later toggle to drop-off can't leave stale invoice data.
+      const isCarrier = input.deliveryMethod === "carrier";
+      const invoiceRemittanceIssuedAt =
+        isCarrier && input.invoiceRemittanceIssuedAt
+          ? new Date(input.invoiceRemittanceIssuedAt)
+          : null;
+
       const request = await db.transaction(async (tx) => {
-        const lockAssetIds = [...input.assetIds].sort((left, right) => left - right);
+        const lockAssetIds = [...input.assetIds].sort(
+          (left, right) => left - right,
+        );
 
         for (const assetId of lockAssetIds) {
           await tx.execute(
@@ -354,6 +373,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
             authOrganizationId: member.organizationId,
             observations: input.observations || null,
             requestedDueDate,
+            deliveryMethod: input.deliveryMethod,
+            invoiceRemittanceNumber: isCarrier
+              ? input.invoiceRemittanceNumber || null
+              : null,
+            invoiceRemittanceKey: isCarrier
+              ? input.invoiceRemittanceKey || null
+              : null,
+            invoiceRemittanceIssuedAt,
+            carrierName: isCarrier ? input.carrierName || null : null,
             submittedBy: session.user.id,
           })
           .returning();
@@ -390,6 +418,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(
           { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
           400,
+        );
+      }
+
+      try {
+        await notifyCalibrationRequestSubmitted(request.id);
+      } catch (error) {
+        console.error(
+          "[Portal Requests] Failed to send request submission notification:",
+          error,
         );
       }
 

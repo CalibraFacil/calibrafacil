@@ -1,8 +1,21 @@
 'use client'
 
 import * as React from 'react'
-import { useLocation } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useMountEffect } from '@/hooks/use-mount-effect'
+import { LEADER_KEYS, matchShortcutSequence } from './shortcuts'
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  )
+}
 
 export type CommandAction = {
   id: string
@@ -55,6 +68,13 @@ export function CommandPaletteProvider({
     Array<ContextActionsConfig>
   >([])
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // Latest-value refs so the once-mounted key listener never goes stale.
+  const navigateRef = React.useRef(navigate)
+  navigateRef.current = navigate
+  const openRef = React.useRef(open)
+  openRef.current = open
 
   const activePage = pages[pages.length - 1] ?? 'root'
 
@@ -93,15 +113,61 @@ export function CommandPaletteProvider({
   }, [])
 
   useMountEffect(() => {
+    let pendingLeader: string | null = null
+    let leaderTimer: ReturnType<typeof setTimeout> | undefined
+
+    const clearPending = () => {
+      pendingLeader = null
+      if (leaderTimer) {
+        clearTimeout(leaderTimer)
+        leaderTimer = undefined
+      }
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // Open/close the palette — Ctrl/⌘+K is not browser-reserved.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        clearPending()
         setOpen((prev) => !prev)
+        return
+      }
+
+      // Leader sequences are off while the palette is open, while typing, or
+      // when a modifier is held (so Ctrl+C and friends are untouched).
+      if (openRef.current) {
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target)) {
+        clearPending()
+        return
+      }
+
+      const key = e.key.toLowerCase()
+
+      if (pendingLeader) {
+        const shortcut = matchShortcutSequence(pendingLeader + key)
+        clearPending()
+        if (shortcut) {
+          e.preventDefault()
+          navigateRef.current({ to: shortcut.to })
+        }
+        return
+      }
+
+      if (LEADER_KEYS.has(key)) {
+        pendingLeader = key
+        leaderTimer = setTimeout(clearPending, 1200)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      if (leaderTimer) {
+        clearTimeout(leaderTimer)
+      }
+    }
   })
 
   return (

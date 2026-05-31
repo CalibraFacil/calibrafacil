@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { useBackofficeSession } from '@calibra-facil/auth/client'
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/bootstrap')({
   head: () => ({
@@ -30,21 +31,10 @@ function BackofficeBootstrapPage() {
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'bootstrap'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao validar bootstrap do backoffice')
-      }
-
-      return res.json() as Promise<{
-        allowed: boolean
-        bootstrapAvailable: boolean
-      }>
-    },
+  const accessQuery = useBackofficeAccessData({
+    scope: 'bootstrap',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user),
-    retry: false,
   })
 
   if (accessQuery.data?.allowed) {
@@ -52,26 +42,7 @@ function BackofficeBootstrapPage() {
   }
 
   const bootstrapMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api.backoffice.bootstrap.$post({
-        json: { token },
-      })
-
-      const data = await res.json().catch(() => null)
-
-      if (!res.ok) {
-        const message =
-          data &&
-          typeof data === 'object' &&
-          'error' in data &&
-          typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao concluir bootstrap'
-        throw new Error(message)
-      }
-
-      return data
-    },
+    mutationFn: async () => calibraApi.backoffice.bootstrap({ token }),
     onSuccess: () => {
       toast.success('Backoffice inicializado com sucesso')
       window.location.assign('/backoffice')
@@ -106,7 +77,11 @@ function BackofficeBootstrapPage() {
                   O bootstrap já foi concluído nesta instância. O primeiro admin
                   de plataforma já existe.
                 </p>
-                <Button className="w-full" variant="outline" onClick={() => navigate({ to: '/backoffice/sign-in' })}>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => navigate({ to: '/backoffice/sign-in' })}
+                >
                   Voltar ao login do backoffice
                 </Button>
               </div>
@@ -131,7 +106,9 @@ function BackofficeBootstrapPage() {
                     </div>
                   ) : null}
                   <Field>
-                    <FieldLabel htmlFor="bootstrapToken">Token de bootstrap</FieldLabel>
+                    <FieldLabel htmlFor="bootstrapToken">
+                      Token de bootstrap
+                    </FieldLabel>
                     <Input
                       id="bootstrapToken"
                       value={token}

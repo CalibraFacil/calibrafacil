@@ -1,72 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
-import {
-  AuditTimeline,
-  buildAuditTimelineEvents,
-} from '@/components/audit-timeline'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { AuditTab } from '@/features/personnel/audit-page'
+import { loadCompetenceAuditData } from '@/features/personnel/queries'
 
 export const Route = createFileRoute('/dashboard/personnel/$id/audit')({
+  loader: ({ context, params }) =>
+    loadCompetenceAuditData(context.queryClient, params.id),
   head: () => ({
     meta: [{ title: 'Histórico | CalibraFacil' }],
   }),
-  component: AuditTab,
+  component: AuditRoute,
 })
 
-function AuditTab() {
+function AuditRoute() {
   const { id } = Route.useParams()
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['competence-audit', id],
-    queryFn: async () => {
-      const res = await api.api.competences[':id']['audit-log'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar histórico')
-      return res.json() as Promise<
-        Array<{
-          id: number
-          action: string
-          changes: unknown
-          performedBy: string
-          performedByName: string
-          performedAt: string
-          reason: string | null
-        }>
-      >
-    },
-  })
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">Carregando...</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  const entries = logs ?? []
-  const timelineEvents = buildAuditTimelineEvents(entries)
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Histórico de Alterações</CardTitle>
-        <CardDescription>Registro de auditoria</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AuditTimeline events={timelineEvents} showCard={false} />
-      </CardContent>
-    </Card>
-  )
+  return <AuditTab id={id} />
 }

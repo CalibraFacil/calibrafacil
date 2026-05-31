@@ -9,9 +9,23 @@
  */
 
 import { Client } from "pg";
+import {
+  notifyAssetDueForRecalibration,
+  notifyCompetenceExpired,
+  notifyCompetenceExpiring,
+  notifyJobOverdue,
+  notifyStandardExpired,
+  notifyStandardExpiring,
+} from "@calibra-facil/notifications";
 
 interface ScheduledEnv {
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  EMAIL_FROM?: string;
+  EMAIL_LOGO_URL?: string;
+  WEB_URL?: string;
+  APP_URL?: string;
 }
 
 // Types for database rows
@@ -74,17 +88,13 @@ interface CompetenceExpiredRow {
   days_expired: number;
 }
 
-interface AdminRecipient {
-  user_id: string;
-}
-
 // Helper to run a database operation with a fresh connection
 async function withDbClient<T>(
   env: ScheduledEnv,
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
-    connectionString: env.HYPERDRIVE.connectionString,
+    connectionString: env.DATABASE_URL,
   });
   await client.connect();
   try {
@@ -267,70 +277,6 @@ async function checkOverdueJobs(
 }
 
 /**
- * Get admin and owner users for an organization
- */
-async function getOrgAdmins(
-  client: Client,
-  organizationId: string,
-): Promise<string[]> {
-  const result = await client.query<AdminRecipient>(
-    `
-    SELECT user_id FROM member
-    WHERE organization_id = $1
-      AND role IN ('admin', 'owner')
-    `,
-    [organizationId],
-  );
-
-  return result.rows.map((r) => r.user_id);
-}
-
-/**
- * Create notification in database
- */
-async function createNotification(
-  client: Client,
-  params: {
-    recipientUserId: string;
-    organizationId: string;
-    type: string;
-    priority: string;
-    title: string;
-    message: string;
-    relatedEntity: object;
-    actionUrl: string;
-  },
-): Promise<void> {
-  await client.query(
-    `
-    INSERT INTO notification (
-      recipient_user_id,
-      organization_id,
-      type,
-      priority,
-      title,
-      message,
-      related_entity,
-      action_url,
-      channels_sent,
-      status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'UNREAD')
-    `,
-    [
-      params.recipientUserId,
-      params.organizationId,
-      params.type,
-      params.priority,
-      params.title,
-      params.message,
-      JSON.stringify(params.relatedEntity),
-      params.actionUrl,
-      JSON.stringify(["IN_APP"]),
-    ],
-  );
-}
-
-/**
  * Record that a scheduled notification was sent
  */
 async function recordScheduledNotification(
@@ -499,23 +445,7 @@ export async function processScheduledNotifications(
 
       for (const asset of assetBatch) {
         try {
-          const admins = await getOrgAdmins(client, asset.organization_id);
-
-          for (const adminId of admins) {
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: asset.organization_id,
-              type: "ASSET_DUE_FOR_RECALIBRATION",
-              priority: "MEDIUM",
-              title: "Ativo vencendo calibração",
-              message: `O ativo "${asset.name}" (${asset.tag}) do cliente ${asset.customer_name} vence em ${asset.days_until_due} dia(s).`,
-              relatedEntity: {
-                entityType: "asset",
-                entityId: asset.id,
-              },
-              actionUrl: `/dashboard/assets/${asset.id}`,
-            });
-          }
+          await notifyAssetDueForRecalibration(asset.id, asset.organization_id);
 
           await recordScheduledNotification(client, {
             organizationId: asset.organization_id,
@@ -556,23 +486,7 @@ export async function processScheduledNotifications(
 
       for (const standard of standardBatch) {
         try {
-          const admins = await getOrgAdmins(client, standard.organization_id);
-
-          for (const adminId of admins) {
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: standard.organization_id,
-              type: "STANDARD_EXPIRING",
-              priority: "HIGH",
-              title: "Padrão de referência vencendo",
-              message: `O padrão "${standard.name}" (${standard.serial_number}) vence em ${standard.days_until_expiry} dia(s). Providencie a recalibração.`,
-              relatedEntity: {
-                entityType: "standard",
-                entityId: standard.id,
-              },
-              actionUrl: `/dashboard/standards/${standard.id}`,
-            });
-          }
+          await notifyStandardExpiring(standard.id, standard.organization_id);
 
           await recordScheduledNotification(client, {
             organizationId: standard.organization_id,
@@ -613,23 +527,7 @@ export async function processScheduledNotifications(
 
       for (const standard of expiredBatch) {
         try {
-          const admins = await getOrgAdmins(client, standard.organization_id);
-
-          for (const adminId of admins) {
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: standard.organization_id,
-              type: "STANDARD_EXPIRED",
-              priority: "HIGH",
-              title: "Padrão de referência VENCIDO",
-              message: `O padrão "${standard.name}" (${standard.serial_number}) venceu há ${standard.days_expired} dia(s). Jobs usando este padrão estão bloqueados até recalibração.`,
-              relatedEntity: {
-                entityType: "standard",
-                entityId: standard.id,
-              },
-              actionUrl: `/dashboard/standards/${standard.id}`,
-            });
-          }
+          await notifyStandardExpired(standard.id, standard.organization_id);
 
           await recordScheduledNotification(client, {
             organizationId: standard.organization_id,
@@ -666,44 +564,7 @@ export async function processScheduledNotifications(
 
       for (const job of jobBatch) {
         try {
-          // Notify the technician (or creator if no technician)
-          const recipientId = job.technician_id ?? job.created_by;
-
-          await createNotification(client, {
-            recipientUserId: recipientId,
-            organizationId: job.organization_id,
-            type: "JOB_OVERDUE",
-            priority: "HIGH",
-            title: "Calibração atrasada",
-            message: `A OS ${job.job_id} está ${job.days_overdue} dia(s) atrasada.`,
-            relatedEntity: {
-              entityType: "job",
-              entityId: job.id,
-              jobId: job.job_id,
-            },
-            actionUrl: `/dashboard/jobs/${job.id}`,
-          });
-
-          // Also notify admins
-          const admins = await getOrgAdmins(client, job.organization_id);
-          for (const adminId of admins) {
-            if (adminId === recipientId) continue; // Don't duplicate
-
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: job.organization_id,
-              type: "JOB_OVERDUE",
-              priority: "HIGH",
-              title: "Calibração atrasada",
-              message: `A OS ${job.job_id} está ${job.days_overdue} dia(s) atrasada.`,
-              relatedEntity: {
-                entityType: "job",
-                entityId: job.id,
-                jobId: job.job_id,
-              },
-              actionUrl: `/dashboard/jobs/${job.id}`,
-            });
-          }
+          await notifyJobOverdue(job.id);
 
           await recordScheduledNotification(client, {
             organizationId: job.organization_id,
@@ -741,23 +602,7 @@ export async function processScheduledNotifications(
 
       for (const comp of compExpiringBatch) {
         try {
-          const admins = await getOrgAdmins(client, comp.organization_id);
-
-          for (const adminId of admins) {
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: comp.organization_id,
-              type: "COMPETENCE_EXPIRING",
-              priority: "MEDIUM",
-              title: "Competência vencendo",
-              message: `A competência de ${comp.user_name} (${comp.scope_description}) vence em ${comp.days_until_expiry} dia(s).`,
-              relatedEntity: {
-                entityType: "competence",
-                entityId: comp.id,
-              },
-              actionUrl: `/dashboard/personnel/${comp.id}`,
-            });
-          }
+          await notifyCompetenceExpiring(comp.id, comp.organization_id);
 
           await recordScheduledNotification(client, {
             organizationId: comp.organization_id,
@@ -817,23 +662,7 @@ export async function processScheduledNotifications(
             ],
           );
 
-          const admins = await getOrgAdmins(client, comp.organization_id);
-
-          for (const adminId of admins) {
-            await createNotification(client, {
-              recipientUserId: adminId,
-              organizationId: comp.organization_id,
-              type: "COMPETENCE_EXPIRED",
-              priority: "HIGH",
-              title: "Competência EXPIRADA",
-              message: `A competência de ${comp.user_name} (${comp.scope_description}) expirou há ${comp.days_expired} dia(s). O técnico não pode executar calibrações neste escopo.`,
-              relatedEntity: {
-                entityType: "competence",
-                entityId: comp.id,
-              },
-              actionUrl: `/dashboard/personnel/${comp.id}`,
-            });
-          }
+          await notifyCompetenceExpired(comp.id, comp.organization_id);
 
           await recordScheduledNotification(client, {
             organizationId: comp.organization_id,

@@ -4,13 +4,20 @@ import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
+  findServiceOrdersForCalibrationJob,
+  triggerAutomaticSendForMilestone,
+} from "../lib/automatic-send";
+import { sendServiceOrdersToFinance } from "../lib/finance";
+import {
   calibrationJob,
   jobAuditLog,
   asset,
   assetType,
   customer,
+  organization,
   service,
   referenceStandard,
+  referenceStandardCertificateDocument,
   user,
   member,
   memberUnitAssignment,
@@ -22,6 +29,8 @@ import {
   type StandardSnapshot,
   type EnvironmentalSnapshot,
   type EnvironmentalLimitsSnapshot,
+  type CalibrationLocationSnapshot,
+  type CalibrationPhaseSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   notifyJobSubmittedForReview,
@@ -48,9 +57,10 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import {
-  type CertificateTemplateSnapshot,
   normalizeMethodDataForStorage,
+  toCanonicalMassValue,
 } from "@calibra-facil/shared";
+import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
@@ -64,6 +74,8 @@ import {
   gte,
   inArray,
   isNull,
+  like,
+  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -85,10 +97,25 @@ import {
   getEffectiveCertificateTemplateSnapshot,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
+import {
+  executeCompiledMethod,
+  type CalculationEngineLike,
+  type CompiledMethod,
+  type CompiledMethodExecutionResult,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
+import { createCalculationEngine } from "@calibra-facil/math-engine";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
+
+const METHOD_ENGINE_OPTIONS = {
+  numericMode: "decimal" as const,
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+};
 
 const CommandPaletteJobSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -134,6 +161,100 @@ function shouldUseLocalR2Download(env: R2Env): env is R2Env & {
   CERTIFICATES_BUCKET: R2BucketLike;
 } {
   return env.NODE_ENV === "development" && Boolean(env.CERTIFICATES_BUCKET);
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function stringFromUnknown(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function r2EnvFromUnknown(value: unknown): R2Env {
+  const env = recordFromUnknown(value);
+  const bucket = env.CERTIFICATES_BUCKET;
+  const bucketGet =
+    bucket && typeof bucket === "object" ? Reflect.get(bucket, "get") : null;
+
+  return {
+    R2_ACCOUNT_ID: stringFromUnknown(env.R2_ACCOUNT_ID),
+    R2_ACCESS_KEY_ID: stringFromUnknown(env.R2_ACCESS_KEY_ID),
+    R2_SECRET_ACCESS_KEY: stringFromUnknown(env.R2_SECRET_ACCESS_KEY),
+    R2_BUCKET_NAME: stringFromUnknown(env.R2_BUCKET_NAME),
+    CERTIFICATES_BUCKET:
+      bucket && typeof bucketGet === "function"
+        ? { get: (key) => bucketGet.call(bucket, key) }
+        : undefined,
+    NODE_ENV:
+      typeof env.NODE_ENV === "string" ? env.NODE_ENV : process.env.NODE_ENV,
+    API_URL: typeof env.API_URL === "string" ? env.API_URL : undefined,
+  };
+}
+
+function isMethodInputField(value: unknown): value is MethodInputField {
+  const field = recordFromUnknown(value);
+  return typeof field.key === "string" && typeof field.type === "string";
+}
+
+function methodInputFieldsFromSnapshot(
+  methodSnapshot: MethodSnapshot | null | undefined,
+) {
+  return Array.isArray(methodSnapshot?.dataFields)
+    ? methodSnapshot.dataFields.filter(isMethodInputField)
+    : [];
+}
+
+function methodSnapshotDisplay(value: unknown) {
+  const snapshot = recordFromUnknown(value);
+  return {
+    methodName:
+      typeof snapshot.methodName === "string" ? snapshot.methodName : undefined,
+    methodVersion:
+      typeof snapshot.methodVersion === "number"
+        ? snapshot.methodVersion
+        : undefined,
+  };
+}
+
+function isCompiledMethod(value: unknown): value is CompiledMethod {
+  const candidate = recordFromUnknown(value);
+  const engine = recordFromUnknown(candidate.engine);
+  return (
+    candidate.status === "compiled" &&
+    typeof candidate.methodFingerprint === "string" &&
+    typeof candidate.normalizedMethodJson === "string" &&
+    typeof engine.version === "string" &&
+    typeof engine.optionsFingerprint === "string" &&
+    Array.isArray(candidate.inputs) &&
+    Array.isArray(candidate.formulas) &&
+    Array.isArray(candidate.measurementModels) &&
+    Array.isArray(candidate.acceptanceCriteria)
+  );
+}
+
+function certificateTemplateSnapshotFromUnknown(
+  value: unknown,
+): CertificateTemplateSnapshot | null {
+  const snapshot = recordFromUnknown(value);
+  const id = snapshot.id;
+  const name = snapshot.name;
+  const slug = snapshot.slug;
+  const version = snapshot.version;
+  if (
+    (id !== null && typeof id !== "number") ||
+    typeof name !== "string" ||
+    typeof slug !== "string" ||
+    typeof version !== "number"
+  ) {
+    return null;
+  }
+
+  return { id, name, slug, version };
 }
 
 function buildLocalJobFileUrl(
@@ -201,7 +322,7 @@ function findMissingRequiredAssetSpecs(
   methodSnapshot: MethodSnapshot | null | undefined,
   assetSnapshot: AssetSnapshot | null | undefined,
 ) {
-  const fields = (methodSnapshot?.dataFields ?? []) as MethodInputField[];
+  const fields = methodInputFieldsFromSnapshot(methodSnapshot);
   return fields.filter(
     (field) =>
       field.source === "asset_spec" &&
@@ -219,7 +340,7 @@ function stripAssetSpecData(
   }
 
   const assetSpecKeys = new Set(
-    ((methodSnapshot?.dataFields ?? []) as MethodInputField[])
+    methodInputFieldsFromSnapshot(methodSnapshot)
       .filter((field) => field.source === "asset_spec")
       .map((field) => field.key),
   );
@@ -231,6 +352,412 @@ function stripAssetSpecData(
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => !assetSpecKeys.has(key)),
   );
+}
+
+function buildCalibrationLocationSnapshot(
+  input:
+    | {
+        type: "customer_site" | "lab" | "other";
+        addressText: string;
+        notes?: string | null;
+      }
+    | undefined,
+  existing: CalibrationLocationSnapshot | null | undefined,
+  actorUserId: string,
+): CalibrationLocationSnapshot | undefined {
+  if (!input) return existing ?? undefined;
+
+  return {
+    type: input.type,
+    addressText: input.addressText.trim(),
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function validateCalibrationLocationForSubmit(
+  snapshot: CalibrationLocationSnapshot | null | undefined,
+): string | null {
+  if (!snapshot) return "Local da calibração é obrigatório";
+  if (!["customer_site", "lab", "other"].includes(snapshot.type)) {
+    return "Tipo de local da calibração é inválido";
+  }
+  if (!snapshot.addressText.trim()) {
+    return "Endereço/local da calibração é obrigatório";
+  }
+  return null;
+}
+
+function buildCalibrationPhaseSnapshot(
+  input:
+    | {
+        blocks: Record<
+          string,
+          {
+            mode:
+              | "before_and_after"
+              | "before_only"
+              | "after_only"
+              | "not_performed";
+            reason?: string | null;
+          }
+        >;
+      }
+    | undefined,
+  existing: CalibrationPhaseSnapshot | null | undefined,
+  actorUserId: string,
+): CalibrationPhaseSnapshot | undefined {
+  if (!input) return existing ?? undefined;
+
+  const blocks: CalibrationPhaseSnapshot["blocks"] = {};
+  for (const [key, block] of Object.entries(input.blocks ?? {})) {
+    if (!key.trim()) continue;
+    if (!isCalibrationPhaseMode(block.mode)) continue;
+    blocks[key] = {
+      mode: block.mode,
+      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
+    };
+  }
+
+  return {
+    blocks,
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function isCalibrationPhaseMode(
+  mode: unknown,
+): mode is CalibrationPhaseSnapshot["blocks"][string]["mode"] {
+  return (
+    mode === "before_and_after" ||
+    mode === "before_only" ||
+    mode === "after_only" ||
+    mode === "not_performed"
+  );
+}
+
+function validateCalibrationPhasesForSubmit(
+  snapshot: CalibrationPhaseSnapshot | null | undefined,
+): string | null {
+  for (const [blockKey, block] of Object.entries(snapshot?.blocks ?? {})) {
+    if (block.mode !== "not_performed") continue;
+    if (!block.reason?.trim()) {
+      return `Informe o motivo para não executar o bloco ${blockKey}`;
+    }
+  }
+  return null;
+}
+
+function createMethodExecutionEngine(): CalculationEngineLike {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine exposes a narrower concrete type than the method-definition execution adapter.
+  return createCalculationEngine(
+    METHOD_ENGINE_OPTIONS,
+  ) as unknown as CalculationEngineLike;
+}
+
+function normalizeStandardNumberToGrams(
+  value: number | null | undefined,
+  unit: unknown,
+): { value: number | null | undefined; normalized: boolean } {
+  if (value === null || value === undefined) {
+    return { value, normalized: false };
+  }
+
+  const normalized = toCanonicalMassValue(value, unit);
+  return normalized === null
+    ? { value, normalized: false }
+    : { value: normalized, normalized: true };
+}
+
+function normalizeStandardsForOfficialExecution(
+  standards: StandardSnapshot[] | null | undefined,
+): StandardSnapshot[] | null | undefined {
+  if (!standards) {
+    return standards;
+  }
+
+  return standards.map((standard) => {
+    const certifiedValues = standard.certifiedValues?.map((certifiedValue) => {
+      const value = normalizeStandardNumberToGrams(
+        certifiedValue.value,
+        certifiedValue.unit,
+      );
+      const uncertainty = normalizeStandardNumberToGrams(
+        certifiedValue.uncertainty,
+        certifiedValue.unit,
+      );
+      const maxError = normalizeStandardNumberToGrams(
+        certifiedValue.maxError,
+        certifiedValue.unit,
+      );
+      const drift = normalizeStandardNumberToGrams(
+        certifiedValue.drift,
+        certifiedValue.unit,
+      );
+      const buoyancy = normalizeStandardNumberToGrams(
+        certifiedValue.buoyancy,
+        certifiedValue.unit,
+      );
+
+      return {
+        ...certifiedValue,
+        value: value.value ?? certifiedValue.value,
+        uncertainty: uncertainty.value ?? certifiedValue.uncertainty,
+        unit: value.normalized ? "g" : certifiedValue.unit,
+        maxError: maxError.value ?? certifiedValue.maxError,
+        drift: drift.value ?? certifiedValue.drift,
+        buoyancy: buoyancy.value ?? certifiedValue.buoyancy,
+      };
+    });
+
+    const driftUnit =
+      standard.certifiedValues?.[0]?.unit ?? standard.uncertaintyUnit;
+    const normalizedUncertainty = normalizeStandardNumberToGrams(
+      standard.uncertainty,
+      standard.uncertaintyUnit,
+    );
+    const normalizedDrift = normalizeStandardNumberToGrams(
+      standard.drift,
+      driftUnit,
+    );
+
+    return {
+      ...standard,
+      uncertainty: normalizedUncertainty.value ?? standard.uncertainty,
+      uncertaintyUnit: normalizedUncertainty.normalized
+        ? "g"
+        : standard.uncertaintyUnit,
+      drift: normalizedDrift.value ?? standard.drift,
+      certifiedValues: certifiedValues ?? null,
+    };
+  });
+}
+
+function standardCertificateDocumentSnapshot(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+) {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
+}
+
+function finalizedStandardCertificateDocumentCondition() {
+  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
+}
+
+function jobExecutionDiagnostic(
+  code: string,
+  message: string,
+  path: string,
+): MethodDiagnostic {
+  return {
+    code,
+    severity: "error",
+    message,
+    path,
+  };
+}
+
+function getCompiledMethodSnapshot(
+  methodSnapshot: MethodSnapshot | null | undefined,
+):
+  | { ok: true; compiledMethod: CompiledMethod }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
+  const compiledMethod = methodSnapshot?.compiledMethod;
+  if (
+    !methodSnapshot ||
+    !compiledMethod ||
+    typeof compiledMethod !== "object" ||
+    !methodSnapshot.methodFingerprint ||
+    !methodSnapshot.engineVersion ||
+    !methodSnapshot.engineOptionsFingerprint ||
+    !methodSnapshot.normalizedMethodJson
+  ) {
+    const message =
+      "Snapshot compilado do método é obrigatório para execução regulada";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  if (!isCompiledMethod(compiledMethod)) {
+    const message = "Snapshot compilado do método possui formato inválido";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_INVALID",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  const candidate = compiledMethod;
+  const mismatches: MethodDiagnostic[] = [];
+  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint do método compilado diverge do snapshot do job",
+        "methodSnapshot.methodFingerprint",
+      ),
+    );
+  }
+  if (candidate.engine?.version !== methodSnapshot.engineVersion) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Versão do engine compilado diverge do snapshot do job",
+        "methodSnapshot.engineVersion",
+      ),
+    );
+  }
+  if (
+    candidate.engine?.optionsFingerprint !==
+    methodSnapshot.engineOptionsFingerprint
+  ) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint das opções do engine diverge do snapshot do job",
+        "methodSnapshot.engineOptionsFingerprint",
+      ),
+    );
+  }
+  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "JSON normalizado do método compilado diverge do snapshot do job",
+        "methodSnapshot.normalizedMethodJson",
+      ),
+    );
+  }
+  if (mismatches.length > 0) {
+    return {
+      ok: false,
+      message: "Snapshot compilado do método diverge dos metadados do job",
+      diagnostics: mismatches,
+    };
+  }
+
+  return { ok: true, compiledMethod };
+}
+
+function buildOfficialExecutionInputs(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+}): Record<string, unknown> {
+  const inputs: Record<string, unknown> = { ...params.data };
+
+  for (const field of params.methodSnapshot.dataFields ?? []) {
+    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
+    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
+    if (value !== undefined) {
+      inputs[field.key] = value;
+    }
+  }
+
+  if (params.environmentalSnapshot) {
+    inputs.environment = {
+      temperature: params.environmentalSnapshot.temperature,
+      humidity: params.environmentalSnapshot.humidity,
+      pressure: params.environmentalSnapshot.pressure,
+    };
+  }
+
+  if (params.standardsSnapshot !== undefined) {
+    inputs.standards =
+      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
+  }
+
+  return inputs;
+}
+
+function executeOfficialCompiledSnapshot(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+  calibrationPhaseSnapshot: CalibrationPhaseSnapshot | null | undefined;
+  requireSuccess?: boolean;
+}):
+  | { ok: true; results: Record<string, unknown>; execution: null }
+  | {
+      ok: true;
+      results: Record<string, unknown>;
+      execution: CompiledMethodExecutionResult;
+    }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
+  const snapshot = getCompiledMethodSnapshot(params.methodSnapshot);
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+
+  const execution = executeCompiledMethod(
+    snapshot.compiledMethod,
+    {
+      inputs: buildOfficialExecutionInputs(params),
+      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
+    },
+    { engine: createMethodExecutionEngine() },
+  );
+
+  if (!execution.ok && params.requireSuccess !== false) {
+    return {
+      ok: false,
+      diagnostics: execution.diagnostics,
+      message:
+        execution.diagnostics.find((item) => item.severity === "error")
+          ?.message ?? "Execução oficial do método compilado falhou",
+    };
+  }
+
+  return {
+    ok: true,
+    results: {
+      ...execution.outputs,
+      __compiledExecution: {
+        methodFingerprint: execution.methodFingerprint,
+        engineVersion: execution.engineVersion,
+        engineOptionsFingerprint: execution.engineOptionsFingerprint,
+        inputFingerprint: execution.inputFingerprint,
+        calculationFingerprint: execution.calculationFingerprint,
+        resultFingerprint: execution.resultFingerprint,
+        canonicalResultJson: execution.canonicalResultJson,
+        formulaResults: execution.formulaResults,
+        measurementModelResults: execution.measurementModelResults,
+        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
+        diagnostics: execution.diagnostics,
+      },
+    },
+    execution,
+  };
 }
 
 async function buildAssetSnapshot(
@@ -381,12 +908,47 @@ async function buildStandardsSnapshot(
     };
   }
 
+  const standardsById = new Map(
+    standards.map((standard) => [standard.id, standard]),
+  );
+  const orderedStandards = selectedStandardIds.map(
+    (id) => standardsById.get(id)!,
+  );
+
+  const currentDocuments = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(
+      and(
+        eq(referenceStandardCertificateDocument.isCurrent, true),
+        finalizedStandardCertificateDocumentCondition(),
+        or(
+          ...orderedStandards.map((standard) =>
+            and(
+              eq(referenceStandardCertificateDocument.standardId, standard.id),
+              eq(
+                referenceStandardCertificateDocument.certificateNumber,
+                standard.certificateNumber,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  const documentsByStandardId = new Map(
+    currentDocuments.map((document) => [
+      document.standardId,
+      standardCertificateDocumentSnapshot(document),
+    ]),
+  );
+
   return {
     ok: true,
-    snapshot: standards.map((s) => ({
+    snapshot: orderedStandards.map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
+      kind: s.kind,
       certificateNumber: s.certificateNumber,
       calibratedBy: s.calibratedBy,
       calibrationDate: s.calibrationDate,
@@ -397,6 +959,8 @@ async function buildStandardsSnapshot(
       distribution: s.distribution,
       drift: s.drift,
       certifiedValues: s.certifiedValues,
+      metrologyData: s.metrologyData,
+      certificateDocument: documentsByStandardId.get(s.id) ?? null,
     })),
   };
 }
@@ -697,8 +1261,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             )
           : null,
         // Extract method name from snapshot for display
-        methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
-        methodVersion: (job.methodSnapshot as MethodSnapshot)?.methodVersion,
+        methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
+        methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
         ...financialContexts.get(job.id),
       }));
 
@@ -785,6 +1349,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         results: calibrationJob.results,
         standardsSnapshot: calibrationJob.standardsSnapshot,
         environmentalSnapshot: calibrationJob.environmentalSnapshot,
+        calibrationLocationSnapshot: calibrationJob.calibrationLocationSnapshot,
+        calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
         assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
@@ -807,6 +1373,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         customerId: calibrationJob.customerId,
         customerName: customer.name,
         customerTaxId: customer.taxId,
+        customerAddress: customer.address,
+        labName: organization.name,
+        labStreet: organization.street,
+        labNumber: organization.number,
+        labComplement: organization.complement,
+        labNeighbourhood: organization.neighbourhood,
+        labCity: organization.city,
+        labState: organization.state,
+        labCep: organization.cep,
         assetId: calibrationJob.assetId,
         assetName: asset.name,
         assetTag: asset.tag,
@@ -830,6 +1405,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       })
       .from(calibrationJob)
       .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+      .leftJoin(
+        organization,
+        eq(calibrationJob.organizationId, organization.id),
+      )
       .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
       .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
       .leftJoin(service, eq(calibrationJob.serviceId, service.id))
@@ -1363,7 +1942,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const normalizedData = normalizeMethodDataForStorage(
         input.data,
-        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        methodInputFieldsFromSnapshot(existing.methodSnapshot),
         assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
       );
 
@@ -1373,6 +1952,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+        input.calibrationLocation,
+        existing.calibrationLocationSnapshot,
+        session.user.id,
+      );
+      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+        input.calibrationPhases,
+        existing.calibrationPhaseSnapshot,
+        session.user.id,
+      );
+      const calibrationLocationError = validateCalibrationLocationForSubmit(
+        nextCalibrationLocationSnapshot,
+      );
+      if (calibrationLocationError) {
+        return c.json({ error: calibrationLocationError }, 400);
+      }
+      const calibrationPhaseError = validateCalibrationPhasesForSubmit(
+        nextCalibrationPhaseSnapshot,
+      );
+      if (calibrationPhaseError) {
+        return c.json({ error: calibrationPhaseError }, 400);
+      }
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
       const nextData = stripAssetSpecData(
         normalizedData.data,
@@ -1397,16 +1998,40 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           400,
         );
       }
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+        requireSuccess: true,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? existing.results);
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? existing.results,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
+          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: "REVIEW",
           performedAt,
         })
@@ -1420,10 +2045,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         changes: {
           status: { old: existing.status, new: "REVIEW" },
           data: { old: existing.data, new: nextData },
-          results:
-            input.results !== undefined
-              ? { old: existing.results, new: input.results }
-              : undefined,
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {
@@ -1435,6 +2068,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 old: existing.environmentalSnapshot,
                 new: environmentalSnapshot,
+              }
+            : undefined,
+          calibrationLocationSnapshot: input.calibrationLocation
+            ? {
+                old: existing.calibrationLocationSnapshot,
+                new: nextCalibrationLocationSnapshot,
+              }
+            : undefined,
+          calibrationPhaseSnapshot: input.calibrationPhases
+            ? {
+                old: existing.calibrationPhaseSnapshot,
+                new: nextCalibrationPhaseSnapshot,
               }
             : undefined,
           unitConversions:
@@ -1544,7 +2189,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const normalizedData = normalizeMethodDataForStorage(
         input.data,
-        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        methodInputFieldsFromSnapshot(existing.methodSnapshot),
         assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
       );
 
@@ -1554,11 +2199,43 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+        input.calibrationLocation,
+        existing.calibrationLocationSnapshot,
+        session.user.id,
+      );
+      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+        input.calibrationPhases,
+        existing.calibrationPhaseSnapshot,
+        session.user.id,
+      );
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
       const nextData = stripAssetSpecData(
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+        requireSuccess: false,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? null);
 
       // Determine new status
       const newStatus =
@@ -1569,10 +2246,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? null,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
+          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: newStatus,
         })
         .where(eq(calibrationJob.id, id))
@@ -1588,6 +2267,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               ? { old: existing.status, new: newStatus }
               : undefined,
           data: { old: existing.data, new: nextData },
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {
@@ -1599,6 +2290,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 old: existing.environmentalSnapshot,
                 new: environmentalSnapshot,
+              }
+            : undefined,
+          calibrationLocationSnapshot: input.calibrationLocation
+            ? {
+                old: existing.calibrationLocationSnapshot,
+                new: nextCalibrationLocationSnapshot,
+              }
+            : undefined,
+          calibrationPhaseSnapshot: input.calibrationPhases
+            ? {
+                old: existing.calibrationPhaseSnapshot,
+                new: nextCalibrationPhaseSnapshot,
               }
             : undefined,
           unitConversions:
@@ -1701,10 +2404,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const effectiveTemplateSnapshot =
-        (existing.certificateTemplateSnapshot as
-          | CertificateTemplateSnapshot
-          | null
-          | undefined) ??
+        certificateTemplateSnapshotFromUnknown(
+          existing.certificateTemplateSnapshot,
+        ) ??
         (await getEffectiveCertificateTemplateSnapshot(
           memberData.organizationId,
         ));
@@ -1747,6 +2449,64 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       notifyJobApproved(id, session.user.id).catch((err) => {
         console.error("[Jobs] Failed to send approval notification:", err);
       });
+
+      // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
+      // to this job. Fire-and-forget — never block the approval response
+      // on the financial-send pathway. Engine writes an audit row per
+      // call regardless of outcome.
+      void (async () => {
+        try {
+          const orgId = memberData.organizationId;
+          const linkedSoIds = await findServiceOrdersForCalibrationJob(
+            id,
+            orgId,
+          );
+          for (const serviceOrderId of linkedSoIds) {
+            await triggerAutomaticSendForMilestone({
+              event: {
+                event: "certificate_approved",
+                serviceOrderId,
+                organizationId: orgId,
+              },
+              actorUserId: session.user.id,
+              invoker: async (params) => {
+                try {
+                  const results = await sendServiceOrdersToFinance({
+                    organizationId: params.organizationId,
+                    serviceOrderIds: [params.serviceOrderId],
+                    actorUserId: params.actorUserId,
+                    scope: memberData,
+                    env: c.env as never,
+                  });
+                  const first = results[0];
+                  if (!first) {
+                    return { ok: false, reason: "no_result" };
+                  }
+                  return {
+                    ok: first.ok,
+                    summary: {
+                      ok: first.ok,
+                      billingDocumentId: first.billingDocumentId ?? null,
+                    },
+                    reason: first.ok ? undefined : (first.error ?? "send_failed"),
+                  };
+                } catch (error) {
+                  return {
+                    ok: false,
+                    reason:
+                      error instanceof Error ? error.message : "send_threw",
+                  };
+                }
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            "[Jobs] Automatic-send wire-up failed:",
+            error,
+          );
+        }
+      })();
 
       return c.json({
         message: "Gerando certificado...",
@@ -1984,10 +2744,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedBy: session.user.id,
       });
       const amendmentTemplateSnapshot =
-        (originalJob.certificateTemplateSnapshot as
-          | CertificateTemplateSnapshot
-          | null
-          | undefined) ??
+        certificateTemplateSnapshotFromUnknown(
+          originalJob.certificateTemplateSnapshot,
+        ) ??
         (await getEffectiveCertificateTemplateSnapshot(
           originalJob.organizationId,
         ));
@@ -2392,7 +3151,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (shouldUseLocalR2Download(env)) {
         return c.json({
           url: buildLocalJobFileUrl(
@@ -2419,7 +3178,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/file",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
         return c.json(
           { error: "Disponivel apenas em desenvolvimento local" },
@@ -2556,7 +3315,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (shouldUseLocalR2Download(env)) {
         return c.json({
           url: buildLocalJobFileUrl(
@@ -2583,7 +3342,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/label-file",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
         return c.json(
           { error: "Disponivel apenas em desenvolvimento local" },

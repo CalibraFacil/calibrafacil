@@ -20,7 +20,10 @@ import {
   calculateFinancialDueDate,
 } from "@calibra-facil/shared";
 import { withInvalidation } from "../../middleware/cache";
-import { withLabPermission, type AuthVariables } from "../../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
 import {
   buildDefaultDueDate,
@@ -73,6 +76,7 @@ async function getDocumentById(organizationId: string, documentId: number) {
   const [document] = await db
     .select({
       id: billingDocument.id,
+      publicId: billingDocument.publicId,
       organizationId: billingDocument.organizationId,
       customerId: billingDocument.customerId,
       customerName: customer.name,
@@ -96,7 +100,10 @@ async function getDocumentById(organizationId: string, documentId: number) {
     })
     .from(billingDocument)
     .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-    .innerJoin(organizationUnit, eq(billingDocument.unitId, organizationUnit.id))
+    .innerJoin(
+      organizationUnit,
+      eq(billingDocument.unitId, organizationUnit.id),
+    )
     .where(
       and(
         eq(billingDocument.id, documentId),
@@ -126,10 +133,16 @@ async function getDocumentById(organizationId: string, documentId: number) {
         sortOrder: billingDocumentItem.sortOrder,
       })
       .from(billingDocumentItem)
-      .leftJoin(calibrationJob, eq(billingDocumentItem.jobId, calibrationJob.id))
+      .leftJoin(
+        calibrationJob,
+        eq(billingDocumentItem.jobId, calibrationJob.id),
+      )
       .leftJoin(
         jobCommercialSnapshot,
-        eq(billingDocumentItem.jobCommercialSnapshotId, jobCommercialSnapshot.id),
+        eq(
+          billingDocumentItem.jobCommercialSnapshotId,
+          jobCommercialSnapshot.id,
+        ),
       )
       .where(eq(billingDocumentItem.documentId, document.id))
       .orderBy(billingDocumentItem.sortOrder, billingDocumentItem.id),
@@ -177,6 +190,25 @@ async function getDocumentById(organizationId: string, documentId: number) {
   };
 }
 
+async function getDocumentByPublicId(organizationId: string, publicId: string) {
+  const [row] = await db
+    .select({ id: billingDocument.id })
+    .from(billingDocument)
+    .where(
+      and(
+        eq(billingDocument.publicId, publicId),
+        eq(billingDocument.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return getDocumentById(organizationId, row.id);
+}
+
 function isDocumentOutsideActiveUnitScope(
   member: AuthVariables["member"],
   unitId: number,
@@ -218,6 +250,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       const documents = await db
         .select({
           id: billingDocument.id,
+          publicId: billingDocument.publicId,
           documentNumber: billingDocument.documentNumber,
           status: billingDocument.status,
           customerId: billingDocument.customerId,
@@ -237,7 +270,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(billingDocument)
         .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-        .innerJoin(organizationUnit, eq(billingDocument.unitId, organizationUnit.id))
+        .innerJoin(
+          organizationUnit,
+          eq(billingDocument.unitId, organizationUnit.id),
+        )
         .where(and(...conditions))
         .orderBy(desc(billingDocument.createdAt));
 
@@ -282,10 +318,16 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(calibrationJob)
         .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(organizationUnit, eq(calibrationJob.unitId, organizationUnit.id))
+        .innerJoin(
+          organizationUnit,
+          eq(calibrationJob.unitId, organizationUnit.id),
+        )
         .innerJoin(service, eq(calibrationJob.serviceId, service.id))
         .where(and(...conditions))
-        .orderBy(desc(calibrationJob.approvedAt), desc(calibrationJob.createdAt))
+        .orderBy(
+          desc(calibrationJob.approvedAt),
+          desc(calibrationJob.createdAt),
+        )
         .limit(query.limit);
 
       const existingLinks = await db
@@ -300,7 +342,12 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(billingDocument.organizationId, member.organizationId),
-            inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
+            inArray(billingDocument.status, [
+              "DRAFT",
+              "ISSUED",
+              "PAID",
+              "OVERDUE",
+            ]),
             inArray(
               billingDocumentItem.jobId,
               jobs.map((job) => job.id),
@@ -364,7 +411,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         );
 
       if (jobs.length !== input.jobIds.length) {
-        return c.json({ error: "Uma ou mais ordens nao foram encontradas" }, 404);
+        return c.json(
+          { error: "Uma ou mais ordens nao foram encontradas" },
+          404,
+        );
       }
 
       const invalidJobs = jobs.filter(
@@ -372,7 +422,9 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       );
       if (invalidJobs.length > 0) {
         return c.json(
-          { error: "Apenas ordens aprovadas ou retificadas podem ser faturadas" },
+          {
+            error: "Apenas ordens aprovadas ou retificadas podem ser faturadas",
+          },
           400,
         );
       }
@@ -390,7 +442,12 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(billingDocument.organizationId, member.organizationId),
-            inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
+            inArray(billingDocument.status, [
+              "DRAFT",
+              "ISSUED",
+              "PAID",
+              "OVERDUE",
+            ]),
             inArray(billingDocumentItem.jobId, input.jobIds),
           ),
         );
@@ -471,7 +528,9 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
             organizationId: member.organizationId,
             customerId: sharedCustomerId,
             unitId: sharedUnitId,
-            agreementId: snapshots.find((snapshot) => snapshot.agreementId)?.agreementId ?? null,
+            agreementId:
+              snapshots.find((snapshot) => snapshot.agreementId)?.agreementId ??
+              null,
             dueDate,
             currency: sharedCurrency,
             subtotalCents,
@@ -527,19 +586,21 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("financial"),
     async (c) => {
       const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
+      const publicId = c.req.param("id");
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      const document = await getDocumentById(member.organizationId, id);
+      const document = await getDocumentByPublicId(
+        member.organizationId,
+        publicId,
+      );
       if (!document) {
         return c.json({ error: "Documento nao encontrado" }, 404);
       }
 
       if (isDocumentOutsideActiveUnitScope(member, document.unitId)) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       return c.json({ data: document });
@@ -567,7 +628,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       if (existing.status !== "DRAFT") {
@@ -578,7 +642,9 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const nextItems = existing.items.map((item) => {
-        const incoming = input.items?.find((candidate) => candidate.id === item.id);
+        const incoming = input.items?.find(
+          (candidate) => candidate.id === item.id,
+        );
         if (!incoming) return item;
 
         return {
@@ -598,7 +664,8 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         return (
           item.quantity !== 1 ||
           item.description !== (item.snapshotServiceName ?? item.description) ||
-          item.unitPriceCents !== (item.snapshotPriceCents ?? item.unitPriceCents)
+          item.unitPriceCents !==
+            (item.snapshotPriceCents ?? item.unitPriceCents)
         );
       });
 
@@ -622,7 +689,9 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           .set({
             dueDate: input.dueDate ? new Date(input.dueDate) : existing.dueDate,
             notes:
-              input.notes === undefined ? existing.notes : input.notes.trim() || null,
+              input.notes === undefined
+                ? existing.notes
+                : input.notes.trim() || null,
             discountCents,
             subtotalCents,
             totalCents,
@@ -685,7 +754,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       if (existing.status !== "DRAFT") {
@@ -702,7 +774,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           existing.dueDate instanceof Date &&
           existing.dueDate.getTime() > issueDate.getTime()
             ? existing.dueDate
-            : calculateFinancialDueDate(issueDate, DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS);
+            : calculateFinancialDueDate(
+                issueDate,
+                DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+              );
 
         await tx
           .update(billingDocument)
@@ -773,7 +848,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       if (existing.status === "VOID") {

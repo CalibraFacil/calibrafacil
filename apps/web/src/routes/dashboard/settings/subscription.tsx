@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { BillingSettingsPage } from './billing'
+import { BillingSettingsPage } from '@/features/settings/billing-page'
 
 export const Route = createFileRoute('/dashboard/settings/subscription')({
   head: () => ({

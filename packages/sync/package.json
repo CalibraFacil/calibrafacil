@@ -1,0 +1,20 @@
+{
+  "name": "@calibra-facil/sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo --noEmit",
+    "check-types": "tsgo --noEmit",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

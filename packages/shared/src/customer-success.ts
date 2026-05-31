@@ -14,21 +14,11 @@ export type MigrationStatus =
   | "COMPLETED"
   | "BLOCKED";
 
-export type GoLiveStatus =
-  | "NOT_SCHEDULED"
-  | "SCHEDULED"
-  | "AT_RISK"
-  | "LIVE";
+export type GoLiveStatus = "NOT_SCHEDULED" | "SCHEDULED" | "AT_RISK" | "LIVE";
 
-export type CustomerSuccessHealthStatus =
-  | "HEALTHY"
-  | "ATTENTION"
-  | "CRITICAL";
+export type CustomerSuccessHealthStatus = "HEALTHY" | "ATTENTION" | "CRITICAL";
 
-export type CustomerSuccessSlaTier =
-  | "PLAN_DEFAULT"
-  | "PRIORITY"
-  | "DEDICATED";
+export type CustomerSuccessSlaTier = "PLAN_DEFAULT" | "PRIORITY" | "DEDICATED";
 
 export type CustomerSuccessNextActionStatus =
   | "NONE"

@@ -15,7 +15,12 @@ describe("unit operational settings helpers", () => {
     accessibleUnitIds: [11, 12],
     accessibleUnits: [
       { id: 11, name: "Matriz", slug: "matriz", role: "unit_admin" as const },
-      { id: 12, name: "Filial Sul", slug: "filial-sul", role: "unit_admin" as const },
+      {
+        id: 12,
+        name: "Filial Sul",
+        slug: "filial-sul",
+        role: "unit_admin" as const,
+      },
     ],
     selectedUnitScope: "unit" as const,
   };
@@ -67,9 +72,9 @@ describe("unit operational settings helpers", () => {
   });
 
   it("rejects explicit units outside the accessible scope", () => {
-    expect(() => resolveAccessibleUnitContext(unitScopedManager, 99)).toThrowError(
-      HTTPException,
-    );
+    expect(() =>
+      resolveAccessibleUnitContext(unitScopedManager, 99),
+    ).toThrowError(HTTPException);
   });
 
   it("prioritizes asset-type limits over the unit default", () => {

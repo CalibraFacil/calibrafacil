@@ -1,0 +1,114 @@
+---
+title: Webhooks
+description: Eventos disponíveis, modelo de entrega, assinatura HMAC, retries automáticos e endpoint de replay para reprocessamento.
+---
+
+Webhooks notificam sistemas externos sobre eventos operacionais sem necessidade de polling. O CalibraFácil entrega cada evento via HTTP POST assinado, com retries automáticos e registro completo de cada tentativa.
+
+## Eventos disponíveis
+
+| Categoria | Evento |
+| :--- | :--- |
+| Cliente | `customer.created`, `customer.updated`, `customer.deleted` |
+| Ativo | `asset.created`, `asset.updated`, `asset.deleted` |
+| Solicitação | `request.created`, `request.updated`, `request.submitted`, `request.canceled` |
+| Ordem de calibração | `job.created`, `job.updated`, `job.results_submitted`, `job.approved`, `job.canceled` |
+| Certificado | `certificate.available` |
+
+A subscrição é seletiva: ao criar um webhook, escolha apenas os eventos que interessam.
+
+## Criação de webhook
+
+Em **Configurações → Integrações** (`/dashboard/settings/integrations`) ou via API com escopo `webhooks:manage`:
+
+1. Informe o **endpoint** (URL HTTPS pública).
+2. Selecione os **eventos** desejados.
+3. Defina (opcionalmente) um **segredo compartilhado** para validação HMAC. Se omitido, o sistema gera um.
+4. Ative o webhook.
+
+## Formato do payload
+
+```http
+POST <endpoint> HTTP/1.1
+Content-Type: application/json
+X-Calibra-Event: job.approved
+X-Calibra-Delivery: <delivery-id>
+X-Calibra-Signature: sha256=<hmac>
+X-Calibra-Timestamp: <unix-seconds>
+
+{
+  "event": "job.approved",
+  "occurredAt": "2026-05-27T18:00:00Z",
+  "organizationId": "...",
+  "data": {
+    "id": "...",
+    "status": "APPROVED",
+    "certificateUrl": "..."
+  }
+}
+```
+
+## Validação da assinatura
+
+O header `X-Calibra-Signature` traz `sha256=<hmac>`, calculado como:
+
+```
+HMAC-SHA256(secret, X-Calibra-Timestamp + "." + raw-body)
+```
+
+O receptor deve:
+
+1. Computar o HMAC com o segredo compartilhado.
+2. Compará-lo com a assinatura recebida (comparação em tempo constante).
+3. Rejeitar requisições onde `X-Calibra-Timestamp` esteja a mais de 5 minutos do agora.
+
+Falhas de validação devem retornar `401` — o sistema interpretará como entrega rejeitada e tentará novamente.
+
+## Retries automáticos
+
+Entregas com resposta diferente de `2xx` são retentadas:
+
+- backoff exponencial com jitter;
+- até **10 tentativas** ao longo de até 24 horas;
+- após esgotamento, a entrega é marcada como falhada e o webhook é sinalizado.
+
+Webhooks com falhas consecutivas em série (`consecutiveFailures` alto) podem ser automaticamente desativados — fique atento ao painel de saúde do webhook.
+
+## Replay manual
+
+Para reprocessar uma entrega — por exemplo, após corrigir um bug no endpoint receptor — use o endpoint de replay:
+
+```
+POST /api/public/v2/webhooks/:id/replay
+```
+
+ou o botão **Reenviar** na tela de entregas do painel. O sistema:
+
+- envia novamente a mesma carga;
+- emite um novo `X-Calibra-Delivery` (a entrega original permanece registrada);
+- registra a tentativa na trilha de auditoria.
+
+## Listagem de entregas
+
+`GET /api/public/v2/webhooks/deliveries?webhookId=...` retorna o histórico:
+
+- ID da entrega
+- evento
+- status (`PENDING`, `SUCCESS`, `FAILED`)
+- HTTP status retornado pelo endpoint
+- duração da requisição
+- timestamp da tentativa
+- `consecutiveFailures` corrente do webhook
+
+Use para auditoria ou para reconciliação retroativa.
+
+## Boas práticas no receptor
+
+- **Responda rápido (≤ 5 s).** Faça o processamento pesado fora do ciclo de resposta.
+- **Idempotência.** O mesmo evento pode chegar mais de uma vez (retries, replay). Use `X-Calibra-Delivery` como chave de deduplicação.
+- **Verifique a assinatura sempre.** Endpoints públicos sem validação são alvo trivial de spoofing.
+- **Logue tudo.** Mantenha o `X-Calibra-Delivery` no seu próprio log para correlação cruzada com a tela de entregas.
+
+<Aside type="note">
+  Webhooks **não substituem** consistência forte. Não dependa exclusivamente deles para invariantes críticas (ex.: cobrança). Para essas, complemente com consulta direta à API após o evento.
+</Aside>

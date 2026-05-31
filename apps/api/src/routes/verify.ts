@@ -23,7 +23,7 @@ import {
  *
  * URL: https://verify.calibrafacil.com/v/{verificationToken}
  */
-export const verifyRouter = new Hono()
+export const verifyRouter = new Hono<{ Bindings: R2Env }>()
   // =========================================================================
   // GET /:token - Get certificate verification info
   // =========================================================================
@@ -198,7 +198,7 @@ export const verifyRouter = new Hono()
       return c.json({ error: "Documento ainda nao disponivel" }, 400);
     }
 
-    const env = c.env as R2Env;
+    const env = c.env;
     const key = extractKeyFromUrl(job.certificateUrl);
     const client = createR2Client(env);
     const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);

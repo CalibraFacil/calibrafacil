@@ -1,6 +1,18 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
+import {
+  ActionButton,
+  DetailBox,
+  EmailCard,
+  EmailLayout,
+  Eyebrow,
+  HighlightValue,
+  LinkFallback,
+  Paragraph,
+  StatusBox,
+  Title,
+  type EmailBrand,
+} from "./components/email-layout";
 
 type JobNotificationType =
   | "submitted"
@@ -17,148 +29,102 @@ export interface JobNotificationEmailProps {
   actorName?: string;
   reason?: string;
   actionUrl: string;
+  logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: JobNotificationType) => {
   switch (type) {
     case "submitted":
       return {
-        title: "Calibracao Aguardando Revisao",
-        statusLabel: "Aguardando Revisao",
+        title: "Calibração aguardando revisão",
+        statusLabel: "Aguardando revisão",
         statusVariant: "warning" as const,
-        previewText: "Uma calibracao foi submetida para revisao",
+        previewText: "Uma calibração foi submetida para revisão",
       };
     case "approved":
       return {
-        title: "Calibracao Aprovada",
+        title: "Calibração aprovada",
         statusLabel: "Aprovada",
         statusVariant: "success" as const,
-        previewText: "Sua calibracao foi aprovada",
+        previewText: "Sua calibração foi aprovada",
       };
     case "rejected":
       return {
-        title: "Calibracao Rejeitada",
+        title: "Calibração rejeitada",
         statusLabel: "Rejeitada",
         statusVariant: "error" as const,
-        previewText: "Sua calibracao foi rejeitada",
+        previewText: "Sua calibração foi rejeitada",
       };
     case "assigned":
       return {
-        title: "Nova Calibracao Atribuida",
-        statusLabel: "Atribuida",
+        title: "Nova calibração atribuída",
+        statusLabel: "Atribuída",
         statusVariant: "info" as const,
-        previewText: "Uma nova calibracao foi atribuida a voce",
+        previewText: "Uma nova calibração foi atribuída a você",
       };
     case "overdue":
       return {
-        title: "Calibracao Atrasada",
+        title: "Calibração atrasada",
         statusLabel: "Atrasada",
         statusVariant: "error" as const,
-        previewText: "Uma calibracao esta atrasada",
+        previewText: "Uma calibração está atrasada",
       };
   }
 };
 
 export function JobNotificationEmail({
-  recipientName = "Usuario",
+  recipientName = "Usuário",
   type = "submitted",
   jobId = "OS-2024-0001",
-  message = "Uma atualizacao foi feita na sua ordem de servico.",
+  message = "Uma atualização foi feita na sua ordem de serviço.",
   actorName,
   reason,
   actionUrl = "#",
+  logoSrc,
+  brand,
 }: JobNotificationEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={`${config.previewText} - ${jobId}`}>
-      <div style={styles.body}>
-        <h1 style={styles.title}>{config.title}</h1>
+    <EmailLayout
+      previewText={`${config.previewText} - ${jobId}`}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
+        <Eyebrow>Fluxo operacional</Eyebrow>
+        <Title>{config.title}</Title>
 
-        <p style={styles.paragraph}>Ola {recipientName},</p>
+        <Paragraph>Olá, {recipientName},</Paragraph>
+        <Paragraph>{message}</Paragraph>
 
-        <p style={styles.paragraph}>{message}</p>
+        <DetailBox>
+          <span className="mb-2 block font-sans text-[11px] font-bold uppercase leading-[1.5] tracking-[0.08em] text-fg-3">
+            Ordem de serviço
+          </span>
+          <HighlightValue>{jobId}</HighlightValue>
+        </DetailBox>
 
-        {/* Job ID Highlight Box */}
-        <div style={styles.highlightBox}>
-          <span style={styles.highlightLabel}>Ordem de Servico</span>
-          <div style={styles.highlightValue}>{jobId}</div>
-        </div>
-
-        {/* Status indicator */}
         <StatusBox variant={config.statusVariant}>
           <strong>Status:</strong> {config.statusLabel}
           {actorName && (
             <>
               {" "}
-              - por <strong>{actorName}</strong>
+              por <strong>{actorName}</strong>
             </>
           )}
         </StatusBox>
 
-        {/* Rejection reason if provided */}
         {type === "rejected" && reason && (
-          <div
-            style={{
-              backgroundColor: theme.colors.errorBg,
-              border: `1px solid ${theme.colors.errorBorder}`,
-              borderRadius: "8px",
-              padding: "16px",
-              marginBottom: "24px",
-              textAlign: "left" as const,
-            }}
-          >
-            <p
-              style={{
-                fontSize: "12px",
-                color: theme.colors.errorText,
-                fontWeight: "600",
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.05em",
-                margin: "0 0 8px",
-              }}
-            >
-              Motivo da Rejeicao
-            </p>
-            <p
-              style={{
-                fontSize: "14px",
-                color: theme.colors.errorText,
-                margin: "0",
-                lineHeight: "1.5",
-              }}
-            >
-              {reason}
-            </p>
-          </div>
+          <StatusBox variant="error">
+            <strong>Motivo da rejeição:</strong> {reason}
+          </StatusBox>
         )}
 
-        {/* Action Button */}
-        <a href={actionUrl} style={styles.button}>
-          Ver Detalhes
-        </a>
-
-        <p
-          style={{
-            ...styles.paragraph,
-            marginTop: "24px",
-            marginBottom: "0",
-            fontSize: "13px",
-          }}
-        >
-          Caso o botao nao funcione, copie e cole o link abaixo no navegador:
-        </p>
-        <p
-          style={{
-            fontSize: "11px",
-            color: "#94a3b8",
-            wordBreak: "break-all" as const,
-            margin: "8px 0 0",
-          }}
-        >
-          {actionUrl}
-        </p>
-      </div>
+        <ActionButton href={actionUrl}>Ver detalhes</ActionButton>
+        <LinkFallback url={actionUrl} />
+      </EmailCard>
     </EmailLayout>
   );
 }

@@ -103,9 +103,11 @@ export const environmentalLimitsRouter = new Hono<{
         )
         .limit(1);
 
-      const { limits: resolvedLimits, source } = selectEffectiveEnvironmentalLimits(
-        [...specificLimits, ...candidateLimits],
-      );
+      const { limits: resolvedLimits, source } =
+        selectEffectiveEnvironmentalLimits([
+          ...specificLimits,
+          ...candidateLimits,
+        ]);
 
       return c.json({
         limits: resolvedLimits,
@@ -173,35 +175,30 @@ export const environmentalLimitsRouter = new Hono<{
   // ===========================================================================
   // DELETE /:id - Delete environmental limits configuration
   // ===========================================================================
-  .delete(
-    "/:id",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
+  .delete("/:id", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+    const memberData = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
+    requireUnitOperationalSettingsManager(memberData);
+    const unit = resolveAccessibleUnitContext(memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+    if (isNaN(id)) {
+      return c.json({ error: "ID inválido" }, 400);
+    }
 
-      const [deleted] = await db
-        .delete(environmentalLimits)
-        .where(
-          and(
-            eq(environmentalLimits.id, id),
-            eq(environmentalLimits.organizationId, memberData.organizationId),
-            eq(environmentalLimits.unitId, unit.unitId),
-          ),
-        )
-        .returning();
+    const [deleted] = await db
+      .delete(environmentalLimits)
+      .where(
+        and(
+          eq(environmentalLimits.id, id),
+          eq(environmentalLimits.organizationId, memberData.organizationId),
+          eq(environmentalLimits.unitId, unit.unitId),
+        ),
+      )
+      .returning();
 
-      if (!deleted) {
-        return c.json({ error: "Configuração não encontrada" }, 404);
-      }
+    if (!deleted) {
+      return c.json({ error: "Configuração não encontrada" }, 404);
+    }
 
-      return c.json({ message: "Limites removidos" });
-    },
-  );
+    return c.json({ message: "Limites removidos" });
+  });

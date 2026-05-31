@@ -55,6 +55,7 @@ function VerifyPage() {
         throw new Error("Erro ao verificar certificado.");
       }
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- portal verification endpoint owns this DTO shape.
       const result = (await response.json()) as VerificationData;
 
       if (!result.valid) {

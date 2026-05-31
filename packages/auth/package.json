@@ -5,6 +5,8 @@
   "exports": {
     ".": "./src/auth.ts",
     "./client": "./src/auth-client.ts",
+    "./lab-access": "./src/lab-access.ts",
+    "./error-messages": "./src/error-messages.ts",
     "./access": "./src/access.ts"
   },
   "description": "",
@@ -12,11 +14,13 @@
     "build": "tsgo"
   },
   "dependencies": {
-    "@better-auth/sso": "^1.4.18",
+    "@better-auth/passkey": "1.6.10",
+    "@better-auth/sso": "1.6.10",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
-    "better-auth": "^1.4.18",
-    "next": "16.2.3",
+    "@simplewebauthn/server": "13.3.0",
+    "better-auth": "1.6.10",
+    "next": "16.2.6",
     "react": "^19.0.0",
     "resend": "^6.6.0"
   },

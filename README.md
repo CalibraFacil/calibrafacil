@@ -24,14 +24,19 @@ Calibra Fácil helps calibration laboratories manage their operations with full 
                      └─────────────┘ └─────────────┘
 ```
 
-| Component | Description | Platform |
-|-----------|-------------|----------|
-| **Web** | Lab dashboard for technicians and administrators | Vercel |
-| **Portal** | Client-facing portal for certificate access | Vercel |
-| **API** | REST API backend | Vercel Functions |
+| Component           | Description                                              | Platform              |
+| ------------------- | -------------------------------------------------------- | --------------------- |
+| **Web**             | Lab dashboard for technicians and administrators         | Vercel                |
+| **Portal**          | Client-facing portal for certificate access              | Vercel                |
+| **API**             | REST API backend                                         | Vercel Functions      |
 | **Background jobs** | PDF generation, compliance checks, and integration syncs | Vercel Queue and Cron |
-| **Database** | PostgreSQL with Drizzle ORM | Neon |
-| **Object storage** | Certificate PDFs and runtime assets | Cloudflare R2 |
+| **Database**        | PostgreSQL with Drizzle ORM                              | Neon                  |
+| **Object storage**  | Certificate PDFs and runtime assets                      | Cloudflare R2         |
+
+For frontend architecture rules, see
+[`docs/architecture/web-frontend-architecture.md`](./docs/architecture/web-frontend-architecture.md).
+For API/client package boundaries, see
+[`docs/architecture/api-client-contract.md`](./docs/architecture/api-client-contract.md).
 
 ## Monorepo Structure
 
@@ -46,14 +51,20 @@ calibra-facil/
 │   ├── db/           # Drizzle ORM + schema
 │   ├── auth/         # Better-Auth integration
 │   ├── schemas/      # Zod validation schemas
-│   ├── math-engine/  # GUM uncertainty calculations
 │   ├── email/        # React Email templates
 │   ├── notifications/# Notification service
 │   ├── documents/    # Certificate/label templates
 │   └── shared/       # Plans, config, types
+├── docs/
+│   └── architecture/ # Architecture rules and package boundaries
 └── packages/
     └── typescript-config/
 ```
+
+The web app uses a feature-first structure: `apps/web/src/routes` contains thin
+TanStack route adapters, while domain implementation lives in
+`apps/web/src/features`. Product code should call `@calibra-facil/client-runtime`
+facades instead of importing API server code or raw Hono route handlers.
 
 ## Tech Stack
 
@@ -69,13 +80,14 @@ calibra-facil/
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - pnpm 9+
 - PostgreSQL (local or Neon account)
 
 ### Setup
 
 1. Clone and install dependencies:
+
    ```bash
    git clone https://github.com/CalibraFacil/calibra-facil.git
    cd calibra-facil
@@ -83,6 +95,7 @@ calibra-facil/
    ```
 
 2. Configure environment:
+
    ```bash
    cp apps/api/.env.example apps/api/.env
    cp apps/worker/.env.example apps/worker/.env
@@ -90,12 +103,14 @@ calibra-facil/
    ```
 
 3. Run database migrations:
+
    ```bash
    cd packages/db
    pnpm db:migrate
    ```
 
 4. Start development:
+
    ```bash
    pnpm dev
    ```

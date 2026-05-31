@@ -1,5 +1,6 @@
 import { db } from "@calibra-facil/db";
 import {
+  type CustomerAddress,
   type CustomerCompliance,
   billingDocument,
   billingDocumentItem,
@@ -17,14 +18,20 @@ import {
   receivableInstallment,
   calibrationJob,
   service,
+  serviceOrder,
+  serviceOrderCertificateLink,
 } from "@calibra-facil/db/schema";
 import {
+  type BillingBlocker,
   type BillingDocumentStatus,
   type CommercialAgreementStatus,
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
   applyIntegrationMappings,
   calculateFinancialDueDate,
+  getBillingBlockerCodeLabel,
+  normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
+  isServiceOrderBillable,
   type FinancialStatus,
   type IntegrationBillingDocumentPayload,
 } from "@calibra-facil/shared";
@@ -37,11 +44,21 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
 import type { IntegrationsEnv } from "./integrations";
-import { decryptPassword } from "@calibra-facil/signing";
+import { buildUnitScopeCondition } from "./units";
+import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
+import { createFinancialErpAdapter } from "./financial-erp-adapters";
+import {
+  buildContaAzulRefreshFailurePolicy,
+  getContaAzulOAuthConfig,
+  parseContaAzulTokenBundle,
+  refreshContaAzulAccessToken,
+  serializeContaAzulTokenBundle,
+} from "./conta-azul-oauth";
 
 type FinanceDbExecutor = Pick<
   typeof db,
@@ -81,6 +98,195 @@ type AgreementResolution = {
 
 const OPERATIONAL_FINANCE_SYSTEM_VERSION = "finance-v1";
 
+/**
+ * Pure billing-blocker evaluation for a single completed service order.
+ * Provider-neutral: it only describes lab-side problems, never raw provider
+ * errors. Kept side-effect free so it is trivially unit-testable.
+ */
+export function evaluateOrderBlockers(input: {
+  customer: {
+    taxId: string | null;
+    email: string | null;
+    address: CustomerAddress | null;
+  };
+  certificateJobStatuses: string[];
+  amountCents: number;
+}): BillingBlocker[] {
+  const blockers: BillingBlocker[] = [];
+  const { customer: c, certificateJobStatuses, amountCents } = input;
+
+  // Phase 2 slice 5: emit granular payer-readiness blockers so operators
+  // know exactly which field to fix, not just "Dados de cliente
+  // incompletos". The code stays BLOCKED_BY_CUSTOMER_DATA so existing
+  // queue consumers keep grouping these together.
+  if (!c.taxId?.trim()) {
+    blockers.push({
+      code: "BLOCKED_BY_CUSTOMER_DATA",
+      label: "CPF/CNPJ do cliente ausente",
+      owner: "finance",
+      fixAction: "Informe o CPF ou CNPJ do cliente",
+      scope: "customer",
+    });
+  }
+  if (!c.email?.trim()) {
+    blockers.push({
+      code: "BLOCKED_BY_CUSTOMER_DATA",
+      label: "E-mail do cliente ausente",
+      owner: "finance",
+      fixAction: "Informe um e-mail válido para o cliente",
+      scope: "customer",
+    });
+  }
+  const addressIncomplete =
+    !c.address || !c.address.city?.trim() || !c.address.state?.trim();
+  if (addressIncomplete) {
+    blockers.push({
+      code: "BLOCKED_BY_CUSTOMER_DATA",
+      label: "Endereço do cliente incompleto",
+      owner: "finance",
+      fixAction: "Complete cidade e estado no endereço do cliente",
+      scope: "customer",
+    });
+  }
+
+  if (
+    certificateJobStatuses.length > 0 &&
+    !certificateJobStatuses.some(
+      (status) => status === "APPROVED" || status === "SUPERSEDED",
+    )
+  ) {
+    blockers.push({
+      code: "BLOCKED_BY_CERTIFICATE_STATUS",
+      label: getBillingBlockerCodeLabel("BLOCKED_BY_CERTIFICATE_STATUS"),
+      owner: "lab_ops",
+      fixAction: "Conclua a aprovação técnica do certificado",
+      scope: "order",
+    });
+  }
+
+  if (amountCents <= 0) {
+    blockers.push({
+      code: "BLOCKED_BY_UNMAPPED_SERVICE",
+      label: getBillingBlockerCodeLabel("BLOCKED_BY_UNMAPPED_SERVICE"),
+      owner: "admin",
+      fixAction: "Defina o valor aprovado ou o mapeamento do serviço",
+      scope: "all_future",
+    });
+  }
+
+  return blockers;
+}
+
+export interface ServiceOrderBillingDocumentLinkInput {
+  serviceOrderId: number;
+  directBillingDocumentId: number | null;
+  certificateJobIds: number[];
+}
+
+export interface ResolvedBillingDocumentLink {
+  documentId: number;
+  status: string;
+  exportStatus: string;
+}
+
+export async function resolveServiceOrderBillingDocumentLinks(
+  inputs: ServiceOrderBillingDocumentLinkInput[],
+  organizationId: string,
+): Promise<Map<number, ResolvedBillingDocumentLink>> {
+  const serviceOrderIds = inputs.map((input) => input.serviceOrderId);
+  const linkedJobIds = inputs.flatMap((input) => input.certificateJobIds);
+
+  const itemMatchConditions = [
+    serviceOrderIds.length
+      ? inArray(billingDocumentItem.serviceOrderId, serviceOrderIds)
+      : undefined,
+    linkedJobIds.length
+      ? inArray(billingDocumentItem.jobId, linkedJobIds)
+      : undefined,
+  ].filter(Boolean);
+
+  const linkItems = itemMatchConditions.length
+    ? await db
+        .select({
+          documentId: billingDocumentItem.documentId,
+          serviceOrderId: billingDocumentItem.serviceOrderId,
+          jobId: billingDocumentItem.jobId,
+        })
+        .from(billingDocumentItem)
+        .innerJoin(
+          billingDocument,
+          eq(billingDocumentItem.documentId, billingDocument.id),
+        )
+        .where(
+          and(
+            eq(billingDocument.organizationId, organizationId),
+            or(...itemMatchConditions),
+          ),
+        )
+    : [];
+
+  const candidateDocIds = new Set<number>();
+  for (const input of inputs) {
+    if (input.directBillingDocumentId) {
+      candidateDocIds.add(input.directBillingDocumentId);
+    }
+  }
+  for (const item of linkItems) candidateDocIds.add(item.documentId);
+
+  const docs = candidateDocIds.size
+    ? await db
+        .select({
+          id: billingDocument.id,
+          status: billingDocument.status,
+          exportStatus: billingDocument.exportStatus,
+        })
+        .from(billingDocument)
+        .where(
+          and(
+            inArray(billingDocument.id, [...candidateDocIds]),
+            eq(billingDocument.organizationId, organizationId),
+            ne(billingDocument.status, "VOID"),
+          ),
+        )
+    : [];
+  const docById = new Map(docs.map((doc) => [doc.id, doc]));
+
+  const docIdByOrderId = new Map<number, number>();
+  const docIdByJobId = new Map<number, number>();
+  for (const item of linkItems) {
+    if (item.serviceOrderId) {
+      docIdByOrderId.set(item.serviceOrderId, item.documentId);
+    }
+    if (item.jobId) docIdByJobId.set(item.jobId, item.documentId);
+  }
+
+  const resolved = new Map<number, ResolvedBillingDocumentLink>();
+  for (const input of inputs) {
+    let docId = input.directBillingDocumentId ?? undefined;
+    if (!docId) docId = docIdByOrderId.get(input.serviceOrderId);
+    if (!docId) {
+      for (const jobId of input.certificateJobIds) {
+        const viaJob = docIdByJobId.get(jobId);
+        if (viaJob) {
+          docId = viaJob;
+          break;
+        }
+      }
+    }
+
+    const doc = docId ? docById.get(docId) : undefined;
+    if (doc) {
+      resolved.set(input.serviceOrderId, {
+        documentId: doc.id,
+        status: doc.status,
+        exportStatus: doc.exportStatus,
+      });
+    }
+  }
+
+  return resolved;
+}
+
 function getAgreementDisplayCode(agreement: {
   agreementCode: string | null;
   id: number;
@@ -106,6 +312,14 @@ function decryptIntegrationSecret(
     secretIv,
     getIntegrationsMasterKey(env),
   );
+}
+
+function encryptIntegrationSecret(secret: string, env: IntegrationsEnv) {
+  const { encryptedPassword, iv } = encryptPassword(
+    secret,
+    getIntegrationsMasterKey(env),
+  );
+  return { encryptedSecret: encryptedPassword, secretIv: iv };
 }
 
 async function writeFinanceIntegrationEvent(params: {
@@ -146,9 +360,9 @@ function toLowerBillingDocumentStatus(
 }
 
 function extractRemoteId(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
 
-  const record = data as Record<string, unknown>;
+  const record = Object.fromEntries(Object.entries(data));
   if (typeof record.remoteId === "string" && record.remoteId.trim()) {
     return record.remoteId.trim();
   }
@@ -207,7 +421,10 @@ async function resolveApplicableAgreement(
       and(
         eq(commercialAgreement.organizationId, params.organizationId),
         eq(commercialAgreement.customerId, params.customerId),
-        eq(commercialAgreement.status, "ACTIVE" satisfies CommercialAgreementStatus),
+        eq(
+          commercialAgreement.status,
+          "ACTIVE" satisfies CommercialAgreementStatus,
+        ),
         lte(commercialAgreement.effectiveFrom, referenceDate),
         or(
           isNull(commercialAgreement.effectiveTo),
@@ -215,7 +432,10 @@ async function resolveApplicableAgreement(
         ),
       ),
     )
-    .orderBy(desc(commercialAgreement.effectiveFrom), desc(commercialAgreement.id));
+    .orderBy(
+      desc(commercialAgreement.effectiveFrom),
+      desc(commercialAgreement.id),
+    );
 
   for (const agreement of agreements) {
     const scopedUnits = await executor
@@ -284,7 +504,10 @@ export async function loadCustomerActiveCommercialAgreement(
       and(
         eq(commercialAgreement.organizationId, organizationId),
         eq(commercialAgreement.customerId, customerId),
-        eq(commercialAgreement.status, "ACTIVE" satisfies CommercialAgreementStatus),
+        eq(
+          commercialAgreement.status,
+          "ACTIVE" satisfies CommercialAgreementStatus,
+        ),
         lte(commercialAgreement.effectiveFrom, now),
         or(
           isNull(commercialAgreement.effectiveTo),
@@ -292,7 +515,10 @@ export async function loadCustomerActiveCommercialAgreement(
         ),
       ),
     )
-    .orderBy(desc(commercialAgreement.effectiveFrom), desc(commercialAgreement.id))
+    .orderBy(
+      desc(commercialAgreement.effectiveFrom),
+      desc(commercialAgreement.id),
+    )
     .limit(1);
 
   if (!agreement) {
@@ -337,7 +563,8 @@ export function syncComplianceWithActiveAgreement(
     };
   }
 
-  const agreementChanged = baseCompliance.contractAgreementId !== activeAgreement.id;
+  const agreementChanged =
+    baseCompliance.contractAgreementId !== activeAgreement.id;
 
   return {
     ...baseCompliance,
@@ -417,7 +644,8 @@ export async function ensureJobCommercialSnapshot(
       agreementId: agreementResolution?.agreement.id ?? null,
       sourceType: agreementResolution ? "AGREEMENT" : "SERVICE_CATALOG",
       serviceName: serviceData.name,
-      priceCents: agreementResolution?.term?.priceCents ?? serviceData.price ?? null,
+      priceCents:
+        agreementResolution?.term?.priceCents ?? serviceData.price ?? null,
       currency: agreementResolution?.term?.currency ?? serviceData.currency,
       paymentTermDays:
         agreementResolution?.agreement.defaultPaymentTermDays ??
@@ -451,7 +679,11 @@ export async function ensureJobCommercialSnapshot(
 }
 
 export async function ensureJobCommercialSnapshotFromJob(
-  params: { actorUserId?: string | null; jobId: number; organizationId: string },
+  params: {
+    actorUserId?: string | null;
+    jobId: number;
+    organizationId: string;
+  },
   executor?: FinanceDbExecutor,
 ) {
   const runner = executor ?? db;
@@ -618,8 +850,7 @@ async function getNextBillingDocumentSequence(
   executor: FinanceDbExecutor,
 ) {
   const prefix = `FIN-${year}-`;
-  const sequenceSql =
-    sql<number>`coalesce(cast(substring(${billingDocument.documentNumber} from '[0-9]+$') as integer), 0)`;
+  const sequenceSql = sql<number>`coalesce(cast(substring(${billingDocument.documentNumber} from '[0-9]+$') as integer), 0)`;
 
   await executor.execute(
     sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year} + 1000)`,
@@ -676,7 +907,10 @@ export async function loadBillingDocumentExportPayload(
     })
     .from(billingDocument)
     .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-    .innerJoin(organizationUnit, eq(billingDocument.unitId, organizationUnit.id))
+    .innerJoin(
+      organizationUnit,
+      eq(billingDocument.unitId, organizationUnit.id),
+    )
     .where(
       and(
         eq(billingDocument.id, documentId),
@@ -697,6 +931,7 @@ export async function loadBillingDocumentExportPayload(
       unitPriceCents: billingDocumentItem.unitPriceCents,
       totalCents: billingDocumentItem.totalCents,
       jobDisplayId: calibrationJob.jobId,
+      serviceId: calibrationJob.serviceId,
     })
     .from(billingDocumentItem)
     .leftJoin(calibrationJob, eq(billingDocumentItem.jobId, calibrationJob.id))
@@ -719,6 +954,9 @@ export async function loadBillingDocumentExportPayload(
     items: items.map((item) => ({
       lineId: `billing_document_item:${item.id}`,
       jobId: item.jobDisplayId ?? null,
+      catalogItemExternalId: item.serviceId
+        ? `service:${item.serviceId}`
+        : null,
       description: item.description,
       quantity: item.quantity,
       unitPriceCents: item.unitPriceCents,
@@ -764,6 +1002,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
   const [record] = await db
     .select({
       integrationId: organizationIntegration.id,
+      provider: organizationIntegration.provider,
       connectionId: integrationConnection.id,
       encryptedSecret: integrationConnection.encryptedSecret,
       secretIv: integrationConnection.secretIv,
@@ -797,17 +1036,6 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
     throw new Error("Documento financeiro nao encontrado");
   }
 
-  const config = normalizeGenericFinancialErpConfig(record.config);
-  const secret = decryptIntegrationSecret(
-    record.encryptedSecret,
-    record.secretIv,
-    params.env,
-  );
-  const mappedPayload = applyIntegrationMappings(
-    "billing_document",
-    payload as unknown as Record<string, unknown>,
-    config.mappings.billing_document,
-  );
   const [existingLink] = await db
     .select({
       id: integrationObjectLink.id,
@@ -823,64 +1051,250 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
     )
     .limit(1);
 
-  const remoteUrl = existingLink?.remoteEntityId
-    ? `${config.baseUrl}${config.billingDocumentPath}/${encodeURIComponent(existingLink.remoteEntityId)}`
-    : `${config.baseUrl}${config.billingDocumentPath}`;
-  const remoteMethod = existingLink?.remoteEntityId ? "PUT" : "POST";
-  const response = await callRemoteJson(
-    remoteUrl,
-    secret,
-    remoteMethod,
-    mappedPayload,
-  );
+  let remoteEntityId: string | null = null;
 
-  if (!response.ok) {
-    await db
-      .update(billingDocument)
-      .set({
-        exportStatus: "FAILED",
-        updatedAt: new Date(),
-      })
-      .where(eq(billingDocument.id, params.documentId));
+  if (record.provider === "generic_http") {
+    const config = normalizeGenericFinancialErpConfig(record.config);
+    const secret = decryptIntegrationSecret(
+      record.encryptedSecret,
+      record.secretIv,
+      params.env,
+    );
+    const mappedPayload = applyIntegrationMappings(
+      "billing_document",
+      Object.fromEntries(Object.entries(payload)),
+      config.mappings.billing_document,
+    );
+    const remoteUrl = existingLink?.remoteEntityId
+      ? `${config.baseUrl}${config.billingDocumentPath}/${encodeURIComponent(existingLink.remoteEntityId)}`
+      : `${config.baseUrl}${config.billingDocumentPath}`;
+    const remoteMethod = existingLink?.remoteEntityId ? "PUT" : "POST";
+    const response = await callRemoteJson(
+      remoteUrl,
+      secret,
+      remoteMethod,
+      mappedPayload,
+    );
 
-    await writeFinanceIntegrationEvent({
+    if (!response.ok) {
+      await db
+        .update(billingDocument)
+        .set({
+          exportStatus: "FAILED",
+          updatedAt: new Date(),
+        })
+        .where(eq(billingDocument.id, params.documentId));
+
+      await writeFinanceIntegrationEvent({
+        integrationId: record.integrationId,
+        organizationId: params.organizationId,
+        level: "error",
+        event: "finance.document_export.failed",
+        message: `Falha ao exportar documento financeiro ${payload.externalId}`,
+        details: {
+          documentId: params.documentId,
+          status: response.status,
+        },
+      });
+
+      throw new Error(
+        `Falha ao exportar documento: remoto respondeu ${response.status}`,
+      );
+    }
+
+    remoteEntityId = extractRemoteId(response.data);
+  } else {
+    const tokenBundle = parseContaAzulTokenBundle(
+      decryptIntegrationSecret(
+        record.encryptedSecret,
+        record.secretIv,
+        params.env,
+      ),
+    );
+    const config = normalizeContaAzulConnectionConfig(record.config);
+    if (!config.enabledTargets.billingDocuments) {
+      throw new Error("Sincronização de faturamento Conta Azul desativada");
+    }
+    const adapter = createFinancialErpAdapter({
+      provider: "conta_azul",
       integrationId: record.integrationId,
       organizationId: params.organizationId,
-      level: "error",
-      event: "finance.document_export.failed",
-      message: `Falha ao exportar documento financeiro ${payload.externalId}`,
-      details: {
-        documentId: params.documentId,
-        status: response.status,
+      config,
+      accessToken: tokenBundle.accessToken,
+      rateLimitKey: record.integrationId,
+      links: {
+        async getExistingRemoteId({ target, localEntityId }) {
+          const [link] = await db
+            .select({
+              remoteEntityId: integrationObjectLink.remoteEntityId,
+            })
+            .from(integrationObjectLink)
+            .where(
+              and(
+                eq(integrationObjectLink.integrationId, record.integrationId),
+                eq(integrationObjectLink.target, target),
+                eq(integrationObjectLink.localEntityId, localEntityId),
+              ),
+            )
+            .limit(1);
+
+          return link?.remoteEntityId ?? null;
+        },
+        async upsertLink({
+          target,
+          localEntityId,
+          remoteEntityId: linkRemoteEntityId,
+          remoteDisplayId,
+          remoteEntityType,
+          metadata,
+        }) {
+          const [link] = await db
+            .select({ id: integrationObjectLink.id })
+            .from(integrationObjectLink)
+            .where(
+              and(
+                eq(integrationObjectLink.integrationId, record.integrationId),
+                eq(integrationObjectLink.target, target),
+                eq(integrationObjectLink.localEntityId, localEntityId),
+              ),
+            )
+            .limit(1);
+
+          if (link) {
+            await db
+              .update(integrationObjectLink)
+              .set({
+                remoteEntityId: linkRemoteEntityId,
+                remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
+                remoteEntityType: remoteEntityType ?? null,
+                metadata: metadata ?? null,
+                lastSyncedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(integrationObjectLink.id, link.id));
+            return;
+          }
+
+          await db.insert(integrationObjectLink).values({
+            id: crypto.randomUUID(),
+            integrationId: record.integrationId,
+            organizationId: params.organizationId,
+            target,
+            localEntityId,
+            remoteEntityId: linkRemoteEntityId,
+            remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
+            remoteEntityType: remoteEntityType ?? null,
+            metadata: metadata ?? null,
+            lastSyncedAt: new Date(),
+          });
+        },
+      },
+      async onUnauthorized() {
+        try {
+          const refreshed = await refreshContaAzulAccessToken(
+            getContaAzulOAuthConfig(params.env),
+            {
+              refreshToken: tokenBundle.refreshToken,
+            },
+          );
+          const encrypted = encryptIntegrationSecret(
+            serializeContaAzulTokenBundle(refreshed),
+            params.env,
+          );
+          const refreshedConfig = normalizeContaAzulConnectionConfig({
+            ...config,
+            accessTokenExpiresAt: refreshed.expiresAt,
+            scopes: refreshed.scopes,
+          });
+
+          await db
+            .update(integrationConnection)
+            .set({
+              credentialType: "oauth2",
+              config: refreshedConfig,
+              encryptedSecret: encrypted.encryptedSecret,
+              secretIv: encrypted.secretIv,
+              updatedAt: new Date(),
+            })
+            .where(eq(integrationConnection.id, record.connectionId));
+
+          return refreshed.accessToken;
+        } catch (error) {
+          const failure = buildContaAzulRefreshFailurePolicy(error);
+
+          await db
+            .update(organizationIntegration)
+            .set({
+              status: failure.status,
+              lastValidationError: failure.message,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationIntegration.id, record.integrationId));
+
+          throw new Error(failure.message);
+        }
       },
     });
 
-    throw new Error(`Falha ao exportar documento: remoto respondeu ${response.status}`);
+    try {
+      const exported = await adapter.exportBillingDocument(payload);
+      remoteEntityId = exported.remoteEntityId;
+    } catch (error) {
+      await db
+        .update(billingDocument)
+        .set({
+          exportStatus: "FAILED",
+          updatedAt: new Date(),
+        })
+        .where(eq(billingDocument.id, params.documentId));
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao exportar documento para Conta Azul";
+
+      await writeFinanceIntegrationEvent({
+        integrationId: record.integrationId,
+        organizationId: params.organizationId,
+        level: "error",
+        event: "finance.document_export.failed",
+        message: `Falha ao exportar documento financeiro ${payload.externalId}`,
+        details: {
+          documentId: params.documentId,
+          provider: "conta_azul",
+          error: message,
+        },
+      });
+
+      throw error;
+    }
   }
 
-  const remoteEntityId = extractRemoteId(response.data);
-
-  if (existingLink) {
-    await db
-      .update(integrationObjectLink)
-      .set({
+  if (record.provider === "generic_http") {
+    if (existingLink) {
+      await db
+        .update(integrationObjectLink)
+        .set({
+          remoteEntityId,
+          remoteDisplayId: remoteEntityId,
+          remoteEntityType: "billing_document",
+          lastSyncedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationObjectLink.id, existingLink.id));
+    } else {
+      await db.insert(integrationObjectLink).values({
+        id: crypto.randomUUID(),
+        integrationId: record.integrationId,
+        organizationId: params.organizationId,
+        target: "billing_document",
+        localEntityId: payload.externalId,
         remoteEntityId,
         remoteDisplayId: remoteEntityId,
+        remoteEntityType: "billing_document",
         lastSyncedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(integrationObjectLink.id, existingLink.id));
-  } else {
-    await db.insert(integrationObjectLink).values({
-      id: crypto.randomUUID(),
-      integrationId: record.integrationId,
-      organizationId: params.organizationId,
-      target: "billing_document",
-      localEntityId: payload.externalId,
-      remoteEntityId,
-      remoteDisplayId: remoteEntityId,
-      lastSyncedAt: new Date(),
-    });
+      });
+    }
   }
 
   await db
@@ -911,4 +1325,363 @@ export function buildDefaultDueDate(
   paymentTermDays = DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
 ) {
   return calculateFinancialDueDate(new Date(), paymentTermDays);
+}
+
+// =============================================================================
+// SEND TO FINANCE — turn a completed service order into an issued billing
+// document and export it through the configured financial provider. Reuses the
+// existing snapshot/number/installment/export primitives so the write path
+// stays consistent with the document-centric billing flow.
+// =============================================================================
+
+type FinanceUnitScope = Parameters<typeof buildUnitScopeCondition>[1];
+
+export interface SendServiceOrderResult {
+  serviceOrderId: number;
+  ok: boolean;
+  billingDocumentId: number | null;
+  error: string | null;
+}
+
+export async function sendServiceOrderToFinance(params: {
+  organizationId: string;
+  serviceOrderId: number;
+  actorUserId: string;
+  scope: FinanceUnitScope;
+  env: IntegrationsEnv;
+}): Promise<SendServiceOrderResult> {
+  const { organizationId, serviceOrderId, actorUserId, scope, env } = params;
+  try {
+    const [order] = await db
+      .select({
+        id: serviceOrder.id,
+        number: serviceOrder.serviceOrderNumber,
+        status: serviceOrder.status,
+        closingReason: serviceOrder.closingReason,
+        customerId: serviceOrder.customerId,
+        unitId: serviceOrder.unitId,
+        amountApprovedCents: serviceOrder.totalApprovedCents,
+        amountQuotedCents: serviceOrder.totalQuotedCents,
+        billingDocumentId: serviceOrder.billingDocumentId,
+        taxId: customer.taxId,
+        email: customer.email,
+        address: customer.address,
+      })
+      .from(serviceOrder)
+      .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+      .where(
+        and(
+          eq(serviceOrder.organizationId, organizationId),
+          eq(serviceOrder.id, serviceOrderId),
+          buildUnitScopeCondition(serviceOrder.unitId, scope),
+        ),
+      )
+      .limit(1);
+
+    if (!order) {
+      throw new Error("Ordem de serviço não encontrada");
+    }
+    if (!isServiceOrderBillable(order.status, order.closingReason)) {
+      throw new Error("Ordem de serviço não está pronta para faturamento");
+    }
+
+    // Reuse an existing (non-void) billing document if the order already has one.
+    let existingDoc: { id: number; status: BillingDocumentStatus } | null =
+      null;
+    if (order.billingDocumentId) {
+      const [doc] = await db
+        .select({ id: billingDocument.id, status: billingDocument.status })
+        .from(billingDocument)
+        .where(
+          and(
+            eq(billingDocument.id, order.billingDocumentId),
+            ne(billingDocument.status, "VOID"),
+          ),
+        )
+        .limit(1);
+      existingDoc = doc ?? null;
+    }
+
+    let documentId: number;
+
+    if (existingDoc) {
+      documentId = existingDoc.id;
+      if (existingDoc.status === "DRAFT") {
+        await issueDraftBillingDocument({
+          organizationId,
+          documentId,
+          actorUserId,
+        });
+      }
+    } else {
+      const jobs = await db
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          status: calibrationJob.status,
+        })
+        .from(serviceOrderCertificateLink)
+        .innerJoin(
+          calibrationJob,
+          eq(serviceOrderCertificateLink.certificateJobId, calibrationJob.id),
+        )
+        .where(eq(serviceOrderCertificateLink.serviceOrderId, order.id));
+
+      const amountCents =
+        order.amountApprovedCents > 0
+          ? order.amountApprovedCents
+          : order.amountQuotedCents;
+
+      const blockers = evaluateOrderBlockers({
+        customer: {
+          taxId: order.taxId,
+          email: order.email,
+          address: order.address,
+        },
+        certificateJobStatuses: jobs.map((job) => job.status),
+        amountCents,
+      });
+      if (blockers.length > 0) {
+        throw new Error(blockers[0]!.label);
+      }
+
+      const approvedJobs = jobs.filter(
+        (job) => job.status === "APPROVED" || job.status === "SUPERSEDED",
+      );
+
+      const snapshots: Awaited<
+        ReturnType<typeof ensureJobCommercialSnapshotFromJob>
+      >[] = [];
+      for (const job of approvedJobs) {
+        snapshots.push(
+          await ensureJobCommercialSnapshotFromJob(
+            { actorUserId, jobId: job.id, organizationId },
+            undefined,
+          ),
+        );
+      }
+
+      const jobSubtotalCents = snapshots.reduce(
+        (sum, snapshot) => sum + (snapshot.priceCents ?? 0),
+        0,
+      );
+      // Repair-only orders may have no certificate jobs; fall back to the
+      // service order's own pricing snapshot so they can still be billed.
+      const useServiceOrderLine =
+        approvedJobs.length === 0 || jobSubtotalCents <= 0;
+      const subtotalCents = useServiceOrderLine
+        ? amountCents
+        : jobSubtotalCents;
+      const currency = snapshots[0]?.currency ?? "BRL";
+      const paymentTermDays =
+        Math.max(
+          ...snapshots.map((snapshot) => snapshot.paymentTermDays),
+          DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+        ) || DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS;
+
+      documentId = await db.transaction(async (tx) => {
+        const issueDate = new Date();
+        const documentNumber = await generateBillingDocumentNumber(
+          organizationId,
+          tx,
+        );
+        const dueDate = calculateFinancialDueDate(issueDate, paymentTermDays);
+
+        const [document] = await tx
+          .insert(billingDocument)
+          .values({
+            organizationId,
+            customerId: order.customerId,
+            unitId: order.unitId,
+            agreementId:
+              snapshots.find((snapshot) => snapshot.agreementId)?.agreementId ??
+              null,
+            documentNumber,
+            status: "ISSUED",
+            issueDate,
+            dueDate,
+            currency,
+            subtotalCents,
+            discountCents: 0,
+            totalCents: subtotalCents,
+            issuedBy: actorUserId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId,
+          })
+          .returning();
+
+        if (!document) {
+          throw new Error("Falha ao criar documento financeiro");
+        }
+
+        if (useServiceOrderLine) {
+          await tx.insert(billingDocumentItem).values({
+            documentId: document.id,
+            jobId: null,
+            serviceOrderId: order.id,
+            description: `OS ${order.number}`,
+            quantity: 1,
+            unitPriceCents: subtotalCents,
+            totalCents: subtotalCents,
+            sortOrder: 0,
+          });
+        } else {
+          await tx.insert(billingDocumentItem).values(
+            approvedJobs.map((job, index) => ({
+              documentId: document.id,
+              jobId: job.id,
+              serviceOrderId: order.id,
+              jobCommercialSnapshotId: snapshots[index]?.id ?? null,
+              description: snapshots[index]?.serviceName ?? job.jobId,
+              quantity: 1,
+              unitPriceCents: snapshots[index]?.priceCents ?? 0,
+              totalCents: snapshots[index]?.priceCents ?? 0,
+              sortOrder: index,
+            })),
+          );
+        }
+
+        await tx.insert(receivableInstallment).values({
+          documentId: document.id,
+          installmentNumber: 1,
+          status: "OPEN",
+          dueDate,
+          amountCents: subtotalCents,
+          currency,
+        });
+
+        await tx
+          .update(serviceOrder)
+          .set({ billingDocumentId: document.id, updatedAt: issueDate })
+          .where(eq(serviceOrder.id, order.id));
+
+        await tx.insert(financialAuditLog).values({
+          organizationId,
+          entityType: "service_order",
+          entityId: String(order.id),
+          action: "service_order.sent_to_finance",
+          changes: {
+            billingDocumentId: document.id,
+            subtotalCents,
+            jobIds: approvedJobs.map((job) => job.id),
+          },
+          performedBy: actorUserId,
+        });
+
+        return document.id;
+      });
+    }
+
+    await exportBillingDocumentToPrimaryIntegration({
+      organizationId,
+      documentId,
+      env,
+    });
+
+    return {
+      serviceOrderId,
+      ok: true,
+      billingDocumentId: documentId,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      serviceOrderId,
+      ok: false,
+      billingDocumentId: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao enviar a ordem para o financeiro",
+    };
+  }
+}
+
+/** Issue an existing DRAFT billing document (number, status, installment). */
+async function issueDraftBillingDocument(params: {
+  organizationId: string;
+  documentId: number;
+  actorUserId: string;
+}) {
+  const { organizationId, documentId, actorUserId } = params;
+  const [existing] = await db
+    .select({
+      dueDate: billingDocument.dueDate,
+      totalCents: billingDocument.totalCents,
+      currency: billingDocument.currency,
+    })
+    .from(billingDocument)
+    .where(eq(billingDocument.id, documentId))
+    .limit(1);
+  if (!existing) {
+    throw new Error("Documento financeiro não encontrado");
+  }
+
+  await db.transaction(async (tx) => {
+    const issueDate = new Date();
+    const documentNumber = await generateBillingDocumentNumber(
+      organizationId,
+      tx,
+    );
+    const effectiveDueDate =
+      existing.dueDate instanceof Date &&
+      existing.dueDate.getTime() > issueDate.getTime()
+        ? existing.dueDate
+        : calculateFinancialDueDate(
+            issueDate,
+            DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+          );
+
+    await tx
+      .update(billingDocument)
+      .set({
+        documentNumber,
+        status: "ISSUED",
+        issueDate,
+        dueDate: effectiveDueDate,
+        issuedBy: actorUserId,
+        updatedBy: actorUserId,
+        updatedAt: issueDate,
+      })
+      .where(eq(billingDocument.id, documentId));
+
+    const [existingInstallment] = await tx
+      .select({ id: receivableInstallment.id })
+      .from(receivableInstallment)
+      .where(eq(receivableInstallment.documentId, documentId))
+      .limit(1);
+
+    if (!existingInstallment) {
+      await tx.insert(receivableInstallment).values({
+        documentId,
+        installmentNumber: 1,
+        status: "OPEN",
+        dueDate: effectiveDueDate,
+        amountCents: existing.totalCents,
+        currency: existing.currency,
+      });
+    }
+  });
+}
+
+export async function sendServiceOrdersToFinance(params: {
+  organizationId: string;
+  serviceOrderIds: number[];
+  actorUserId: string;
+  scope: FinanceUnitScope;
+  env: IntegrationsEnv;
+}): Promise<SendServiceOrderResult[]> {
+  const results: SendServiceOrderResult[] = [];
+  for (const serviceOrderId of params.serviceOrderIds) {
+    results.push(
+      await sendServiceOrderToFinance({
+        organizationId: params.organizationId,
+        serviceOrderId,
+        actorUserId: params.actorUserId,
+        scope: params.scope,
+        env: params.env,
+      }),
+    );
+  }
+  return results;
 }

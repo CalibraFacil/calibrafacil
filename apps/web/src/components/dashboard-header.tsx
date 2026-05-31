@@ -1,5 +1,5 @@
 import { Link, useMatches } from '@tanstack/react-router'
-import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useMemo } from 'react'
 
 import {
@@ -13,9 +13,23 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
-import { api } from '@/utils/api'
-import { apiRouteParam } from '@/lib/route-identifiers'
+import {
+  useAssetLabelData,
+  useCapaLabelData,
+  useCompetenceLabelData,
+  useCustomerLabelData,
+  useJobLabelData,
+  useMethodLabelData,
+  useNonConformanceLabelData,
+  useServiceLabelData,
+  useServiceOrderLabelData,
+  useStandardLabelData,
+} from '@/features/entity-labels/queries'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
+import {
+  DesktopDataSourceIndicator,
+  DesktopSyncButton,
+} from '@/runtime/sync-status'
 
 const routeLabels: Record<string, string> = {
   // Dashboard
@@ -42,6 +56,8 @@ const routeLabels: Record<string, string> = {
   '/dashboard/internal': 'Operação Interna',
   '/dashboard/internal/customer-success': 'Customer Success',
   '/dashboard/finance': 'Financeiro',
+  '/dashboard/finance/billing-readiness': 'Pronto para faturar',
+  '/dashboard/finance/receivables': 'Recebíveis',
   '/dashboard/finance/documents': 'Documentos financeiros',
   '/dashboard/finance/documents/new': 'Nova cobrança',
   '/dashboard/finance/documents/$id': 'Documento financeiro',
@@ -49,12 +65,15 @@ const routeLabels: Record<string, string> = {
   '/dashboard/finance/contracts': 'Contratos comerciais',
   '/dashboard/finance/contracts/new': 'Novo contrato comercial',
   '/dashboard/finance/contracts/$id': 'Contrato comercial',
+  '/dashboard/finance/analytics': 'Análises financeiras',
+  '/dashboard/finance/automation': 'Automação financeira',
   '/dashboard/finance/erp': 'ERP financeiro',
 
   // Clients
   '/dashboard/clients': 'Clientes',
   '/dashboard/clients/new': 'Novo Cliente',
   '/dashboard/clients/$id': 'Cliente',
+  '/dashboard/clients/$id/overview': 'Visão geral',
   '/dashboard/clients/$id/info': 'Informações',
   '/dashboard/clients/$id/users': 'Usuários',
   '/dashboard/clients/$id/assets': 'Ativos',
@@ -81,6 +100,9 @@ const routeLabels: Record<string, string> = {
   '/dashboard/jobs/new': 'Nova Calibração',
   '/dashboard/jobs/$id': 'Calibração',
   '/dashboard/jobs/$id/execute': 'Executar',
+
+  // Reports
+  '/dashboard/reports': 'Relatórios',
 
   // Calibration Requests
   '/dashboard/requests': 'Solicitações de Calibração',
@@ -114,27 +136,9 @@ const routeLabels: Record<string, string> = {
   '/dashboard/personnel/$id': 'Competência',
   '/dashboard/personnel/$id/training': 'Treinamentos',
   '/dashboard/personnel/$id/audit': 'Histórico',
-}
 
-const LABEL_STALE_TIME = 5 * 60 * 1000
-
-type LabelResponse = {
-  ok: boolean
-  status: number
-  json: () => Promise<unknown>
-}
-
-async function parseLabelResponse(
-  response: LabelResponse,
-  entityName: string,
-): Promise<string | null> {
-  if (!response.ok) {
-    if (response.status === 404) return null
-    throw new Error(`Failed to fetch ${entityName} label`)
-  }
-
-  const data = (await response.json()) as { label?: string }
-  return data.label ?? null
+  // Certificate Templates
+  '/dashboard/certificate-templates': 'Templates de Certificados',
 }
 
 function getCachedLabel(
@@ -151,6 +155,15 @@ function getCachedLabel(
   }
 
   return null
+}
+
+function stringProperty(value: unknown, key: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const property = Reflect.get(value, key)
+  return typeof property === 'string' ? property : undefined
 }
 
 // Extract entity IDs from pathname
@@ -173,6 +186,7 @@ function extractEntityIds(pathname: string): {
     methodId?: string
     jobId?: string
     serviceId?: string
+    serviceOrderId?: string
     standardId?: string
     ncId?: string
     capaId?: string
@@ -299,54 +313,52 @@ export function DashboardHeader({
   const customerCachedLabel = getCachedLabel(
     queryClient,
     [['customer', customerId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const assetCachedLabel = getCachedLabel(
     queryClient,
     [['asset', assetId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const methodCachedLabel = getCachedLabel(
     queryClient,
     [['methods', methodId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const jobCachedLabel = getCachedLabel(
     queryClient,
     [['jobs', jobId]],
-    (cached) => (cached as { jobId?: string } | undefined)?.jobId,
+    (cached) => stringProperty(cached, 'jobId'),
   )
   const serviceCachedLabel = getCachedLabel(
     queryClient,
     [['services', serviceId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const serviceOrderCachedLabel = getCachedLabel(
     queryClient,
     [['service-order', serviceOrderId]],
-    (cached) =>
-      (cached as { serviceOrderNumber?: string } | undefined)
-        ?.serviceOrderNumber,
+    (cached) => stringProperty(cached, 'serviceOrderNumber'),
   )
   const standardCachedLabel = getCachedLabel(
     queryClient,
     [['standards', standardId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const ncCachedLabel = getCachedLabel(
     queryClient,
     [['non-conformance', ncId]],
-    (cached) => (cached as { ncNumber?: string } | undefined)?.ncNumber,
+    (cached) => stringProperty(cached, 'ncNumber'),
   )
   const capaCachedLabel = getCachedLabel(
     queryClient,
     [['capa', capaId]],
-    (cached) => (cached as { capaNumber?: string } | undefined)?.capaNumber,
+    (cached) => stringProperty(cached, 'capaNumber'),
   )
   const competenceCachedLabel = getCachedLabel(
     queryClient,
     [['competence', competenceId]],
-    (cached) => (cached as { userName?: string } | undefined)?.userName,
+    (cached) => stringProperty(cached, 'userName'),
   )
 
   const customerDetailFetchCount = useIsFetching({
@@ -374,192 +386,94 @@ export function DashboardHeader({
     queryKey: ['competence', competenceId],
   })
 
-  // Reactive queries for entity labels
-  const { data: customerLabel } = useQuery({
-    queryKey: ['customers', customerId, 'label'],
-    queryFn: async () => {
-      if (customerCachedLabel) return customerCachedLabel
-
-      const res = await api.api.customers[':id'].label.$get({
-        param: { id: customerId! },
-      })
-      return parseLabelResponse(res, 'customer')
-    },
+  const { data: customerLabel } = useCustomerLabelData({
+    id: customerId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!customerId &&
       !customerCachedLabel &&
       customerDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: assetLabel } = useQuery({
-    queryKey: ['assets', assetId, 'label'],
-    queryFn: async () => {
-      if (assetCachedLabel) return assetCachedLabel
-
-      const res = await api.api.assets[':id'].label.$get({
-        param: { id: assetId! },
-      })
-      return parseLabelResponse(res, 'asset')
-    },
+  const { data: assetLabel } = useAssetLabelData({
+    id: assetId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!assetId &&
       !assetCachedLabel &&
       assetDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: methodLabel } = useQuery({
-    queryKey: ['methods', methodId, 'label'],
-    queryFn: async () => {
-      if (methodCachedLabel) return methodCachedLabel
-
-      const res = await api.api.methods[':id'].label.$get({
-        param: { id: methodId! },
-      })
-      return parseLabelResponse(res, 'method')
-    },
+  const { data: methodLabel } = useMethodLabelData({
+    id: methodId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!methodId &&
       !methodCachedLabel &&
       methodDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: jobLabel } = useQuery({
-    queryKey: ['jobs', jobId, 'label'],
-    queryFn: async () => {
-      if (jobCachedLabel) return jobCachedLabel
-
-      const res = await api.api.jobs[':id'].label.$get({
-        param: { id: apiRouteParam(jobId!) },
-      })
-      return parseLabelResponse(res, 'job')
-    },
+  const { data: jobLabel } = useJobLabelData({
+    id: jobId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!jobId &&
       !jobCachedLabel &&
       jobDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: serviceLabel } = useQuery({
-    queryKey: ['services', serviceId, 'label'],
-    queryFn: async () => {
-      if (serviceCachedLabel) return serviceCachedLabel
-
-      const res = await api.api.services[':id'].label.$get({
-        param: { id: serviceId! },
-      })
-      return parseLabelResponse(res, 'service')
-    },
+  const { data: serviceLabel } = useServiceLabelData({
+    id: serviceId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!serviceId &&
       !serviceCachedLabel &&
       serviceDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: serviceOrderLabel } = useQuery({
-    queryKey: ['service-orders', serviceOrderId, 'label'],
-    queryFn: async () => {
-      if (serviceOrderCachedLabel) return serviceOrderCachedLabel
-
-      const res = await api.api['service-orders'][':id'].$get({
-        param: { id: serviceOrderId! },
-      })
-      if (!res.ok) {
-        if (res.status === 404) return null
-        throw new Error('Failed to fetch service order label')
-      }
-      const data = (await res.json()) as {
-        data?: { serviceOrderNumber?: string }
-      }
-      return data.data?.serviceOrderNumber ?? null
-    },
+  const { data: serviceOrderLabel } = useServiceOrderLabelData({
+    id: serviceOrderId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!serviceOrderId &&
       !serviceOrderCachedLabel &&
       serviceOrderDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: standardLabel } = useQuery({
-    queryKey: ['standards', standardId, 'label'],
-    queryFn: async () => {
-      if (standardCachedLabel) return standardCachedLabel
-
-      const res = await api.api.standards[':id'].label.$get({
-        param: { id: standardId! },
-      })
-      return parseLabelResponse(res, 'standard')
-    },
+  const { data: standardLabel } = useStandardLabelData({
+    id: standardId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!standardId &&
       !standardCachedLabel &&
       standardDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: ncLabel } = useQuery({
-    queryKey: ['non-conformance', ncId, 'label'],
-    queryFn: async () => {
-      if (ncCachedLabel) return ncCachedLabel
-
-      const res = await api.api.nc[':id'].label.$get({
-        param: { id: ncId! },
-      })
-      return parseLabelResponse(res, 'non-conformance')
-    },
+  const { data: ncLabel } = useNonConformanceLabelData({
+    id: ncId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!ncId &&
       !ncCachedLabel &&
       ncDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: capaLabel } = useQuery({
-    queryKey: ['capa', capaId, 'label'],
-    queryFn: async () => {
-      if (capaCachedLabel) return capaCachedLabel
-
-      const res = await api.api.capa[':id'].label.$get({
-        param: { id: capaId! },
-      })
-      return parseLabelResponse(res, 'capa')
-    },
+  const { data: capaLabel } = useCapaLabelData({
+    id: capaId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!capaId &&
       !capaCachedLabel &&
       capaDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: competenceLabel } = useQuery({
-    queryKey: ['competence', competenceId, 'label'],
-    queryFn: async () => {
-      if (competenceCachedLabel) return competenceCachedLabel
-
-      const res = await api.api.competences[':id'].label.$get({
-        param: { id: competenceId! },
-      })
-      return parseLabelResponse(res, 'competence')
-    },
+  const { data: competenceLabel } = useCompetenceLabelData({
+    id: competenceId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!competenceId &&
       !competenceCachedLabel &&
       competenceDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
   // Build entity name lookup
@@ -725,6 +639,8 @@ export function DashboardHeader({
         </Breadcrumb>
       </div>
       <div className="flex items-center gap-2">
+        <DesktopDataSourceIndicator />
+        <DesktopSyncButton />
         <NotificationBell />
       </div>
     </header>

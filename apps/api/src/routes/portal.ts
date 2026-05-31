@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
@@ -6,23 +7,94 @@ import {
   organization,
   customer,
   calibrationJob,
+  calibrationRequest,
+  calibrationRequestItem,
+  serviceOrder,
   asset,
   assetType,
   service,
+  referenceStandardCertificateDocument,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
   eq,
   and,
   inArray,
+  asc,
   desc,
+  like,
+  not,
   count,
   isNull,
+  isNotNull,
+  lt,
+  lte,
+  gt,
+  gte,
   ilike,
   or,
   sql,
 } from "drizzle-orm";
 import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
+
+// Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
+// An instrument is "due soon" within this many days of its next calibration.
+const DUE_SOON_DAYS = 30;
+
+// Portal-local extension of the shared asset query. Adds an optional
+// calibration-status filter so the command center can deep-link the equipment
+// list to "overdue" / "due soon" without touching the shared schema or web.
+const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
+  dueStatus: z
+    .enum(["overdue", "due_soon", "scheduled", "unscheduled"])
+    .optional(),
+});
+
+type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
+
+function buildDueStatusCondition(dueStatus: DueStatus) {
+  if (!dueStatus) return undefined;
+  const now = new Date();
+  const soon = new Date(now);
+  soon.setDate(soon.getDate() + DUE_SOON_DAYS);
+
+  switch (dueStatus) {
+    case "overdue":
+      return lt(asset.nextCalibrationDate, now);
+    case "due_soon":
+      return and(
+        gte(asset.nextCalibrationDate, now),
+        lte(asset.nextCalibrationDate, soon),
+      );
+    case "scheduled":
+      return gt(asset.nextCalibrationDate, soon);
+    case "unscheduled":
+      return isNull(asset.nextCalibrationDate);
+  }
+}
+
+function emptyOverview() {
+  return {
+    equipment: {
+      total: 0,
+      overdue: 0,
+      dueSoon: 0,
+      scheduled: 0,
+      unscheduled: 0,
+      attention: [],
+    },
+    certificates: { available: 0, recent: [] },
+    requests: { total: 0, open: 0, rejected: 0, recent: [] },
+    serviceOrders: {
+      total: 0,
+      inProgress: 0,
+      awaitingQuoteApproval: 0,
+      readyForPickup: 0,
+      awaitingQuote: [],
+      recent: [],
+    },
+  };
+}
 import {
   requirePortalAuth,
   requirePermission,
@@ -37,6 +109,204 @@ import {
 } from "../lib/storage";
 import { denormalizeAssetSpecificationsForResponse } from "../lib/asset-measurement";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
+import {
+  applyPortalCertificateReleaseGate,
+  loadPortalReleaseStatuses,
+} from "../lib/portal-certificate-release-gate";
+
+type PortalReferenceStandardDocument = {
+  documentId: number;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  sha256: string;
+  uploadedAt: string | Date;
+  certificateNumber: string;
+  calibrationDate: string | Date;
+  nextCalibrationDate: string | Date;
+};
+
+function finalizedStandardCertificateDocumentCondition() {
+  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
+}
+
+type PortalReferenceStandardSnapshot = {
+  id: number;
+  name: string;
+  type?: string | null;
+  certificateNumber: string;
+  calibratedBy?: string | null;
+  calibrationDate: string | Date;
+  nextCalibrationDate: string | Date | null;
+  certificateDocument?: PortalReferenceStandardDocument | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function getNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizePortalDocument(
+  value: unknown,
+): PortalReferenceStandardDocument | null {
+  if (!isRecord(value)) return null;
+  const documentId = getNumber(value.documentId);
+  const r2Key = getString(value.r2Key);
+  const fileName = getString(value.fileName);
+  const fileSize = getNumber(value.fileSize);
+  const sha256 = getString(value.sha256);
+  const certificateNumber = getString(value.certificateNumber);
+  const calibrationDate =
+    getString(value.calibrationDate) ??
+    (value.calibrationDate instanceof Date ? value.calibrationDate : null);
+  const nextCalibrationDate =
+    getString(value.nextCalibrationDate) ??
+    (value.nextCalibrationDate instanceof Date
+      ? value.nextCalibrationDate
+      : null);
+  const uploadedAt =
+    getString(value.uploadedAt) ??
+    (value.uploadedAt instanceof Date ? value.uploadedAt : null);
+
+  if (
+    documentId === null ||
+    !r2Key ||
+    r2Key.startsWith("pending/") ||
+    !fileName ||
+    fileSize === null ||
+    !sha256 ||
+    !certificateNumber ||
+    !calibrationDate ||
+    !nextCalibrationDate ||
+    !uploadedAt
+  ) {
+    return null;
+  }
+
+  return {
+    documentId,
+    r2Key,
+    fileName,
+    fileSize,
+    sha256,
+    uploadedAt,
+    certificateNumber,
+    calibrationDate,
+    nextCalibrationDate,
+  };
+}
+
+function normalizePortalReferenceStandards(
+  value: unknown,
+): PortalReferenceStandardSnapshot[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = getNumber(item.id);
+    const name = getString(item.name);
+    const certificateNumber = getString(item.certificateNumber);
+    const calibrationDate =
+      getString(item.calibrationDate) ??
+      (item.calibrationDate instanceof Date ? item.calibrationDate : null);
+    const nextCalibrationDate =
+      getString(item.nextCalibrationDate) ??
+      (item.nextCalibrationDate instanceof Date
+        ? item.nextCalibrationDate
+        : null);
+
+    if (id === null || !name || !certificateNumber || !calibrationDate) {
+      return [];
+    }
+
+    return [
+      {
+        id,
+        name,
+        type: getString(item.type),
+        certificateNumber,
+        calibratedBy: getString(item.calibratedBy),
+        calibrationDate,
+        nextCalibrationDate,
+        certificateDocument: normalizePortalDocument(item.certificateDocument),
+      },
+    ];
+  });
+}
+
+function portalStandardDocumentResponse(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+): PortalReferenceStandardDocument {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
+}
+
+async function withMatchingPortalStandardDocuments(
+  referenceStandards: PortalReferenceStandardSnapshot[],
+): Promise<PortalReferenceStandardSnapshot[]> {
+  const missingDocumentStandards = referenceStandards.filter(
+    (standard) => !standard.certificateDocument,
+  );
+
+  if (missingDocumentStandards.length === 0) {
+    return referenceStandards;
+  }
+
+  const conditions = missingDocumentStandards.map((standard) =>
+    and(
+      eq(referenceStandardCertificateDocument.standardId, standard.id),
+      eq(referenceStandardCertificateDocument.isCurrent, true),
+      eq(
+        referenceStandardCertificateDocument.certificateNumber,
+        standard.certificateNumber,
+      ),
+      finalizedStandardCertificateDocumentCondition(),
+    ),
+  );
+
+  const documents = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(or(...conditions))
+    .orderBy(
+      desc(referenceStandardCertificateDocument.isCurrent),
+      desc(referenceStandardCertificateDocument.uploadedAt),
+    );
+
+  const documentsByKey = new Map<string, PortalReferenceStandardDocument>();
+  for (const document of documents) {
+    const key = `${document.standardId}:${document.certificateNumber}`;
+    if (!documentsByKey.has(key)) {
+      documentsByKey.set(key, portalStandardDocumentResponse(document));
+    }
+  }
+
+  return referenceStandards.map((standard) => {
+    if (standard.certificateDocument) return standard;
+    return {
+      ...standard,
+      certificateDocument:
+        documentsByKey.get(`${standard.id}:${standard.certificateNumber}`) ??
+        null,
+    };
+  });
+}
 
 function getPortalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };
@@ -44,17 +314,53 @@ function getPortalHostOrigin(c: {
   return c.req.header("origin") ?? c.req.header("referer") ?? null;
 }
 
+function isDefaultPortalHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    normalized === "dev-portal.calibrafacil.com"
+  ) {
+    return true;
+  }
+
+  return (
+    normalized === "portal.calibrafacil.com" ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "[::1]" ||
+    normalized.startsWith("10.") ||
+    normalized.startsWith("192.168.")
+  );
+}
+
+type PortalLabScope = {
+  labOrganizationId: string | null;
+  blocked: boolean;
+};
+
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
-}) {
+}): Promise<PortalLabScope> {
   const origin = getPortalHostOrigin(c);
-  if (!origin) return null;
+  if (!origin) return { labOrganizationId: null, blocked: true };
 
   try {
     const url = new URL(origin);
-    return resolveLabOrganizationIdByPortalHostname(url.hostname);
+    const hostname = url.hostname.toLowerCase();
+    const labOrganizationId =
+      await resolveLabOrganizationIdByPortalHostname(hostname);
+
+    if (labOrganizationId) {
+      return { labOrganizationId, blocked: false };
+    }
+
+    return {
+      labOrganizationId: null,
+      blocked: !isDefaultPortalHostname(hostname),
+    };
   } catch {
-    return null;
+    return { labOrganizationId: null, blocked: true };
   }
 }
 
@@ -63,7 +369,10 @@ async function getPortalLabScope(c: {
  * These routes handle client-facing functionality.
  * Uses Portal auth (portal_session cookie) for authentication.
  */
-export const portalRouter = new Hono<{ Variables: AuthVariables }>()
+export const portalRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: R2Env;
+}>()
   // =========================================================================
   // GET /organizations - List CLIENT organizations for the portal
   // =========================================================================
@@ -77,6 +386,9 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
 
     try {
       // Query member table joined with organization
@@ -99,8 +411,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
             inArray(member.role, PORTAL_ACCESS_ROLES),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -113,19 +425,237 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   })
 
   // =========================================================================
+  // GET /overview - Command-center aggregation for the active portal org
+  // =========================================================================
+  // One round-trip that powers the dashboard with accurate, fleet-wide numbers
+  // (not guessed from the first page of a list). Scoped to the active org's
+  // linked customer, exactly like /assets.
+  // =========================================================================
+  .get("/overview", ...requirePortalProtected, async (c) => {
+    const member = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const [linkedCustomer] = await db
+        .select({
+          id: customer.id,
+          labOrganizationId: customer.labOrganizationId,
+        })
+        .from(customer)
+        .where(eq(customer.authOrganizationId, member.organizationId))
+        .limit(1);
+
+      if (
+        !linkedCustomer ||
+        (portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId)
+      ) {
+        return c.json(emptyOverview());
+      }
+
+      // Compare against the DB clock in UTC. Binding raw JS Date objects inside
+      // a sql`` template fails under postgres.js (it can't encode a bare Date),
+      // so we derive both bounds from now() in SQL instead.
+      const nowUtc = sql`(now() at time zone 'utc')`;
+      const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+
+      const equipmentWhere = and(
+        eq(asset.customerId, linkedCustomer.id),
+        eq(asset.status, "ACTIVE"),
+        isNull(asset.deletedAt),
+      );
+      const requestWhere = and(
+        eq(calibrationRequest.customerId, linkedCustomer.id),
+        eq(calibrationRequest.authOrganizationId, member.organizationId),
+      );
+      const certificateWhere = and(
+        eq(calibrationJob.customerId, linkedCustomer.id),
+        eq(calibrationJob.status, "APPROVED"),
+      );
+      const serviceOrderWhere = eq(serviceOrder.customerId, linkedCustomer.id);
+
+      const [
+        equipmentCounts,
+        equipmentAttention,
+        certificateCounts,
+        recentCertificatesRaw,
+        requestCounts,
+        recentRequests,
+        serviceOrderCounts,
+        awaitingQuoteOrders,
+        recentServiceOrders,
+      ] = await Promise.all([
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
+            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${soonUtc}) as int)`,
+            unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
+          })
+          .from(asset)
+          .where(equipmentWhere),
+        db
+          .select({
+            id: asset.id,
+            name: asset.name,
+            tag: asset.tag,
+            nextCalibrationDate: asset.nextCalibrationDate,
+          })
+          .from(asset)
+          .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
+          .orderBy(asc(asset.nextCalibrationDate))
+          .limit(6),
+        db
+          .select({ available: sql<number>`cast(count(*) as int)` })
+          .from(calibrationJob)
+          .where(certificateWhere),
+        db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            approvedAt: calibrationJob.approvedAt,
+            certificateUrl: calibrationJob.certificateUrl,
+            assetName: asset.name,
+            assetTag: asset.tag,
+          })
+          .from(calibrationJob)
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .where(certificateWhere)
+          .orderBy(desc(calibrationJob.approvedAt))
+          .limit(5),
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            open: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} in ('PENDING','UNDER_REVIEW')) as int)`,
+            rejected: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} = 'REJECTED') as int)`,
+          })
+          .from(calibrationRequest)
+          .where(requestWhere),
+        db
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            submittedAt: calibrationRequest.submittedAt,
+            itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
+          })
+          .from(calibrationRequest)
+          .where(requestWhere)
+          .orderBy(desc(calibrationRequest.submittedAt))
+          .limit(5),
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            inProgress: sql<number>`cast(count(*) filter (where ${serviceOrder.status} not in ('delivered','closed','canceled')) as int)`,
+            awaitingQuoteApproval: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'awaiting_quote_approval') as int)`,
+            readyForPickup: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'ready_for_pickup') as int)`,
+          })
+          .from(serviceOrder)
+          .where(serviceOrderWhere),
+        db
+          .select({
+            id: serviceOrder.id,
+            publicId: serviceOrder.publicId,
+            serviceOrderNumber: serviceOrder.serviceOrderNumber,
+            status: serviceOrder.status,
+            openedAt: serviceOrder.openedAt,
+            assetName: asset.name,
+          })
+          .from(serviceOrder)
+          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+          .where(
+            and(
+              serviceOrderWhere,
+              eq(serviceOrder.status, "awaiting_quote_approval"),
+            ),
+          )
+          .orderBy(desc(serviceOrder.openedAt))
+          .limit(5),
+        db
+          .select({
+            id: serviceOrder.id,
+            publicId: serviceOrder.publicId,
+            serviceOrderNumber: serviceOrder.serviceOrderNumber,
+            status: serviceOrder.status,
+            openedAt: serviceOrder.openedAt,
+            assetName: asset.name,
+          })
+          .from(serviceOrder)
+          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+          .where(serviceOrderWhere)
+          .orderBy(desc(serviceOrder.openedAt))
+          .limit(5),
+      ]);
+
+      const recentCertificates = (
+        await applyPortalCertificateReleaseGate(
+          recentCertificatesRaw,
+          linkedCustomer.labOrganizationId,
+        )
+      ).map((cert) => ({
+        id: cert.id,
+        jobId: cert.jobId,
+        approvedAt: cert.approvedAt,
+        assetName: cert.assetName,
+        assetTag: cert.assetTag,
+        releaseStatus: cert.releaseStatus,
+        ready: cert.certificateUrl !== null,
+      }));
+
+      const equipment = equipmentCounts[0] ?? {
+        total: 0,
+        overdue: 0,
+        dueSoon: 0,
+        scheduled: 0,
+        unscheduled: 0,
+      };
+      const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
+      const orders = serviceOrderCounts[0] ?? {
+        total: 0,
+        inProgress: 0,
+        awaitingQuoteApproval: 0,
+        readyForPickup: 0,
+      };
+
+      return c.json({
+        equipment: { ...equipment, attention: equipmentAttention },
+        certificates: {
+          available: certificateCounts[0]?.available ?? 0,
+          recent: recentCertificates,
+        },
+        requests: { ...requests, recent: recentRequests },
+        serviceOrders: {
+          ...orders,
+          awaitingQuote: awaitingQuoteOrders,
+          recent: recentServiceOrders,
+        },
+      });
+    } catch (error) {
+      console.error("Error building portal overview:", error);
+      return c.json({ error: "Erro ao carregar o painel" }, 500);
+    }
+  })
+
+  // =========================================================================
   // GET /assets - List assets for active portal organization
   // =========================================================================
   .get(
     "/assets",
     ...requirePortalProtected,
     requirePermission({ equipment: ["read"] }),
-    zValidator("query", ListAssetsQuerySchema),
+    zValidator("query", PortalListAssetsQuerySchema),
     async (c) => {
       const member = c.get("member");
       const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
 
       try {
-        const { page, limit, query } = c.req.valid("query");
+        const { page, limit, query, dueStatus } = c.req.valid("query");
         const offset = (page - 1) * limit;
 
         const [linkedCustomer] = await db
@@ -145,8 +675,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (
-          portalLabScope &&
-          linkedCustomer.labOrganizationId !== portalLabScope
+          portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
         ) {
           return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
         }
@@ -164,6 +694,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
                 ilike(asset.model, `%${query}%`),
               )
             : undefined,
+          buildDueStatusCondition(dueStatus),
         );
 
         const [countResult] = await db
@@ -236,6 +767,9 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const portalMember = c.get("member");
       const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (Number.isNaN(id)) {
@@ -257,8 +791,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (
-          portalLabScope &&
-          linkedCustomer.labOrganizationId !== portalLabScope
+          portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
         ) {
           return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
         }
@@ -302,7 +836,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const certificates = await db
+        const certificatesRaw = await db
           .select({
             id: calibrationJob.id,
             jobId: calibrationJob.jobId,
@@ -330,6 +864,12 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .orderBy(desc(calibrationJob.approvedAt))
           .limit(5);
+
+        // Phase 2 slice 1: hide certificateUrl for held releases.
+        const certificates = await applyPortalCertificateReleaseGate(
+          certificatesRaw,
+          linkedCustomer.labOrganizationId,
+        );
 
         return c.json({
           data: {
@@ -359,6 +899,9 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/certificates", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
 
     try {
       // Parse pagination params
@@ -401,8 +944,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -431,12 +974,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
               ilike(service.name, `%${query}%`),
             )
           : undefined,
-        dateFrom
-          ? sql`${approvedAtPortalDate} >= ${dateFrom}`
-          : undefined,
-        dateTo
-          ? sql`${approvedAtPortalDate} <= ${dateTo}`
-          : undefined,
+        dateFrom ? sql`${approvedAtPortalDate} >= ${dateFrom}` : undefined,
+        dateTo ? sql`${approvedAtPortalDate} <= ${dateTo}` : undefined,
       );
 
       // Count total certificates
@@ -450,7 +989,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       const total = totalResult?.count ?? 0;
 
       // Get certificates with pagination
-      const certificates = await db
+      const certificatesRaw = await db
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
@@ -481,6 +1020,12 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .limit(limit)
         .offset(offset);
 
+      // Phase 2 slice 1: hide certificateUrl for held releases.
+      const certificates = await applyPortalCertificateReleaseGate(
+        certificatesRaw,
+        portalLabScope.labOrganizationId,
+      );
+
       return c.json({
         data: certificates,
         pagination: {
@@ -502,6 +1047,9 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/certificates/:id", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -535,8 +1083,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -558,6 +1106,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
           methodSnapshot: calibrationJob.methodSnapshot,
+          standardsSnapshot: calibrationJob.standardsSnapshot,
           results: calibrationJob.results,
           assetId: calibrationJob.assetId,
           assetName: asset.name,
@@ -589,7 +1138,27 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
-      return c.json(certificate);
+      const referenceStandards = await withMatchingPortalStandardDocuments(
+        normalizePortalReferenceStandards(certificate.standardsSnapshot),
+      );
+
+      // Phase 2 slice 1: hide certificateUrl when the release is held.
+      const [gated] = await applyPortalCertificateReleaseGate(
+        [certificate],
+        portalLabScope.labOrganizationId,
+      );
+      const releaseStatus = gated?.releaseStatus ?? "RELEASED";
+
+      return c.json({
+        ...certificate,
+        certificateUrl:
+          releaseStatus === "PAYMENT_PENDING"
+            ? null
+            : certificate.certificateUrl,
+        releaseStatus,
+        standardsSnapshot: undefined,
+        referenceStandards,
+      });
     } catch (error) {
       console.error("Error fetching portal certificate:", error);
       return c.json({ error: "Erro ao buscar certificado" }, 500);
@@ -602,6 +1171,9 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/certificates/:id/download", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -635,8 +1207,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -668,11 +1240,25 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
+      // Phase 2 slice 1: deny download when the release is held for billing
+      // or for payment. Customer-facing copy is provider-neutral.
+      const releaseStatuses = await loadPortalReleaseStatuses({
+        organizationId: portalLabScope.labOrganizationId,
+        calibrationJobIds: [id],
+      });
+      const portalReleaseStatus = releaseStatuses.get(id) ?? "RELEASED";
+      if (portalReleaseStatus === "PAYMENT_PENDING") {
+        return c.json(
+          { error: "Certificado aguardando confirmação financeira" },
+          409,
+        );
+      }
+
       if (!certificate.certificateUrl) {
         return c.json({ error: "Documento ainda nao disponivel" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = c.env;
       const key = extractKeyFromUrl(certificate.certificateUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
@@ -685,7 +1271,141 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       console.error("Error generating certificate download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
     }
-  });
+  })
+
+  // =========================================================================
+  // GET /certificates/:id/reference-standards/:standardId/certificate/download
+  // =========================================================================
+  .get(
+    "/certificates/:id/reference-standards/:standardId/certificate/download",
+    requirePortalAuth,
+    async (c) => {
+      const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const id = parseInt(c.req.param("id"));
+      const standardId = parseInt(c.req.param("standardId"));
+
+      if (isNaN(id) || isNaN(standardId)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const userOrgs = await db
+          .select({ orgId: member.organizationId })
+          .from(member)
+          .innerJoin(organization, eq(member.organizationId, organization.id))
+          .where(
+            and(
+              eq(member.userId, session.user.id),
+              eq(organization.type, "CLIENT"),
+              inArray(member.role, PORTAL_ACCESS_ROLES),
+            ),
+          );
+
+        if (userOrgs.length === 0) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const customers = await db
+          .select({ id: customer.id })
+          .from(customer)
+          .where(
+            and(
+              inArray(
+                customer.authOrganizationId,
+                userOrgs.map((org) => org.orgId),
+              ),
+              portalLabScope.labOrganizationId
+                ? eq(
+                    customer.labOrganizationId,
+                    portalLabScope.labOrganizationId,
+                  )
+                : undefined,
+            ),
+          );
+
+        if (customers.length === 0) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const [certificate] = await db
+          .select({
+            standardsSnapshot: calibrationJob.standardsSnapshot,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              inArray(
+                calibrationJob.customerId,
+                customers.map((cust) => cust.id),
+              ),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .limit(1);
+
+        if (!certificate) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const standard = normalizePortalReferenceStandards(
+          certificate.standardsSnapshot,
+        ).find((item) => item.id === standardId);
+
+        if (!standard) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
+
+        let document = standard.certificateDocument;
+        if (!document) {
+          const [matchingDocument] = await db
+            .select()
+            .from(referenceStandardCertificateDocument)
+            .where(
+              and(
+                eq(referenceStandardCertificateDocument.standardId, standardId),
+                eq(referenceStandardCertificateDocument.isCurrent, true),
+                eq(
+                  referenceStandardCertificateDocument.certificateNumber,
+                  standard.certificateNumber,
+                ),
+                finalizedStandardCertificateDocumentCondition(),
+              ),
+            )
+            .orderBy(
+              desc(referenceStandardCertificateDocument.isCurrent),
+              desc(referenceStandardCertificateDocument.uploadedAt),
+            )
+            .limit(1);
+
+          document = matchingDocument
+            ? portalStandardDocumentResponse(matchingDocument)
+            : null;
+        }
+
+        if (!document) {
+          return c.json({ error: "Certificado do padrão não disponível" }, 404);
+        }
+
+        const env = c.env;
+        const client = createR2Client(env);
+        const url = await generatePresignedUrl(
+          client,
+          env.R2_BUCKET_NAME,
+          document.r2Key,
+        );
+
+        return c.json({ url, filename: document.fileName });
+      } catch (error) {
+        console.error("Error generating standard certificate URL:", error);
+        return c.json({ error: "Erro ao gerar link de download" }, 500);
+      }
+    },
+  );
 
 function sanitizeCertificateFilename(value: string) {
   const sanitized = value

@@ -1,0 +1,40 @@
+{
+  "name": "@calibra-facil/certificate-xlsx-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./conversion": "./src/conversion.ts",
+    "./manifest": "./src/manifest.ts"
+  },
+  "scripts": {
+    "build": "tsgo -p tsconfig.json --noEmit",
+    "check-types": "tsgo -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "generate:fixtures": "tsx scripts/create-sanitized-exemplo-fixture.ts",
+    "analyze:exemplo": "tsx scripts/analyze-exemplo.ts",
+    "fill:exemplo": "tsx scripts/fill-exemplo.ts",
+    "convert:exemplo:preview": "tsx scripts/convert-exemplo-preview.ts",
+    "fidelity:exemplo": "tsx scripts/fidelity-check.ts",
+    "fidelity:workbook": "tsx scripts/workbook-fidelity-check.ts"
+  },
+  "dependencies": {
+    "@cj-tech-master/excelts": "^9.5.5",
+    "@xmldom/xmldom": "^0.8.13",
+    "fflate": "^0.8.2",
+    "qrcode": "^1.5.4",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

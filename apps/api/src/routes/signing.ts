@@ -119,7 +119,7 @@ export const signingRouter = new Hono<{
       const input = c.req.valid("json");
       const memberData = c.get("member");
       const session = c.get("session");
-      const env = c.env as SigningEnv;
+      const env = c.env;
       requireUnitOperationalSettingsManager(memberData);
       const unit = resolveAccessibleUnitContext(memberData);
 
@@ -313,14 +313,14 @@ export const signingRouter = new Hono<{
           .set({ isDefault: false })
           .where(
             and(
-                  eq(
-                    organizationSigningCertificate.organizationId,
-                    memberData.organizationId,
-                  ),
-                  eq(organizationSigningCertificate.unitId, unit.unitId),
-                  eq(organizationSigningCertificate.isDefault, true),
-                ),
-              );
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
+              eq(organizationSigningCertificate.isDefault, true),
+            ),
+          );
 
         await tx
           .update(organizationSigningCertificate)

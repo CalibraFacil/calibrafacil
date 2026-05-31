@@ -14,6 +14,7 @@ import {
   usePortalActiveOrganization,
   usePortalSession,
 } from "@calibra-facil/auth/client";
+import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { toast } from "sonner";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
@@ -30,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMountEffect } from "@/hooks/use-mount-effect";
+import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
@@ -62,6 +64,12 @@ type PortalOrganization = {
 
 function PortalLayout() {
   const navigate = useNavigate();
+  const signInRedirect =
+    typeof window === "undefined"
+      ? "/"
+      : sanitizePortalRedirect(
+          `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        );
   const { data: session, isPending: sessionPending } = usePortalSession();
   const { data: activeOrg, isPending: activeOrgLoading } =
     usePortalActiveOrganization();
@@ -110,7 +118,7 @@ function PortalLayout() {
   }
 
   if (!session) {
-    return <Navigate to="/sign-in" />;
+    return <Navigate to="/sign-in" search={{ redirect: signInRedirect }} />;
   }
 
   if (orgsLoading || activeOrgLoading || needsPortalOrgSwitch) {
@@ -170,7 +178,7 @@ function PortalLayout() {
       <PortalSidebar />
       <SidebarInset>
         <PortalHeader />
-        <main className="flex-1 space-y-4 p-4">
+        <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
           {session.user.name.trim() ? null : <CompleteProfilePrompt />}
           <Outlet />
         </main>
@@ -223,7 +231,12 @@ function CompleteProfilePrompt() {
       const result = await portalAuthClient.updateUser({ name: trimmedName });
 
       if (result.error) {
-        throw new Error(result.error.message ?? "Falha ao atualizar perfil");
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            "Falha ao atualizar perfil",
+          ),
+        );
       }
 
       toast.success("Perfil atualizado");

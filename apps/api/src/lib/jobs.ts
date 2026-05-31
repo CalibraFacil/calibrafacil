@@ -10,12 +10,12 @@ import {
   memberUnitAssignment,
   personnelCompetence,
   service,
-  type CustomerCompliance,
   type AssetSnapshot,
   type MethodInputField,
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
+import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
@@ -51,6 +51,7 @@ export const jobCreationClientErrors = new Set([
   "Servico nao possui metodo vinculado",
   "Metodo do servico nao encontrado",
   "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
+  "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
   "Tipo do ativo nao e compativel com o servico selecionado",
   "Tecnico nao encontrado ou sem permissao",
   "Técnico não possui competência ativa para este tipo de instrumento",
@@ -70,6 +71,14 @@ function hasSpecificationValue(
   return value !== null && value !== undefined && value !== "";
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function validateRequiredAssetSpecs(
   dataFields: MethodInputField[] | null | undefined,
   specifications: Record<string, unknown> | null | undefined,
@@ -84,6 +93,50 @@ function validateRequiredAssetSpecs(
   if (missing.length > 0) {
     throw new Error(
       "Ativo nao possui especificacao obrigatoria para este metodo",
+    );
+  }
+}
+
+function validatePublishedMethodCompiledArtifact(methodData: {
+  compiledMethod: unknown;
+  methodFingerprint: string | null;
+  methodEngine: unknown;
+  publicationEvidence: unknown;
+}) {
+  const compiledMethod =
+    methodData.compiledMethod &&
+    typeof methodData.compiledMethod === "object" &&
+    !Array.isArray(methodData.compiledMethod)
+      ? toRecord(methodData.compiledMethod)
+      : null;
+  const methodEngine =
+    methodData.methodEngine &&
+    typeof methodData.methodEngine === "object" &&
+    !Array.isArray(methodData.methodEngine)
+      ? toRecord(methodData.methodEngine)
+      : null;
+  const compiledEngine =
+    compiledMethod?.engine &&
+    typeof compiledMethod.engine === "object" &&
+    !Array.isArray(compiledMethod.engine)
+      ? toRecord(compiledMethod.engine)
+      : null;
+
+  if (
+    !compiledMethod ||
+    !methodData.methodFingerprint ||
+    !methodEngine ||
+    !compiledEngine ||
+    !methodData.publicationEvidence ||
+    compiledMethod.methodFingerprint !== methodData.methodFingerprint ||
+    typeof compiledMethod.normalizedMethodJson !== "string" ||
+    typeof methodEngine.version !== "string" ||
+    typeof methodEngine.optionsFingerprint !== "string" ||
+    compiledEngine.version !== methodEngine.version ||
+    compiledEngine.optionsFingerprint !== methodEngine.optionsFingerprint
+  ) {
+    throw new Error(
+      "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
     );
   }
 }
@@ -149,12 +202,9 @@ async function persistCalibrationJob(
     throw new Error("Ativo nao pertence a esta unidade");
   }
 
-  const customerCompliance = assetData.customerCompliance as
-    | CustomerCompliance
-    | null
-    | undefined;
+  const customerCompliance = toRecord(assetData.customerCompliance);
 
-  if (customerCompliance?.qualificationStatus === "suspended") {
+  if (customerCompliance.qualificationStatus === "suspended") {
     throw new Error(
       "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
     );
@@ -207,6 +257,7 @@ async function persistCalibrationJob(
       "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
     );
   }
+  validatePublishedMethodCompiledArtifact(methodData);
 
   if (
     serviceData.assetTypeId &&
@@ -309,9 +360,35 @@ async function persistCalibrationJob(
     methodId: methodData.id,
     methodName: methodData.name,
     methodVersion: methodData.version,
+    compiledMethod: methodData.compiledMethod ?? null,
+    methodFingerprint: methodData.methodFingerprint ?? null,
+    engineVersion:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "version" in methodData.methodEngine &&
+      typeof methodData.methodEngine.version === "string"
+        ? methodData.methodEngine.version
+        : null,
+    engineOptionsFingerprint:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "optionsFingerprint" in methodData.methodEngine &&
+      typeof methodData.methodEngine.optionsFingerprint === "string"
+        ? methodData.methodEngine.optionsFingerprint
+        : null,
+    normalizedMethodJson:
+      methodData.compiledMethod &&
+      typeof methodData.compiledMethod === "object" &&
+      "normalizedMethodJson" in methodData.compiledMethod &&
+      typeof methodData.compiledMethod.normalizedMethodJson === "string"
+        ? methodData.compiledMethod.normalizedMethodJson
+        : null,
+    publicationEvidence: methodData.publicationEvidence ?? null,
     dataFields: methodData.dataFields,
+    variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,
-    validations: methodData.validations,
+    measurementModels: methodData.measurementModels ?? [],
+    validations: normalizeMethodValidationsInput(methodData.validations),
     uncertaintyParams: methodData.uncertaintyParams,
     certificateContent: methodData.certificateContent ?? null,
   };

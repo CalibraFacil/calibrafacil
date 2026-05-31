@@ -11,6 +11,10 @@ const entries = [
   ["vercel-src/queues/background.ts", "vercel-functions/queues/background.js"],
   ["vercel-src/cron/integrations.ts", "vercel-functions/cron/integrations.js"],
   ["vercel-src/cron/notifications.ts", "vercel-functions/cron/notifications.js"],
+  [
+    "vercel-src/cron/operator-alerts.ts",
+    "vercel-functions/cron/operator-alerts.js",
+  ],
 ];
 
 for (const [, outfile] of entries) {
@@ -31,6 +35,7 @@ await build({
   platform: "node",
   target: "node22",
   format: "esm",
+  external: ["@resvg/resvg-js"],
   splitting: false,
   sourcemap: false,
   minify: true,

@@ -24,11 +24,22 @@ import {
   updateCustomer,
   type AsaasBillingType,
 } from "../../services/asaas";
-import { getCommercialRenewalMode, isPlanBearingOffer } from "@calibra-facil/shared";
+import {
+  getCommercialRenewalMode,
+  isPlanBearingOffer,
+} from "@calibra-facil/shared";
 import type { CommercialOfferPreviewInput } from "@calibra-facil/schemas";
 import type { CommercialOfferPreviewResult } from "./preview";
 
 export type DbTx = any;
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
 
 function sanitizeTaxId(value: string | null | undefined) {
   return value?.replace(/\D/g, "") ?? "";
@@ -176,31 +187,31 @@ export async function ensureBillingCustomer(
     postalCode:
       typeof override?.address?.cep === "string"
         ? override.address.cep
-        : org.cep ?? undefined,
+        : (org.cep ?? undefined),
     address:
       typeof override?.address?.street === "string"
         ? override.address.street
-        : org.street ?? undefined,
+        : (org.street ?? undefined),
     addressNumber:
       typeof override?.address?.number === "string"
         ? override.address.number
-        : org.number ?? undefined,
+        : (org.number ?? undefined),
     complement:
       typeof override?.address?.complement === "string"
         ? override.address.complement
-        : org.complement ?? undefined,
+        : (org.complement ?? undefined),
     province:
       typeof override?.address?.neighbourhood === "string"
         ? override.address.neighbourhood
-        : org.neighbourhood ?? undefined,
+        : (org.neighbourhood ?? undefined),
     city:
       typeof override?.address?.city === "string"
         ? override.address.city
-        : org.city ?? undefined,
+        : (org.city ?? undefined),
     state:
       typeof override?.address?.state === "string"
         ? override.address.state
-        : org.state ?? undefined,
+        : (org.state ?? undefined),
     externalReference: organizationId,
   };
 
@@ -211,10 +222,9 @@ export async function ensureBillingCustomer(
     ),
   });
 
-  let providerCustomer =
-    existing?.providerCustomerId
-      ? await updateCustomer(existing.providerCustomerId, customerPayload)
-      : await findCustomerByExternalReference(organizationId);
+  let providerCustomer = existing?.providerCustomerId
+    ? await updateCustomer(existing.providerCustomerId, customerPayload)
+    : await findCustomerByExternalReference(organizationId);
 
   if (!providerCustomer) {
     providerCustomer = await createCustomer(customerPayload);
@@ -237,7 +247,7 @@ export async function ensureBillingCustomer(
           city: customerPayload.city,
           state: customerPayload.state,
         },
-        providerSnapshot: providerCustomer as unknown as Record<string, unknown>,
+        providerSnapshot: toRecord(providerCustomer),
         updatedAt: new Date(),
       })
       .where(eq(billingCustomer.id, existing.id))
@@ -266,7 +276,7 @@ export async function ensureBillingCustomer(
         city: customerPayload.city,
         state: customerPayload.state,
       },
-      providerSnapshot: providerCustomer as unknown as Record<string, unknown>,
+      providerSnapshot: toRecord(providerCustomer),
       createdBy: actorUserId,
     })
     .returning();
@@ -310,7 +320,8 @@ export async function createProviderArtifact(params: {
 
   if (preview.providerMode === "CHECKOUT") {
     const checkout = await createCheckout({
-      billingTypes: preview.normalizedSnapshot.paymentMethods.map(resolveBillingType),
+      billingTypes:
+        preview.normalizedSnapshot.paymentMethods.map(resolveBillingType),
       chargeTypes: [
         preview.normalizedSnapshot.kind === "PLAN_RECURRING"
           ? "RECURRENT"
@@ -327,7 +338,8 @@ export async function createProviderArtifact(params: {
         ? Math.max(
             10,
             Math.ceil(
-              (preview.normalizedSnapshot.offerExpiresAt.getTime() - Date.now()) /
+              (preview.normalizedSnapshot.offerExpiresAt.getTime() -
+                Date.now()) /
                 60000,
             ),
           )
@@ -359,14 +371,16 @@ export async function createProviderArtifact(params: {
         externalReference,
         description,
       },
-      providerResponseSnapshot: checkout as unknown as Record<string, unknown>,
+      providerResponseSnapshot: toRecord(checkout),
     };
   }
 
   if (preview.providerMode === "PAYMENT") {
     const payment = await createPayment({
       customer: params.customerId,
-      billingType: resolveBillingType(preview.normalizedSnapshot.paymentMethods[0]!),
+      billingType: resolveBillingType(
+        preview.normalizedSnapshot.paymentMethods[0]!,
+      ),
       value: preview.totalAmount / 100,
       dueDate: formatAsaasDate(preview.normalizedSnapshot.dueDate),
       description,
@@ -378,19 +392,23 @@ export async function createProviderArtifact(params: {
       externalReference,
       paymentId: payment.id,
       checkoutUrl:
-        payment.invoiceUrl ?? payment.bankSlipUrl ?? payment.pixTransaction?.qrCode,
+        payment.invoiceUrl ??
+        payment.bankSlipUrl ??
+        payment.pixTransaction?.qrCode,
       providerRequestSnapshot: {
         externalReference,
         description,
       },
-      providerResponseSnapshot: payment as unknown as Record<string, unknown>,
+      providerResponseSnapshot: toRecord(payment),
       initialPayment: payment,
     };
   }
 
   const subscriptionResult = await createSubscription({
     customer: params.customerId,
-    billingType: resolveBillingType(preview.normalizedSnapshot.paymentMethods[0]!),
+    billingType: resolveBillingType(
+      preview.normalizedSnapshot.paymentMethods[0]!,
+    ),
     value: preview.totalAmount / 100,
     nextDueDate: formatAsaasDate(preview.normalizedSnapshot.dueDate),
     cycle: preview.normalizedSnapshot.billingCycle!,
@@ -398,7 +416,9 @@ export async function createProviderArtifact(params: {
     externalReference,
   });
 
-  const payments = await getSubscriptionPayments(subscriptionResult.id, { limit: 1 });
+  const payments = await getSubscriptionPayments(subscriptionResult.id, {
+    limit: 1,
+  });
   const firstPayment = payments.data[0];
 
   return {
@@ -417,7 +437,7 @@ export async function createProviderArtifact(params: {
     providerResponseSnapshot: {
       subscription: subscriptionResult,
       firstPayment,
-    } as Record<string, unknown>,
+    },
     initialPayment: firstPayment,
   };
 }
@@ -472,7 +492,11 @@ export async function upsertSubscriptionFromOffer(
   tx: DbTx,
   offer: typeof commercialOffer.$inferSelect,
 ) {
-  if (!isPlanBearingOffer(offer.kind) || !offer.basePlanId || !offer.billingCycle) {
+  if (
+    !isPlanBearingOffer(offer.kind) ||
+    !offer.basePlanId ||
+    !offer.billingCycle
+  ) {
     return null;
   }
 

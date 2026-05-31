@@ -1,9 +1,15 @@
-import { Link, Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import {
+  Link,
+  Navigate,
+  createFileRoute,
+  useNavigate,
+} from '@tanstack/react-router'
 
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 import { Button } from '@/components/ui/button'
+import { sanitizeBackofficeRedirect } from '@/lib/auth-redirect'
 import {
   Card,
   CardContent,
@@ -16,15 +22,15 @@ import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
-import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type BackofficeSignInSearch = {
   redirect?: string
 }
 
 export const Route = createFileRoute('/backoffice/sign-in')({
-  validateSearch: (search: Record<string, unknown>): BackofficeSignInSearch => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): BackofficeSignInSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: async () => {
@@ -43,26 +49,16 @@ export const Route = createFileRoute('/backoffice/sign-in')({
 function BackofficeSignInPage() {
   const navigate = useNavigate()
   const { redirect: redirectTo } = Route.useSearch()
+  const safeRedirect = sanitizeBackofficeRedirect(redirectTo)
   const { data: session } = useBackofficeSession()
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'sign-in'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao validar acesso ao backoffice')
-      }
-
-      return res.json() as Promise<{
-        allowed: boolean
-        bootstrapAvailable: boolean
-      }>
-    },
+  const accessQuery = useBackofficeAccessData({
+    scope: 'sign-in',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user),
-    retry: false,
   })
 
   if (session?.user && accessQuery.data?.allowed) {
-    return <Navigate to={redirectTo || '/backoffice'} />
+    return <Navigate to={safeRedirect} />
   }
 
   if (session?.user && accessQuery.data?.bootstrapAvailable) {
@@ -70,7 +66,7 @@ function BackofficeSignInPage() {
   }
 
   if (session?.user && accessQuery.isSuccess) {
-    return <BackofficeSignOutOnMount />
+    return <BackofficeAccessRestricted />
   }
 
   return (
@@ -83,7 +79,7 @@ function BackofficeSignInPage() {
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm space-y-4">
-            <SignInForm redirect={redirectTo || '/backoffice'} mode="backoffice" />
+            <SignInForm redirect={safeRedirect} mode="backoffice" />
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Acesso separado</CardTitle>
@@ -93,7 +89,10 @@ function BackofficeSignInPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                <Button variant="outline" onClick={() => navigate({ to: '/sign-in' })}>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate({ to: '/sign-in' })}
+                >
                   Ir para o login do laboratório
                 </Button>
               </CardContent>
@@ -119,8 +118,8 @@ function BackofficeSignInPage() {
 
         <div className="relative z-10 rounded-xl border bg-background/80 p-6 backdrop-blur">
           <p className="text-sm text-muted-foreground">
-            Use impersonação apenas para suporte e troubleshooting. A operação do
-            cliente continua no dashboard do laboratório.
+            Use impersonação apenas para suporte e troubleshooting. A operação
+            do cliente continua no dashboard do laboratório.
           </p>
         </div>
       </div>
@@ -128,20 +127,26 @@ function BackofficeSignInPage() {
   )
 }
 
-function BackofficeSignOutOnMount() {
-  useMountEffect(() => {
-    void backofficeSignOut()
-  })
+function BackofficeAccessRestricted() {
+  const navigate = useNavigate()
 
   return (
     <div className="grid min-h-svh place-items-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Saindo...</CardTitle>
+          <CardTitle>Backoffice restrito</CardTitle>
           <CardDescription>
             Esta conta não possui acesso ao backoffice.
           </CardDescription>
         </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Button onClick={() => navigate({ to: '/dashboard' })}>
+            Voltar ao dashboard
+          </Button>
+          <Button variant="outline" onClick={() => void backofficeSignOut()}>
+            Entrar com outra conta
+          </Button>
+        </CardContent>
       </Card>
     </div>
   )

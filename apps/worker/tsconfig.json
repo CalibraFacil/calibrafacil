@@ -7,15 +7,20 @@
             "DOM.Iterable"
         ],
         "jsx": "react-jsx",
-        "module": "NodeNext",
-        "moduleResolution": "NodeNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
         "types": [
             "@cloudflare/workers-types"
         ],
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "noEmit": true
+        "noEmit": true,
+        "paths": {
+            "@calibra-facil/certificate-xlsx-template": [
+                "../../packages/certificate-xlsx-template/src/index.ts"
+            ]
+        }
     },
     "include": [
         "src/**/*"

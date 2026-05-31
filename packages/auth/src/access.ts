@@ -771,21 +771,19 @@ export type PortalManageableMemberRole =
   (typeof PORTAL_MANAGEABLE_MEMBER_ROLES)[number];
 
 export function isPortalAccessRole(role: string): role is PortalAccessRole {
-  return PORTAL_ACCESS_ROLES.includes(role as PortalAccessRole);
+  return role === "client_user";
 }
 
 export function isPortalVisibleMemberRole(
   role: string,
 ): role is PortalVisibleMemberRole {
-  return PORTAL_VISIBLE_MEMBER_ROLES.includes(role as PortalVisibleMemberRole);
+  return isPortalAccessRole(role);
 }
 
 export function isPortalManageableMemberRole(
   role: string,
 ): role is PortalManageableMemberRole {
-  return PORTAL_MANAGEABLE_MEMBER_ROLES.includes(
-    role as PortalManageableMemberRole,
-  );
+  return role === "client_user";
 }
 
 /**
@@ -939,9 +937,18 @@ export function canPerformCalibrationAction(
   action: CalibrationAction,
 ): boolean {
   const permissions = calibrationWorkflowPermissions[state];
-  const key =
-    `can${action.charAt(0).toUpperCase()}${action.slice(1)}` as keyof typeof permissions;
-  return permissions[key].includes(role);
+  switch (action) {
+    case "edit":
+      return permissions.canEdit.includes(role);
+    case "delete":
+      return permissions.canDelete.includes(role);
+    case "submit":
+      return permissions.canSubmit.includes(role);
+    case "approve":
+      return permissions.canApprove.includes(role);
+    case "reject":
+      return permissions.canReject.includes(role);
+  }
 }
 
 /**

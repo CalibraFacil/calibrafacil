@@ -1,0 +1,40 @@
+---
+title: Visão Geral de Integrações
+description: Como o CalibraFácil se conecta a sistemas externos — API pública, webhooks e conectores HTTP para ERP e automações operacionais.
+---
+
+O CalibraFácil expõe três camadas de integração, projetadas para casos de uso distintos:
+
+| Camada | Para que serve | Quando usar |
+| :--- | :--- | :--- |
+| [**API pública**](/integracoes/api/conceitos) | Acesso programático aos recursos operacionais | Automações próprias, dashboards corporativos, sincronização com sistemas internos |
+| [**Webhooks**](/integracoes/api/webhooks) | Notificação assíncrona de eventos | Reagir a eventos em tempo real sem polling |
+| [**Conectores ERP**](/integracoes/conectores-erp) | Sincronização HTTP genérica com mapeamento de campos | Integração com ERP financeiro, sistemas de faturamento |
+
+## API pública
+
+Modelo **resource-first** com autenticação por chave de API, escopos granulares e suporte a idempotency-key. Cobre clientes, ativos, solicitações de calibração, ordens de calibração, padrões, métodos, serviços e webhooks.
+
+Comece por [Autenticação](/integracoes/api/autenticacao), depois [Conceitos](/integracoes/api/conceitos).
+
+## Webhooks
+
+Subscrição de eventos com entrega via HTTP POST assinado. Inclui retry automático, registro de entregas e endpoint de replay para reprocessamento.
+
+Detalhes em [Webhooks](/integracoes/api/webhooks).
+
+## Conectores ERP
+
+Conector HTTP genérico com mapeamento de campos configurável. Permite sincronizar clientes, ordens de serviço e documentos financeiros com sistemas externos sem código personalizado. Gatilhos suportam execução manual, por evento ou agendada.
+
+Detalhes em [Conectores ERP](/integracoes/conectores-erp).
+
+## Modelo de identidade
+
+Toda integração é escopada à organização. Chaves de API, webhooks e conectores pertencem ao laboratório que os criou — não há acesso cruzado entre organizações. A trilha de auditoria registra cada criação, rotação e revogação.
+
+## Onde gerenciar
+
+- **Configurações → Autenticação** — chaves de API.
+- **Configurações → Integrações** — webhooks e conectores ERP.
+- **Configurações → Notificações** — preferências de email/in-app (não confundir com webhooks).

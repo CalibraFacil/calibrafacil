@@ -73,7 +73,9 @@ describe("commercial review feedback regressions", () => {
       },
     } satisfies AsaasWebhookPayload;
 
-    expect(resolveProviderSubscriptionId(payload, null)).toBe("sub_from_payload");
+    expect(resolveProviderSubscriptionId(payload, null)).toBe(
+      "sub_from_payload",
+    );
   });
 
   it("falls back to payment and stored offer subscription ids", () => {
@@ -90,12 +92,15 @@ describe("commercial review feedback regressions", () => {
       },
     } satisfies AsaasWebhookPayload;
 
-    expect(resolveProviderSubscriptionId(paymentPayload, null)).toBe("sub_from_payment");
+    expect(resolveProviderSubscriptionId(paymentPayload, null)).toBe(
+      "sub_from_payment",
+    );
+    const subscriptionPayload = {
+      event: "SUBSCRIPTION_UPDATED",
+    } satisfies AsaasWebhookPayload;
+
     expect(
-      resolveProviderSubscriptionId(
-        { event: "SUBSCRIPTION_UPDATED" } as AsaasWebhookPayload,
-        "sub_existing",
-      ),
+      resolveProviderSubscriptionId(subscriptionPayload, "sub_existing"),
     ).toBe("sub_existing");
   });
 });

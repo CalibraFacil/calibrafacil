@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { portalAuthClient, usePortalSession } from "@calibra-facil/auth/client";
+import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 import { toast } from "sonner";
 
@@ -109,7 +110,12 @@ function AcceptInvitePage() {
       });
 
       if (result.error) {
-        toast.error(result.error.message || "Erro ao enviar link de acesso");
+        toast.error(
+          translateAuthErrorMessage(
+            result.error.message,
+            "Erro ao enviar link de acesso",
+          ),
+        );
         setSubmitting(false);
         return;
       }
@@ -361,8 +367,12 @@ function InviteAutoAcceptOnMount({
           return;
         }
 
-        setError("Erro ao aceitar convite");
-        toast.error("Erro ao aceitar convite");
+        const message = translateAuthErrorMessage(
+          result.error.message,
+          "Erro ao aceitar convite",
+        );
+        setError(message);
+        toast.error(message);
         return;
       }
 

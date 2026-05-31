@@ -1,3 +1,9 @@
+import type {
+  IntegrationProvider,
+  IntegrationSyncTarget,
+  IntegrationSyncTrigger,
+} from "./integrations";
+
 export type DocumentBackgroundJobMessage =
   | {
       type?: "CERTIFICATE" | "LABEL";
@@ -19,32 +25,49 @@ export type DocumentBackgroundJobMessage =
 
 export type IntegrationSyncBackgroundJobMessage = {
   type: "INTEGRATION_SYNC";
+  provider?: IntegrationProvider;
   integrationId: string;
   organizationId: string;
   runId: string;
-  target: "customer" | "service_order" | "billing_document";
+  target: IntegrationSyncTarget;
   limit: number;
-  trigger: "manual" | "event" | "scheduled" | "retry";
+  trigger: IntegrationSyncTrigger;
 };
 
 export type ScheduledNotificationsBackgroundJobMessage = {
   type: "SCHEDULED_NOTIFICATIONS";
 };
 
+export type CertificateXlsxPreviewBackgroundJobMessage = {
+  type: "CERTIFICATE_XLSX_PREVIEW";
+  previewId: number;
+  templateVersionId: number;
+  userId: string;
+};
+
 export type BackgroundJobMessage =
   | DocumentBackgroundJobMessage
   | IntegrationSyncBackgroundJobMessage
-  | ScheduledNotificationsBackgroundJobMessage;
+  | ScheduledNotificationsBackgroundJobMessage
+  | CertificateXlsxPreviewBackgroundJobMessage;
 
 export function isBackgroundJobMessage(
   value: unknown,
 ): value is BackgroundJobMessage {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 
-  const message = value as Record<string, unknown>;
+  const message = Object.fromEntries(Object.entries(value));
   const type = message.type;
 
   if (type === "SCHEDULED_NOTIFICATIONS") return true;
+
+  if (type === "CERTIFICATE_XLSX_PREVIEW") {
+    return (
+      typeof message.previewId === "number" &&
+      typeof message.templateVersionId === "number" &&
+      typeof message.userId === "string"
+    );
+  }
 
   if (type === "INTEGRATION_SYNC") {
     return (

@@ -24,7 +24,8 @@ export function requireUnitOperationalSettingsManager(
 ) {
   if (!canManageUnitOperationalSettings(member)) {
     throw new HTTPException(403, {
-      message: "Operational settings management requires unit_admin or admin access",
+      message:
+        "Operational settings management requires unit_admin or admin access",
     });
   }
 }
@@ -47,7 +48,8 @@ export function resolveAccessibleUnitContext(
     }
 
     const selectedUnit =
-      member.accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null;
+      member.accessibleUnits.find((unit) => unit.id === requestedUnitId) ??
+      null;
 
     return {
       unitId: requestedUnitId,

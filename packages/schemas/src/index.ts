@@ -1,5 +1,7 @@
 import { z } from "zod";
 export * from "./commercial";
+export * from "./imports";
+export * from "./quality";
 export * from "./service-orders";
 
 export const TaskSchema = z.object({
@@ -368,6 +370,27 @@ export const CreateCalibrationRequestSchema = z.object({
     })
     .optional()
     .nullable(),
+  // How the customer gets the assets to the lab. When shipping via a carrier,
+  // they may attach the "nota fiscal de remessa para conserto".
+  deliveryMethod: z.enum(["dropoff", "carrier"]).default("dropoff"),
+  invoiceRemittanceNumber: z.string().trim().max(60).optional().nullable(),
+  invoiceRemittanceKey: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .nullable()
+    .refine((value) => !value || /^\d{44}$/.test(value.replace(/\D/g, "")), {
+      message: "A chave de acesso deve ter 44 dígitos",
+    }),
+  carrierName: z.string().trim().max(120).optional().nullable(),
+  invoiceRemittanceIssuedAt: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data de emissão inválida",
+    })
+    .optional()
+    .nullable(),
 });
 
 export type CreateCalibrationRequestInput = z.infer<
@@ -493,7 +516,9 @@ export const MassCompositionConfigSchema = z.object({
     })
     .optional(),
   uncertaintyMode: z.enum(["expanded_rss"]).optional(),
-  quantityMode: z.enum(["linear_per_item_then_rss"]).optional(),
+  quantityMode: z
+    .enum(["linear_per_item_then_rss", "profile_linear"])
+    .optional(),
 });
 export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
 
@@ -509,6 +534,7 @@ export const MethodTableColumnSchema = z.object({
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
   role: MethodTableColumnRoleSchema.optional(),
+  phase: z.enum(["before", "after", "always"]).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
 });
 
@@ -576,6 +602,8 @@ export const MethodInputFieldSchema = z
     source: MethodInputSourceSchema.optional().default("manual"),
     assetSpecKey: z.string().optional(),
     allowOverride: z.boolean().optional().default(false),
+    phaseBlockKey: z.string().optional(),
+    phaseBlockLabel: z.string().optional(),
     eccentricityIndicator: EccentricityIndicatorConfigSchema.optional(),
     weighingRangeResolver: WeighingRangeResolverConfigSchema.optional(),
   })
@@ -662,23 +690,238 @@ export const MethodFormulaSchema = z.object({
       "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
   expression: z.string().min(1, "Expressão é obrigatória"),
+  scope: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("scalar") }),
+      z.object({
+        kind: z.literal("table_row"),
+        tableKey: z.string().min(1, "Tabela é obrigatória"),
+      }),
+    ])
+    .optional(),
   label: z.string().optional(),
   unit: z.string().optional(),
   reporting: MethodFormulaReportingSchema.optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MethodFormula = z.infer<typeof MethodFormulaSchema>;
 
+export const MethodMeasurementModelSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().min(1, "Rótulo é obrigatório"),
+    scope: z
+      .discriminatedUnion("kind", [
+        z.object({ kind: z.literal("scalar") }),
+        z.object({
+          kind: z.literal("table_row"),
+          tableKey: z.string().min(1, "Tabela é obrigatória"),
+        }),
+      ])
+      .optional(),
+    measurand: z.string().min(1, "Mensurando é obrigatório"),
+    expression: z.string().min(1, "Expressão é obrigatória"),
+    quantities: z.array(z.unknown()).default([]),
+    correlations: z.array(z.unknown()).optional(),
+    covariances: z.array(z.unknown()).optional(),
+    coverageProbability: z.coerce.number().gt(0).lt(1).optional(),
+    coverageFactor: z.union([z.string(), z.number()]).optional(),
+    outputUnit: z.string().optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type MethodMeasurementModel = z.infer<
+  typeof MethodMeasurementModelSchema
+>;
+
 /**
  * Validation rule for pass/fail criteria
  */
-export const MethodValidationSchema = z.object({
-  expression: z.string().min(1, "Expressão é obrigatória"),
+export const MethodValidationOperatorSchema = z.enum([
+  "<",
+  "<=",
+  ">",
+  ">=",
+  "==",
+  "!=",
+]);
+export type MethodValidationOperator = z.infer<
+  typeof MethodValidationOperatorSchema
+>;
+
+const StructuredMethodValidationSchema = z.object({
+  leftExpression: z.string().min(1, "Expressão esquerda é obrigatória"),
+  operator: MethodValidationOperatorSchema,
+  rightExpression: z.string().min(1, "Expressão direita é obrigatória"),
   message: z.string().min(1, "Mensagem é obrigatória"),
   severity: z.enum(["error", "warning"]),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-export type MethodValidation = z.infer<typeof MethodValidationSchema>;
+export type MethodValidation = z.infer<typeof StructuredMethodValidationSchema>;
+
+const LegacyMethodValidationSchema = z
+  .object({
+    expression: z.string().min(1, "Expressão é obrigatória"),
+    message: z.string().min(1, "Mensagem é obrigatória"),
+    severity: z.enum(["error", "warning"]),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .transform((validation) =>
+    normalizeLegacyMethodValidationExpression(validation),
+  );
+
+export const MethodValidationSchema = z.union([
+  StructuredMethodValidationSchema,
+  LegacyMethodValidationSchema,
+]);
+
+export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("data_field"),
+    fieldKey: z.string().min(1, "Campo é obrigatório"),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("table_column"),
+    fieldKey: z.string().min(1, "Tabela é obrigatória"),
+    columnKey: z.string().min(1, "Coluna é obrigatória"),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("table_statistic"),
+    fieldKey: z.string().min(1, "Tabela é obrigatória"),
+    columnKey: z.string().min(1, "Coluna é obrigatória"),
+    statistic: z.enum(["mean", "sample_stddev", "count", "min", "max"]),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("environment"),
+    field: z.enum(["temperature", "humidity", "pressure"]),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("standard"),
+    standardId: z.number().int().positive().optional(),
+    valueKey: z.string().min(1, "Valor do padrão é obrigatório"),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("standard_channel"),
+    standardId: z.number().int().positive().optional(),
+    channelKey: z.string().min(1, "Canal do padrão é obrigatório"),
+    property: z.enum([
+      "value",
+      "correction",
+      "uncertainty",
+      "coverageFactor",
+      "drift",
+    ]),
+  }),
+]);
+export type MethodVariableBinding = z.infer<typeof MethodVariableBindingSchema>;
+
+export function normalizeMethodValidationInput(
+  validation: unknown,
+): MethodValidation {
+  return MethodValidationSchema.parse(validation);
+}
+
+export function normalizeMethodValidationsInput(
+  validations: unknown,
+): MethodValidation[] {
+  if (!Array.isArray(validations)) return [];
+  return validations.map((validation) =>
+    normalizeMethodValidationInput(validation),
+  );
+}
+
+function normalizeLegacyMethodValidationExpression(validation: {
+  expression: string;
+  message: string;
+  severity: "error" | "warning";
+  metadata?: Record<string, unknown>;
+}): MethodValidation {
+  const match = validation.expression.match(
+    /^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/,
+  );
+
+  return {
+    leftExpression: match?.[1]?.trim() || validation.expression,
+    operator: parseMethodValidationOperator(match?.[2]),
+    rightExpression: match?.[3]?.trim() || "0",
+    message: validation.message,
+    severity: validation.severity,
+    metadata: validation.metadata,
+  };
+}
+
+function parseMethodValidationOperator(
+  operator: string | undefined,
+): MethodValidationOperator {
+  switch (operator) {
+    case "<=":
+    case ">":
+    case ">=":
+    case "==":
+    case "!=":
+      return operator;
+    default:
+      return "!=";
+  }
+}
 
 /**
  * Type B uncertainty component for method defaults
@@ -739,13 +982,15 @@ export type MethodCertificateContent = z.infer<
  * Schema for creating a new method
  */
 export const CreateMethodSchema = z.object({
-  assetTypeId: z.coerce.number().optional(),
+  assetTypeId: z.coerce.number().nullable().optional(),
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   dataFields: z
     .array(MethodInputFieldSchema)
     .min(1, "Defina pelo menos um campo de entrada"),
+  variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema).default([]),
+  measurementModels: z.array(MethodMeasurementModelSchema).default([]),
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
@@ -872,12 +1117,126 @@ export type UncertaintyDistribution = z.infer<
   typeof UncertaintyDistributionSchema
 >;
 
+export const ReferenceStandardKindSchema = z.enum([
+  "mass_single",
+  "mass_set",
+  "thermohygrometer",
+  "thermometer",
+  "hygrometer",
+  "barometer",
+  "manometer",
+  "dimensional",
+  "electrical",
+  "time_frequency",
+  "volume",
+  "force_torque",
+  "rpm",
+  "generic_scalar",
+  "generic_multi_channel",
+]);
+
+export type ReferenceStandardKind = z.infer<typeof ReferenceStandardKindSchema>;
+
+export const ReferenceStandardMetrologyPointSchema = z.object({
+  reference: z.coerce.number().nullable().optional(),
+  indication: z.coerce.number().nullable().optional(),
+  meanReading: z.coerce.number().nullable().optional(),
+  correction: z.coerce.number().nullable().optional(),
+  uncertainty: z.coerce.number().positive().nullable().optional(),
+  unit: z.string().min(1, "Unidade é obrigatória"),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+  degreesOfFreedom: z.coerce.number().positive().nullable().optional(),
+  degreesOfFreedomOperator: z
+    .enum(["exact", "greater_than", "infinity"])
+    .default("exact"),
+  repeatability: z.coerce.number().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ReferenceStandardMetrologyChannelSchema = z.object({
+  key: z.string().min(1, "Canal é obrigatório"),
+  label: z.string().min(1, "Nome do canal é obrigatório"),
+  quantity: z.string().min(1, "Grandeza é obrigatória"),
+  value: z.coerce.number().nullable().optional(),
+  correction: z.coerce.number().nullable().optional(),
+  uncertainty: z.coerce.number().positive().nullable().optional(),
+  unit: z.string().min(1, "Unidade é obrigatória"),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+  drift: z.coerce.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  points: z.array(ReferenceStandardMetrologyPointSchema).default([]),
+});
+
+export const ReferenceStandardMassValueSchema = z.object({
+  nominal: z.string().min(1, "Valor nominal é obrigatório"),
+  authentication: z.string().nullable().optional(),
+  value: z.coerce.number({ message: "Valor certificado é obrigatório" }),
+  uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
+  unit: z.string().min(1, "Unidade é obrigatória"),
+  maxError: z.coerce.number().nullable().optional(),
+  drift: z.coerce.number().nullable().optional(),
+  buoyancy: z.coerce.number().nullable().optional(),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+});
+
+export const ReferenceStandardCompositionProfileSchema = z.object({
+  profileKey: z.string().min(1, "Perfil é obrigatório"),
+  profileClass: z.string().nullable().optional(),
+  nominal: z.string().min(1, "Valor nominal é obrigatório"),
+  value: z.coerce.number({ message: "Valor certificado é obrigatório" }),
+  uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
+  unit: z.string().min(1, "Unidade é obrigatória"),
+  maxError: z.coerce.number().nullable().optional(),
+  drift: z.coerce.number().nullable().optional(),
+  buoyancy: z.coerce.number().nullable().optional(),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+  quantityAvailable: z.coerce.number().nullable().optional(),
+});
+
+export const ReferenceStandardMetrologyDataSchema = z
+  .object({
+    version: z.literal(1).default(1),
+    channels: z.array(ReferenceStandardMetrologyChannelSchema).default([]),
+    massValues: z.array(ReferenceStandardMassValueSchema).default([]),
+    compositionProfiles: z
+      .array(ReferenceStandardCompositionProfileSchema)
+      .default([]),
+    notes: z.string().nullable().optional(),
+  })
+  .default({
+    version: 1,
+    channels: [],
+    massValues: [],
+    compositionProfiles: [],
+  });
+
+export type ReferenceStandardMetrologyData = z.infer<
+  typeof ReferenceStandardMetrologyDataSchema
+>;
+
+export const ReferenceStandardCertificateDocumentSchema = z.object({
+  documentId: z.number(),
+  r2Key: z.string(),
+  fileName: z.string(),
+  fileSize: z.number(),
+  sha256: z.string(),
+  uploadedAt: z.string().or(z.date()),
+  certificateNumber: z.string(),
+  calibrationDate: z.string().or(z.date()),
+  nextCalibrationDate: z.string().or(z.date()),
+});
+
+export type ReferenceStandardCertificateDocument = z.infer<
+  typeof ReferenceStandardCertificateDocumentSchema
+>;
+
 /**
  * Certified value for multi-value standards (e.g., weight sets, gauge block sets)
  * Each entry represents one value from the calibration certificate
  */
 export const CertifiedValueSchema = z.object({
   nominal: z.string().min(1, "Valor nominal e obrigatorio"),
+  authentication: z.string().nullable().optional(),
   value: z.coerce.number({ message: "Valor certificado e obrigatorio" }),
   uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
   unit: z.string().min(1, "Unidade e obrigatoria"),
@@ -900,6 +1259,7 @@ export type CertifiedValue = z.infer<typeof CertifiedValueSchema>;
 export const CreateReferenceStandardSchema = z
   .object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    kind: ReferenceStandardKindSchema.default("generic_scalar"),
     type: z.string().optional(), // Optional category: "Peso", "Bloco Padrão", etc.
     serialNumber: z.string().min(1, "Número de série é obrigatório"),
     manufacturer: z.string().optional(),
@@ -918,21 +1278,25 @@ export const CreateReferenceStandardSchema = z
     drift: z.coerce.number().optional().nullable(),
     // Multi-value metrology data (for sets)
     certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+    metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
     // Status
     status: ReferenceStandardStatusSchema.default("ACTIVE"),
   })
   .refine(
     (data) => {
-      // Must have either single-value data OR certifiedValues array
       const hasSingleValue =
         data.referenceValue != null && data.uncertainty != null;
       const hasMultiValue =
         data.certifiedValues && data.certifiedValues.length > 0;
-      return hasSingleValue || hasMultiValue;
+      const hasTypedMetrology =
+        (data.metrologyData?.channels.length ?? 0) > 0 ||
+        (data.metrologyData?.massValues.length ?? 0) > 0 ||
+        (data.metrologyData?.compositionProfiles.length ?? 0) > 0;
+      return hasSingleValue || hasMultiValue || hasTypedMetrology;
     },
     {
       message:
-        "Informe o valor de referência e incerteza, ou os valores certificados do conjunto",
+        "Informe os dados metrológicos do padrão, como canais, valores de massa ou valor de referência",
     },
   );
 
@@ -946,6 +1310,7 @@ export type CreateReferenceStandardInput = z.infer<
 export const UpdateReferenceStandardSchema = z.object({
   name: z.string().min(2).optional(),
   type: z.string().optional().nullable(),
+  kind: ReferenceStandardKindSchema.optional(),
   serialNumber: z.string().min(1).optional(),
   manufacturer: z.string().optional().nullable(),
   model: z.string().optional().nullable(),
@@ -960,6 +1325,7 @@ export const UpdateReferenceStandardSchema = z.object({
   distribution: UncertaintyDistributionSchema.optional(),
   drift: z.coerce.number().optional().nullable(),
   certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+  metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
   status: ReferenceStandardStatusSchema.optional(),
 });
 
@@ -982,6 +1348,7 @@ export const RenewCertificateSchema = z.object({
   uncertaintyUnit: z.string().optional().nullable(),
   coverageFactor: z.coerce.number().positive().optional(),
   certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+  metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
   // Required for audit trail (ISO 17025)
   reason: z.string().min(1, "Motivo da renovação é obrigatório"),
 });
@@ -1032,8 +1399,16 @@ export const MethodSnapshotSchema = z.object({
   methodId: z.number(),
   methodName: z.string(),
   methodVersion: z.number(),
+  compiledMethod: z.unknown().optional(),
+  methodFingerprint: z.string().nullable().optional(),
+  engineVersion: z.string().nullable().optional(),
+  engineOptionsFingerprint: z.string().nullable().optional(),
+  normalizedMethodJson: z.string().nullable().optional(),
+  publicationEvidence: z.unknown().optional(),
   dataFields: z.array(MethodInputFieldSchema),
+  variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema),
+  measurementModels: z.array(MethodMeasurementModelSchema).default([]),
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
@@ -1097,6 +1472,41 @@ export const EnvironmentalDataSchema = z.object({
 
 export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
 
+export const CalibrationLocationTypeSchema = z.enum([
+  "customer_site",
+  "lab",
+  "other",
+]);
+
+export const CalibrationLocationInputSchema = z.object({
+  type: CalibrationLocationTypeSchema,
+  addressText: z.string().trim().min(1, "Local da calibração é obrigatório"),
+  notes: z.string().trim().optional().nullable(),
+});
+
+export type CalibrationLocationInput = z.infer<
+  typeof CalibrationLocationInputSchema
+>;
+
+export const CalibrationPhaseModeSchema = z.enum([
+  "before_and_after",
+  "before_only",
+  "after_only",
+  "not_performed",
+]);
+
+export const CalibrationPhaseInputSchema = z.object({
+  blocks: z.record(
+    z.string(),
+    z.object({
+      mode: CalibrationPhaseModeSchema,
+      reason: z.string().trim().optional().nullable(),
+    }),
+  ),
+});
+
+export type CalibrationPhaseInput = z.infer<typeof CalibrationPhaseInputSchema>;
+
 /**
  * Schema for submitting job for review
  */
@@ -1107,6 +1517,8 @@ export const SubmitForReviewSchema = z.object({
   environment: EnvironmentalDataSchema.optional(),
   performedAt: z.string().datetime().optional(),
   backdateReason: z.string().trim().min(1).optional(),
+  calibrationLocation: CalibrationLocationInputSchema.optional(),
+  calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });
 
 export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
@@ -1158,8 +1570,10 @@ export type AmendJobInput = z.infer<typeof AmendJobSchema>;
 export const StandardSnapshotSchema = z.object({
   id: z.number(),
   name: z.string(),
+  kind: ReferenceStandardKindSchema.optional(),
   type: z.string().nullable().optional(),
   certificateNumber: z.string(),
+  calibratedBy: z.string().nullable().optional(),
   calibrationDate: z.string(),
   nextCalibrationDate: z.string().nullable().optional(),
   uncertainty: z.number().nullable(),
@@ -1168,6 +1582,9 @@ export const StandardSnapshotSchema = z.object({
   distribution: UncertaintyDistributionSchema,
   drift: z.number().nullable(),
   certifiedValues: z.array(CertifiedValueSchema).nullable(),
+  metrologyData: ReferenceStandardMetrologyDataSchema.nullable().optional(),
+  certificateDocument:
+    ReferenceStandardCertificateDocumentSchema.nullable().optional(),
 });
 
 export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;
@@ -1198,6 +1615,8 @@ export const ExecuteJobSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
   environment: EnvironmentalDataSchema.optional(),
+  calibrationLocation: CalibrationLocationInputSchema.optional(),
+  calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });
 
 export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;
@@ -1238,6 +1657,7 @@ export const NotificationTypeSchema = z.enum([
   "CERTIFICATE_AMENDED", // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
   "ASSET_DUE_FOR_RECALIBRATION",
   "STANDARD_EXPIRING",
+  "STANDARD_EXPIRED",
   "JOB_OVERDUE",
   "PAYMENT_RECEIVED",
   "PAYMENT_FAILED",
@@ -1253,6 +1673,11 @@ export const NotificationTypeSchema = z.enum([
   "CUSTOMER_SUCCESS_SLA_DUE_SOON",
   "CUSTOMER_SUCCESS_SLA_BREACHED",
   "CUSTOMER_SUCCESS_ESCALATION_REQUIRED",
+  "CALIBRATION_REQUEST_SUBMITTED",
+  "CALIBRATION_REQUEST_UNDER_REVIEW",
+  "CALIBRATION_REQUEST_APPROVED",
+  "CALIBRATION_REQUEST_REJECTED",
+  "CALIBRATION_REQUEST_CONVERTED",
 ]);
 
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

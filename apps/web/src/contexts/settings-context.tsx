@@ -1,8 +1,9 @@
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authClient, useSession } from '@calibra-facil/auth/client'
+import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 // =============================================================================
 // TYPES
@@ -18,7 +19,6 @@ interface User {
 
 interface SessionInfo {
   id: string
-  token: string
   expiresAt: Date
   createdAt: Date
   updatedAt: Date
@@ -98,7 +98,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       const result = await authClient.listSessions()
       return (result.data ?? []).map((s) => ({
         id: s.id,
-        token: s.token,
         expiresAt: new Date(s.expiresAt),
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
@@ -112,7 +111,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await queryClient.invalidateQueries({ queryKey: ['settings', 'sessions'] })
     await queryClient.refetchQueries({ queryKey: ['settings', 'sessions'] })
   }, [queryClient])
-  const sessions = sessionsQuery.data ?? []
+  const sessions = React.useMemo(
+    () => sessionsQuery.data ?? [],
+    [sessionsQuery.data],
+  )
   const sessionsLoading = sessionsQuery.isPending || sessionsQuery.isFetching
 
   const updateProfile = React.useCallback(
@@ -122,7 +124,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       try {
         const result = await authClient.updateUser(data)
         if (result.error) {
-          throw new Error(result.error.message ?? 'Falha ao atualizar perfil')
+          throw new Error(
+            translateAuthErrorMessage(
+              result.error.message,
+              'Falha ao atualizar perfil',
+            ),
+          )
         }
         // Session will auto-refresh from useSession
       } catch (err) {
@@ -152,7 +159,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           revokeOtherSessions: data.revokeOtherSessions,
         })
         if (result.error) {
-          throw new Error(result.error.message ?? 'Falha ao alterar senha')
+          throw new Error(
+            translateAuthErrorMessage(
+              result.error.message,
+              'Falha ao alterar senha',
+            ),
+          )
         }
         // Refresh sessions if other sessions were revoked
         if (data.revokeOtherSessions) {
@@ -180,20 +192,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
       )
       try {
-        const res = await api.api.sessions.revoke.$post({
-          json: { sessionId },
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          const message =
-            data &&
-            typeof data === 'object' &&
-            'error' in data &&
-            typeof data.error === 'string'
-              ? data.error
-              : 'Falha ao encerrar sessão'
-          throw new Error(message)
-        }
+        await calibraApi.sessions.revoke(sessionId)
         await refreshSessions()
       } catch (err) {
         const message =
@@ -215,7 +214,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await authClient.revokeOtherSessions()
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao encerrar sessões')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao encerrar sessões',
+          ),
+        )
       }
       // Refresh sessions to show only current session
       await refreshSessions()
@@ -236,7 +240,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       const result = await authClient.revokeSessions()
       if (result.error) {
         throw new Error(
-          result.error.message ?? 'Falha ao sair de todos os dispositivos',
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao sair de todos os dispositivos',
+          ),
         )
       }
       // Will redirect to sign-in, so no need to update state
@@ -258,7 +265,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await authClient.deleteUser({ password })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao excluir conta')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao excluir conta',
+          ),
+        )
       }
       // Will redirect after deletion
     } catch (err) {
@@ -285,7 +297,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       session: sessionData?.session
         ? {
             id: sessionData.session.id,
-            token: sessionData.session.token,
             expiresAt: new Date(sessionData.session.expiresAt),
             createdAt: new Date(sessionData.session.createdAt),
             updatedAt: new Date(sessionData.session.updatedAt),

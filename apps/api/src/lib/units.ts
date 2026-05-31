@@ -5,7 +5,7 @@ import {
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import type { RoleName } from "@calibra-facil/auth/access";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 
 export type UnitScopeMode = "all" | "unit";
 
@@ -63,7 +63,10 @@ export function getDefaultUnitRole(role: RoleName): MemberUnitRole {
   return "member";
 }
 
-export function isUnitScopedManagementRole(role: RoleName, unitRole?: string | null) {
+export function isUnitScopedManagementRole(
+  role: RoleName,
+  unitRole?: string | null,
+) {
   return GLOBAL_MULTI_UNIT_ROLES.has(role) || unitRole === "unit_admin";
 }
 
@@ -75,7 +78,8 @@ export function getUnitGovernanceAccess(
   member: UnitGovernanceMember,
 ): UnitGovernanceAccess {
   const isGlobalManager = isGlobalUnitManager(member.role);
-  const canManageAssignments = isGlobalManager || member.unitRole === "unit_admin";
+  const canManageAssignments =
+    isGlobalManager || member.unitRole === "unit_admin";
 
   return {
     isGlobalManager,
@@ -175,7 +179,10 @@ export async function resolveMemberUnitScope(params: {
   const wantsAll = requestedScope === "all";
 
   if (GLOBAL_MULTI_UNIT_ROLES.has(params.memberRole)) {
-    await ensureDefaultUnitForOrganization(params.organizationId, params.userId);
+    await ensureDefaultUnitForOrganization(
+      params.organizationId,
+      params.userId,
+    );
 
     const units = await db
       .select({
@@ -201,19 +208,19 @@ export async function resolveMemberUnitScope(params: {
       requestedScope && requestedScope !== "all"
         ? Number.parseInt(requestedScope, 10)
         : Number.NaN;
-    const activeUnit =
-      wantsAll
-        ? null
-        : !hasExplicitScope
-          ? accessibleUnits[0] ?? null
-          : Number.isInteger(requestedUnitId) &&
-              accessibleUnitIds.includes(requestedUnitId)
-            ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-            : null;
+    const activeUnit = wantsAll
+      ? null
+      : !hasExplicitScope
+        ? (accessibleUnits[0] ?? null)
+        : Number.isInteger(requestedUnitId) &&
+            accessibleUnitIds.includes(requestedUnitId)
+          ? (accessibleUnits.find((unit) => unit.id === requestedUnitId) ??
+            null)
+          : null;
 
     return {
-      activeUnitId: wantsAll ? null : activeUnit?.id ?? null,
-      activeUnitName: wantsAll ? null : activeUnit?.name ?? null,
+      activeUnitId: wantsAll ? null : (activeUnit?.id ?? null),
+      activeUnitName: wantsAll ? null : (activeUnit?.name ?? null),
       accessibleUnitIds,
       accessibleUnits,
       canAccessAllUnits: true,
@@ -230,7 +237,10 @@ export async function resolveMemberUnitScope(params: {
       role: memberUnitAssignment.role,
     })
     .from(memberUnitAssignment)
-    .innerJoin(organizationUnit, eq(memberUnitAssignment.unitId, organizationUnit.id))
+    .innerJoin(
+      organizationUnit,
+      eq(memberUnitAssignment.unitId, organizationUnit.id),
+    )
     .where(
       and(
         eq(memberUnitAssignment.organizationId, params.organizationId),
@@ -276,13 +286,12 @@ export async function resolveMemberUnitScope(params: {
   const requestedUnitId = requestedScope
     ? Number.parseInt(requestedScope, 10)
     : Number.NaN;
-  const activeUnit =
-    !hasExplicitScope
-      ? accessibleUnits[0] ?? null
-      : Number.isInteger(requestedUnitId) &&
-          accessibleUnitIds.includes(requestedUnitId)
-        ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-        : null;
+  const activeUnit = !hasExplicitScope
+    ? (accessibleUnits[0] ?? null)
+    : Number.isInteger(requestedUnitId) &&
+        accessibleUnitIds.includes(requestedUnitId)
+      ? (accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null)
+      : null;
 
   return {
     activeUnitId: activeUnit?.id ?? null,
@@ -296,7 +305,7 @@ export async function resolveMemberUnitScope(params: {
 }
 
 export function buildUnitScopeCondition(
-  column: Parameters<typeof eq>[0],
+  column: AnyColumn<{ data: number }>,
   scope: Pick<
     ResolvedUnitScope,
     "selectedUnitScope" | "activeUnitId" | "accessibleUnitIds"
@@ -306,12 +315,12 @@ export function buildUnitScopeCondition(
     if (scope.accessibleUnitIds.length === 0) {
       return sql`false`;
     }
-    return inArray(column as never, scope.accessibleUnitIds);
+    return inArray(column, scope.accessibleUnitIds);
   }
 
   if (scope.activeUnitId === null) {
     return sql`false`;
   }
 
-  return eq(column as never, scope.activeUnitId as never);
+  return eq(column, scope.activeUnitId);
 }

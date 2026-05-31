@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm build:vercel-functions",
+  "bunVersion": "1.x",
+  "installCommand": "bun ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile --filter \"@calibra-facil/api...\"",
+  "buildCommand": "bun scripts/build-vercel-deployment.mjs",
+  "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs api",
   "regions": ["gru1"],
   "functions": {
     "api/[...route].js": {
@@ -30,6 +33,10 @@
     {
       "path": "/api/cron/notifications",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/operator-alerts",
+      "schedule": "*/30 * * * *"
     }
   ],
   "rewrites": [
@@ -44,6 +51,10 @@
     {
       "source": "/api/cron/notifications",
       "destination": "/api/cron/notifications"
+    },
+    {
+      "source": "/api/cron/operator-alerts",
+      "destination": "/api/cron/operator-alerts"
     },
     {
       "source": "/api/(.*)",

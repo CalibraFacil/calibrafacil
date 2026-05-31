@@ -43,10 +43,7 @@ import {
   PortalServiceAccountError,
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
-import {
-  parseLegacyNumericIdentifier,
-  slugifyRouteIdentifier,
-} from "../lib/route-identifiers";
+import { resolveCustomerRouteId } from "../lib/customer-route-id";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -75,49 +72,32 @@ function generateUniqueSlug(name: string): string {
   return `${baseSlug}-${randomSuffix}`;
 }
 
-async function resolveCustomerRouteId(
-  identifier: string,
-  labOrganizationId: string,
-): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
-  const directConditions = [eq(customer.taxId, identifier)];
-
-  if (legacyId !== null) {
-    directConditions.unshift(eq(customer.id, legacyId));
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
   }
 
-  const [directMatch] = await db
-    .select({ id: customer.id })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.labOrganizationId, labOrganizationId),
-        or(...directConditions)!,
-      ),
-    )
-    .limit(1);
+  return Object.fromEntries(Object.entries(value));
+}
 
-  if (directMatch) {
-    return directMatch.id;
+function getStringProperty(value: unknown, key: string) {
+  const property = toRecord(value)[key];
+  return typeof property === "string" ? property : undefined;
+}
+
+function portalErrorStatus(
+  error: PortalServiceAccountError,
+): 400 | 401 | 403 | 404 | 409 | 500 {
+  switch (error.status) {
+    case 400:
+    case 401:
+    case 403:
+    case 404:
+    case 409:
+      return error.status;
+    default:
+      return 500;
   }
-
-  const scopedCustomers = await db
-    .select({
-      id: customer.id,
-      name: customer.name,
-      taxId: customer.taxId,
-    })
-    .from(customer)
-    .where(eq(customer.labOrganizationId, labOrganizationId));
-
-  const match = scopedCustomers.find(
-    (candidate) =>
-      (candidate.taxId &&
-        slugifyRouteIdentifier(candidate.taxId) === identifier) ||
-      slugifyRouteIdentifier(candidate.name) === identifier,
-  );
-
-  return match?.id ?? null;
 }
 
 export const customersRouter = new Hono<{ Variables: AuthVariables }>()
@@ -395,9 +375,9 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Build changes object for audit log
         const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const existingCustomerRecord = toRecord(existingCustomer);
         for (const [key, value] of Object.entries(input)) {
-          const oldValue =
-            existingCustomer[key as keyof typeof existingCustomer];
+          const oldValue = existingCustomerRecord[key];
           if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
             changes[key] = { old: oldValue, new: value };
           }
@@ -690,7 +670,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               error: error.message,
               code: error.code,
             },
-            error.status as any,
+            portalErrorStatus(error),
           );
         }
 
@@ -767,7 +747,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
 
         return c.json({
-          id: (newInvite as { id: string })?.id,
+          id: getStringProperty(newInvite, "id"),
           email: foundInvitation.email,
         });
       } catch (error) {
@@ -778,7 +758,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               error: error.message,
               code: error.code,
             },
-            error.status as any,
+            portalErrorStatus(error),
           );
         }
         return c.json({ error: "Erro ao reenviar convite" }, 500);
@@ -869,7 +849,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               error: error.message,
               code: error.code,
             },
-            error.status as any,
+            portalErrorStatus(error),
           );
         }
         return c.json({ error: "Erro ao cancelar convite" }, 500);
@@ -974,7 +954,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               error: error.message,
               code: error.code,
             },
-            error.status as any,
+            portalErrorStatus(error),
           );
         }
         return c.json({ error: "Erro ao remover membro" }, 500);

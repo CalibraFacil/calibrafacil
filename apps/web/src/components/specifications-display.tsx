@@ -2,7 +2,7 @@ import type { SpecFieldDefinition } from './dynamic-specs-form'
 import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
-} from './method-builder/weighing-range-utils'
+} from './method-runtime/weighing-range-utils'
 import { resolveMassDisplayUnit, type MassUnit } from '@calibra-facil/shared'
 
 interface SpecificationsDisplayProps {

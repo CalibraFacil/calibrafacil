@@ -1,0 +1,71 @@
+---
+title: Catálogo de Serviços
+description: Configuração do catálogo de serviços do laboratório — vinculação a métodos, prazos e tipos de ativo.
+---
+
+## O Que é um Serviço
+
+Um **serviço** é a oferta operacional do laboratório — o que o cliente contrata. Ele vincula três elementos:
+
+```
+Serviço → Método de Calibração (publicado) → Tipo de Ativo
+```
+
+Exemplo: o serviço "Calibração de Balança Analítica 0–220 g" vincula o método "Calibração de Balança por Comparação" ao tipo de ativo "Balança Analítica", com prazo de 5 dias úteis.
+
+Acesse em **Painel → Serviços** (`/dashboard/services`).
+
+## Cadastro de Serviço
+
+<Steps>
+
+1. **Informações básicas**
+
+   - **Nome:** nome do serviço (ex.: "Calibração de Termômetro Digital -20 a 150 °C").
+   - **Descrição:** detalhamento opcional do serviço.
+
+2. **Vinculações**
+
+   - **Método de calibração:** selecione um método com status **Publicado** (aprovado).
+   - **Tipo de ativo:** preenchido automaticamente com base no método (se o método tiver tipo de ativo associado).
+
+3. **Condições operacionais**
+
+   - **Prazo (TAT):** tempo de retorno em dias úteis.
+   - **Condições comerciais:** os campos de valor são opcionais; preencha conforme a política interna do laboratório.
+
+4. **Salvar.**
+
+</Steps>
+
+<Aside type="note">
+  Apenas métodos **publicados** (após revisão técnica e aprovação da qualidade) podem ser vinculados a serviços. Se o método ainda está em rascunho, siga o fluxo em [Ciclo de Vida dos Métodos](/metodos/ciclo-de-vida).
+</Aside>
+
+## Ativo e Inativo
+
+Serviços possuem um controle de ativação:
+
+| Estado | Efeito |
+| :--- | :--- |
+| **Ativo** | Aparece na lista ao criar ordens de serviço |
+| **Inativo** | Não aparece na criação de OS, mas OS existentes não são afetadas |
+
+<Aside type="caution">
+  Serviços **nunca são excluídos permanentemente** — o histórico operacional e a rastreabilidade de OS já emitidas devem ser preservados. Use a desativação para removê-los da lista.
+</Aside>
+
+## Relação com Ordens de Serviço
+
+Ao criar uma [Ordem de Serviço](/calibracao/ordens-de-calibracao/visao-geral), o técnico ou admin seleciona um serviço. A partir dessa seleção:
+
+1. O **método de calibração** vinculado define os campos, fórmulas e critérios.
+2. O **tipo de ativo** filtra quais instrumentos do cliente podem ser selecionados.
+3. O **prazo (TAT)** sugere automaticamente a data de vencimento da OS.
+
+## Filtros e Busca
+
+| Filtro | Descrição |
+| :--- | :--- |
+| **Busca** | Por nome do serviço |
+| **Status** | Ativo, Inativo ou Todos |

@@ -1,19 +1,17 @@
 import {
-  BriefcaseIcon,
+  Building02Icon,
   CustomerSupportIcon,
-  File02Icon,
-  Home01Icon,
+  DashboardSquare01Icon,
   Invoice02Icon,
   LeftToRightListDashIcon,
+  ShieldKeyIcon,
   UserGroupIcon,
-  UserIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 
-import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
-import { SidebarFlyoutProvider } from './sidebar-flyout-nav'
+import { BrandMark } from '@/components/brand'
 
 import {
   Sidebar,
@@ -21,77 +19,67 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
-const platformItems = [
+type IconType = Parameters<typeof HugeiconsIcon>[0]['icon']
+
+type NavItem = {
+  title: string
+  url: string
+  icon: IconType
+  exact?: boolean
+}
+
+const operationsItems: ReadonlyArray<NavItem> = [
   {
-    title: 'Visão Geral',
+    title: 'Comando',
     url: '/backoffice',
-    icon: <HugeiconsIcon icon={Home01Icon} />,
+    icon: DashboardSquare01Icon,
+    exact: true,
   },
-  {
-    title: 'Organizações',
-    url: '/backoffice/organizations',
-    icon: <HugeiconsIcon icon={BriefcaseIcon} />,
-  },
-  {
-    title: 'Usuários',
-    url: '/backoffice/users',
-    icon: <HugeiconsIcon icon={UserIcon} />,
-  },
+  { title: 'Contas', url: '/backoffice/accounts', icon: Building02Icon },
+  { title: 'Suporte', url: '/backoffice/support', icon: CustomerSupportIcon },
 ]
 
-const operationsItems = [
+const platformItems: ReadonlyArray<NavItem> = [
   {
-    title: 'Comercial',
+    title: 'Receita',
     url: '/backoffice/commercial-checkouts',
-    icon: <HugeiconsIcon icon={Invoice02Icon} />,
+    icon: Invoice02Icon,
   },
-  {
-    title: 'Customer Success',
-    url: '/backoffice/customer-success',
-    icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
-    items: [
-      {
-        title: 'Contas',
-        url: '/backoffice/customer-success',
-        icon: <HugeiconsIcon icon={BriefcaseIcon} />,
-      },
-      {
-        title: 'Tickets',
-        url: '/backoffice/customer-success/tickets',
-        icon: <HugeiconsIcon icon={File02Icon} />,
-      },
-    ],
-  },
-  {
-    title: 'Suporte',
-    url: '/backoffice/support',
-    icon: <HugeiconsIcon icon={UserGroupIcon} />,
-  },
+  { title: 'Equipe', url: '/backoffice/users', icon: UserGroupIcon },
+  { title: 'Auditoria', url: '/backoffice/audit', icon: ShieldKeyIcon },
 ]
 
 export function BackofficeSidebar() {
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="px-2 pt-2">
-        <div className="rounded-lg border bg-sidebar-accent/40 px-3 py-2">
-          <p className="text-sm font-semibold">Backoffice</p>
-          <p className="text-xs text-muted-foreground">
-            Operação interna da plataforma
-          </p>
+        {/* Expanded: logo + wordmark; the box hides on the icon rail. */}
+        <div className="flex items-center gap-2.5 overflow-hidden rounded-lg border bg-sidebar-accent/40 px-3 py-2 group-data-[collapsible=icon]:hidden">
+          <BrandMark className="size-8 shrink-0" alt="" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Centro de operações
+            </p>
+            <p className="truncate text-sm font-semibold">Backoffice</p>
+          </div>
+        </div>
+        {/* Collapsed: just the centered logo mark, sized to the rail. */}
+        <div className="hidden justify-center group-data-[collapsible=icon]:flex">
+          <BrandMark className="size-8" alt="Backoffice" />
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarFlyoutProvider>
-          <NavMain items={platformItems} label="Plataforma" />
-          <NavMain items={operationsItems} label="Operação" />
-        </SidebarFlyoutProvider>
+        <NavSection label="Operação" items={operationsItems} />
+        <NavSection label="Plataforma" items={platformItems} />
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
@@ -110,5 +98,52 @@ export function BackofficeSidebar() {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  )
+}
+
+function NavSection({
+  label,
+  items,
+}: {
+  label: string
+  items: ReadonlyArray<NavItem>
+}) {
+  const location = useLocation()
+
+  const isActive = (item: NavItem) =>
+    item.exact
+      ? location.pathname === item.url
+      : location.pathname === item.url ||
+        location.pathname.startsWith(`${item.url}/`)
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => (
+            <NavRow key={item.url} item={item} active={isActive(item)} />
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+  const prewarmIntentHandlers = usePathPrewarmIntent(item.url)
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        render={<Link to={item.url} />}
+        isActive={active}
+        tooltip={item.title}
+        {...prewarmIntentHandlers}
+      >
+        <HugeiconsIcon icon={item.icon} />
+        <span>{item.title}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 }

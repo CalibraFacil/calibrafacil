@@ -29,6 +29,7 @@ const ALL_FEATURES: FeatureFlag[] = [
   'math_engine',
   'portal',
   'financial',
+  'financial_integrations',
   'api',
   'custom_domain',
   'sso',
@@ -47,6 +48,7 @@ const PLAN_HIGHLIGHTS: Record<LandingPlanId, string[]> = {
     'Suporte padrão',
   ],
   PROFESSIONAL: [
+    'Integração financeira com ERP (Conta Azul)',
     'Fluxo de revisão e aprovação',
     'Templates personalizados',
     'Suporte prioritário',
@@ -70,8 +72,8 @@ const Pricing: React.FC = () => {
             Planos para diferentes estágios da operação
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            A base técnica permanece consistente. O que evolui é a governança,
-            a extensibilidade e o nível de suporte para o laboratório.
+            A base técnica permanece consistente. O que evolui é a governança, a
+            extensibilidade e o nível de suporte para o laboratório.
           </p>
         </div>
 

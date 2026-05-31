@@ -1,0 +1,77 @@
+---
+title: Retificação de Certificados
+description: Como corrigir um certificado emitido sem editar o original — o fluxo de substituição que mantém a trilha de auditoria exigida pela ISO/IEC 17025.
+---
+
+Certificados emitidos no CalibraFácil são **imutáveis**. Para corrigir um certificado, a plataforma usa um fluxo de **substituição** (supersession) que atende a **ISO/IEC 17025:2017, cláusula 7.8.8** (Emendas a relatórios — em particular 7.8.8.2 e 7.8.8.3).
+
+A regra: nunca se altera um certificado já emitido. Em vez disso, emite-se uma **nova versão** que aponta para a anterior. Ambos os certificados continuam acessíveis; o original fica marcado como substituído, a nova versão é a oficial.
+
+## Quando retificar
+
+Use retificação quando há um erro material no certificado emitido — por exemplo:
+
+- erro nos dados de identificação do instrumento ou do cliente;
+- correção em resultado por revisão pós-aprovação;
+- ajuste no critério aplicado.
+
+**Não** use retificação para mudanças de template ou logo — essas alterações de aparência não invalidam o certificado anterior; basta atualizar o [template](/certificados/templates) para os próximos.
+
+## Como funciona
+
+```
+Ordem de calibração original  (status: Aprovada)
+        │
+        │  retificação iniciada
+        ▼
+Nova ordem de calibração      (status: Rascunho → ... → Aprovada)
+   - supersedesId  → aponta para a original
+   - amendmentNumber → 1, 2, 3...
+   - amendmentReason → justificativa obrigatória
+   - novo verificationToken
+        │
+        │  aprovação da nova ordem
+        ▼
+Ordem original                (status: Substituída / Superseded)
+   - supersededById → aponta para a nova
+   - certificado original permanece acessível
+        │
+Novo certificado emitido      (versão oficial corrente)
+```
+
+## O que a operação precisa fornecer
+
+Para criar uma retificação:
+
+- **Motivo da retificação** — texto obrigatório que aparecerá no histórico e na cadeia de substituição.
+- **Dados corrigidos** — a nova ordem é uma cópia editável da original; ajuste o que precisa ser corrigido.
+- **Nova execução completa do fluxo** — execução, revisão e aprovação acontecem como em uma ordem normal. A nova ordem só substitui a original após sua própria aprovação.
+
+## Quem pode retificar
+
+Apenas usuários com permissão de aprovação (Administradores e Proprietários) podem iniciar e aprovar retificações. A separação de responsabilidades aplicada ao fluxo original também vale aqui — o aprovador da retificação deve ser distinto do executor.
+
+## Cadeia de substituição
+
+Múltiplas retificações encadeiam-se. Se a versão 2 for retificada novamente, a versão 3 substitui a 2, e assim por diante. Todas as versões permanecem acessíveis e ligadas:
+
+- a versão corrente é a única **não substituída** da cadeia;
+- todas as versões anteriores aparecem com link para a próxima;
+- a [verificação pública](/certificados/verificacao-publica) sempre mostra o número de versão e indica se há uma versão mais recente.
+
+## O que o cliente vê
+
+No [portal](/plataforma/portal-do-cliente):
+
+- a versão antiga ganha um aviso de "substituído";
+- o cliente é notificado de que o certificado foi retificado;
+- a nova versão fica imediatamente disponível para download.
+
+<Aside type="caution">
+  O fluxo de retificação **substitui** o certificado original — não exclui nem oculta. Auditorias podem (e devem) ver tanto a versão original quanto a corrigida, com a justificativa registrada. Essa é a forma correta de demonstrar controle do processo.
+</Aside>
+
+## O que **não** é retificação
+
+- **Anulação (voiding)** — usada quando o certificado nunca deveria ter sido emitido (por exemplo, calibração executada no instrumento errado). Anula sem substituição. Exige justificativa formal e fica registrada.
+- **Cancelamento de ordem** — só permitido enquanto a ordem ainda está em rascunho ou execução. Ordens aprovadas não podem ser canceladas; só substituídas ou anuladas.

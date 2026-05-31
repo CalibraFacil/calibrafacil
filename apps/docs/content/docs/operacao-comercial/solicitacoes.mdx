@@ -1,0 +1,73 @@
+---
+title: Solicitações de Calibração
+description: Pedidos de calibração enviados pelos clientes através do Portal, da criação até a conversão em ordem de serviço.
+---
+
+As **solicitações** são o ponto de entrada do trabalho a partir do cliente. Em vez de o laboratório receber emails ou planilhas, o cliente — pelo [Portal do Cliente](/plataforma/portal-do-cliente) — cria uma solicitação estruturada que entra direto na fila operacional.
+
+Acesse em **Painel → Solicitações** (`/dashboard/requests`).
+
+## Quando usar solicitações
+
+- O cliente quer pedir uma calibração de instrumentos que já tem cadastrados.
+- O cliente quer pedir uma calibração de instrumentos que ainda não foram cadastrados.
+- A operação quer centralizar pedidos sem depender de canais informais.
+
+Se o trabalho começa no laboratório (não no cliente), pule a solicitação e crie diretamente uma [ordem de serviço](/operacao-comercial/ordens-de-servico).
+
+## Ciclo de vida
+
+Uma solicitação segue um fluxo simples antes de virar trabalho efetivo:
+
+```
+Submetida (pelo cliente)
+   ↓
+Em análise (atendimento do laboratório)
+   ↓
+Aprovada → vira ordem de serviço
+   ↓
+Cancelada / Rejeitada (encerra o fluxo)
+```
+
+Cada transição é registrada na trilha de auditoria.
+
+## O que o cliente envia
+
+No portal, o cliente preenche:
+
+- **Instrumentos** — escolha de itens já cadastrados ou descrição de itens novos a serem registrados pelo laboratório.
+- **Serviço solicitado** — vinculado ao [catálogo de serviços](/operacao-comercial/servicos).
+- **Forma de entrega** — entrega no laboratório ou envio por transportadora. No envio por transportadora, o cliente informa a **transportadora** e a **nota fiscal de remessa para conserto**, de modo que o instrumento já chega vinculado ao seu documento fiscal.
+- **Prazo desejado** — opcional; o laboratório define o prazo definitivo na ordem de serviço.
+- **Observações** — informações operacionais (uso típico do instrumento, restrições, etc.).
+
+## O que o laboratório faz
+
+Ao receber a solicitação, o atendimento:
+
+1. Revisa os instrumentos descritos. Se forem novos, cria os ativos correspondentes em [Ativos](/calibracao/ativos).
+2. Confirma o serviço aplicável.
+3. Aprova a solicitação, gerando a ordem de serviço associada.
+4. Se necessário, rejeita ou solicita ajustes ao cliente.
+
+A partir desse ponto, o fluxo segue em [Ordens de Serviço](/operacao-comercial/ordens-de-servico).
+
+## Visibilidade para o cliente
+
+No portal, o cliente acompanha:
+
+- o status da solicitação;
+- as ordens de serviço derivadas;
+- eventuais notas do laboratório.
+
+A solicitação **não** dá acesso a medições ou certificados — esses ficam visíveis apenas após a calibração ser concluída.
+
+## Notificações automáticas
+
+| Evento | Para quem |
+| :--- | :--- |
+| Solicitação submetida | Atendimento do laboratório |
+| Solicitação aprovada | Cliente (no portal e por email) |
+| Solicitação rejeitada | Cliente (no portal e por email) |
+
+Personalize os canais em [Notificações](/plataforma/notificacoes).

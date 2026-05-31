@@ -80,7 +80,7 @@ export interface CertificateInfo {
 export class SigningError extends Error {
   constructor(
     message: string,
-    public readonly code: SigningErrorCode
+    public readonly code: SigningErrorCode,
   ) {
     super(message);
     this.name = "SigningError";

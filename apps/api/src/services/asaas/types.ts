@@ -10,11 +10,7 @@ export type AsaasEnvironment = "sandbox" | "production";
 /**
  * Asaas billing types
  */
-export type AsaasBillingType =
-  | "BOLETO"
-  | "CREDIT_CARD"
-  | "PIX"
-  | "UNDEFINED";
+export type AsaasBillingType = "BOLETO" | "CREDIT_CARD" | "PIX" | "UNDEFINED";
 
 export type AsaasCheckoutChargeType = "DETACHED" | "RECURRENT";
 

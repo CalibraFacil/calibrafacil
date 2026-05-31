@@ -15,12 +15,15 @@ node_modules
 
 # Testing
 coverage
+playwright-report/
+test-results/
 
 # Turbo
 .turbo
 
 # Vercel
 .vercel
+.calibra-local/
 
 # Build Outputs
 .next/
@@ -49,3 +52,7 @@ packages/math-engine/docs/validation/latex/*.out
 packages/math-engine/docs/validation/latex/*.synctex.gz
 packages/math-engine/docs/validation/latex/*.jpg
 .todos/
+tmp/
+
+# Local client workbook samples must stay out of git.
+packages/documents/src/*.xlsx

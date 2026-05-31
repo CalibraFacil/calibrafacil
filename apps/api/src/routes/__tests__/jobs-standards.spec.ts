@@ -230,7 +230,9 @@ describe("Reference Standards Validation - ISO 17025 Clause 6.4.6", () => {
 
       // Query returns only standards belonging to the user's org (id: 1)
       // Standards 2 and 3 exist but belong to a different org
-      const foundStandards = [{ id: 1, name: "Standard A", organizationId: "org-1" }];
+      const foundStandards = [
+        { id: 1, name: "Standard A", organizationId: "org-1" },
+      ];
 
       const foundIds = new Set(foundStandards.map((s) => s.id));
       const missingIds = requestedIds.filter((id) => !foundIds.has(id));

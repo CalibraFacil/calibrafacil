@@ -9,11 +9,17 @@ import {
 } from "../../lib/finance";
 import type { IntegrationsEnv } from "../../lib/integrations";
 import { withInvalidation } from "../../middleware/cache";
-import { withLabPermission, type AuthVariables } from "../../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 
-export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
+export const financeErpRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: IntegrationsEnv;
+}>()
   .get(
     "/exports",
     ...withLabPermission({ financial: ["read"] }),
@@ -50,7 +56,9 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         billing: {
           planId: access.planId,
           planName: access.planName,
-          hasCustomIntegrations: access.entitlements.includes("custom_integrations"),
+          hasFinancialIntegrations: access.entitlements.includes(
+            "financial_integrations",
+          ),
         },
         data: documents,
       });
@@ -60,7 +68,7 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
     "/documents/:id/export",
     ...withLabPermission({ financial: ["export"] }),
     requireFeature("financial"),
-    requireFeature("custom_integrations"),
+    requireFeature("financial_integrations"),
     withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");
@@ -82,14 +90,17 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         member.selectedUnitScope !== "all" &&
         payload.unitId !== member.activeUnitId
       ) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       try {
         const exported = await exportBillingDocumentToPrimaryIntegration({
           organizationId: member.organizationId,
           documentId,
-          env: c.env as IntegrationsEnv,
+          env: c.env,
         });
 
         return c.json({ data: exported });
@@ -97,7 +108,9 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(
           {
             error:
-              error instanceof Error ? error.message : "Falha ao exportar documento",
+              error instanceof Error
+                ? error.message
+                : "Falha ao exportar documento",
           },
           502,
         );

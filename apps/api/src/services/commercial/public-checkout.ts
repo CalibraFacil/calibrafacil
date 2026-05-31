@@ -37,6 +37,10 @@ type OfferItemRow = typeof commercialOfferItem.$inferSelect;
 type PaymentRecordRow = typeof paymentRecord.$inferSelect;
 type OrganizationRow = typeof organization.$inferSelect;
 type BillingCustomerRow = typeof billingCustomer.$inferSelect;
+type CommercialTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+type CommercialExecutor = typeof db | CommercialTransaction;
 
 type PublicRequestMeta = {
   ipAddress?: string | null;
@@ -165,13 +169,17 @@ export type PublicCheckoutStartResponse =
       type: "PIX_READY";
       state: "PIX_READY";
       paymentId: number;
-      pix: NonNullable<Extract<PublicCheckoutPresentation, { type: "PIX" }>["pix"]>;
+      pix: NonNullable<
+        Extract<PublicCheckoutPresentation, { type: "PIX" }>["pix"]
+      >;
     }
   | {
       type: "BOLETO_READY";
       state: "BOLETO_READY";
       paymentId: number;
-      boleto: NonNullable<Extract<PublicCheckoutPresentation, { type: "BOLETO" }>["boleto"]>;
+      boleto: NonNullable<
+        Extract<PublicCheckoutPresentation, { type: "BOLETO" }>["boleto"]
+      >;
     }
   | {
       type: "REDIRECT";
@@ -192,14 +200,74 @@ function isPublicTokenFormat(token: string) {
   return TOKEN_PATTERN.test(token);
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function stringFromUnknown(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function isCommercialPaymentMethod(
+  value: unknown,
+): value is CommercialPaymentMethod {
+  return value === "PIX" || value === "BOLETO" || value === "CREDIT_CARD";
+}
+
+function paymentMethodsFromUnknown(value: unknown): CommercialPaymentMethod[] {
+  return Array.isArray(value)
+    ? value.filter(isCommercialPaymentMethod)
+    : ["BOLETO"];
+}
+
+function basePlanIdFromUnknown(value: unknown) {
+  return value === "STANDARD" ||
+    value === "PROFESSIONAL" ||
+    value === "ENTERPRISE"
+    ? value
+    : undefined;
+}
+
+function billingCycleFromUnknown(value: unknown) {
+  return value === "MONTHLY" || value === "YEARLY" ? value : undefined;
+}
+
+function getLockedOfferId(lockedRows: unknown) {
+  const rows =
+    typeof lockedRows === "object" && lockedRows !== null
+      ? Reflect.get(lockedRows, "rows")
+      : lockedRows;
+
+  if (!Array.isArray(rows)) {
+    return undefined;
+  }
+
+  const firstRow = rows[0];
+  if (typeof firstRow !== "object" || firstRow === null) {
+    return undefined;
+  }
+
+  const id = Reflect.get(firstRow, "id");
+  return typeof id === "string" ? id : undefined;
+}
+
 function getPaymentMethod(offer: OfferRow): CommercialPaymentMethod {
-  return (offer.paymentMethods[0] as CommercialPaymentMethod | undefined) ?? "BOLETO";
+  const paymentMethod = offer.paymentMethods[0];
+  return isCommercialPaymentMethod(paymentMethod) ? paymentMethod : "BOLETO";
 }
 
 function getRecurringAmount(offer: OfferRow) {
-  const terms = (offer.termsSnapshot ?? {}) as Record<string, unknown>;
+  const terms = recordFromUnknown(offer.termsSnapshot);
   const value = terms.recurringAmount;
-  return typeof value === "number" ? value : offer.kind === "PLAN_RECURRING" ? offer.totalAmount : null;
+  return typeof value === "number"
+    ? value
+    : offer.kind === "PLAN_RECURRING"
+      ? offer.totalAmount
+      : null;
 }
 
 function getPaymentPresentationStatus(payment: PaymentRecordRow | null) {
@@ -263,16 +331,19 @@ export function resolveCommercialPublicState(
   return "AWAITING_PAYMENT";
 }
 
-function getProviderSnapshotValue<T>(
+function getProviderSnapshotValue(
   payment: PaymentRecordRow | null,
   key: string,
-): T | null {
-  if (!payment?.providerSnapshot || typeof payment.providerSnapshot !== "object") {
+): unknown {
+  if (
+    !payment?.providerSnapshot ||
+    typeof payment.providerSnapshot !== "object"
+  ) {
     return null;
   }
 
-  const snapshot = payment.providerSnapshot as Record<string, unknown>;
-  return (snapshot[key] as T | undefined) ?? null;
+  const snapshot = recordFromUnknown(payment.providerSnapshot);
+  return snapshot[key] ?? null;
 }
 
 function normalizePixImage(input: string | null | undefined) {
@@ -288,9 +359,8 @@ function getSnapshotPixValue(
   payment: PaymentRecordRow | null,
   key: "qrCode" | "qrCodePayload" | "expirationDate",
 ) {
-  const snapshotPix = getProviderSnapshotValue<Record<string, unknown>>(
-    payment,
-    "pixTransaction",
+  const snapshotPix = recordFromUnknown(
+    getProviderSnapshotValue(payment, "pixTransaction"),
   );
 
   const value = snapshotPix?.[key];
@@ -307,11 +377,15 @@ function buildPresentation(
 
   const paymentMethod = getPaymentMethod(offer);
   const paymentId = latestPayment?.id ?? null;
-  const dueDate = latestPayment?.dueDate?.toISOString() ?? offer.dueDate?.toISOString() ?? null;
+  const dueDate =
+    latestPayment?.dueDate?.toISOString() ??
+    offer.dueDate?.toISOString() ??
+    null;
 
   if (paymentMethod === "PIX" && latestPayment) {
     const qrCodeImage = normalizePixImage(
-      latestPayment.pixQrCodeUrl ?? getSnapshotPixValue(latestPayment, "qrCode"),
+      latestPayment.pixQrCodeUrl ??
+        getSnapshotPixValue(latestPayment, "qrCode"),
     );
     const payload =
       latestPayment.pixPayload ??
@@ -337,12 +411,14 @@ function buildPresentation(
       type: "BOLETO" as const,
       paymentId,
       providerPaymentId: latestPayment.providerPaymentId ?? null,
-      providerUrl: latestPayment.bankSlipUrl ?? latestPayment.invoiceUrl ?? null,
+      providerUrl:
+        latestPayment.bankSlipUrl ?? latestPayment.invoiceUrl ?? null,
       pix: null,
       boleto: {
         bankSlipUrl: latestPayment.bankSlipUrl ?? null,
-        identificationField:
-          getProviderSnapshotValue<string>(latestPayment, "identificationField"),
+        identificationField: stringFromUnknown(
+          getProviderSnapshotValue(latestPayment, "identificationField"),
+        ),
         dueDate,
         amount: latestPayment.amount,
       },
@@ -368,7 +444,12 @@ function buildPresentation(
 function serializeSnapshot(
   context: OfferContext,
 ): ValidPublicCheckoutSnapshotResponse {
-  const state = resolveCommercialPublicState(context.offer, context.latestPayment);
+  const state = resolveCommercialPublicState(
+    context.offer,
+    context.latestPayment,
+  );
+
+  const customerSnapshot = recordFromUnknown(context.offer.customerSnapshot);
 
   return {
     state,
@@ -405,33 +486,20 @@ function serializeSnapshot(
         state: context.organization.state ?? null,
       },
       payer: {
-        name:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.name ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).name as string)
-            : null,
-        email:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.email ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).email as string)
-            : null,
-        phone:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.phone ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).phone as string)
-            : null,
-        taxId:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.cpfCnpj ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).cpfCnpj as string)
-            : null,
+        name: stringFromUnknown(customerSnapshot.name),
+        email: stringFromUnknown(customerSnapshot.email),
+        phone: stringFromUnknown(customerSnapshot.phone),
+        taxId: stringFromUnknown(customerSnapshot.cpfCnpj),
       },
     },
     presentation: buildPresentation(context.offer, context.latestPayment),
   };
 }
 
-async function loadOfferContextById(executor: typeof db, offerId: string) {
+async function loadOfferContextById(
+  executor: CommercialExecutor,
+  offerId: string,
+) {
   const offer = await executor.query.commercialOffer.findFirst({
     where: eq(commercialOffer.id, offerId),
   });
@@ -442,21 +510,21 @@ async function loadOfferContextById(executor: typeof db, offerId: string) {
 
   const [items, organizationRecord, billingCustomerRecord, latestPayment] =
     await Promise.all([
-    executor.query.commercialOfferItem.findMany({
-      where: eq(commercialOfferItem.offerId, offer.id),
-      orderBy: [commercialOfferItem.id],
-    }),
-    executor.query.organization.findFirst({
-      where: eq(organization.id, offer.organizationId),
-    }),
-    executor.query.billingCustomer.findFirst({
-      where: eq(billingCustomer.id, offer.billingCustomerId),
-    }),
-    executor.query.paymentRecord.findFirst({
-      where: eq(paymentRecord.commercialOfferId, offer.id),
-      orderBy: [desc(paymentRecord.createdAt)],
-    }),
-  ]);
+      executor.query.commercialOfferItem.findMany({
+        where: eq(commercialOfferItem.offerId, offer.id),
+        orderBy: [commercialOfferItem.id],
+      }),
+      executor.query.organization.findFirst({
+        where: eq(organization.id, offer.organizationId),
+      }),
+      executor.query.billingCustomer.findFirst({
+        where: eq(billingCustomer.id, offer.billingCustomerId),
+      }),
+      executor.query.paymentRecord.findFirst({
+        where: eq(paymentRecord.commercialOfferId, offer.id),
+        orderBy: [desc(paymentRecord.createdAt)],
+      }),
+    ]);
 
   if (!organizationRecord || !billingCustomerRecord) {
     throw new Error("Dados vinculados à oferta pública não encontrados");
@@ -492,11 +560,14 @@ async function loadOfferContextByTokenHash(tokenHash: string) {
 }
 
 async function recordOfferAccess(
-  executor: typeof db,
+  executor: CommercialExecutor,
   offerId: string,
   meta: PublicRequestMeta,
   eventType: typeof commercialOfferAccessLog.$inferInsert.eventType,
-  publicState: Exclude<CommercialPublicCheckoutState, "INVALID" | "REDIRECTING">,
+  publicState: Exclude<
+    CommercialPublicCheckoutState,
+    "INVALID" | "REDIRECTING"
+  >,
   markViewed = false,
   metadata?: Record<string, unknown> | null,
 ) {
@@ -520,7 +591,10 @@ async function recordOfferAccess(
   });
 }
 
-function buildPreviewFromOffer(offer: OfferRow, items: OfferItemRow[]): CommercialOfferPreviewResult {
+function buildPreviewFromOffer(
+  offer: OfferRow,
+  items: OfferItemRow[],
+): CommercialOfferPreviewResult {
   const normalizedItems: CommercialOfferPreviewResult["normalizedSnapshot"]["items"] =
     items.length > 0
       ? items.map((item) => ({
@@ -551,10 +625,10 @@ function buildPreviewFromOffer(offer: OfferRow, items: OfferItemRow[]): Commerci
     warnings: [],
     normalizedSnapshot: {
       kind: offer.kind,
-      basePlanId: offer.basePlanId as "STANDARD" | "PROFESSIONAL" | "ENTERPRISE" | undefined,
-      billingCycle: offer.billingCycle as "MONTHLY" | "YEARLY" | undefined,
+      basePlanId: basePlanIdFromUnknown(offer.basePlanId),
+      billingCycle: billingCycleFromUnknown(offer.billingCycle),
       contractTermMonths: offer.contractTermMonths,
-      paymentMethods: offer.paymentMethods as CommercialPaymentMethod[],
+      paymentMethods: paymentMethodsFromUnknown(offer.paymentMethods),
       dueDate: offer.dueDate ?? new Date(),
       offerExpiresAt: offer.offerExpiresAt,
       customerVisibleDescription: offer.customerVisibleDescription,
@@ -592,7 +666,10 @@ async function createLazyArtifactForOffer(params: {
   const description =
     preview.normalizedSnapshot.customerVisibleDescription ??
     buildOfferDescription(preview);
-  const callbacks = buildProviderReturnUrls(params.publicAppUrl, params.publicToken);
+  const callbacks = buildProviderReturnUrls(
+    params.publicAppUrl,
+    params.publicToken,
+  );
 
   if (params.offer.providerMode === "CHECKOUT") {
     const checkout = await createCheckout({
@@ -637,7 +714,7 @@ async function createLazyArtifactForOffer(params: {
           description,
           callbacks,
         },
-        providerResponseSnapshot: checkout as unknown as Record<string, unknown>,
+        providerResponseSnapshot: recordFromUnknown(checkout),
       },
       paymentValues: null,
       paymentStatus: null,
@@ -662,7 +739,9 @@ async function createLazyArtifactForOffer(params: {
       externalReference,
     });
 
-    const payments = await getSubscriptionPayments(subscriptionResult.id, { limit: 1 });
+    const payments = await getSubscriptionPayments(subscriptionResult.id, {
+      limit: 1,
+    });
     const firstPayment = payments.data[0];
 
     if (!firstPayment) {
@@ -684,10 +763,7 @@ async function createLazyArtifactForOffer(params: {
         callbacks,
       },
       providerSubscriptionId: subscriptionResult.id,
-      checkoutUrl:
-        firstPayment.invoiceUrl ??
-        firstPayment.bankSlipUrl ??
-        null,
+      checkoutUrl: firstPayment.invoiceUrl ?? firstPayment.bankSlipUrl ?? null,
     });
   }
 
@@ -712,7 +788,7 @@ async function createLazyArtifactForOffer(params: {
     payment,
     paymentMethod,
     externalReference,
-    providerResponseSnapshot: payment as unknown as Record<string, unknown>,
+    providerResponseSnapshot: recordFromUnknown(payment),
     providerRequestSnapshot: {
       externalReference,
       description,
@@ -721,8 +797,8 @@ async function createLazyArtifactForOffer(params: {
     providerSubscriptionId: payment.subscription ?? null,
     checkoutUrl:
       paymentMethod === "CREDIT_CARD"
-        ? payment.invoiceUrl ?? null
-        : payment.invoiceUrl ?? payment.bankSlipUrl ?? null,
+        ? (payment.invoiceUrl ?? null)
+        : (payment.invoiceUrl ?? payment.bankSlipUrl ?? null),
   });
 }
 
@@ -736,9 +812,7 @@ async function buildPaymentArtifactResult(params: {
   providerSubscriptionId: string | null;
   checkoutUrl: string | null;
 }) {
-  const paymentSnapshot = {
-    ...(params.payment as unknown as Record<string, unknown>),
-  };
+  const paymentSnapshot = recordFromUnknown(params.payment);
 
   let pixQrCodeUrl: string | null =
     params.payment.pixTransaction?.qrCode ?? null;
@@ -750,7 +824,7 @@ async function buildPaymentArtifactResult(params: {
     pixQrCodeUrl = normalizePixImage(pixQrCode.encodedImage);
     pixPayload = pixQrCode.payload;
     paymentSnapshot.pixTransaction = {
-      ...(params.payment.pixTransaction ?? {}),
+      ...params.payment.pixTransaction,
       qrCode: pixQrCodeUrl,
       qrCodePayload: pixQrCode.payload,
       expirationDate: pixQrCode.expirationDate,
@@ -759,7 +833,8 @@ async function buildPaymentArtifactResult(params: {
 
   if (params.paymentMethod === "BOLETO") {
     const identificationField = await getPaymentBoletoLine(params.payment.id);
-    paymentSnapshot.identificationField = identificationField.identificationField;
+    paymentSnapshot.identificationField =
+      identificationField.identificationField;
     paymentSnapshot.nossoNumero = identificationField.nossoNumero;
     paymentSnapshot.barCode = identificationField.barCode;
   }
@@ -785,13 +860,14 @@ async function buildPaymentArtifactResult(params: {
       paymentMethod: params.paymentMethod,
       status: params.payment.status,
       dueDate: params.payment.dueDate ? new Date(params.payment.dueDate) : null,
-      paidAt: params.payment.paymentDate ? new Date(params.payment.paymentDate) : null,
+      paidAt: params.payment.paymentDate
+        ? new Date(params.payment.paymentDate)
+        : null,
       invoiceUrl: params.payment.invoiceUrl ?? null,
       bankSlipUrl: params.payment.bankSlipUrl ?? null,
       pixQrCodeUrl,
       pixPayload,
-      cardLast4:
-        params.payment.creditCard?.creditCardNumber?.slice(-4) ?? null,
+      cardLast4: params.payment.creditCard?.creditCardNumber?.slice(-4) ?? null,
       cardBrand: params.payment.creditCard?.creditCardBrand ?? null,
       providerSnapshot: paymentSnapshot,
     },
@@ -805,9 +881,10 @@ async function buildPaymentArtifactResult(params: {
             pix: {
               qrCodeImage: pixQrCodeUrl,
               payload: pixPayload,
-              expirationDate:
-                (paymentSnapshot.pixTransaction as Record<string, unknown> | undefined)
-                  ?.expirationDate as string | null | undefined ?? null,
+              expirationDate: stringFromUnknown(
+                recordFromUnknown(paymentSnapshot.pixTransaction)
+                  .expirationDate,
+              ),
             },
           } satisfies PublicCheckoutStartResponse)
         : params.paymentMethod === "BOLETO"
@@ -817,12 +894,12 @@ async function buildPaymentArtifactResult(params: {
               paymentId: -1,
               boleto: {
                 bankSlipUrl: params.payment.bankSlipUrl ?? null,
-                identificationField:
-                  (paymentSnapshot.identificationField as string | undefined) ?? null,
-                dueDate:
-                  params.payment.dueDate
-                    ? new Date(params.payment.dueDate).toISOString()
-                    : null,
+                identificationField: stringFromUnknown(
+                  paymentSnapshot.identificationField,
+                ),
+                dueDate: params.payment.dueDate
+                  ? new Date(params.payment.dueDate).toISOString()
+                  : null,
                 amount: Math.round(params.payment.value * 100),
               },
             } satisfies PublicCheckoutStartResponse)
@@ -874,7 +951,9 @@ function coerceStartResponse(
     };
   }
 
-  throw new Error("A oferta ainda não possui uma apresentação pública iniciada");
+  throw new Error(
+    "A oferta ainda não possui uma apresentação pública iniciada",
+  );
 }
 
 export function getPublicRequestMeta(request: Request): PublicRequestMeta {
@@ -895,7 +974,9 @@ export async function getCommercialPublicCheckout(
     return { state: "INVALID", offer: null, presentation: null };
   }
 
-  const context = await loadOfferContextByTokenHash(hashCommercialPublicToken(token));
+  const context = await loadOfferContextByTokenHash(
+    hashCommercialPublicToken(token),
+  );
   if (!context) {
     return { state: "INVALID", offer: null, presentation: null };
   }
@@ -921,13 +1002,25 @@ export async function getCommercialPublicCheckoutStatus(
     return { state: "INVALID" };
   }
 
-  const context = await loadOfferContextByTokenHash(hashCommercialPublicToken(token));
+  const context = await loadOfferContextByTokenHash(
+    hashCommercialPublicToken(token),
+  );
   if (!context) {
     return { state: "INVALID" };
   }
 
-  const state = resolveCommercialPublicState(context.offer, context.latestPayment);
-  await recordOfferAccess(db, context.offer.id, meta, "STATUS_CHECKED", state, false);
+  const state = resolveCommercialPublicState(
+    context.offer,
+    context.latestPayment,
+  );
+  await recordOfferAccess(
+    db,
+    context.offer.id,
+    meta,
+    "STATUS_CHECKED",
+    state,
+    false,
+  );
 
   return {
     state,
@@ -956,17 +1049,13 @@ export async function startCommercialPublicCheckout(params: {
     const lockedRows = await tx.execute(
       sql`select id from commercial_offer where public_token_hash = ${tokenHash} for update`,
     );
-    const lockedOfferId =
-      (lockedRows as { rows?: Array<{ id?: string }> }).rows?.[0]?.id ??
-      (Array.isArray(lockedRows)
-        ? ((lockedRows[0] as { id?: string } | undefined)?.id ?? undefined)
-        : undefined);
+    const lockedOfferId = getLockedOfferId(lockedRows);
 
     if (!lockedOfferId) {
       throw new Error("INVALID_TOKEN");
     }
 
-    const context = await loadOfferContextById(tx as typeof db, lockedOfferId);
+    const context = await loadOfferContextById(tx, lockedOfferId);
     if (!context) {
       throw new Error("INVALID_TOKEN");
     }
@@ -974,7 +1063,7 @@ export async function startCommercialPublicCheckout(params: {
     const currentSnapshot = serializeSnapshot(context);
     if (currentSnapshot.state === "PAID") {
       await recordOfferAccess(
-        tx as typeof db,
+        tx,
         context.offer.id,
         params.meta,
         "PAYMENT_RESUMED",
@@ -991,7 +1080,7 @@ export async function startCommercialPublicCheckout(params: {
         currentSnapshot.presentation?.providerUrl)
     ) {
       await recordOfferAccess(
-        tx as typeof db,
+        tx,
         context.offer.id,
         params.meta,
         "PAYMENT_RESUMED",
@@ -1019,7 +1108,10 @@ export async function startCommercialPublicCheckout(params: {
       publicAppUrl: params.publicAppUrl,
     });
 
-    if (!createdArtifact.offerValues.providerCheckoutId && !createdArtifact.offerValues.providerPaymentId) {
+    if (
+      !createdArtifact.offerValues.providerCheckoutId &&
+      !createdArtifact.offerValues.providerPaymentId
+    ) {
       throw new Error("Falha ao iniciar o artefato público de pagamento");
     }
 
@@ -1027,8 +1119,10 @@ export async function startCommercialPublicCheckout(params: {
       .update(commercialOffer)
       .set({
         checkoutUrl: createdArtifact.offerValues.checkoutUrl ?? null,
-        providerCheckoutId: createdArtifact.offerValues.providerCheckoutId ?? null,
-        providerPaymentId: createdArtifact.offerValues.providerPaymentId ?? null,
+        providerCheckoutId:
+          createdArtifact.offerValues.providerCheckoutId ?? null,
+        providerPaymentId:
+          createdArtifact.offerValues.providerPaymentId ?? null,
         providerSubscriptionId:
           createdArtifact.offerValues.providerSubscriptionId ?? null,
         providerRequestSnapshot:
@@ -1049,7 +1143,8 @@ export async function startCommercialPublicCheckout(params: {
           provider: "ASAAS",
           providerCheckoutId: createdArtifact.paymentValues.providerCheckoutId,
           providerPaymentId: createdArtifact.paymentValues.providerPaymentId,
-          providerSubscriptionId: createdArtifact.paymentValues.providerSubscriptionId,
+          providerSubscriptionId:
+            createdArtifact.paymentValues.providerSubscriptionId,
           externalReference: createdArtifact.paymentValues.externalReference,
           amount: createdArtifact.paymentValues.amount,
           netAmount: createdArtifact.paymentValues.netAmount,
@@ -1099,7 +1194,7 @@ export async function startCommercialPublicCheckout(params: {
             };
 
     await recordOfferAccess(
-      tx as typeof db,
+      tx,
       context.offer.id,
       params.meta,
       createdArtifact.result.type === "REDIRECT"

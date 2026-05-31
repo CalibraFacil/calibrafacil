@@ -106,6 +106,216 @@
       "when": 1777683600000,
       "tag": "0014_app_queue_job",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778112000000,
+      "tag": "0015_method_variable_bindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778198400000,
+      "tag": "0016_method_definition",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778202000000,
+      "tag": "0017_method_measurement_models",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778212800000,
+      "tag": "0018_calibration_location_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778220000000,
+      "tag": "0019_calibration_phase_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1779115779169,
+      "tag": "0020_xlsx_certificate_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1779129000000,
+      "tag": "0021_remove_legacy_certificate_designer_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1779292800000,
+      "tag": "0022_reference_standard_metrology_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779379200000,
+      "tag": "0023_reference_standard_certificate_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779465600000,
+      "tag": "0024_lab_passwordless_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779552000000,
+      "tag": "0025_auth_uniqueness",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779638400000,
+      "tag": "0026_integration_object_link_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1779724800000,
+      "tag": "0027_integration_sync_cursor",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779811200000,
+      "tag": "0028_integration_sync_item",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1780358400000,
+      "tag": "0029_payment_aware_certificate_release",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0030_integration_drift_acknowledgement",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780531200000,
+      "tag": "0031_automatic_send_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1780617600000,
+      "tag": "0032_outsourced_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1780704000000,
+      "tag": "0033_supplier",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780790400000,
+      "tag": "0034_billing_group",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1780876800000,
+      "tag": "0035_billing_document_public_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "0036_account_task",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781049600000,
+      "tag": "0037_organization_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781136000000,
+      "tag": "0038_entitlement_override",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1781222400000,
+      "tag": "0039_approval_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1781308800000,
+      "tag": "0040_import_run",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1781395200000,
+      "tag": "0041_account_interaction",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1781481600000,
+      "tag": "0042_operator_alert",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1781568000000,
+      "tag": "0043_calibration_request_remittance",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781654400000,
+      "tag": "0044_service_order_public_id",
+      "breakpoints": true
     }
   ]
 }

@@ -16,31 +16,46 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   CancelCommercialOfferSchema,
+  CommercialOfferKindSchema,
   CommercialOfferPreviewInputSchema,
+  CommercialOfferStatusSchema,
   CreateCommercialOfferSchema,
   ReissueCommercialOfferSchema,
   SyncBillingCustomerSchema,
 } from "@calibra-facil/schemas";
 import { and, asc, desc, eq, ilike, or } from "drizzle-orm";
 import type { AuthVariables } from "../middleware/permission";
-import { ensureBillingCustomer, getBillingContacts, listRecentOffers } from "../services/commercial/common";
+import {
+  ensureBillingCustomer,
+  getBillingContacts,
+  listRecentOffers,
+} from "../services/commercial/common";
 import { previewCommercialOffer } from "../services/commercial/preview";
 import { issueCommercialOffer } from "../services/commercial/issue";
 import { cancelCommercialOffer } from "../services/commercial/cancel";
 import { reissueCommercialOffer } from "../services/commercial/reissue";
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
-  const configured =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ?? process.env.APP_URL;
+  const configured = toRecord(c.env).APP_URL ?? process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
     : "https://calibrafacil.com";
 }
 
-function attachCustomerCheckoutUrl<T extends {
-  customerCheckoutUrlPath?: string | null;
-}>(offer: T, publicAppUrl: string) {
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function attachCustomerCheckoutUrl<
+  T extends {
+    customerCheckoutUrlPath?: string | null;
+  },
+>(offer: T, publicAppUrl: string) {
   return {
     ...offer,
     customerCheckoutUrl: offer.customerCheckoutUrlPath
@@ -51,9 +66,11 @@ function attachCustomerCheckoutUrl<T extends {
 
 const OrganizationsQuerySchema = SyncBillingCustomerSchema.pick({
   organizationId: true,
-}).partial().extend({
-  search: SyncBillingCustomerSchema.shape.name.optional(),
-});
+})
+  .partial()
+  .extend({
+    search: SyncBillingCustomerSchema.shape.name.optional(),
+  });
 
 const CreateBillingContactSchema = z.object({
   organizationId: z.string().trim().min(1),
@@ -85,64 +102,76 @@ async function logCommercialEvent(params: {
 export const backofficeCommercialRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .get("/organizations", zValidator("query", OrganizationsQuerySchema), async (c) => {
-    const { search } = c.req.valid("query");
-    const filters = [eq(organization.type, "LAB")];
+  .get(
+    "/organizations",
+    zValidator("query", OrganizationsQuerySchema),
+    async (c) => {
+      const { search } = c.req.valid("query");
+      const filters = [eq(organization.type, "LAB")];
 
-    if (search?.trim()) {
-      filters.push(
-        or(
-          ilike(organization.name, `%${search.trim()}%`),
-          ilike(organization.slug, `%${search.trim()}%`),
-          ilike(organization.cnpj, `%${search.trim()}%`),
-        )!,
-      );
-    }
+      if (search?.trim()) {
+        filters.push(
+          or(
+            ilike(organization.name, `%${search.trim()}%`),
+            ilike(organization.slug, `%${search.trim()}%`),
+            ilike(organization.cnpj, `%${search.trim()}%`),
+          )!,
+        );
+      }
 
-    const rows = await db
-      .select({
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        cnpj: organization.cnpj,
-        email: organization.email,
-        phone: organization.phone,
-      })
-      .from(organization)
-      .where(and(...filters))
-      .orderBy(asc(organization.name))
-      .limit(50);
+      const rows = await db
+        .select({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          cnpj: organization.cnpj,
+          email: organization.email,
+          phone: organization.phone,
+        })
+        .from(organization)
+        .where(and(...filters))
+        .orderBy(asc(organization.name))
+        .limit(50);
 
-    return c.json({ data: rows });
-  })
+      return c.json({ data: rows });
+    },
+  )
   .get("/organizations/:organizationId/context", async (c) => {
     const organizationId = c.req.param("organizationId");
     const publicAppUrl = resolvePublicAppUrl(c);
 
     const org = await db.query.organization.findFirst({
-      where: and(eq(organization.id, organizationId), eq(organization.type, "LAB")),
+      where: and(
+        eq(organization.id, organizationId),
+        eq(organization.type, "LAB"),
+      ),
     });
 
     if (!org) {
       return c.json({ error: "Organização não encontrada" }, 404);
     }
 
-    const [currentSubscription, billingCustomerRecord, contacts, offers, deals] =
-      await Promise.all([
-        db.query.subscription.findFirst({
-          where: eq(subscription.organizationId, organizationId),
-        }),
-        db.query.billingCustomer.findFirst({
-          where: eq(billingCustomer.organizationId, organizationId),
-        }),
-        getBillingContacts(organizationId),
-        listRecentOffers(organizationId),
-        db.query.commercialDeal.findMany({
-          where: eq(commercialDeal.organizationId, organizationId),
-          orderBy: [desc(commercialDeal.createdAt)],
-          limit: 10,
-        }),
-      ]);
+    const [
+      currentSubscription,
+      billingCustomerRecord,
+      contacts,
+      offers,
+      deals,
+    ] = await Promise.all([
+      db.query.subscription.findFirst({
+        where: eq(subscription.organizationId, organizationId),
+      }),
+      db.query.billingCustomer.findFirst({
+        where: eq(billingCustomer.organizationId, organizationId),
+      }),
+      getBillingContacts(organizationId),
+      listRecentOffers(organizationId),
+      db.query.commercialDeal.findMany({
+        where: eq(commercialDeal.organizationId, organizationId),
+        orderBy: [desc(commercialDeal.createdAt)],
+        limit: 10,
+      }),
+    ]);
 
     return c.json({
       organization: org,
@@ -167,7 +196,7 @@ export const backofficeCommercialRouter = new Hono<{
           email: input.email,
           phone: input.phone,
           taxId: input.taxId,
-          address: input.address as Record<string, unknown> | undefined,
+          address: input.address ? toRecord(input.address) : undefined,
         }),
       );
 
@@ -230,33 +259,37 @@ export const backofficeCommercialRouter = new Hono<{
       return c.json(preview);
     },
   )
-  .post("/offers", zValidator("json", CreateCommercialOfferSchema), async (c) => {
-    const session = c.get("session");
-    const input = c.req.valid("json");
-    const publicAppUrl = resolvePublicAppUrl(c);
+  .post(
+    "/offers",
+    zValidator("json", CreateCommercialOfferSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("json");
+      const publicAppUrl = resolvePublicAppUrl(c);
 
-    const offer = await issueCommercialOffer(
-      input,
-      session.user.id,
-      input.idempotencyKey,
-    );
+      const offer = await issueCommercialOffer(
+        input,
+        session.user.id,
+        input.idempotencyKey,
+      );
 
-    await logCommercialEvent({
-      actorUserId: session.user.id,
-      action: "commercial.offer.issued",
-      entityType: "commercial_offer",
-      entityId: offer.id,
-      details: {
-        organizationId: offer.organizationId,
-        dealId: offer.dealId,
-      },
-    });
+      await logCommercialEvent({
+        actorUserId: session.user.id,
+        action: "commercial.offer.issued",
+        entityType: "commercial_offer",
+        entityId: offer.id,
+        details: {
+          organizationId: offer.organizationId,
+          dealId: offer.dealId,
+        },
+      });
 
-    return c.json(
-      { offer: attachCustomerCheckoutUrl(offer, publicAppUrl) },
-      201,
-    );
-  })
+      return c.json(
+        { offer: attachCustomerCheckoutUrl(offer, publicAppUrl) },
+        201,
+      );
+    },
+  )
   .get("/offers", async (c) => {
     const organizationId = c.req.query("organizationId");
     const status = c.req.query("status");
@@ -264,10 +297,14 @@ export const backofficeCommercialRouter = new Hono<{
     const kind = c.req.query("kind");
 
     const filters = [];
-    if (organizationId) filters.push(eq(commercialOffer.organizationId, organizationId));
-    if (status) filters.push(eq(commercialOffer.status, status as any));
+    if (organizationId)
+      filters.push(eq(commercialOffer.organizationId, organizationId));
+    const parsedStatus = CommercialOfferStatusSchema.safeParse(status);
+    if (parsedStatus.success)
+      filters.push(eq(commercialOffer.status, parsedStatus.data));
     if (dealId) filters.push(eq(commercialOffer.dealId, dealId));
-    if (kind) filters.push(eq(commercialOffer.kind, kind as any));
+    const parsedKind = CommercialOfferKindSchema.safeParse(kind);
+    if (parsedKind.success) filters.push(eq(commercialOffer.kind, parsedKind.data));
 
     const rows = await db
       .select()
@@ -322,7 +359,11 @@ export const backofficeCommercialRouter = new Hono<{
       const session = c.get("session");
       const offerId = c.req.param("offerId");
       const input = c.req.valid("json");
-      const offer = await cancelCommercialOffer(offerId, input.reason, session.user.id);
+      const offer = await cancelCommercialOffer(
+        offerId,
+        input.reason,
+        session.user.id,
+      );
 
       await logCommercialEvent({
         actorUserId: session.user.id,

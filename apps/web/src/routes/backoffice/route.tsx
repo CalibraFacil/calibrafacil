@@ -5,15 +5,18 @@ import {
   useLocation,
   useNavigate,
 } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
 import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BackofficeHeader } from '@/components/backoffice-header'
 import { BackofficeSidebar } from '@/components/backoffice-sidebar'
+import { BackofficeCommandPaletteProvider } from '@/features/backoffice/command-palette/context'
+import { BackofficeCommandPalette } from '@/features/backoffice/command-palette/palette'
 import { Button } from '@/components/ui/button'
+import { readSessionWithRetry } from '@/lib/auth-session'
 import {
   Card,
   CardContent,
@@ -23,7 +26,6 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { api } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice')({
   beforeLoad: async ({ location, preload }) => {
@@ -33,7 +35,7 @@ export const Route = createFileRoute('/backoffice')({
       return
     }
 
-    const { data: session } = await getBackofficeSession()
+    const { data: session } = await readSessionWithRetry(getBackofficeSession)
 
     if (!session) {
       throw redirect({
@@ -53,18 +55,10 @@ function BackofficeLayout() {
     location.pathname === '/backoffice/bootstrap'
   const { data: session } = useBackofficeSession()
 
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'layout'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao validar acesso ao backoffice')
-      }
-
-      return res.json() as Promise<{ allowed: boolean }>
-    },
+  const accessQuery = useBackofficeAccessData({
+    scope: 'layout',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user) && !isAuthPage,
-    retry: false,
   })
 
   if (isAuthPage) {
@@ -109,14 +103,17 @@ function BackofficeLayout() {
   }
 
   return (
-    <SidebarProvider>
-      <BackofficeSidebar />
-      <SidebarInset>
-        <BackofficeHeader />
-        <main className="flex-1 p-4">
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <BackofficeCommandPaletteProvider>
+      <SidebarProvider>
+        <BackofficeSidebar />
+        <SidebarInset>
+          <BackofficeHeader />
+          <main className="flex-1 p-4 sm:p-5">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+      <BackofficeCommandPalette />
+    </BackofficeCommandPaletteProvider>
   )
 }

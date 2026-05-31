@@ -4,15 +4,15 @@ This document describes how to deploy CalibraFacil to production.
 
 ## Architecture Overview
 
-| App | Platform | URL |
-|-----|----------|-----|
-| API | Vercel Functions | api.calibrafacil.com |
-| Web | Vercel | calibrafacil.com |
-| Portal | Vercel | portal.calibrafacil.com |
-| Background jobs | Vercel Queue and Cron | (API project) |
-| Docs | Cloudflare Pages | docs.calibrafacil.com |
-| Database | Neon PostgreSQL | (direct connection) |
-| Object storage | Cloudflare R2 | (certificate assets) |
+| App             | Platform              | URL                     |
+| --------------- | --------------------- | ----------------------- |
+| API             | Vercel Functions      | api.calibrafacil.com    |
+| Web             | Vercel                | calibrafacil.com        |
+| Portal          | Vercel                | portal.calibrafacil.com |
+| Background jobs | Vercel Queue and Cron | (API project)           |
+| Docs            | Cloudflare Pages      | docs.calibrafacil.com   |
+| Database        | Neon PostgreSQL       | (direct connection)     |
+| Object storage  | Cloudflare R2         | (certificate assets)    |
 
 ## Prerequisites
 
@@ -27,11 +27,11 @@ This document describes how to deploy CalibraFacil to production.
 The API, web, and portal apps deploy through Vercel. Each project should point at
 the matching app directory:
 
-| Project | Root Directory | Build |
-|---------|----------------|-------|
-| API | `apps/api` | `pnpm build:vercel-functions` |
-| Web | `apps/web` | `pnpm build` |
-| Portal | `apps/portal` | `pnpm build` |
+| Project | Root Directory | Build                         |
+| ------- | -------------- | ----------------------------- |
+| API     | `apps/api`     | `pnpm build:vercel-functions` |
+| Web     | `apps/web`     | `pnpm build`                  |
+| Portal  | `apps/portal`  | `pnpm build`                  |
 
 Vercel-specific routing, cron, queue, and output settings live in each app's
 `vercel.json`.
@@ -40,43 +40,43 @@ Vercel-specific routing, cron, queue, and output settings live in each app's
 
 Set production secrets in Vercel for the API project:
 
-| Variable | Description |
-|----------|-------------|
-| `BETTER_AUTH_SECRET` | Auth secret key |
-| `DATABASE_URL` | Neon PostgreSQL connection string |
-| `RESEND_API_KEY` | Resend email API key |
-| `RESEND_FROM_EMAIL` | Sender email address |
-| `APP_URL` | Web app URL |
-| `API_URL` | API base URL |
-| `PORTAL_URL` | Portal URL |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account id |
-| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret |
-| `R2_BUCKET_NAME` | Certificate bucket name |
-| `CHROMIUM_PACK_R2_BUCKET` | Optional R2 bucket for Chromium pack |
-| `CHROMIUM_PACK_R2_KEY` | Optional R2 key for Chromium pack |
-| `CHROMIUM_PACK_URL` | Optional public fallback URL for Chromium pack |
-| `SIGNING_MASTER_KEY` | Certificate signing master key |
-| `INTEGRATIONS_MASTER_KEY` | Integration credential encryption key |
+| Variable                  | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `BETTER_AUTH_SECRET`      | Auth secret key                                |
+| `DATABASE_URL`            | Neon PostgreSQL connection string              |
+| `RESEND_API_KEY`          | Resend email API key                           |
+| `RESEND_FROM_EMAIL`       | Sender email address                           |
+| `APP_URL`                 | Web app URL                                    |
+| `API_URL`                 | API base URL                                   |
+| `PORTAL_URL`              | Portal URL                                     |
+| `R2_ACCOUNT_ID`           | Cloudflare R2 account id                       |
+| `R2_ACCESS_KEY_ID`        | Cloudflare R2 access key                       |
+| `R2_SECRET_ACCESS_KEY`    | Cloudflare R2 secret                           |
+| `R2_BUCKET_NAME`          | Certificate bucket name                        |
+| `CHROMIUM_PACK_R2_BUCKET` | Optional R2 bucket for Chromium pack           |
+| `CHROMIUM_PACK_R2_KEY`    | Optional R2 key for Chromium pack              |
+| `CHROMIUM_PACK_URL`       | Optional public fallback URL for Chromium pack |
+| `SIGNING_MASTER_KEY`      | Certificate signing master key                 |
+| `INTEGRATIONS_MASTER_KEY` | Integration credential encryption key          |
 
 Set app-specific public variables, such as `VITE_API_URL`, on the web and portal
 Vercel projects.
 
 Optional Turbo Remote Cache settings can remain in GitHub Actions:
 
-| Secret or Variable | Description |
-|--------------------|-------------|
-| `TURBO_TOKEN` | Vercel Turbo remote cache token |
-| `TURBO_TEAM` | Vercel team name, usually configured as a repository variable |
+| Secret or Variable | Description                                                   |
+| ------------------ | ------------------------------------------------------------- |
+| `TURBO_TOKEN`      | Vercel Turbo remote cache token                               |
+| `TURBO_TEAM`       | Vercel team name, usually configured as a repository variable |
 
 ### 3. Configure Docs Deployment
 
 Docs remain on Cloudflare Pages. Keep the Cloudflare secrets in GitHub Actions:
 
-| Secret Name | Description |
-|-------------|-------------|
-| `CLOUDFLARE_API_TOKEN` | Token with Pages edit permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
+| Secret Name             | Description                       |
+| ----------------------- | --------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Token with Pages edit permissions |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id             |
 
 The docs deployment command is defined in `apps/docs/package.json`.
 
@@ -85,6 +85,7 @@ The docs deployment command is defined in `apps/docs/package.json`.
 ### Pull Request Workflow (`.github/workflows/ci.yml`)
 
 Runs on every PR to `main`:
+
 - Linting with oxlint
 - Type checking with TypeScript
 - Unit tests with Vitest
@@ -92,6 +93,7 @@ Runs on every PR to `main`:
 ### Deploy Workflow (`.github/workflows/deploy.yml`)
 
 Runs on push to `main`:
+
 1. Quality checks (lint, typecheck, test)
 2. Docs deployment when `apps/docs` changes
 
@@ -100,6 +102,7 @@ The API, web, and portal projects deploy through Vercel's Git integration.
 ### Database Migration Workflow (`.github/workflows/db-migrate.yml`)
 
 **Manual trigger only** - requires explicit confirmation:
+
 1. Go to Actions > Database Migration
 2. Select environment (production/staging)
 3. Type `migrate` to confirm
@@ -110,6 +113,7 @@ The API, web, and portal projects deploy through Vercel's Git integration.
 ### Setup
 
 1. Copy environment files:
+
    ```bash
    cp apps/api/.env.example apps/api/.env
    cp apps/worker/.env.example apps/worker/.env
@@ -191,6 +195,7 @@ Use the Cloudflare Pages deployment history for docs.
 ### Database
 
 Database migrations are forward-only. For rollback:
+
 1. Create a new migration that reverses the changes
 2. Test thoroughly in staging
 3. Deploy the reversal migration

@@ -15,6 +15,7 @@ import {
   getEffectivePlanLimits,
   hasFeature,
   isSubscriptionActive,
+  isValidPlanId,
   type PlanId,
   type FeatureFlag,
   type PlanLimits,
@@ -55,16 +56,14 @@ export async function assertPlanLimit(
   requested = 1,
 ) {
   const memberData = c.get("member");
-  const kv = (c.env as Record<string, unknown>).CACHE as
-    | KVNamespace
-    | undefined;
+  const kv = getCacheNamespace(c.env);
   const requestedCount = Math.max(0, requested);
 
   // Get subscription (cached)
   const sub = await getCachedSubscription(kv, memberData.organizationId);
 
   // Determine effective plan (FREE if no subscription)
-  const planId: PlanId = (sub?.planId as PlanId) || "FREE";
+  const planId = toPlanId(sub?.planId);
   const status = sub?.status || "TRIAL";
 
   // Check if subscription allows access
@@ -90,10 +89,9 @@ export async function assertPlanLimit(
     where: eq(organization.id, memberData.organizationId),
   });
 
-  const limit = getEffectivePlanLimits(
-    planId,
-    currentOrganization?.createdAt,
-  )[resource];
+  const limit = getEffectivePlanLimits(planId, currentOrganization?.createdAt)[
+    resource
+  ];
 
   // Get current usage (cached)
   const usage = await getCachedResourceUsage(
@@ -152,15 +150,13 @@ export function requirePlanLimit(resource: LimitResource) {
 export function requireFeature(feature: FeatureFlag) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const memberData = c.get("member");
-    const kv = (c.env as Record<string, unknown>).CACHE as
-      | KVNamespace
-      | undefined;
+    const kv = getCacheNamespace(c.env);
 
     // Get subscription (cached)
     const sub = await getCachedSubscription(kv, memberData.organizationId);
 
     // Determine effective plan (FREE if no subscription)
-    const planId: PlanId = (sub?.planId as PlanId) || "FREE";
+    const planId = toPlanId(sub?.planId);
     const status = sub?.status || "TRIAL";
 
     // Check if subscription allows access
@@ -198,7 +194,7 @@ export function requireFeature(feature: FeatureFlag) {
 // =============================================================================
 
 interface CachedSubscription {
-  planId: string;
+  planId: PlanId;
   status: SubscriptionStatus;
 }
 
@@ -228,8 +224,8 @@ async function getCachedSubscription(
   }
 
   const result: CachedSubscription = {
-    planId: sub.planId,
-    status: sub.status as SubscriptionStatus,
+    planId: toPlanId(sub.planId),
+    status: toSubscriptionStatus(sub.status),
   };
 
   await kvPut(kv, cacheKey, result, { ttl: CACHE_TTL.subscription });
@@ -359,7 +355,7 @@ function getFeatureLabel(feature: FeatureFlag): string {
  * .post("/", ...withLabPermission({ calibration: ["create"] }), ...withPlanLimit("certificates"), handler)
  */
 export function withPlanLimit(resource: LimitResource) {
-  return [requirePlanLimit(resource)] as const;
+  return [requirePlanLimit(resource)];
 }
 
 /**
@@ -371,5 +367,45 @@ export function withPlanLimit(resource: LimitResource) {
  * .get("/", ...withLabPermission({ portal: ["read"] }), ...withFeature("portal"), handler)
  */
 export function withFeature(feature: FeatureFlag) {
-  return [requireFeature(feature)] as const;
+  return [requireFeature(feature)];
+}
+
+function getCacheNamespace(env: unknown): KVNamespace | undefined {
+  const cache = readProperty(env, "CACHE");
+  return isKvNamespace(cache) ? cache : undefined;
+}
+
+function isKvNamespace(value: unknown): value is KVNamespace {
+  return (
+    typeof readProperty(value, "get") === "function" &&
+    typeof readProperty(value, "put") === "function" &&
+    typeof readProperty(value, "delete") === "function"
+  );
+}
+
+function readProperty(value: unknown, key: string): unknown {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return undefined;
+  }
+
+  return Reflect.get(value, key);
+}
+
+function toPlanId(value: unknown): PlanId {
+  return typeof value === "string" && isValidPlanId(value) ? value : "FREE";
+}
+
+function toSubscriptionStatus(value: unknown): SubscriptionStatus {
+  switch (value) {
+    case "ACTIVE":
+    case "PAST_DUE":
+    case "CANCELED":
+    case "TRIAL":
+      return value;
+    default:
+      return "TRIAL";
+  }
 }

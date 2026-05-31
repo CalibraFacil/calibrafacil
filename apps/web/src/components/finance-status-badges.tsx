@@ -36,16 +36,46 @@ const exportStatusMeta: Record<
   FAILED: { label: 'Falhou', variant: 'destructive' },
 }
 
+function parseBillingDocumentStatus(
+  status: string,
+): BillingDocumentStatus | null {
+  switch (status) {
+    case 'DRAFT':
+    case 'ISSUED':
+    case 'PAID':
+    case 'OVERDUE':
+    case 'VOID':
+      return status
+    default:
+      return null
+  }
+}
+
+function parseCommercialAgreementStatus(
+  status: string,
+): CommercialAgreementStatus | null {
+  switch (status) {
+    case 'DRAFT':
+    case 'ACTIVE':
+    case 'EXPIRED':
+    case 'CANCELED':
+      return status
+    default:
+      return null
+  }
+}
+
 export function BillingDocumentStatusBadge({
   status,
 }: {
   status: string | null | undefined
 }) {
   if (!status) return null
+  const parsedStatus = parseBillingDocumentStatus(status)
 
   return (
     <Badge variant={billingDocumentVariants[status] ?? 'secondary'}>
-      {getBillingDocumentStatusLabel(status as BillingDocumentStatus)}
+      {parsedStatus ? getBillingDocumentStatusLabel(parsedStatus) : status}
     </Badge>
   )
 }
@@ -56,10 +86,11 @@ export function CommercialAgreementStatusBadge({
   status: string | null | undefined
 }) {
   if (!status) return null
+  const parsedStatus = parseCommercialAgreementStatus(status)
 
   return (
     <Badge variant={agreementVariants[status] ?? 'secondary'}>
-      {getCommercialAgreementStatusLabel(status as CommercialAgreementStatus)}
+      {parsedStatus ? getCommercialAgreementStatusLabel(parsedStatus) : status}
     </Badge>
   )
 }

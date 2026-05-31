@@ -16,24 +16,36 @@ export function methodRouteId(method: {
   return `${slugifyRouteIdentifier(method.name)}-v${method.version}`
 }
 
-export function standardRouteId(standard: { serialNumber: string }): string {
-  return slugifyRouteIdentifier(standard.serialNumber)
+export function standardRouteId(standard: {
+  id: string | number
+  name: string
+  serialNumber?: string | null
+}): string {
+  return `${slugifyRouteIdentifier(standard.name)}-${standard.id}`
+}
+
+function decodeRouteIdentifier(value: string): string {
+  let decodedValue = value
+
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const nextValue = decodeURIComponent(decodedValue)
+      if (nextValue === decodedValue) break
+      decodedValue = nextValue
+    } catch {
+      break
+    }
+  }
+
+  return decodedValue
 }
 
 export function jobRouteId(job: { jobId: string }): string {
-  return job.jobId
+  return encodeURIComponent(decodeRouteIdentifier(job.jobId))
 }
 
 export function apiRouteParam(value: string | number): string {
-  const stringValue = String(value)
-  let decodedValue = stringValue
-
-  try {
-    decodedValue = decodeURIComponent(stringValue)
-  } catch {
-    decodedValue = stringValue
-  }
-
+  const decodedValue = decodeRouteIdentifier(String(value))
   return encodeURIComponent(encodeURIComponent(decodedValue))
 }
 

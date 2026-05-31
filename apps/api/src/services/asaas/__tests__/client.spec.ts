@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AsaasClient, AsaasError, getAsaasClient, resetAsaasClient } from "../client";
+import {
+  AsaasClient,
+  AsaasError,
+  getAsaasClient,
+  resetAsaasClient,
+} from "../client";
 import {
   mockFetchResponse,
   mockFetch,
@@ -75,7 +80,11 @@ describe("AsaasClient", () => {
       global.fetch = mockFetch(mockFetchResponse({ data: [] }));
 
       const client = new AsaasClient("test-api-key", "sandbox");
-      await client.get("/customers", { limit: 10, offset: 0, status: undefined });
+      await client.get("/customers", {
+        limit: 10,
+        offset: 0,
+        status: undefined,
+      });
 
       expect(global.fetch).toHaveBeenCalledWith(
         "https://sandbox.asaas.com/api/v3/customers?limit=10&offset=0",
@@ -84,11 +93,7 @@ describe("AsaasClient", () => {
     });
 
     it("should handle empty response body", async () => {
-      const response = {
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(""),
-      } as Response;
+      const response = new Response("", { status: 200 });
       global.fetch = vi.fn().mockResolvedValue(response);
 
       const client = new AsaasClient("test-api-key", "sandbox");
@@ -175,14 +180,21 @@ describe("AsaasClient", () => {
 
       const client = new AsaasClient("test-api-key", "sandbox");
 
-      await expect(client.get("/customers/invalid")).rejects.toThrow(AsaasError);
+      await expect(client.get("/customers/invalid")).rejects.toThrow(
+        AsaasError,
+      );
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it("should exhaust retries and throw error", async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        mockFetchResponse({ errors: [{ code: "server_error", description: "Server error" }] }, 500),
-      );
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockFetchResponse(
+            { errors: [{ code: "server_error", description: "Server error" }] },
+            500,
+          ),
+        );
 
       const client = new AsaasClient("test-api-key", "sandbox");
 
@@ -237,7 +249,8 @@ describe("AsaasClient", () => {
         expect.fail("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(AsaasError);
-        const asaasError = error as AsaasError;
+        if (!(error instanceof AsaasError)) throw error;
+        const asaasError = error;
         expect(asaasError.code).toBe("invalid_cpfCnpj");
         expect(asaasError.message).toBe("CPF/CNPJ inválido");
         expect(asaasError.details.errors).toHaveLength(2);
@@ -245,12 +258,10 @@ describe("AsaasClient", () => {
     });
 
     it("should handle non-JSON error response", async () => {
-      const response = {
-        ok: false,
+      const response = new Response("not json", {
         status: 500,
         statusText: "Internal Server Error",
-        json: () => Promise.reject(new Error("Invalid JSON")),
-      } as unknown as Response;
+      });
 
       // Mock to always return this error (simulates exhausted retries)
       global.fetch = vi.fn().mockResolvedValue(response);
@@ -262,7 +273,8 @@ describe("AsaasClient", () => {
         expect.fail("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(AsaasError);
-        const asaasError = error as AsaasError;
+        if (!(error instanceof AsaasError)) throw error;
+        const asaasError = error;
         expect(asaasError.code).toBe("HTTP_500");
       }
     });
@@ -273,7 +285,9 @@ describe("AsaasClient", () => {
       const originalEnv = process.env.ASAAS_API_KEY;
       delete process.env.ASAAS_API_KEY;
 
-      expect(() => getAsaasClient()).toThrow("ASAAS_API_KEY environment variable is required for billing operations");
+      expect(() => getAsaasClient()).toThrow(
+        "ASAAS_API_KEY environment variable is required for billing operations",
+      );
 
       process.env.ASAAS_API_KEY = originalEnv;
     });

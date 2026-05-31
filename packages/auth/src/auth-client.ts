@@ -1,21 +1,76 @@
+// oxlint-disable-next-line typescript/triple-slash-reference -- package-local Vite globals are provided by this declaration file.
 /// <reference path="./vite-env.d.ts" />
 import {
   adminClient,
+  emailOTPClient,
   magicLinkClient,
   organizationClient,
 } from "better-auth/client/plugins";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
 import { ac, platformAc, platformRoles, roles } from "./access";
 
 function getApiBaseURL(): string {
-  // Primary source of truth (Cloudflare Pages, Vite)
-  if (typeof window !== "undefined" && import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  if (typeof window !== "undefined") {
+    if (isDesktopRuntime()) {
+      return (
+        import.meta.env.VITE_DESKTOP_AUTH_API_URL ??
+        "https://api.calibrafacil.com"
+      );
+    }
+
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+
+    const host = window.location.hostname;
+    if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+      return `http://${host}:3000`;
+    }
+
+    if (/^dev-(portal|web|api)\.calibrafacil\.com$/.test(host)) {
+      return window.location.origin;
+    }
+
+    return "https://api.calibrafacil.com";
   }
 
   // Fallback for local development
   return "http://localhost:3000";
+}
+
+function isDesktopRuntime() {
+  return (
+    typeof window !== "undefined" &&
+    ((typeof window.calibraBridge === "object" &&
+      window.calibraBridge != null) ||
+      window.navigator.userAgent.includes("Electron"))
+  );
+}
+
+async function desktopAuthFetch(input: RequestInfo | URL, init?: RequestInit) {
+  if (!isDesktopRuntime() || !window.calibraBridge?.authFetch) {
+    return fetch(input, init);
+  }
+
+  const request = new Request(input, init);
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? null
+      : await request.clone().text();
+  const response = await window.calibraBridge.authFetch({
+    url: request.url,
+    method: request.method,
+    headers: [...request.headers.entries()],
+    body,
+  });
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 // Shared organization plugin config
@@ -60,11 +115,15 @@ export const labAuthClient = createBetterAuthClient({
   basePath: "/api/auth/lab",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   sessionOptions: {
     refetchOnWindowFocus: false,
   },
   plugins: [
+    passkeyClient(),
+    magicLinkClient(),
+    emailOTPClient(),
     adminClient({
       ac: platformAc,
       roles: platformRoles,
@@ -83,6 +142,7 @@ export const portalAuthClient = createBetterAuthClient({
   basePath: "/api/auth/portal",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   sessionOptions: {
     refetchOnWindowFocus: false,
@@ -99,6 +159,7 @@ export const backofficeAuthClient = createBetterAuthClient({
   basePath: "/api/auth/backoffice",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   plugins: [
     adminClient({
@@ -142,6 +203,8 @@ export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
 export const labAdmin = labAuthClient.admin;
+export const labPasskey = labAuthClient.passkey;
+export const labEmailOtp = labAuthClient.emailOtp;
 
 // Backoffice-specific exports (for apps/web /backoffice)
 export const backofficeSignIn = backofficeAuthClient.signIn;
@@ -164,10 +227,10 @@ export const backofficeAdmin = backofficeAuthClient.admin;
 export async function hasPermission(
   permissions: Parameters<
     typeof authClient.organization.hasPermission
-  >[0]["permission"],
+  >[0]["permissions"],
 ): Promise<boolean> {
   const result = await authClient.organization.hasPermission({
-    permission: permissions,
+    permissions,
   });
   return result.data?.success ?? false;
 }

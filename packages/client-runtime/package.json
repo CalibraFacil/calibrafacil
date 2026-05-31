@@ -1,0 +1,24 @@
+{
+  "name": "@calibra-facil/client-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo --noEmit",
+    "check-types": "tsgo --noEmit",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@calibra-facil/contracts": "workspace:^",
+    "hono": "^4.12.4"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

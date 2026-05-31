@@ -9,17 +9,10 @@ import {
   uploadToR2,
   type R2Env,
 } from "../lib/storage";
-import {
-  requireAuth,
-  type AuthVariables,
-} from "../middleware/permission";
+import { requireAuth, type AuthVariables } from "../middleware/permission";
 
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
-const ALLOWED_AVATAR_CONTENT_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-];
+const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
 
 function getAvatarApiUrl(): string {
@@ -36,13 +29,13 @@ export const profileMediaRouter = new Hono<{
 }>()
   .post("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     try {
       const formData = await c.req.formData();
-      const file = formData.get("avatar") as File | null;
+      const file = formData.get("avatar");
 
-      if (!file) {
+      if (!(file instanceof File)) {
         return c.json({ error: "Nenhum arquivo enviado" }, 400);
       }
 
@@ -83,7 +76,7 @@ export const profileMediaRouter = new Hono<{
   })
   .get("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     const [currentUser] = await db
       .select({ image: user.image })
@@ -112,13 +105,15 @@ export const profileMediaRouter = new Hono<{
   })
   .delete("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     try {
       const r2Client = createR2Client(env);
-      await deleteFromR2(r2Client, env.R2_BUCKET_NAME, getAvatarKey(session.user.id)).catch(
-        () => undefined,
-      );
+      await deleteFromR2(
+        r2Client,
+        env.R2_BUCKET_NAME,
+        getAvatarKey(session.user.id),
+      ).catch(() => undefined);
 
       return c.json({ success: true });
     } catch (error) {

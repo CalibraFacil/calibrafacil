@@ -24,7 +24,7 @@ export type ApiRuntimeEnv = Record<string, unknown> & {
 };
 
 export type WorkerRuntimeEnv = {
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
   CERTIFICATES_BUCKET: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
     put(
@@ -39,8 +39,15 @@ export type WorkerRuntimeEnv = {
   CHROME_EXECUTABLE_PATH?: string;
   CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
+  GOTENBERG_URL?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  EMAIL_FROM?: string;
+  EMAIL_LOGO_URL?: string;
+  WEB_URL?: string;
+  APP_URL?: string;
 };
 
 const requiredProductionEnv = [
@@ -108,6 +115,7 @@ type LocalS3Client = S3Client & {
 
 function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client has command-specific send overloads that are narrower than the base client type exposes.
   const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
@@ -164,13 +172,13 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
   }
 
   const databaseUrl = process.env.DATABASE_URL;
-  const env = {
+  const env: ApiRuntimeEnv = {
     API_URL: process.env.API_URL,
     APP_URL: process.env.APP_URL,
     PORTAL_APP_URL: process.env.PORTAL_APP_URL,
     ...process.env,
     CACHE: apiRuntimeCache,
-  } as ApiRuntimeEnv;
+  };
 
   if (databaseUrl) {
     env.HYPERDRIVE = { connectionString: databaseUrl };
@@ -187,7 +195,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
   }
 
   return {
-    HYPERDRIVE: { connectionString: databaseUrl },
+    DATABASE_URL: databaseUrl,
     CERTIFICATES_BUCKET: createR2Bucket(),
     RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
       ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
@@ -195,7 +203,14 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
     CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
+    GOTENBERG_URL: process.env.GOTENBERG_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    EMAIL_LOGO_URL: process.env.EMAIL_LOGO_URL,
+    WEB_URL: process.env.WEB_URL,
+    APP_URL: process.env.APP_URL,
   };
 }

@@ -1,26 +1,41 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import {
   backofficeSignIn,
   backofficeSignOut,
+  labAuthClient,
   signIn,
 } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
+import { getBackofficeAccess } from '@/features/backoffice/queries'
+import { calibraApi } from '@/utils/api'
+import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { cn } from '@/lib/utils'
+import {
+  sanitizeBackofficeRedirect,
+  sanitizeLabRedirect,
+} from '@/lib/auth-redirect'
+import {
+  AuthStatusMessage,
+  type AuthStatus,
+} from '@/components/auth-status-message'
 import { BrandMark } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from '@/components/ui/input-otp'
 import { Separator } from '@/components/ui/separator'
 
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
   mode?: 'lab' | 'backoffice'
-}
-
-interface SsoStartResponse {
-  url: string
 }
 
 export function SignInForm({
@@ -34,99 +49,246 @@ export function SignInForm({
   const [password, setPassword] = useState('')
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [ssoEmail, setSsoEmail] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSsoLoading, setIsSsoLoading] = useState(false)
+  const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false)
+  const [isOtpRequesting, setIsOtpRequesting] = useState(false)
+  const [isOtpSigningIn, setIsOtpSigningIn] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [otpRequested, setOtpRequested] = useState(false)
+
+  const isLabMode = mode === 'lab'
+  const safeRedirect = isLabMode
+    ? sanitizeLabRedirect(redirect)
+    : sanitizeBackofficeRedirect(redirect)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError(null)
-    setIsLoading(true)
-
-    const authSignIn = mode === 'backoffice' ? backofficeSignIn : signIn
-    const { error } = await authSignIn.email({
-      email,
-      password,
-    })
-
-    if (error) {
-      setIsLoading(false)
-      setError(error.message ?? 'Failed to sign in')
+    if (isLabMode) {
+      await handlePasskeySignIn()
       return
     }
 
-    if (mode === 'backoffice') {
-      try {
-        const accessRes = await api.api.backoffice.access.$get()
+    setAuthStatus(null)
+    setIsLoading(true)
 
-        if (!accessRes.ok) {
-          setError('Falha ao validar acesso ao backoffice')
-          return
-        }
+    try {
+      const { error: signInError } = await backofficeSignIn.email({
+        email,
+        password,
+      })
 
-        const access = (await accessRes.json()) as {
-          allowed: boolean
-          bootstrapAvailable: boolean
-        }
-
-        if (access.allowed) {
-          navigate({ to: redirect || '/backoffice' })
-          return
-        }
-
-        if (access.bootstrapAvailable) {
-          navigate({ to: '/backoffice/bootstrap' })
-          return
-        }
-
-        await backofficeSignOut()
-        setError('Sua conta não possui acesso ao backoffice')
+      if (signInError) {
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            signInError.message,
+            'Não foi possível entrar. Verifique os dados e tente novamente.',
+          ),
+        })
         return
-      } finally {
-        setIsLoading(false)
       }
-    }
 
-    setIsLoading(false)
-    navigate({ to: redirect || '/dashboard' })
+      clearDesktopSignedOut()
+
+      const access = await getBackofficeAccess()
+
+      if (access.allowed) {
+        navigate({ to: safeRedirect })
+        return
+      }
+
+      if (access.bootstrapAvailable) {
+        navigate({ to: '/backoffice/bootstrap' })
+        return
+      }
+
+      await backofficeSignOut()
+      setAuthStatus({
+        tone: 'error',
+        title: 'Sua conta não possui acesso ao backoffice',
+      })
+    } catch {
+      setAuthStatus({
+        tone: 'error',
+        title:
+          'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handlePasskeySignIn() {
+    setAuthStatus(null)
+    setIsLoading(true)
+
+    try {
+      const result = await labAuthClient.signIn.passkey()
+
+      if (result.error) {
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            result.error.message,
+            'Não foi possível entrar com passkey.',
+          ),
+        })
+        return
+      }
+
+      clearDesktopSignedOut()
+      startDesktopInitialSync()
+      navigate({ to: safeRedirect })
+    } catch {
+      setAuthStatus({
+        tone: 'error',
+        title: 'Não foi possível entrar com passkey.',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleMagicLinkSignIn() {
+    setAuthStatus(null)
+    setIsMagicLinkLoading(true)
+
+    try {
+      const callbackURL = `${window.location.origin}${safeRedirect}`
+      const { error: magicLinkError } = await signIn.magicLink({
+        email,
+        callbackURL,
+        errorCallbackURL: `${window.location.origin}/sign-in`,
+      })
+
+      if (magicLinkError) {
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            magicLinkError.message,
+            'Não foi possível enviar o link mágico.',
+          ),
+        })
+        return
+      }
+
+      setAuthStatus({
+        tone: 'success',
+        title: 'Link de acesso solicitado',
+        description:
+          'Se o email tiver acesso LAB, enviaremos o link em instantes.',
+      })
+    } catch {
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao solicitar link mágico.',
+      })
+    } finally {
+      setIsMagicLinkLoading(false)
+    }
+  }
+
+  async function handleRequestOtp() {
+    setAuthStatus(null)
+    setIsOtpRequesting(true)
+
+    try {
+      const { error: otpRequestError } =
+        await labAuthClient.emailOtp.sendVerificationOtp({
+          email,
+          type: 'sign-in',
+        })
+
+      if (otpRequestError) {
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            otpRequestError.message,
+            'Falha ao enviar código.',
+          ),
+        })
+        return
+      }
+
+      setOtpRequested(true)
+      setAuthStatus({
+        tone: 'success',
+        title: 'Código solicitado',
+        description:
+          'Se o email tiver acesso LAB, enviaremos um código de 6 dígitos.',
+      })
+    } catch {
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao solicitar código.',
+      })
+    } finally {
+      setIsOtpRequesting(false)
+    }
+  }
+
+  async function handleOtpSignIn() {
+    setAuthStatus(null)
+    setIsOtpSigningIn(true)
+
+    try {
+      const { error: otpSignInError } = await labAuthClient.signIn.emailOtp({
+        email,
+        otp,
+      })
+
+      if (otpSignInError) {
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            otpSignInError.message,
+            'Código inválido.',
+          ),
+        })
+        return
+      }
+
+      clearDesktopSignedOut()
+      startDesktopInitialSync()
+      navigate({ to: safeRedirect })
+    } catch {
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao validar código.',
+      })
+    } finally {
+      setIsOtpSigningIn(false)
+    }
   }
 
   async function handleSsoSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
-    setError(null)
+    setAuthStatus(null)
     setIsSsoLoading(true)
 
     try {
-      const res = await api.api.sso.start.$post({
-        json: {
-          organizationSlug,
-          ...(ssoEmail ? { email: ssoEmail } : {}),
-          redirectPath: redirect || '/dashboard',
-        },
+      const data = await calibraApi.sso.start({
+        organizationSlug,
+        ...(ssoEmail ? { email: ssoEmail } : {}),
+        redirectPath: sanitizeLabRedirect(redirect),
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        const message =
-          data &&
-          typeof data === 'object' &&
-          'error' in data &&
-          typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao iniciar login via SSO'
-        setError(message)
-        return
-      }
-
-      const data = (await res.json()) as SsoStartResponse
       if (!data.url) {
-        setError('Falha ao iniciar login via SSO')
+        setAuthStatus({
+          tone: 'error',
+          title: 'Falha ao iniciar login via SSO',
+        })
         return
       }
 
+      clearDesktopSignedOut()
       window.location.assign(data.url)
     } catch {
-      setError('Falha ao iniciar login via SSO')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao iniciar login via SSO',
+      })
     } finally {
       setIsSsoLoading(false)
     }
@@ -142,69 +304,159 @@ export function SignInForm({
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12" />
           <h1 className="text-2xl font-bold">
-            {mode === 'backoffice' ? 'Entrar no backoffice' : 'Entre em sua conta'}
+            {mode === 'backoffice'
+              ? 'Entrar no backoffice'
+              : 'Entre em sua conta'}
           </h1>
           <p className="text-muted-foreground text-sm text-balance">
             {mode === 'backoffice'
               ? 'Acesso interno da equipe CalibraFácil'
-              : 'Insira seu email abaixo para entrar em sua conta'}
+              : 'Use sua passkey ou um método seguro por email'}
           </p>
         </div>
-        {error && (
-          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-            {error}
-          </div>
-        )}
+        {authStatus ? <AuthStatusMessage status={authStatus} /> : null}
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
             id="email"
             type="email"
-            placeholder="m@example.com"
+            autoComplete={isLabMode ? 'username webauthn' : 'username'}
+            placeholder="seu@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
+            required={!isLabMode || isMagicLinkLoading || isOtpRequesting}
           />
         </Field>
-        <Field>
-          <div className="flex items-center">
-            <FieldLabel htmlFor="password">Senha</FieldLabel>
-            <Link
-              to="/reset-password"
-              className="ml-auto text-sm underline-offset-4 hover:underline"
-            >
-              Esqueceu sua senha?
-            </Link>
-          </div>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </Field>
-        <Field>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Spinner className="mr-2" />
-                Entrando...
-              </>
-            ) : (
-              'Entrar'
-            )}
-          </Button>
-        </Field>
+        {isLabMode ? (
+          <>
+            <Field>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Entrando...
+                  </>
+                ) : (
+                  'Entrar com passkey'
+                )}
+              </Button>
+            </Field>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isMagicLinkLoading || !email.trim()}
+                onClick={handleMagicLinkSignIn}
+              >
+                {isMagicLinkLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber link de acesso'
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isOtpRequesting || !email.trim()}
+                onClick={handleRequestOtp}
+              >
+                {isOtpRequesting ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber código'
+                )}
+              </Button>
+            </div>
+            {otpRequested ? (
+              <div className="space-y-3">
+                <Field>
+                  <FieldLabel htmlFor="sign-in-otp">Código recebido</FieldLabel>
+                  <InputOTP
+                    id="sign-in-otp"
+                    maxLength={6}
+                    pattern={REGEXP_ONLY_DIGITS}
+                    value={otp}
+                    onChange={setOtp}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    aria-label="Código recebido"
+                    containerClassName="justify-center"
+                    required
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </Field>
+                <Button
+                  type="button"
+                  disabled={isOtpSigningIn || otp.length < 6}
+                  onClick={handleOtpSignIn}
+                >
+                  {isOtpSigningIn ? 'Validando...' : 'Entrar com código'}
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Field>
+              <div className="flex items-center">
+                <FieldLabel htmlFor="password">Senha</FieldLabel>
+                <Link
+                  to="/reset-password"
+                  className="ml-auto text-sm underline-offset-4 hover:underline"
+                >
+                  Esqueceu sua senha?
+                </Link>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </Field>
+            <Field>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Entrando...
+                  </>
+                ) : (
+                  'Entrar'
+                )}
+              </Button>
+            </Field>
+          </>
+        )}
         {mode === 'lab' ? (
           <>
             <Separator />
             <Field>
               <div className="space-y-1">
-                <FieldLabel htmlFor="organizationSlug">Entrar com SSO</FieldLabel>
+                <FieldLabel htmlFor="organizationSlug">
+                  Entrar com SSO
+                </FieldLabel>
                 <p className="text-sm text-muted-foreground">
-                  Informe o slug da organização e, se quiser, um email corporativo
-                  como login hint.
+                  Informe o slug da organização e, se quiser, um email
+                  corporativo como login hint.
                 </p>
               </div>
             </Field>
@@ -250,15 +502,15 @@ export function SignInForm({
             </Field>
           </>
         ) : null}
-        {/* <Field>
-          <FieldDescription className="text-center">
-            Não possui uma conta?{' '}
-            <Link to="/sign-up" className="underline underline-offset-4">
-              Cadastre-se
-            </Link>
-          </FieldDescription>
-        </Field> */}
       </FieldGroup>
     </form>
   )
+}
+
+export function startDesktopInitialSync() {
+  if (typeof window === 'undefined' || !window.calibraBridge) return
+
+  void window.calibraBridge.startSync().catch(() => {
+    // The sync status banner surfaces failures after navigation.
+  })
 }

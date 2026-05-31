@@ -14,20 +14,15 @@ import {
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 
-import {
-  CommandGroup,
-  CommandItem,
-  CommandShortcut,
-} from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
 
 type ContextAction = {
   id: string
   label: string
   icon: React.ReactNode
-  shortcut?: string
   onSelect: () => void
   disabled?: boolean
 }
@@ -70,22 +65,13 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
             className="text-green-500"
           />
         ),
-        shortcut: '⌘⏎',
         onSelect: async () => {
           if (!jobId) return
 
           try {
-            const res = await api.api.jobs[':id'].approve.$post({
-              param: { id: apiRouteParam(jobId) },
-              json: { reason: 'Aprovado via comando rápido' },
+            await calibraApi.jobs.approve(apiRouteParam(jobId), {
+              reason: 'Aprovado via comando rápido',
             })
-
-            if (!res.ok) {
-              const error = await res.json()
-              throw new Error(
-                (error as { error?: string }).error || 'Erro ao aprovar',
-              )
-            }
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Job aprovado com sucesso!', {
@@ -118,21 +104,11 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'print-label',
         label: 'Imprimir Etiqueta',
         icon: <HugeiconsIcon icon={PrinterIcon} />,
-        shortcut: '⌘P',
         onSelect: async () => {
           if (!jobId) return
 
           try {
-            const res = await api.api.jobs[':id']['generate-label'].$post({
-              param: { id: apiRouteParam(jobId) },
-            })
-
-            if (!res.ok) {
-              const error = await res.json()
-              throw new Error(
-                (error as { error?: string }).error || 'Erro ao gerar etiqueta',
-              )
-            }
+            await calibraApi.jobs.generateLabel(apiRouteParam(jobId))
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Gerando etiqueta...', {
@@ -191,7 +167,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'download-last-cert',
         label: 'Baixar Último Certificado',
         icon: <HugeiconsIcon icon={Download01Icon} />,
-        shortcut: '⌘D',
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -233,7 +208,6 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
         id: 'download-standard-cert',
         label: 'Baixar Certificado do Padrão',
         icon: <HugeiconsIcon icon={Download01Icon} />,
-        shortcut: '⌘D',
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -274,9 +248,6 @@ export function ContextGroup() {
         >
           {action.icon}
           <span>{action.label}</span>
-          {action.shortcut && (
-            <CommandShortcut>{action.shortcut}</CommandShortcut>
-          )}
         </CommandItem>
       ))}
     </CommandGroup>

@@ -31,6 +31,7 @@ export type FeatureFlag =
   | "math_engine" // Standard+: Advanced uncertainty calculations
   | "portal" // Standard+: Client portal access
   | "financial" // Professional+: Financial module (invoicing, payments)
+  | "financial_integrations" // Professional+: Native financial ERP integration (Conta Azul + connectors)
   | "api" // Professional+: API access for integrations
   | "custom_domain" // Professional+: Custom domain support
   | "sso" // Enterprise: SSO for lab dashboard access
@@ -50,6 +51,7 @@ export interface PlanEntitlements {
     | "math_engine"
     | "portal"
     | "financial"
+    | "financial_integrations"
     | "api"
     | "custom_domain"
     | "sso"
@@ -155,6 +157,11 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
     name: "Módulo Financeiro",
     description: "Faturamento e gestão de pagamentos",
   },
+  financial_integrations: {
+    category: "capabilities",
+    name: "Integrações Financeiras (ERP)",
+    description: "Continuidade financeira com ERPs como a Conta Azul",
+  },
   api: {
     category: "capabilities",
     name: "Acesso à API",
@@ -202,10 +209,32 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
   },
 } as const;
 
+export const FEATURE_FLAGS = [
+  "math_engine",
+  "portal",
+  "financial",
+  "financial_integrations",
+  "api",
+  "custom_domain",
+  "sso",
+  "approval_workflow",
+  "advanced_audit_trail",
+  "custom_templates",
+  "priority_support",
+  "multi_unit",
+  "custom_integrations",
+] as const satisfies readonly FeatureFlag[];
+
+/** Runtime guard for an arbitrary string being a known feature flag. */
+export function isFeatureFlag(value: string): value is FeatureFlag {
+  return FEATURE_FLAGS.some((flag) => flag === value);
+}
+
 const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   math_engine: ["math_engine"],
   portal: ["portal"],
   financial: ["financial"],
+  financial_integrations: ["financial_integrations"],
   api: ["api"],
   custom_domain: ["custom_domain"],
   sso: ["sso"],
@@ -225,6 +254,7 @@ function createEntitlements(enabled: FeatureFlag[]): PlanEntitlements {
       math_engine: has("math_engine"),
       portal: has("portal"),
       financial: has("financial"),
+      financial_integrations: has("financial_integrations"),
       api: has("api"),
       custom_domain: has("custom_domain"),
       sso: has("sso"),
@@ -285,6 +315,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "math_engine",
       "portal",
       "financial",
+      "financial_integrations",
       "api",
       "custom_domain",
       "approval_workflow",
@@ -307,6 +338,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "math_engine",
       "portal",
       "financial",
+      "financial_integrations",
       "api",
       "custom_domain",
       "sso",
@@ -359,13 +391,14 @@ export function hasEntitlement(
   if (!plan?.entitlements) {
     return false;
   }
+  const entitlementGroups: Array<Partial<Record<FeatureFlag, boolean>>> = [
+    plan.entitlements.capabilities,
+    plan.entitlements.operations,
+    plan.entitlements.scale,
+  ];
 
   return legacyFeatureMap[feature].some((mappedFeature) =>
-    [
-      plan.entitlements.capabilities,
-      plan.entitlements.operations,
-      plan.entitlements.scale,
-    ].some((group) => group[mappedFeature as keyof typeof group] === true),
+    entitlementGroups.some((group) => group[mappedFeature] === true),
   );
 }
 
@@ -435,9 +468,7 @@ export function getPaidPlans(): PlanConfig[] {
  * List enabled feature flags for a plan.
  */
 export function getEnabledEntitlements(planId: PlanId): FeatureFlag[] {
-  return (Object.keys(ENTITLEMENT_METADATA) as FeatureFlag[]).filter(
-    (feature) => hasEntitlement(planId, feature),
-  );
+  return FEATURE_FLAGS.filter((feature) => hasEntitlement(planId, feature));
 }
 
 /**

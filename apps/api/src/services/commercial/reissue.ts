@@ -1,4 +1,8 @@
-import type { ReissueCommercialOfferInput } from "@calibra-facil/schemas";
+import {
+  CommercialOfferItemSchema,
+  CommercialPaymentMethodSchema,
+  type ReissueCommercialOfferInput,
+} from "@calibra-facil/schemas";
 import { db } from "@calibra-facil/db";
 import { commercialOffer } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
@@ -10,12 +14,68 @@ export function resolveReissueItems(
   termsSnapshot: Record<string, unknown>,
 ) {
   const originalItems = Array.isArray(termsSnapshot.items)
-    ? (termsSnapshot.items as NonNullable<
-        ReissueCommercialOfferInput["overrides"]["items"]
-      >)
+    ? termsSnapshot.items.flatMap((item) => {
+        const parsed = CommercialOfferItemSchema.safeParse(item);
+        if (!parsed.success) {
+          return [];
+        }
+
+        const totalAmount =
+          item && typeof item === "object" && !Array.isArray(item)
+            ? Object.fromEntries(Object.entries(item)).totalAmount
+            : null;
+
+        return [
+          typeof totalAmount === "number"
+            ? { ...parsed.data, totalAmount }
+            : parsed.data,
+        ];
+      })
     : [];
 
   return overrides.items ?? originalItems;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function toBasePlanId(value: unknown) {
+  switch (value) {
+    case "STANDARD":
+    case "PROFESSIONAL":
+    case "ENTERPRISE":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function toBillingCycle(value: unknown) {
+  switch (value) {
+    case "MONTHLY":
+    case "YEARLY":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function toPaymentMethods(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const methods = value.flatMap((item) => {
+    const parsed = CommercialPaymentMethodSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  return methods.length > 0 ? methods : undefined;
 }
 
 export async function reissueCommercialOffer(
@@ -28,7 +88,12 @@ export async function reissueCommercialOffer(
     throw new Error("Oferta original não encontrada");
   }
 
-  const terms = (current.termsSnapshot ?? {}) as Record<string, unknown>;
+  const terms = toRecord(current.termsSnapshot);
+  const paymentMethods =
+    input.overrides.paymentMethods ?? toPaymentMethods(current.paymentMethods);
+  if (!paymentMethods) {
+    throw new Error("Oferta original sem meio de pagamento valido");
+  }
   const merged = {
     organizationId: current.organizationId,
     dealId: current.dealId,
@@ -38,20 +103,16 @@ export async function reissueCommercialOffer(
         : undefined,
     kind: current.kind,
     basePlanId:
-      (input.overrides.basePlanId ?? current.basePlanId ?? undefined) as
-        | "STANDARD"
-        | "PROFESSIONAL"
-        | "ENTERPRISE"
-        | undefined,
+      input.overrides.basePlanId ?? toBasePlanId(current.basePlanId),
     billingCycle:
-      (input.overrides.billingCycle ?? current.billingCycle ?? undefined) as
-        | "MONTHLY"
-        | "YEARLY"
-        | undefined,
+      input.overrides.billingCycle ?? toBillingCycle(current.billingCycle),
     contractTermMonths:
-      input.overrides.contractTermMonths ?? current.contractTermMonths ?? undefined,
+      input.overrides.contractTermMonths ??
+      current.contractTermMonths ??
+      undefined,
     negotiatedAmount:
-      input.overrides.negotiatedAmount ?? Number(terms.totalAmount ?? current.totalAmount),
+      input.overrides.negotiatedAmount ??
+      Number(terms.totalAmount ?? current.totalAmount),
     discountAmount: input.overrides.discountAmount ?? current.discountAmount,
     setupFeeAmount: input.overrides.setupFeeAmount ?? 0,
     dueDate:
@@ -59,12 +120,16 @@ export async function reissueCommercialOffer(
       (current.dueDate ? current.dueDate.toISOString() : undefined),
     offerExpiresAt:
       input.overrides.offerExpiresAt ??
-      (current.offerExpiresAt ? current.offerExpiresAt.toISOString() : undefined),
-    paymentMethods:
-      input.overrides.paymentMethods ?? (current.paymentMethods as any[]),
+      (current.offerExpiresAt
+        ? current.offerExpiresAt.toISOString()
+        : undefined),
+    paymentMethods,
     customerVisibleDescription:
-      input.overrides.customerVisibleDescription ?? current.customerVisibleDescription ?? undefined,
-    internalNotes: input.overrides.internalNotes ?? current.internalNotes ?? undefined,
+      input.overrides.customerVisibleDescription ??
+      current.customerVisibleDescription ??
+      undefined,
+    internalNotes:
+      input.overrides.internalNotes ?? current.internalNotes ?? undefined,
     items: resolveReissueItems(input.overrides, terms),
   };
 

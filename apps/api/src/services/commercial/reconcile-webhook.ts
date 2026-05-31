@@ -8,9 +8,11 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, or } from "drizzle-orm";
 import type { AsaasPayment, AsaasWebhookPayload } from "../../services/asaas";
+import { activateOfferFromConfirmedPayment } from "./activation";
 import {
-  activateOfferFromConfirmedPayment,
-} from "./activation";
+  notifyPaymentFailed,
+  notifyPaymentReceived,
+} from "@calibra-facil/notifications";
 import {
   createCommercialExternalReference,
   invalidateCommercialPublicToken,
@@ -22,23 +24,55 @@ import {
 function isUniqueConstraintError(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === "23505",
+    typeof error === "object" &&
+    "code" in error &&
+    Reflect.get(error, "code") === "23505",
   );
 }
 
-function mapPaymentStatus(status: string): PaymentStatus {
-  return status as PaymentStatus;
+function mapPaymentStatus(status: PaymentStatus): PaymentStatus {
+  return status;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
-function getExistingPixSnapshot(existing: typeof paymentRecord.$inferSelect | null) {
-  const providerSnapshot = asRecord(existing?.providerSnapshot);
-  const pixTransaction = asRecord(providerSnapshot?.pixTransaction);
+function optionalRecord(value: unknown): Record<string, unknown> | null {
+  const record = asRecord(value);
+  return Object.keys(record).length > 0 ? record : null;
+}
+
+function paymentMethodFromBillingType(
+  billingType: AsaasPayment["billingType"],
+) {
+  if (
+    billingType === "PIX" ||
+    billingType === "BOLETO" ||
+    billingType === "CREDIT_CARD"
+  ) {
+    return billingType;
+  }
+
+  return "BOLETO";
+}
+
+type PaymentNotificationToSend = {
+  type: "received" | "failed";
+  paymentId: number;
+  organizationId: string;
+  reason?: string;
+};
+
+function getExistingPixSnapshot(
+  existing: typeof paymentRecord.$inferSelect | null,
+) {
+  const providerSnapshot = optionalRecord(existing?.providerSnapshot);
+  const pixTransaction = optionalRecord(providerSnapshot?.pixTransaction);
 
   return {
     qrCode:
@@ -133,17 +167,18 @@ async function upsertPaymentFromWebhook(
     existingPix.qrCodePayload ??
     null;
   const providerSnapshot = {
-    ...(existingPix.providerSnapshot ?? {}),
-    ...(payment as unknown as Record<string, unknown>),
+    ...asRecord(existingPix.providerSnapshot),
+    ...asRecord(payment),
     pixTransaction: {
-      ...(existingPix.pixTransaction ?? {}),
-      ...(payment.pixTransaction ?? {}),
+      ...asRecord(existingPix.pixTransaction),
+      ...asRecord(payment.pixTransaction),
       ...(nextPixQrCodeUrl ? { qrCode: nextPixQrCodeUrl } : {}),
       ...(nextPixPayload ? { qrCodePayload: nextPixPayload } : {}),
       ...(payment.pixTransaction?.expirationDate || existingPix.expirationDate
         ? {
             expirationDate:
-              payment.pixTransaction?.expirationDate ?? existingPix.expirationDate,
+              payment.pixTransaction?.expirationDate ??
+              existingPix.expirationDate,
           }
         : {}),
     },
@@ -155,13 +190,14 @@ async function upsertPaymentFromWebhook(
     provider: "ASAAS" as const,
     providerCheckoutId: offer.providerCheckoutId,
     providerPaymentId: payment.id,
-    providerSubscriptionId: payment.subscription ?? offer.providerSubscriptionId,
+    providerSubscriptionId:
+      payment.subscription ?? offer.providerSubscriptionId,
     externalReference:
       payment.externalReference ?? createCommercialExternalReference(offer.id),
     amount: Math.round(payment.value * 100),
     netAmount: payment.netValue ? Math.round(payment.netValue * 100) : null,
     currency: "BRL",
-    paymentMethod: payment.billingType as "PIX" | "BOLETO" | "CREDIT_CARD",
+    paymentMethod: paymentMethodFromBillingType(payment.billingType),
     status: mapPaymentStatus(payment.status),
     dueDate: payment.dueDate ? new Date(payment.dueDate) : null,
     paidAt: payment.paymentDate ? new Date(payment.paymentDate) : null,
@@ -187,10 +223,10 @@ async function upsertPaymentFromWebhook(
       fromStatus: existing.status,
       toStatus: values.status,
       sourceEventId: eventId,
-      payload: payment as unknown as Record<string, unknown>,
+      payload: asRecord(payment),
     });
 
-    return updated ?? existing;
+    return { payment: updated ?? existing, previousStatus: existing.status };
   }
 
   const [created] = await tx.insert(paymentRecord).values(values).returning();
@@ -203,13 +239,15 @@ async function upsertPaymentFromWebhook(
     commercialOfferId: offer.id,
     toStatus: values.status,
     sourceEventId: eventId,
-    payload: payment as unknown as Record<string, unknown>,
+    payload: asRecord(payment),
   });
 
-  return created;
+  return { payment: created, previousStatus: null };
 }
 
-export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
+export async function reconcileCommercialWebhook(
+  payload: AsaasWebhookPayload,
+): Promise<{ duplicate: boolean; organizationId: string | null }> {
   const eventId = payload.id || crypto.randomUUID();
 
   try {
@@ -217,11 +255,11 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
       provider: "ASAAS",
       eventId,
       eventType: payload.event,
-      payload: payload as unknown as Record<string, unknown>,
+      payload: asRecord(payload),
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      return { duplicate: true, organizationId: null as string | null };
+      return { duplicate: true, organizationId: null };
     }
     throw error;
   }
@@ -237,8 +275,10 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
           eq(providerWebhookEvent.eventId, eventId),
         ),
       );
-    return { duplicate: false, organizationId: null as string | null };
+    return { duplicate: false, organizationId: null };
   }
+
+  let paymentNotification: PaymentNotificationToSend | null = null;
 
   await db.transaction(async (tx) => {
     const providerSubscriptionId = resolveProviderSubscriptionId(
@@ -247,14 +287,22 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
     );
 
     if (payload.payment) {
-      const payment = await upsertPaymentFromWebhook(tx, offer, payload.payment, eventId);
+      const { payment, previousStatus } = await upsertPaymentFromWebhook(
+        tx,
+        offer,
+        payload.payment,
+        eventId,
+      );
 
       let nextOfferStatus = offer.status;
       if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
         nextOfferStatus = "PAID";
       } else if (payment.status === "OVERDUE") {
         nextOfferStatus = "FAILED";
-      } else if (payment.status === "REFUNDED" || payment.status === "DELETED") {
+      } else if (
+        payment.status === "REFUNDED" ||
+        payment.status === "DELETED"
+      ) {
         nextOfferStatus = "FAILED";
       }
 
@@ -265,7 +313,7 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
             status: nextOfferStatus,
             paidAt:
               nextOfferStatus === "PAID"
-                ? payment.paidAt ?? new Date()
+                ? (payment.paidAt ?? new Date())
                 : offer.paidAt,
           })
           .where(eq(commercialOffer.id, offer.id));
@@ -280,12 +328,52 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
           toStatus: nextOfferStatus,
           source: "WEBHOOK",
           sourceEventId: eventId,
-          payload: payload as unknown as Record<string, unknown>,
+          payload: asRecord(payload),
         });
       }
 
       if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
         await activateOfferFromConfirmedPayment(tx, offer.id, payment.status);
+      }
+
+      const paymentSuccessStatuses: PaymentStatus[] = ["CONFIRMED", "RECEIVED"];
+      const enteredSuccessfulPaymentState =
+        paymentSuccessStatuses.includes(payment.status) &&
+        (previousStatus === null ||
+          !paymentSuccessStatuses.includes(previousStatus));
+
+      if (enteredSuccessfulPaymentState) {
+        paymentNotification = {
+          type: "received",
+          paymentId: payment.id,
+          organizationId: offer.organizationId,
+        };
+      } else if (
+        previousStatus !== payment.status &&
+        [
+          "OVERDUE",
+          "REFUNDED",
+          "REFUND_REQUESTED",
+          "CHARGEBACK_REQUESTED",
+          "CHARGEBACK_DISPUTE",
+          "AWAITING_CHARGEBACK_REVERSAL",
+          "DELETED",
+        ].includes(payment.status)
+      ) {
+        paymentNotification = {
+          type: "failed",
+          paymentId: payment.id,
+          organizationId: offer.organizationId,
+          reason:
+            payment.status === "OVERDUE"
+              ? "Pagamento vencido"
+              : payment.status === "REFUNDED" ||
+                  payment.status === "REFUND_REQUESTED"
+                ? "Pagamento estornado"
+                : payment.status.includes("CHARGEBACK")
+                  ? "Pagamento em contestação"
+                  : "Pagamento cancelado",
+        };
       }
 
       if (payment.status === "OVERDUE" && offer.kind !== "SETUP_FEE") {
@@ -321,7 +409,7 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
             tx,
             offer.id,
             eventId,
-            payload as unknown as Record<string, unknown>,
+            asRecord(payload),
           );
         }
 
@@ -331,7 +419,7 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
           toStatus: nextStatus,
           source: "WEBHOOK",
           sourceEventId: eventId,
-          payload: payload as unknown as Record<string, unknown>,
+          payload: asRecord(payload),
         });
       }
     }
@@ -367,6 +455,31 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
         ),
       );
   });
+
+  const notificationToSend =
+    paymentNotification as PaymentNotificationToSend | null;
+
+  if (notificationToSend) {
+    try {
+      if (notificationToSend.type === "received") {
+        await notifyPaymentReceived(
+          notificationToSend.paymentId,
+          notificationToSend.organizationId,
+        );
+      } else {
+        await notifyPaymentFailed(
+          notificationToSend.paymentId,
+          notificationToSend.organizationId,
+          notificationToSend.reason,
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[Commercial Webhook] Failed to send payment notification:",
+        error,
+      );
+    }
+  }
 
   return { duplicate: false, organizationId: offer.organizationId };
 }

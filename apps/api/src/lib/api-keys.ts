@@ -1,8 +1,4 @@
-import {
-  createHash,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 const API_KEY_PREFIX = "cf_live";
 

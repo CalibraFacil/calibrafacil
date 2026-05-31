@@ -27,12 +27,10 @@ function pad(value: number, length: number) {
   return String(value).padStart(length, "0");
 }
 
-function renderTemplate(
-  template: string,
-  tokens: Record<string, string>,
-) {
-  return template.replace(/\{([A-Z]+)\}/g, (match, token) =>
-    tokens[token] ?? match,
+function renderTemplate(template: string, tokens: Record<string, string>) {
+  return template.replace(
+    /\{([A-Z]+)\}/g,
+    (match, token) => tokens[token] ?? match,
   );
 }
 

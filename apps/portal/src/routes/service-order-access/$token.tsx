@@ -79,6 +79,7 @@ function PublicServiceOrderAccessPage() {
         throw new Error("Link expirado, revogado ou inválido.");
       }
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- token access endpoint returns the PublicOrder DTO.
       const result = (await response.json()) as { data: PublicOrder };
       return result.data;
     },
@@ -99,7 +100,9 @@ function PublicServiceOrderAccessPage() {
     },
     onSuccess: async () => {
       toast.success("Orçamento aprovado.");
-      await queryClient.invalidateQueries({ queryKey: ["public-service-order", token] });
+      await queryClient.invalidateQueries({
+        queryKey: ["public-service-order", token],
+      });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao aprovar.");
@@ -122,7 +125,9 @@ function PublicServiceOrderAccessPage() {
     onSuccess: async () => {
       toast.success("Orçamento recusado.");
       setRejectionReason("");
-      await queryClient.invalidateQueries({ queryKey: ["public-service-order", token] });
+      await queryClient.invalidateQueries({
+        queryKey: ["public-service-order", token],
+      });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao recusar.");
@@ -202,7 +207,9 @@ function PublicServiceOrderAccessPage() {
           <CardHeader>
             <CardTitle>Orçamento</CardTitle>
             <CardDescription>
-              {quote ? `${quote.quoteNumber} v${quote.version}` : "Não disponível"}
+              {quote
+                ? `${quote.quoteNumber} v${quote.version}`
+                : "Não disponível"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -241,21 +248,27 @@ function PublicServiceOrderAccessPage() {
                   <div className="grid gap-3 pt-2 sm:grid-cols-2">
                     <Button
                       onClick={() => approveMutation.mutate()}
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                      disabled={
+                        approveMutation.isPending || rejectMutation.isPending
+                      }
                     >
                       Aprovar orçamento
                     </Button>
                     <div className="space-y-3">
                       <Textarea
                         value={rejectionReason}
-                        onChange={(event) => setRejectionReason(event.target.value)}
+                        onChange={(event) =>
+                          setRejectionReason(event.target.value)
+                        }
                         placeholder="Motivo da recusa, opcional"
                       />
                       <Button
                         variant="outline"
                         className="w-full"
                         onClick={() => rejectMutation.mutate()}
-                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                        disabled={
+                          approveMutation.isPending || rejectMutation.isPending
+                        }
                       >
                         Recusar orçamento
                       </Button>
@@ -278,7 +291,9 @@ function PublicServiceOrderAccessPage() {
 function Info({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm">{value?.trim() || "-"}</p>
     </div>
   );

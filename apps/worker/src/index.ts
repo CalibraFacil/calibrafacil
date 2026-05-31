@@ -1,9 +1,8 @@
 import type { Browser, Page } from "puppeteer-core";
+import { createHash, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
-  CertificateHtml,
-  type JobData,
   LabelHtml,
   type LabelData,
   ServiceOrderDeliveryReceiptHtml,
@@ -17,6 +16,18 @@ import {
 } from "@calibra-facil/documents";
 import React from "react";
 import QRCode from "qrcode";
+import { Resvg } from "@resvg/resvg-js";
+import {
+  ExcelTsCertificateWorkbookEngine,
+  GotenbergXlsxToPdfConverter,
+  LocalLibreOfficeXlsxToPdfConverter,
+  validateCertificateXlsxBindingManifest,
+  type CertificateXlsxBindingManifest,
+  type ImageCellBinding,
+  type WorkbookImage,
+  type XlsxToPdfConverter,
+  type WorkbookWarning,
+} from "@calibra-facil/certificate-xlsx-template";
 import { processScheduledNotifications } from "./scheduled.js";
 import {
   signPdf,
@@ -24,7 +35,6 @@ import {
   decryptBinary,
   type SignatureMetadata,
 } from "@calibra-facil/signing";
-import { DEFAULT_CERTIFICATE_TEMPLATE_CONFIG } from "@calibra-facil/shared";
 import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
@@ -32,12 +42,22 @@ import {
 } from "./integrations.js";
 import {
   type BackgroundJobMessage,
+  type CertificateXlsxPreviewBackgroundJobMessage,
   type DocumentBackgroundJobMessage,
 } from "@calibra-facil/shared";
+import {
+  convertMassValue,
+  isMassMeasurementUnit,
+  type MassUnit,
+} from "@calibra-facil/shared/mass-units";
+import { notifyCertificateReady } from "@calibra-facil/notifications";
 
 export interface Env {
   CERTIFICATES_BUCKET: {
-    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+    get(key: string): Promise<{
+      arrayBuffer(): Promise<ArrayBuffer>;
+      httpMetadata?: { contentType?: string };
+    } | null>;
     put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
@@ -47,12 +67,267 @@ export interface Env {
   RUNTIME_ASSETS_BUCKET?: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
   CHROME_EXECUTABLE_PATH?: string;
   CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
+  GOTENBERG_URL?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  EMAIL_FROM?: string;
+  EMAIL_LOGO_URL?: string;
+  WEB_URL?: string;
+  APP_URL?: string;
+}
+
+type CustomerAddress = {
+  cep?: string;
+  number?: string;
+  street?: string;
+  complement?: string;
+  neighbourhood?: string;
+  city?: string;
+  state?: string;
+};
+
+type MethodInputField = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select" | "table";
+  unit?: string;
+  required?: boolean;
+  options?: string[];
+  defaultValue?: string | number;
+  source?: "manual" | "asset_spec";
+  assetSpecKey?: string;
+  allowOverride?: boolean;
+  phaseBlockKey?: string;
+  phaseBlockLabel?: string;
+  eccentricityIndicator?: {
+    enabled?: boolean;
+    variant?: "circular_platform" | "road_scale";
+  };
+  weighingRangeResolver?: {
+    enabled?: boolean;
+    assetSpecKey?: string;
+    pointColumn?: string;
+    pointUnit?: "mg" | "g" | "kg";
+    targetColumns?: {
+      rangeLabel?: string;
+      rangeMin?: string;
+      rangeMax?: string;
+      rangeUnit?: string;
+      resolution?: string;
+      resolutionUnit?: string;
+    };
+  };
+  columns?: Array<{
+    key: string;
+    label: string;
+    type: "text" | "number";
+    unit?: string;
+    role?: "standard_value" | "mass_standard_composition";
+    phase?: "before" | "after" | "always";
+    massComposition?: {
+      targetUnit?: "mg" | "g" | "kg";
+      optionSource?: "certified_values" | "composition_profiles";
+      targetColumns?: {
+        certifiedValue?: string;
+        compositionLabel?: string;
+        expandedUncertainty?: string;
+        maxError?: string;
+        drift?: string;
+        buoyancy?: string;
+      };
+    };
+  }>;
+};
+
+type MethodFormulaReporting = {
+  includeInCertificate?: boolean;
+  role?:
+    | "primary_result"
+    | "expanded_uncertainty"
+    | "coverage_factor"
+    | "conformity_margin"
+    | "uncertainty_component"
+    | "auxiliary";
+  group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+};
+
+type MethodFormula = {
+  outputKey: string;
+  expression: string;
+  label?: string;
+  unit?: string;
+  reporting?: MethodFormulaReporting;
+};
+
+type MethodCertificateContent = {
+  procedureCode?: string;
+  referenceStandards?: string[];
+  certifiedValuesDisplay?: "full" | "hidden";
+  massCompositionDisplay?: "full" | "hidden";
+  uncertaintyBudgetDisplay?: "full" | "hidden";
+};
+
+type MethodSnapshot = {
+  methodId: number;
+  methodName: string;
+  methodVersion: number;
+  dataFields?: MethodInputField[];
+  formulas?: MethodFormula[];
+  certificateContent?: MethodCertificateContent | null;
+};
+
+type CertifiedValue = {
+  nominal: string;
+  authentication?: string | null;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+};
+
+type StandardSnapshot = {
+  id: number;
+  name: string;
+  type?: string | null;
+  certificateNumber: string;
+  calibratedBy?: string | null;
+  calibrationDate: Date | string;
+  nextCalibrationDate?: Date | string | null;
+  uncertainty: number | null;
+  uncertaintyUnit: string | null;
+  coverageFactor: number;
+  certifiedValues?: CertifiedValue[] | null;
+};
+
+type EnvironmentalSnapshot = {
+  temperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  limits: Record<string, unknown> | null;
+  withinLimits: boolean;
+  outOfLimitsJustification: string | null;
+};
+
+type CalibrationLocationSnapshot = {
+  type: "customer_site" | "lab" | "other";
+  addressText: string;
+  notes?: string | null;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
+type CalibrationPhaseSnapshot = {
+  blocks: Record<
+    string,
+    {
+      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
+      reason?: string | null;
+    }
+  >;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
+type AssetSnapshot = {
+  assetId: number;
+  assetTypeId: number;
+  assetTypeName: string;
+  assetTypeSlug: string;
+  baseMeasurementUnit?: MassUnit | null;
+  name: string;
+  tag: string;
+  serialNumber: string;
+  manufacturer: string | null;
+  model: string | null;
+  specifications: Record<string, unknown> | null;
+  capturedAt: string;
+};
+
+type JobData = {
+  jobId: string;
+  certificateName?: string | null;
+  organizationId?: string | null;
+  unitId?: number | null;
+  performedAt: Date | null;
+  approvedAt: Date | null;
+  environmentalSnapshot?: EnvironmentalSnapshot | null;
+  calibrationLocationSnapshot?: CalibrationLocationSnapshot | null;
+  calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null;
+  lab: {
+    name: string;
+    cnpj?: string | null;
+    accreditationNumber?: string | null;
+    accreditationBody?: string | null;
+    street?: string | null;
+    number?: string | null;
+    complement?: string | null;
+    neighbourhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    cep?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    website?: string | null;
+    logo?: string | null;
+    technicalManagerName?: string | null;
+    technicalManagerTitle?: string | null;
+  };
+  customer: {
+    name: string;
+    taxId?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address: CustomerAddress | null;
+  };
+  asset: {
+    name: string;
+    serialNumber: string;
+    tag: string;
+    model: string | null;
+    manufacturer: string | null;
+  };
+  methodSnapshot: MethodSnapshot;
+  assetSnapshot?: AssetSnapshot | null;
+  standardsSnapshot: StandardSnapshot[] | null;
+  serviceOrder?: {
+    inmetroRepairSealNumber?: string | null;
+  } | null;
+  data: Record<string, unknown> | null;
+  results: Record<string, unknown> | null;
+  approverName: string | null;
+  certificateTemplateSnapshot?: Record<string, unknown> | null;
+  approverSignatureUrl?: string | null;
+  supersedesId?: number | null;
+  supersededById?: number | null;
+  amendmentNumber?: number | null;
+  amendmentReason?: string | null;
+  originalJobId?: string | null;
+  originalApprovedAt?: Date | null;
+};
+
+const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
+  "Certificate generation requires a published XLSX certificate template assignment";
+
+function createXlsxToPdfConverter(env: Env): XlsxToPdfConverter {
+  if (env.GOTENBERG_URL) {
+    return new GotenbergXlsxToPdfConverter(env.GOTENBERG_URL);
+  }
+
+  return new LocalLibreOfficeXlsxToPdfConverter();
 }
 
 export type QueueMessage = BackgroundJobMessage;
@@ -66,6 +341,9 @@ export interface MessageBatch<T> {
 }
 
 type Dateish = Date | string | null | undefined;
+
+const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
+const ORGANIZATION_LOGO_URL_MARKER = "/api/organization-media/logo/";
 
 function encodeKeyPart(label: string, value: string): string {
   const trimmed = value.trim();
@@ -140,6 +418,507 @@ function buildServiceOrderR2Key(params: {
   return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/quotes/${quote}-v${params.version ?? 1}.pdf`;
 }
 
+function buildXlsxPreviewR2Key(params: {
+  orgId: string;
+  previewId: number;
+  extension: "xlsx" | "pdf";
+}): string {
+  const orgId = encodeKeyPart("orgId", params.orgId);
+  return `org/${orgId}/certificate-template-previews/${params.previewId}/preview.${params.extension}`;
+}
+
+function buildIssuedXlsxR2Key(params: {
+  orgId: string;
+  jobId: string;
+  year: number;
+  issuedId: string;
+}): string {
+  const orgId = encodeKeyPart("orgId", params.orgId);
+  const jobId = encodeKeyPart("jobId", params.jobId);
+  const issuedId = encodeKeyPart("issuedId", params.issuedId);
+  return `org/${orgId}/${params.year}/jobs/${jobId}/issued/${issuedId}/cert.xlsx`;
+}
+
+function buildIssuedPdfR2Key(params: {
+  orgId: string;
+  jobId: string;
+  year: number;
+  issuedId: string;
+}): string {
+  const orgId = encodeKeyPart("orgId", params.orgId);
+  const jobId = encodeKeyPart("jobId", params.jobId);
+  const issuedId = encodeKeyPart("issuedId", params.issuedId);
+  return `org/${orgId}/${params.year}/jobs/${jobId}/issued/${issuedId}/cert.pdf`;
+}
+
+function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
+  return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+type EccentricityIndicatorVariant = "circular_platform" | "road_scale";
+type EccentricityIndicatorPosition =
+  | "top"
+  | "right"
+  | "bottom"
+  | "left"
+  | "1"
+  | "2"
+  | "3"
+  | "4";
+
+const ECCENTRICITY_INDICATOR_SPEC_KEY = "eccentricityIndicatorPosition";
+const CIRCULAR_ECCENTRICITY_INDICATOR_POSITIONS = new Set([
+  "top",
+  "right",
+  "bottom",
+  "left",
+]);
+const ROAD_SCALE_ECCENTRICITY_INDICATOR_POSITIONS = new Set([
+  "1",
+  "2",
+  "3",
+  "4",
+]);
+const CIRCULAR_ECCENTRICITY_LOAD_POINTS = ["A", "B", "C", "D", "E"];
+const ECCENTRICITY_INDICATOR_FONT_FAMILY =
+  "Carlito, Calibri, Aptos, sans-serif";
+
+function prepareXlsxWorkbookForRender(input: Uint8Array): Uint8Array {
+  return input;
+}
+
+async function fillXlsxWorkbookFromManifest(
+  engine: ExcelTsCertificateWorkbookEngine,
+  source: Uint8Array,
+  manifest: CertificateXlsxBindingManifest,
+  data: Record<string, unknown>,
+  job?: JobData,
+): Promise<{ workbook: Uint8Array; warnings: WorkbookWarning[] }> {
+  const scalarResult = await engine.fillScalarsWithWarnings(
+    source,
+    manifest.scalarBindings,
+    data,
+  );
+  let workbook = scalarResult.workbook;
+  const warnings = [...scalarResult.warnings];
+
+  for (const tableBinding of manifest.tableBindings) {
+    const tableResult = await engine.fillTableRows(
+      workbook,
+      tableBinding,
+      data,
+    );
+    workbook = tableResult.workbook;
+    warnings.push(...tableResult.warnings);
+  }
+
+  const images = await resolveXlsxImageBindings(
+    manifest.imageBindings,
+    data,
+    job,
+  );
+  if (manifest.imageBindings.length > 0) {
+    workbook = await engine.insertImages(
+      workbook,
+      manifest.imageBindings,
+      images,
+    );
+  }
+
+  return { workbook, warnings };
+}
+
+async function resolveXlsxImageBindings(
+  bindings: CertificateXlsxBindingManifest["imageBindings"],
+  data: Record<string, unknown>,
+  job?: JobData,
+): Promise<Record<string, WorkbookImage>> {
+  const images: Record<string, WorkbookImage> = {};
+
+  for (const binding of bindings) {
+    const image = await resolveXlsxImageBinding(binding, data, job);
+    if (image) {
+      images[binding.sourcePath] = image;
+      images[binding.id] = image;
+    }
+  }
+
+  return images;
+}
+
+async function resolveXlsxImageBinding(
+  binding: ImageCellBinding,
+  data: Record<string, unknown>,
+  job?: JobData,
+): Promise<WorkbookImage | null> {
+  if (binding.imageKind === "qr_code") {
+    const value = getPathValue(data, binding.sourcePath);
+    return typeof value === "string" && value.trim()
+      ? new Uint8Array(
+          await QRCode.toBuffer(value, {
+            type: "png",
+            errorCorrectionLevel: "M",
+            margin: 1,
+            width: 440,
+          }),
+        )
+      : null;
+  }
+
+  if (binding.imageKind === "signature") {
+    const value = getPathValue(data, binding.sourcePath);
+    return typeof value === "string" ? workbookImageFromDataUrl(value) : null;
+  }
+
+  if (
+    binding.imageKind === "organization_logo" ||
+    binding.imageKind === "accreditation_seal"
+  ) {
+    const value = getPathValue(data, binding.sourcePath);
+    return typeof value === "string" ? workbookImageFromDataUrl(value) : null;
+  }
+
+  if (binding.imageKind === "eccentricity_indicator") {
+    return renderEccentricityIndicatorPng(job, data);
+  }
+
+  return null;
+}
+
+function workbookImageFromDataUrl(value: string): WorkbookImage | null {
+  const trimmed = value.trim();
+  if (!trimmed.toLowerCase().startsWith("data:")) {
+    return null;
+  }
+
+  const commaIndex = trimmed.indexOf(",");
+  if (commaIndex === -1) return null;
+
+  const metadata = trimmed.slice("data:".length, commaIndex).split(";");
+  const contentType = metadata[0]?.toLowerCase();
+  const payload = trimmed.slice(commaIndex + 1);
+  if (!contentType || !payload) return null;
+
+  if (!contentType.startsWith("image/")) {
+    return null;
+  }
+
+  const isBase64 = metadata
+    .slice(1)
+    .some((item) => item.toLowerCase() === "base64");
+  const bytes = isBase64
+    ? new Uint8Array(Buffer.from(payload, "base64"))
+    : new TextEncoder().encode(decodeURIComponent(payload));
+
+  if (contentType === "image/svg+xml") {
+    try {
+      const svg = new TextDecoder().decode(bytes);
+      return {
+        bytes: new Resvg(svg).render().asPng(),
+        contentType: "image/png",
+        extension: "png",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  if (contentType === "image/png") {
+    return { bytes, contentType: "image/png", extension: "png" };
+  }
+
+  if (contentType === "image/jpeg" || contentType === "image/jpg") {
+    return { bytes, contentType: "image/jpeg", extension: "jpeg" };
+  }
+
+  if (contentType === "image/webp") {
+    return { bytes, contentType: "image/webp", extension: "webp" };
+  }
+
+  if (contentType === "image/gif") {
+    return { bytes, contentType: "image/gif", extension: "gif" };
+  }
+
+  return null;
+}
+
+function parseSignatureMetadata(value: unknown): SignatureMetadata | undefined {
+  if (value == null) return undefined;
+
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parseSignatureMetadata(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+
+  const metadata = recordFromUnknown(value);
+  const signedAt = metadata.signedAt;
+  const signerCertificateSerial = metadata.signerCertificateSerial;
+  const signerName = metadata.signerName;
+  const signerCpfCnpj = metadata.signerCpfCnpj;
+  const pdfHash = metadata.pdfHash;
+  const ltvEnabled = metadata.ltvEnabled;
+  if (
+    typeof signedAt !== "string" ||
+    typeof signerCertificateSerial !== "string" ||
+    typeof signerName !== "string" ||
+    (signerCpfCnpj !== null && typeof signerCpfCnpj !== "string") ||
+    typeof pdfHash !== "string" ||
+    typeof ltvEnabled !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  return {
+    signedAt,
+    signerCertificateSerial,
+    signerName,
+    signerCpfCnpj,
+    pdfHash,
+    ltvEnabled,
+  };
+}
+
+function renderEccentricityIndicatorPng(
+  job: JobData | undefined,
+  data: Record<string, unknown>,
+): Uint8Array {
+  const variant = resolveEccentricityIndicatorVariant(job, data);
+  const selectedPosition = resolveEccentricityIndicatorPosition(
+    job,
+    data,
+    variant,
+  );
+  const loadPositions =
+    variant === "circular_platform"
+      ? resolveCircularEccentricityLoadPositions(job, data)
+      : undefined;
+  const svg = renderEccentricityIndicatorSvg({
+    variant,
+    selectedPosition,
+    loadPositions,
+  });
+  const rendered = new Resvg(svg, {
+    fitTo: {
+      mode: "width",
+      value: 960,
+    },
+  }).render();
+
+  return rendered.asPng();
+}
+
+function resolveEccentricityIndicatorVariant(
+  job: JobData | undefined,
+  data: Record<string, unknown>,
+): EccentricityIndicatorVariant {
+  const fields = job?.methodSnapshot?.dataFields ?? [];
+  const configuredField = fields.find(
+    (field) => field.eccentricityIndicator?.enabled,
+  );
+  const value =
+    configuredField?.eccentricityIndicator?.variant ??
+    getPathValue(data, "graphics.eccentricityIndicatorVariant");
+
+  return value === "road_scale" ? "road_scale" : "circular_platform";
+}
+
+function resolveEccentricityIndicatorPosition(
+  job: JobData | undefined,
+  data: Record<string, unknown>,
+  variant: EccentricityIndicatorVariant,
+): EccentricityIndicatorPosition | null {
+  const value =
+    job?.assetSnapshot?.specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY] ??
+    job?.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY] ??
+    getPathValue(
+      data,
+      "assetSnapshot.specifications.eccentricityIndicatorPosition",
+    ) ??
+    getPathValue(data, "data.eccentricityIndicatorPosition") ??
+    getPathValue(data, "graphics.eccentricityIndicatorPosition");
+  return typeof value === "string" &&
+    isEccentricityIndicatorPosition(value, variant)
+    ? value
+    : null;
+}
+
+function isEccentricityIndicatorPosition(
+  value: string,
+  variant: EccentricityIndicatorVariant,
+): value is EccentricityIndicatorPosition {
+  const allowed =
+    variant === "road_scale"
+      ? ROAD_SCALE_ECCENTRICITY_INDICATOR_POSITIONS
+      : CIRCULAR_ECCENTRICITY_INDICATOR_POSITIONS;
+
+  return allowed.has(value);
+}
+
+function resolveCircularEccentricityLoadPositions(
+  job: JobData | undefined,
+  data: Record<string, unknown>,
+): string[] {
+  const field = job?.methodSnapshot?.dataFields?.find(
+    (item) => item.eccentricityIndicator?.enabled,
+  );
+  const configuredRows = field ? job?.data?.[field.key] : undefined;
+  const rows =
+    field && Array.isArray(configuredRows)
+      ? configuredRows
+      : getPathValue(data, "dataDisplay.excentricidade");
+
+  if (!field?.columns || !Array.isArray(rows)) {
+    return CIRCULAR_ECCENTRICITY_LOAD_POINTS;
+  }
+
+  const positionColumn = field.columns.find((column) => {
+    const text = normalizeSearchText(`${column.key} ${column.label}`);
+    return text.includes("posicao") || text.includes("ponto");
+  });
+
+  if (!positionColumn) {
+    return CIRCULAR_ECCENTRICITY_LOAD_POINTS;
+  }
+
+  const positions: string[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+
+    const value = String(recordFromUnknown(row)[positionColumn.key] ?? "")
+      .trim()
+      .toUpperCase();
+    if (
+      CIRCULAR_ECCENTRICITY_LOAD_POINTS.includes(value) &&
+      !positions.includes(value)
+    ) {
+      positions.push(value);
+    }
+  }
+
+  return positions.length > 0 ? positions : CIRCULAR_ECCENTRICITY_LOAD_POINTS;
+}
+
+function renderEccentricityIndicatorSvg({
+  variant,
+  selectedPosition,
+  loadPositions,
+}: {
+  variant: EccentricityIndicatorVariant;
+  selectedPosition: EccentricityIndicatorPosition | null;
+  loadPositions?: string[];
+}) {
+  return variant === "road_scale"
+    ? renderRoadScaleEccentricitySvg(selectedPosition)
+    : renderCircularEccentricitySvg(selectedPosition, loadPositions);
+}
+
+function renderCircularEccentricitySvg(
+  selectedPosition: EccentricityIndicatorPosition | null,
+  loadPositions = CIRCULAR_ECCENTRICITY_LOAD_POINTS,
+) {
+  const selectedFill = "#2563eb";
+  const ink = "#111111";
+  const fontFamily = ECCENTRICITY_INDICATOR_FONT_FAMILY;
+  const marker = (
+    position: EccentricityIndicatorPosition,
+    x: number,
+    y: number,
+  ) => {
+    const selected = selectedPosition === position;
+    return `<g><rect x="${x}" y="${y}" width="16" height="16" fill="#ffffff" stroke="${ink}" stroke-width="1.3"/>${
+      selected
+        ? `<path d="M ${x + 3.5} ${y + 3.5} L ${x + 12.5} ${y + 12.5} M ${x + 12.5} ${y + 3.5} L ${x + 3.5} ${y + 12.5}" fill="none" stroke="${ink}" stroke-width="1.9" stroke-linecap="round"/>`
+        : ""
+    }</g>`;
+  };
+  const point = (label: string, x: number, y: number, anchor = "start") =>
+    loadPositions.includes(label)
+      ? `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="${fontFamily}" font-size="16" font-weight="700" fill="${ink}">${label}</text>`
+      : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="100" viewBox="0 0 170 100">
+  <g transform="translate(44.5 4) scale(0.54)">
+    <rect x="38" y="38" width="74" height="74" rx="37" fill="#ffffff" stroke="${ink}" stroke-width="1.5"/>
+    <rect x="74.5" y="10" width="1" height="130" fill="${ink}"/>
+    <rect x="10" y="74.5" width="130" height="1" fill="${ink}"/>
+    <rect x="66" y="66" width="18" height="18" fill="#ffffff"/>
+    ${point("A", 75, 80, "middle")}
+    ${point("B", 54, 63)}
+    ${point("C", 86, 63)}
+    ${point("D", 86, 101)}
+    ${point("E", 54, 101)}
+    ${marker("top", 67, 0)}
+    ${marker("right", 134, 67)}
+    ${marker("bottom", 67, 134)}
+    ${marker("left", 0, 67)}
+  </g>
+  <text x="85" y="95" text-anchor="middle" font-family="${fontFamily}" font-size="8.5" font-weight="600" fill="${ink}">Posição do indicador</text>
+</svg>`;
+}
+
+function renderRoadScaleEccentricitySvg(
+  selectedPosition: EccentricityIndicatorPosition | null,
+) {
+  const selectedFill = "#2563eb";
+  const ink = "#111111";
+  const fontFamily = ECCENTRICITY_INDICATOR_FONT_FAMILY;
+  const sections = ["1", "2", "3", "4"]
+    .map((section, index) => {
+      const x = 12 + index * 42;
+      const selected = selectedPosition === section;
+      return `<rect x="${x}" y="58" width="42" height="34" fill="${selected ? selectedFill : "#ffffff"}" stroke="${ink}" stroke-width="1.5"/>
+        <text x="${x + 21}" y="75" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="14" font-weight="700" fill="${selected ? "#ffffff" : ink}">${section}</text>`;
+    })
+    .join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="100" viewBox="0 0 170 100">
+  <g transform="translate(2 -35)">
+    ${sections}
+    <rect x="78" y="116" width="34" height="18" fill="#ffffff" stroke="${ink}" stroke-width="1.5"/>
+  </g>
+  <text x="85" y="97" text-anchor="middle" font-family="${fontFamily}" font-size="8.5" font-weight="600" fill="${ink}">Posição do indicador</text>
+</svg>`;
+}
+
+function getPathValue(data: Record<string, unknown>, path: string): unknown {
+  return path.split(".").reduce<unknown>((current, segment) => {
+    if (current == null) return undefined;
+    if (Array.isArray(current) && /^\d+$/.test(segment)) {
+      return current[Number.parseInt(segment, 10)];
+    }
+    if (typeof current === "object") {
+      return Reflect.get(current, segment);
+    }
+    return undefined;
+  }, data);
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 async function fetchJobData(
   client: Client,
   jobId: number,
@@ -157,6 +936,8 @@ async function fetchJobData(
       cj.asset_snapshot,
       cj.standards_snapshot,
       cj.environmental_snapshot,
+      cj.calibration_location_snapshot,
+      cj.calibration_phase_snapshot,
       cj.certificate_template_id,
       cj.certificate_template_snapshot,
       cj.results,
@@ -183,6 +964,7 @@ async function fetchJobData(
       o.phone as lab_phone,
       o.email as lab_email,
       o.website as lab_website,
+      o.logo as lab_logo,
       o.technical_manager_name as lab_technical_manager_name,
       o.technical_manager_title as lab_technical_manager_title,
       -- Customer info (complete)
@@ -232,7 +1014,7 @@ async function fetchJobData(
   if (!certificateTemplateSnapshot) {
     const templateResult = await client.query(
       `
-            SELECT id, name, slug, version, config
+            SELECT id, name, slug, version
             FROM certificate_template
             WHERE organization_id = $1
               AND is_default = true
@@ -249,14 +1031,12 @@ async function fetchJobData(
           name: templateRow.name,
           slug: templateRow.slug,
           version: templateRow.version,
-          config: templateRow.config,
         }
       : {
           id: null,
           name: "Padrão do Sistema",
           slug: "padrao-sistema",
           version: 1,
-          config: DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
         };
 
     certificateTemplateId = templateRow?.id ?? null;
@@ -275,6 +1055,12 @@ async function fetchJobData(
       ],
     );
   }
+
+  const labLogoUrl = await resolveOrganizationLogoDataUrl(
+    env,
+    row.lab_logo,
+    jobId,
+  );
 
   // Fetch approver's visual signature if exists
   let approverSignatureUrl: string | null = null;
@@ -329,6 +1115,7 @@ async function fetchJobData(
       phone: row.lab_phone,
       email: row.lab_email,
       website: row.lab_website,
+      logo: labLogoUrl,
       technicalManagerName: row.lab_technical_manager_name,
       technicalManagerTitle: row.lab_technical_manager_title,
     },
@@ -353,6 +1140,8 @@ async function fetchJobData(
       inmetroRepairSealNumber: row.inmetro_repair_seal_number,
     },
     environmentalSnapshot: row.environmental_snapshot,
+    calibrationLocationSnapshot: row.calibration_location_snapshot,
+    calibrationPhaseSnapshot: row.calibration_phase_snapshot,
     certificateTemplateSnapshot,
     data: row.data,
     results: row.results,
@@ -366,6 +1155,146 @@ async function fetchJobData(
     originalJobId: row.original_job_id,
     originalApprovedAt: row.original_approved_at,
   };
+}
+
+type XlsxTemplateSelection = {
+  templateId: number;
+  templateVersionId: number;
+  xlsxR2Key: string;
+  bindingManifest: unknown;
+  bindingManifestSha256: string;
+  renderPolicy: unknown;
+};
+
+async function fetchXlsxTemplateSelectionForJob(
+  client: Client,
+  jobId: number,
+): Promise<XlsxTemplateSelection | null> {
+  const result = await client.query<{
+    template_id: number;
+    template_version_id: number;
+    xlsx_r2_key: string;
+    binding_manifest: unknown;
+    binding_manifest_sha256: string;
+    render_policy: unknown;
+  }>(
+    `
+      select
+        a.template_id,
+        a.template_version_id,
+        v.xlsx_r2_key,
+        v.binding_manifest,
+        v.binding_manifest_sha256,
+        v.render_policy
+      from calibration_job cj
+      left join service s on s.id = cj.service_id
+      inner join certificate_template_assignment a
+        on a.organization_id = cj.organization_id
+       and a.status = 'ACTIVE'
+       and a.certificate_type = 'calibration'
+       and (a.unit_id is null or a.unit_id = cj.unit_id)
+       and (a.service_id is null or a.service_id = cj.service_id)
+       and (a.method_id is null or a.method_id = s.method_id)
+      inner join certificate_template_version v
+        on v.id = a.template_version_id
+       and v.status = 'PUBLISHED'
+      inner join certificate_template t
+        on t.id = a.template_id
+       and t.status = 'ACTIVE'
+      where cj.id = $1
+      order by a.priority desc, a.created_at desc
+      limit 1
+    `,
+    [jobId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    templateId: row.template_id,
+    templateVersionId: row.template_version_id,
+    xlsxR2Key: row.xlsx_r2_key,
+    bindingManifest: row.binding_manifest,
+    bindingManifestSha256: row.binding_manifest_sha256,
+    renderPolicy: row.render_policy,
+  };
+}
+
+function decodeOrganizationLogoKey(value: string | null | undefined) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const markerIndex = url.pathname.indexOf(ORGANIZATION_LOGO_URL_MARKER);
+    if (markerIndex === -1) return null;
+
+    const encodedKey = url.pathname.slice(
+      markerIndex + ORGANIZATION_LOGO_URL_MARKER.length,
+    );
+    const decoded = Buffer.from(encodedKey, "base64url").toString("utf8");
+    return decoded.startsWith(ORGANIZATION_LOGO_KEY_PREFIX) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function inferImageContentType(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return "image/png";
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return "image/jpeg";
+  }
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+
+  const textStart = new TextDecoder("utf-8", { fatal: false })
+    .decode(bytes.slice(0, 256))
+    .trimStart();
+  if (textStart.startsWith("<svg") || textStart.startsWith("<?xml")) {
+    return "image/svg+xml";
+  }
+
+  return "application/octet-stream";
+}
+
+async function resolveOrganizationLogoDataUrl(
+  env: Env,
+  logoUrl: string | null | undefined,
+  jobId: number,
+) {
+  const key = decodeOrganizationLogoKey(logoUrl);
+  if (!key) return logoUrl ?? null;
+
+  try {
+    const logoObject = await env.CERTIFICATES_BUCKET.get(key);
+    if (!logoObject) return logoUrl ?? null;
+
+    const logoBuffer = await logoObject.arrayBuffer();
+    const contentType =
+      logoObject.httpMetadata?.contentType ?? inferImageContentType(logoBuffer);
+    const base64 = arrayBufferToBase64(logoBuffer);
+    return `data:${contentType};base64,${base64}`;
+  } catch (err) {
+    console.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, err);
+    return logoUrl ?? null;
+  }
 }
 
 /**
@@ -429,16 +1358,27 @@ async function updateJobWithCertificate(
   certificateUrl: string,
   userId: string,
   signatureMetadata?: SignatureMetadata,
+  options: { preserveSignatureMetadata?: boolean } = {},
 ): Promise<void> {
   const now = new Date();
 
   // Check if job is SUPERSEDED (being regenerated with watermark)
-  const statusResult = await client.query(
-    `SELECT status FROM calibration_job WHERE id = $1`,
-    [jobId],
-  );
+  const statusResult = await client.query<{
+    status: string;
+    signature_metadata: unknown;
+  }>(`SELECT status, signature_metadata FROM calibration_job WHERE id = $1`, [
+    jobId,
+  ]);
   const currentStatus = statusResult.rows[0]?.status;
   const isSuperseded = currentStatus === "SUPERSEDED";
+  const shouldPreserveSignatureMetadata =
+    options.preserveSignatureMetadata === true &&
+    signatureMetadata === undefined;
+  const auditSignatureMetadata =
+    signatureMetadata ??
+    (shouldPreserveSignatureMetadata
+      ? parseSignatureMetadata(statusResult.rows[0]?.signature_metadata)
+      : undefined);
 
   // Only update status to APPROVED if not already SUPERSEDED
   // SUPERSEDED jobs are being regenerated with watermark and should keep their status
@@ -448,7 +1388,7 @@ async function updateJobWithCertificate(
     SET
       status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
       certificate_url = $2,
-      signature_metadata = $3,
+      signature_metadata = CASE WHEN $5 THEN signature_metadata ELSE $3::jsonb END,
       updated_at = $4
     WHERE id = $1
     `,
@@ -457,6 +1397,7 @@ async function updateJobWithCertificate(
       certificateUrl,
       signatureMetadata ? JSON.stringify(signatureMetadata) : null,
       now,
+      shouldPreserveSignatureMetadata,
     ],
   );
 
@@ -479,14 +1420,90 @@ async function updateJobWithCertificate(
       JSON.stringify({
         ...statusChange,
         certificateUrl: { old: null, new: certificateUrl },
-        signatureMetadata: signatureMetadata
-          ? { signed: true, signerName: signatureMetadata.signerName }
+        signatureMetadata: auditSignatureMetadata
+          ? { signed: true, signerName: auditSignatureMetadata.signerName }
           : { signed: false },
       }),
       userId,
       now,
     ],
   );
+
+  if (!isSuperseded) {
+    try {
+      await notifyCertificateReady(jobId);
+    } catch (error) {
+      console.error(
+        `[JOB ${jobId}] Failed to send certificate ready notification:`,
+        error,
+      );
+    }
+  }
+}
+
+async function signPdfWithUnitCertificate(
+  env: Env,
+  jobId: number,
+  organizationId: string | null | undefined,
+  unitId: number | null | undefined,
+  pdfBuffer: Buffer,
+): Promise<{ pdfBuffer: Buffer; signatureMetadata?: SignatureMetadata }> {
+  if (!env.SIGNING_MASTER_KEY) {
+    return { pdfBuffer };
+  }
+
+  const signStart = performance.now();
+  if (!organizationId) {
+    console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
+  }
+  if (!unitId) {
+    console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
+  }
+
+  const signingCert =
+    organizationId && unitId
+      ? await withDbClient(env, (client) =>
+          fetchSigningCertificate(client, organizationId, unitId),
+        )
+      : null;
+
+  if (!signingCert) {
+    console.log(`[JOB ${jobId}] No signing certificate available`);
+    return { pdfBuffer };
+  }
+
+  try {
+    const password = decryptPassword(
+      signingCert.encryptedPassword,
+      signingCert.passwordIv,
+      env.SIGNING_MASTER_KEY,
+    );
+    const p12Buffer = decryptBinary(
+      signingCert.encryptedP12,
+      env.SIGNING_MASTER_KEY,
+    );
+    const result = await signPdf(pdfBuffer, {
+      p12Buffer,
+      password,
+      reason: "Certificado de Calibracao - CalibraFacil",
+      location: "Brasil",
+      enableLtv: false,
+    });
+
+    console.log(
+      `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
+    );
+    return {
+      pdfBuffer: Buffer.from(result.signedPdf),
+      signatureMetadata: result.metadata,
+    };
+  } catch (signError) {
+    console.error(
+      `[JOB ${jobId}] PDF signing failed (continuing without signature):`,
+      signError,
+    );
+    return { pdfBuffer };
+  }
 }
 
 async function setJobError(
@@ -762,14 +1779,11 @@ async function processServiceOrderIntakeDocument(
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(data.openedAt, "openedAt");
+    const orgId = await withDbClient(env, (client) =>
+      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    );
     const key = buildServiceOrderR2Key({
-      orgId: (await withDbClient(env, async (client) => {
-        const result = await client.query(
-          `SELECT organization_id FROM service_order WHERE id = $1`,
-          [serviceOrderId],
-        );
-        return result.rows[0]?.organization_id;
-      })) as string,
+      orgId,
       serviceOrderNumber: data.serviceOrderNumber,
       year,
       type: "INTAKE",
@@ -800,6 +1814,22 @@ async function processServiceOrderIntakeDocument(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+async function fetchServiceOrderOrganizationId(
+  client: Client,
+  serviceOrderId: number,
+) {
+  const result = await client.query<{ organization_id: string }>(
+    `SELECT organization_id FROM service_order WHERE id = $1`,
+    [serviceOrderId],
+  );
+  const organizationId = result.rows[0]?.organization_id;
+  if (!organizationId) {
+    throw new Error("Service order organization not found");
+  }
+
+  return organizationId;
 }
 
 async function processServiceOrderTag(
@@ -937,13 +1967,9 @@ async function processServiceOrderQuote(
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(base.openedAt, "openedAt");
-    const orgId = await withDbClient(env, async (client) => {
-      const result = await client.query(
-        `SELECT organization_id FROM service_order WHERE id = $1`,
-        [serviceOrderId],
-      );
-      return result.rows[0]?.organization_id as string;
-    });
+    const orgId = await withDbClient(env, (client) =>
+      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    );
     const key = buildServiceOrderR2Key({
       orgId,
       serviceOrderNumber: base.serviceOrderNumber,
@@ -1251,7 +2277,7 @@ async function withDbClient<T>(
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
-    connectionString: env.HYPERDRIVE.connectionString,
+    connectionString: env.DATABASE_URL,
   });
   await client.connect();
   try {
@@ -1325,7 +2351,7 @@ function readTarString(bytes: Uint8Array, start: number, length: number) {
 }
 
 function readTarSize(bytes: Uint8Array, start: number) {
-  const rawSize = readTarString(bytes, start, 12).replace(/\0/g, "").trim();
+  const rawSize = readTarString(bytes, start, 12).replaceAll("\0", "").trim();
   if (!rawSize) return 0;
 
   const size = Number.parseInt(rawSize, 8);
@@ -1453,7 +2479,7 @@ async function launchBrowser(env: Env): Promise<Browser> {
       executablePath: env.CHROME_EXECUTABLE_PATH,
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    }) as Promise<Browser>;
+    });
   }
 
   if (process.env.VERCEL) {
@@ -1470,7 +2496,7 @@ async function launchBrowser(env: Env): Promise<Browser> {
         "--no-sandbox",
         "--disable-setuid-sandbox",
       ],
-    }) as Promise<Browser>;
+    });
   }
 
   throw new Error(
@@ -1525,6 +2551,7 @@ async function processJob(
   jobId: number,
   userId: string,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  void page;
   const totalStart = performance.now();
   console.log(`[JOB ${jobId}] Starting`);
 
@@ -1542,123 +2569,27 @@ async function processJob(
       return { success: false, error: "Job not found" };
     }
 
-    // 2. Render HTML
-    const renderStart = performance.now();
-    const html = renderToString(React.createElement(CertificateHtml, { job }));
-    console.log(
-      `[JOB ${jobId}] renderToString: ${Math.round(performance.now() - renderStart)}ms`,
+    const xlsxSelection = await withDbClient(env, (client) =>
+      fetchXlsxTemplateSelectionForJob(client, jobId),
     );
-
-    // 3. Generate PDF (reusing existing page)
-    const pdfStart = performance.now();
-    let pdfBuffer = await generatePdfFromHtml(page, html);
-    console.log(
-      `[JOB ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`,
-    );
-
-    // 4. Sign PDF with ICP-Brasil certificate (if available)
-    let signatureMetadata: SignatureMetadata | undefined;
-    if (env.SIGNING_MASTER_KEY) {
-      const signStart = performance.now();
-      const organizationId = job.organizationId;
-      const unitId = job.unitId;
-      if (!organizationId) {
-        console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
-      }
-      if (!unitId) {
-        console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
-      }
-      const signingCert =
-        organizationId && unitId
-          ? await withDbClient(env, (client) =>
-              fetchSigningCertificate(client, organizationId, unitId),
-            )
-          : null;
-
-      if (signingCert) {
-        try {
-          // Decrypt password
-          const password = decryptPassword(
-            signingCert.encryptedPassword,
-            signingCert.passwordIv,
-            env.SIGNING_MASTER_KEY,
-          );
-          const p12Buffer = decryptBinary(
-            signingCert.encryptedP12,
-            env.SIGNING_MASTER_KEY,
-          );
-
-          // Sign the PDF
-          const result = await signPdf(pdfBuffer, {
-            p12Buffer,
-            password,
-            reason: "Certificado de Calibracao - CalibraFacil",
-            location: "Brasil",
-            enableLtv: false,
-          });
-
-          pdfBuffer = result.signedPdf;
-          signatureMetadata = result.metadata;
-          console.log(
-            `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
-          );
-        } catch (signError) {
-          console.error(
-            `[JOB ${jobId}] PDF signing failed (continuing without signature):`,
-            signError,
-          );
-          // Continue without signature - don't fail the job
-        }
-      } else {
-        console.log(`[JOB ${jobId}] No signing certificate available`);
-      }
-    }
-
-    // 5. Upload to R2
-    const r2Start = performance.now();
-    const orgId = job.organizationId;
-    if (!orgId) {
-      throw new Error("Missing organization_id for certificate generation");
-    }
-    const year = getYearFromDateish(
-      job.approvedAt ?? job.performedAt,
-      "approvedAt/performedAt",
-    );
-    const key = buildR2Key({
-      orgId,
-      jobId: job.jobId,
-      year,
-      type: "CERTIFICATE",
-    });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
-    });
-    console.log(
-      `[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`,
-    );
-
-    // 6. Build public URL
-    const certificateUrl = `https://certificates.calibrafacil.com/${key}`;
-
-    // 7. Update DB with certificate URL and signature metadata
-    const dbUpdateStart = performance.now();
-    await withDbClient(env, (client) =>
-      updateJobWithCertificate(
-        client,
+    if (xlsxSelection) {
+      return processXlsxIssuedCertificate(
+        env,
         jobId,
-        certificateUrl,
+        job,
         userId,
-        signatureMetadata,
-      ),
-    );
-    console.log(
-      `[JOB ${jobId}] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`,
-    );
+        xlsxSelection,
+      );
+    }
 
     const totalMs = Math.round(performance.now() - totalStart);
-    console.log(`[JOB ${jobId}] DONE in ${totalMs}ms: ${certificateUrl}`);
-
-    return { success: true, certificateUrl };
+    console.warn(
+      `[JOB ${jobId}] ${CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE} (${totalMs}ms)`,
+    );
+    return {
+      success: false,
+      error: CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[JOB ${jobId}] Error:`, errorMsg);
@@ -1671,8 +2602,15 @@ function isDocumentMessage(
 ): message is DocumentBackgroundJobMessage {
   return (
     message.type !== "INTEGRATION_SYNC" &&
-    message.type !== "SCHEDULED_NOTIFICATIONS"
+    message.type !== "SCHEDULED_NOTIFICATIONS" &&
+    message.type !== "CERTIFICATE_XLSX_PREVIEW"
   );
+}
+
+function isIntegrationSyncMessage(
+  message: BackgroundJobMessage,
+): message is IntegrationSyncQueueMessage {
+  return message.type === "INTEGRATION_SYNC";
 }
 
 function isServiceOrderDocumentMessage(
@@ -1705,17 +2643,10 @@ function isCalibrationCertificateMessage(
   if (!isDocumentMessage(message)) return false;
   if (isServiceOrderDocumentMessage(message)) return false;
 
-  const calibrationMessage = message as {
-    type?: string;
-    jobId?: unknown;
-    userId?: unknown;
-  };
-
   return (
-    (calibrationMessage.type === undefined ||
-      calibrationMessage.type === "CERTIFICATE") &&
-    typeof calibrationMessage.jobId === "number" &&
-    typeof calibrationMessage.userId === "string"
+    (message.type === undefined || message.type === "CERTIFICATE") &&
+    typeof message.jobId === "number" &&
+    typeof message.userId === "string"
   );
 }
 
@@ -1783,40 +2714,22 @@ async function processDocumentMessage(
     return;
   }
 
-  const calibrationBody = body as {
-    type?: "CERTIFICATE" | "LABEL";
-    jobId: number;
-    userId: string;
-  };
-  const messageType = calibrationBody.type || "CERTIFICATE";
+  const messageType = body.type || "CERTIFICATE";
   const result =
     messageType === "LABEL"
-      ? await processLabelJob(
-          env,
-          page,
-          calibrationBody.jobId,
-          calibrationBody.userId,
-        )
-      : await processJob(
-          env,
-          page,
-          calibrationBody.jobId,
-          calibrationBody.userId,
-        );
+      ? await processLabelJob(env, page, body.jobId, body.userId)
+      : await processJob(env, page, body.jobId, body.userId);
 
   if (!result.success && messageType !== "LABEL") {
     await withDbClient(env, (client) =>
       setJobError(
         client,
-        calibrationBody.jobId,
+        body.jobId,
         result.error || "Unknown error",
-        calibrationBody.userId,
+        body.userId,
       ),
     ).catch((dbError) => {
-      console.error(
-        `[JOB ${calibrationBody.jobId}] Failed to record error:`,
-        dbError,
-      );
+      console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
     });
   }
 
@@ -1825,18 +2738,972 @@ async function processDocumentMessage(
   }
 }
 
+async function processXlsxCertificateMessageIfSelected(
+  env: Env,
+  message: BackgroundJobMessage,
+): Promise<boolean> {
+  if (!isCalibrationCertificateMessage(message)) {
+    return false;
+  }
+
+  const job = await withDbClient(env, (client) =>
+    fetchJobData(client, message.jobId, env),
+  );
+
+  if (!job) {
+    await withDbClient(env, (client) =>
+      setJobError(client, message.jobId, "Job not found", message.userId),
+    );
+    throw new Error("Job not found");
+  }
+
+  const xlsxSelection = await withDbClient(env, (client) =>
+    fetchXlsxTemplateSelectionForJob(client, message.jobId),
+  );
+
+  if (!xlsxSelection) {
+    return false;
+  }
+
+  const result = await processXlsxIssuedCertificate(
+    env,
+    message.jobId,
+    job,
+    message.userId,
+    xlsxSelection,
+  );
+
+  if (!result.success) {
+    await withDbClient(env, (client) =>
+      setJobError(
+        client,
+        message.jobId,
+        result.error || "Unknown error",
+        message.userId,
+      ),
+    ).catch((dbError) => {
+      console.error(
+        `[JOB ${message.jobId}] Failed to record XLSX error:`,
+        dbError,
+      );
+    });
+    throw new Error(result.error ?? "XLSX certificate generation failed");
+  }
+
+  return true;
+}
+
+async function processXlsxPreviewJob(
+  env: Env,
+  message: CertificateXlsxPreviewBackgroundJobMessage,
+) {
+  const totalStart = performance.now();
+  console.log(`[XLSX PREVIEW ${message.previewId}] Starting`);
+
+  try {
+    const preview = await withDbClient(env, async (client) => {
+      const result = await client.query<{
+        id: number;
+        organization_id: string;
+        sample_data: Record<string, unknown> | null;
+        xlsx_r2_key: string;
+        xlsx_sha256: string;
+        binding_manifest: unknown;
+        binding_manifest_sha256: string;
+      }>(
+        `
+          select
+            p.id,
+            p.organization_id,
+            p.sample_data,
+            v.xlsx_r2_key,
+            v.xlsx_sha256,
+            v.binding_manifest,
+            v.binding_manifest_sha256
+          from certificate_template_preview p
+          inner join certificate_template_version v
+            on v.id = p.template_version_id
+          where p.id = $1
+            and p.template_version_id = $2
+        `,
+        [message.previewId, message.templateVersionId],
+      );
+      return result.rows[0] ?? null;
+    });
+
+    if (!preview) {
+      throw new Error("XLSX preview not found");
+    }
+
+    const sourceObject = await env.CERTIFICATES_BUCKET.get(preview.xlsx_r2_key);
+    if (!sourceObject) {
+      throw new Error(`Template XLSX not found: ${preview.xlsx_r2_key}`);
+    }
+
+    const manifest = validateCertificateXlsxBindingManifest(
+      preview.binding_manifest,
+    );
+    const source = prepareXlsxWorkbookForRender(
+      new Uint8Array(await sourceObject.arrayBuffer()),
+    );
+    const engine = new ExcelTsCertificateWorkbookEngine();
+    const filled = await fillXlsxWorkbookFromManifest(
+      engine,
+      source,
+      manifest,
+      preview.sample_data ?? {},
+    );
+    const converter = createXlsxToPdfConverter(env);
+    const converted = await converter.convert(filled.workbook, {
+      fileName: `preview-${message.previewId}.xlsx`,
+      singlePageSheets: false,
+    });
+
+    const filledXlsxR2Key = buildXlsxPreviewR2Key({
+      orgId: preview.organization_id,
+      previewId: preview.id,
+      extension: "xlsx",
+    });
+    const pdfR2Key = buildXlsxPreviewR2Key({
+      orgId: preview.organization_id,
+      previewId: preview.id,
+      extension: "pdf",
+    });
+
+    await env.CERTIFICATES_BUCKET.put(filledXlsxR2Key, filled.workbook, {
+      httpMetadata: {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+    });
+    await env.CERTIFICATES_BUCKET.put(pdfR2Key, converted.bytes, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+
+    const renderMetadata = {
+      converter: converted.metadata,
+      xlsxSha256: preview.xlsx_sha256,
+      bindingManifestSha256: preview.binding_manifest_sha256,
+      workbookWarnings: filled.warnings,
+      durationMs: Math.round(performance.now() - totalStart),
+    };
+
+    await withDbClient(env, (client) =>
+      client.query(
+        `
+          update certificate_template_preview
+          set status = 'RENDERED',
+              filled_xlsx_r2_key = $1,
+              pdf_r2_key = $2,
+              pdf_sha256 = $3,
+              render_metadata = $4::jsonb,
+              error = null,
+              updated_at = now()
+          where id = $5
+        `,
+        [
+          filledXlsxR2Key,
+          pdfR2Key,
+          sha256Hex(converted.bytes),
+          JSON.stringify(renderMetadata),
+          preview.id,
+        ],
+      ),
+    );
+
+    console.log(
+      `[XLSX PREVIEW ${message.previewId}] DONE in ${renderMetadata.durationMs}ms`,
+    );
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    await withDbClient(env, (client) =>
+      client.query(
+        `
+          update certificate_template_preview
+          set status = 'FAILED',
+              error = $1,
+              updated_at = now()
+          where id = $2
+        `,
+        [errorMessage, message.previewId],
+      ),
+    ).catch((dbError) => {
+      console.error(
+        `[XLSX PREVIEW ${message.previewId}] Failed to record error:`,
+        dbError,
+      );
+    });
+    throw error;
+  }
+}
+
+function formatCustomerAddress(
+  address: JobData["customer"]["address"],
+): string {
+  if (!address) return "";
+  return [
+    [address.street, address.number].filter(Boolean).join(", "),
+    address.complement,
+    address.neighbourhood,
+    address.city && address.state
+      ? `${address.city} - ${address.state}`
+      : (address.city ?? address.state),
+    address.cep,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function formatLabAddress(job: JobData): string {
+  return [
+    [job.lab.street, job.lab.number].filter(Boolean).join(", "),
+    job.lab.complement,
+    job.lab.neighbourhood,
+    job.lab.city && job.lab.state
+      ? `${job.lab.city} - ${job.lab.state}`
+      : (job.lab.city ?? job.lab.state),
+    job.lab.cep,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function toIsoDateish(value: Dateish): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
+}
+
+function parseDateish(value: Dateish): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateForXlsx(value: Dateish): string {
+  const date = parseDateish(value);
+  if (!date) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatNumberForXlsx(value: number, fractionDigits?: number): string {
+  const decimals =
+    fractionDigits ??
+    (Number.isInteger(value)
+      ? 0
+      : Math.min(6, Math.max(1, String(value).split(".")[1]?.length ?? 1)));
+
+  return value.toLocaleString("pt-BR", {
+    useGrouping: false,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatMeasuredValueForXlsx(
+  value: unknown,
+  unit: string,
+  fractionDigits = 1,
+): string {
+  const numeric = asFiniteNumber(value);
+  return numeric === null
+    ? ""
+    : `${formatNumberForXlsx(numeric, fractionDigits)} ${unit}`;
+}
+
+function formatMethodValueForXlsx(
+  value: unknown,
+  unit: unknown,
+  targetUnit: unknown,
+): unknown {
+  if (value === null || value === undefined || value === "") return "";
+
+  const numeric = asFiniteNumber(value);
+  if (numeric === null) return value;
+
+  if (isMassMeasurementUnit(unit) && isMassMeasurementUnit(targetUnit)) {
+    const converted = convertMassValue(numeric, unit, targetUnit);
+    return converted === null
+      ? formatNumberForXlsx(numeric)
+      : formatNumberForXlsx(converted);
+  }
+
+  return formatNumberForXlsx(numeric);
+}
+
+function isEffectiveDegreesOfFreedomKey(key: string): boolean {
+  return key === "veff" || key.startsWith("veff_");
+}
+
+function formatEffectiveDegreesOfFreedomForXlsx(value: unknown): unknown {
+  if (value === null || value === undefined || value === "") return "";
+  if (Array.isArray(value)) {
+    return value.map((item) => formatEffectiveDegreesOfFreedomForXlsx(item));
+  }
+
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (raw.toLowerCase() === "infinito" || raw === "Infinity") {
+    return "infinito";
+  }
+
+  const numeric = asFiniteNumber(value);
+  if (numeric === null) return value;
+  return numeric >= 1_000_000_000
+    ? "infinito"
+    : formatNumberForXlsx(numeric, 0);
+}
+
+function formatAssetMeasurementForXlsx(
+  job: JobData,
+  value: unknown,
+  sourceUnit: unknown,
+): string {
+  const numeric = asFiniteNumber(value);
+  if (numeric === null) return "";
+
+  const targetUnit = job.assetSnapshot?.baseMeasurementUnit;
+  if (isMassMeasurementUnit(targetUnit)) {
+    const unit = isMassMeasurementUnit(sourceUnit) ? sourceUnit : "g";
+    const converted = convertMassValue(numeric, unit, targetUnit);
+    if (converted !== null) {
+      return `${formatNumberForXlsx(converted)} ${targetUnit}`;
+    }
+  }
+
+  return isMassMeasurementUnit(sourceUnit)
+    ? `${formatNumberForXlsx(numeric)} ${sourceUnit}`
+    : formatNumberForXlsx(numeric);
+}
+
+function getFirstWeighingRangeSpec(
+  job: JobData,
+): Record<string, unknown> | undefined {
+  const ranges = job.assetSnapshot?.specifications?.weighingRanges;
+  if (!Array.isArray(ranges)) {
+    return undefined;
+  }
+
+  const firstRange = recordFromUnknown(ranges[0]);
+  return Object.keys(firstRange).length > 0 ? firstRange : undefined;
+}
+
+function collectMethodDataUnits(job: JobData): Map<string, unknown> {
+  const units = new Map<string, unknown>();
+
+  for (const field of job.methodSnapshot.dataFields ?? []) {
+    if (field.type === "table") {
+      for (const column of field.columns ?? []) {
+        if (column.unit) {
+          units.set(`${field.key}.${column.key}`, column.unit);
+        }
+      }
+      continue;
+    }
+
+    if (field.unit) {
+      units.set(field.key, field.unit);
+    }
+  }
+
+  return units;
+}
+
+function normalizeMethodDataDisplayForXlsx(job: JobData) {
+  const data = job.data ?? {};
+  const units = collectMethodDataUnits(job);
+  const targetUnit = job.assetSnapshot?.baseMeasurementUnit;
+
+  const formatByPath = (value: unknown, path: string): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((item) => formatByPath(item, path));
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(recordFromUnknown(value)).map(([key, itemValue]) => [
+          key,
+          formatByPath(itemValue, path ? `${path}.${key}` : key),
+        ]),
+      );
+    }
+
+    return formatMethodValueForXlsx(value, units.get(path), targetUnit);
+  };
+
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, formatByPath(value, key)]),
+  );
+}
+
+function normalizeMethodResultsDisplayForXlsx(job: JobData) {
+  const results = job.results ?? {};
+  const targetUnit = job.assetSnapshot?.baseMeasurementUnit;
+  const formulaUnits = new Map(
+    (job.methodSnapshot.formulas ?? []).map((formula) => [
+      formula.outputKey,
+      formula.unit,
+    ]),
+  );
+
+  const formatResultValue = (value: unknown, unit: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((item) => formatResultValue(item, unit));
+    }
+
+    return formatMethodValueForXlsx(value, unit, targetUnit);
+  };
+
+  return Object.fromEntries(
+    Object.entries(results)
+      .filter(([key]) => !key.startsWith("__"))
+      .map(([key, value]) => [
+        key,
+        isEffectiveDegreesOfFreedomKey(key)
+          ? formatEffectiveDegreesOfFreedomForXlsx(value)
+          : formatResultValue(value, formulaUnits.get(key)),
+      ]),
+  );
+}
+
+function normalizeStandardsForXlsx(job: JobData) {
+  return (job.standardsSnapshot ?? []).map((standard, index) => ({
+    index,
+    id: standard.id,
+    name: standard.name,
+    type: standard.type,
+    certificateNumber: standard.certificateNumber,
+    issuer: standard.calibratedBy || standard.certificateNumber.split("-")[0],
+    calibratedBy: standard.calibratedBy,
+    calibrationDate: toIsoDateish(standard.calibrationDate),
+    calibrationDateText: formatDateForXlsx(standard.calibrationDate),
+    validUntil: toIsoDateish(standard.nextCalibrationDate),
+    validUntilText: formatDateForXlsx(standard.nextCalibrationDate),
+    nextCalibrationDate: toIsoDateish(standard.nextCalibrationDate),
+    nextCalibrationDateText: formatDateForXlsx(standard.nextCalibrationDate),
+    uncertainty: standard.uncertainty,
+    uncertaintyUnit: standard.uncertaintyUnit,
+    coverageFactor: standard.coverageFactor,
+    certifiedValues:
+      standard.certifiedValues?.map((certifiedValue, certifiedValueIndex) => ({
+        index: certifiedValueIndex,
+        standardIndex: index,
+        standardId: standard.id,
+        standardName: standard.name,
+        certificateNumber: standard.certificateNumber,
+        nominal: certifiedValue.nominal,
+        value: certifiedValue.value,
+        uncertainty: certifiedValue.uncertainty,
+        unit: certifiedValue.unit,
+        maxError: certifiedValue.maxError,
+        drift: certifiedValue.drift,
+        buoyancy: certifiedValue.buoyancy,
+        coverageFactor: certifiedValue.coverageFactor,
+      })) ?? [],
+  }));
+}
+
+function normalizeCertifiedValuesForXlsx(
+  standards: ReturnType<typeof normalizeStandardsForXlsx>,
+) {
+  return standards.flatMap((standard) => standard.certifiedValues);
+}
+
+function normalizeResultRowsForXlsx(job: JobData) {
+  const results = job.results ?? {};
+  const formulas = job.methodSnapshot.formulas ?? [];
+  const rows = formulas
+    .filter((formula) => formula.outputKey in results)
+    .map((formula) => ({
+      key: formula.outputKey,
+      label: formula.label ?? formula.outputKey,
+      value: results[formula.outputKey],
+      unit: formula.unit,
+      role: formula.reporting?.role,
+      group: formula.reporting?.group ?? "calibration_result",
+      includeInCertificate: formula.reporting?.includeInCertificate ?? true,
+    }));
+
+  const formulaKeys = new Set(formulas.map((formula) => formula.outputKey));
+  for (const [key, value] of Object.entries(results)) {
+    if (formulaKeys.has(key)) {
+      continue;
+    }
+
+    rows.push({
+      key,
+      label: key,
+      value,
+      unit: undefined,
+      role: undefined,
+      group: "calibration_result",
+      includeInCertificate: true,
+    });
+  }
+
+  return rows;
+}
+
+function findFirstResultByRole(
+  rows: ReturnType<typeof normalizeResultRowsForXlsx>,
+  role: string,
+) {
+  return rows.find((row) => row.role === role) ?? null;
+}
+
+function normalizeMassCompositionsForXlsx(job: JobData) {
+  const sources = [job.data ?? {}, job.results ?? {}];
+  const compositions: Array<Record<string, unknown>> = [];
+
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      const composition = recordFromUnknown(value);
+      if (composition.kind === "mass_standard_composition") {
+        compositions.push({ key, ...composition });
+      }
+    }
+  }
+
+  return compositions;
+}
+
+function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
+  const standards = normalizeStandardsForXlsx(job);
+  const resultRows = normalizeResultRowsForXlsx(job);
+  const firstWeighingRange = getFirstWeighingRangeSpec(job);
+  const assetSpecifications = job.assetSnapshot?.specifications ?? {};
+  const expandedUncertainty = findFirstResultByRole(
+    resultRows,
+    "expanded_uncertainty",
+  );
+  const coverageFactor = findFirstResultByRole(resultRows, "coverage_factor");
+  const uncertaintyBudget = resultRows.filter(
+    (row) => row.group === "uncertainty_budget",
+  );
+  const calibrationResults = resultRows.filter(
+    (row) => row.group === "calibration_result",
+  );
+  const lab = {
+    name: job.lab.name,
+    cnpj: job.lab.cnpj,
+    accreditationNumber: job.lab.accreditationNumber,
+    accreditationBody: job.lab.accreditationBody,
+    address: formatLabAddress(job),
+    street: job.lab.street,
+    number: job.lab.number,
+    complement: job.lab.complement,
+    neighbourhood: job.lab.neighbourhood,
+    city: job.lab.city,
+    state: job.lab.state,
+    cep: job.lab.cep,
+    phone: job.lab.phone,
+    email: job.lab.email,
+    website: job.lab.website,
+    logo: job.lab.logo,
+    technicalManagerName: job.lab.technicalManagerName,
+    technicalManagerTitle: job.lab.technicalManagerTitle,
+  };
+
+  return {
+    raw: job,
+    snapshots: {
+      method: job.methodSnapshot,
+      asset: job.assetSnapshot,
+      standards: job.standardsSnapshot,
+      environmental: job.environmentalSnapshot,
+      calibrationLocation: job.calibrationLocationSnapshot,
+      calibrationPhase: job.calibrationPhaseSnapshot,
+      certificateTemplate: job.certificateTemplateSnapshot,
+    },
+    lab,
+    organization: lab,
+    customer: {
+      name: job.customer.name,
+      taxId: job.customer.taxId,
+      address: formatCustomerAddress(job.customer.address),
+      phone: job.customer.phone,
+      email: job.customer.email,
+    },
+    asset: {
+      kind: job.asset.name,
+      serialNumber: job.asset.serialNumber,
+      tag: job.asset.tag,
+      model: job.asset.model,
+      manufacturer: job.asset.manufacturer,
+      measurementUnit: job.assetSnapshot?.baseMeasurementUnit,
+      baseMeasurementUnit: job.assetSnapshot?.baseMeasurementUnit,
+      capacity: assetSpecifications.capacity,
+      capacityText: formatAssetMeasurementForXlsx(
+        job,
+        assetSpecifications.capacity,
+        assetSpecifications.capacityUnit ?? firstWeighingRange?.rangeUnit,
+      ),
+      division: assetSpecifications.resolution,
+      divisionText: formatAssetMeasurementForXlsx(
+        job,
+        assetSpecifications.resolution,
+        assetSpecifications.resolutionUnit ??
+          firstWeighingRange?.resolutionUnit,
+      ),
+    },
+    certificate: {
+      number: job.jobId,
+      name: job.certificateName,
+      issuedAt: toIsoDateish(job.approvedAt),
+      issuedAtText: formatDateForXlsx(job.approvedAt),
+      supersedesId: job.supersedesId,
+      supersededById: job.supersededById,
+      amendmentNumber: job.amendmentNumber,
+      amendmentReason: job.amendmentReason,
+      originalJobId: job.originalJobId,
+      originalApprovedAt: toIsoDateish(job.originalApprovedAt),
+    },
+    job: {
+      id: job.jobId,
+      performedAt: toIsoDateish(job.performedAt),
+      performedAtText: formatDateForXlsx(job.performedAt),
+      location: job.calibrationLocationSnapshot?.addressText,
+      locationType: job.calibrationLocationSnapshot?.type,
+    },
+    method: {
+      id: job.methodSnapshot.methodId,
+      name: job.methodSnapshot.methodName,
+      version: job.methodSnapshot.methodVersion,
+      procedureCode: job.methodSnapshot.certificateContent?.procedureCode,
+      referenceStandards:
+        job.methodSnapshot.certificateContent?.referenceStandards ?? [],
+      referenceStandardsText:
+        job.methodSnapshot.certificateContent?.referenceStandards
+          ?.filter((item) => item.trim())
+          .join(" e ") ?? "",
+    },
+    methodSnapshot: job.methodSnapshot,
+    assetSnapshot: job.assetSnapshot,
+    standardsSnapshot: job.standardsSnapshot,
+    environmentalSnapshot: job.environmentalSnapshot,
+    calibrationLocationSnapshot: job.calibrationLocationSnapshot,
+    calibrationPhaseSnapshot: job.calibrationPhaseSnapshot,
+    certificateTemplateSnapshot: job.certificateTemplateSnapshot,
+    serviceOrder: {
+      inmetroRepairSealNumber: job.serviceOrder?.inmetroRepairSealNumber,
+    },
+    graphics: {
+      eccentricityIndicator: null,
+      eccentricityIndicatorPosition:
+        job.assetSnapshot?.specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY] ??
+        job.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY],
+    },
+    environment: {
+      temperature: job.environmentalSnapshot?.temperature,
+      temperatureText: formatMeasuredValueForXlsx(
+        job.environmentalSnapshot?.temperature,
+        "ºC",
+      ),
+      relativeHumidity: job.environmentalSnapshot?.humidity,
+      relativeHumidityText: formatMeasuredValueForXlsx(
+        job.environmentalSnapshot?.humidity,
+        "%",
+      ),
+      pressure: job.environmentalSnapshot?.pressure,
+      pressureText: formatMeasuredValueForXlsx(
+        job.environmentalSnapshot?.pressure,
+        "hPa",
+      ),
+      recordedAt: job.environmentalSnapshot?.recordedAt,
+      recordedBy: job.environmentalSnapshot?.recordedBy,
+      withinLimits: job.environmentalSnapshot?.withinLimits,
+      outOfLimitsJustification:
+        job.environmentalSnapshot?.outOfLimitsJustification,
+    },
+    standards,
+    traceability: standards,
+    certifiedValues: normalizeCertifiedValuesForXlsx(standards),
+    resultRows,
+    calibrationResults,
+    uncertainty: {
+      expanded: expandedUncertainty,
+      coverageFactor,
+      budget: uncertaintyBudget,
+    },
+    uncertaintyBudget,
+    massCompositions: normalizeMassCompositionsForXlsx(job),
+    calibrationPhase: job.calibrationPhaseSnapshot,
+    approval: {
+      approvedBy: {
+        name: job.approverName,
+      },
+      signatureUrl: job.approverSignatureUrl,
+    },
+    results: job.results,
+    resultsDisplay: normalizeMethodResultsDisplayForXlsx(job),
+    data: job.data,
+    dataDisplay: normalizeMethodDataDisplayForXlsx(job),
+  };
+}
+
+async function processXlsxIssuedCertificate(
+  env: Env,
+  jobId: number,
+  job: JobData,
+  userId: string,
+  selection: XlsxTemplateSelection,
+): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  const existingSnapshot = await withDbClient(env, async (client) => {
+    const result = await client.query<{
+      pdf_r2_key: string;
+      signature_metadata: unknown;
+    }>(
+      `
+        select ics.pdf_r2_key, cj.signature_metadata
+        from issued_certificate_snapshot ics
+        join calibration_job cj on cj.id = ics.job_id
+        where ics.job_id = $1
+        limit 1
+      `,
+      [jobId],
+    );
+    return result.rows[0] ?? null;
+  });
+
+  if (existingSnapshot) {
+    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
+    await withDbClient(env, (client) =>
+      updateJobWithCertificate(
+        client,
+        jobId,
+        certificateUrl,
+        userId,
+        parseSignatureMetadata(existingSnapshot.signature_metadata),
+        { preserveSignatureMetadata: true },
+      ),
+    );
+    return { success: true, certificateUrl };
+  }
+
+  if (!job.organizationId) {
+    return { success: false, error: "Missing organization_id" };
+  }
+
+  try {
+    const sourceObject = await env.CERTIFICATES_BUCKET.get(selection.xlsxR2Key);
+    if (!sourceObject) {
+      throw new Error(`Template XLSX not found: ${selection.xlsxR2Key}`);
+    }
+
+    const manifest = validateCertificateXlsxBindingManifest(
+      selection.bindingManifest,
+    );
+    const source = prepareXlsxWorkbookForRender(
+      new Uint8Array(await sourceObject.arrayBuffer()),
+    );
+    const inputDataSnapshot = buildXlsxCertificateData(job);
+    const engine = new ExcelTsCertificateWorkbookEngine();
+    const filled = await fillXlsxWorkbookFromManifest(
+      engine,
+      source,
+      manifest,
+      inputDataSnapshot,
+      job,
+    );
+    const converter = createXlsxToPdfConverter(env);
+    const converted = await converter.convert(filled.workbook, {
+      fileName: `${job.jobId}.xlsx`,
+      singlePageSheets: false,
+    });
+    const signed = await signPdfWithUnitCertificate(
+      env,
+      jobId,
+      job.organizationId,
+      job.unitId,
+      Buffer.from(converted.bytes),
+    );
+    const pdfBuffer = signed.pdfBuffer;
+
+    const year = getYearFromDateish(
+      job.approvedAt ?? job.performedAt,
+      "approvedAt/performedAt",
+    );
+    const issuedObjectId = randomUUID();
+    const pdfR2Key = buildIssuedPdfR2Key({
+      orgId: job.organizationId,
+      jobId: job.jobId,
+      year,
+      issuedId: issuedObjectId,
+    });
+    const filledXlsxR2Key = buildIssuedXlsxR2Key({
+      orgId: job.organizationId,
+      jobId: job.jobId,
+      year,
+      issuedId: issuedObjectId,
+    });
+
+    await env.CERTIFICATES_BUCKET.put(filledXlsxR2Key, filled.workbook, {
+      httpMetadata: {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+    });
+    await env.CERTIFICATES_BUCKET.put(pdfR2Key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+
+    const renderMetadata = {
+      converter: converted.metadata,
+      workbookWarnings: filled.warnings,
+      signature: signed.signatureMetadata
+        ? { signed: true, signerName: signed.signatureMetadata.signerName }
+        : { signed: false },
+      renderedAt: new Date().toISOString(),
+    };
+
+    const issuedPdfR2Key = await withDbClient(env, async (client) => {
+      const insertResult = await client.query<{ pdf_r2_key: string }>(
+        `
+          insert into issued_certificate_snapshot (
+            organization_id,
+            job_id,
+            template_id,
+            template_version_id,
+            certificate_number,
+            filled_xlsx_r2_key,
+            filled_xlsx_sha256,
+            pdf_r2_key,
+            pdf_sha256,
+            binding_manifest_sha256,
+            render_policy,
+            render_metadata,
+            input_data_snapshot,
+            status,
+            issued_by
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, 'ISSUED', $14)
+          on conflict (job_id) do nothing
+          returning pdf_r2_key
+        `,
+        [
+          job.organizationId,
+          jobId,
+          selection.templateId,
+          selection.templateVersionId,
+          job.jobId,
+          filledXlsxR2Key,
+          sha256Hex(filled.workbook),
+          pdfR2Key,
+          sha256Hex(pdfBuffer),
+          selection.bindingManifestSha256,
+          JSON.stringify(selection.renderPolicy),
+          JSON.stringify(renderMetadata),
+          JSON.stringify(inputDataSnapshot),
+          userId,
+        ],
+      );
+
+      const insertedSnapshotPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
+      const existingSnapshotAfterConflict = insertedSnapshotPdfR2Key
+        ? null
+        : (
+            await client.query<{
+              pdf_r2_key: string;
+              signature_metadata: unknown;
+            }>(
+              `
+                select ics.pdf_r2_key, cj.signature_metadata
+                from issued_certificate_snapshot ics
+                join calibration_job cj on cj.id = ics.job_id
+                where ics.job_id = $1
+                limit 1
+              `,
+              [jobId],
+            )
+          ).rows[0];
+      const snapshotPdfR2Key =
+        insertedSnapshotPdfR2Key ?? existingSnapshotAfterConflict?.pdf_r2_key;
+
+      if (!snapshotPdfR2Key) {
+        throw new Error("Issued certificate snapshot was not persisted");
+      }
+
+      const snapshotCertificateUrl = `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`;
+      await updateJobWithCertificate(
+        client,
+        jobId,
+        snapshotCertificateUrl,
+        userId,
+        insertedSnapshotPdfR2Key
+          ? signed.signatureMetadata
+          : parseSignatureMetadata(
+              existingSnapshotAfterConflict?.signature_metadata,
+            ),
+        { preserveSignatureMetadata: !insertedSnapshotPdfR2Key },
+      );
+      return snapshotPdfR2Key;
+    });
+
+    const certificateUrl = `https://certificates.calibrafacil.com/${issuedPdfR2Key}`;
+    return { success: true, certificateUrl };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
 export async function processBackgroundJob(
   env: Env,
   message: BackgroundJobMessage,
 ) {
+  if (message.type === "CERTIFICATE_XLSX_PREVIEW") {
+    await processXlsxPreviewJob(env, message);
+    return;
+  }
+
   if (message.type === "INTEGRATION_SYNC") {
-    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+    await processIntegrationSync(env, message);
     return;
   }
 
   if (message.type === "SCHEDULED_NOTIFICATIONS") {
     await processScheduledNotifications(env);
     return;
+  }
+
+  if (await processXlsxCertificateMessageIfSelected(env, message)) {
+    return;
+  }
+
+  if (isCalibrationCertificateMessage(message)) {
+    await withDbClient(env, (client) =>
+      setJobError(
+        client,
+        message.jobId,
+        CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
+        message.userId,
+      ),
+    ).catch((dbError) => {
+      console.error(
+        `[JOB ${message.jobId}] Failed to record missing XLSX template error:`,
+        dbError,
+      );
+    });
+    throw new Error(CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE);
   }
 
   const browserStart = performance.now();
@@ -1875,23 +3742,37 @@ export async function processBackgroundJobBatch(
   env: Env,
   messages: BackgroundJobMessage[],
 ) {
-  const integrationMessages = messages.filter(
-    (message) => message.type === "INTEGRATION_SYNC",
-  );
+  const integrationMessages = messages.filter(isIntegrationSyncMessage);
   const scheduledNotificationMessages = messages.filter(
     (message) => message.type === "SCHEDULED_NOTIFICATIONS",
+  );
+  const xlsxPreviewMessages = messages.filter(
+    (message): message is CertificateXlsxPreviewBackgroundJobMessage =>
+      message.type === "CERTIFICATE_XLSX_PREVIEW",
   );
   const documentMessages = messages.filter(isDocumentMessage);
 
   for (const message of integrationMessages) {
-    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+    await processIntegrationSync(env, message);
   }
 
   for (const _message of scheduledNotificationMessages) {
     await processScheduledNotifications(env);
   }
 
-  if (documentMessages.length === 0) return;
+  for (const message of xlsxPreviewMessages) {
+    await processXlsxPreviewJob(env, message);
+  }
+
+  const browserDocumentMessages: DocumentBackgroundJobMessage[] = [];
+  for (const message of documentMessages) {
+    if (await processXlsxCertificateMessageIfSelected(env, message)) {
+      continue;
+    }
+    browserDocumentMessages.push(message);
+  }
+
+  if (browserDocumentMessages.length === 0) return;
 
   const browserStart = performance.now();
   let browser: Browser | undefined;
@@ -1911,13 +3792,13 @@ export async function processBackgroundJobBatch(
     );
     readyForDocumentMessages = true;
 
-    for (const message of documentMessages) {
+    for (const message of browserDocumentMessages) {
       await processDocumentMessage(env, page, message);
     }
   } catch (error) {
     if (!readyForDocumentMessages) {
       await Promise.all(
-        documentMessages.map((message) =>
+        browserDocumentMessages.map((message) =>
           recordCertificateInfrastructureError(env, message, error),
         ),
       );

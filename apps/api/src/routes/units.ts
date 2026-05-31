@@ -56,11 +56,14 @@ function slugify(name: string) {
 }
 
 function isUniqueViolation(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? error.code
+      : undefined;
+
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
+    typeof code === "string" &&
+    code === "23505"
   );
 }
 
@@ -80,7 +83,9 @@ async function allocateUnitSlug(params: {
         and(
           eq(organizationUnit.organizationId, params.organizationId),
           eq(organizationUnit.slug, candidate),
-          params.excludeId ? ne(organizationUnit.id, params.excludeId) : undefined,
+          params.excludeId
+            ? ne(organizationUnit.id, params.excludeId)
+            : undefined,
         ),
       )
       .limit(1);
@@ -93,10 +98,8 @@ async function allocateUnitSlug(params: {
   throw new Error("Nao foi possivel gerar um slug unico para a unidade");
 }
 
-function getViewerAccess(c: {
-  get: (key: string) => unknown;
-}) {
-  const memberData = c.get("member") as MemberData;
+function getViewerAccess(c: { get: (key: "member") => MemberData }) {
+  const memberData = c.get("member");
   return {
     memberData,
     viewer: getGovernanceAccess(memberData),
@@ -107,11 +110,16 @@ function dedupeUnitAssignments(
   assignments: Array<{ unitId: number; role: MemberUnitRole }>,
 ) {
   return Array.from(
-    new Map(assignments.map((assignment) => [assignment.unitId, assignment])).values(),
+    new Map(
+      assignments.map((assignment) => [assignment.unitId, assignment]),
+    ).values(),
   );
 }
 
-function getScopeSummary(memberData: MemberData, viewer: ReturnType<typeof getGovernanceAccess>) {
+function getScopeSummary(
+  memberData: MemberData,
+  viewer: ReturnType<typeof getGovernanceAccess>,
+) {
   const activeUnit = memberData.accessibleUnits.find(
     (unit) => unit.id === memberData.activeUnitId,
   );
@@ -143,7 +151,7 @@ function getScopeSummary(memberData: MemberData, viewer: ReturnType<typeof getGo
     label:
       memberData.selectedUnitScope === "all"
         ? "Visão consolidada"
-        : activeUnit?.name ?? memberData.activeUnitName ?? "Unidade ativa",
+        : (activeUnit?.name ?? memberData.activeUnitName ?? "Unidade ativa"),
     description:
       memberData.selectedUnitScope === "all"
         ? "Operando em visão consolidada para todas as unidades acessíveis."
@@ -221,7 +229,10 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       let created: typeof organizationUnit.$inferSelect | undefined;
 
       if (!viewer.canManageOrganizationUnits) {
-        return c.json({ error: "Apenas administradores globais podem criar unidades" }, 403);
+        return c.json(
+          { error: "Apenas administradores globais podem criar unidades" },
+          403,
+        );
       }
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -328,8 +339,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (input.status && input.status !== existing.status) {
         updateData.status = input.status;
-        updateData.archivedAt =
-          input.status === "ARCHIVED" ? new Date() : null;
+        updateData.archivedAt = input.status === "ARCHIVED" ? new Date() : null;
       }
 
       if (Object.keys(updateData).length === 0) {
@@ -424,7 +434,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const visibleMemberIds = viewer.isGlobalManager
         ? null
-        : Array.from(new Set(assignments.map((assignment) => assignment.memberId)));
+        : Array.from(
+            new Set(assignments.map((assignment) => assignment.memberId)),
+          );
 
       const members =
         visibleMemberIds && visibleMemberIds.length === 0
@@ -443,7 +455,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
               .where(
                 and(
                   eq(member.organizationId, memberData.organizationId),
-                  visibleMemberIds ? inArray(member.id, visibleMemberIds) : undefined,
+                  visibleMemberIds
+                    ? inArray(member.id, visibleMemberIds)
+                    : undefined,
                 ),
               )
               .orderBy(asc(user.name));
@@ -503,8 +517,13 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(organizationEventLog)
         .leftJoin(user, eq(organizationEventLog.actorUserId, user.id))
-        .leftJoin(organizationUnit, eq(organizationEventLog.unitId, organizationUnit.id))
-        .where(eq(organizationEventLog.organizationId, memberData.organizationId))
+        .leftJoin(
+          organizationUnit,
+          eq(organizationEventLog.unitId, organizationUnit.id),
+        )
+        .where(
+          eq(organizationEventLog.organizationId, memberData.organizationId),
+        )
         .orderBy(desc(organizationEventLog.createdAt))
         .limit(80);
 
@@ -565,7 +584,10 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
 
       if (!viewer.canManageAssignments) {
-        return c.json({ error: "Permissão insuficiente para editar atribuições" }, 403);
+        return c.json(
+          { error: "Permissão insuficiente para editar atribuições" },
+          403,
+        );
       }
 
       const dedupedAssignments = dedupeUnitAssignments(input.assignments);
@@ -585,9 +607,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Membro não encontrado" }, 404);
       }
 
-      if (!viewer.isGlobalManager && ["owner", "admin"].includes(targetMember.role)) {
+      if (
+        !viewer.isGlobalManager &&
+        ["owner", "admin"].includes(targetMember.role)
+      ) {
         return c.json(
-          { error: "Papéis globais não podem ser gerenciados por administradores de unidade" },
+          {
+            error:
+              "Papéis globais não podem ser gerenciados por administradores de unidade",
+          },
           403,
         );
       }
@@ -612,7 +640,10 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
               .from(organizationUnit)
               .where(
                 and(
-                  eq(organizationUnit.organizationId, memberData.organizationId),
+                  eq(
+                    organizationUnit.organizationId,
+                    memberData.organizationId,
+                  ),
                   inArray(organizationUnit.id, unitIds),
                 ),
               );
@@ -641,7 +672,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       // units included in the incoming payload. Scoped managers can only delete
       // assignments for units they manage.
       const editableUnitIds = viewer.isGlobalManager
-        ? existingAssignments.map((assignment) => assignment.unitId).concat(unitIds)
+        ? existingAssignments
+            .map((assignment) => assignment.unitId)
+            .concat(unitIds)
         : viewer.managedUnitIds;
 
       // Deduping here keeps the subsequent inArray delete filter scoped to the
@@ -661,7 +694,10 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(memberUnitAssignment.memberId, targetMemberId),
-              eq(memberUnitAssignment.organizationId, memberData.organizationId),
+              eq(
+                memberUnitAssignment.organizationId,
+                memberData.organizationId,
+              ),
               inArray(memberUnitAssignment.unitId, scopedEditableUnitIds),
             ),
           );
@@ -710,7 +746,10 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!viewer.canManageGlobalRoles) {
         return c.json(
-          { error: "Apenas administradores globais podem alterar papéis globais" },
+          {
+            error:
+              "Apenas administradores globais podem alterar papéis globais",
+          },
           403,
         );
       }

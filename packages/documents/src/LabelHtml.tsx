@@ -2,11 +2,11 @@
 // Types for label generation (standalone, does not depend on @calibra-facil/db)
 
 export type LabelData = {
-    jobId: string; // Certificate number (e.g., "CAL-2025-0001")
-    labName: string;
-    assetTag: string;
-    calibrationDate: Date | string | null;
-    qrCodeDataUrl: string; // Pre-generated QR code as data URL
+  jobId: string; // Certificate number (e.g., "CAL-2025-0001")
+  labName: string;
+  assetTag: string;
+  calibrationDate: Date | string | null;
+  qrCodeDataUrl: string; // Pre-generated QR code as data URL
 };
 
 // Styles for 50mm x 30mm thermal printer label
@@ -108,47 +108,47 @@ const labelStyles = `
 `;
 
 function formatShortDate(date: Date | string | null): string {
-    if (!date) return "-";
-    const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-    });
+  if (!date) return "-";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function LabelHtml({ label }: { label: LabelData }) {
-    return (
-        <html lang="pt-BR">
-            <head>
-                <meta charSet="UTF-8" />
-                <title>Etiqueta - {label.jobId}</title>
-                <style dangerouslySetInnerHTML={{ __html: labelStyles }} />
-            </head>
-            <body>
-                <div className="label">
-                    <div className="qr-section">
-                        <img src={label.qrCodeDataUrl} alt="QR Code" />
-                    </div>
-                    <div className="info-section">
-                        <div className="calibrado">Calibrado</div>
-                        <div className="lab-name">{label.labName}</div>
-                        <div className="details">
-                            <div className="field">
-                                <span className="field-label">TAG:</span>
-                                <span className="field-value">{label.assetTag || "-"}</span>
-                            </div>
-                            <div className="field">
-                                <span className="field-label">DATA:</span>
-                                <span className="field-value">
-                                    {formatShortDate(label.calibrationDate)}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="cert-number">{label.jobId}</div>
-                    </div>
-                </div>
-            </body>
-        </html>
-    );
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="UTF-8" />
+        <title>Etiqueta - {label.jobId}</title>
+        <style dangerouslySetInnerHTML={{ __html: labelStyles }} />
+      </head>
+      <body>
+        <div className="label">
+          <div className="qr-section">
+            <img src={label.qrCodeDataUrl} alt="QR Code" />
+          </div>
+          <div className="info-section">
+            <div className="calibrado">Calibrado</div>
+            <div className="lab-name">{label.labName}</div>
+            <div className="details">
+              <div className="field">
+                <span className="field-label">TAG:</span>
+                <span className="field-value">{label.assetTag || "-"}</span>
+              </div>
+              <div className="field">
+                <span className="field-label">DATA:</span>
+                <span className="field-value">
+                  {formatShortDate(label.calibrationDate)}
+                </span>
+              </div>
+            </div>
+            <div className="cert-number">{label.jobId}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  );
 }

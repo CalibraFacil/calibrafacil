@@ -40,8 +40,14 @@ export function BrandLockup({
 }: BrandLockupProps) {
   return (
     <div className={cn('flex items-center gap-2.5', className)} {...props}>
-      <BrandMark alt="" aria-hidden="true" className={cn('size-8', markClassName)} />
-      <span className={cn('text-lg font-semibold tracking-tight', textClassName)}>
+      <BrandMark
+        alt=""
+        aria-hidden="true"
+        className={cn('size-8', markClassName)}
+      />
+      <span
+        className={cn('text-lg font-semibold tracking-tight', textClassName)}
+      >
         CalibraFácil
       </span>
     </div>

@@ -6,14 +6,10 @@ import {
   Package01Icon,
   ThermometerIcon,
 } from '@hugeicons/core-free-icons'
-import { toast } from 'sonner'
 
 import { useCommandPalette } from '../command-context'
-import {
-  CommandGroup,
-  CommandItem,
-  CommandShortcut,
-} from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@/components/ui/command'
+import { ShortcutHint } from '../shortcuts'
 
 export function QuickCreateGroup() {
   const navigate = useNavigate()
@@ -29,7 +25,7 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
         <span>Nova Calibração</span>
-        <CommandShortcut>⌘N</CommandShortcut>
+        <ShortcutHint id="createCalibration" />
       </CommandItem>
       <CommandItem
         onSelect={() => {
@@ -39,6 +35,7 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
         <span>Nova Ordem de Serviço</span>
+        <ShortcutHint id="createServiceOrder" />
       </CommandItem>
 
       <CommandItem
@@ -49,7 +46,7 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={ThermometerIcon} className="text-orange-500" />
         <span>Configurar Condições Ambientais</span>
-        <CommandShortcut>⌘E</CommandShortcut>
+        <ShortcutHint id="createEnvironment" />
       </CommandItem>
 
       <CommandItem
@@ -60,22 +57,18 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Package01Icon} className="text-green-500" />
         <span>Registrar Entrada de Ativo</span>
-        <CommandShortcut>⌘I</CommandShortcut>
+        <ShortcutHint id="createAsset" />
       </CommandItem>
 
       <CommandItem
         onSelect={() => {
-          toast.info('Em breve', {
-            description: 'Relatórios de Não Conformidade serão implementados em breve.',
-          })
           setOpen(false)
+          navigate({ to: '/dashboard/nc/new' })
         }}
       >
         <HugeiconsIcon icon={AlertDiamondIcon} className="text-red-500" />
-        <span className="flex items-center gap-2">
-          Criar Relatório de Não Conformidade
-          <span className="text-xs text-muted-foreground">(Em breve)</span>
-        </span>
+        <span>Criar Relatório de Não Conformidade</span>
+        <ShortcutHint id="createNonConformance" />
       </CommandItem>
     </CommandGroup>
   )

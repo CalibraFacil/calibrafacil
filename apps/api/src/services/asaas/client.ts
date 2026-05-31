@@ -40,6 +40,14 @@ function calculateBackoff(attempt: number): number {
   return Math.min(exponentialDelay + jitter, MAX_DELAY_MS);
 }
 
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function parseAsaasEnvironment(value: unknown): AsaasEnvironment {
+  return value === "production" || value === "sandbox" ? value : "sandbox";
+}
+
 /**
  * Custom error class for Asaas API errors
  */
@@ -100,15 +108,18 @@ export class AsaasClient {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(url, {
+        const requestInit: RequestInit = {
           method,
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "CalibraFacil/1.0 (+https://calibrafacil.com)",
             access_token: this.apiKey,
           },
-          body: body ? JSON.stringify(body) : undefined,
-        });
+        };
+        if (body && method !== "GET") {
+          requestInit.body = JSON.stringify(body);
+        }
+        const response = await fetch(url, requestInit);
 
         // Handle non-OK responses
         if (!response.ok) {
@@ -145,12 +156,12 @@ export class AsaasClient {
         // Handle empty responses (e.g., DELETE)
         const text = await response.text();
         if (!text) {
-          return {} as T;
+          return JSON.parse("{}");
         }
 
-        return JSON.parse(text) as T;
+        return JSON.parse(text);
       } catch (error) {
-        lastError = error as Error;
+        lastError = toError(error);
 
         // Don't retry AsaasError (non-retryable API errors like validation)
         if (error instanceof AsaasError) {
@@ -161,7 +172,7 @@ export class AsaasClient {
         if (attempt < MAX_RETRIES) {
           const delay = calculateBackoff(attempt);
           console.warn(
-            `Asaas API request failed: ${(error as Error).message}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+            `Asaas API request failed: ${lastError.message}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
           );
           await sleep(delay);
           continue;
@@ -171,8 +182,7 @@ export class AsaasClient {
 
     // All retries exhausted
     throw (
-      lastError ||
-      new Error("Asaas API request failed after maximum retries")
+      lastError || new Error("Asaas API request failed after maximum retries")
     );
   }
 
@@ -230,8 +240,7 @@ export function getAsaasClient(): AsaasClient {
       );
     }
 
-    const environment =
-      (process.env.ASAAS_ENVIRONMENT as AsaasEnvironment) || "sandbox";
+    const environment = parseAsaasEnvironment(process.env.ASAAS_ENVIRONMENT);
     clientInstance = new AsaasClient(apiKey, environment);
   }
 

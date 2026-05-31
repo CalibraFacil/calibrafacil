@@ -1,20 +1,17 @@
-import { createRouter } from '@tanstack/react-router'
+import {
+  createBrowserHistory,
+  createHashHistory,
+  createRouter,
+} from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import { routeTree } from './routeTree.gen'
-
-const SENTRY_DSN =
-  'https://examplePublicKey@o0.ingest.sentry.io/0'
-
-const REPLAY_ENABLED_PREFIXES = [
-  '/dashboard',
-  '/sign-in',
-  '/sign-up',
-  '/accept-invitation',
-] as const
-
-function shouldEnableSessionReplay(pathname: string) {
-  return REPLAY_ENABLED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-}
+import { isDesktopRuntime } from './runtime/desktop'
+import {
+  getSentryDsn,
+  shouldEnableSentryReplay,
+  shouldEnableTelemetry,
+  shouldSendSentryPii,
+} from './app/config/runtime'
 
 function scheduleIdle(callback: () => void) {
   if (typeof window === 'undefined') return
@@ -28,14 +25,23 @@ function scheduleIdle(callback: () => void) {
 }
 
 async function initializeSentry() {
-  if (typeof window === 'undefined' || !import.meta.env.PROD) return
+  if (
+    typeof window === 'undefined' ||
+    !shouldEnableTelemetry() ||
+    isDesktopRuntime()
+  ) {
+    return
+  }
+
+  const dsn = getSentryDsn()
+  if (!dsn) return
 
   const Sentry = await import('@sentry/react')
-  const replayEnabled = shouldEnableSessionReplay(window.location.pathname)
+  const replayEnabled = shouldEnableSentryReplay(window.location.pathname)
 
   Sentry.init({
-    dsn: SENTRY_DSN,
-    sendDefaultPii: true,
+    dsn,
+    sendDefaultPii: shouldSendSentryPii(),
     integrations: replayEnabled
       ? [Sentry.browserTracingIntegration(), Sentry.replayIntegration()]
       : [Sentry.browserTracingIntegration()],
@@ -46,6 +52,7 @@ async function initializeSentry() {
 }
 
 export const getRouter = () => {
+  const isDesktop = isDesktopRuntime()
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -56,12 +63,16 @@ export const getRouter = () => {
 
   const router = createRouter({
     routeTree,
+    history: isDesktop ? createHashHistory() : createBrowserHistory(),
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadDelay: 80,
     defaultPreloadStaleTime: 0,
     context: {
       queryClient,
+      runtime: {
+        isDesktop,
+      },
     },
   })
 

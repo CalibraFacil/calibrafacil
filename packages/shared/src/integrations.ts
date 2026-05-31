@@ -1,8 +1,114 @@
 export type IntegrationType = "financial_erp";
 
-export type IntegrationProvider = "generic_http";
+export type IntegrationProvider = "generic_http" | "conta_azul";
 
-export type IntegrationStatus = "ACTIVE" | "DISABLED";
+export const INTEGRATION_PROVIDER_CAPABILITY_FLAGS = [
+  "canCreateCustomers",
+  "canCreateSuppliers",
+  "canCreateTransporters",
+  "canCreateCatalogItems",
+  "canCreateBudgets",
+  "canCreateSales",
+  "canCreateReceivables",
+  "canCreatePayables",
+  "canCreateContracts",
+  "canReadReceivableStatus",
+  "canReadInstallments",
+  "canReadPayableStatus",
+  "canReadFiscalDocuments",
+  "canIssueFiscalDocuments",
+  "canReadRemoteDocumentLinks",
+  "canSyncContracts",
+  "canUseWebhooks",
+  "requiresPolling",
+  "supportsCostCenters",
+  "supportsCategories",
+  "supportsRateio",
+  "supportsSellers",
+  "supportsBranchAddresses",
+] as const;
+
+export type IntegrationProviderCapabilityFlag =
+  (typeof INTEGRATION_PROVIDER_CAPABILITY_FLAGS)[number];
+
+export type IntegrationProviderCapabilities = Record<
+  IntegrationProviderCapabilityFlag,
+  boolean
+>;
+
+const noProviderCapabilities: IntegrationProviderCapabilities = {
+  canCreateCustomers: false,
+  canCreateSuppliers: false,
+  canCreateTransporters: false,
+  canCreateCatalogItems: false,
+  canCreateBudgets: false,
+  canCreateSales: false,
+  canCreateReceivables: false,
+  canCreatePayables: false,
+  canCreateContracts: false,
+  canReadReceivableStatus: false,
+  canReadInstallments: false,
+  canReadPayableStatus: false,
+  canReadFiscalDocuments: false,
+  canIssueFiscalDocuments: false,
+  canReadRemoteDocumentLinks: false,
+  canSyncContracts: false,
+  canUseWebhooks: false,
+  requiresPolling: false,
+  supportsCostCenters: false,
+  supportsCategories: false,
+  supportsRateio: false,
+  supportsSellers: false,
+  supportsBranchAddresses: false,
+};
+
+export const INTEGRATION_PROVIDER_CAPABILITIES = {
+  generic_http: {
+    ...noProviderCapabilities,
+    canCreateCustomers: true,
+    canCreateReceivables: true,
+  },
+  conta_azul: {
+    ...noProviderCapabilities,
+    canCreateCustomers: true,
+    canCreateSuppliers: true,
+    canCreateTransporters: true,
+    canCreateCatalogItems: true,
+    canCreateBudgets: true,
+    canCreateSales: true,
+    canCreateReceivables: true,
+    canCreatePayables: true,
+    canCreateContracts: true,
+    canReadReceivableStatus: true,
+    canReadInstallments: true,
+    canReadPayableStatus: true,
+    canReadFiscalDocuments: true,
+    canReadRemoteDocumentLinks: true,
+    canSyncContracts: true,
+    requiresPolling: true,
+    supportsCostCenters: true,
+    supportsCategories: true,
+    supportsSellers: true,
+  },
+} as const satisfies Record<
+  IntegrationProvider,
+  IntegrationProviderCapabilities
+>;
+
+export function getProviderCapabilities(
+  provider: IntegrationProvider,
+): IntegrationProviderCapabilities {
+  return { ...INTEGRATION_PROVIDER_CAPABILITIES[provider] };
+}
+
+export function providerSupports(
+  provider: IntegrationProvider,
+  flag: IntegrationProviderCapabilityFlag,
+) {
+  return INTEGRATION_PROVIDER_CAPABILITIES[provider][flag];
+}
+
+export type IntegrationStatus = "ACTIVE" | "DISABLED" | "ACTION_REQUIRED";
 
 export type IntegrationSetupStatus =
   | "NOT_CONFIGURED"
@@ -10,21 +116,55 @@ export type IntegrationSetupStatus =
   | "READY"
   | "ACTION_REQUIRED";
 
-export type IntegrationReadinessStatus =
-  | "NOT_READY"
-  | "READY"
-  | "DEGRADED";
+export type IntegrationReadinessStatus = "NOT_READY" | "READY" | "DEGRADED";
 
 export type IntegrationSyncTarget =
+  | "catalog_item"
+  | "contract"
   | "customer"
+  | "supplier"
+  | "transporter"
   | "service_order"
-  | "billing_document";
+  | "billing_document"
+  | "payable";
 
-export type IntegrationSyncTrigger =
-  | "manual"
-  | "event"
-  | "scheduled"
-  | "retry";
+export type IntegrationObjectLinkTarget =
+  | IntegrationSyncTarget
+  | "baixa"
+  | "budget"
+  | "catalog_item"
+  | "category"
+  | "contract"
+  | "cost_center"
+  | "dre_category"
+  | "expense"
+  | "financial_account"
+  | "financial_transfer"
+  | "fiscal_document"
+  | "payable"
+  | "payable_installment"
+  | "product"
+  | "protocol"
+  | "receivable_installment"
+  | "remote_document"
+  | "sale"
+  | "seller"
+  | "service"
+  | "supplier"
+  | "transporter";
+
+const INTEGRATION_SYNC_TARGETS = [
+  "catalog_item",
+  "contract",
+  "customer",
+  "supplier",
+  "transporter",
+  "service_order",
+  "billing_document",
+  "payable",
+] as const satisfies readonly IntegrationSyncTarget[];
+
+export type IntegrationSyncTrigger = "manual" | "event" | "scheduled" | "retry";
 
 export type IntegrationRunMode = "disabled" | "manual_only" | "scheduled";
 
@@ -46,9 +186,127 @@ export type IntegrationSyncStatus =
   | "FAILED"
   | "PARTIAL";
 
+export type IntegrationSyncItemOperation =
+  | "create"
+  | "update"
+  | "upsert"
+  | "poll"
+  | "reconcile"
+  | "link"
+  | "validate"
+  | "delete";
+
+export type IntegrationSyncItemStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "DEAD_LETTER";
+
 export type IntegrationEventLevel = "info" | "warning" | "error";
 
-export type IntegrationCredentialType = "bearer";
+export type IntegrationCredentialType = "bearer" | "oauth2";
+
+export type ContaAzulExportMode =
+  | "budget_to_sale"
+  | "contract_generated"
+  | "receivable_event"
+  | "sale"
+  | "sale_and_receivable";
+
+export type ContaAzulBudgetMode = "sales_search_link";
+
+export type ContaAzulFiscalMode = "consultation_only" | "disabled";
+
+export type ContaAzulProtocolMode = "api_lookup_verified" | "metadata_only";
+
+export type ContaAzulSaleTrigger =
+  | "billing_document_issued"
+  | "certificate_approved"
+  | "manual"
+  | "quote_approved"
+  | "service_order_approved"
+  | "service_order_completed";
+
+export type ContaAzulSyncDomain =
+  | "baixas"
+  | "balances"
+  | "billingDocuments"
+  | "budgets"
+  | "categories"
+  | "contracts"
+  | "costCenters"
+  | "customers"
+  | "dreCategories"
+  | "driftChecks"
+  | "expenses"
+  | "financialAccounts"
+  | "fiscalDocuments"
+  | "inventoryTaxonomy"
+  | "payables"
+  | "paymentStatusPolling"
+  | "products"
+  | "protocols"
+  | "receivables"
+  | "remoteDocuments"
+  | "sales"
+  | "sellers"
+  | "services"
+  | "suppliers"
+  | "transfers"
+  | "transporters";
+
+export type ContaAzulReferenceDomain =
+  | "accounts"
+  | "balances"
+  | "categories"
+  | "cest"
+  | "costCenters"
+  | "dreCategories"
+  | "ncm"
+  | "productCategories"
+  | "productEcommerceBrands"
+  | "productEcommerceCategories"
+  | "products"
+  | "protocols"
+  | "sellers"
+  | "serviceCategories"
+  | "transfers"
+  | "units";
+
+export type ContaAzulEnabledTargetsConfig = Record<
+  ContaAzulSyncDomain,
+  boolean
+>;
+
+export const CONTA_AZUL_SYNC_DOMAINS = [
+  "customers",
+  "suppliers",
+  "transporters",
+  "services",
+  "products",
+  "inventoryTaxonomy",
+  "budgets",
+  "sellers",
+  "sales",
+  "contracts",
+  "billingDocuments",
+  "receivables",
+  "payables",
+  "expenses",
+  "financialAccounts",
+  "balances",
+  "transfers",
+  "categories",
+  "dreCategories",
+  "costCenters",
+  "baixas",
+  "paymentStatusPolling",
+  "fiscalDocuments",
+  "remoteDocuments",
+  "protocols",
+  "driftChecks",
+] as const satisfies readonly ContaAzulSyncDomain[];
 
 export type IntegrationMappingValueMode = "source" | "constant";
 
@@ -65,9 +323,12 @@ export type IntegrationMappingFormatter =
   | "currency_major";
 
 export type IntegrationDependencyWarningCode =
+  | "CATALOG_NOT_ENABLED"
   | "CUSTOMERS_NOT_SYNCED"
+  | "SUPPLIERS_NOT_SYNCED"
   | "SERVICE_ORDERS_NOT_SYNCED"
   | "VALIDATION_REQUIRED"
+  | "REMOTE_CONFIG_MISSING"
   | "INTEGRATION_DISABLED";
 
 export const DEFAULT_GENERIC_ERP_PATHS = {
@@ -76,6 +337,14 @@ export const DEFAULT_GENERIC_ERP_PATHS = {
   serviceOrders: "/service-orders",
   billingDocuments: "/billing-documents",
 } as const;
+
+export const CONTA_AZUL_API_BASE_URL = "https://api-v2.contaazul.com" as const;
+
+export const DEFAULT_CONTA_AZUL_SCOPES = [
+  "openid",
+  "profile",
+  "aws.cognito.signin.user.admin",
+] as const;
 
 export const DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY: IntegrationScheduleFrequency =
   "daily";
@@ -126,6 +395,78 @@ export interface GenericFinancialErpConnectionConfig {
   mappings: IntegrationMappingsConfig;
 }
 
+export interface ContaAzulConnectionConfig {
+  provider: "conta_azul";
+  baseUrl: typeof CONTA_AZUL_API_BASE_URL;
+  accountId: string | null;
+  connectedCompanyName: string | null;
+  scopes: string[];
+  accessTokenExpiresAt: string | null;
+  defaultFinancialAccountId: string | null;
+  defaultCategoryId: string | null;
+  defaultCostCenterId: string | null;
+  defaultDreCategoryId: string | null;
+  defaultExpenseCategoryId: string | null;
+  defaultPaymentMethodId: string | null;
+  defaultProductCategoryId: string | null;
+  defaultSellerId: string | null;
+  defaultServiceCategoryId: string | null;
+  defaultUnitOfMeasureId: string | null;
+  budgetMode: ContaAzulBudgetMode;
+  fiscalMode: ContaAzulFiscalMode;
+  defaultFiscalTaxonomy: Record<string, unknown> | null;
+  protocolMode: ContaAzulProtocolMode;
+  saleTrigger: ContaAzulSaleTrigger;
+  exportMode: ContaAzulExportMode;
+  enabledTargets: ContaAzulEnabledTargetsConfig;
+  polling: {
+    receivablesLastRemoteUpdatedAt: string | null;
+    payablesLastRemoteUpdatedAt: string | null;
+    invoicesLastRemoteUpdatedAt: string | null;
+    protocolsLastRemoteUpdatedAt: string | null;
+    driftLastCheckedAt: string | null;
+  };
+  schedules: Record<IntegrationSyncTarget, IntegrationTargetScheduleConfig>;
+  mappings: IntegrationMappingsConfig;
+}
+
+export type FinancialErpConnectionConfig =
+  | GenericFinancialErpConnectionConfig
+  | ContaAzulConnectionConfig;
+
+export type ContaAzulConnectionConfigInput = Partial<
+  Omit<
+    ContaAzulConnectionConfig,
+    | "baseUrl"
+    | "budgetMode"
+    | "defaultFiscalTaxonomy"
+    | "enabledTargets"
+    | "exportMode"
+    | "fiscalMode"
+    | "mappings"
+    | "polling"
+    | "protocolMode"
+    | "saleTrigger"
+    | "schedules"
+  >
+> & {
+  baseUrl?: string | null;
+  budgetMode?: unknown;
+  defaultFiscalTaxonomy?: unknown;
+  enabledTargets?: Partial<ContaAzulEnabledTargetsConfig> | null;
+  exportMode?: unknown;
+  fiscalMode?: unknown;
+  polling?: Partial<ContaAzulConnectionConfig["polling"]> | null;
+  protocolMode?: unknown;
+  saleTrigger?: unknown;
+  schedules?: Partial<
+    Record<IntegrationSyncTarget, Partial<IntegrationTargetScheduleConfig>>
+  > | null;
+  mappings?: Partial<
+    Record<IntegrationSyncTarget, Partial<IntegrationTargetMappingConfig>>
+  > | null;
+};
+
 export interface IntegrationCustomerPayload {
   externalId: string;
   organizationId: string;
@@ -134,8 +475,38 @@ export interface IntegrationCustomerPayload {
   email: string | null;
   phone: string | null;
   address: string | null;
+  addressParts?: IntegrationCustomerAddress;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+export type IntegrationPessoaRole = "customer" | "supplier" | "transporter";
+
+export interface IntegrationPessoaPayload extends IntegrationCustomerPayload {
+  pessoaRole: IntegrationPessoaRole;
+}
+
+export interface IntegrationSupplierPayload extends IntegrationPessoaPayload {
+  pessoaRole: "supplier";
+}
+
+export interface IntegrationTransporterPayload extends IntegrationPessoaPayload {
+  pessoaRole: "transporter";
+}
+
+export interface IntegrationCatalogItemPayload {
+  externalId: string;
+  organizationId: string;
+  kind: "product" | "service";
+  code: string | null;
+  name: string;
+  description: string | null;
+  priceCents: number | null;
+  currency: string | null;
+  unitOfMeasureId: string | null;
+  categoryId: string | null;
+  fiscalMetadata: Record<string, unknown> | null;
+  active: boolean;
 }
 
 export interface IntegrationServiceOrderPayload {
@@ -147,6 +518,7 @@ export interface IntegrationServiceOrderPayload {
   status: string;
   customerExternalId: string | null;
   customerName: string | null;
+  serviceExternalId?: string | null;
   assetName: string | null;
   assetTag: string | null;
   serviceName: string | null;
@@ -173,11 +545,155 @@ export interface IntegrationBillingDocumentPayload {
   items: Array<{
     lineId: string;
     jobId: string | null;
+    catalogItemExternalId?: string | null;
     description: string;
     quantity: number;
     unitPriceCents: number;
     totalCents: number;
   }>;
+}
+
+export interface IntegrationCommercialItemPayload {
+  lineId: string;
+  catalogItemExternalId: string | null;
+  remoteItemId?: string | null;
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  totalCents: number;
+  unitCostCents?: number | null;
+}
+
+export interface IntegrationPaymentInstallmentPayload {
+  dueDate: string;
+  amountCents: number;
+  description: string | null;
+}
+
+export interface IntegrationPaymentTermsPayload {
+  paymentMethodId: string | null;
+  financialAccountId: string | null;
+  paymentConditionLabel: string | null;
+  dueDate: string | null;
+  dueDay?: number | null;
+  firstDueDate?: string | null;
+  installments: IntegrationPaymentInstallmentPayload[];
+}
+
+export interface IntegrationBudgetPayload {
+  externalId: string;
+  organizationId: string;
+  customerExternalId: string | null;
+  budgetNumber: string | null;
+  issueDate: string | null;
+  expirationDate: string | null;
+  status: string;
+  sellerExternalId: string | null;
+  categoryId: string | null;
+  costCenterId: string | null;
+  totalCents: number;
+  currency: string;
+  notes: string | null;
+  items: IntegrationCommercialItemPayload[];
+  paymentTerms: IntegrationPaymentTermsPayload | null;
+}
+
+export interface IntegrationSalePayload {
+  externalId: string;
+  organizationId: string;
+  customerExternalId: string | null;
+  saleNumber: string | null;
+  saleDate: string | null;
+  status: string;
+  sellerExternalId: string | null;
+  categoryId: string | null;
+  costCenterId: string | null;
+  totalCents: number;
+  currency: string;
+  notes: string | null;
+  items: IntegrationCommercialItemPayload[];
+  paymentTerms: IntegrationPaymentTermsPayload | null;
+}
+
+export interface IntegrationPayablePayload {
+  externalId: string;
+  organizationId: string;
+  supplierExternalId: string | null;
+  documentNumber: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  competenceDate: string | null;
+  amountCents: number;
+  currency: string;
+  categoryId: string | null;
+  costCenterId: string | null;
+  notes: string | null;
+}
+
+export type IntegrationFiscalDocumentType = "nfe" | "nfse";
+
+export type IntegrationMdfeLinkStatus =
+  | "AUTORIZADO"
+  | "ENCERRADO"
+  | "CANCELADO";
+
+export interface IntegrationFiscalDocumentMetadata {
+  fiscalDocumentType: IntegrationFiscalDocumentType;
+  remoteEntityId: string | null;
+  accessKey: string | null;
+  number: string | null;
+  status: string | null;
+  issuedAt: string | null;
+  customerName: string | null;
+  customerDocument: string | null;
+  saleRemoteId: string | null;
+  contractRemoteId: string | null;
+  saleNumber: string | null;
+  totalAmountCents: number | null;
+  xmlAvailable: boolean;
+  consultationOnly: boolean;
+  rawMetadata: Record<string, unknown>;
+}
+
+export interface IntegrationMdfeLinkPayload {
+  externalId: string;
+  organizationId: string;
+  fiscalDocumentAccessKeys: string[];
+  mdfeIdentifier: string;
+  status: IntegrationMdfeLinkStatus | null;
+}
+
+export interface IntegrationContractPayload {
+  externalId: string;
+  organizationId: string;
+  customerExternalId: string | null;
+  contractNumber: string | null;
+  recurrence: string | null;
+  issueDate: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  sellerExternalId: string | null;
+  totalCents: number;
+  currency: string;
+  categoryId: string | null;
+  costCenterId: string | null;
+  notes: string | null;
+  items: IntegrationCommercialItemPayload[];
+  paymentTerms: IntegrationPaymentTermsPayload | null;
+}
+
+export interface ContaAzulReferenceItem {
+  id: string;
+  name: string;
+  code: string | null;
+  active: boolean | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface ContaAzulReferencePage {
+  domain: ContaAzulReferenceDomain;
+  items: ContaAzulReferenceItem[];
+  nextCursor: string | null;
 }
 
 export interface IntegrationDependencyWarning {
@@ -213,9 +729,20 @@ export interface IntegrationTargetSyncSummary {
   hasActiveRun: boolean;
 }
 
+export interface IntegrationRemoteDocumentSummary {
+  totalCount: number;
+  availableCount: number;
+  unavailableCount: number;
+  salePdfCount: number;
+  fiscalXmlCount: number;
+  otherCount: number;
+  lastSyncedAt: string | null;
+}
+
 export interface IntegrationReadinessSummary {
   setupStatus: IntegrationSetupStatus;
   readinessStatus: IntegrationReadinessStatus;
+  capabilities: IntegrationProviderCapabilities;
   validationRequired: boolean;
   canSync: boolean;
   lastValidatedAt: string | null;
@@ -238,11 +765,119 @@ export interface IntegrationMappedPreviewSample {
   issues: string[];
 }
 
+export interface IntegrationValidationResult {
+  ok: boolean;
+  provider: IntegrationProvider;
+  status: "connected" | "action_required" | "failed";
+  message: string | null;
+  details?: Record<string, unknown>;
+}
+
+export interface RemoteEntityRef {
+  remoteEntityId: string | null;
+  remoteDisplayId?: string | null;
+  remoteEntityType?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface IntegrationSyncCursor {
+  cursorType: string;
+  lastRemoteUpdatedAt: string | null;
+  lastSuccessfulPollAt: string | null;
+  nextPage: number | null;
+  state: Record<string, unknown> | null;
+}
+
+export interface RemoteStatusPollResult {
+  processedCount: number;
+  updatedCount: number;
+  cursor: IntegrationSyncCursor;
+  warnings: string[];
+}
+
+export interface FinancialErpAdapter {
+  provider: IntegrationProvider;
+  validateConnection(): Promise<IntegrationValidationResult>;
+  upsertCustomer(payload: IntegrationCustomerPayload): Promise<RemoteEntityRef>;
+  upsertPessoa?(payload: IntegrationPessoaPayload): Promise<RemoteEntityRef>;
+  upsertSupplier?(
+    payload: IntegrationSupplierPayload,
+  ): Promise<RemoteEntityRef>;
+  upsertTransporter?(
+    payload: IntegrationTransporterPayload,
+  ): Promise<RemoteEntityRef>;
+  upsertCatalogItem?(
+    payload: IntegrationCatalogItemPayload,
+  ): Promise<RemoteEntityRef>;
+  exportBudget?(payload: IntegrationBudgetPayload): Promise<RemoteEntityRef>;
+  exportSale?(payload: IntegrationSalePayload): Promise<RemoteEntityRef>;
+  exportBillingDocument(
+    payload: IntegrationBillingDocumentPayload,
+  ): Promise<RemoteEntityRef>;
+  exportPayable?(payload: IntegrationPayablePayload): Promise<RemoteEntityRef>;
+  upsertContract?(
+    payload: IntegrationContractPayload,
+  ): Promise<RemoteEntityRef>;
+  listReferenceData?(
+    domain: ContaAzulReferenceDomain,
+  ): Promise<ContaAzulReferencePage>;
+  pollBillingStatus?(
+    cursor: IntegrationSyncCursor,
+  ): Promise<RemoteStatusPollResult>;
+  pollPayableStatus?(
+    cursor: IntegrationSyncCursor,
+  ): Promise<RemoteStatusPollResult>;
+  pollFiscalDocuments?(
+    cursor: IntegrationSyncCursor,
+  ): Promise<RemoteStatusPollResult>;
+  pollProtocols?(
+    cursor: IntegrationSyncCursor,
+  ): Promise<RemoteStatusPollResult>;
+  linkFiscalDocumentsToMdfe?(
+    payload: IntegrationMdfeLinkPayload,
+  ): Promise<RemoteEntityRef>;
+  pollRemoteDrift?(
+    cursor: IntegrationSyncCursor,
+  ): Promise<RemoteStatusPollResult>;
+}
+
+export interface FinancialErpAdapterContext {
+  integrationId: string;
+  organizationId: string;
+  config: FinancialErpConnectionConfig;
+}
+
+export interface FinancialErpAdapterFactory {
+  createAdapter(context: FinancialErpAdapterContext): FinancialErpAdapter;
+}
+
 export const INTEGRATION_CANONICAL_FIELDS: Record<
   IntegrationSyncTarget,
   readonly string[]
 > = {
   customer: [
+    "externalId",
+    "organizationId",
+    "name",
+    "taxId",
+    "email",
+    "phone",
+    "address",
+    "createdAt",
+    "updatedAt",
+  ],
+  supplier: [
+    "externalId",
+    "organizationId",
+    "name",
+    "taxId",
+    "email",
+    "phone",
+    "address",
+    "createdAt",
+    "updatedAt",
+  ],
+  transporter: [
     "externalId",
     "organizationId",
     "name",
@@ -271,6 +906,38 @@ export const INTEGRATION_CANONICAL_FIELDS: Record<
     "approvedAt",
     "updatedAt",
   ],
+  catalog_item: [
+    "externalId",
+    "organizationId",
+    "kind",
+    "code",
+    "name",
+    "description",
+    "priceCents",
+    "currency",
+    "unitOfMeasureId",
+    "categoryId",
+    "fiscalMetadata",
+    "active",
+  ],
+  contract: [
+    "externalId",
+    "organizationId",
+    "customerExternalId",
+    "contractNumber",
+    "recurrence",
+    "issueDate",
+    "startsAt",
+    "endsAt",
+    "sellerExternalId",
+    "totalCents",
+    "currency",
+    "categoryId",
+    "costCenterId",
+    "notes",
+    "items",
+    "paymentTerms",
+  ],
   billing_document: [
     "externalId",
     "documentNumber",
@@ -286,15 +953,34 @@ export const INTEGRATION_CANONICAL_FIELDS: Record<
     "status",
     "items",
   ],
+  payable: [
+    "externalId",
+    "organizationId",
+    "supplierExternalId",
+    "documentNumber",
+    "issueDate",
+    "dueDate",
+    "competenceDate",
+    "amountCents",
+    "currency",
+    "categoryId",
+    "costCenterId",
+    "notes",
+  ],
 };
 
 export const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
   IntegrationSyncTarget,
   readonly string[]
 > = {
+  catalog_item: ["externalId", "kind", "name"],
+  contract: ["externalId", "customerExternalId", "totalCents"],
   customer: ["externalId", "name"],
+  supplier: ["externalId", "name"],
+  transporter: ["externalId", "name"],
   service_order: ["externalId", "jobId", "status"],
   billing_document: ["externalId", "totalCents", "currency", "status"],
+  payable: ["externalId", "supplierExternalId", "amountCents", "dueDate"],
 };
 
 function parseIpv4Address(hostname: string): number[] | null {
@@ -387,7 +1073,7 @@ export function normalizeIntegrationBaseUrl(baseUrl: string): string {
   return `${url.origin}${normalizedPath}`;
 }
 
-type IntegrationCustomerAddress = {
+export type IntegrationCustomerAddress = {
   cep?: string;
   number?: string;
   street?: string;
@@ -395,6 +1081,7 @@ type IntegrationCustomerAddress = {
   neighbourhood?: string;
   city?: string;
   state?: string;
+  country?: string;
 } | null;
 
 export function formatIntegrationCustomerAddress(
@@ -460,6 +1147,23 @@ function normalizeScheduleConfig(
   };
 }
 
+function normalizeSchedulesConfig(
+  input?: Partial<
+    Record<IntegrationSyncTarget, Partial<IntegrationTargetScheduleConfig>>
+  > | null,
+): Record<IntegrationSyncTarget, IntegrationTargetScheduleConfig> {
+  return {
+    catalog_item: normalizeScheduleConfig(input?.catalog_item),
+    contract: normalizeScheduleConfig(input?.contract),
+    customer: normalizeScheduleConfig(input?.customer),
+    supplier: normalizeScheduleConfig(input?.supplier),
+    transporter: normalizeScheduleConfig(input?.transporter),
+    service_order: normalizeScheduleConfig(input?.service_order),
+    billing_document: normalizeScheduleConfig(input?.billing_document),
+    payable: normalizeScheduleConfig(input?.payable),
+  };
+}
+
 function normalizeMappingRule(
   rule: Partial<IntegrationFieldMappingRule> | undefined,
   fallbackId: string,
@@ -472,7 +1176,9 @@ function normalizeMappingRule(
   return {
     id: typeof rule?.id === "string" && rule.id.trim() ? rule.id : fallbackId,
     destinationField:
-      typeof rule?.destinationField === "string" ? rule.destinationField.trim() : "",
+      typeof rule?.destinationField === "string"
+        ? rule.destinationField.trim()
+        : "",
     enabled: rule?.enabled ?? true,
     valueMode,
     sourceField:
@@ -505,20 +1211,30 @@ function normalizeTargetMappingConfig(
   const fallback = defaultMappingRules(target);
   const normalizedFields =
     input?.fields?.map((rule, index) =>
-      normalizeMappingRule(rule, fallback[index]?.id ?? `${target}:field:${index}`),
+      normalizeMappingRule(
+        rule,
+        fallback[index]?.id ?? `${target}:field:${index}`,
+      ),
     ) ?? fallback;
 
   return {
     fields:
-      normalizedFields.length > 0 ? normalizedFields : defaultMappingRules(target),
+      normalizedFields.length > 0
+        ? normalizedFields
+        : defaultMappingRules(target),
   };
 }
 
 export function getDefaultIntegrationMappings(): IntegrationMappingsConfig {
   return {
+    catalog_item: normalizeTargetMappingConfig("catalog_item"),
+    contract: normalizeTargetMappingConfig("contract"),
     customer: normalizeTargetMappingConfig("customer"),
+    supplier: normalizeTargetMappingConfig("supplier"),
+    transporter: normalizeTargetMappingConfig("transporter"),
     service_order: normalizeTargetMappingConfig("service_order"),
     billing_document: normalizeTargetMappingConfig("billing_document"),
+    payable: normalizeTargetMappingConfig("payable"),
   };
 }
 
@@ -556,15 +1272,28 @@ export function normalizeGenericFinancialErpConfig(input: {
       DEFAULT_GENERIC_ERP_PATHS.billingDocuments,
     ),
     authType: "bearer",
-    schedules: {
-      customer: normalizeScheduleConfig(input.schedules?.customer),
-      service_order: normalizeScheduleConfig(input.schedules?.service_order),
-      billing_document: normalizeScheduleConfig(
-        input.schedules?.billing_document,
-      ),
-    },
+    schedules: normalizeSchedulesConfig(input.schedules),
     mappings: {
-      customer: normalizeTargetMappingConfig("customer", input.mappings?.customer),
+      catalog_item: normalizeTargetMappingConfig(
+        "catalog_item",
+        input.mappings?.catalog_item,
+      ),
+      contract: normalizeTargetMappingConfig(
+        "contract",
+        input.mappings?.contract,
+      ),
+      customer: normalizeTargetMappingConfig(
+        "customer",
+        input.mappings?.customer,
+      ),
+      supplier: normalizeTargetMappingConfig(
+        "supplier",
+        input.mappings?.supplier,
+      ),
+      transporter: normalizeTargetMappingConfig(
+        "transporter",
+        input.mappings?.transporter,
+      ),
       service_order: normalizeTargetMappingConfig(
         "service_order",
         input.mappings?.service_order,
@@ -573,8 +1302,234 @@ export function normalizeGenericFinancialErpConfig(input: {
         "billing_document",
         input.mappings?.billing_document,
       ),
+      payable: normalizeTargetMappingConfig("payable", input.mappings?.payable),
     },
   };
+}
+
+function normalizeNullableText(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function normalizeStringArray(value: unknown, fallback: readonly string[]) {
+  if (!Array.isArray(value)) return [...fallback];
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+
+  return normalized.length > 0 ? normalized : [...fallback];
+}
+
+function normalizeNullableRecord(
+  value: unknown,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value).filter(
+    ([key]) => key.trim().length > 0,
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+function normalizeContaAzulExportMode(value: unknown): ContaAzulExportMode {
+  switch (value) {
+    case "budget_to_sale":
+    case "contract_generated":
+    case "receivable_event":
+    case "sale":
+    case "sale_and_receivable":
+      return value;
+    default:
+      return "receivable_event";
+  }
+}
+
+function normalizeContaAzulBudgetMode(_value: unknown): ContaAzulBudgetMode {
+  return "sales_search_link";
+}
+
+function normalizeContaAzulFiscalMode(value: unknown): ContaAzulFiscalMode {
+  switch (value) {
+    case "disabled":
+      return value;
+    default:
+      return "consultation_only";
+  }
+}
+
+function normalizeContaAzulProtocolMode(value: unknown): ContaAzulProtocolMode {
+  return value === "metadata_only" ? value : "api_lookup_verified";
+}
+
+function normalizeContaAzulSaleTrigger(value: unknown): ContaAzulSaleTrigger {
+  switch (value) {
+    case "billing_document_issued":
+    case "certificate_approved":
+    case "quote_approved":
+    case "service_order_approved":
+    case "service_order_completed":
+      return value;
+    default:
+      return "manual";
+  }
+}
+
+function normalizeContaAzulEnabledTargets(
+  input?: Partial<ContaAzulEnabledTargetsConfig> | null,
+): ContaAzulEnabledTargetsConfig {
+  return {
+    customers: input?.customers ?? true,
+    suppliers: input?.suppliers ?? false,
+    transporters: input?.transporters ?? false,
+    services: input?.services ?? false,
+    products: input?.products ?? false,
+    inventoryTaxonomy: input?.inventoryTaxonomy ?? false,
+    budgets: input?.budgets ?? false,
+    sellers: input?.sellers ?? true,
+    sales: input?.sales ?? false,
+    contracts: input?.contracts ?? false,
+    billingDocuments: input?.billingDocuments ?? true,
+    receivables: input?.receivables ?? true,
+    payables: input?.payables ?? false,
+    expenses: input?.expenses ?? false,
+    financialAccounts: input?.financialAccounts ?? true,
+    balances: input?.balances ?? false,
+    transfers: input?.transfers ?? false,
+    categories: input?.categories ?? true,
+    dreCategories: input?.dreCategories ?? false,
+    costCenters: input?.costCenters ?? true,
+    baixas: input?.baixas ?? true,
+    paymentStatusPolling: input?.paymentStatusPolling ?? true,
+    fiscalDocuments: input?.fiscalDocuments ?? false,
+    remoteDocuments: input?.remoteDocuments ?? false,
+    protocols: input?.protocols ?? false,
+    driftChecks: input?.driftChecks ?? false,
+  };
+}
+
+function normalizeContaAzulBaseUrl(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return CONTA_AZUL_API_BASE_URL;
+  }
+
+  if (value !== CONTA_AZUL_API_BASE_URL) {
+    throw new Error("Base URL da Conta Azul deve usar o endpoint oficial");
+  }
+
+  return CONTA_AZUL_API_BASE_URL;
+}
+
+export function normalizeContaAzulConnectionConfig(
+  input: ContaAzulConnectionConfigInput = {},
+): ContaAzulConnectionConfig {
+  return {
+    provider: "conta_azul",
+    baseUrl: normalizeContaAzulBaseUrl(input.baseUrl),
+    accountId: normalizeNullableText(input.accountId),
+    connectedCompanyName: normalizeNullableText(input.connectedCompanyName),
+    scopes: normalizeStringArray(input.scopes, DEFAULT_CONTA_AZUL_SCOPES),
+    accessTokenExpiresAt: normalizeNullableText(input.accessTokenExpiresAt),
+    defaultFinancialAccountId: normalizeNullableText(
+      input.defaultFinancialAccountId,
+    ),
+    defaultCategoryId: normalizeNullableText(input.defaultCategoryId),
+    defaultCostCenterId: normalizeNullableText(input.defaultCostCenterId),
+    defaultDreCategoryId: normalizeNullableText(input.defaultDreCategoryId),
+    defaultExpenseCategoryId: normalizeNullableText(
+      input.defaultExpenseCategoryId,
+    ),
+    defaultPaymentMethodId: normalizeNullableText(input.defaultPaymentMethodId),
+    defaultProductCategoryId: normalizeNullableText(
+      input.defaultProductCategoryId,
+    ),
+    defaultSellerId: normalizeNullableText(input.defaultSellerId),
+    defaultServiceCategoryId: normalizeNullableText(
+      input.defaultServiceCategoryId,
+    ),
+    defaultUnitOfMeasureId: normalizeNullableText(input.defaultUnitOfMeasureId),
+    budgetMode: normalizeContaAzulBudgetMode(input.budgetMode),
+    fiscalMode: normalizeContaAzulFiscalMode(input.fiscalMode),
+    defaultFiscalTaxonomy: normalizeNullableRecord(input.defaultFiscalTaxonomy),
+    protocolMode: normalizeContaAzulProtocolMode(input.protocolMode),
+    saleTrigger: normalizeContaAzulSaleTrigger(input.saleTrigger),
+    exportMode: normalizeContaAzulExportMode(input.exportMode),
+    enabledTargets: normalizeContaAzulEnabledTargets(input.enabledTargets),
+    polling: {
+      receivablesLastRemoteUpdatedAt: normalizeNullableText(
+        input.polling?.receivablesLastRemoteUpdatedAt,
+      ),
+      payablesLastRemoteUpdatedAt: normalizeNullableText(
+        input.polling?.payablesLastRemoteUpdatedAt,
+      ),
+      invoicesLastRemoteUpdatedAt: normalizeNullableText(
+        input.polling?.invoicesLastRemoteUpdatedAt,
+      ),
+      protocolsLastRemoteUpdatedAt: normalizeNullableText(
+        input.polling?.protocolsLastRemoteUpdatedAt,
+      ),
+      driftLastCheckedAt: normalizeNullableText(
+        input.polling?.driftLastCheckedAt,
+      ),
+    },
+    schedules: normalizeSchedulesConfig(input.schedules),
+    mappings: {
+      catalog_item: normalizeTargetMappingConfig(
+        "catalog_item",
+        input.mappings?.catalog_item,
+      ),
+      contract: normalizeTargetMappingConfig(
+        "contract",
+        input.mappings?.contract,
+      ),
+      customer: normalizeTargetMappingConfig(
+        "customer",
+        input.mappings?.customer,
+      ),
+      supplier: normalizeTargetMappingConfig(
+        "supplier",
+        input.mappings?.supplier,
+      ),
+      transporter: normalizeTargetMappingConfig(
+        "transporter",
+        input.mappings?.transporter,
+      ),
+      service_order: normalizeTargetMappingConfig(
+        "service_order",
+        input.mappings?.service_order,
+      ),
+      billing_document: normalizeTargetMappingConfig(
+        "billing_document",
+        input.mappings?.billing_document,
+      ),
+      payable: normalizeTargetMappingConfig("payable", input.mappings?.payable),
+    },
+  };
+}
+
+export function normalizeFinancialErpConnectionConfig(
+  provider: IntegrationProvider,
+  input: ContaAzulConnectionConfigInput &
+    Partial<GenericFinancialErpConnectionConfig> & { baseUrl?: string },
+): FinancialErpConnectionConfig {
+  if (provider === "conta_azul") {
+    return normalizeContaAzulConnectionConfig(input);
+  }
+
+  return normalizeGenericFinancialErpConfig({
+    ...input,
+    baseUrl: input.baseUrl ?? "",
+  });
 }
 
 export function validateIntegrationMappings(
@@ -582,7 +1537,7 @@ export function validateIntegrationMappings(
 ): IntegrationMappingValidationIssue[] {
   const issues: IntegrationMappingValidationIssue[] = [];
 
-  for (const target of Object.keys(mappings) as IntegrationSyncTarget[]) {
+  for (const target of INTEGRATION_SYNC_TARGETS) {
     const config = mappings[target];
     const seenDestinations = new Set<string>();
 
@@ -640,7 +1595,9 @@ export function validateIntegrationMappings(
       }
     }
 
-    for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[target]) {
+    for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[
+      target
+    ]) {
       const enabledRule = config.fields.find(
         (field) =>
           field.enabled && field.destinationField.trim() === requiredField,

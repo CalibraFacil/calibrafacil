@@ -1,0 +1,27 @@
+{
+  "name": "@calibra-facil/local-db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./migrations": "./src/migrations/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo --noEmit",
+    "check-types": "tsgo --noEmit",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@calibra-facil/contracts": "workspace:^",
+    "@calibra-facil/sync": "workspace:*",
+    "better-sqlite3": "^12.0.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/better-sqlite3": "^7.6.13",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

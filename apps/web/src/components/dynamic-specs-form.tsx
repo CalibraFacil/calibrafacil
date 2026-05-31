@@ -46,6 +46,42 @@ interface DynamicSpecsFormProps {
   activeMassUnit?: MassUnit | null
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function numberInputValue(value: unknown) {
+  return typeof value === 'string' || typeof value === 'number' ? value : ''
+}
+
+function weighingRangeFromUnknown(value: unknown): WeighingRangeSpec {
+  const record = recordFromUnknown(value)
+  return {
+    label: stringValue(record.label),
+    min: numberOrNull(record.min),
+    max: numberOrNull(record.max),
+    rangeUnit: stringValue(record.rangeUnit) || 'kg',
+    resolution: numberOrNull(record.resolution),
+    resolutionUnit: stringValue(record.resolutionUnit) || 'g',
+  }
+}
+
+function weighingRangesFromUnknown(value: unknown) {
+  return Array.isArray(value) ? value.map(weighingRangeFromUnknown) : []
+}
+
 /**
  * Dynamic form component that renders specification fields based on asset type definition.
  * Supports text, number (with unit addon), and select field types.
@@ -70,17 +106,13 @@ export function DynamicSpecsForm({
     index: number,
     updates: Partial<WeighingRangeSpec>,
   ) => {
-    const ranges = Array.isArray(value[key])
-      ? ([...(value[key] as WeighingRangeSpec[])] as WeighingRangeSpec[])
-      : []
+    const ranges = weighingRangesFromUnknown(value[key])
     ranges[index] = { ...ranges[index], ...updates }
     updateField(key, ranges)
   }
 
   const addWeighingRange = (key: string) => {
-    const ranges = Array.isArray(value[key])
-      ? ([...(value[key] as WeighingRangeSpec[])] as WeighingRangeSpec[])
-      : []
+    const ranges = weighingRangesFromUnknown(value[key])
     updateField(key, [
       ...ranges,
       {
@@ -95,9 +127,7 @@ export function DynamicSpecsForm({
   }
 
   const removeWeighingRange = (key: string, index: number) => {
-    const ranges = Array.isArray(value[key])
-      ? ([...(value[key] as WeighingRangeSpec[])] as WeighingRangeSpec[])
-      : []
+    const ranges = weighingRangesFromUnknown(value[key])
     updateField(
       key,
       ranges.filter((_, itemIndex) => itemIndex !== index),
@@ -127,138 +157,137 @@ export function DynamicSpecsForm({
 
           {field.type === 'weighing_ranges' ? (
             <div className="space-y-3 border-y py-3 sm:col-span-2">
-              {(Array.isArray(value[field.key])
-                ? (value[field.key] as WeighingRangeSpec[])
-                : []
-              ).map((range, index) => (
-                <div
-                  key={index}
-                  className={`grid gap-2 border-b pb-3 last:border-b-0 last:pb-0 ${
-                    activeMassUnit
-                      ? 'md:grid-cols-[1fr_100px_100px_120px_auto]'
-                      : 'md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]'
-                  }`}
-                >
-                  <Input
-                    value={range.label}
-                    onChange={(event) =>
-                      updateWeighingRange(field.key, index, {
-                        label: event.target.value,
-                      })
-                    }
-                    placeholder="Faixa 1…"
-                    disabled={disabled}
-                    aria-label={`${field.label}: nome da faixa ${index + 1}`}
-                    autoComplete="off"
-                  />
-                  <Input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={range.min ?? ''}
-                    onChange={(event) =>
-                      updateWeighingRange(field.key, index, {
-                        min:
-                          event.target.value === ''
-                            ? null
-                            : parseFloat(event.target.value),
-                      })
-                    }
-                    placeholder="Mín…"
-                    disabled={disabled}
-                    aria-label={`${field.label}: mínimo da faixa ${index + 1}`}
-                    autoComplete="off"
-                  />
-                  <Input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={range.max ?? ''}
-                    onChange={(event) =>
-                      updateWeighingRange(field.key, index, {
-                        max:
-                          event.target.value === ''
-                            ? null
-                            : parseFloat(event.target.value),
-                      })
-                    }
-                    placeholder="Máx…"
-                    disabled={disabled}
-                    aria-label={`${field.label}: máximo da faixa ${index + 1}`}
-                    autoComplete="off"
-                  />
-                  {activeMassUnit ? (
-                    <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
-                      {activeMassUnit}
-                    </div>
-                  ) : (
-                    <Input
-                      value={range.rangeUnit}
-                      onChange={(event) =>
-                        updateWeighingRange(field.key, index, {
-                          rangeUnit: event.target.value,
-                        })
-                      }
-                      placeholder="kg…"
-                      disabled={disabled}
-                      aria-label={`${field.label}: unidade da faixa ${
-                        index + 1
-                      }`}
-                      autoComplete="off"
-                    />
-                  )}
-                  <Input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={range.resolution ?? ''}
-                    onChange={(event) =>
-                      updateWeighingRange(field.key, index, {
-                        resolution:
-                          event.target.value === ''
-                            ? null
-                            : parseFloat(event.target.value),
-                      })
-                    }
-                    placeholder="Res…"
-                    disabled={disabled}
-                    aria-label={`${field.label}: resolução da faixa ${
-                      index + 1
+              {weighingRangesFromUnknown(value[field.key]).map(
+                (range, index) => (
+                  <div
+                    key={index}
+                    className={`grid gap-2 border-b pb-3 last:border-b-0 last:pb-0 ${
+                      activeMassUnit
+                        ? 'md:grid-cols-[1fr_100px_100px_120px_auto]'
+                        : 'md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]'
                     }`}
-                    autoComplete="off"
-                  />
-                  {activeMassUnit ? (
-                    <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
-                      {activeMassUnit}
-                    </div>
-                  ) : (
+                  >
                     <Input
-                      value={range.resolutionUnit}
+                      value={range.label}
                       onChange={(event) =>
                         updateWeighingRange(field.key, index, {
-                          resolutionUnit: event.target.value,
+                          label: event.target.value,
                         })
                       }
-                      placeholder="g…"
+                      placeholder="Faixa 1…"
                       disabled={disabled}
-                      aria-label={`${field.label}: unidade da resolução da faixa ${
+                      aria-label={`${field.label}: nome da faixa ${index + 1}`}
+                      autoComplete="off"
+                    />
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      value={range.min ?? ''}
+                      onChange={(event) =>
+                        updateWeighingRange(field.key, index, {
+                          min:
+                            event.target.value === ''
+                              ? null
+                              : parseFloat(event.target.value),
+                        })
+                      }
+                      placeholder="Mín…"
+                      disabled={disabled}
+                      aria-label={`${field.label}: mínimo da faixa ${index + 1}`}
+                      autoComplete="off"
+                    />
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      value={range.max ?? ''}
+                      onChange={(event) =>
+                        updateWeighingRange(field.key, index, {
+                          max:
+                            event.target.value === ''
+                              ? null
+                              : parseFloat(event.target.value),
+                        })
+                      }
+                      placeholder="Máx…"
+                      disabled={disabled}
+                      aria-label={`${field.label}: máximo da faixa ${index + 1}`}
+                      autoComplete="off"
+                    />
+                    {activeMassUnit ? (
+                      <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
+                        {activeMassUnit}
+                      </div>
+                    ) : (
+                      <Input
+                        value={range.rangeUnit}
+                        onChange={(event) =>
+                          updateWeighingRange(field.key, index, {
+                            rangeUnit: event.target.value,
+                          })
+                        }
+                        placeholder="kg…"
+                        disabled={disabled}
+                        aria-label={`${field.label}: unidade da faixa ${
+                          index + 1
+                        }`}
+                        autoComplete="off"
+                      />
+                    )}
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      value={range.resolution ?? ''}
+                      onChange={(event) =>
+                        updateWeighingRange(field.key, index, {
+                          resolution:
+                            event.target.value === ''
+                              ? null
+                              : parseFloat(event.target.value),
+                        })
+                      }
+                      placeholder="Res…"
+                      disabled={disabled}
+                      aria-label={`${field.label}: resolução da faixa ${
                         index + 1
                       }`}
                       autoComplete="off"
                     />
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="md:justify-self-end"
-                    onClick={() => removeWeighingRange(field.key, index)}
-                    disabled={disabled}
-                  >
-                    Remover
-                  </Button>
-                </div>
-              ))}
+                    {activeMassUnit ? (
+                      <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
+                        {activeMassUnit}
+                      </div>
+                    ) : (
+                      <Input
+                        value={range.resolutionUnit}
+                        onChange={(event) =>
+                          updateWeighingRange(field.key, index, {
+                            resolutionUnit: event.target.value,
+                          })
+                        }
+                        placeholder="g…"
+                        disabled={disabled}
+                        aria-label={`${field.label}: unidade da resolução da faixa ${
+                          index + 1
+                        }`}
+                        autoComplete="off"
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="md:justify-self-end"
+                      onClick={() => removeWeighingRange(field.key, index)}
+                      disabled={disabled}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                ),
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -271,12 +300,12 @@ export function DynamicSpecsForm({
             </div>
           ) : field.type === 'select' && field.options ? (
             <Select
-              value={(value[field.key] as string) || ''}
+              value={stringValue(value[field.key])}
               onValueChange={(val) => updateField(field.key, val)}
               disabled={disabled}
             >
               <SelectTrigger id={`spec-${field.key}`}>
-                <span>{(value[field.key] as string) || 'Selecione…'}</span>
+                <span>{stringValue(value[field.key]) || 'Selecione…'}</span>
               </SelectTrigger>
               <SelectContent>
                 {field.options.map((option) => (
@@ -294,7 +323,7 @@ export function DynamicSpecsForm({
                 type="number"
                 step="any"
                 inputMode="decimal"
-                value={(value[field.key] as string | number) ?? ''}
+                value={numberInputValue(value[field.key])}
                 onChange={(e) => {
                   const val = e.target.value
                   updateField(field.key, val === '' ? '' : parseFloat(val))
@@ -314,7 +343,7 @@ export function DynamicSpecsForm({
               id={`spec-${field.key}`}
               name={`spec-${field.key}`}
               type="text"
-              value={(value[field.key] as string) ?? ''}
+              value={stringValue(value[field.key])}
               onChange={(e) => updateField(field.key, e.target.value)}
               disabled={disabled}
               autoComplete="off"

@@ -33,6 +33,7 @@ type R2S3Client = S3Client & {
 };
 
 export function createR2Client(env: R2Env): R2S3Client {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
   return new S3Client({
     region: "auto",
     endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -50,6 +51,21 @@ export async function generatePresignedUrl(
   expiresIn: number = 900, // 15 minutes
 ): Promise<string> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return getSignedUrl(client, command, { expiresIn });
+}
+
+export async function generatePresignedUploadUrl(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  contentType: string,
+  expiresIn: number = 900,
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: contentType,
+  });
   return getSignedUrl(client, command, { expiresIn });
 }
 
@@ -79,6 +95,41 @@ export async function uploadToR2(
     ContentType: contentType,
   });
   await client.send(command);
+}
+
+/**
+ * Download an object from R2.
+ */
+export async function downloadFromR2(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+): Promise<Uint8Array> {
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  const response = await client.send(command);
+  const responseRecord =
+    response && typeof response === "object" && !Array.isArray(response)
+      ? Object.fromEntries(Object.entries(response))
+      : {};
+  const body = responseRecord.Body;
+  const bodyRecord =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? Object.fromEntries(Object.entries(body))
+      : {};
+
+  if (!body) {
+    throw new Error(`R2 object not found: ${key}`);
+  }
+
+  if (typeof bodyRecord.transformToByteArray === "function") {
+    return bodyRecord.transformToByteArray();
+  }
+
+  if (typeof bodyRecord.transformToString === "function") {
+    return new TextEncoder().encode(await bodyRecord.transformToString());
+  }
+
+  throw new Error(`R2 object body is not readable: ${key}`);
 }
 
 /**

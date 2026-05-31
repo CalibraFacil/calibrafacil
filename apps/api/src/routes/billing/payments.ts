@@ -15,10 +15,7 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List payment history
   // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ billing: ["read"] }),
-    async (c) => {
+  .get("/", ...withLabPermission({ billing: ["read"] }), async (c) => {
     const memberData = c.get("member");
     const rawLimit = Number(c.req.query("limit") ?? "20");
     const rawOffset = Number(c.req.query("offset") ?? "0");
@@ -39,8 +36,7 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
       .offset(offset);
 
     return c.json({ data: payments });
-    },
-  )
+  })
 
   // =========================================================================
   // GET /:paymentId - Get single payment details

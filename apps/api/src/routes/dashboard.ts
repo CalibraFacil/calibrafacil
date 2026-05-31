@@ -7,6 +7,11 @@ import {
   asset,
   service,
   user,
+  nonConformance,
+  correctiveAction,
+  personnelCompetence,
+  serviceOrder,
+  calibrationRequest,
 } from "@calibra-facil/db/schema";
 import {
   withLabPermission,
@@ -15,12 +20,14 @@ import {
 } from "../middleware/permission";
 import {
   eq,
+  ne,
   and,
   count,
   sql,
   gte,
   lte,
   inArray,
+  notInArray,
   desc,
   asc,
   isNull,
@@ -96,6 +103,15 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           standardsWatchlistResult,
           trendResult,
           recentJobsResult,
+          openNonConformancesResult,
+          ncAwaitingDispositionResult,
+          capasOpenResult,
+          capasOverdueResult,
+          pendingRequestsResult,
+          serviceOrdersInProgressResult,
+          competencesExpiringResult,
+          competencesPendingEvaluationResult,
+          dueSoonJobsResult,
         ] = await Promise.all([
           // 1. Pending calibrations (DRAFT + IN_PROGRESS + REVIEW)
           db
@@ -329,6 +345,145 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .orderBy(desc(calibrationJob.createdAt))
             .limit(10),
+
+          // 13. Open non-conformances (not yet resolved) — org-wide
+          db
+            .select({ count: count() })
+            .from(nonConformance)
+            .where(
+              and(
+                eq(nonConformance.organizationId, memberData.organizationId),
+                ne(nonConformance.status, "resolved"),
+              ),
+            ),
+
+          // 14. NCs awaiting disposition (open, no disposition decided yet)
+          db
+            .select({ count: count() })
+            .from(nonConformance)
+            .where(
+              and(
+                eq(nonConformance.organizationId, memberData.organizationId),
+                ne(nonConformance.status, "resolved"),
+                isNull(nonConformance.disposition),
+              ),
+            ),
+
+          // 15. Open CAPAs (corrective actions not closed)
+          db
+            .select({ count: count() })
+            .from(correctiveAction)
+            .where(
+              and(
+                eq(correctiveAction.organizationId, memberData.organizationId),
+                ne(correctiveAction.status, "CLOSED"),
+              ),
+            ),
+
+          // 16. Overdue CAPAs (open, target date in the past)
+          db
+            .select({ count: count() })
+            .from(correctiveAction)
+            .where(
+              and(
+                eq(correctiveAction.organizationId, memberData.organizationId),
+                ne(correctiveAction.status, "CLOSED"),
+                lte(correctiveAction.dueDate, now),
+              ),
+            ),
+
+          // 17. Calibration requests awaiting triage
+          db
+            .select({ count: count() })
+            .from(calibrationRequest)
+            .where(
+              and(
+                eq(
+                  calibrationRequest.organizationId,
+                  memberData.organizationId,
+                ),
+                inArray(calibrationRequest.status, ["PENDING", "UNDER_REVIEW"]),
+              ),
+            ),
+
+          // 18. Service orders in flight (not in a terminal state)
+          db
+            .select({ count: count() })
+            .from(serviceOrder)
+            .where(
+              and(
+                eq(serviceOrder.organizationId, memberData.organizationId),
+                notInArray(serviceOrder.status, [
+                  "closed",
+                  "delivered",
+                  "canceled",
+                  "quote_rejected",
+                ]),
+              ),
+            ),
+
+          // 19. Active competences expiring within 30 days
+          db
+            .select({ count: count() })
+            .from(personnelCompetence)
+            .where(
+              and(
+                eq(
+                  personnelCompetence.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(personnelCompetence.status, "ACTIVE"),
+                gte(personnelCompetence.expiresAt, now),
+                lte(personnelCompetence.expiresAt, thirtyDaysFromNow),
+              ),
+            ),
+
+          // 20. Competences pending evaluation
+          db
+            .select({ count: count() })
+            .from(personnelCompetence)
+            .where(
+              and(
+                eq(
+                  personnelCompetence.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(personnelCompetence.status, "PENDING_EVALUATION"),
+              ),
+            ),
+
+          // 21. Due-soon dispatch list (open jobs due within 7 days, incl. overdue)
+          db
+            .select({
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              status: calibrationJob.status,
+              dueDate: calibrationJob.dueDate,
+              createdAt: calibrationJob.createdAt,
+              customerName: customer.name,
+              assetName: asset.name,
+              serviceName: service.name,
+              technicianName: user.name,
+            })
+            .from(calibrationJob)
+            .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+            .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+            .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+            .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+                inArray(calibrationJob.status, [
+                  "DRAFT",
+                  "IN_PROGRESS",
+                  "REVIEW",
+                ]),
+                lte(calibrationJob.dueDate, sevenDaysFromNow),
+              ),
+            )
+            .orderBy(asc(calibrationJob.dueDate), desc(calibrationJob.createdAt))
+            .limit(6),
         ]);
         addServerTiming(c, "dashboard_db", dbStartedAt);
 
@@ -381,6 +536,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
 
         const reviewQueue = reviewQueueResult.map(withOverdueFlag);
         const recentJobs = recentJobsResult.map(withOverdueFlag);
+        const dueSoonJobs = dueSoonJobsResult.map(withOverdueFlag);
 
         return c.json({
           pendingCalibrations,
@@ -396,6 +552,18 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           standardsWatchlist: standardsWatchlistResult,
           calibrationTrend,
           recentJobs,
+          // Cross-domain operational signals
+          openNonConformances: openNonConformancesResult[0]?.count ?? 0,
+          nonConformancesAwaitingDisposition:
+            ncAwaitingDispositionResult[0]?.count ?? 0,
+          capasOpen: capasOpenResult[0]?.count ?? 0,
+          capasOverdue: capasOverdueResult[0]?.count ?? 0,
+          pendingCalibrationRequests: pendingRequestsResult[0]?.count ?? 0,
+          serviceOrdersInProgress: serviceOrdersInProgressResult[0]?.count ?? 0,
+          competencesExpiring: competencesExpiringResult[0]?.count ?? 0,
+          competencesPendingEvaluation:
+            competencesPendingEvaluationResult[0]?.count ?? 0,
+          dueSoonJobs,
         });
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);

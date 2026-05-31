@@ -82,10 +82,13 @@ describe("asset measurement helpers", () => {
       ],
     });
     expect(normalized.conversions).toHaveLength(5);
+    if (!normalized.specifications) {
+      throw new Error("Expected normalized specifications.");
+    }
 
     expect(
       denormalizeAssetSpecificationsForResponse({
-        specifications: normalized.specifications as Record<string, unknown>,
+        specifications: normalized.specifications,
         definition: balanceDefinition,
         baseMeasurementUnit: "kg",
       }),
@@ -135,10 +138,13 @@ describe("asset measurement helpers", () => {
       tolerancia_maxima: 500,
       pontos: [{ valor_padrao: 2000, indicacao: 2001 }],
     });
+    if (!normalized.data) {
+      throw new Error("Expected normalized method data.");
+    }
 
     expect(
       denormalizeMethodDataForDisplay(
-        normalized.data as Record<string, unknown>,
+        normalized.data,
         fields,
         "kg",
       ),

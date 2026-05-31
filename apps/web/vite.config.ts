@@ -19,7 +19,14 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: ['dev-web.calibrafacil.com'],
     https: httpsConfig,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        secure: false,
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['better-auth'],
@@ -34,4 +41,33 @@ export default defineConfig({
     }),
     viteReact(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('/node_modules/')) return undefined
+
+          if (id.includes('/@tanstack/')) return 'vendor-tanstack'
+          if (id.includes('/@base-ui/')) return 'vendor-base-ui'
+          if (id.includes('/@sentry/')) return 'vendor-sentry'
+          if (id.includes('/recharts/') || id.includes('/d3-')) {
+            return 'vendor-charts'
+          }
+          if (id.includes('/motion/')) return 'vendor-motion'
+          if (id.includes('/@calibra-facil/math-engine/')) {
+            return 'vendor-math-engine'
+          }
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('/node_modules/scheduler/')
+          ) {
+            return 'vendor-react'
+          }
+
+          return undefined
+        },
+      },
+    },
+  },
 })

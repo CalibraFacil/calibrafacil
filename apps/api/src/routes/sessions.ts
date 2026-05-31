@@ -16,9 +16,13 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
       return c.json({ error: "Invalid JSON body" }, 400);
     }
 
+    const bodyRecord =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? Object.fromEntries(Object.entries(body))
+        : {};
     const sessionId =
-      typeof (body as { sessionId?: unknown })?.sessionId === "string"
-        ? (body as { sessionId?: string }).sessionId!.trim()
+      typeof bodyRecord.sessionId === "string"
+        ? bodyRecord.sessionId.trim()
         : "";
 
     if (!sessionId) {
@@ -42,9 +46,7 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
       return c.json({ error: "Session not found" }, 404);
     }
 
-    await db
-      .delete(sessionTable)
-      .where(eq(sessionTable.id, targetSession.id));
+    await db.delete(sessionTable).where(eq(sessionTable.id, targetSession.id));
 
     return c.json({ status: true });
   },

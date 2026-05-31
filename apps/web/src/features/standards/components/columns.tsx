@@ -1,0 +1,298 @@
+import { type ColumnDef } from '@tanstack/react-table'
+import { Link } from '@tanstack/react-router'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  AlertCircleIcon,
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+  Edit02Icon,
+  MoreHorizontalIcon,
+  RefreshIcon,
+  ViewIcon,
+} from '@hugeicons/core-free-icons'
+
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import type {
+  StandardListItem,
+  StandardStatus,
+} from '@/features/standards/types'
+import { cn } from '@/lib/utils'
+import { standardRouteId } from '@/lib/route-identifiers'
+
+export type ReferenceStandard = StandardListItem
+
+export interface StandardsTableMeta {
+  onStatusChange?: (id: number, status: StandardStatus) => void
+  onDelete?: (id: number) => void
+}
+
+function getCalibrationBadge(daysUntilExpiry: number, isExpired: boolean) {
+  if (isExpired) {
+    return { variant: 'destructive' as const, label: 'Vencido' }
+  } else if (daysUntilExpiry <= 30) {
+    return {
+      variant: 'outline' as const,
+      label: `${daysUntilExpiry} dias`,
+      className: 'border-orange-500 text-orange-600',
+    }
+  } else {
+    return {
+      variant: 'outline' as const,
+      label: 'Válido',
+      className: 'border-green-500 text-green-600',
+    }
+  }
+}
+
+function getStatusBadge(status: StandardStatus) {
+  switch (status) {
+    case 'ACTIVE':
+      return { variant: 'default' as const, label: 'Ativo' }
+    case 'INACTIVE':
+      return { variant: 'secondary' as const, label: 'Inativo' }
+    case 'OUT_OF_TOLERANCE':
+      return { variant: 'destructive' as const, label: 'Fora de Tolerância' }
+    case 'SENT_FOR_CALIBRATION':
+      return { variant: 'outline' as const, label: 'Em Calibração' }
+    default:
+      return { variant: 'secondary' as const, label: status }
+  }
+}
+
+function formatDate(dateString: string | Date): string {
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+function formatUncertainty(standard: ReferenceStandard): string {
+  const massCount = standard.metrologyData?.massValues.length ?? 0
+  const channelCount = standard.metrologyData?.channels.length ?? 0
+  const profileCount = standard.metrologyData?.compositionProfiles.length ?? 0
+
+  if (massCount > 0 || channelCount > 0 || profileCount > 0) {
+    const parts = []
+    if (massCount > 0) parts.push(`${massCount} valores`)
+    if (channelCount > 0) parts.push(`${channelCount} canais`)
+    if (profileCount > 0) parts.push(`${profileCount} perfis`)
+    return parts.join(' + ')
+  }
+
+  if (standard.certifiedValues && standard.certifiedValues.length > 0) {
+    const certifiedCount = standard.certifiedValues.filter(
+      (value) => value.compositionProfile !== true,
+    ).length
+    const profileCount = standard.certifiedValues.length - certifiedCount
+
+    if (certifiedCount > 0 && profileCount > 0) {
+      return `${certifiedCount} valores + ${profileCount} perfis`
+    }
+
+    if (profileCount > 0) {
+      return `${profileCount} perfis`
+    }
+
+    return `${certifiedCount} valores`
+  }
+  if (standard.uncertainty != null && standard.uncertaintyUnit) {
+    return `${standard.uncertainty} ${standard.uncertaintyUnit}`
+  }
+  return '-'
+}
+
+export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Nome',
+    cell: ({ row }) => (
+      <div>
+        <Link
+          to="/dashboard/standards/$id"
+          params={{ id: standardRouteId(row.original) }}
+          className="font-medium hover:underline"
+        >
+          {row.original.name}
+        </Link>
+        {row.original.type && (
+          <p className="text-sm text-muted-foreground">{row.original.type}</p>
+        )}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'serialNumber',
+    header: 'N Série',
+    cell: ({ row }) => (
+      <span className="font-mono text-sm">{row.original.serialNumber}</span>
+    ),
+  },
+  {
+    accessorKey: 'certificateNumber',
+    header: 'Certificado',
+    cell: ({ row }) => (
+      <div>
+        <span className="font-mono text-sm">
+          {row.original.certificateNumber}
+        </span>
+        {row.original.calibratedBy && (
+          <p className="text-xs text-muted-foreground">
+            {row.original.calibratedBy}
+          </p>
+        )}
+      </div>
+    ),
+  },
+  {
+    id: 'uncertainty',
+    header: 'Incerteza (U)',
+    cell: ({ row }) => (
+      <span className="font-mono text-sm">
+        {formatUncertainty(row.original)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'nextCalibrationDate',
+    header: 'Próxima Calibração',
+    cell: ({ row }) => {
+      const calBadge = getCalibrationBadge(
+        row.original.daysUntilExpiry,
+        row.original.isExpired,
+      )
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm">
+            {formatDate(row.original.nextCalibrationDate)}
+          </span>
+          <Badge
+            variant={calBadge.variant}
+            className={'className' in calBadge ? calBadge.className : undefined}
+          >
+            {calBadge.label}
+          </Badge>
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const statusBadge = getStatusBadge(row.original.status)
+      return <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+    },
+  },
+  {
+    id: 'actions',
+    cell: ({ row, table }) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- TanStack table meta is supplied by this table instance.
+      const meta = table.options.meta as StandardsTableMeta | undefined
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+            <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/standards/$id"
+                  params={{ id: standardRouteId(row.original) }}
+                  className={cn(props.className, 'w-full flex items-center')}
+                >
+                  <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                  Visualizar
+                </Link>
+              )}
+            />
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/standards/$id/edit"
+                  params={{ id: standardRouteId(row.original) }}
+                  className={cn(props.className, 'w-full flex items-center')}
+                >
+                  <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+                  Editar
+                </Link>
+              )}
+            />
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/standards/$id/edit"
+                  params={{ id: standardRouteId(row.original) }}
+                  search={{ renew: true }}
+                  className={cn(props.className, 'w-full flex items-center')}
+                >
+                  <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
+                  Renovar Certificado
+                </Link>
+              )}
+            />
+            <DropdownMenuSeparator />
+            {row.original.status === 'ACTIVE' && (
+              <>
+                <DropdownMenuItem
+                  onClick={() =>
+                    meta?.onStatusChange?.(
+                      row.original.id,
+                      'SENT_FOR_CALIBRATION',
+                    )
+                  }
+                >
+                  <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
+                  Enviar para Calibração
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    meta?.onStatusChange?.(row.original.id, 'OUT_OF_TOLERANCE')
+                  }
+                  className="text-orange-600"
+                >
+                  <HugeiconsIcon
+                    icon={AlertCircleIcon}
+                    className="mr-2 h-4 w-4"
+                  />
+                  Marcar Fora de Tolerância
+                </DropdownMenuItem>
+              </>
+            )}
+            {row.original.status !== 'ACTIVE' &&
+              row.original.status !== 'INACTIVE' && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    meta?.onStatusChange?.(row.original.id, 'ACTIVE')
+                  }
+                >
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    className="mr-2 h-4 w-4"
+                  />
+                  Reativar
+                </DropdownMenuItem>
+              )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => meta?.onDelete?.(row.original.id)}
+              className="text-destructive"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
+              Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    },
+  },
+]

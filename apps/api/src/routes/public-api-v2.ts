@@ -26,19 +26,22 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   ApproveJobSchema,
+  AssetStatusSchema,
   CancelJobSchema,
+  CalibrationRequestStatusSchema,
   CreateAssetSchema,
   CreateCalibrationRequestSchema,
   CreateCustomerSchema,
   CreateJobSchema,
   ExecuteJobSchema,
+  JobStatusSchema,
   RejectJobSchema,
   SubmitForReviewSchema,
   UpdateAssetSchema,
   UpdateCustomerSchema,
   UpdateJobSchema,
 } from "@calibra-facil/schemas";
-import { type CertificateTemplateSnapshot } from "@calibra-facil/shared";
+import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import {
   and,
   count,
@@ -204,6 +207,46 @@ function slugify(text: string) {
 
 function generateUniqueSlug(name: string) {
   return `${slugify(name)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function toIdempotencyResponseStatus(status: number): 200 | 201 | 202 | 204 {
+  switch (status) {
+    case 201:
+    case 202:
+    case 204:
+      return status;
+    default:
+      return 200;
+  }
+}
+
+function toCertificateTemplateSnapshot(
+  value: unknown,
+): CertificateTemplateSnapshot | null {
+  const record = toRecord(value);
+  if (
+    (typeof record.id !== "number" && record.id !== null) ||
+    typeof record.name !== "string" ||
+    typeof record.slug !== "string" ||
+    typeof record.version !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    id: record.id,
+    name: record.name,
+    slug: record.slug,
+    version: record.version,
+  };
 }
 
 function resolvePeriodRange(
@@ -432,8 +475,8 @@ async function withIdempotentMutation(
     }
 
     return c.json(
-      existing.responseBody as Record<string, unknown>,
-      existing.responseStatus,
+      toRecord(existing.responseBody),
+      toIdempotencyResponseStatus(existing.responseStatus),
     );
   }
 
@@ -1737,7 +1780,9 @@ publicApiV2Router
         resolvedCustomerId
           ? eq(asset.customerId, resolvedCustomerId)
           : undefined,
-        status ? eq(asset.status, status as any) : undefined,
+        AssetStatusSchema.safeParse(status).success
+          ? eq(asset.status, AssetStatusSchema.parse(status))
+          : undefined,
         query
           ? or(
               ilike(asset.name, `%${query}%`),
@@ -3135,7 +3180,9 @@ publicApiV2Router
       const conditions = [
         eq(calibrationRequest.organizationId, apiKey.organizationId),
         unitId ? eq(calibrationRequest.unitId, unitId) : undefined,
-        status ? eq(calibrationRequest.status, status as any) : undefined,
+        CalibrationRequestStatusSchema.safeParse(status).success
+          ? eq(calibrationRequest.status, CalibrationRequestStatusSchema.parse(status))
+          : undefined,
         resolvedCustomerId
           ? eq(calibrationRequest.customerId, resolvedCustomerId)
           : undefined,
@@ -3718,7 +3765,9 @@ publicApiV2Router
       const conditions = [
         eq(calibrationJob.organizationId, apiKey.organizationId),
         unitId ? eq(calibrationJob.unitId, unitId) : undefined,
-        status ? eq(calibrationJob.status, status as any) : undefined,
+        JobStatusSchema.safeParse(status).success
+          ? eq(calibrationJob.status, JobStatusSchema.parse(status))
+          : undefined,
         resolvedCustomerId
           ? eq(calibrationJob.customerId, resolvedCustomerId)
           : undefined,
@@ -4334,10 +4383,7 @@ publicApiV2Router
         }
 
         const effectiveTemplateSnapshot =
-          (existing.certificateTemplateSnapshot as
-            | CertificateTemplateSnapshot
-            | null
-            | undefined) ??
+          toCertificateTemplateSnapshot(existing.certificateTemplateSnapshot) ??
           (await getEffectiveCertificateTemplateSnapshot(
             apiKey.organizationId,
           ));

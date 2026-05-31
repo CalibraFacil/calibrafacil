@@ -1,14 +1,30 @@
 {
   "name": "@calibra-facil/schemas",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "scripts": {},
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./quality": {
+      "types": "./src/quality.ts",
+      "default": "./src/quality.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.17"
   }
 }

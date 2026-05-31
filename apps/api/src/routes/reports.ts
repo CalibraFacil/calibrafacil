@@ -65,9 +65,9 @@ function parseRequestedUnitIds(raw?: string) {
   return unitIds.length > 0 ? Array.from(new Set(unitIds)) : null;
 }
 
-function mapCountsByUnit<T extends { unitId: number | null; value: number | string }>(
-  rows: T[],
-) {
+function mapCountsByUnit<
+  T extends { unitId: number | null; value: number | string },
+>(rows: T[]) {
   return new Map(
     rows
       .filter((row): row is T & { unitId: number } => row.unitId !== null)
@@ -82,7 +82,13 @@ const requireConsolidatedReportingAccess = createMiddleware<{
   const viewer = getGovernanceAccess(memberData);
 
   if (!viewer.canAccessConsolidatedView) {
-    return c.json({ error: "Apenas administradores globais podem acessar relatórios consolidados" }, 403);
+    return c.json(
+      {
+        error:
+          "Apenas administradores globais podem acessar relatórios consolidados",
+      },
+      403,
+    );
   }
 
   await next();
@@ -110,10 +116,13 @@ async function resolveSelectedUnits(params: {
     .orderBy(organizationUnit.name);
 
   if (availableUnits.length === 0) {
+    const emptyUnits: UnitSummary[] = [];
+    const emptyUnitIds: number[] = [];
+
     return {
-      availableUnits: [] as UnitSummary[],
-      selectedUnits: [] as UnitSummary[],
-      selectedUnitIds: [] as number[],
+      availableUnits: emptyUnits,
+      selectedUnits: emptyUnits,
+      selectedUnitIds: emptyUnitIds,
     };
   }
 
@@ -269,7 +278,9 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           });
         }
 
-        const buildGroupedJobCount = async (condition: SQL<unknown> | undefined) =>
+        const buildGroupedJobCount = async (
+          condition: SQL<unknown> | undefined,
+        ) =>
           db
             .select({
               unitId: calibrationJob.unitId,
@@ -285,7 +296,9 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .groupBy(calibrationJob.unitId);
 
-        const buildGroupedStandardCount = async (condition: SQL<unknown> | undefined) =>
+        const buildGroupedStandardCount = async (
+          condition: SQL<unknown> | undefined,
+        ) =>
           db
             .select({
               unitId: referenceStandard.unitId,
@@ -447,31 +460,41 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           };
         });
 
-        const highestVolumeUnit = [...unitRows].sort((left, right) => {
-          if (right.jobsCreatedInPeriod !== left.jobsCreatedInPeriod) {
-            return right.jobsCreatedInPeriod - left.jobsCreatedInPeriod;
-          }
-
-          return right.approvedInPeriod - left.approvedInPeriod;
-        })[0] ?? null;
-
-        const bestApprovalUnit = unitRows
-          .filter((row) => row.approvedInPeriod + row.rejectedInPeriod > 0)
-          .sort((left, right) => {
-            if (right.approvalRate !== left.approvalRate) {
-              return right.approvalRate - left.approvalRate;
+        const highestVolumeUnit =
+          [...unitRows].sort((left, right) => {
+            if (right.jobsCreatedInPeriod !== left.jobsCreatedInPeriod) {
+              return right.jobsCreatedInPeriod - left.jobsCreatedInPeriod;
             }
 
             return right.approvedInPeriod - left.approvedInPeriod;
           })[0] ?? null;
 
+        const bestApprovalUnit =
+          unitRows
+            .filter((row) => row.approvedInPeriod + row.rejectedInPeriod > 0)
+            .sort((left, right) => {
+              if (right.approvalRate !== left.approvalRate) {
+                return right.approvalRate - left.approvalRate;
+              }
+
+              return right.approvedInPeriod - left.approvedInPeriod;
+            })[0] ?? null;
+
         const attentionUnit =
           unitRows
             .filter((row) => row.healthStatus !== "healthy")
             .sort((left, right) => {
-              const severity = { critical: 2, attention: 1, healthy: 0 } as const;
-              if (severity[right.healthStatus] !== severity[left.healthStatus]) {
-                return severity[right.healthStatus] - severity[left.healthStatus];
+              const severity = {
+                critical: 2,
+                attention: 1,
+                healthy: 0,
+              } as const;
+              if (
+                severity[right.healthStatus] !== severity[left.healthStatus]
+              ) {
+                return (
+                  severity[right.healthStatus] - severity[left.healthStatus]
+                );
               }
               if (right.overdueNow !== left.overdueNow) {
                 return right.overdueNow - left.overdueNow;
@@ -515,7 +538,10 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: error.message }, 400);
         }
 
-        return c.json({ error: "Falha ao carregar visão executiva consolidada" }, 500);
+        return c.json(
+          { error: "Falha ao carregar visão executiva consolidada" },
+          500,
+        );
       }
     },
   )
@@ -618,13 +644,18 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
                 eq(referenceStandard.organizationId, memberData.organizationId),
                 inArray(referenceStandard.unitId, selectedUnitIds),
                 eq(referenceStandard.status, "ACTIVE"),
-                lte(referenceStandard.nextCalibrationDate, new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000)),
+                lte(
+                  referenceStandard.nextCalibrationDate,
+                  new Date(range.endDate.getTime() + 30 * 24 * 60 * 60 * 1000),
+                ),
                 gte(referenceStandard.nextCalibrationDate, range.endDate),
               ),
             ),
         ]);
 
-        const approvedInPeriod = pendingResult ? approvedResult[0]?.count ?? 0 : 0;
+        const approvedInPeriod = pendingResult
+          ? (approvedResult[0]?.count ?? 0)
+          : 0;
         const rejectedInPeriod = rejectedResult[0]?.count ?? 0;
         const totalDecisions = approvedInPeriod + rejectedInPeriod;
 
@@ -704,7 +735,9 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .groupBy(calibrationJob.unitId);
 
-        const buildGroupedStandardCount = async (condition: SQL<unknown> | undefined) =>
+        const buildGroupedStandardCount = async (
+          condition: SQL<unknown> | undefined,
+        ) =>
           db
             .select({
               unitId: referenceStandard.unitId,
@@ -812,7 +845,10 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: error.message }, 400);
         }
 
-        return c.json({ error: "Falha ao carregar comparativo por unidade" }, 500);
+        return c.json(
+          { error: "Falha ao carregar comparativo por unidade" },
+          500,
+        );
       }
     },
   )
@@ -850,7 +886,8 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           date: string;
           approved: string;
           rejected: string;
-        }>(await db.execute(sql`
+        }>(
+          await db.execute(sql`
           SELECT
             DATE(COALESCE(approved_at, rejected_at)) as date,
             COUNT(*) FILTER (WHERE status = 'APPROVED') as approved,
@@ -867,7 +904,8 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
             )
           GROUP BY DATE(COALESCE(approved_at, rejected_at))
           ORDER BY date ASC
-        `));
+        `),
+        );
 
         return c.json({
           period: range.period,
@@ -885,7 +923,10 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: error.message }, 400);
         }
 
-        return c.json({ error: "Falha ao carregar tendência consolidada" }, 500);
+        return c.json(
+          { error: "Falha ao carregar tendência consolidada" },
+          500,
+        );
       }
     },
   );

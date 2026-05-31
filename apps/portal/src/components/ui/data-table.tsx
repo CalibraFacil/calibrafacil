@@ -36,7 +36,7 @@ interface DataTableProps<TData, TValue> {
   onPageChange?: (page: number) => void;
   isLoading?: boolean;
   onRowClick?: (row: TData) => void;
-  meta?: unknown;
+  meta?: TableMeta<TData>;
   itemName?: string;
 }
 
@@ -51,8 +51,9 @@ export function DataTable<TData, TValue>({
   itemName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] =
-    React.useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    [],
+  );
 
   const table = useReactTable({
     data,
@@ -66,7 +67,7 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
     },
-    meta: meta as TableMeta<TData>,
+    meta,
   });
 
   if (isLoading) {

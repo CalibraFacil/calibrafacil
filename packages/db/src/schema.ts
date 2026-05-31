@@ -34,12 +34,15 @@ import type {
   CustomerSuccessHealthStatus,
   CustomerSuccessSlaTier,
   FinancialPaymentMethod,
-  GenericFinancialErpConnectionConfig,
+  FinancialErpConnectionConfig,
   GoLiveStatus,
   IntegrationCredentialType,
   IntegrationEventLevel,
+  IntegrationObjectLinkTarget,
   IntegrationProvider,
   IntegrationStatus,
+  IntegrationSyncItemOperation,
+  IntegrationSyncItemStatus,
   IntegrationSyncStatus,
   IntegrationSyncTarget,
   IntegrationSyncTrigger,
@@ -56,6 +59,14 @@ import type {
   SupportRequestPriority,
   SupportRequestStatus,
   ReceivableInstallmentStatus,
+  CertificateReleaseStatus,
+  CertificateReleasePolicyMode,
+  CertificateReleaseAuditSource,
+  CertificateReleasePaymentStateSnapshot,
+  AutomaticSendMilestone,
+  AutomaticSendOutcome,
+  SupplierKind,
+  BillingGroupStatus,
   MassUnit,
   ServiceOrderActorType,
   ServiceOrderClosingReason,
@@ -149,7 +160,13 @@ export const account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    index("account_userId_idx").on(table.userId),
+    uniqueIndex("account_provider_account_uidx").on(
+      table.providerId,
+      table.accountId,
+    ),
+  ],
 );
 
 export const verification = pgTable(
@@ -168,6 +185,32 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    aaguid: text("aaguid"),
+  },
+  (table) => [
+    index("passkey_user_id_idx").on(table.userId),
+    uniqueIndex("passkey_credential_id_uidx").on(table.credentialID),
+  ],
+);
+
+/** Backoffice-managed tenant lifecycle state. */
+export type OrganizationStatus = "ACTIVE" | "SUSPENDED" | "OFFBOARDING";
+
 export const organization = pgTable(
   "organization",
   {
@@ -178,6 +221,14 @@ export const organization = pgTable(
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
     type: text("type").default("LAB"),
+    // Backoffice-managed tenant lifecycle (suspend / offboard).
+    status: text("status")
+      .$type<OrganizationStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    suspendedAt: timestamp("suspended_at"),
+    suspensionReason: text("suspension_reason"),
+    deletionScheduledAt: timestamp("deletion_scheduled_at"),
     // ISO 17025 / RBC compliance fields
     cnpj: text("cnpj"),
     accreditationNumber: text("accreditation_number"),
@@ -325,6 +376,10 @@ export const member = pgTable(
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
+    uniqueIndex("member_organization_user_uidx").on(
+      table.organizationId,
+      table.userId,
+    ),
   ],
 );
 
@@ -617,6 +672,253 @@ export const organizationSupportRequestEvent = pgTable(
   ],
 );
 
+/**
+ * Backoffice account tasks — first-class, assignable, due-dated operator tasks
+ * per account, superseding the single free-text `nextAction` field. The
+ * substrate for onboarding / migration / dunning / go-live playbook motions and
+ * an operator "my day" worklist.
+ */
+export type AccountTaskStatus = "OPEN" | "DONE" | "CANCELED";
+export type AccountTaskType =
+  | "ONBOARDING"
+  | "MIGRATION"
+  | "GO_LIVE"
+  | "DUNNING"
+  | "CHECK_IN"
+  | "GENERAL";
+
+export type ApprovalRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ApprovalRequestKind = "refund" | "credit" | "adjustment" | "other";
+
+// VALIDATED = dry-run preview persisted as an audit record (current scope).
+// COMMITTED is reserved for the gated follow-up that writes real domain rows.
+export type ImportRunStatus = "VALIDATED" | "COMMITTED";
+
+export type AccountInteractionChannel =
+  | "whatsapp"
+  | "email"
+  | "phone"
+  | "meeting"
+  | "note"
+  | "other";
+export type AccountInteractionDirection = "outbound" | "inbound" | "internal";
+
+export type OperatorAlertSeverity = "info" | "warning" | "critical";
+export type OperatorAlertStatus = "OPEN" | "ACKNOWLEDGED";
+
+export const accountTask = pgTable(
+  "account_task",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    type: text("type").$type<AccountTaskType>().default("GENERAL").notNull(),
+    status: text("status").$type<AccountTaskStatus>().default("OPEN").notNull(),
+    ownerUserId: text("owner_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at"),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    completedAt: timestamp("completed_at"),
+    completedByUserId: text("completed_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("account_task_org_id_idx").on(table.organizationId),
+    index("account_task_status_idx").on(table.status),
+    index("account_task_owner_idx").on(table.ownerUserId),
+    index("account_task_due_idx").on(table.dueAt),
+  ],
+);
+
+/**
+ * Backoffice entitlement overrides — per-org GRANTS layered on top of the plan
+ * (comps, upsell trials, one-off feature access). Grant-only and optionally
+ * time-boxed; merged into `getOrganizationPlanAccess` so the override never
+ * removes a plan entitlement, only adds. `feature` is a `FeatureFlag` string.
+ */
+export const entitlementOverride = pgTable(
+  "entitlement_override",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    reason: text("reason"),
+    expiresAt: timestamp("expires_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("entitlement_override_org_idx").on(table.organizationId)],
+);
+
+/**
+ * Backoffice approval requests — maker-checker / dual-control over sensitive,
+ * money-touching actions (refunds, credits, adjustments). One operator opens a
+ * request; a *different* platform admin approves or rejects it. The decision
+ * record is the governance artifact; downstream execution (e.g. an Asaas refund)
+ * happens separately and references this request.
+ */
+export const approvalRequest = pgTable(
+  "approval_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<ApprovalRequestKind>().default("other").notNull(),
+    summary: text("summary").notNull(),
+    amountCents: integer("amount_cents"),
+    status: text("status")
+      .$type<ApprovalRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: text("decided_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decisionReason: text("decision_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    decidedAt: timestamp("decided_at"),
+  },
+  (table) => [
+    index("approval_request_org_idx").on(table.organizationId),
+    index("approval_request_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Backoffice migration-importer audit (operations-console gap #12, preview-only).
+ * Each dry-run validation of an uploaded spreadsheet persists one row — what was
+ * imported, by whom, against which entity, and how many rows passed/failed. The
+ * actual domain-write commit is a gated follow-up (status would advance to
+ * COMMITTED); this scope never writes domain records.
+ */
+export const importRun = pgTable(
+  "import_run",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entity: text("entity").notNull(),
+    fileName: text("file_name"),
+    status: text("status")
+      .$type<ImportRunStatus>()
+      .default("VALIDATED")
+      .notNull(),
+    totalRows: integer("total_rows").default(0).notNull(),
+    validRows: integer("valid_rows").default(0).notNull(),
+    errorRows: integer("error_rows").default(0).notNull(),
+    mapping: jsonb("mapping").$type<Record<string, string>>(),
+    errorsSample: jsonb("errors_sample").$type<unknown>(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("import_run_org_idx").on(table.organizationId),
+    index("import_run_created_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Account interaction log (operations-console gap #14, omnichannel core). A
+ * unified, manually-recorded timeline of operator↔tenant touchpoints (WhatsApp,
+ * email, call, meeting, internal note) so context lives in one place. Auto-capture
+ * from the actual channels (WhatsApp/email providers) is the external follow-up;
+ * this is the in-repo log + surface.
+ */
+export const accountInteraction = pgTable(
+  "account_interaction",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    channel: text("channel")
+      .$type<AccountInteractionChannel>()
+      .default("note")
+      .notNull(),
+    direction: text("direction")
+      .$type<AccountInteractionDirection>()
+      .default("outbound")
+      .notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("account_interaction_org_idx").on(table.organizationId),
+    index("account_interaction_occurred_idx").on(table.occurredAt),
+  ],
+);
+
+/**
+ * Operator-addressed alerts (operations-console gap #5). A scheduler-driven engine
+ * (the `operator-alerts` cron) recomputes proactive risk signals and upserts them
+ * here so the *team* is notified — until now only labs were. `dedupeKey` makes
+ * recompute idempotent; alerts whose condition clears are swept on the next run;
+ * acknowledgement persists while the condition holds.
+ */
+export const operatorAlert = pgTable(
+  "operator_alert",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    dedupeKey: text("dedupe_key").notNull().unique(),
+    kind: text("kind").notNull(),
+    severity: text("severity")
+      .$type<OperatorAlertSeverity>()
+      .default("warning")
+      .notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    status: text("status")
+      .$type<OperatorAlertStatus>()
+      .default("OPEN")
+      .notNull(),
+    acknowledgedByUserId: text("acknowledged_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("operator_alert_status_idx").on(table.status),
+    index("operator_alert_org_idx").on(table.organizationId),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -636,6 +938,45 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+  ],
+);
+
+export type LabAccountSetupTokenPurpose = "owner_claim" | "member_invite_claim";
+
+export const labAccountSetupToken = pgTable(
+  "lab_account_setup_token",
+  {
+    id: text("id").primaryKey(),
+    secretHash: text("secret_hash").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    invitationId: text("invitation_id").references(() => invitation.id, {
+      onDelete: "cascade",
+    }),
+    email: text("email").notNull(),
+    purpose: text("purpose").$type<LabAccountSetupTokenPurpose>().notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("lab_account_setup_token_user_idx").on(table.userId),
+    index("lab_account_setup_token_org_idx").on(table.organizationId),
+    index("lab_account_setup_token_invitation_idx").on(table.invitationId),
+    index("lab_account_setup_token_expires_idx").on(table.expiresAt),
+    index("lab_account_setup_token_consumed_idx").on(table.consumedAt),
   ],
 );
 
@@ -706,7 +1047,6 @@ export const certificateTemplate = pgTable(
     version: integer("version").default(1).notNull(),
     status: text("status").default("ACTIVE").notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
-    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -724,6 +1064,236 @@ export const certificateTemplate = pgTable(
       table.organizationId,
       table.slug,
     ),
+  ],
+);
+
+export type CertificateXlsxTemplateVersionStatus =
+  | "DRAFT"
+  | "VALIDATED"
+  | "PUBLISHED"
+  | "ARCHIVED";
+
+export type CertificateXlsxTemplateAssignmentStatus = "ACTIVE" | "ARCHIVED";
+export type CertificateXlsxTemplatePreviewStatus =
+  | "PENDING"
+  | "RENDERED"
+  | "FAILED"
+  | "EXPIRED";
+
+export type IssuedCertificateSnapshotStatus =
+  | "ISSUED"
+  | "SUPERSEDED"
+  | "VOIDED";
+
+export type CertificateXlsxRenderPolicy = {
+  formulas: "preserve" | "rejectVolatile";
+  macros: "reject";
+  externalLinks: "reject";
+  converter: "gotenberg-libreoffice";
+};
+
+export const certificateTemplateVersion = pgTable(
+  "certificate_template_version",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status")
+      .$type<CertificateXlsxTemplateVersionStatus>()
+      .default("DRAFT")
+      .notNull(),
+    xlsxR2Key: text("xlsx_r2_key").notNull(),
+    xlsxSha256: text("xlsx_sha256").notNull(),
+    bindingManifest: jsonb("binding_manifest")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    renderPolicy: jsonb("render_policy")
+      .$type<CertificateXlsxRenderPolicy>()
+      .notNull(),
+    analysis: jsonb("analysis").$type<Record<string, unknown>>(),
+    validationResult:
+      jsonb("validation_result").$type<Record<string, unknown>>(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    publishedAt: timestamp("published_at"),
+    publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_version_org_idx").on(table.organizationId),
+    index("certificate_template_version_template_idx").on(table.templateId),
+    index("certificate_template_version_status_idx").on(table.status),
+    uniqueIndex("certificate_template_version_template_version_uidx").on(
+      table.templateId,
+      table.version,
+    ),
+  ],
+);
+
+export const certificateTemplateAssignment = pgTable(
+  "certificate_template_assignment",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "restrict",
+      }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "cascade",
+    }),
+    serviceId: integer("service_id").references(() => service.id, {
+      onDelete: "cascade",
+    }),
+    methodId: integer("method_id").references(() => calibrationMethod.id, {
+      onDelete: "cascade",
+    }),
+    certificateType: text("certificate_type").default("calibration").notNull(),
+    status: text("status")
+      .$type<CertificateXlsxTemplateAssignmentStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    priority: integer("priority").default(0).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_assignment_org_idx").on(table.organizationId),
+    index("certificate_template_assignment_template_idx").on(table.templateId),
+    index("certificate_template_assignment_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("certificate_template_assignment_unit_idx").on(table.unitId),
+    index("certificate_template_assignment_service_idx").on(table.serviceId),
+    index("certificate_template_assignment_method_idx").on(table.methodId),
+    index("certificate_template_assignment_status_idx").on(table.status),
+  ],
+);
+
+export const certificateTemplatePreview = pgTable(
+  "certificate_template_preview",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "cascade",
+      }),
+    sampleData: jsonb("sample_data").$type<Record<string, unknown>>(),
+    filledXlsxR2Key: text("filled_xlsx_r2_key"),
+    pdfR2Key: text("pdf_r2_key"),
+    pdfSha256: text("pdf_sha256"),
+    renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
+    status: text("status")
+      .$type<CertificateXlsxTemplatePreviewStatus>()
+      .default("PENDING")
+      .notNull(),
+    error: text("error"),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_preview_org_idx").on(table.organizationId),
+    index("certificate_template_preview_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("certificate_template_preview_status_idx").on(table.status),
+    index("certificate_template_preview_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const issuedCertificateSnapshot = pgTable(
+  "issued_certificate_snapshot",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "restrict" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "restrict",
+      }),
+    certificateNumber: text("certificate_number"),
+    filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
+    filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
+    pdfR2Key: text("pdf_r2_key").notNull(),
+    pdfSha256: text("pdf_sha256").notNull(),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    renderPolicy: jsonb("render_policy")
+      .$type<CertificateXlsxRenderPolicy>()
+      .notNull(),
+    renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
+    inputDataSnapshot: jsonb("input_data_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    status: text("status")
+      .$type<IssuedCertificateSnapshotStatus>()
+      .default("ISSUED")
+      .notNull(),
+    issuedBy: text("issued_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    issuedAt: timestamp("issued_at").defaultNow().notNull(),
+    supersededById: integer("superseded_by_id"),
+    voidedAt: timestamp("voided_at"),
+    voidedBy: text("voided_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    voidReason: text("void_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("issued_certificate_snapshot_org_idx").on(table.organizationId),
+    uniqueIndex("issued_certificate_snapshot_job_uidx").on(table.jobId),
+    index("issued_certificate_snapshot_template_idx").on(table.templateId),
+    index("issued_certificate_snapshot_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("issued_certificate_snapshot_status_idx").on(table.status),
   ],
 );
 
@@ -996,9 +1566,7 @@ export const integrationConnection = pgTable(
       .$type<IntegrationCredentialType>()
       .default("bearer")
       .notNull(),
-    config: jsonb("config")
-      .$type<GenericFinancialErpConnectionConfig>()
-      .notNull(),
+    config: jsonb("config").$type<FinancialErpConnectionConfig>().notNull(),
     encryptedSecret: text("encrypted_secret").notNull(),
     secretIv: text("secret_iv").notNull(),
     createdBy: text("created_by")
@@ -1039,11 +1607,23 @@ export const integrationObjectLink = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    target: text("target").$type<IntegrationSyncTarget>().notNull(),
+    target: text("target").$type<IntegrationObjectLinkTarget>().notNull(),
     localEntityId: text("local_entity_id").notNull(),
     remoteEntityId: text("remote_entity_id"),
     remoteDisplayId: text("remote_display_id"),
+    remoteEntityType: text("remote_entity_type"),
+    remoteLegacyId: text("remote_legacy_id"),
+    remoteVersion: integer("remote_version"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     lastSyncedAt: timestamp("last_synced_at"),
+    // Phase 2 slice 3: operator-acknowledged drift. When a drift state is
+    // surfaced via the drift queue and the operator decides the local state
+    // is correct (or that the remote will be reconciled separately), they
+    // can acknowledge the link to remove it from the queue without
+    // resolving the underlying drift.
+    driftAcknowledgedAt: timestamp("drift_acknowledged_at"),
+    driftAcknowledgedByUserId: text("drift_acknowledged_by_user_id"),
+    driftAcknowledgedReason: text("drift_acknowledged_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -1061,6 +1641,10 @@ export const integrationObjectLink = pgTable(
       table.target,
       table.remoteEntityId,
     ),
+    index("integration_object_link_drift_ack_idx").on(
+      table.organizationId,
+      table.driftAcknowledgedAt,
+    ),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
       foreignColumns: [
@@ -1069,6 +1653,11 @@ export const integrationObjectLink = pgTable(
       ],
       name: "integration_object_link_integration_org_fk",
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.driftAcknowledgedByUserId],
+      foreignColumns: [user.id],
+      name: "integration_object_link_drift_ack_user_fk",
+    }).onDelete("set null"),
   ],
 );
 
@@ -1116,6 +1705,116 @@ export const integrationSyncRun = pgTable(
         organizationIntegration.organizationId,
       ],
       name: "integration_sync_run_integration_org_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const integrationSyncItem = pgTable(
+  "integration_sync_item",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => integrationSyncRun.id, { onDelete: "cascade" }),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    target: text("target").$type<IntegrationObjectLinkTarget>().notNull(),
+    localEntityId: text("local_entity_id").notNull(),
+    remoteEntityId: text("remote_entity_id"),
+    operation: text("operation")
+      .$type<IntegrationSyncItemOperation>()
+      .notNull(),
+    status: text("status")
+      .$type<IntegrationSyncItemStatus>()
+      .default("PENDING")
+      .notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    requestFingerprint: text("request_fingerprint"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("integration_sync_item_run_idx").on(table.runId),
+    index("integration_sync_item_integration_target_status_idx").on(
+      table.integrationId,
+      table.target,
+      table.status,
+    ),
+    index("integration_sync_item_local_entity_idx").on(
+      table.integrationId,
+      table.localEntityId,
+    ),
+    index("integration_sync_item_request_fingerprint_idx").on(
+      table.integrationId,
+      table.target,
+      table.requestFingerprint,
+    ),
+    index("integration_sync_item_dead_letter_idx").on(
+      table.integrationId,
+      table.status,
+      table.updatedAt,
+    ),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_sync_item_integration_org_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const integrationSyncCursor = pgTable(
+  "integration_sync_cursor",
+  {
+    id: serial("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    cursorType: text("cursor_type").notNull(),
+    lastRemoteUpdatedAt: timestamp("last_remote_updated_at"),
+    lastSuccessfulPollAt: timestamp("last_successful_poll_at"),
+    nextPage: integer("next_page"),
+    state: jsonb("state").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_sync_cursor_integration_type_uidx").on(
+      table.integrationId,
+      table.cursorType,
+    ),
+    index("integration_sync_cursor_org_type_idx").on(
+      table.organizationId,
+      table.cursorType,
+    ),
+    index("integration_sync_cursor_last_poll_idx").on(
+      table.lastSuccessfulPollAt,
+    ),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_sync_cursor_integration_org_fk",
     }).onDelete("cascade"),
   ],
 );
@@ -1292,11 +1991,17 @@ export const customerAuditLog = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  passkeys: many(passkey),
   members: many(member),
   invitations: many(invitation),
+  labAccountSetupTokens: many(labAccountSetupToken),
   ssoProviders: many(ssoProvider),
   customDomains: many(organizationCustomDomain),
   certificateTemplates: many(certificateTemplate),
+  certificateTemplateVersions: many(certificateTemplateVersion),
+  certificateTemplateAssignments: many(certificateTemplateAssignment),
+  certificateTemplatePreviews: many(certificateTemplatePreview),
+  issuedCertificateSnapshots: many(issuedCertificateSnapshot),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
   successProfiles: many(organizationSuccessProfile),
   supportRequestsCreated: many(organizationSupportRequest, {
@@ -1322,6 +2027,13 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));
+
 export const organizationRelations = relations(
   organization,
   ({ one, many }) => ({
@@ -1329,15 +2041,21 @@ export const organizationRelations = relations(
     units: many(organizationUnit),
     unitAssignments: many(memberUnitAssignment),
     invitations: many(invitation),
+    labAccountSetupTokens: many(labAccountSetupToken),
     eventLogs: many(organizationEventLog),
     subscription: one(subscription),
     ssoProviders: many(ssoProvider),
     customDomain: one(organizationCustomDomain),
     certificateTemplates: many(certificateTemplate),
+    certificateTemplateVersions: many(certificateTemplateVersion),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
+    certificateTemplatePreviews: many(certificateTemplatePreview),
+    issuedCertificateSnapshots: many(issuedCertificateSnapshot),
     apiKeys: many(organizationApiKey),
     integrations: many(organizationIntegration),
     integrationConnections: many(integrationConnection),
     integrationSyncRuns: many(integrationSyncRun),
+    integrationSyncCursors: many(integrationSyncCursor),
     integrationEventLogs: many(integrationEventLog),
     integrationObjectLinks: many(integrationObjectLink),
     successProfile: one(organizationSuccessProfile),
@@ -1459,7 +2177,7 @@ export const organizationSupportRequestEventRelations = relations(
   }),
 );
 
-export const invitationRelations = relations(invitation, ({ one }) => ({
+export const invitationRelations = relations(invitation, ({ one, many }) => ({
   organization: one(organization, {
     fields: [invitation.organizationId],
     references: [organization.id],
@@ -1468,7 +2186,30 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
     fields: [invitation.inviterId],
     references: [user.id],
   }),
+  labAccountSetupTokens: many(labAccountSetupToken),
 }));
+
+export const labAccountSetupTokenRelations = relations(
+  labAccountSetupToken,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [labAccountSetupToken.userId],
+      references: [user.id],
+    }),
+    organization: one(organization, {
+      fields: [labAccountSetupToken.organizationId],
+      references: [organization.id],
+    }),
+    invitation: one(invitation, {
+      fields: [labAccountSetupToken.invitationId],
+      references: [invitation.id],
+    }),
+    createdByUser: one(user, {
+      fields: [labAccountSetupToken.createdByUserId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
   organization: one(organization, {
@@ -1506,7 +2247,126 @@ export const certificateTemplateRelations = relations(
       fields: [certificateTemplate.createdBy],
       references: [user.id],
     }),
+    versions: many(certificateTemplateVersion),
+    assignments: many(certificateTemplateAssignment),
+    issuedSnapshots: many(issuedCertificateSnapshot),
     jobs: many(calibrationJob),
+  }),
+);
+
+export const certificateTemplateVersionRelations = relations(
+  certificateTemplateVersion,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplateVersion.organizationId],
+      references: [organization.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [certificateTemplateVersion.templateId],
+      references: [certificateTemplate.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplateVersion.createdBy],
+      references: [user.id],
+      relationName: "certificateTemplateVersionCreator",
+    }),
+    publishedByUser: one(user, {
+      fields: [certificateTemplateVersion.publishedBy],
+      references: [user.id],
+      relationName: "certificateTemplateVersionPublisher",
+    }),
+    assignments: many(certificateTemplateAssignment),
+    previews: many(certificateTemplatePreview),
+    issuedSnapshots: many(issuedCertificateSnapshot),
+  }),
+);
+
+export const certificateTemplateAssignmentRelations = relations(
+  certificateTemplateAssignment,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplateAssignment.organizationId],
+      references: [organization.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [certificateTemplateAssignment.templateId],
+      references: [certificateTemplate.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [certificateTemplateAssignment.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [certificateTemplateAssignment.unitId],
+      references: [organizationUnit.id],
+    }),
+    service: one(service, {
+      fields: [certificateTemplateAssignment.serviceId],
+      references: [service.id],
+    }),
+    method: one(calibrationMethod, {
+      fields: [certificateTemplateAssignment.methodId],
+      references: [calibrationMethod.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplateAssignment.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const certificateTemplatePreviewRelations = relations(
+  certificateTemplatePreview,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplatePreview.organizationId],
+      references: [organization.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [certificateTemplatePreview.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [certificateTemplatePreview.requestedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const issuedCertificateSnapshotRelations = relations(
+  issuedCertificateSnapshot,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [issuedCertificateSnapshot.organizationId],
+      references: [organization.id],
+    }),
+    job: one(calibrationJob, {
+      fields: [issuedCertificateSnapshot.jobId],
+      references: [calibrationJob.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [issuedCertificateSnapshot.templateId],
+      references: [certificateTemplate.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [issuedCertificateSnapshot.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    issuedByUser: one(user, {
+      fields: [issuedCertificateSnapshot.issuedBy],
+      references: [user.id],
+      relationName: "issuedCertificateIssuer",
+    }),
+    supersededBy: one(issuedCertificateSnapshot, {
+      fields: [issuedCertificateSnapshot.supersededById],
+      references: [issuedCertificateSnapshot.id],
+      relationName: "issuedCertificateSupersession",
+    }),
+    voidedByUser: one(user, {
+      fields: [issuedCertificateSnapshot.voidedBy],
+      references: [user.id],
+      relationName: "issuedCertificateVoider",
+    }),
   }),
 );
 
@@ -1569,6 +2429,8 @@ export const organizationIntegrationRelations = relations(
       references: [integrationConnection.integrationId],
     }),
     runs: many(integrationSyncRun),
+    syncItems: many(integrationSyncItem),
+    cursors: many(integrationSyncCursor),
     events: many(integrationEventLog),
     objectLinks: many(integrationObjectLink),
   }),
@@ -1629,6 +2491,39 @@ export const integrationSyncRunRelations = relations(
       relationName: "integrationRunInitiator",
     }),
     events: many(integrationEventLog),
+    syncItems: many(integrationSyncItem),
+  }),
+);
+
+export const integrationSyncItemRelations = relations(
+  integrationSyncItem,
+  ({ one }) => ({
+    run: one(integrationSyncRun, {
+      fields: [integrationSyncItem.runId],
+      references: [integrationSyncRun.id],
+    }),
+    integration: one(organizationIntegration, {
+      fields: [integrationSyncItem.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationSyncItem.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+export const integrationSyncCursorRelations = relations(
+  integrationSyncCursor,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationSyncCursor.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationSyncCursor.organizationId],
+      references: [organization.id],
+    }),
   }),
 );
 
@@ -1851,7 +2746,7 @@ export type MassCompositionConfig = {
     buoyancy?: string;
   };
   uncertaintyMode?: "expanded_rss";
-  quantityMode?: "linear_per_item_then_rss";
+  quantityMode?: "linear_per_item_then_rss" | "profile_linear";
 };
 
 /**
@@ -1871,6 +2766,8 @@ export type MethodInputField = {
   allowOverride?: boolean;
   eccentricityIndicator?: EccentricityIndicatorConfig;
   weighingRangeResolver?: WeighingRangeResolverConfig;
+  phaseBlockKey?: string;
+  phaseBlockLabel?: string;
   // For table type only:
   columns?: Array<{
     key: string;
@@ -1878,6 +2775,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: MethodTableColumnRole;
+    phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
   }>;
 };
@@ -1901,20 +2799,92 @@ export type MethodFormulaReporting = {
 export type MethodFormula = {
   outputKey: string; // Variable name for result, e.g., "error"
   expression: string; // Math expression, e.g., "reading_1 - nominal"
+  scope?: { kind: "scalar" } | { kind: "table_row"; tableKey: string };
   label?: string; // Display label, e.g., "Measurement Error"
   unit?: string;
   reporting?: MethodFormulaReporting;
+  metadata?: Record<string, unknown>;
+};
+
+export type MethodMeasurementModel = {
+  key: string;
+  label: string;
+  scope?: { kind: "scalar" } | { kind: "table_row"; tableKey: string };
+  measurand: string;
+  expression: string;
+  quantities: unknown[];
+  correlations?: unknown[];
+  covariances?: unknown[];
+  coverageProbability?: number;
+  coverageFactor?: string | number;
+  outputUnit?: string;
+  options?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 };
 
 /**
  * Validation rule for pass/fail criteria.
  * Defines acceptance criteria per ISO 17025.
  */
+export type MethodValidationOperator = "<" | "<=" | ">" | ">=" | "==" | "!=";
+
 export type MethodValidation = {
-  expression: string; // Boolean expression, e.g., "abs(error) < tolerance"
+  leftExpression: string;
+  operator: MethodValidationOperator;
+  rightExpression: string;
   message: string; // Message shown on failure
   severity: "error" | "warning";
+  metadata?: Record<string, unknown>;
 };
+
+export type MethodVariableBinding =
+  | {
+      key: string;
+      label?: string;
+      source: "data_field";
+      fieldKey: string;
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "table_statistic";
+      fieldKey: string;
+      columnKey: string;
+      statistic: "mean" | "sample_stddev" | "count" | "min" | "max";
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "table_column";
+      fieldKey: string;
+      columnKey: string;
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "environment";
+      field: "temperature" | "humidity" | "pressure";
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "standard";
+      standardId?: number;
+      valueKey: string;
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "standard_channel";
+      standardId?: number;
+      channelKey: string;
+      property:
+        | "value"
+        | "correction"
+        | "uncertainty"
+        | "coverageFactor"
+        | "drift";
+    };
 
 /**
  * Default Type B uncertainty component for the method.
@@ -1979,7 +2949,15 @@ export const calibrationMethod = pgTable(
     status: text("status").$type<MethodStatus>().default("DRAFT").notNull(),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
+    variableBindings: jsonb("variable_bindings")
+      .$type<MethodVariableBinding[]>()
+      .default([])
+      .notNull(),
     formulas: jsonb("formulas").$type<MethodFormula[]>().default([]).notNull(),
+    measurementModels: jsonb("measurement_models")
+      .$type<MethodMeasurementModel[]>()
+      .default([])
+      .notNull(),
     validations: jsonb("validations")
       .$type<MethodValidation[]>()
       .default([])
@@ -1991,6 +2969,11 @@ export const calibrationMethod = pgTable(
     certificateContent: jsonb(
       "certificate_content",
     ).$type<MethodCertificateContent>(),
+    compiledMethod: jsonb("compiled_method").$type<unknown>(),
+    methodFingerprint: text("method_fingerprint"),
+    methodEngine: jsonb("method_engine").$type<unknown>(),
+    methodCompiledAt: timestamp("method_compiled_at"),
+    publicationEvidence: jsonb("publication_evidence").$type<unknown>(),
     // Version chain - links to the parent version
     parentId: integer("parent_id"),
     // Timestamps and actors
@@ -2099,6 +3082,7 @@ export const calibrationMethodRelations = relations(
       relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
   }),
 );
 
@@ -2225,6 +3209,7 @@ export const serviceRelations = relations(service, ({ one, many }) => ({
     references: [assetType.id],
   }),
   auditLogs: many(serviceAuditLog),
+  certificateTemplateAssignments: many(certificateTemplateAssignment),
 }));
 
 export const serviceAuditLogRelations = relations(
@@ -2251,6 +3236,7 @@ export const serviceAuditLogRelations = relations(
  */
 export type CertifiedValue = {
   nominal: string; // Display label, e.g., "100g"
+  authentication?: string | null; // Certificate row/code, e.g., "JP03-2.1"
   value: number; // Actual certified value, e.g., 100.005
   uncertainty: number; // Uncertainty for this specific value
   unit: string; // Unit, e.g., "g", "mg"
@@ -2278,6 +3264,97 @@ export type ReferenceStandardStatus =
  */
 export type UncertaintyDistribution = "normal" | "rectangular";
 
+export type ReferenceStandardKind =
+  | "mass_single"
+  | "mass_set"
+  | "thermohygrometer"
+  | "thermometer"
+  | "hygrometer"
+  | "barometer"
+  | "manometer"
+  | "dimensional"
+  | "electrical"
+  | "time_frequency"
+  | "volume"
+  | "force_torque"
+  | "rpm"
+  | "generic_scalar"
+  | "generic_multi_channel";
+
+export type ReferenceStandardMetrologyPoint = {
+  reference?: number | null;
+  indication?: number | null;
+  meanReading?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  degreesOfFreedom?: number | null;
+  degreesOfFreedomOperator?: "exact" | "greater_than" | "infinity";
+  repeatability?: number | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReferenceStandardMetrologyChannel = {
+  key: string;
+  label: string;
+  quantity: string;
+  value?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  drift?: number | null;
+  notes?: string | null;
+  points?: ReferenceStandardMetrologyPoint[];
+};
+
+export type ReferenceStandardMassValue = {
+  nominal: string;
+  authentication?: string | null;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+};
+
+export type ReferenceStandardCompositionProfile = {
+  profileKey: string;
+  profileClass?: string | null;
+  nominal: string;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  quantityAvailable?: number | null;
+};
+
+export type ReferenceStandardMetrologyData = {
+  version: 1;
+  channels: ReferenceStandardMetrologyChannel[];
+  massValues: ReferenceStandardMassValue[];
+  compositionProfiles: ReferenceStandardCompositionProfile[];
+  notes?: string | null;
+};
+
+export type ReferenceStandardCertificateDocumentSnapshot = {
+  documentId: number;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  sha256: string;
+  uploadedAt: Date | string;
+  certificateNumber: string;
+  calibrationDate: Date | string;
+  nextCalibrationDate: Date | string;
+};
+
 /**
  * Reference Standard table - Lab's own master instruments for calibrations.
  * These are the "Truth" used to calibrate client equipment.
@@ -2299,6 +3376,10 @@ export const referenceStandard = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(), // e.g., "Conjunto de Pesos E2"
+    kind: text("kind")
+      .$type<ReferenceStandardKind>()
+      .default("generic_scalar")
+      .notNull(),
     type: text("type"), // Optional category: "Peso", "Bloco Padrão", etc.
     serialNumber: text("serial_number").notNull(),
     manufacturer: text("manufacturer"),
@@ -2320,6 +3401,8 @@ export const referenceStandard = pgTable(
     drift: real("drift"),
     // Multi-value metrology data (for sets like weight sets, gauge blocks)
     certifiedValues: jsonb("certified_values").$type<CertifiedValue[]>(),
+    metrologyData:
+      jsonb("metrology_data").$type<ReferenceStandardMetrologyData>(),
     // Status
     status: text("status")
       .$type<ReferenceStandardStatus>()
@@ -2341,6 +3424,44 @@ export const referenceStandard = pgTable(
     index("standard_organization_id_idx").on(table.organizationId),
     index("standard_status_idx").on(table.status),
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
+  ],
+);
+
+export const referenceStandardCertificateDocument = pgTable(
+  "reference_standard_certificate_document",
+  {
+    id: serial("id").primaryKey(),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    certificateNumber: text("certificate_number").notNull(),
+    calibrationDate: timestamp("calibration_date").notNull(),
+    nextCalibrationDate: timestamp("next_calibration_date").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    sha256: text("sha256").notNull(),
+    r2Key: text("r2_key").notNull(),
+    isCurrent: boolean("is_current").default(true).notNull(),
+    uploadedBy: text("uploaded_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("standard_certificate_document_standard_idx").on(table.standardId),
+    index("standard_certificate_document_org_idx").on(table.organizationId),
+    index("standard_certificate_document_unit_idx").on(table.unitId),
+    index("standard_certificate_document_current_idx").on(
+      table.standardId,
+      table.isCurrent,
+    ),
   ],
 );
 
@@ -2395,6 +3516,29 @@ export const referenceStandardRelations = relations(
       references: [user.id],
     }),
     auditLogs: many(referenceStandardAuditLog),
+    certificateDocuments: many(referenceStandardCertificateDocument),
+  }),
+);
+
+export const referenceStandardCertificateDocumentRelations = relations(
+  referenceStandardCertificateDocument,
+  ({ one }) => ({
+    standard: one(referenceStandard, {
+      fields: [referenceStandardCertificateDocument.standardId],
+      references: [referenceStandard.id],
+    }),
+    organization: one(organization, {
+      fields: [referenceStandardCertificateDocument.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [referenceStandardCertificateDocument.unitId],
+      references: [organizationUnit.id],
+    }),
+    uploadedByUser: one(user, {
+      fields: [referenceStandardCertificateDocument.uploadedBy],
+      references: [user.id],
+    }),
   }),
 );
 
@@ -2447,8 +3591,16 @@ export type MethodSnapshot = {
   methodId: number;
   methodName: string;
   methodVersion: number;
+  compiledMethod?: unknown;
+  methodFingerprint?: string | null;
+  engineVersion?: string | null;
+  engineOptionsFingerprint?: string | null;
+  normalizedMethodJson?: string | null;
+  publicationEvidence?: unknown;
   dataFields: MethodInputField[];
+  variableBindings: MethodVariableBinding[];
   formulas: MethodFormula[];
+  measurementModels: MethodMeasurementModel[];
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];
   certificateContent?: MethodCertificateContent | null;
@@ -2479,6 +3631,7 @@ export type StandardSnapshot = {
   id: number;
   name: string;
   type?: string | null;
+  kind?: ReferenceStandardKind;
   certificateNumber: string;
   calibratedBy?: string | null;
   calibrationDate: Date;
@@ -2489,6 +3642,8 @@ export type StandardSnapshot = {
   distribution: UncertaintyDistribution;
   drift: number | null;
   certifiedValues: CertifiedValue[] | null;
+  metrologyData?: ReferenceStandardMetrologyData | null;
+  certificateDocument?: ReferenceStandardCertificateDocumentSnapshot | null;
 };
 
 export type EnvironmentalLimitsSnapshot = {
@@ -2506,6 +3661,34 @@ export type EnvironmentalSnapshot = {
   limits: EnvironmentalLimitsSnapshot | null;
   withinLimits: boolean;
   outOfLimitsJustification: string | null;
+};
+
+export type CalibrationLocationType = "customer_site" | "lab" | "other";
+
+export type CalibrationLocationSnapshot = {
+  type: CalibrationLocationType;
+  addressText: string;
+  notes?: string | null;
+  recordedAt: string;
+  recordedBy: string;
+};
+
+export type CalibrationPhaseMode =
+  | "before_and_after"
+  | "before_only"
+  | "after_only"
+  | "not_performed";
+
+export type CalibrationPhaseSnapshot = {
+  blocks: Record<
+    string,
+    {
+      mode: CalibrationPhaseMode;
+      reason?: string | null;
+    }
+  >;
+  recordedAt: string;
+  recordedBy: string;
 };
 
 export type CalibrationRequestStatus =
@@ -2582,6 +3765,12 @@ export const calibrationJob = pgTable(
     environmentalSnapshot: jsonb(
       "environmental_snapshot",
     ).$type<EnvironmentalSnapshot>(),
+    calibrationLocationSnapshot: jsonb(
+      "calibration_location_snapshot",
+    ).$type<CalibrationLocationSnapshot>(),
+    calibrationPhaseSnapshot: jsonb(
+      "calibration_phase_snapshot",
+    ).$type<CalibrationPhaseSnapshot>(),
     certificateTemplateId: integer("certificate_template_id").references(
       () => certificateTemplate.id,
       { onDelete: "set null" },
@@ -2895,6 +4084,12 @@ export const billingDocument = pgTable(
   "billing_document",
   {
     id: serial("id").primaryKey(),
+    // Non-sequential public identifier used in URLs so the global serial id
+    // (and cross-tenant document volume) is never exposed. gen_random_uuid().
+    publicId: text("public_id")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -3087,6 +4282,335 @@ export const financialAuditLog = pgTable(
 );
 
 // =============================================================================
+// CERTIFICATE RELEASE - Phase 2 slice 1. Separates technical approval
+// (calibrationJob.status === "APPROVED") from commercial release of the
+// certificate to the customer portal. Driven by a per-org / per-customer /
+// per-contract / per-service-category policy that evaluates the Phase 1
+// payment continuity state. ERP payment status must never mutate
+// calibrationJob.status or issuedCertificateSnapshot.status.
+// =============================================================================
+
+export const certificateReleasePolicy = pgTable(
+  "certificate_release_policy",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    mode: text("mode").$type<CertificateReleasePolicyMode>().notNull(),
+    customerId: integer("customer_id").references(() => customer.id, {
+      onDelete: "cascade",
+    }),
+    commercialAgreementId: integer("commercial_agreement_id").references(
+      () => commercialAgreement.id,
+      { onDelete: "cascade" },
+    ),
+    serviceCategory: text("service_category"),
+    priority: integer("priority").default(0).notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => [
+    index("certificate_release_policy_org_idx").on(table.organizationId),
+    index("certificate_release_policy_customer_idx").on(
+      table.organizationId,
+      table.customerId,
+    ),
+    index("certificate_release_policy_agreement_idx").on(
+      table.organizationId,
+      table.commercialAgreementId,
+    ),
+    index("certificate_release_policy_category_idx").on(
+      table.organizationId,
+      table.serviceCategory,
+    ),
+    // One active org-default per organization. Drizzle's uniqueIndex with a
+    // where-style partial cannot be expressed directly; enforce via the SQL
+    // unique on (org, customer=null, agreement=null, category=null) where
+    // archivedAt is null at the application layer in resolveCertificateReleasePolicy.
+  ],
+);
+
+export const certificateRelease = pgTable(
+  "certificate_release",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    calibrationJobId: integer("calibration_job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    status: text("status").$type<CertificateReleaseStatus>().notNull(),
+    appliedPolicyId: integer("applied_policy_id").references(
+      () => certificateReleasePolicy.id,
+      { onDelete: "set null" },
+    ),
+    lastEvaluatedAt: timestamp("last_evaluated_at").defaultNow().notNull(),
+    paymentStateSnapshot: jsonb("payment_state_snapshot")
+      .$type<CertificateReleasePaymentStateSnapshot | null>()
+      .default(sql`'null'::jsonb`),
+    releasedByUserId: text("released_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    releaseReason: text("release_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("certificate_release_job_uidx").on(table.calibrationJobId),
+    index("certificate_release_org_idx").on(table.organizationId),
+    index("certificate_release_status_idx").on(
+      table.organizationId,
+      table.status,
+    ),
+    index("certificate_release_policy_idx").on(table.appliedPolicyId),
+  ],
+);
+
+// Phase 2 slice 4 - automatic send rules by milestone. Mirrors the
+// certificate-release-policy shape: org default + per-customer /
+// per-agreement / per-service-name override scopes, priority + id
+// tie-break. Triggered by certificate-approval / SO-delivery /
+// contract-anniversary events.
+
+export const automaticSendRule = pgTable(
+  "automatic_send_rule",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    milestone: text("milestone").$type<AutomaticSendMilestone>().notNull(),
+    customerId: integer("customer_id").references(() => customer.id, {
+      onDelete: "cascade",
+    }),
+    commercialAgreementId: integer("commercial_agreement_id").references(
+      () => commercialAgreement.id,
+      { onDelete: "cascade" },
+    ),
+    serviceCategory: text("service_category"),
+    priority: integer("priority").default(0).notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => [
+    index("automatic_send_rule_org_idx").on(table.organizationId),
+    index("automatic_send_rule_customer_idx").on(
+      table.organizationId,
+      table.customerId,
+    ),
+    index("automatic_send_rule_agreement_idx").on(
+      table.organizationId,
+      table.commercialAgreementId,
+    ),
+    index("automatic_send_rule_category_idx").on(
+      table.organizationId,
+      table.serviceCategory,
+    ),
+  ],
+);
+
+export const automaticSendAuditLog = pgTable(
+  "automatic_send_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    serviceOrderId: integer("service_order_id").references(
+      () => serviceOrder.id,
+      { onDelete: "set null" },
+    ),
+    appliedRuleId: integer("applied_rule_id").references(
+      () => automaticSendRule.id,
+      { onDelete: "set null" },
+    ),
+    milestone: text("milestone").$type<AutomaticSendMilestone>().notNull(),
+    outcome: text("outcome").$type<AutomaticSendOutcome>().notNull(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason"),
+    providerResponseSummary: jsonb("provider_response_summary").$type<Record<
+      string,
+      unknown
+    > | null>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("automatic_send_audit_org_idx").on(table.organizationId),
+    index("automatic_send_audit_so_idx").on(table.serviceOrderId),
+    index("automatic_send_audit_created_idx").on(table.createdAt),
+  ],
+);
+
+// Phase 2 slice 9 - batch / consolidated billing groups. Many service
+// orders can share one billing document via this group; compatibility
+// rules live in apps/api/src/lib/billing-group.ts.
+
+export const billingGroup = pgTable(
+  "billing_group",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    status: text("status")
+      .$type<BillingGroupStatus>()
+      .default("OPEN")
+      .notNull(),
+    paymentTermDays: integer("payment_term_days").default(28).notNull(),
+    currency: text("currency").default("BRL").notNull(),
+    billingPeriodFrom: timestamp("billing_period_from"),
+    billingPeriodTo: timestamp("billing_period_to"),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("billing_group_org_idx").on(table.organizationId),
+    index("billing_group_customer_idx").on(
+      table.organizationId,
+      table.customerId,
+    ),
+    index("billing_group_status_idx").on(table.organizationId, table.status),
+  ],
+);
+
+export const billingGroupServiceOrder = pgTable(
+  "billing_group_service_order",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => billingGroup.id, { onDelete: "cascade" }),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("billing_group_service_order_uidx").on(
+      table.groupId,
+      table.serviceOrderId,
+    ),
+    index("billing_group_service_order_so_idx").on(table.serviceOrderId),
+  ],
+);
+
+// Phase 2 slice 7 - normalized supplier / transporter records. Replaces
+// the free-text supplierName captured in slice 6's
+// service_order_outsourced_cost.
+
+export const supplier = pgTable(
+  "supplier",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    taxId: text("tax_id"),
+    email: text("email"),
+    phone: text("phone"),
+    kind: text("kind").$type<SupplierKind>().default("other").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => [
+    index("supplier_org_idx").on(table.organizationId),
+    index("supplier_org_name_idx").on(table.organizationId, table.name),
+  ],
+);
+
+// Phase 2 slice 6 - outsourced calibration cost capture so margin per
+// service order is visible. expected_cost_cents is set by the operator
+// before dispatch; actual_cost_cents + payable_link_id are populated
+// when the Conta Azul payable poll reconciles a matching payable.
+
+export const serviceOrderOutsourcedCost = pgTable(
+  "service_order_outsourced_cost",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    supplierName: text("supplier_name").notNull(),
+    expectedCostCents: integer("expected_cost_cents").notNull(),
+    actualCostCents: integer("actual_cost_cents"),
+    currency: text("currency").default("BRL").notNull(),
+    payableLinkId: text("payable_link_id"),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    voidedAt: timestamp("voided_at"),
+  },
+  (table) => [
+    index("service_order_outsourced_cost_org_idx").on(table.organizationId),
+    index("service_order_outsourced_cost_so_idx").on(table.serviceOrderId),
+    index("service_order_outsourced_cost_payable_idx").on(table.payableLinkId),
+  ],
+);
+
+export const certificateReleaseAuditLog = pgTable(
+  "certificate_release_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    certificateReleaseId: integer("certificate_release_id")
+      .notNull()
+      .references(() => certificateRelease.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    fromStatus: text("from_status").$type<CertificateReleaseStatus | null>(),
+    toStatus: text("to_status").$type<CertificateReleaseStatus>().notNull(),
+    appliedPolicyId: integer("applied_policy_id").references(
+      () => certificateReleasePolicy.id,
+      { onDelete: "set null" },
+    ),
+    paymentStateSnapshot: jsonb(
+      "payment_state_snapshot",
+    ).$type<CertificateReleasePaymentStateSnapshot | null>(),
+    reason: text("reason"),
+    source: text("source").$type<CertificateReleaseAuditSource>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("certificate_release_audit_org_idx").on(table.organizationId),
+    index("certificate_release_audit_release_idx").on(
+      table.certificateReleaseId,
+    ),
+    index("certificate_release_audit_created_idx").on(table.createdAt),
+  ],
+);
+
+// =============================================================================
 // SERVICE ORDER - Operational intake, repair, quote and delivery workflow
 // =============================================================================
 
@@ -3109,6 +4633,13 @@ export const serviceOrder = pgTable(
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
     serviceOrderNumber: text("service_order_number").notNull(),
+    // Opaque, non-sequential identifier for client-facing URLs (the portal
+    // routes by this instead of the enumerable serial id). Mirrors
+    // calibrationJob.verificationToken / billingDocument.publicId.
+    publicId: text("public_id")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -3761,6 +5292,19 @@ export const calibrationRequest = pgTable(
     requestedDueDate: timestamp("requested_due_date", {
       withTimezone: true,
     }),
+    // How the customer will get the assets to the lab. When shipping via a
+    // carrier, they provide the "nota fiscal de remessa para conserto" so the
+    // lab can receive the goods and later issue the return invoice.
+    deliveryMethod: text("delivery_method")
+      .$type<"dropoff" | "carrier">()
+      .default("dropoff")
+      .notNull(),
+    invoiceRemittanceNumber: text("invoice_remittance_number"),
+    invoiceRemittanceKey: text("invoice_remittance_key"),
+    invoiceRemittanceIssuedAt: timestamp("invoice_remittance_issued_at", {
+      withTimezone: true,
+    }),
+    carrierName: text("carrier_name"),
     submittedBy: text("submitted_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -3906,6 +5450,10 @@ export const calibrationJobRelations = relations(
     certificateTemplate: one(certificateTemplate, {
       fields: [calibrationJob.certificateTemplateId],
       references: [certificateTemplate.id],
+    }),
+    issuedCertificateSnapshot: one(issuedCertificateSnapshot, {
+      fields: [calibrationJob.id],
+      references: [issuedCertificateSnapshot.jobId],
     }),
     // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
     // The job that this one supersedes (original certificate being corrected)
@@ -4158,6 +5706,7 @@ export const organizationUnitRelations = relations(
     calibrationRequests: many(calibrationRequest),
     assets: many(asset),
     eventLogs: many(organizationEventLog),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
   }),
 );
 
@@ -4752,19 +6301,16 @@ export const providerWebhookEvent = pgTable(
 // BILLING RELATIONS
 // =============================================================================
 
-export const subscriptionRelations = relations(
-  subscription,
-  ({ one, many }) => ({
-    organization: one(organization, {
-      fields: [subscription.organizationId],
-      references: [organization.id],
-    }),
-    sourceOffer: one(commercialOffer, {
-      fields: [subscription.sourceCommercialOfferId],
-      references: [commercialOffer.id],
-    }),
+export const subscriptionRelations = relations(subscription, ({ one }) => ({
+  organization: one(organization, {
+    fields: [subscription.organizationId],
+    references: [organization.id],
   }),
-);
+  sourceOffer: one(commercialOffer, {
+    fields: [subscription.sourceCommercialOfferId],
+    references: [commercialOffer.id],
+  }),
+}));
 
 export const billingCustomerRelations = relations(
   billingCustomer,
@@ -4900,7 +6446,7 @@ export const paymentHistoryRelations = relations(paymentRecord, ({ one }) => ({
 
 export const webhookEventLogRelations = relations(
   providerWebhookEvent,
-  ({}) => ({}),
+  () => ({}),
 );
 
 // =============================================================================
@@ -4934,7 +6480,13 @@ export type NotificationType =
   | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
   | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
   | "CUSTOMER_SUCCESS_SLA_BREACHED"
-  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED";
+  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED"
+  | "SUPPORT_REQUEST_REPLIED" // Backoffice operator replied to a lab's support request
+  | "CALIBRATION_REQUEST_SUBMITTED"
+  | "CALIBRATION_REQUEST_UNDER_REVIEW"
+  | "CALIBRATION_REQUEST_APPROVED"
+  | "CALIBRATION_REQUEST_REJECTED"
+  | "CALIBRATION_REQUEST_CONVERTED";
 
 /**
  * Notification priority levels
@@ -4961,6 +6513,7 @@ export type NotificationRelatedEntity = {
     | "standard"
     | "payment"
     | "customer"
+    | "request"
     | "nc"
     | "capa"
     | "competence";
@@ -5156,7 +6709,8 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_TAG"
   | "SERVICE_ORDER_QUOTE"
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
-  | "INTEGRATION_SYNC";
+  | "INTEGRATION_SYNC"
+  | "CERTIFICATE_XLSX_PREVIEW";
 
 export type AppQueueJobStatus =
   | "PENDING"

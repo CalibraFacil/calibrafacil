@@ -245,11 +245,7 @@ function CertificatesPage() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: () => (
-          <Badge variant="default">
-            Aprovado
-          </Badge>
-        ),
+        cell: () => <Badge variant="default">Aprovado</Badge>,
       },
       {
         id: "actions",
@@ -268,7 +264,7 @@ function CertificatesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="portal-shell space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Certificados</CardTitle>

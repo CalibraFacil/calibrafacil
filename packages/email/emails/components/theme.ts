@@ -1,0 +1,78 @@
+import type { TailwindConfig } from "@react-email/components";
+
+export const emailTheme = {
+  colors: {
+    bg: "#ffffff",
+    bg2: "#f3f4f6",
+    fg: "#14171e",
+    fg2: "#43454b",
+    fg3: "#7b7d81",
+    fgInverted: "#ffffff",
+    stroke: "#f0f0f0",
+    strokeStrong: "#e4e4e7",
+    buttonBorder: "#d9e2f5",
+    brand: "#1447e6",
+    brandSoft: "#eaf0ff",
+    successBg: "#e7f8ef",
+    successBorder: "#9fe3bd",
+    successText: "#0f7a3f",
+    warningBg: "#fff6db",
+    warningBorder: "#f4c95d",
+    warningText: "#8a5a00",
+    errorBg: "#fff0ef",
+    errorBorder: "#f3aaa4",
+    errorText: "#b42318",
+    infoBg: "#e9f3ff",
+    infoBorder: "#9fc6ff",
+    infoText: "#1155cc",
+  },
+} as const;
+
+export const emailTailwindConfig = {
+  theme: {
+    extend: {
+      colors: {
+        bg: emailTheme.colors.bg,
+        "bg-2": emailTheme.colors.bg2,
+        fg: emailTheme.colors.fg,
+        "fg-2": emailTheme.colors.fg2,
+        "fg-3": emailTheme.colors.fg3,
+        "fg-inverted": emailTheme.colors.fgInverted,
+        stroke: emailTheme.colors.stroke,
+        "stroke-strong": emailTheme.colors.strokeStrong,
+        "button-border": emailTheme.colors.buttonBorder,
+        brand: emailTheme.colors.brand,
+        "brand-soft": emailTheme.colors.brandSoft,
+        "success-bg": emailTheme.colors.successBg,
+        "success-border": emailTheme.colors.successBorder,
+        "success-text": emailTheme.colors.successText,
+        "warning-bg": emailTheme.colors.warningBg,
+        "warning-border": emailTheme.colors.warningBorder,
+        "warning-text": emailTheme.colors.warningText,
+        "error-bg": emailTheme.colors.errorBg,
+        "error-border": emailTheme.colors.errorBorder,
+        "error-text": emailTheme.colors.errorText,
+        "info-bg": emailTheme.colors.infoBg,
+        "info-border": emailTheme.colors.infoBorder,
+        "info-text": emailTheme.colors.infoText,
+      },
+      fontFamily: {
+        sans: [
+          "Figtree",
+          "Aptos",
+          "Segoe UI",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
+        mono: [
+          "Roboto Mono",
+          "SFMono-Regular",
+          "Consolas",
+          "Courier New",
+          "monospace",
+        ],
+      },
+    },
+  },
+} satisfies TailwindConfig;

@@ -1,0 +1,40 @@
+---
+title: Snapshots e Imutabilidade
+description: Como o CalibraFácil congela o método, os padrões, o ativo e as condições ambientais no momento da calibração para garantir reprodutibilidade e defesa em auditoria.
+---
+
+A reprodutibilidade exigida pela **ISO/IEC 17025** depende de uma garantia simples: o que foi medido hoje deve poder ser reconstruído amanhã, exatamente como aconteceu. O CalibraFácil resolve isso com **snapshots**.
+
+## O que é um snapshot
+
+Um snapshot é uma cópia imutável do estado de um recurso no exato instante em que ele participa de uma calibração. Não é uma referência — é uma cópia. Se o recurso original mudar depois, o snapshot continua exatamente como estava.
+
+## O que é capturado em cada ordem de calibração
+
+Quando uma ordem de calibração é criada e executada, o sistema congela:
+
+| Snapshot | O que é capturado | Quando |
+| :--- | :--- | :--- |
+| **Método de calibração** | A versão publicada do método: campos de entrada, fórmulas, critérios de aceitação, componentes Tipo B | Na criação da ordem |
+| **Ativo** | Especificações do instrumento (tipo, faixa, resolução, identificação) | Na criação da ordem |
+| **Padrões de referência** | Identificação dos padrões, certificados associados, incertezas declaradas | Ao selecionar os padrões na execução |
+| **Condições ambientais** | Limites aplicáveis (temperatura, umidade, pressão) na unidade | Ao submeter para revisão |
+| **Template do certificado** | Layout, logo, rodapé, identificação do responsável técnico | Na aprovação |
+
+## Por que isso importa
+
+- **Auditoria defensável.** Um auditor pedindo evidência sobre uma calibração de 2023 vê o método como ele era em 2023, mesmo que tenha sido revisado em 2026.
+- **Versionamento implícito.** Métodos podem evoluir livremente sem invalidar o histórico. Cada calibração permanece autocontida.
+- **Reprocessamento confiável.** Se for necessário recomputar uma incerteza, todos os insumos originais estão preservados — não há ambiguidade sobre "qual versão do método foi usada".
+- **Imutabilidade pós-aprovação.** Uma ordem de calibração aprovada não pode ser editada nem cancelada. Correções legítimas usam o fluxo de [retificação](/certificados/retificacao), que cria uma nova ordem ligada à anterior pela cadeia de substituição.
+
+## Consequências práticas
+
+- Atualizar um método **publicado** não afeta calibrações que já o usaram.
+- Renovar o certificado de um padrão **não invalida** calibrações anteriores que o utilizaram — o snapshot preserva o estado do padrão na época.
+- Mudar o template do certificado **não reescreve** PDFs já emitidos.
+- Excluir um ativo ou cliente preserva as ordens históricas, porque os dados estão dentro dos snapshots.
+
+<Aside type="note">
+  Snapshots não substituem a trilha de auditoria. Eles preservam o **conteúdo** da calibração; a trilha de auditoria registra as **ações** sobre ela. Veja [Rastreabilidade](/conceitos/rastreabilidade).
+</Aside>

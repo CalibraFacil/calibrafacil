@@ -6,11 +6,27 @@ import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
+import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
+import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
-import { OrganizationInvitationEmail } from "@calibra-facil/email";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/server";
+import {
+  EmailConfirmationEmail,
+  LabAccessLinkEmail,
+  LabOtpEmail,
+  OrganizationInvitationEmail,
+  PasswordResetEmail,
+  PortalInvitationEmail,
+  PortalMagicLinkEmail,
+  type EmailBrand,
+} from "@calibra-facil/email";
 import { hasEntitlement } from "@calibra-facil/shared";
 import {
   PORTAL_ACCESS_ROLES,
@@ -19,8 +35,21 @@ import {
   platformRoles,
   roles,
 } from "./access";
+import {
+  hasActiveLabMembership,
+  hasPendingLabInvitation,
+  hasValidLabSetupTokenForEmail,
+  normalizeLabAccessEmail,
+  validateLabAccountSetupToken,
+} from "./lab-access";
+
+export type BetterAuthPasskeyPortableTypes =
+  | AuthenticationResponseJSON
+  | PublicKeyCredentialCreationOptionsJSON
+  | PublicKeyCredentialRequestOptionsJSON;
 
 let devFallbackAuthSecret: string | null = null;
+const IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS = 60;
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -35,15 +64,136 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+function getEmailLogoSrc(): string {
+  const explicitLogoUrl = readEnv("EMAIL_LOGO_URL");
+  if (explicitLogoUrl) return explicitLogoUrl;
+
+  const appUrl = readEnv("APP_URL") ?? readEnv("WEB_URL");
+  if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
+
+  return "https://calibrafacil.com/logo192.png";
+}
+
 function resolveApiBaseUrl(fallback: string): string {
   return readEnv("API_URL") ?? fallback;
 }
 
-function isProductionRuntime(): boolean {
+function resolveWebBaseUrl(isProduction: boolean): string {
   return (
-    process.env.VERCEL_ENV === "production" ||
-    process.env.VERCEL === "1"
+    readEnv("APP_URL") ??
+    readEnv("WEB_URL") ??
+    (isProduction ? "https://calibrafacil.com" : "http://localhost:5173")
   );
+}
+
+function resolveEmailVerificationUrl(url: string, webBaseUrl: string): string {
+  try {
+    const verificationUrl = new URL(url);
+    const callbackURL = verificationUrl.searchParams.get("callbackURL");
+
+    if (
+      !callbackURL ||
+      !callbackURL.startsWith("/") ||
+      callbackURL.startsWith("//")
+    ) {
+      return url;
+    }
+
+    verificationUrl.searchParams.set(
+      "callbackURL",
+      new URL(callbackURL, webBaseUrl).toString(),
+    );
+
+    return verificationUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
+function isLocalDevelopmentUrl(value: string | undefined): boolean {
+  if (!value) return false;
+
+  try {
+    const { hostname } = new URL(value);
+    return hostname === "localhost" || isPrivateIpv4(hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function isProductionLikeUrl(value: string | undefined): boolean {
+  if (!value) return false;
+
+  try {
+    const { protocol, hostname } = new URL(value);
+    // dev-*.calibrafacil.com is a reserved prefix for dev tunnels (e.g.
+    // dev-portal, dev-web). Never treat those as production-like, even
+    // though they are https:.
+    if (/^dev-[\w-]+\.calibrafacil\.com$/.test(hostname.toLowerCase())) {
+      return false;
+    }
+    return protocol === "https:" && !isLocalDevelopmentUrl(value)
+      ? !hostname.endsWith(".local")
+      : false;
+  } catch {
+    return false;
+  }
+}
+
+function isProductionRuntime(): boolean {
+  const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
+
+  // Explicit env always wins. A common dev workflow runs the local API behind a
+  // Cloudflare/ngrok tunnel so `API_URL`/`APP_URL` look production-like
+  // (`https://dev-api.calibrafacil.com`) even though the process is the local
+  // one with `NODE_ENV=development`. URL-based inference must not override that.
+  if (runtimeEnv === "development" || runtimeEnv === "test") {
+    return false;
+  }
+  if (runtimeEnv === "production") {
+    return true;
+  }
+
+  // No explicit runtime env: fall back to URL inference.
+  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")];
+
+  if (configuredUrls.some(isLocalDevelopmentUrl)) {
+    return false;
+  }
+
+  if (configuredUrls.some(isProductionLikeUrl)) {
+    return true;
+  }
+
+  if (runtimeEnv) {
+    return runtimeEnv !== "development" && runtimeEnv !== "test";
+  }
+
+  return false;
+}
+
+function createBaseUrlConfig(
+  isProduction: boolean,
+):
+  | string
+  | { allowedHosts: string[]; protocol?: "http" | "https" | "auto" } {
+  if (isProduction) {
+    return getRequiredEnv("API_URL");
+  }
+
+  // Dev: dynamic per-request resolution from the incoming Host header.
+  // The same list is automatically added to trustedOrigins by better-auth,
+  // so magic-link URLs and origin trust both derive from the tunnel hostname
+  // the user actually hit (dev-portal vs dev-web), with no extra rewriting.
+  return {
+    allowedHosts: [
+      "localhost:3000",
+      "localhost:5173",
+      "localhost:5174",
+      "*.calibrafacil.com",
+    ],
+    protocol: "auto",
+  };
 }
 
 function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
@@ -57,6 +207,24 @@ function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
   }
 }
 
+function shouldUseCrossSubDomainCookies(
+  isProduction: boolean,
+  apiUrl: string | undefined,
+  cookieDomain: string | null,
+) {
+  if (!cookieDomain || !apiUrl) return false;
+  if (isProduction) return true;
+
+  try {
+    const url = new URL(apiUrl);
+    return (
+      url.protocol === "https:" && url.hostname.endsWith(".calibrafacil.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getDevFallbackAuthSecret(): string {
   if (devFallbackAuthSecret) {
     return devFallbackAuthSecret;
@@ -66,6 +234,24 @@ function getDevFallbackAuthSecret(): string {
   return devFallbackAuthSecret;
 }
 
+function allowsDevFallbackAuthSecret(isProduction: boolean): boolean {
+  if (isProduction) {
+    return false;
+  }
+
+  const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
+  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")].filter(
+    Boolean,
+  );
+
+  return (
+    runtimeEnv === "development" ||
+    runtimeEnv === "test" ||
+    configuredUrls.length === 0 ||
+    configuredUrls.some(isLocalDevelopmentUrl)
+  );
+}
+
 function resolveAuthSecret(isProduction: boolean): string {
   const configuredSecret = readEnv("BETTER_AUTH_SECRET");
 
@@ -73,12 +259,12 @@ function resolveAuthSecret(isProduction: boolean): string {
     return configuredSecret;
   }
 
-  if (isProduction) {
+  if (!allowsDevFallbackAuthSecret(isProduction)) {
     if (!configuredSecret) {
       throw new Error("BETTER_AUTH_SECRET environment variable is required");
     }
     throw new Error(
-      "BETTER_AUTH_SECRET must be at least 32 characters long in production",
+      "BETTER_AUTH_SECRET must be at least 32 characters long outside local development",
     );
   }
 
@@ -92,20 +278,30 @@ function resolveAuthSecret(isProduction: boolean): string {
 }
 
 const DEV_TRUSTED_ORIGINS = [
+  "app://calibra-facil",
   "http://localhost:5173",
   "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "https://dev-web.calibrafacil.com",
+  "https://dev-portal.calibrafacil.com",
+  "https://dev-api.calibrafacil.com",
   "http://192.168.0.10:5173",
   "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
+  "https://dev-portal.calibrafacil.com",
+  "https://dev-web.calibrafacil.com",
 ];
 
 const PROD_TRUSTED_ORIGINS = [
+  "app://calibra-facil",
   "https://calibrafacil.com",
+  "https://www.calibrafacil.com",
   "https://portal.calibrafacil.com",
 ];
+
+type AuthSurface = "lab" | "backoffice" | "portal";
 
 function isIpv4Address(hostname: string): boolean {
   const parts = hostname.split(".");
@@ -176,6 +372,7 @@ function normalizeDynamicTrustedOrigin(
 
 function createTrustedOrigins(
   isProduction: boolean,
+  surface: AuthSurface,
 ): string[] | ((request?: Request) => Promise<string[]>) {
   const baseOrigins = isProduction ? PROD_TRUSTED_ORIGINS : DEV_TRUSTED_ORIGINS;
 
@@ -196,7 +393,12 @@ function createTrustedOrigins(
       origins.add(issuerOrigin);
     }
 
-    if (requestOrigin && (await isActivePortalCustomOrigin(requestOrigin))) {
+    if (
+      requestOrigin &&
+      ((!isProduction && isPrivateDevWebOrigin(requestOrigin)) ||
+        (surface === "portal" &&
+          (await isActivePortalCustomOrigin(requestOrigin))))
+    ) {
       origins.add(requestOrigin);
     }
 
@@ -212,6 +414,7 @@ function createTrustedOrigins(
 
       if (
         callbackOrigin &&
+        surface === "portal" &&
         (await isActivePortalCustomOrigin(callbackOrigin))
       ) {
         origins.add(callbackOrigin);
@@ -220,6 +423,19 @@ function createTrustedOrigins(
 
     return [...origins];
   };
+}
+
+function isPrivateDevWebOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || isPrivateIpv4(url.hostname)) &&
+      (url.port === "5173" || url.port === "5174")
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
@@ -250,26 +466,42 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function sanitizeMailHeader(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function getEmailAddress(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return match?.[1]?.trim() ?? value.trim();
+}
+
+function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined) {
+  if (!brand?.isWhiteLabel) return fromEmail;
+
+  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
+}
+
+function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
+  const email = brand?.supportEmail?.trim();
+  if (!email || !email.includes("@")) return undefined;
+  return sanitizeMailHeader(email);
 }
 
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
 
-  const body = (ctx as { body?: Record<string, unknown> }).body;
+  const body = toRecord(toRecord(ctx).body);
   const callbackURL = body?.callbackURL;
 
   return typeof callbackURL === "string" ? callbackURL : null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function readInvitationIdFromCallbackUrl(
@@ -311,6 +543,7 @@ async function findPendingPortalInvitation(
       id: schema.invitation.id,
       email: schema.invitation.email,
       role: schema.invitation.role,
+      organizationId: schema.organization.id,
       organizationName: schema.organization.name,
     })
     .from(schema.invitation)
@@ -322,6 +555,103 @@ async function findPendingPortalInvitation(
     .limit(1);
 
   return pendingInvitation ?? null;
+}
+
+function formatLabAddress(lab: {
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighbourhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+}): string | undefined {
+  const streetLine = [lab.street, lab.number, lab.complement]
+    .filter(Boolean)
+    .join(", ");
+  const cityLine = [
+    lab.neighbourhood,
+    [lab.city, lab.state].filter(Boolean).join(" - "),
+    lab.cep ? `CEP ${lab.cep}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const address = [streetLine, cityLine].filter(Boolean).join(" · ");
+
+  return address || undefined;
+}
+
+function createLabEmailBrand(lab: {
+  name: string;
+  logo: string | null;
+  cnpj: string | null;
+  accreditationNumber: string | null;
+  accreditationBody: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighbourhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+}): EmailBrand {
+  const accreditation = [lab.accreditationBody, lab.accreditationNumber]
+    .filter(Boolean)
+    .join(" ");
+  const legalLines = [
+    lab.cnpj ? `CNPJ ${lab.cnpj}` : undefined,
+    accreditation ? `Acreditação ${accreditation}` : undefined,
+    formatLabAddress(lab),
+    lab.phone ? `Telefone: ${lab.phone}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+  return {
+    name: lab.name,
+    logoSrc: lab.logo ?? getEmailLogoSrc(),
+    footerLegalLines: legalLines,
+    supportEmail: lab.email ?? undefined,
+    website: lab.website ?? undefined,
+    isWhiteLabel: true,
+  };
+}
+
+async function findLabBrandForClientOrganization(
+  clientOrganizationId: string,
+): Promise<EmailBrand | undefined> {
+  const [customerData] = await getDb()
+    .select({ labOrganizationId: schema.customer.labOrganizationId })
+    .from(schema.customer)
+    .where(eq(schema.customer.authOrganizationId, clientOrganizationId))
+    .limit(1);
+
+  if (!customerData?.labOrganizationId) return undefined;
+
+  const [labOrganization] = await getDb()
+    .select({
+      name: schema.organization.name,
+      logo: schema.organization.logo,
+      cnpj: schema.organization.cnpj,
+      accreditationNumber: schema.organization.accreditationNumber,
+      accreditationBody: schema.organization.accreditationBody,
+      street: schema.organization.street,
+      number: schema.organization.number,
+      complement: schema.organization.complement,
+      neighbourhood: schema.organization.neighbourhood,
+      city: schema.organization.city,
+      state: schema.organization.state,
+      cep: schema.organization.cep,
+      phone: schema.organization.phone,
+      email: schema.organization.email,
+      website: schema.organization.website,
+    })
+    .from(schema.organization)
+    .where(eq(schema.organization.id, customerData.labOrganizationId))
+    .limit(1);
+
+  return labOrganization ? createLabEmailBrand(labOrganization) : undefined;
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
@@ -370,7 +700,7 @@ async function sendPortalMagicLink(
   const apiKey = process.env.RESEND_API_KEY;
   const subject = pendingInvitation
     ? sanitizeMailHeader(`Convite para ${pendingInvitation.organizationName}`)
-    : "Acesse o Portal CalibraFacil";
+    : "Acesse o Portal CalibraFácil";
   let magicLinkUrl = data.url;
 
   if (pendingInvitation && !invitationId && callbackURL) {
@@ -385,6 +715,10 @@ async function sendPortalMagicLink(
       magicLinkUrl = data.url;
     }
   }
+  const labBrand = pendingInvitation
+    ? await findLabBrandForClientOrganization(pendingInvitation.organizationId)
+    : undefined;
+  const labName = labBrand?.name ?? null;
 
   if (!apiKey) {
     if (isProductionRuntime()) {
@@ -392,7 +726,7 @@ async function sendPortalMagicLink(
     }
 
     console.info(
-      `[Better Auth] Portal magic link for ${normalizedEmail}: ${magicLinkUrl}`,
+      `[Better Auth] Portal magic link suppressed in development email delivery for ${normalizedEmail}`,
     );
     return;
   }
@@ -401,49 +735,28 @@ async function sendPortalMagicLink(
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Facil <noreply@calibrafacil.com>";
-  const escapedUrl = escapeHtml(magicLinkUrl);
-  const escapedOrgName = pendingInvitation
-    ? escapeHtml(pendingInvitation.organizationName)
-    : null;
+    "Calibra Fácil <noreply@calibrafacil.com>";
 
   await resend.emails.send({
-    from: fromEmail,
+    from: formatFromEmail(fromEmail, labBrand),
     to: normalizedEmail,
     subject,
-    html: pendingInvitation
-      ? `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Acesse o portal do cliente</h2>
-          <p>Voce recebeu um convite para acessar <strong>${escapedOrgName}</strong> no Calibra Facil.</p>
-          <p>
-            <a
-              href="${escapedUrl}"
-              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-            >
-              Aceitar convite
-            </a>
-          </p>
-          <p>Este link expira em poucos minutos. Se voce nao esperava este convite, ignore esta mensagem.</p>
-          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
-        </div>
-      `
-      : `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Acesse o Portal Calibra Facil</h2>
-          <p>Use o link abaixo para entrar no portal do cliente.</p>
-          <p>
-            <a
-              href="${escapedUrl}"
-              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-            >
-              Entrar no portal
-            </a>
-          </p>
-          <p>Este link expira em poucos minutos. Se voce nao solicitou acesso, ignore esta mensagem.</p>
-          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
-        </div>
-      `,
+    replyTo: getReplyToEmail(labBrand),
+    react: pendingInvitation
+      ? PortalInvitationEmail({
+          recipientName: normalizedEmail,
+          organizationName: pendingInvitation.organizationName,
+          labName,
+          role: pendingInvitation.role ?? undefined,
+          inviteUrl: magicLinkUrl,
+          logoSrc: getEmailLogoSrc(),
+          brand: labBrand,
+        })
+      : PortalMagicLinkEmail({
+          recipientName: normalizedEmail,
+          magicLinkUrl,
+          logoSrc: getEmailLogoSrc(),
+        }),
     text: pendingInvitation
       ? [
           `Convite para ${pendingInvitation.organizationName}`,
@@ -451,16 +764,190 @@ async function sendPortalMagicLink(
           "Use o link abaixo para aceitar o convite e acessar o portal:",
           magicLinkUrl,
           "",
-          "Se voce nao esperava este convite, ignore esta mensagem.",
+          "Se você não esperava este convite, ignore esta mensagem.",
         ].join("\n")
       : [
-          "Acesse o Portal Calibra Facil",
+          "Acesse o Portal CalibraFácil",
           "",
           "Use o link abaixo para entrar no portal:",
           magicLinkUrl,
           "",
-          "Se voce nao solicitou acesso, ignore esta mensagem.",
+          "Se você não solicitou acesso, ignore esta mensagem.",
         ].join("\n"),
+  });
+}
+
+function readSetupTokenFromMagicLinkContext(ctx: unknown): string | undefined {
+  if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return undefined;
+
+  const metadata = toRecord(toRecord(toRecord(ctx).body).metadata);
+  const setupToken = metadata.setupToken;
+
+  return typeof setupToken === "string" && setupToken.trim()
+    ? setupToken.trim()
+    : undefined;
+}
+
+async function canSendLabPasswordlessEmail(email: string, setupToken?: string) {
+  return (
+    (await hasValidLabSetupTokenForEmail(setupToken, email)) ||
+    (await hasActiveLabMembership(email)) ||
+    (await hasPendingLabInvitation(email))
+  );
+}
+
+async function sendLabMagicLink(
+  data: { email: string; url: string; token?: string },
+  ctx?: unknown,
+) {
+  const normalizedEmail = normalizeLabAccessEmail(data.email);
+  const setupToken = readSetupTokenFromMagicLinkContext(ctx);
+
+  if (!(await canSendLabPasswordlessEmail(normalizedEmail, setupToken))) {
+    console.warn(
+      `[Lab Auth] Suppressed magic link for non-LAB email: ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB magic links");
+    }
+
+    console.info(
+      `[Better Auth] LAB magic link suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: "Acesse o CalibraFácil",
+    react: LabAccessLinkEmail({
+      recipientName: normalizedEmail,
+      accessUrl: data.url,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      "Acesse o CalibraFácil",
+      "",
+      "Use o link abaixo para entrar no dashboard:",
+      data.url,
+      "",
+      "Se você não solicitou acesso, ignore esta mensagem.",
+    ].join("\n"),
+  });
+}
+
+async function sendLabVerificationOtp(data: {
+  email: string;
+  otp: string;
+  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+}) {
+  const normalizedEmail = normalizeLabAccessEmail(data.email);
+
+  if (
+    data.type !== "sign-in" ||
+    !(await canSendLabPasswordlessEmail(normalizedEmail))
+  ) {
+    console.warn(
+      `[Lab Auth] Suppressed ${data.type} OTP for non-LAB email: ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB OTP emails");
+    }
+
+    console.info(
+      `[Better Auth] LAB OTP suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: "Código de acesso ao CalibraFácil",
+    react: LabOtpEmail({
+      recipientName: normalizedEmail,
+      otp: data.otp,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      "Código de acesso ao CalibraFácil",
+      "",
+      `Seu código de acesso é: ${data.otp}`,
+      "",
+      "Este código expira em poucos minutos. Se você não solicitou acesso, ignore esta mensagem.",
+    ].join("\n"),
+  });
+}
+
+export async function sendLabAccountSetupEmail(input: {
+  email: string;
+  recipientName?: string | null;
+  organizationName: string;
+  claimUrl: string;
+}) {
+  const normalizedEmail = normalizeLabAccessEmail(input.email);
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB setup links");
+    }
+
+    console.info(
+      `[Better Auth] LAB account setup link suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: `Configure seu acesso a ${sanitizeMailHeader(input.organizationName)}`,
+    react: LabAccessLinkEmail({
+      recipientName: input.recipientName ?? normalizedEmail,
+      organizationName: input.organizationName,
+      accessUrl: input.claimUrl,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      `Configure seu acesso a ${input.organizationName}`,
+      "",
+      "Use o link abaixo para reivindicar seu acesso ao CalibraFácil:",
+      input.claimUrl,
+      "",
+      "Se você não esperava este convite, ignore esta mensagem.",
+    ].join("\n"),
   });
 }
 
@@ -469,8 +956,8 @@ function createOrganizationPlugin() {
   return organization({
     ac,
     roles,
-    defaultMemberRole: "member" as any,
-    creatorRole: "owner" as any,
+    defaultMemberRole: "member",
+    creatorRole: "owner",
     schema: {
       organization: {
         additionalFields: {
@@ -479,7 +966,7 @@ function createOrganizationPlugin() {
             defaultValue: "LAB",
             input: true,
           },
-          // ISO 17025 / RBC compliance fields
+          // Lab profile fields
           cnpj: { type: "string", input: true },
           accreditationNumber: { type: "string", input: true },
           accreditationBody: { type: "string", input: true },
@@ -510,7 +997,7 @@ function createOrganizationPlugin() {
 
           if (!serviceUserId) {
             throw new APIError("BAD_REQUEST", {
-              message: "PORTAL_SERVICE_USER_ID nao configurado",
+              message: "PORTAL_SERVICE_USER_ID não configurado",
             });
           }
 
@@ -546,6 +1033,7 @@ function createOrganizationPlugin() {
           organizationName: data.organization.name,
           inviteLink,
           role: data.role,
+          logoSrc: getEmailLogoSrc(),
         }),
       });
     },
@@ -553,20 +1041,28 @@ function createOrganizationPlugin() {
 }
 
 // Shared configuration factory - reads env at call time, not module load time
-function createSharedConfig() {
+function createSharedConfig(surface: AuthSurface) {
   const isProduction = isProductionRuntime();
   const configuredApiUrl = readEnv("API_URL");
   const crossSubDomainCookieDomain =
     getCookieDomainFromApiUrl(configuredApiUrl);
-  const useCrossSubDomainCookies =
-    isProduction && Boolean(crossSubDomainCookieDomain);
+  // Enable cross-sub-domain cookies whenever the API host is on the
+  // .calibrafacil.com zone. In dev, this lets the lab_session / portal_session
+  // cookies be shared across dev-web and dev-portal tunnels; in prod, it
+  // preserves the existing api.calibrafacil.com → frontends behavior.
+  // shouldUseCrossSubDomainCookies adds an extra https/protocol guard so that
+  // plaintext .calibrafacil.com hosts cannot opt in by accident.
+  const useCrossSubDomainCookies = shouldUseCrossSubDomainCookies(
+    isProduction,
+    configuredApiUrl,
+    crossSubDomainCookieDomain,
+  );
   const useSecureCookies =
     isProduction || configuredApiUrl?.startsWith("https://") === true;
   const authSecret = resolveAuthSecret(isProduction);
   const defaultSameSite: "lax" | "none" = useCrossSubDomainCookies
     ? "none"
     : "lax";
-  const sessionCookieStrategy = "jwe" as const;
 
   return {
     secret: authSecret,
@@ -576,6 +1072,7 @@ function createSharedConfig() {
     }),
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: true,
       sendResetPassword: async ({
         user,
         url,
@@ -591,7 +1088,7 @@ function createSharedConfig() {
           }
 
           console.info(
-            `[Better Auth] Reset password link for ${user.email}: ${url}`,
+            `[Better Auth] Reset password link suppressed in development email delivery for ${user.email}`,
           );
           return;
         }
@@ -606,22 +1103,11 @@ function createSharedConfig() {
           from: fromEmail,
           to: user.email,
           subject: "Defina sua senha no CalibraFácil",
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-              <h2>Defina sua senha</h2>
-              <p>Recebemos uma solicitação para definir ou redefinir a sua senha no CalibraFácil.</p>
-              <p>
-                <a
-                  href="${url}"
-                  style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-                >
-                  Definir senha
-                </a>
-              </p>
-              <p>Se você não esperava este email, ignore esta mensagem.</p>
-              <p><small>Se o botão não funcionar, copie e cole este link no navegador:</small><br />${url}</p>
-            </div>
-          `,
+          react: PasswordResetEmail({
+            recipientName: user.email,
+            resetUrl: url,
+            logoSrc: getEmailLogoSrc(),
+          }),
           text: [
             "Defina sua senha no CalibraFácil",
             "",
@@ -634,18 +1120,73 @@ function createSharedConfig() {
       },
       resetPasswordTokenExpiresIn: 60 * 60,
     },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: true,
+      expiresIn: 60 * 60 * 24,
+      sendVerificationEmail: async ({
+        user,
+        url,
+      }: {
+        user: { email: string; name?: string | null };
+        url: string;
+        token: string;
+      }) => {
+        const verificationUrl = resolveEmailVerificationUrl(
+          url,
+          resolveWebBaseUrl(isProduction),
+        );
+        const apiKey = process.env.RESEND_API_KEY;
+
+        if (!apiKey) {
+          if (isProduction) {
+            throw new Error(
+              "RESEND_API_KEY is required to send verification emails",
+            );
+          }
+
+          console.info(
+            `[Better Auth] Email verification link for ${user.email}: ${verificationUrl}`,
+          );
+          return;
+        }
+
+        const resend = new Resend(apiKey);
+        const fromEmail =
+          process.env.RESEND_FROM_EMAIL ||
+          process.env.EMAIL_FROM ||
+          "Calibra Fácil <noreply@calibrafacil.com>";
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: user.email,
+          subject: "Confirme seu e-mail no CalibraFácil",
+          react: EmailConfirmationEmail({
+            recipientName: user.name ?? user.email,
+            confirmationUrl: verificationUrl,
+            logoSrc: getEmailLogoSrc(),
+          }),
+          text: [
+            "Confirme seu e-mail no CalibraFácil",
+            "",
+            "Use o link abaixo para confirmar seu endereço de e-mail:",
+            verificationUrl,
+            "",
+            "Se você não criou uma conta, ignore esta mensagem.",
+          ].join("\n"),
+        });
+      },
+    },
     user: {
       deleteUser: {
         enabled: true,
       },
     },
-    trustedOrigins: createTrustedOrigins(isProduction),
+    trustedOrigins: createTrustedOrigins(isProduction, surface),
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 60 * 5,
-        strategy: sessionCookieStrategy,
-        refreshCache: false,
+        enabled: false,
       },
     },
     advanced: {
@@ -688,21 +1229,124 @@ async function findDefaultActiveOrganizationId(
   return membership?.organizationId ?? null;
 }
 
+function createLabPasskeyPluginOptions(isProduction: boolean) {
+  const webBaseUrl = resolveWebBaseUrl(isProduction);
+
+  try {
+    const url = new URL(webBaseUrl);
+
+    return {
+      rpName: "CalibraFácil",
+      rpID: url.hostname,
+      origin: url.origin,
+      advanced: {
+        webAuthnChallengeCookie: "lab-passkey-challenge",
+      },
+      registration: {
+        requireSession: false,
+        resolveUser: async ({ context }: { context?: string | null }) => {
+          const token = context?.trim();
+
+          if (!token) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Token de configuração obrigatório",
+            });
+          }
+
+          const validation = await validateLabAccountSetupToken(token);
+
+          if (!validation.ok) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Link de configuração inválido ou expirado",
+            });
+          }
+
+          return {
+            id: validation.token.userId,
+            name: validation.token.email,
+            displayName: validation.token.email,
+          };
+        },
+        afterVerification: async ({
+          user,
+          context,
+        }: {
+          user: { id: string };
+          context?: string | null;
+        }) => {
+          const token = context?.trim();
+          const validation = token
+            ? await validateLabAccountSetupToken(token)
+            : null;
+
+          if (token && !validation?.ok) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Link de configuração inválido ou expirado",
+            });
+          }
+
+          if (validation?.ok) {
+            if (validation.token.userId !== user.id) {
+              throw new APIError("FORBIDDEN", {
+                message: "Link de configuração não pertence a este usuário",
+              });
+            }
+          }
+
+          await getDb()
+            .insert(schema.platformEventLog)
+            .values({
+              actorUserId: user.id,
+              targetUserId: user.id,
+              action: "lab_account.passkey_registered",
+              entityType: "lab_account_setup_token",
+              entityId: validation?.ok ? validation.token.id : null,
+              details: validation?.ok
+                ? {
+                    organizationId: validation.token.organizationId,
+                    invitationId: validation.token.invitationId,
+                    purpose: validation.token.purpose,
+                  }
+                : null,
+            });
+        },
+      },
+    } satisfies Parameters<typeof passkey>[0];
+  } catch {
+    return {
+      rpName: "CalibraFácil",
+      advanced: {
+        webAuthnChallengeCookie: "lab-passkey-challenge",
+      },
+      registration: {
+        requireSession: false,
+        resolveUser: async () => {
+          throw new APIError("BAD_REQUEST", {
+            message: "Origem WebAuthn não configurada",
+          });
+        },
+      },
+    } satisfies Parameters<typeof passkey>[0];
+  }
+}
+
 /**
  * Factory function to create Lab Auth instance
  * Call this inside request handlers to ensure env vars are available
  */
 export function createLabAuth() {
-  const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("http://localhost:3000");
+  const sharedConfig = createSharedConfig("lab");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/lab",
     baseURL,
+    emailAndPassword: {
+      ...sharedConfig.emailAndPassword,
+      disableSignUp: true,
+    },
     databaseHooks: {
       session: {
         create: {
@@ -737,6 +1381,27 @@ export function createLabAuth() {
       cookiePrefix: "lab",
     },
     plugins: [
+      passkey(createLabPasskeyPluginOptions(isProduction)),
+      magicLink({
+        expiresIn: 60 * 10,
+        sendMagicLink: sendLabMagicLink,
+        disableSignUp: true,
+        storeToken: "hashed",
+        rateLimit: {
+          window: 60,
+          max: 5,
+        },
+      }),
+      emailOTP({
+        expiresIn: 60 * 10,
+        disableSignUp: true,
+        storeOTP: "hashed",
+        rateLimit: {
+          window: 60,
+          max: 5,
+        },
+        sendVerificationOTP: sendLabVerificationOtp,
+      }),
       adminPlugin({
         ac: platformAc,
         roles: platformRoles,
@@ -744,7 +1409,7 @@ export function createLabAuth() {
       }),
       oneTimeToken({
         disableClientRequest: true,
-        expiresIn: 3,
+        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
         storeToken: "hashed",
       }),
       createOrganizationPlugin(),
@@ -767,16 +1432,18 @@ export function createLabAuth() {
  * Call this inside request handlers to ensure env vars are available
  */
 export function createBackofficeAuth() {
-  const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("https://localhost:3000");
+  const sharedConfig = createSharedConfig("backoffice");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/backoffice",
     baseURL,
+    emailAndPassword: {
+      ...sharedConfig.emailAndPassword,
+      disableSignUp: true,
+    },
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "backoffice",
@@ -789,7 +1456,7 @@ export function createBackofficeAuth() {
       }),
       oneTimeToken({
         disableClientRequest: true,
-        expiresIn: 3,
+        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
         storeToken: "hashed",
       }),
     ],
@@ -801,11 +1468,9 @@ export function createBackofficeAuth() {
  * Call this inside request handlers to ensure env vars are available
  */
 export function createPortalAuth() {
-  const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("http://localhost:3000");
+  const sharedConfig = createSharedConfig("portal");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
@@ -895,32 +1560,32 @@ export type BackofficeAuth = ReturnType<typeof createBackofficeAuth>;
 export type PortalAuth = ReturnType<typeof createPortalAuth>;
 
 // Legacy exports for backwards compatibility (lazy getters)
-export const labAuth = {
+export const labAuth: Pick<LabAuth, "api" | "handler"> = {
   get api() {
     return getLabAuth().api;
   },
   get handler() {
     return getLabAuth().handler;
   },
-} as Pick<LabAuth, "api" | "handler">;
+};
 
-export const backofficeAuth = {
+export const backofficeAuth: Pick<BackofficeAuth, "api" | "handler"> = {
   get api() {
     return getBackofficeAuth().api;
   },
   get handler() {
     return getBackofficeAuth().handler;
   },
-} as Pick<BackofficeAuth, "api" | "handler">;
+};
 
-export const portalAuth = {
+export const portalAuth: Pick<PortalAuth, "api" | "handler"> = {
   get api() {
     return getPortalAuth().api;
   },
   get handler() {
     return getPortalAuth().handler;
   },
-} as Pick<PortalAuth, "api" | "handler">;
+};
 
 export const auth = labAuth;
 

@@ -99,10 +99,9 @@ function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
       const bytes = await response.Body.transformToByteArray();
       return {
         async arrayBuffer() {
-          return bytes.buffer.slice(
-            bytes.byteOffset,
-            bytes.byteOffset + bytes.byteLength,
-          );
+          const copy = new Uint8Array(bytes.byteLength);
+          copy.set(bytes);
+          return copy.buffer;
         },
       };
     },
@@ -128,7 +127,7 @@ function createEnv(): WorkerEnv {
   process.env.NODE_ENV ??= "production";
 
   return {
-    HYPERDRIVE: { connectionString: databaseUrl },
+    DATABASE_URL: databaseUrl,
     CERTIFICATES_BUCKET: createR2Bucket(),
     RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
       ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
@@ -136,9 +135,16 @@ function createEnv(): WorkerEnv {
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
     CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
+    GOTENBERG_URL: process.env.GOTENBERG_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
-  } as WorkerEnv;
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    EMAIL_LOGO_URL: process.env.EMAIL_LOGO_URL,
+    WEB_URL: process.env.WEB_URL,
+    APP_URL: process.env.APP_URL,
+  };
 }
 
 function createBatch(jobs: ClaimedQueueJob[]) {
@@ -163,9 +169,20 @@ async function processQueueBatch(env: WorkerEnv) {
 
   console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
   const { batch, states } = createBatch(jobs);
+  const executionContext: ExecutionContext = {
+    props: {},
+    waitUntil(promise) {
+      void promise.catch((error) => {
+        console.error("[Worker] waitUntil task failed", error);
+      });
+    },
+    passThroughOnException() {
+      // Local queue processing has no upstream request to pass through.
+    },
+  };
 
   try {
-    await worker.queue(batch, env, {} as never);
+    await worker.queue(batch, env, executionContext);
   } catch (error) {
     await Promise.all(jobs.map((job) => failQueueJob(job.id, error)));
     return;

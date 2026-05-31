@@ -1,5 +1,7 @@
 import { Link, useMatches } from '@tanstack/react-router'
 import { Fragment, useMemo } from 'react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Search01Icon } from '@hugeicons/core-free-icons'
 
 import {
   Breadcrumb,
@@ -9,18 +11,21 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { Kbd } from '@/components/ui/kbd'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useBackofficeCommandPalette } from '@/features/backoffice/command-palette/context'
 
 const routeLabels: Record<string, string> = {
   '/backoffice': 'Backoffice',
-  '/backoffice/': 'Visão Geral',
-  '/backoffice/organizations': 'Organizações',
-  '/backoffice/organizations/$id': 'Organização',
-  '/backoffice/commercial-checkouts': 'Comercial',
-  '/backoffice/customer-success': 'Customer Success',
+  '/backoffice/': 'Comando',
+  '/backoffice/accounts': 'Contas',
+  '/backoffice/accounts/': 'Contas',
+  '/backoffice/accounts/$id': 'Conta',
   '/backoffice/support': 'Suporte',
-  '/backoffice/users': 'Usuários',
+  '/backoffice/commercial-checkouts': 'Receita',
+  '/backoffice/users': 'Equipe',
+  '/backoffice/audit': 'Auditoria',
 }
 
 function normalizePath(pathname: string) {
@@ -33,6 +38,7 @@ function normalizePath(pathname: string) {
 
 export function BackofficeHeader() {
   const matches = useMatches()
+  const { setOpen } = useBackofficeCommandPalette()
   const breadcrumbs = useMemo(() => {
     const seen = new Set<string>()
 
@@ -40,11 +46,10 @@ export function BackofficeHeader() {
       .filter((match) => match.routeId.startsWith('/backoffice'))
       .map((match) => {
         const path = normalizePath(match.pathname)
-        const fallbackLabel = path.replace('/backoffice', '').trim() || 'Backoffice'
+        const fallbackLabel =
+          path.replace('/backoffice', '').trim() || 'Backoffice'
         const label =
-          routeLabels[match.routeId] ??
-          routeLabels[path] ??
-          fallbackLabel
+          routeLabels[match.routeId] ?? routeLabels[path] ?? fallbackLabel
 
         return {
           key: `${match.routeId}:${path}`,
@@ -65,7 +70,7 @@ export function BackofficeHeader() {
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-8" />
         <Breadcrumb>
@@ -91,7 +96,15 @@ export function BackofficeHeader() {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <div className="flex items-center gap-2" />
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-9 items-center gap-2 rounded-lg bg-muted/50 px-3 text-sm text-muted-foreground shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-colors hover:bg-muted hover:text-foreground dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+      >
+        <HugeiconsIcon icon={Search01Icon} className="size-4" />
+        <span className="hidden sm:inline">Buscar contas, ações…</span>
+        <Kbd className="ml-1 hidden sm:inline-flex">⌘K</Kbd>
+      </button>
     </header>
   )
 }

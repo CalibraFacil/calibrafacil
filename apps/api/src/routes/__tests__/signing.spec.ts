@@ -10,7 +10,7 @@ describe("ICP-Brasil Certificate Management", () => {
     const calculateStatus = (
       isActive: boolean,
       validFrom: Date,
-      validUntil: Date
+      validUntil: Date,
     ): "valid" | "expired" | "not_yet_valid" | "revoked" => {
       const now = new Date();
       if (!isActive) return "revoked";
@@ -40,7 +40,9 @@ describe("ICP-Brasil Certificate Management", () => {
       const validFrom = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
       const validUntil = new Date(now.getTime() + 372 * 24 * 60 * 60 * 1000); // 372 days from now
 
-      expect(calculateStatus(true, validFrom, validUntil)).toBe("not_yet_valid");
+      expect(calculateStatus(true, validFrom, validUntil)).toBe(
+        "not_yet_valid",
+      );
     });
 
     it("should return 'revoked' for inactive certificate regardless of dates", () => {
@@ -64,7 +66,7 @@ describe("ICP-Brasil Certificate Management", () => {
     const calculateDaysUntilExpiry = (validUntil: Date): number => {
       const now = new Date();
       return Math.ceil(
-        (validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        (validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
       );
     };
 
@@ -253,7 +255,7 @@ describe("ICP-Brasil Certificate Management", () => {
   describe("Certificate serial number uniqueness", () => {
     const checkDuplicateSerial = (
       newSerial: string,
-      existingSerials: string[]
+      existingSerials: string[],
     ): boolean => {
       return existingSerials.includes(newSerial);
     };
@@ -309,7 +311,7 @@ describe("ICP-Brasil Certificate Management", () => {
         now.getDate(),
         23,
         59,
-        59
+        59,
       );
 
       // Should not be expired yet

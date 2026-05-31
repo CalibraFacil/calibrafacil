@@ -1,185 +1,47 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  ArrowRight02Icon,
   Calendar03Icon,
+  CheckmarkBadge04Icon,
   Copy01Icon,
   CreditCardIcon,
-  CustomerSupportIcon,
+  Download04Icon,
   HelpCircleIcon,
   Invoice01Icon,
   QrCodeIcon,
+  RefreshIcon,
+  SentIcon,
+  SquareLock02Icon,
   Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
 import { BrandLockup } from '@/components/brand'
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { StaggerGroup, StaggerItem } from '@/components/instrument-panel'
+import type { PublicCheckoutPresentation } from '@/features/public/types'
+import {
+  usePublicCheckoutSnapshotData,
+  usePublicCheckoutStatusData,
+} from '@/features/public/queries'
+import type {
+  CheckoutState,
+  PublicCheckoutStartResponse,
+} from '@/features/public/types'
 import { cn } from '@/lib/utils'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type ProviderOutcome = 'success' | 'cancel' | 'expired'
 
 type CheckoutSearch = {
   providerOutcome?: ProviderOutcome
 }
-
-type CheckoutState =
-  | 'INVALID'
-  | 'EXPIRED'
-  | 'REVOKED'
-  | 'AWAITING_PAYMENT'
-  | 'PIX_READY'
-  | 'BOLETO_READY'
-  | 'PAID'
-  | 'OVERDUE'
-  | 'REFUNDED'
-  | 'CANCELED'
-
-type SnapshotResponse =
-  | {
-      state: 'INVALID'
-      offer: null
-      presentation: null
-    }
-  | {
-      state: CheckoutState
-      offer: {
-        id: string
-        status: string
-        kind: 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
-        paymentMethod: 'PIX' | 'BOLETO' | 'CREDIT_CARD'
-        providerMode: 'CHECKOUT' | 'PAYMENT' | 'SUBSCRIPTION'
-        currency: string
-        totalAmount: number
-        recurringAmount: number | null
-        dueDate: string | null
-        offerExpiresAt: string | null
-        issuedAt: string | null
-        paidAt: string | null
-        customerVisibleDescription: string | null
-        items: Array<{
-          id: number
-          type: string
-          label: string
-          description: string | null
-          quantity: number
-          unitAmount: number
-          totalAmount: number
-        }>
-        seller: {
-          name: string
-          cnpj: string | null
-          email: string | null
-          phone: string | null
-          website: string | null
-          city: string | null
-          state: string | null
-        }
-        payer: {
-          name: string | null
-          email: string | null
-          phone: string | null
-          taxId: string | null
-        }
-      }
-      presentation: Presentation
-    }
-
-type Presentation =
-  | {
-      type: 'PIX'
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: {
-        qrCodeImage: string | null
-        payload: string | null
-        expirationDate: string | null
-      }
-      boleto: null
-    }
-  | {
-      type: 'BOLETO'
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: null
-      boleto: {
-        bankSlipUrl: string | null
-        identificationField: string | null
-        dueDate: string | null
-        amount: number
-      }
-    }
-  | {
-      type: 'REDIRECT' | null
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: null
-      boleto: null
-    }
-  | null
-
-type StatusResponse = {
-  state: CheckoutState
-  paymentId: number | null
-  status: string | null
-  paidAt: string | null
-  presentation: Presentation
-}
-
-type StartResponse =
-  | {
-      type: 'PAID'
-      state: 'PAID'
-      paymentId: number | null
-    }
-  | {
-      type: 'PIX_READY'
-      state: 'PIX_READY'
-      paymentId: number
-      pix: {
-        qrCodeImage: string | null
-        payload: string | null
-        expirationDate: string | null
-      }
-    }
-  | {
-      type: 'BOLETO_READY'
-      state: 'BOLETO_READY'
-      paymentId: number
-      boleto: {
-        bankSlipUrl: string | null
-        identificationField: string | null
-        dueDate: string | null
-        amount: number
-      }
-    }
-  | {
-      type: 'REDIRECT'
-      state: 'AWAITING_PAYMENT'
-      providerUrl: string
-      paymentId: number | null
-    }
 
 const METHOD_COPY = {
   PIX: {
@@ -213,20 +75,17 @@ const STATE_LABELS: Record<CheckoutState, string> = {
 }
 
 const STATE_BADGE_CLASS: Record<CheckoutState, string> = {
-  INVALID:
-    'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+  INVALID: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   EXPIRED:
     'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  REVOKED:
-    'border-zinc-500/20 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300',
+  REVOKED: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300',
   AWAITING_PAYMENT:
     'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   PIX_READY:
     'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   BOLETO_READY:
     'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  PAID:
-    'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  PAID: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   OVERDUE:
     'border-orange-500/20 bg-orange-500/10 text-orange-700 dark:text-orange-300',
   REFUNDED:
@@ -239,7 +98,8 @@ function formatPhone(value: string | null | undefined): string | null {
   if (!value) return null
 
   const digits = value.replace(/\D/g, '')
-  const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
+  const localDigits =
+    digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
   const trimmed = localDigits.slice(0, 11)
 
   if (trimmed.length < 10) {
@@ -283,20 +143,7 @@ function PublicCheckoutPage() {
   const [copiedBoleto, setCopiedBoleto] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
 
-  const snapshotQuery = useQuery({
-    queryKey: ['public-commercial-checkout', token, 'snapshot'],
-    queryFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].$get({
-        param: { token },
-      })
-
-      if (!response.ok) {
-        throw new Error('Falha ao carregar a oferta comercial')
-      }
-
-      return response.json() as Promise<SnapshotResponse>
-    },
-  })
+  const snapshotQuery = usePublicCheckoutSnapshotData(token)
 
   const effectiveSnapshot = snapshotQuery.data
   const shouldPoll =
@@ -305,23 +152,8 @@ function PublicCheckoutPage() {
     effectiveSnapshot?.state === 'AWAITING_PAYMENT' ||
     Boolean(providerOutcome)
 
-  const statusQuery = useQuery({
-    queryKey: ['public-commercial-checkout', token, 'status'],
-    queryFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].status.$get({
-        param: { token },
-      })
-
-      if (response.status === 404) {
-        return { state: 'INVALID' as const }
-      }
-
-      if (!response.ok) {
-        throw new Error('Falha ao verificar o status do pagamento')
-      }
-
-      return response.json() as Promise<StatusResponse | { state: 'INVALID' }>
-    },
+  const statusQuery = usePublicCheckoutStatusData({
+    token,
     enabled: shouldPoll,
     refetchInterval: (query) => {
       const data = query.state.data
@@ -344,19 +176,7 @@ function PublicCheckoutPage() {
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].start.$post({
-        param: { token },
-      })
-
-      const payload = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(
-          (payload as { error?: string } | null)?.error ??
-            'Falha ao iniciar o pagamento',
-        )
-      }
-
-      return payload as StartResponse
+      return calibraApi.publicCheckout.start<PublicCheckoutStartResponse>(token)
     },
     onMutate: () => {
       setStartError(null)
@@ -386,12 +206,12 @@ function PublicCheckoutPage() {
   const liveState =
     statusQuery.data && statusQuery.data.state !== 'INVALID'
       ? statusQuery.data.state
-      : effectiveSnapshot?.state ?? 'AWAITING_PAYMENT'
+      : (effectiveSnapshot?.state ?? 'AWAITING_PAYMENT')
 
   const livePresentation =
     statusQuery.data && statusQuery.data.state !== 'INVALID'
       ? statusQuery.data.presentation
-      : effectiveSnapshot?.presentation ?? null
+      : (effectiveSnapshot?.presentation ?? null)
 
   const offer = effectiveSnapshot?.offer
 
@@ -455,283 +275,286 @@ function PublicCheckoutPage() {
 
   return (
     <CheckoutFrame>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-6">
-            <section className="relative overflow-hidden rounded-[28px] border border-border/70 bg-card/85 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
-              <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.14),transparent_55%),radial-gradient(circle_at_top_right,_rgba(245,158,11,0.12),transparent_45%)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),transparent_55%),radial-gradient(circle_at_top_right,_rgba(245,158,11,0.16),transparent_45%)]" />
-              <div className="relative flex flex-col gap-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-3">
-                    <Badge variant="outline" className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-                      Proposta comercial emitida
-                    </Badge>
-                    <div className="space-y-2">
-                      <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                        Checkout comercial da {offer.seller.name}
-                      </h1>
-                      <p className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-                        Confira a proposta negociada, o vencimento e o meio de
-                        pagamento escolhido antes de prosseguir.
-                      </p>
-                    </div>
-                  </div>
-                  <StatusBadge state={liveState} />
-                </div>
+      <StaggerGroup className="space-y-4">
+        <StaggerItem>
+          <div className="relative overflow-hidden rounded-[28px] bg-card p-6 shadow-[0_24px_60px_-24px_rgba(2,6,23,0.30)] ring-1 ring-black/[0.06] dark:ring-white/[0.08] sm:p-7">
+            <div
+              aria-hidden
+              className="absolute inset-x-7 top-0 h-px bg-gradient-to-r from-transparent via-teal-500/55 to-transparent"
+            />
 
-                {providerOutcome ? (
-                  <OutcomeHint outcome={providerOutcome} />
-                ) : null}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-2">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Proposta de {offer.seller.name}
+                </p>
+                <h1 className="text-pretty text-xl font-semibold leading-snug tracking-tight">
+                  {offer.items[0]?.label ?? 'Proposta comercial'}
+                </h1>
+              </div>
+              <StatusBadge state={liveState} />
+            </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <InfoPill
-                    icon={Calendar03Icon}
-                    label="Vencimento"
-                    value={formatDate(offer.dueDate)}
-                  />
-                  <InfoPill
-                    icon={Calendar03Icon}
-                    label="Expiração do link"
-                    value={formatDate(offer.offerExpiresAt)}
-                  />
-                  <InfoPill
+            <div className="mt-6">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Total a pagar
+              </p>
+              <p className="mt-1.5 text-[2.75rem] font-semibold leading-none tracking-tight tabular-nums">
+                {formatCurrency(offer.totalAmount)}
+              </p>
+              {offer.recurringAmount != null &&
+              offer.recurringAmount !== offer.totalAmount ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Depois,{' '}
+                  <span className="tabular-nums">
+                    {formatCurrency(offer.recurringAmount)}
+                  </span>{' '}
+                  por período.
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <HugeiconsIcon icon={Calendar03Icon} className="size-3.5" />
+                  vence {formatDate(offer.dueDate)}
+                </span>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <HugeiconsIcon
                     icon={paymentMethodIcon(offer.paymentMethod)}
-                    label="Meio de pagamento"
-                    value={paymentMethodLabel(offer.paymentMethod)}
+                    className="size-3.5"
                   />
-                </div>
-
-                {offer.customerVisibleDescription ? (
-                  <div className="rounded-2xl border border-border/70 bg-muted/50 p-4 text-sm leading-6 text-muted-foreground">
-                    {offer.customerVisibleDescription}
-                  </div>
+                  {paymentMethodLabel(offer.paymentMethod)}
+                </span>
+                {offer.offerExpiresAt ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>válido até {formatDate(offer.offerExpiresAt)}</span>
+                  </>
                 ) : null}
               </div>
-            </section>
+            </div>
 
-            <Card className="border-border/70 bg-card/90 shadow-sm">
-              <CardHeader>
-                <CardTitle>Resumo da oferta</CardTitle>
-                <CardDescription>
-                  Esta página mostra o snapshot comercial emitido pela
-                  CalibraFácil. Alterações cadastrais ou fiscais exigem uma nova
-                  emissão.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-3">
-                  {offer.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-start justify-between gap-4 rounded-2xl border border-border/70 bg-muted/40 p-4"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium text-foreground">{item.label}</p>
-                        {item.description ? (
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            {item.description}
-                          </p>
-                        ) : null}
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          Quantidade {item.quantity}
-                        </p>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatCurrency(item.totalAmount)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+            {providerOutcome ? (
+              <div className="mt-5">
+                <OutcomeHint outcome={providerOutcome} />
+              </div>
+            ) : null}
 
-                <Separator />
+            {startError ? (
+              <div className="mt-5">
+                <Alert variant="destructive">
+                  <AlertTitle>Não foi possível iniciar</AlertTitle>
+                  <AlertDescription>{startError}</AlertDescription>
+                </Alert>
+              </div>
+            ) : null}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Valor devido agora
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
-                      {formatCurrency(offer.totalAmount)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Valor recorrente
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-                      {offer.recurringAmount
-                        ? formatCurrency(offer.recurringAmount)
-                        : 'Não aplicável'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/70 bg-card/90 shadow-sm">
-              <CardHeader>
-                <CardTitle>Dados de referência</CardTitle>
-                <CardDescription>
-                  Identidade comercial do laboratório e snapshot do pagador
-                  usado nesta emissão.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <IdentityCard
-                  title="Laboratório"
-                  lines={[
-                    offer.seller.name,
-                    offer.seller.cnpj ? `CNPJ ${offer.seller.cnpj}` : null,
-                    formatLocation(offer.seller.city, offer.seller.state),
-                    offer.seller.email,
-                    formatPhone(offer.seller.phone),
-                  ]}
-                />
-                <IdentityCard
-                  title="Pagador"
-                  lines={[
-                    offer.payer.name,
-                    offer.payer.taxId ? `CPF/CNPJ ${offer.payer.taxId}` : null,
-                    offer.payer.email,
-                    formatPhone(offer.payer.phone),
-                  ]}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="sticky top-6 border-border/70 bg-card/95 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-              <CardHeader>
-                <CardTitle>{methodCopy.title}</CardTitle>
-                <CardDescription>{methodCopy.body}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="rounded-2xl border border-border/70 bg-muted/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Status atual
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">
-                    {STATE_LABELS[liveState]}
-                  </p>
-                </div>
-
-                {startError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Não foi possível iniciar</AlertTitle>
-                    <AlertDescription>{startError}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                {showTerminalState ? (
-                  <TerminalStateDetails
-                    state={liveState}
-                    paidAt={statusQuery.data && statusQuery.data.state !== 'INVALID'
+            <div className="mt-6">
+              {showTerminalState ? (
+                <TerminalStateDetails
+                  state={liveState}
+                  paidAt={
+                    statusQuery.data && statusQuery.data.state !== 'INVALID'
                       ? statusQuery.data.paidAt
-                      : offer.paidAt}
-                  />
-                ) : (
-                  <>
-                    <Button
-                      className="h-12 w-full text-base"
-                      disabled={startMutation.isPending}
-                      onClick={() => startMutation.mutate()}
-                    >
-                      {startMutation.isPending ? (
-                        <>
-                          <Spinner className="mr-2" />
-                          Preparando pagamento
-                        </>
-                      ) : (
-                        methodCopy.button
-                      )}
-                    </Button>
-
-                    {offer.paymentMethod === 'PIX' && livePresentation?.type === 'PIX' ? (
-                      <PixInstructions
-                        presentation={livePresentation}
-                        copied={copiedPix}
-                        onCopy={() =>
-                          copyText(livePresentation.pix.payload, 'pix')
-                        }
-                        onVerify={() => statusQuery.refetch()}
-                        isVerifying={statusQuery.isFetching}
-                      />
-                    ) : null}
-
-                    {offer.paymentMethod === 'BOLETO' &&
-                    livePresentation?.type === 'BOLETO' ? (
-                      <BoletoInstructions
-                        presentation={livePresentation}
-                        copied={copiedBoleto}
-                        onCopy={() =>
-                          copyText(
-                            livePresentation.boleto.identificationField,
-                            'boleto',
-                          )
-                        }
-                        onVerify={() => statusQuery.refetch()}
-                        isVerifying={statusQuery.isFetching}
-                      />
-                    ) : null}
-
-                    {offer.paymentMethod === 'CREDIT_CARD' ? (
-                      <Alert>
-                        <HugeiconsIcon
-                          icon={CreditCardIcon}
-                          className="size-4 text-foreground"
-                        />
-                        <AlertTitle>Finalização em ambiente seguro</AlertTitle>
-                        <AlertDescription>
-                          O preenchimento do cartão acontece no Asaas. Depois do
-                          retorno, esta página consulta novamente o status real
-                          da oferta antes de exibir qualquer confirmação.
-                        </AlertDescription>
-                      </Alert>
-                    ) : null}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/70 bg-card/90 shadow-sm">
-              <CardHeader>
-                <CardTitle>Precisa de ajuda?</CardTitle>
-                <CardDescription>
-                  Use os contatos abaixo caso o link tenha expirado ou os dados
-                  comerciais precisem ser reemitidos.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <SupportRow label="Time responsável" value={offer.seller.name} />
-                <SupportRow label="Email" value={offer.seller.email} />
-                <SupportRow label="Telefone" value={formatPhone(offer.seller.phone)} />
-                <SupportRow
-                  label="Observação"
-                  value="Este checkout é somente leitura para preservar o snapshot emitido."
+                      : offer.paidAt
+                  }
                 />
-              </CardContent>
-            </Card>
+              ) : livePresentation?.type === 'PIX' ? (
+                <PixInstructions
+                  presentation={livePresentation}
+                  copied={copiedPix}
+                  onCopy={() => copyText(livePresentation.pix.payload, 'pix')}
+                  onVerify={() => statusQuery.refetch()}
+                  isVerifying={statusQuery.isFetching}
+                />
+              ) : livePresentation?.type === 'BOLETO' ? (
+                <BoletoInstructions
+                  presentation={livePresentation}
+                  copied={copiedBoleto}
+                  onCopy={() =>
+                    copyText(
+                      livePresentation.boleto.identificationField,
+                      'boleto',
+                    )
+                  }
+                  onVerify={() => statusQuery.refetch()}
+                  isVerifying={statusQuery.isFetching}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  <Button
+                    className="h-12 w-full text-base transition-transform active:scale-[0.97]"
+                    disabled={startMutation.isPending}
+                    onClick={() => startMutation.mutate()}
+                  >
+                    {startMutation.isPending ? (
+                      <>
+                        <Spinner className="mr-2" />
+                        Preparando pagamento
+                      </>
+                    ) : (
+                      methodCopy.button
+                    )}
+                  </Button>
+                  <p className="text-center text-xs leading-5 text-muted-foreground">
+                    {methodCopy.body}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {!showTerminalState ? (
+              <p className="mt-5 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                <HugeiconsIcon
+                  icon={CheckmarkBadge04Icon}
+                  className="mt-0.5 size-3.5 shrink-0 text-emerald-500"
+                />
+                <span>
+                  Assim que confirmarmos o pagamento, liberamos o acesso
+                  {offer.payer.email
+                    ? ` e enviamos o comprovante para ${offer.payer.email}`
+                    : ''}
+                  . Confirmação automática — você não precisa avisar.
+                </span>
+              </p>
+            ) : null}
           </div>
-        </div>
-      </div>
+        </StaggerItem>
+
+        <StaggerItem>
+          <p className="flex items-center justify-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            <HugeiconsIcon icon={SquareLock02Icon} className="size-3.5" />
+            Pagamento processado com segurança pela Asaas
+          </p>
+        </StaggerItem>
+
+        <StaggerItem>
+          <div className="space-y-3 rounded-2xl bg-card/60 p-5 ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Resumo da proposta
+            </p>
+            <div className="space-y-2">
+              {offer.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate">{item.label}</span>
+                    {item.quantity > 1 ? (
+                      <span className="text-xs text-muted-foreground">
+                        Qtd {item.quantity}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {formatCurrency(item.totalAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-black/[0.06] pt-3 text-sm dark:border-white/[0.08]">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-semibold tabular-nums">
+                {formatCurrency(offer.totalAmount)}
+              </span>
+            </div>
+            {offer.recurringAmount != null &&
+            offer.recurringAmount !== offer.totalAmount ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Recorrente</span>
+                <span className="tabular-nums">
+                  {formatCurrency(offer.recurringAmount)}
+                </span>
+              </div>
+            ) : null}
+            {offer.customerVisibleDescription ? (
+              <p className="rounded-xl bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                {offer.customerVisibleDescription}
+              </p>
+            ) : null}
+          </div>
+        </StaggerItem>
+
+        <StaggerItem>
+          <ForwardToFinance />
+        </StaggerItem>
+
+        <StaggerItem>
+          <details className="group rounded-2xl bg-card/60 p-5 ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium">
+              Identidade fiscal e ajuda
+              <HugeiconsIcon
+                icon={ArrowRight02Icon}
+                className="size-4 text-muted-foreground transition-transform group-open:rotate-90"
+              />
+            </summary>
+            <div className="mt-4 space-y-4">
+              <IdentityCard
+                title="Laboratório"
+                lines={[
+                  offer.seller.name,
+                  offer.seller.cnpj ? `CNPJ ${offer.seller.cnpj}` : null,
+                  formatLocation(offer.seller.city, offer.seller.state),
+                  offer.seller.email,
+                  formatPhone(offer.seller.phone),
+                ]}
+              />
+              <IdentityCard
+                title="Pagador"
+                lines={[
+                  offer.payer.name,
+                  offer.payer.taxId ? `CPF/CNPJ ${offer.payer.taxId}` : null,
+                  offer.payer.email,
+                  formatPhone(offer.payer.phone),
+                ]}
+              />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Link expirado ou dados incorretos? Fale com {offer.seller.name}
+                {offer.seller.email ? ` (${offer.seller.email})` : ''} para uma
+                nova emissão. Este checkout é somente leitura para preservar o
+                snapshot emitido.
+              </p>
+            </div>
+          </details>
+        </StaggerItem>
+      </StaggerGroup>
     </CheckoutFrame>
   )
 }
 
 function CheckoutFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-svh overflow-hidden bg-background px-4 py-6 md:px-6 md:py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.10),transparent_32%),radial-gradient(circle_at_top_right,_rgba(245,158,11,0.09),transparent_28%),linear-gradient(180deg,rgba(2,6,23,0)_0%,rgba(15,23,42,0.03)_100%)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),transparent_34%),radial-gradient(circle_at_top_right,_rgba(245,158,11,0.16),transparent_30%),linear-gradient(180deg,rgba(2,6,23,0.05)_0%,rgba(2,6,23,0.6)_100%)]" />
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <div className="flex items-center justify-between rounded-full border border-border/70 bg-card/70 px-4 py-3 shadow-sm backdrop-blur">
-          <Link to="/" className="inline-flex items-center">
-            <BrandLockup textClassName="text-foreground" />
+    <div className="relative min-h-svh bg-background antialiased">
+      {/* Faint precision dot-grid — a metrology signature, not a gradient blob. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle, rgba(125,128,145,0.13) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+          maskImage: 'radial-gradient(120% 55% at 50% 0%, black, transparent 78%)',
+          WebkitMaskImage:
+            'radial-gradient(120% 55% at 50% 0%, black, transparent 78%)',
+        }}
+      />
+      <div className="relative mx-auto flex w-full max-w-lg flex-col px-4 pb-12 pt-7 sm:pt-10">
+        <header className="mb-7 flex items-center justify-between">
+          <Link
+            to="/"
+            className="inline-flex items-center transition-opacity hover:opacity-80"
+          >
+            <BrandLockup
+              markClassName="size-6"
+              textClassName="text-base text-foreground"
+            />
           </Link>
-          <Badge variant="outline" className="border-border bg-background/70 text-foreground">
-            Checkout público
-          </Badge>
-        </div>
+          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            <HugeiconsIcon icon={SquareLock02Icon} className="size-3.5" />
+            Seguro
+          </span>
+        </header>
         {children}
       </div>
     </div>
@@ -741,16 +564,10 @@ function CheckoutFrame({ children }: { children: React.ReactNode }) {
 function CheckoutLoadingShell() {
   return (
     <CheckoutFrame>
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
-          <Skeleton className="h-72 rounded-[28px]" />
-          <Skeleton className="h-96 rounded-[28px]" />
-          <Skeleton className="h-64 rounded-[28px]" />
-        </div>
-        <div className="space-y-6">
-          <Skeleton className="h-[520px] rounded-[28px]" />
-          <Skeleton className="h-64 rounded-[28px]" />
-        </div>
+      <div className="space-y-4">
+        <Skeleton className="h-[22rem] rounded-[28px]" />
+        <Skeleton className="mx-auto h-4 w-64 rounded-full" />
+        <Skeleton className="h-32 rounded-2xl" />
       </div>
     </CheckoutFrame>
   )
@@ -762,16 +579,16 @@ function CenteredStateCard(props: {
   description: string
 }) {
   return (
-    <div className="flex min-h-[70svh] items-center justify-center">
-      <Card className="max-w-xl border-border/70 bg-card/95 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-        <CardHeader className="text-center">
-          <CardDescription>{props.eyebrow}</CardDescription>
-          <CardTitle className="text-3xl tracking-tight">{props.title}</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center text-sm leading-7 text-muted-foreground">
-          {props.description}
-        </CardContent>
-      </Card>
+    <div className="rounded-[28px] bg-card p-8 text-center shadow-[0_24px_60px_-24px_rgba(2,6,23,0.30)] ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {props.eyebrow}
+      </p>
+      <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tight">
+        {props.title}
+      </h1>
+      <p className="mt-3 text-pretty text-sm leading-6 text-muted-foreground">
+        {props.description}
+      </p>
     </div>
   )
 }
@@ -804,38 +621,22 @@ function OutcomeHint({ outcome }: { outcome: ProviderOutcome }) {
 
 function StatusBadge({ state }: { state: CheckoutState }) {
   return (
-    <Badge
-      variant="outline"
+    <span
       className={cn(
-        'border px-3 py-1 text-sm font-medium',
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.1em]',
         STATE_BADGE_CLASS[state],
       )}
     >
+      <span className="size-1.5 rounded-full bg-current opacity-70" />
       {STATE_LABELS[state]}
-    </Badge>
-  )
-}
-
-function InfoPill(props: {
-  icon: typeof CreditCardIcon
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <HugeiconsIcon icon={props.icon} className="size-4" />
-        <span className="text-xs uppercase tracking-[0.18em]">{props.label}</span>
-      </div>
-      <p className="mt-3 text-sm font-semibold text-foreground">{props.value}</p>
-    </div>
+    </span>
   )
 }
 
 function IdentityCard(props: { title: string; lines: Array<string | null> }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/35 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="rounded-xl bg-muted/40 p-4 ring-1 ring-black/[0.05] dark:ring-white/[0.07]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
         {props.title}
       </p>
       <div className="mt-3 space-y-2 text-sm leading-6 text-foreground/85">
@@ -847,132 +648,175 @@ function IdentityCard(props: { title: string; lines: Array<string | null> }) {
   )
 }
 
+/** B2B affordance: the opener is rarely the payer — copy the link to forward. */
+function ForwardToFinance() {
+  const [copied, setCopied] = useState(false)
+  return (
+    <Button
+      variant="outline"
+      className="w-full transition-transform active:scale-[0.98]"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+          toast.success('Link copiado para encaminhar')
+        } catch {
+          toast.error('Não foi possível copiar o link')
+        }
+      }}
+    >
+      <HugeiconsIcon
+        icon={copied ? Tick02Icon : SentIcon}
+        className="mr-2 size-4"
+      />
+      {copied ? 'Link copiado' : 'Encaminhar para o financeiro'}
+    </Button>
+  )
+}
+
+function AutoConfirmRow({
+  onVerify,
+  isVerifying,
+  note,
+}: {
+  onVerify: () => void
+  isVerifying: boolean
+  note?: string | null
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+          Confirmamos automaticamente assim que o pagamento cair.
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onVerify}
+          className="h-7 px-2"
+        >
+          <HugeiconsIcon
+            icon={RefreshIcon}
+            className={cn('mr-1 size-3.5', isVerifying && 'animate-spin')}
+          />
+          Atualizar
+        </Button>
+      </div>
+      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+    </div>
+  )
+}
+
 function PixInstructions(props: {
-  presentation: Extract<Presentation, { type: 'PIX' }>
+  presentation: Extract<PublicCheckoutPresentation, { type: 'PIX' }>
   copied: boolean
   onCopy: () => void
   onVerify: () => void
   isVerifying: boolean
 }) {
   return (
-    <div className="space-y-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Pix pronto para pagamento</p>
-        <p className="text-sm leading-6 text-emerald-700/80 dark:text-emerald-200/80">
-          Escaneie o QR Code ou copie o código abaixo. O status é atualizado
-          automaticamente.
-        </p>
-      </div>
-
-      <div className="flex justify-center rounded-2xl bg-background/90 p-4 shadow-sm">
+    <div className="space-y-4">
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted/30 p-5 ring-1 ring-black/[0.05] dark:ring-white/[0.07]">
         {props.presentation.pix.qrCodeImage ? (
           <img
             src={props.presentation.pix.qrCodeImage}
             alt="QR Code Pix"
-            className="size-52 rounded-xl"
+            className="size-56 rounded-xl bg-white p-2.5 outline outline-1 -outline-offset-1 outline-black/10"
           />
         ) : (
-          <div className="flex size-52 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <div className="flex size-56 items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
             QR indisponível
           </div>
         )}
-      </div>
-
-      <div className="rounded-2xl bg-background/90 p-4 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Código Pix copia e cola
-        </p>
-        <p className="mt-3 break-all font-mono text-xs leading-6 text-foreground/85">
-          {props.presentation.pix.payload ?? 'Aguardando payload do provedor'}
+        <p className="text-center text-sm text-muted-foreground">
+          Abra o app do seu banco e escaneie o QR Code para pagar.
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <Button variant="outline" onClick={props.onCopy} className="w-full">
+      <div className="rounded-2xl bg-muted/40 p-4 ring-1 ring-black/[0.05] dark:ring-white/[0.07]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          Pix copia e cola
+        </p>
+        <p className="mt-2 break-all font-mono text-xs leading-5 text-foreground/80">
+          {props.presentation.pix.payload ?? 'Aguardando código…'}
+        </p>
+        <Button
+          variant="outline"
+          onClick={props.onCopy}
+          className="mt-3 w-full transition-transform active:scale-[0.98]"
+        >
           <HugeiconsIcon
             icon={props.copied ? Tick02Icon : Copy01Icon}
             className="mr-2 size-4"
           />
           {props.copied ? 'Código copiado' : 'Copiar código Pix'}
         </Button>
-        <Button variant="ghost" onClick={props.onVerify} className="w-full">
-          {props.isVerifying ? (
-            <>
-              <Spinner className="mr-2" />
-              Verificando
-            </>
-          ) : (
-            'Já paguei / verificar status'
-          )}
-        </Button>
       </div>
 
-      <p className="text-xs text-emerald-700/80 dark:text-emerald-200/80">
-        Expiração: {formatDateTime(props.presentation.pix.expirationDate)}
-      </p>
+      <AutoConfirmRow
+        onVerify={props.onVerify}
+        isVerifying={props.isVerifying}
+        note={`Expira em ${formatDateTime(props.presentation.pix.expirationDate)}`}
+      />
     </div>
   )
 }
 
 function BoletoInstructions(props: {
-  presentation: Extract<Presentation, { type: 'BOLETO' }>
+  presentation: Extract<PublicCheckoutPresentation, { type: 'BOLETO' }>
   copied: boolean
   onCopy: () => void
   onVerify: () => void
   isVerifying: boolean
 }) {
   return (
-    <div className="space-y-4 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Boleto emitido</p>
-        <p className="text-sm leading-6 text-amber-700/80 dark:text-amber-200/80">
-          Use a linha digitável no seu banco ou abra o boleto em PDF no provedor.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <Button
+        onClick={() => {
+          if (props.presentation.boleto.bankSlipUrl) {
+            window.open(
+              props.presentation.boleto.bankSlipUrl,
+              '_blank',
+              'noopener,noreferrer',
+            )
+          }
+        }}
+        disabled={!props.presentation.boleto.bankSlipUrl}
+        className="h-12 w-full text-base transition-transform active:scale-[0.99]"
+      >
+        <HugeiconsIcon icon={Download04Icon} className="mr-2 size-4" />
+        Baixar boleto (PDF)
+      </Button>
 
-      <div className="rounded-2xl bg-background/90 p-4 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="rounded-2xl bg-muted/40 p-4 ring-1 ring-black/[0.05] dark:ring-white/[0.07]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
           Linha digitável
         </p>
-        <p className="mt-3 break-all font-mono text-xs leading-6 text-foreground/85">
-          {props.presentation.boleto.identificationField ?? 'Linha não disponível'}
+        <p className="mt-2 break-all font-mono text-xs leading-5 text-foreground/80">
+          {props.presentation.boleto.identificationField ??
+            'Linha não disponível'}
         </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Button variant="outline" onClick={props.onCopy}>
+        <Button
+          variant="outline"
+          onClick={props.onCopy}
+          className="mt-3 w-full transition-transform active:scale-[0.98]"
+        >
           <HugeiconsIcon
             icon={props.copied ? Tick02Icon : Copy01Icon}
             className="mr-2 size-4"
           />
-          {props.copied ? 'Linha copiada' : 'Copiar linha'}
-        </Button>
-        <Button
-          onClick={() => {
-            if (props.presentation.boleto.bankSlipUrl) {
-              window.open(props.presentation.boleto.bankSlipUrl, '_blank', 'noopener,noreferrer')
-            }
-          }}
-          disabled={!props.presentation.boleto.bankSlipUrl}
-        >
-          Abrir boleto
+          {props.copied ? 'Linha copiada' : 'Copiar linha digitável'}
         </Button>
       </div>
 
-      <Button variant="ghost" onClick={props.onVerify} className="w-full">
-        {props.isVerifying ? (
-          <>
-            <Spinner className="mr-2" />
-            Verificando
-          </>
-        ) : (
-          'Verificar status'
-        )}
-      </Button>
-
-      <p className="text-xs text-amber-700/80 dark:text-amber-200/80">
-        Vencimento: {formatDate(props.presentation.boleto.dueDate)}
-      </p>
+      <AutoConfirmRow
+        onVerify={props.onVerify}
+        isVerifying={props.isVerifying}
+        note={`Vence ${formatDate(props.presentation.boleto.dueDate)}`}
+      />
     </div>
   )
 }
@@ -984,15 +828,35 @@ function TerminalStateDetails(props: {
   >
   paidAt?: string | null
 }) {
+  if (props.state === 'PAID') {
+    return (
+      <div className="space-y-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 text-center">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-500/15">
+          <HugeiconsIcon
+            icon={CheckmarkBadge04Icon}
+            className="size-7 text-emerald-600 dark:text-emerald-400"
+          />
+        </div>
+        <div className="space-y-1">
+          <p className="text-lg font-semibold">Pagamento confirmado</p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {props.paidAt ? `Recebido em ${formatDateTime(props.paidAt)}. ` : ''}
+            Seu acesso foi liberado.
+          </p>
+        </div>
+        <Button
+          className="w-full transition-transform active:scale-[0.98]"
+          render={<Link to="/" />}
+        >
+          Acessar a CalibraFácil
+          <HugeiconsIcon icon={ArrowRight02Icon} className="ml-1 size-4" />
+        </Button>
+      </div>
+    )
+  }
+
   const content =
-    props.state === 'PAID'
-      ? {
-          title: 'Pagamento confirmado',
-          body: props.paidAt
-            ? `Recebimento confirmado em ${formatDateTime(props.paidAt)}.`
-            : 'Recebimento confirmado e oferta processada.',
-        }
-      : props.state === 'EXPIRED'
+    props.state === 'EXPIRED'
         ? {
             title: 'Link expirado',
             body: 'Peça uma nova emissão ao time comercial para continuar.',
@@ -1023,22 +887,6 @@ function TerminalStateDetails(props: {
       <AlertTitle>{content.title}</AlertTitle>
       <AlertDescription>{content.body}</AlertDescription>
     </Alert>
-  )
-}
-
-function SupportRow(props: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/35 p-3">
-      <HugeiconsIcon icon={CustomerSupportIcon} className="mt-0.5 size-4 text-muted-foreground" />
-      <div>
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          {props.label}
-        </p>
-        <p className="mt-1 text-sm text-foreground/85">
-          {props.value || 'Não informado'}
-        </p>
-      </div>
-    </div>
   )
 }
 

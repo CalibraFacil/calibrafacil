@@ -129,7 +129,7 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
   } = useSortable({
     id,
   })
-  const { activeCardId } = useContext(KanbanContext) as KanbanContextProps
+  const { activeCardId } = useContext(KanbanContext)
 
   const style = {
     transition,
@@ -186,6 +186,7 @@ export const KanbanCards = <T extends KanbanItemProps = KanbanItemProps>({
   className,
   ...props
 }: KanbanCardsProps<T>) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- React context cannot preserve the provider's generic item type through useContext.
   const { data } = useContext(KanbanContext) as KanbanContextProps<T>
   const filteredData = data.filter((item) => item.column === props.id)
   const items = filteredData.map((item) => item.id)
@@ -258,8 +259,8 @@ export const KanbanProvider = <
 
   const handleDragStart = (event: DragStartEvent) => {
     const card = data.find((item) => item.id === event.active.id)
-    if (card) {
-      setActiveCardId(event.active.id as string)
+    if (card && typeof event.active.id === 'string') {
+      setActiveCardId(event.active.id)
     }
     onDragStart?.(event)
   }

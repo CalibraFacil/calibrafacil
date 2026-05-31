@@ -17,8 +17,9 @@ import {
 import { toast } from 'sonner'
 
 import { signOut } from '@calibra-facil/auth/client'
-import { CommandGroup, CommandItem, CommandShortcut } from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
+import { ShortcutHint } from '../shortcuts'
 
 export function NavigationGroup() {
   const { setOpen } = useCommandPalette()
@@ -44,17 +45,19 @@ export function NavigationGroup() {
       label: 'Painel de Controle',
       icon: Home01Icon,
       to: '/dashboard' as const,
-      shortcut: '⌘H',
+      shortcutId: 'goDashboard' as const,
     },
     {
       label: 'Clientes',
       icon: UserIcon,
       to: '/dashboard/clients' as const,
+      shortcutId: 'goClients' as const,
     },
     {
       label: 'Ativos',
       icon: Wrench01Icon,
       to: '/dashboard/assets' as const,
+      shortcutId: 'goAssets' as const,
     },
     {
       label: 'Padrões de Referência',
@@ -85,7 +88,7 @@ export function NavigationGroup() {
       label: 'Configurações',
       icon: Settings05Icon,
       to: '/dashboard/settings' as const,
-      shortcut: '⌘,',
+      shortcutId: 'goSettings' as const,
     },
   ]
 
@@ -101,7 +104,7 @@ export function NavigationGroup() {
         >
           <HugeiconsIcon icon={item.icon} />
           <span>{item.label}</span>
-          {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
+          {item.shortcutId ? <ShortcutHint id={item.shortcutId} /> : null}
         </CommandItem>
       ))}
 
@@ -115,13 +118,11 @@ export function NavigationGroup() {
       >
         <HugeiconsIcon icon={Building02Icon} />
         <span>Trocar Organização</span>
-        <CommandShortcut>⌘O</CommandShortcut>
       </CommandItem>
 
       <CommandItem onSelect={handleLogout}>
         <HugeiconsIcon icon={Logout01Icon} className="text-red-500" />
         <span>Sair</span>
-        <CommandShortcut>⌘Q</CommandShortcut>
       </CommandItem>
     </CommandGroup>
   )

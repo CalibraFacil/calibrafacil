@@ -1,0 +1,201 @@
+---
+title: Templates e Numeração
+description: Como criar, validar, publicar e atribuir templates de certificado a serviços e métodos. Inclui também a numeração sequencial dos certificados emitidos.
+---
+
+O laboratório personaliza seus certificados de duas formas, configuradas em telas distintas:
+
+- **Templates** — arquivo Excel que define o layout do PDF emitido. Configure em **Painel → Configurações → Certificados** (`/dashboard/certificate-templates`).
+- **Numeração** — formato sequencial dos números de certificado (ex.: `CAL-2026-0001`). Configure em **Painel → Configurações → Numeração de Certificados** (`/dashboard/settings/certificate-numbering`).
+
+As duas configurações são independentes: a numeração é aplicada ao certificado no momento da emissão, e o template determina o aspecto final do PDF.
+
+---
+
+## Como funciona o template
+
+Um **template de certificado** é uma planilha Excel (`.xlsx`) anexada à plataforma. A planilha contém células e regiões reservadas (cabeçalho, identificação do cliente, identificação do instrumento, resultados, padrões, condições ambientais, assinatura, QR code de verificação, logo do laboratório). Para cada uma dessas regiões, o laboratório associa um **campo da calibração** que será preenchido automaticamente no momento da emissão.
+
+Esse mapeamento — qual célula recebe qual campo — vive em um **manifesto de vinculação** (binding manifest) configurado pelo painel.
+
+Tipos de vinculação suportados:
+
+| Tipo | Para o quê | Exemplo |
+| :--- | :--- | :--- |
+| **Texto** (`scalar`) | Valores únicos em células individuais | Nome do cliente em `D10`, número do certificado em `D8` |
+| **Imagem** | Logo, assinatura, QR code, selo de acreditação, indicador de excentricidade | QR code de verificação na área `S43:W47` |
+| **Tabela** | Linhas que se repetem (resultados de medição, padrões usados) | Linhas de resultados a partir de `A30`, com colunas valor / incerteza / unidade |
+
+Em cada vinculação o laboratório define ainda:
+
+- se o campo é **obrigatório** — o sistema rejeita publicar o template sem ele;
+- se o campo é **governado** — apenas Administradores e Proprietários podem alterar a vinculação após a publicação;
+- um **formatador opcional** — por exemplo `date:dd/mm/yyyy` para datas, `number:2` para duas casas decimais.
+
+## Onde os campos vêm
+
+O sistema expõe um catálogo de campos da calibração que podem ser vinculados às células do template. Os principais grupos:
+
+- **`customer`** — dados do cliente (nome, CNPJ, endereço, contato);
+- **`asset`** / **`assetSnapshot`** — identificação do instrumento calibrado (tag, número de série, fabricante, modelo);
+- **`job`** — dados da ordem de calibração (datas, técnico, observações);
+- **`method`** / **`methodSnapshot`** — método aplicado e seus parâmetros;
+- **`standards`** / **`standardsSnapshot`** — padrões de referência utilizados;
+- **`environment`** / **`environmentalSnapshot`** — condições ambientais registradas;
+- **`results`** / **`calibrationResults`** / **`resultRows`** — valores medidos, incertezas, critérios;
+- **`uncertainty`** / **`uncertaintyBudget`** — orçamento de incerteza (incerteza expandida, fator k, graus de liberdade efetivos);
+- **`certificate`** — dados do próprio certificado (número, data de emissão, token de verificação, URL pública);
+- **`approval`** — aprovador, data e assinatura;
+- **`organization`** / **`lab`** — dados do laboratório (logo, dados de acreditação);
+- **`traceability`** — cadeia de rastreabilidade metrológica.
+
+O catálogo completo aparece na tela de edição do manifesto.
+
+## Fluxo de criação de um template
+
+<Steps>
+
+1. **Crie o template**
+
+   Em **Configurações → Certificados** → **Novo template**. Informe um nome (3 a 80 caracteres). O sistema cria o registro com status **Ativo** e gera automaticamente uma identificação interna.
+
+2. **Faça upload da planilha**
+
+   Envie um arquivo `.xlsx` (até 25 MB) que será a base do layout. A primeira versão é criada com status **Rascunho**.
+
+3. **Defina o manifesto de vinculação**
+
+   O painel mostra a estrutura da planilha (planilhas internas, áreas usadas, área de impressão). Para cada célula ou região do certificado, escolha o campo da calibração correspondente:
+
+   - **Vinculações de texto:** célula → caminho do campo + formatador opcional.
+   - **Vinculações de imagem:** região (ex.: `S43:W47`) → tipo da imagem (QR code, assinatura, logo, selo de acreditação) + origem do dado.
+   - **Vinculações de tabela:** região modelo + caminho do array + colunas + política de transbordamento (anexar linhas, slots fixos ou anexo).
+
+   Marque os campos obrigatórios e governados.
+
+4. **Valide a versão**
+
+   O sistema executa:
+
+   - análise estrutural da planilha (planilhas presentes, área de impressão, ajustes de impressão);
+   - verificação do manifesto (todos os campos vinculados existem no catálogo, sem caminhos perigosos);
+   - bloqueios de segurança (macros, vínculos externos).
+
+   Se tudo passa, o status muda para **Validado**. Se há avisos ou erros, o template permanece em **Rascunho** com a lista de problemas a corrigir.
+
+5. **Gere uma pré-visualização**
+
+   Antes de publicar, gere um PDF de teste. O sistema preenche o template com dados de exemplo (ou dados informados pelo administrador) e converte em PDF via LibreOffice. A pré-visualização é gerada de forma assíncrona e fica disponível por 24 horas.
+
+   Revise o PDF com atenção. Esta é a última oportunidade de detectar problemas antes da publicação.
+
+6. **Publique a versão**
+
+   A publicação exige:
+
+   - status **Validado**;
+   - uma pré-visualização bem-sucedida correspondente ao manifesto atual.
+
+   Após publicada, a versão fica **imutável** e disponível para uso em ordens de calibração. A data e o aprovador da publicação ficam registrados na trilha de auditoria.
+
+7. **Atribua o template a serviços e métodos**
+
+   Atribuições determinam qual template será usado em quais ordens de calibração. Cada atribuição combina:
+
+   - **Escopo** — opcionalmente vinculado a uma unidade, um serviço ou um método específico.
+   - **Prioridade** — número inteiro (maior = preferido) quando múltiplas atribuições se aplicam.
+
+   Ao criar uma ordem de calibração, o sistema escolhe o template mais específico e de maior prioridade entre as atribuições ativas.
+
+</Steps>
+
+## Versões e ciclo de vida
+
+| Status da versão | O que significa |
+| :--- | :--- |
+| **Rascunho** | Manifesto em edição. Pode ser modificado livremente. |
+| **Validado** | Análise estrutural e do manifesto aprovadas. Pré-condição para publicação. |
+| **Publicado** | Versão imutável, em uso em ordens de calibração. |
+| **Arquivado** | Versão antiga, retirada de uso. Continua acessível para certificados que a utilizaram. |
+
+Para alterar um template publicado, **crie uma nova versão**. A nova versão pode ser editada como rascunho, validada, pré-visualizada e publicada — quando publicada, ela substitui a versão anterior nas próximas ordens. Certificados já emitidos com a versão anterior **não** são afetados.
+
+## Snapshot de template
+
+No momento em que a ordem de calibração é **aprovada**, o sistema congela um **snapshot** do template em uso dentro da própria ordem. O snapshot registra a identificação e a versão do template aplicado.
+
+A partir desse momento:
+
+- A ordem aprovada referencia uma versão específica do template, imutavelmente.
+- Mudanças posteriores no template (nova versão publicada, manifesto alterado) **não reescrevem** o certificado já emitido.
+- Em auditoria, é possível correlacionar qualquer certificado emitido com o template e a versão exatos que o produziram.
+
+Veja também [Snapshots e Imutabilidade](/conceitos/snapshots-e-imutabilidade).
+
+## Conversão para PDF
+
+A conversão `xlsx → PDF` é executada por LibreOffice em servidor controlado pela CalibraFácil. A política de renderização é fixa e parte do manifesto:
+
+- **Macros (VBA)** são rejeitadas — uma planilha com macros não publica.
+- **Vínculos externos** (referências a outros arquivos ou URLs) são rejeitados.
+- **Fórmulas voláteis** (`NOW`, `TODAY`, `RAND`, `RANDBETWEEN`, `OFFSET`, `INDIRECT`) são sinalizadas como aviso — produzem resultados diferentes a cada renderização e quebram a reprodutibilidade do certificado.
+
+### Fórmulas Excel e o motor matemático
+
+Os cálculos de calibração — incerteza, fator de abrangência, graus de liberdade efetivos, critérios — são executados **exclusivamente** pelo [motor matemático](/incerteza/motor-matematico). Os valores resultantes são **escritos como literais** nas células vinculadas do template, sobrescrevendo qualquer fórmula que existisse ali.
+
+- Em **células vinculadas pelo manifesto:** a fórmula original (se houver) é descartada no preenchimento; o valor calculado pelo motor é gravado como literal.
+- Em **células não vinculadas:** fórmulas escritas pelo autor do template sobrevivem e são avaliadas pelo LibreOffice na conversão para PDF. Use-as apenas para apresentação (concatenação de strings, somatórios sobre valores já preenchidos, formatação condicional). **Não** as use para recalcular grandezas de calibração — o resultado pode divergir do motor validado e quebrar a rastreabilidade.
+
+Após a conversão, o PDF é armazenado no R2 com hash SHA-256 para integridade e fica disponível para download e para o [Portal do Cliente](/plataforma/portal-do-cliente).
+
+## Identidade visual da organização
+
+Logo, dados de acreditação, cores e identificação do responsável técnico ficam em **Configurações → Organização** (`/dashboard/settings/organization`). Eles são referenciados pelo template via vinculações de imagem e texto. Manter a identidade da organização atualizada garante coerência entre os certificados emitidos.
+
+---
+
+## Numeração de Certificados
+
+A numeração é configurada em **Configurações → Numeração de Certificados** (`/dashboard/settings/certificate-numbering`).
+
+### Campos do formulário
+
+| Campo | Padrão | Descrição |
+| :--- | :--- | :--- |
+| **Código do laboratório** | `CAL` | Prefixo principal do número do certificado. |
+| **Código do projeto** | (vazio) | Segmento adicional opcional para identificar projetos/contratos específicos. |
+| **Modelo do número** | `{labCode}-{yyyy}-{seq}` | Formato do número com tokens substituídos no momento da emissão. |
+| **Modelo do nome** | `Certificado {number}` | Texto humano usado em emails e no Portal do Cliente. |
+| **Escopo do reset** | `Anual` | Quando a sequência reinicia: `Anual`, `Mensal` ou `Sem reset`. |
+| **Iniciar em** | `1` | Primeiro valor da sequência. |
+| **Incremento** | `1` | Passo entre números consecutivos. |
+| **Preenchimento (dígitos)** | `4` | Largura mínima do número sequencial (ex.: `0001`). |
+
+### Tokens disponíveis no modelo
+
+| Token | Substituído por |
+| :--- | :--- |
+| `{labCode}` | Código do laboratório configurado acima |
+| `{labName}` | Nome completo do laboratório |
+| `{labSlug}` | Versão URL-segura do nome do laboratório |
+| `{projectCode}` | Código do projeto (se configurado) |
+| `{yyyy}` | Ano com 4 dígitos |
+| `{yy}` | Ano com 2 dígitos |
+| `{mm}` | Mês com 2 dígitos |
+| `{dd}` | Dia com 2 dígitos |
+| `{seq}` | Número sequencial com preenchimento aplicado |
+
+**Exemplo:** `{labCode}-{yyyy}-{seq}` com `labCode=CAL` produz `CAL-2026-0001`, `CAL-2026-0002`, etc.
+
+### Regras
+
+- A sequência é **monotônica** dentro do escopo configurado. Números nunca são reutilizados, mesmo se uma ordem de calibração for cancelada antes da emissão.
+- Em laboratórios com [multiunidade](/plataforma/multiunidade), a sequência pode ser **global** para toda a organização ou **por unidade**. Essa escolha é feita na configuração inicial e raramente deve mudar — alterar com histórico já emitido confunde clientes e auditores.
+- A [retificação](/certificados/retificacao) **mantém o número de certificado** original e adiciona um indicador de versão de emenda (ex.: `CAL-2026-0001 v2`).
+
+---
+
+## Permissões
+
+Templates e numeração ficam restritos aos perfis **Administrador** e **Proprietário** — incluem upload, validação, publicação, atribuição e arquivamento. Veja [Permissões](/plataforma/permissoes).

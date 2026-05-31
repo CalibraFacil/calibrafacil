@@ -14,6 +14,7 @@ import {
 import {
   getEffectivePlanLimits,
   getPlan,
+  isValidPlanId,
   type PlanId,
 } from "@calibra-facil/shared";
 import { withInvalidation } from "../../middleware/cache";
@@ -46,46 +47,43 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - Get current organization's subscription
   // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ billing: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const currentOrganization = await db.query.organization.findFirst({
-        columns: { createdAt: true },
-        where: eq(organization.id, memberData.organizationId),
-      });
+  .get("/", ...withLabPermission({ billing: ["read"] }), async (c) => {
+    const memberData = c.get("member");
+    const currentOrganization = await db.query.organization.findFirst({
+      columns: { createdAt: true },
+      where: eq(organization.id, memberData.organizationId),
+    });
 
-      // Get subscription
-      const sub = await db.query.subscription.findFirst({
-        where: eq(subscription.organizationId, memberData.organizationId),
-      });
+    // Get subscription
+    const sub = await db.query.subscription.findFirst({
+      where: eq(subscription.organizationId, memberData.organizationId),
+    });
 
-      if (!sub) {
-        // Return default FREE plan info for organizations without subscription
-        const freePlan = getPlan("FREE");
-        const usage = await getOrganizationUsage(memberData.organizationId);
-
-        return c.json({
-          subscription: null,
-          plan: freePlan,
-          usage,
-          limits: getEffectivePlanLimits("FREE", currentOrganization?.createdAt),
-        });
-      }
-
-      // Get plan details
-      const plan = getPlan(sub.planId as PlanId);
+    if (!sub) {
+      // Return default FREE plan info for organizations without subscription
+      const freePlan = getPlan("FREE");
       const usage = await getOrganizationUsage(memberData.organizationId);
 
       return c.json({
-        subscription: serializePublicSubscription(sub),
-        plan,
+        subscription: null,
+        plan: freePlan,
         usage,
-        limits: getEffectivePlanLimits(plan.id, currentOrganization?.createdAt),
+        limits: getEffectivePlanLimits("FREE", currentOrganization?.createdAt),
       });
-    },
-  )
+    }
+
+    // Get plan details
+    const planId: PlanId = isValidPlanId(sub.planId) ? sub.planId : "FREE";
+    const plan = getPlan(planId);
+    const usage = await getOrganizationUsage(memberData.organizationId);
+
+    return c.json({
+      subscription: serializePublicSubscription(sub),
+      plan,
+      usage,
+      limits: getEffectivePlanLimits(plan.id, currentOrganization?.createdAt),
+    });
+  })
 
   // =========================================================================
   // DELETE / - Cancel subscription

@@ -77,6 +77,9 @@ for (const job of jobs) {
 
 runOrThrow(
   'cp',
-  [resolve('public/og/calibrafacil-cover-dark.png'), resolve('public/og/calibrafacil-cover.png')],
+  [
+    resolve('public/og/calibrafacil-cover-dark.png'),
+    resolve('public/og/calibrafacil-cover.png'),
+  ],
   'OG canonical copy',
 )

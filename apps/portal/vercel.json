@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm build",
+  "bunVersion": "1.x",
+  "installCommand": "bun ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile --filter \"@calibra-facil/portal...\"",
+  "buildCommand": "bun node_modules/vite/bin/vite.js build",
+  "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs portal",
   "outputDirectory": "dist",
   "rewrites": [
     {

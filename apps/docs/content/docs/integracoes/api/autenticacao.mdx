@@ -1,0 +1,72 @@
+---
+title: Autenticação da API
+description: Como criar, escopar, rotacionar e revogar chaves de API; modelo de escopos e práticas de segurança.
+---
+
+A API pública do CalibraFácil usa autenticação por **chave de API**, com escopos granulares por recurso. Cada chave pertence a uma organização e é gerenciada em **Configurações → Autenticação** (`/dashboard/settings/authentication`).
+
+## Como autenticar
+
+Inclua a chave no header `Authorization` de cada requisição:
+
+```
+Authorization: Bearer <api-key>
+```
+
+Chaves inválidas, revogadas ou sem escopo retornam `401 Unauthorized`. Requisições autenticadas mas sem escopo suficiente para o recurso retornam `403 Forbidden`.
+
+## Criação de chave
+
+Apenas usuários com papel `admin` ou `owner` podem criar chaves. Ao criar:
+
+1. Defina o **nome** da chave (identificação operacional, ex.: "ERP financeiro – produção").
+2. Selecione os **escopos** necessários.
+3. O sistema gera o segredo e o exibe **uma única vez**. Guarde-o no sistema cliente antes de fechar o diálogo.
+4. A chave fica imediatamente ativa.
+
+<Aside type="caution">
+  O segredo da chave é exibido apenas no momento da criação. Se não for capturado, a chave não pode ser recuperada — é preciso revogá-la e criar uma nova.
+</Aside>
+
+## Escopos disponíveis
+
+Cada escopo segue o padrão `<recurso>:<ação>`. Conceda apenas o necessário:
+
+| Escopo | Permite |
+| :--- | :--- |
+| `customers:read` | Listar e consultar clientes |
+| `customers:write` | Criar, atualizar e remover clientes |
+| `assets:read` | Listar e consultar ativos |
+| `assets:write` | Criar, atualizar e remover ativos |
+| `requests:read` | Listar e consultar solicitações |
+| `requests:write` | Criar e cancelar solicitações |
+| `jobs:read` | Listar e consultar ordens de calibração |
+| `jobs:write` | Criar ordens, registrar execução, submeter, aprovar/rejeitar |
+| `services:read` | Listar o catálogo de serviços |
+| `units:read` | Listar unidades da organização |
+| `reports:read` | Acessar métricas consolidadas |
+| `certificates:read` | Baixar certificados emitidos |
+| `webhooks:manage` | Criar, atualizar e revogar webhooks |
+
+## Boas práticas
+
+- **Uma chave por integração.** Facilita rotação e revogação sem afetar outras integrações.
+- **Escopos mínimos.** Conceda apenas o que a integração realmente usa.
+- **Rotação periódica.** Pelo menos uma vez por ano, ou após qualquer evento que possa ter exposto a chave.
+- **Sem chaves em código-fonte.** Guarde sempre em gerenciadores de segredo (Vault, AWS Secrets Manager, variáveis de ambiente cifradas).
+- **Revogação imediata em incidentes.** Suspeita de exposição → revogue antes de investigar.
+
+## Rotação
+
+Rotação saudável é uma operação em duas chaves:
+
+1. Crie a nova chave com os mesmos escopos.
+2. Atualize a integração para usar a nova chave.
+3. Verifique que a nova chave está funcionando em produção.
+4. Revogue a chave antiga.
+
+A trilha de auditoria registra criação, rotação e revogação.
+
+## Revogação
+
+A revogação é imediata e irreversível. Requisições com a chave revogada começam a retornar `401` em segundos. O registro permanece para auditoria — chaves revogadas continuam aparecendo na listagem com o carimbo de tempo da revogação.
