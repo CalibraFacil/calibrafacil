@@ -32,7 +32,7 @@ function shell(cmd, argv) {
 
 // Apps with no `check-types` turbo task → invisible to CI. Type-check them here.
 // `allowed` is a documented baseline of pre-existing errors to tolerate (we fail
-// only on NEW errors); keep it empty for apps that are clean.
+// only on NEW errors); keep it null for apps that are clean.
 const UNTRACKED_TYPECHECKS = [
   // apps/api/src/routes/backoffice.ts has 2 pre-existing drizzle `.returning()`
   // type errors (PR #7; confirmed by both tsgo and tsc). Baseline until fixed.
@@ -40,15 +40,22 @@ const UNTRACKED_TYPECHECKS = [
   { dir: "apps/worker", allowed: null },
 ];
 
+// ANSI escape (ESC + `[…m`), built without a literal control char so colorized
+// tsgo output can't split the "error TS" token we match on (and no lint disable).
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 function typeCheckUntrackedApps() {
   let ok = true;
+  // Capture mode: force plain output AND strip any ANSI anyway (belt-and-braces).
+  const plainEnv = { ...env, FORCE_COLOR: "0", NO_COLOR: "1" };
   for (const { dir, allowed } of UNTRACKED_TYPECHECKS) {
     const result = spawnSync(
       "pnpm",
       ["--dir", dir, "exec", "tsgo", "--noEmit", "-p", "tsconfig.json"],
-      { encoding: "utf8", env },
+      { encoding: "utf8", env: plainEnv },
     );
     const errorLines = `${result.stdout ?? ""}${result.stderr ?? ""}`
+      .replace(ANSI, "")
       .split("\n")
       .filter((line) => line.includes("error TS"));
     const unexpected = errorLines.filter(
