@@ -578,6 +578,8 @@ export function buildExecutionMutationPayload({
   environment,
   calibrationLocation,
   calibrationPhases,
+  performedAt,
+  backdateReason,
 }: {
   selectedStandardIds: number[]
   normalizedData: Record<string, unknown>
@@ -585,6 +587,8 @@ export function buildExecutionMutationPayload({
   environment: EnvironmentalFormData | undefined
   calibrationLocation: ReturnType<typeof buildCalibrationLocationPayload>
   calibrationPhases: ReturnType<typeof buildCalibrationPhasesPayload>
+  performedAt?: string
+  backdateReason?: string
 }) {
   return {
     selectedStandardIds: buildSelectedStandardPayload(
@@ -600,6 +604,8 @@ export function buildExecutionMutationPayload({
     environment,
     calibrationLocation,
     calibrationPhases,
+    ...(performedAt !== undefined ? { performedAt } : {}),
+    ...(backdateReason !== undefined ? { backdateReason } : {}),
   }
 }
 

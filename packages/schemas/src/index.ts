@@ -1515,6 +1515,8 @@ export const SubmitForReviewSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
   environment: EnvironmentalDataSchema.optional(),
+  performedAt: z.string().datetime().optional(),
+  backdateReason: z.string().trim().min(1).optional(),
   calibrationLocation: CalibrationLocationInputSchema.optional(),
   calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });

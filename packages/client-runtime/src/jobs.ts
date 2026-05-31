@@ -70,6 +70,8 @@ export type JobExecutionPayload = {
       }
     >;
   };
+  performedAt?: string;
+  backdateReason?: string;
 };
 
 export type ReferenceStandardsResponse<TStandard = unknown> = {
