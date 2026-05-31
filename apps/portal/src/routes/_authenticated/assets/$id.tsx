@@ -12,14 +12,23 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill, TONE } from "@/components/status-pill";
+import { Timeline } from "@/components/timeline";
+import {
+  ACTION_BUTTON_CLASS,
+  BlueprintField,
+  BlueprintGrid,
+  BlueprintOverlay,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from "@/components/instrument-panel";
+import { getCalibrationStatus } from "@/lib/calibration-status";
+import { formatDate } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/assets/$id")({
@@ -70,37 +79,11 @@ const statusLabels: Record<AssetStatus, string> = {
   SCRAPPED: "Descartado",
 };
 
-const statusVariants: Record<
-  AssetStatus,
-  "default" | "secondary" | "outline" | "destructive"
-> = {
-  ACTIVE: "default",
-  INACTIVE: "secondary",
-  MAINTENANCE: "outline",
-  SCRAPPED: "destructive",
-};
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "-";
-
-  return new Date(value).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatSpecificationValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "-";
-
-  if (Array.isArray(value)) {
+  if (Array.isArray(value))
     return value.map(formatSpecificationValue).join(", ");
-  }
-
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
-
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
@@ -127,24 +110,12 @@ const specificationLabels: Record<string, string> = {
 
 function formatSpecificationLabel(key: string): string {
   if (specificationLabels[key]) return specificationLabels[key];
-
   return key
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^./, (character) => character.toLocaleUpperCase("pt-BR"));
-}
-
-function daysUntil(value: string | null | undefined): number | null {
-  if (!value) return null;
-
-  const today = new Date();
-  const dueDate = new Date(value);
-  today.setHours(0, 0, 0, 0);
-  dueDate.setHours(0, 0, 0, 0);
-
-  return Math.ceil((dueDate.getTime() - today.getTime()) / 86_400_000);
 }
 
 function AssetDetailPage() {
@@ -157,11 +128,9 @@ function AssetDetailPage() {
         `${getApiBaseUrl()}/api/portal/assets/${id}`,
         { credentials: "include" },
       );
-
       if (!response.ok) {
         throw new Error("Falha ao carregar ativo.");
       }
-
       // oxlint-disable-next-line typescript/consistent-type-assertions -- portal asset endpoint returns the AssetDetail DTO.
       const result = (await response.json()) as { data: AssetDetail };
       return result.data;
@@ -176,299 +145,301 @@ function AssetDetailPage() {
 
   if (assetQuery.error || !asset) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Ativo não encontrado</CardTitle>
-          <CardDescription>
-            O ativo não está disponível para este acesso.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="outline" render={<Link to="/assets" />}>
-            <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
-            Voltar
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="portal-shell">
+        <Panel className="p-6">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Instrumento
+          </p>
+          <h1 className="mt-1 text-lg font-semibold">
+            Equipamento não encontrado
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm text-pretty">
+            O equipamento não está disponível para este acesso.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              render={<Link to="/assets" />}
+              className={ACTION_BUTTON_CLASS}
+            >
+              <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} />
+              Voltar
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => assetQuery.refetch()}
+              className={ACTION_BUTTON_CLASS}
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        </Panel>
+      </div>
     );
   }
 
-  const dueInDays = daysUntil(asset.nextCalibrationDate);
-  const dueLabel =
-    dueInDays === null
-      ? "Sem próxima calibração"
-      : dueInDays < 0
-        ? `Vencida há ${Math.abs(dueInDays)} dia(s)`
-        : dueInDays === 0
-          ? "Vence hoje"
-          : `Vence em ${dueInDays} dia(s)`;
+  const calibration = getCalibrationStatus(asset.nextCalibrationDate);
   const specifications = Object.entries(asset.specifications ?? {});
+  const certificateCount = asset.certificates.length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <Button variant="ghost" size="sm" render={<Link to="/assets" />}>
-            <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
-            Voltar
-          </Button>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Badge variant={statusVariants[asset.status]}>
-              {statusLabels[asset.status]}
-            </Badge>
-            <Badge variant="secondary">{asset.assetTypeName}</Badge>
+    <div className="portal-shell space-y-6">
+      {/* Hero */}
+      <Panel className="relative overflow-hidden p-5 sm:p-6">
+        <BlueprintOverlay />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              render={<Link to="/assets" />}
+              className={ACTION_BUTTON_CLASS}
+            >
+              <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} />
+              Equipamentos
+            </Button>
+            <div className="mt-4 flex items-center gap-2">
+              <span className={cnDot(calibration.tone)} aria-hidden />
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Instrumento · {asset.assetTypeName}
+              </p>
+            </div>
+            <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+              {asset.name}
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm text-pretty">
+              Tag <span className="font-mono tabular-nums">{asset.tag}</span>
+              {" · "}Série{" "}
+              <span className="font-mono tabular-nums">
+                {asset.serialNumber}
+              </span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <StatusPill
+                tone={calibration.tone}
+                pulse={calibration.tone === "critical"}
+              >
+                {calibration.label}
+              </StatusPill>
+              <Badge variant="secondary">{asset.assetTypeName}</Badge>
+            </div>
           </div>
-          <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-            {asset.name}
-          </h1>
-          <p className="mt-2 text-pretty text-sm text-muted-foreground">
-            Tag <span className="font-mono tabular-nums">{asset.tag}</span>
-            {" · "}Série{" "}
-            <span className="font-mono tabular-nums">{asset.serialNumber}</span>
-          </p>
+
+          <Button
+            render={<Link to="/requests/new" />}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={Wrench01Icon} strokeWidth={2} />
+            Solicitar calibração
+          </Button>
         </div>
+      </Panel>
 
-        <Button render={<Link to="/requests/new" />}>
-          <HugeiconsIcon icon={Wrench01Icon} className="size-4" />
-          Solicitar calibração
-        </Button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard
-          icon={Calendar03Icon}
-          label="Próxima calibração"
-          value={formatDate(asset.nextCalibrationDate)}
-          detail={dueLabel}
-        />
-        <MetricCard
-          icon={CheckmarkCircle02Icon}
-          label="Última calibração"
-          value={formatDate(asset.lastCalibrationDate)}
-          detail="Data registrada no cadastro"
-        />
-        <MetricCard
-          icon={File01Icon}
-          label="Certificados"
-          value={String(asset.certificates.length)}
-          detail="Últimos documentos aprovados"
-        />
-      </div>
+      {/* Vitals */}
+      <StaggerGroup className="grid gap-3 sm:grid-cols-3">
+        <StaggerItem>
+          <SignalTile
+            icon={Calendar03Icon}
+            label="Próxima calibração"
+            value={formatDate(asset.nextCalibrationDate)}
+            hint={calibration.description}
+            tone={calibration.tone}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <SignalTile
+            icon={CheckmarkCircle02Icon}
+            label="Última calibração"
+            value={formatDate(asset.lastCalibrationDate)}
+            hint="registrada"
+            tone="neutral"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <SignalTile
+            icon={File01Icon}
+            label="Certificados"
+            value={certificateCount}
+            hint="disponíveis"
+            tone={certificateCount > 0 ? "info" : "neutral"}
+          />
+        </StaggerItem>
+      </StaggerGroup>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Identificação</CardTitle>
-              <CardDescription>
-                Dados principais do instrumento cadastrado.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Info label="Fabricante" value={asset.manufacturer} />
-              <Info label="Modelo" value={asset.model} />
-              <Info label="Número de série" value={asset.serialNumber} mono />
-              <Info label="Tag" value={asset.tag} mono />
-              <Info label="Cliente" value={asset.customerName} />
-              <Info label="Atualizado em" value={formatDate(asset.updatedAt)} />
-            </CardContent>
-          </Card>
+          {/* Identification */}
+          <Panel className="p-5">
+            <PanelHeader
+              eyebrow="Cadastro"
+              title="Identificação"
+              description="Dados principais do instrumento cadastrado."
+            />
+            <BlueprintGrid className="mt-4 sm:grid-cols-2">
+              <BlueprintField label="Fabricante">
+                {asset.manufacturer?.trim() || "—"}
+              </BlueprintField>
+              <BlueprintField label="Modelo">
+                {asset.model?.trim() || "—"}
+              </BlueprintField>
+              <BlueprintField label="Número de série" mono>
+                {asset.serialNumber.trim() || "—"}
+              </BlueprintField>
+              <BlueprintField label="Tag" mono>
+                {asset.tag.trim() || "—"}
+              </BlueprintField>
+              <BlueprintField label="Cliente">
+                {asset.customerName.trim() || "—"}
+              </BlueprintField>
+              <BlueprintField label="Atualizado em" mono>
+                {formatDate(asset.updatedAt)}
+              </BlueprintField>
+            </BlueprintGrid>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Especificações</CardTitle>
-              <CardDescription>
-                Características técnicas usadas no processo de calibração.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          {/* Specifications */}
+          <Panel className="p-5">
+            <PanelHeader
+              eyebrow="Técnico"
+              title="Especificações"
+              description="Características técnicas usadas no processo de calibração."
+            />
+            <div className="mt-4">
               {specifications.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <BlueprintGrid className="sm:grid-cols-2">
                   {specifications.map(([key, value]) => (
-                    <div
+                    <BlueprintField
                       key={key}
-                      className="rounded-lg bg-muted/60 p-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"
+                      label={formatSpecificationLabel(key)}
+                      mono
                     >
-                      <p className="text-xs font-medium uppercase text-muted-foreground">
-                        {formatSpecificationLabel(key)}
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums">
-                        {formatSpecificationValue(value)}
-                      </p>
-                    </div>
+                      {formatSpecificationValue(value)}
+                    </BlueprintField>
                   ))}
-                </div>
+                </BlueprintGrid>
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   Nenhuma especificação registrada.
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
-          {asset.comments && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Observações</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-pretty text-sm leading-6 text-muted-foreground">
-                  {asset.comments}
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          {asset.comments ? (
+            <Panel className="p-5">
+              <PanelHeader eyebrow="Notas" title="Observações" />
+              <p className="text-muted-foreground mt-4 text-sm leading-6 text-pretty">
+                {asset.comments}
+              </p>
+            </Panel>
+          ) : null}
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Histórico de certificados</CardTitle>
-              <CardDescription>
-                Últimos certificados aprovados para este ativo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          {/* Calibration history */}
+          <Panel className="p-5">
+            <PanelHeader
+              eyebrow="Rastreabilidade"
+              title="Histórico de calibrações"
+              description="Certificados aprovados, do mais recente ao mais antigo."
+            />
+            <div className="mt-4">
               {asset.certificates.length > 0 ? (
-                asset.certificates.map((certificate) => (
-                  <Link
-                    key={certificate.id}
-                    to="/certificates/$id"
-                    params={{ id: String(certificate.id) }}
-                    className="group flex min-h-16 items-center gap-3 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--color-border)] transition-[background-color,box-shadow,transform] hover:bg-muted/60 hover:shadow-[inset_0_0_0_1px_var(--color-border),0_8px_24px_rgba(0,0,0,0.06)] active:scale-[0.96] dark:hover:shadow-[inset_0_0_0_1px_var(--color-border),0_8px_24px_rgba(0,0,0,0.18)]"
-                  >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <HugeiconsIcon icon={File01Icon} className="size-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                <Timeline
+                  items={asset.certificates.map((certificate) => ({
+                    title: (
+                      <Link
+                        to="/certificates/$id"
+                        params={{ id: String(certificate.id) }}
+                        className="font-mono tabular-nums hover:underline"
+                      >
                         {certificate.jobId}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {certificate.serviceName} ·{" "}
-                        <span className="tabular-nums">
-                          {formatDate(certificate.approvedAt)}
-                        </span>
-                      </p>
-                    </div>
-                  </Link>
-                ))
+                      </Link>
+                    ),
+                    description: certificate.serviceName,
+                    meta: formatDate(certificate.approvedAt),
+                    state: "done",
+                    tone: "ok",
+                    icon: File01Icon,
+                  }))}
+                />
               ) : (
-                <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
-                  Nenhum certificado aprovado encontrado.
+                <div className="bg-muted/45 text-muted-foreground rounded-xl p-4 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+                  Nenhum certificado aprovado encontrado para este equipamento.
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumo operacional</CardTitle>
-              <CardDescription>
-                Informações rápidas para acompanhamento.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Info label="Tipo" value={asset.assetTypeName} />
-              <Info label="Status" value={statusLabels[asset.status]} />
-              <Info label="Criado em" value={formatDate(asset.createdAt)} />
-              <div className="rounded-xl bg-muted/60 p-4">
-                <div className="flex items-start gap-3">
-                  <HugeiconsIcon
-                    icon={InformationCircleIcon}
-                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                  />
-                  <p className="text-pretty text-sm text-muted-foreground">
-                    Use a solicitação de calibração para enviar este ativo ao
-                    laboratório junto com outros instrumentos da organização.
-                  </p>
-                </div>
+          {/* Operational summary */}
+          <Panel className="p-5">
+            <PanelHeader
+              eyebrow="Operação"
+              title="Resumo operacional"
+              description="Informações rápidas para acompanhamento."
+            />
+            <BlueprintGrid className="mt-4 sm:grid-cols-2">
+              <BlueprintField label="Tipo">
+                {asset.assetTypeName}
+              </BlueprintField>
+              <BlueprintField label="Situação">
+                {statusLabels[asset.status]}
+              </BlueprintField>
+              <BlueprintField label="Criado em" mono>
+                {formatDate(asset.createdAt)}
+              </BlueprintField>
+              <BlueprintField label="Atualizado em" mono>
+                {formatDate(asset.updatedAt)}
+              </BlueprintField>
+            </BlueprintGrid>
+            <div className="bg-muted/45 mt-4 rounded-xl p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+              <div className="flex items-start gap-3">
+                <HugeiconsIcon
+                  icon={InformationCircleIcon}
+                  className="text-muted-foreground mt-0.5 size-4 shrink-0"
+                  strokeWidth={2}
+                />
+                <p className="text-muted-foreground text-sm text-pretty">
+                  Use a solicitação de calibração para enviar este equipamento
+                  ao laboratório junto com outros instrumentos da organização.
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
         </div>
       </div>
     </div>
   );
+}
+
+function cnDot(tone: SignalTone): string {
+  return `size-1.5 shrink-0 rounded-full ${TONE[tone].dot}`;
 }
 
 function AssetDetailSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-5 w-96 max-w-full" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="portal-shell space-y-6">
+      <Panel className="p-5 sm:p-6">
+        <Skeleton className="h-8 w-28" />
+        <Skeleton className="mt-4 h-4 w-40" />
+        <Skeleton className="mt-3 h-9 w-72 max-w-full" />
+        <Skeleton className="mt-3 h-5 w-96 max-w-full" />
+      </Panel>
+      <div className="grid gap-3 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <Card key={index}>
-            <CardContent className="p-5">
-              <Skeleton className="h-5 w-24" />
-              <Skeleton className="mt-3 h-8 w-32" />
-              <Skeleton className="mt-2 h-4 w-40" />
-            </CardContent>
-          </Card>
+          <Skeleton key={index} className="h-[5.5rem] rounded-xl" />
         ))}
       </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Calendar03Icon;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex min-h-32 items-start gap-4 p-5">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <HugeiconsIcon icon={icon} className="size-4" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
-            {value}
-          </p>
-          <p className="mt-1 text-pretty text-xs text-muted-foreground">
-            {detail}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Info({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value?: string | null;
-  mono?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={
-          mono
-            ? "mt-1 text-sm font-medium tabular-nums"
-            : "mt-1 text-sm font-medium"
-        }
-      >
-        {value?.trim() || "-"}
-      </p>
+      <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
+        <Panel className="p-5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="mt-4 h-40 w-full rounded-xl" />
+        </Panel>
+        <Panel className="p-5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="mt-4 h-40 w-full rounded-xl" />
+        </Panel>
+      </div>
     </div>
   );
 }

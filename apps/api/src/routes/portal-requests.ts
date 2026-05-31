@@ -221,6 +221,12 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           status: calibrationRequest.status,
           observations: calibrationRequest.observations,
           requestedDueDate: calibrationRequest.requestedDueDate,
+          deliveryMethod: calibrationRequest.deliveryMethod,
+          invoiceRemittanceNumber: calibrationRequest.invoiceRemittanceNumber,
+          invoiceRemittanceKey: calibrationRequest.invoiceRemittanceKey,
+          invoiceRemittanceIssuedAt:
+            calibrationRequest.invoiceRemittanceIssuedAt,
+          carrierName: calibrationRequest.carrierName,
           submittedAt: calibrationRequest.submittedAt,
           reviewedAt: calibrationRequest.reviewedAt,
           approvedAt: calibrationRequest.approvedAt,
@@ -314,6 +320,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         ? new Date(input.requestedDueDate)
         : null;
 
+      // Remittance details only apply when shipping via a carrier; drop them
+      // otherwise so a later toggle to drop-off can't leave stale invoice data.
+      const isCarrier = input.deliveryMethod === "carrier";
+      const invoiceRemittanceIssuedAt =
+        isCarrier && input.invoiceRemittanceIssuedAt
+          ? new Date(input.invoiceRemittanceIssuedAt)
+          : null;
+
       const request = await db.transaction(async (tx) => {
         const lockAssetIds = [...input.assetIds].sort(
           (left, right) => left - right,
@@ -359,6 +373,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
             authOrganizationId: member.organizationId,
             observations: input.observations || null,
             requestedDueDate,
+            deliveryMethod: input.deliveryMethod,
+            invoiceRemittanceNumber: isCarrier
+              ? input.invoiceRemittanceNumber || null
+              : null,
+            invoiceRemittanceKey: isCarrier
+              ? input.invoiceRemittanceKey || null
+              : null,
+            invoiceRemittanceIssuedAt,
+            carrierName: isCarrier ? input.carrierName || null : null,
             submittedBy: session.user.id,
           })
           .returning();

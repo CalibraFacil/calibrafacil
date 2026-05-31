@@ -61,6 +61,7 @@ type ServiceOrderStatus =
 
 type PortalServiceOrder = {
   id: number;
+  publicId: string;
   serviceOrderNumber: string;
   status: ServiceOrderStatus;
   statusLabel: string;
@@ -196,7 +197,7 @@ function ServiceOrdersPage() {
           <div className="space-y-1">
             <Link
               to="/service-orders/$id"
-              params={{ id: String(row.original.id) }}
+              params={{ id: row.original.publicId }}
               className="font-medium hover:underline"
             >
               {row.original.serviceOrderNumber}
@@ -254,7 +255,7 @@ function ServiceOrdersPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="portal-shell space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Ordens de Serviço</CardTitle>

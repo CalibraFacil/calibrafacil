@@ -1,6 +1,8 @@
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
+import { getCalibrationStatus } from "@/lib/calibration-status";
+import { formatDate } from "@/lib/format";
 
 type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
@@ -25,80 +27,71 @@ export interface Asset {
   updatedAt: string;
 }
 
-const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: "Ativo",
-  INACTIVE: "Inativo",
-  MAINTENANCE: "Manutenção",
-  SCRAPPED: "Descartado",
-};
-
-const statusVariants: Record<
-  AssetStatus,
-  "default" | "secondary" | "outline" | "destructive"
-> = {
-  ACTIVE: "default",
-  INACTIVE: "secondary",
-  MAINTENANCE: "outline",
-  SCRAPPED: "destructive",
-};
-
-function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return "-";
-  const d = new Date(date);
-  return d.toLocaleDateString("pt-BR");
-}
-
 export const assetsColumns: ColumnDef<Asset>[] = [
   {
     accessorKey: "tag",
     header: "Tag",
     cell: ({ row }) => (
-      <span className="font-mono font-medium tabular-nums">
+      <span className="font-mono text-xs font-medium tabular-nums">
         {row.original.tag}
       </span>
     ),
   },
   {
-    accessorKey: "assetTypeName",
-    header: "Tipo",
-    cell: ({ row }) => (
-      <Badge variant="secondary">{row.original.assetTypeName}</Badge>
-    ),
-  },
-  {
     accessorKey: "name",
-    header: "Nome",
-  },
-  {
-    accessorKey: "manufacturer",
-    header: "Fabricante",
-    cell: ({ row }) => row.original.manufacturer || "-",
+    header: "Instrumento",
+    cell: ({ row }) => (
+      <div className="min-w-0">
+        <p className="truncate font-medium">{row.original.name}</p>
+        <p className="text-muted-foreground truncate text-xs">
+          {row.original.assetTypeName}
+          {row.original.manufacturer ? ` · ${row.original.manufacturer}` : ""}
+        </p>
+      </div>
+    ),
   },
   {
     accessorKey: "serialNumber",
     header: "N. Série",
     cell: ({ row }) => (
-      <span className="font-mono tabular-nums">
+      <span className="font-mono text-xs tabular-nums">
         {row.original.serialNumber}
       </span>
     ),
   },
   {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => (
-      <Badge variant={statusVariants[row.original.status]}>
-        {statusLabels[row.original.status]}
-      </Badge>
-    ),
+    id: "calibrationStatus",
+    header: "Calibração",
+    cell: ({ row }) => {
+      const status = getCalibrationStatus(row.original.nextCalibrationDate);
+      return (
+        <StatusPill
+          tone={status.tone}
+          size="sm"
+          pulse={status.tone === "critical"}
+        >
+          {status.label}
+        </StatusPill>
+      );
+    },
   },
   {
     accessorKey: "nextCalibrationDate",
-    header: "Próx. Calibração",
-    cell: ({ row }) => (
-      <span className="tabular-nums">
-        {formatDate(row.original.nextCalibrationDate)}
-      </span>
-    ),
+    header: "Próx. calibração",
+    cell: ({ row }) => {
+      const status = getCalibrationStatus(row.original.nextCalibrationDate);
+      return (
+        <div className="text-sm">
+          <span className="font-mono tabular-nums">
+            {formatDate(row.original.nextCalibrationDate)}
+          </span>
+          {status.daysDelta !== null ? (
+            <p className="text-muted-foreground text-xs">
+              {status.description}
+            </p>
+          ) : null}
+        </div>
+      );
+    },
   },
 ];

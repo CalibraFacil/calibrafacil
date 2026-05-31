@@ -4633,6 +4633,13 @@ export const serviceOrder = pgTable(
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
     serviceOrderNumber: text("service_order_number").notNull(),
+    // Opaque, non-sequential identifier for client-facing URLs (the portal
+    // routes by this instead of the enumerable serial id). Mirrors
+    // calibrationJob.verificationToken / billingDocument.publicId.
+    publicId: text("public_id")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -5285,6 +5292,19 @@ export const calibrationRequest = pgTable(
     requestedDueDate: timestamp("requested_due_date", {
       withTimezone: true,
     }),
+    // How the customer will get the assets to the lab. When shipping via a
+    // carrier, they provide the "nota fiscal de remessa para conserto" so the
+    // lab can receive the goods and later issue the return invoice.
+    deliveryMethod: text("delivery_method")
+      .$type<"dropoff" | "carrier">()
+      .default("dropoff")
+      .notNull(),
+    invoiceRemittanceNumber: text("invoice_remittance_number"),
+    invoiceRemittanceKey: text("invoice_remittance_key"),
+    invoiceRemittanceIssuedAt: timestamp("invoice_remittance_issued_at", {
+      withTimezone: true,
+    }),
+    carrierName: text("carrier_name"),
     submittedBy: text("submitted_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),

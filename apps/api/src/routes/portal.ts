@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
@@ -6,6 +7,9 @@ import {
   organization,
   customer,
   calibrationJob,
+  calibrationRequest,
+  calibrationRequestItem,
+  serviceOrder,
   asset,
   assetType,
   service,
@@ -16,16 +20,81 @@ import {
   eq,
   and,
   inArray,
+  asc,
   desc,
   like,
   not,
   count,
   isNull,
+  isNotNull,
+  lt,
+  lte,
+  gt,
+  gte,
   ilike,
   or,
   sql,
 } from "drizzle-orm";
 import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
+
+// Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
+// An instrument is "due soon" within this many days of its next calibration.
+const DUE_SOON_DAYS = 30;
+
+// Portal-local extension of the shared asset query. Adds an optional
+// calibration-status filter so the command center can deep-link the equipment
+// list to "overdue" / "due soon" without touching the shared schema or web.
+const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
+  dueStatus: z
+    .enum(["overdue", "due_soon", "scheduled", "unscheduled"])
+    .optional(),
+});
+
+type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
+
+function buildDueStatusCondition(dueStatus: DueStatus) {
+  if (!dueStatus) return undefined;
+  const now = new Date();
+  const soon = new Date(now);
+  soon.setDate(soon.getDate() + DUE_SOON_DAYS);
+
+  switch (dueStatus) {
+    case "overdue":
+      return lt(asset.nextCalibrationDate, now);
+    case "due_soon":
+      return and(
+        gte(asset.nextCalibrationDate, now),
+        lte(asset.nextCalibrationDate, soon),
+      );
+    case "scheduled":
+      return gt(asset.nextCalibrationDate, soon);
+    case "unscheduled":
+      return isNull(asset.nextCalibrationDate);
+  }
+}
+
+function emptyOverview() {
+  return {
+    equipment: {
+      total: 0,
+      overdue: 0,
+      dueSoon: 0,
+      scheduled: 0,
+      unscheduled: 0,
+      attention: [],
+    },
+    certificates: { available: 0, recent: [] },
+    requests: { total: 0, open: 0, rejected: 0, recent: [] },
+    serviceOrders: {
+      total: 0,
+      inProgress: 0,
+      awaitingQuoteApproval: 0,
+      readyForPickup: 0,
+      awaitingQuote: [],
+      recent: [],
+    },
+  };
+}
 import {
   requirePortalAuth,
   requirePermission,
@@ -356,13 +425,228 @@ export const portalRouter = new Hono<{
   })
 
   // =========================================================================
+  // GET /overview - Command-center aggregation for the active portal org
+  // =========================================================================
+  // One round-trip that powers the dashboard with accurate, fleet-wide numbers
+  // (not guessed from the first page of a list). Scoped to the active org's
+  // linked customer, exactly like /assets.
+  // =========================================================================
+  .get("/overview", ...requirePortalProtected, async (c) => {
+    const member = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const [linkedCustomer] = await db
+        .select({
+          id: customer.id,
+          labOrganizationId: customer.labOrganizationId,
+        })
+        .from(customer)
+        .where(eq(customer.authOrganizationId, member.organizationId))
+        .limit(1);
+
+      if (
+        !linkedCustomer ||
+        (portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId)
+      ) {
+        return c.json(emptyOverview());
+      }
+
+      // Compare against the DB clock in UTC. Binding raw JS Date objects inside
+      // a sql`` template fails under postgres.js (it can't encode a bare Date),
+      // so we derive both bounds from now() in SQL instead.
+      const nowUtc = sql`(now() at time zone 'utc')`;
+      const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+
+      const equipmentWhere = and(
+        eq(asset.customerId, linkedCustomer.id),
+        eq(asset.status, "ACTIVE"),
+        isNull(asset.deletedAt),
+      );
+      const requestWhere = and(
+        eq(calibrationRequest.customerId, linkedCustomer.id),
+        eq(calibrationRequest.authOrganizationId, member.organizationId),
+      );
+      const certificateWhere = and(
+        eq(calibrationJob.customerId, linkedCustomer.id),
+        eq(calibrationJob.status, "APPROVED"),
+      );
+      const serviceOrderWhere = eq(serviceOrder.customerId, linkedCustomer.id);
+
+      const [
+        equipmentCounts,
+        equipmentAttention,
+        certificateCounts,
+        recentCertificatesRaw,
+        requestCounts,
+        recentRequests,
+        serviceOrderCounts,
+        awaitingQuoteOrders,
+        recentServiceOrders,
+      ] = await Promise.all([
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
+            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${soonUtc}) as int)`,
+            unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
+          })
+          .from(asset)
+          .where(equipmentWhere),
+        db
+          .select({
+            id: asset.id,
+            name: asset.name,
+            tag: asset.tag,
+            nextCalibrationDate: asset.nextCalibrationDate,
+          })
+          .from(asset)
+          .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
+          .orderBy(asc(asset.nextCalibrationDate))
+          .limit(6),
+        db
+          .select({ available: sql<number>`cast(count(*) as int)` })
+          .from(calibrationJob)
+          .where(certificateWhere),
+        db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            approvedAt: calibrationJob.approvedAt,
+            certificateUrl: calibrationJob.certificateUrl,
+            assetName: asset.name,
+            assetTag: asset.tag,
+          })
+          .from(calibrationJob)
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .where(certificateWhere)
+          .orderBy(desc(calibrationJob.approvedAt))
+          .limit(5),
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            open: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} in ('PENDING','UNDER_REVIEW')) as int)`,
+            rejected: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} = 'REJECTED') as int)`,
+          })
+          .from(calibrationRequest)
+          .where(requestWhere),
+        db
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            submittedAt: calibrationRequest.submittedAt,
+            itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
+          })
+          .from(calibrationRequest)
+          .where(requestWhere)
+          .orderBy(desc(calibrationRequest.submittedAt))
+          .limit(5),
+        db
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            inProgress: sql<number>`cast(count(*) filter (where ${serviceOrder.status} not in ('delivered','closed','canceled')) as int)`,
+            awaitingQuoteApproval: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'awaiting_quote_approval') as int)`,
+            readyForPickup: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'ready_for_pickup') as int)`,
+          })
+          .from(serviceOrder)
+          .where(serviceOrderWhere),
+        db
+          .select({
+            id: serviceOrder.id,
+            publicId: serviceOrder.publicId,
+            serviceOrderNumber: serviceOrder.serviceOrderNumber,
+            status: serviceOrder.status,
+            openedAt: serviceOrder.openedAt,
+            assetName: asset.name,
+          })
+          .from(serviceOrder)
+          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+          .where(
+            and(
+              serviceOrderWhere,
+              eq(serviceOrder.status, "awaiting_quote_approval"),
+            ),
+          )
+          .orderBy(desc(serviceOrder.openedAt))
+          .limit(5),
+        db
+          .select({
+            id: serviceOrder.id,
+            publicId: serviceOrder.publicId,
+            serviceOrderNumber: serviceOrder.serviceOrderNumber,
+            status: serviceOrder.status,
+            openedAt: serviceOrder.openedAt,
+            assetName: asset.name,
+          })
+          .from(serviceOrder)
+          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+          .where(serviceOrderWhere)
+          .orderBy(desc(serviceOrder.openedAt))
+          .limit(5),
+      ]);
+
+      const recentCertificates = (
+        await applyPortalCertificateReleaseGate(
+          recentCertificatesRaw,
+          linkedCustomer.labOrganizationId,
+        )
+      ).map((cert) => ({
+        id: cert.id,
+        jobId: cert.jobId,
+        approvedAt: cert.approvedAt,
+        assetName: cert.assetName,
+        assetTag: cert.assetTag,
+        releaseStatus: cert.releaseStatus,
+        ready: cert.certificateUrl !== null,
+      }));
+
+      const equipment = equipmentCounts[0] ?? {
+        total: 0,
+        overdue: 0,
+        dueSoon: 0,
+        scheduled: 0,
+        unscheduled: 0,
+      };
+      const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
+      const orders = serviceOrderCounts[0] ?? {
+        total: 0,
+        inProgress: 0,
+        awaitingQuoteApproval: 0,
+        readyForPickup: 0,
+      };
+
+      return c.json({
+        equipment: { ...equipment, attention: equipmentAttention },
+        certificates: {
+          available: certificateCounts[0]?.available ?? 0,
+          recent: recentCertificates,
+        },
+        requests: { ...requests, recent: recentRequests },
+        serviceOrders: {
+          ...orders,
+          awaitingQuote: awaitingQuoteOrders,
+          recent: recentServiceOrders,
+        },
+      });
+    } catch (error) {
+      console.error("Error building portal overview:", error);
+      return c.json({ error: "Erro ao carregar o painel" }, 500);
+    }
+  })
+
+  // =========================================================================
   // GET /assets - List assets for active portal organization
   // =========================================================================
   .get(
     "/assets",
     ...requirePortalProtected,
     requirePermission({ equipment: ["read"] }),
-    zValidator("query", ListAssetsQuerySchema),
+    zValidator("query", PortalListAssetsQuerySchema),
     async (c) => {
       const member = c.get("member");
       const portalLabScope = await getPortalLabScope(c);
@@ -371,7 +655,7 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const { page, limit, query } = c.req.valid("query");
+        const { page, limit, query, dueStatus } = c.req.valid("query");
         const offset = (page - 1) * limit;
 
         const [linkedCustomer] = await db
@@ -410,6 +694,7 @@ export const portalRouter = new Hono<{
                 ilike(asset.model, `%${query}%`),
               )
             : undefined,
+          buildDueStatusCondition(dueStatus),
         );
 
         const [countResult] = await db

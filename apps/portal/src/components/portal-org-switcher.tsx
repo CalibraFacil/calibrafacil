@@ -26,6 +26,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { shortcutLabel } from "@/lib/platform";
 
 function getWebAppUrl(): string {
   if (import.meta.env.VITE_WEB_URL) {
@@ -102,9 +103,9 @@ export function PortalOrgSwitcher() {
                   <span className="truncate font-medium">
                     {activeOrg?.name ?? "Selecionar organização"}
                   </span>
-                  <span className="truncate text-xs">
+                  <span className="text-muted-foreground truncate text-xs">
                     {activeOrg?.type === "CLIENT"
-                      ? "cliente"
+                      ? "Portal do cliente"
                       : (activeOrg?.slug ?? "Nenhuma selecionada")}
                   </span>
                 </div>
@@ -138,7 +139,9 @@ export function PortalOrgSwitcher() {
                     </div>
                     {org.name}
                     {index < 9 && (
-                      <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+                      <DropdownMenuShortcut>
+                        {shortcutLabel(String(index + 1))}
+                      </DropdownMenuShortcut>
                     )}
                   </DropdownMenuItem>
                 ))}
