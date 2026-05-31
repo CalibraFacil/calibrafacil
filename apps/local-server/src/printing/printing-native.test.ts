@@ -76,15 +76,15 @@ vi.mock("usb", () => ({
 
 vi.mock("serialport", () => ({ SerialPort: serialMock.SerialPort }));
 
-const { sendZplOverUsb } = await import("./usb-transport");
-const { sendZplOverSerial } = await import("./serial-transport");
+const { sendCommandsOverUsb } = await import("./usb-transport");
+const { sendCommandsOverSerial } = await import("./serial-transport");
 const { sendToPrinter } = await import("./transport-types");
 const { discoverPrinters } = await import("./discovery");
 
 describe("usb transport", () => {
   it("claims, detaches the kernel driver, transfers, then releases/closes", async () => {
     usbMock.calls.length = 0;
-    const bytes = await sendZplOverUsb(
+    const bytes = await sendCommandsOverUsb(
       { vendorId: 0x0a5f, productId: 0x0001 },
       "^XA^XZ",
     );
@@ -104,7 +104,7 @@ describe("usb transport", () => {
 describe("serial transport", () => {
   it("opens, writes, drains and closes", async () => {
     serialMock.calls.length = 0;
-    const bytes = await sendZplOverSerial(
+    const bytes = await sendCommandsOverSerial(
       { path: "/dev/ttyUSB0", baudRate: 9600 },
       "^XA^XZ",
     );
@@ -126,6 +126,7 @@ describe("transport dispatcher", () => {
         id: "u",
         name: "USB",
         connection: { type: "usb", vendorId: 0x0a5f, productId: 1 },
+        language: "zpl",
         dpi: 203,
         darkness: 15,
         speed: 4,

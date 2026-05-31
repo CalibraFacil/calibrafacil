@@ -89,8 +89,8 @@ async function readPrintResult(response: Response): Promise<PrintResult> {
     : { success: false, error: 'Resposta inválida do servidor local' }
 }
 
-export async function printZplToLocalPrinter(input: {
-  zpl: string
+export async function printToLocalPrinter(input: {
+  commands: string
   profileId?: string
 }): Promise<PrintResult> {
   return readPrintResult(

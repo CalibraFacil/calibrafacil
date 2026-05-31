@@ -1,29 +1,32 @@
-# Thermal Label Printing (Zebra / ZPL)
+# Thermal Label Printing (ZPL + TSPL)
 
 This document is the design record behind real thermal-printer support for
 calibration labels (the `feat/thermal-label-printing*` branch stack). It explains
 the architecture, the transport matrix, the key decisions and their rationale, the
-native-module packaging, and how to verify/extend it.
+native-module packaging, the printer-language abstraction, and how to verify/extend it.
 
 ## Problem
 
 A calibration label used to be a 50×30 mm **PDF** (React `LabelHtml.tsx` →
 Gotenberg) opened in a browser tab (`window.open`). That is unreliable on thermal
 label printers: driver/media scaling, soft QR/barcodes, no exact media sizing. We
-wanted **real** printing — printer-native **ZPL** sent straight to a Zebra-class
-printer — from every runtime the product ships in (cloud web app + desktop/offline
-Electron), with the PDF kept as a universal fallback.
+wanted **real** printing — printer-native commands sent straight to the printer —
+from every runtime the product ships in (cloud web app + desktop/offline Electron),
+in the printer's command language (**ZPL** for Zebra, **TSPL** for TSC), with the
+PDF kept as a universal fallback.
 
 ## Shape
 
-One **pure ZPL core** feeds runtime-selected **transports**:
+One **pure rendering core** (pluggable command languages) feeds runtime-selected
+**transports**:
 
 ```
-packages/label-zpl   pure, zero-dep: buildLabelZpl + ^FH/^CI28 escaping + ^BQ QR
+packages/label-rendering   pure, zero-dep. LabelRenderer interface →
+                           zpl/ (^FH/^CI28, ^BQ QR) + tspl/ (CODEPAGE, QRCODE)
         │ used by
- apps/api  ── GET /api/jobs/:id/label.zpl ──►  ZPL built server-side
-   (verification token never leaves the server)
-        │ browser fetches ZPL, then picks a transport by runtime:
+ apps/api  ── GET /api/jobs/:id/label-commands?lang= ──►  commands built server-side
+   (verification token isn't in the general job DTO — only in this response)
+        │ browser fetches the commands, then picks a transport by runtime:
  apps/web (features/printing/print-label.ts)
    ├─ desktop      → apps/local-server /api/printer/print → net | usb | serial
    ├─ cloud        → Zebra Browser Print agent
@@ -32,32 +35,33 @@ packages/label-zpl   pure, zero-dep: buildLabelZpl + ^FH/^CI28 escaping + ^BQ QR
    └─ else         → PDF "Baixar Etiqueta QR" (window.open)  ← universal fallback
 ```
 
-`packages/label-zpl` is pure (like `@calibra-facil/shared`), so it runs in the
-worker, the API, the local-server, and the browser without pulling server runtime
-into the frontend type graph — it respects the
-[API/client contract boundary](./api-client-contract.md).
+`packages/label-rendering` is pure (like `@calibra-facil/shared`), so it runs in
+the API, the local-server, and the browser without pulling server runtime into the
+frontend type graph — it respects the
+[API/client contract boundary](./api-client-contract.md). The renderer is selected
+per **printer profile** (`language: "zpl" | "tspl"`).
 
 ## Components
 
-| Area | What |
-|---|---|
-| `packages/label-zpl` | Typed ZPL builder. `buildLabelZpl(data, options)`, `buildTestLabelZpl(options)`, `defaultRenderOptions(dpi)`. Native `^BQ` QR; `^FH` + `^CI28` hex escaping; DPI-driven layout (203 → `^PW400 ^LL240`, 300 → `^PW591 ^LL354`). |
-| `packages/schemas/src/printing.ts` | `PrinterConnection` (discriminated union: `network` / `usb` / `serial`), `PrinterProfile`, `PrintLabelRequest`, `PrintTestRequest`, `PrinterDiscoverResult`. Schema-first source of truth. |
-| `apps/api` `GET /:id/label.zpl` | Builds ZPL server-side from the same data `fetchLabelData` uses (`?dpi=203\|300`). Exposed to the frontend as `calibraApi.jobs.getLabelZpl` (policy `cloud-only`). |
-| `apps/local-server/src/printing` | Desktop transports + routes: `net`/`usb`/`serial`, `/api/printer/{print,test,profiles,discover}`. Profiles persist in SQLite (`packages/local-db` migration `0008` + `printer-profiles` repo). |
-| `apps/web/src/features/printing` | `printLabel` orchestration, the "Imprimir Etiqueta (térmica)" action, a runtime-aware settings dialog, and the cloud transports (`browser-print.ts`, `web-usb.ts`, `web-serial.ts`). |
+| Area                                 | What                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/label-rendering`           | The `LabelRenderer` interface + `renderLabel(data, options)`, `renderTestLabel(options)`, `getRenderer(language)`, `defaultRenderOptions(language, dpi)`. `zpl/` (native `^BQ` QR, `^FH`/`^CI28` escaping) and `tspl/` (`CODEPAGE UTF-8`, `QRCODE`, quote/newline escaping). DPI-driven layout (203 → 400×240, 300 → 591×354). |
+| `packages/schemas/src/printing.ts`   | `PrinterLanguage` (`zpl`/`tspl`), `PrinterConnection` (discriminated union: `network` / `usb` / `serial`), `PrinterProfile` (carries `language`), `PrintLabelRequest` (`commands`), `PrintTestRequest`, `PrinterDiscoverResult`. Schema-first source of truth.                                                                 |
+| `apps/api` `GET /:id/label-commands` | Renders commands server-side from the same data `fetchLabelData` uses (`?lang=zpl\|tspl&dpi=203\|300`). Exposed as `calibraApi.jobs.getLabelCommands` (policy `cloud-only`).                                                                                                                                                   |
+| `apps/local-server/src/printing`     | Desktop transports + routes: `net`/`usb`/`serial`, `/api/printer/{print,test,profiles,discover}`. Profiles persist in SQLite (`packages/local-db` migration `0008` + `printer-profiles` repo).                                                                                                                                 |
+| `apps/web/src/features/printing`     | `printLabel` orchestration, the "Imprimir Etiqueta (térmica)" action, a runtime-aware settings dialog, and the cloud transports (`browser-print.ts`, `web-usb.ts`, `web-serial.ts`).                                                                                                                                           |
 
 ## Transport matrix
 
-| Runtime | Transport | Where the bytes go |
-|---|---|---|
-| Desktop | Network | `net.Socket` → `host:9100` (zero deps; the robust default) |
-| Desktop | USB | `usb` (node-usb): claim interface 0, bulk OUT |
-| Desktop | Serial | `serialport`: open/write/drain/close |
-| Cloud | Zebra Browser Print | local agent over `fetch` (`/available`, `/write`) |
-| Cloud | WebUSB | `navigator.usb` (Chromium, HTTPS, per-device grant) |
-| Cloud | Web Serial | `navigator.serial` (Chromium, HTTPS, per-device grant) |
-| Any | PDF | presigned label PDF, `window.open` (fallback) |
+| Runtime | Transport           | Where the bytes go                                         |
+| ------- | ------------------- | ---------------------------------------------------------- |
+| Desktop | Network             | `net.Socket` → `host:9100` (zero deps; the robust default) |
+| Desktop | USB                 | `usb` (node-usb): claim interface 0, bulk OUT              |
+| Desktop | Serial              | `serialport`: open/write/drain/close                       |
+| Cloud   | Zebra Browser Print | local agent over `fetch` (`/available`, `/write`)          |
+| Cloud   | WebUSB              | `navigator.usb` (Chromium, HTTPS, per-device grant)        |
+| Cloud   | Web Serial          | `navigator.serial` (Chromium, HTTPS, per-device grant)     |
+| Any     | PDF                 | presigned label PDF, `window.open` (fallback)              |
 
 The cloud path is a **priority chain** (`print-label.ts:resolveCloudSender`):
 Browser Print → granted WebUSB → granted Web Serial → `NoCloudPrinterError`
@@ -66,17 +70,18 @@ not on mount, so we never ping `localhost` on every page load.
 
 ## Key decisions
 
-- **In-house ZPL builder, not a dependency.** The only healthy native-ZPL npm
+- **In-house renderers, not a dependency.** The only healthy native-ZPL npm
   package (`jszpl`) is **GPL-3.0**, incompatible with this proprietary codebase;
-  `node-zpl` is stale and drags `jimp`. A ~150-line builder is license-clean,
-  dependency-light, fully unit-tested, and pure (runs everywhere).
-- **ZPL is built server-side.** `verification_token` is not exposed in any web
-  job DTO, so the QR payload (`https://verify.calibrafacil.com/v/{token}`) is built
-  in `GET /:id/label.zpl` and the token never reaches the browser.
-- **ZPL injection / accents are handled at the core.** `^` and `~` are ZPL command
-  prefixes; arbitrary field text is emitted for `^FH` hex mode and `^CI28` (UTF-8),
-  so Portuguese accents round-trip and user data (e.g. an asset tag) can't break out
-  of a field. Exhaustively tested in `escape.test.ts`.
+  `node-zpl` is stale and drags `jimp`. The renderers are license-clean,
+  dependency-light, fully unit-tested, and pure (run everywhere).
+- **Commands are built server-side.** `verification_token` is not exposed in the
+  general job DTO; the QR payload (`https://verify.calibrafacil.com/v/{token}`) is
+  embedded only in the dedicated `label-commands` response (least exposure — the
+  token isn't sprinkled across general job data).
+- **Injection / accents are handled per renderer.** ZPL hex-escapes `^`/`~`/`_`
+  via `^FH` + `^CI28`; TSPL strips CR/LF and neutralizes quotes/backslashes and
+  sets `CODEPAGE UTF-8`. Either way user data (e.g. an asset tag) can't break out
+  of a field. Exhaustively tested.
 - **Network is the recommended default.** It needs no driver and no OS-specific
   permissions; USB/serial are offered but are best-effort per OS (see below).
 - **Browser Print over plain `fetch`, not the SDK.** The base URL is
@@ -121,60 +126,56 @@ USB raw access is OS-specific — **prefer network (9100)**. See
 
 Each phase is independently shippable and was reviewed on its own PR.
 
-| Phase | PR | Scope |
-|---|---|---|
-| 1 | #358 | Pure ZPL core, `label.zpl` endpoint, desktop **network** transport, SQLite profiles, web action. No native modules. |
-| 2 | #359 | Cloud **Zebra Browser Print**. No native modules. |
-| 3 | #360 | Desktop **USB + serial** + discovery; the native-module packaging. |
-| 4 | #361 | Cloud **WebUSB + Web Serial** no-install fallback. |
+| Phase | PR   | Scope                                                                                                                                                                                 |
+| ----- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | #358 | Pure ZPL core, label-commands endpoint, desktop **network** transport, SQLite profiles, web action. No native modules.                                                                |
+| 2     | #359 | Cloud **Zebra Browser Print**. No native modules.                                                                                                                                     |
+| 3     | #360 | Desktop **USB + serial** + discovery; the native-module packaging.                                                                                                                    |
+| 4     | #361 | Cloud **WebUSB + Web Serial** no-install fallback.                                                                                                                                    |
+| 5     | #362 | **Printer-language abstraction** (`LabelRenderer`) + **TSPL** renderer; `language` per profile; neutral naming (`label-rendering`, `label-commands`, `getLabelCommands`, `commands`). |
 
 ## Verification & extension
 
-- **Unit tests** — `packages/label-zpl` (exact ZPL at 203/300 dpi, escaping,
-  injection); `packages/local-db` (profile round-trip); `apps/local-server`
-  (network = a real `net` echo server; usb/serial = mocked call-sequences;
-  discovery). Run with `TZ=UTC` + Node 22 to match CI.
+- **Unit tests** — `packages/label-rendering` (exact ZPL **and** TSPL at 203/300
+  dpi, escaping, injection, the renderer factory); `packages/local-db` (profile
+  round-trip); `apps/local-server` (network = a real `net` echo server; usb/serial
+  = mocked call-sequences; discovery). Run with `TZ=UTC` + Node 22 to match CI.
 - **Hardware** — transport call-sequences are unit-tested, but real printing must
   be validated on a device: each settings dialog has a **"Teste"** button that
-  sends a diagnostic label. Tune QR/margin fit via the profile offsets and a
-  visual check with [Labelary](https://labelary.com) on first print.
-- **Adding a ZPL-compatible printer** (TSC, Godex… in ZPL mode) — works via the
-  same transports; discovery filters USB to the Zebra vendor id, so other vendors
-  are added by entering their vendor/product id (network needs only an IP).
+  sends a diagnostic label (in the profile's language). Tune QR/margin fit via the
+  profile offsets and a visual check with [Labelary](https://labelary.com) (ZPL)
+  on first print. TSPL fidelity (font sizing) is reasonable but not
+  hardware-validated.
+- **Adding a printer** — a ZPL/TSPL printer is just a profile with the right
+  `language` (network needs only an IP; discovery filters USB to the Zebra vendor
+  id, others by manual vendor/product id).
 
-### Printer-language portability (e.g. ZPL → TSPL)
+### Printer-language portability
 
-The architecture is **language-agnostic at the transport layer but not yet at the
-edges** — swapping in TSPL is *not* strictly "add a renderer, change nothing else".
+The architecture is **language-agnostic** (delivered in Phase 5). Adding a command
+language (e.g. EPL) is implementing one interface and registering it:
 
-Already agnostic (opaque byte pipes — no ZPL knowledge):
+```ts
+// packages/label-rendering/src/types.ts
+interface LabelRenderer {
+  readonly language: PrinterLanguage;
+  renderLabel(input: LabelInput, options: LabelRenderOptions): string;
+  renderTestLabel(options: LabelRenderOptions): string;
+}
+```
 
-- `apps/local-server/src/printing/{network,usb,serial}-transport.ts` and the
-  `sendToPrinter` dispatcher take a string and write bytes; they switch on
-  `connection.type`, never on language.
-- The cloud `sendZpl*` senders (`browser-print`, `web-usb`, `web-serial`) likewise
-  just transmit bytes.
-- The label **data model** (`LabelZplInput`: cert no., lab, asset tag, date,
-  verify URL) and the layout intent are dialect-independent.
+Add `epl/renderer.ts`, register it in `render.ts:RENDERERS`, and extend
+`PrinterLanguageSchema`. Nothing else changes:
 
-Coupled to ZPL today (change points outside the renderer):
+- **Transports are opaque byte pipes.** `{network,usb,serial}-transport.ts` + the
+  `sendToPrinter` dispatcher, and the cloud `sendVia*` senders, take a `commands`
+  string and transmit bytes — they switch on `connection.type`, never on language.
+- **The data model + layout intent** (`LabelInput`) are dialect-independent; each
+  renderer maps darkness/speed onto its own range (e.g. ZPL `~SD` 0–30 vs TSPL
+  `DENSITY` 0–15).
+- **The API negotiates language** via `?lang=` and the **printer profile carries
+  `language`**, so the right dialect is chosen end to end. Identifiers are neutral
+  (`label-rendering`, `getLabelCommands`, `printToLocalPrinter`, `commands`).
 
-- `packages/label-zpl` is the renderer — a sibling `label-tspl` (or a
-  `LabelRenderer` interface with `zpl`/`tspl` implementations) would be the new
-  rendering layer. ✅ intended.
-- `apps/api` `GET /:id/label.zpl` imports the ZPL builder directly and the route /
-  client method / contract literal are ZPL-named (`label.zpl`, `getLabelZpl`,
-  `api-app.ts`). Picking a dialect needs the endpoint to negotiate language (or a
-  second route).
-- `PrinterProfile`/`PrinterConnection` (`packages/schemas`) have **no `language`
-  field**, and `darkness` (0–30) maps to ZPL `~SD` (TSPL `DENSITY` is 0–15).
-- `buildTestLabelZpl` (shared by the desktop + cloud "Teste") is ZPL.
-- Naming (`getLabelZpl`, `printZplToLocalPrinter`, `data: zpl`) assumes ZPL.
-- The cloud **Zebra Browser Print** path is Zebra-only *hardware-wise* — a TSC
-  printer would use network/USB/serial, not Browser Print.
-
-True language-agnosticism is a small, well-scoped refactor: introduce a
-`LabelRenderer` interface + a `language` field on the printer profile, have the API
-endpoint resolve the dialect, and rename the ZPL-specific identifiers to neutral
-ones (`getLabelCommands`, `printRawToPrinter`, `data`). The transports and
-local-server routes would not change.
+The one hardware caveat: **Zebra Browser Print** is Zebra-only — a TSC printer
+uses network/USB/serial (all language-agnostic), not Browser Print.

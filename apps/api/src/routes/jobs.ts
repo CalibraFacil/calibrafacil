@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { buildLabelZpl, defaultRenderOptions } from "@calibra-facil/label-zpl";
+import {
+  renderLabel,
+  defaultRenderOptions,
+} from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   findServiceOrdersForCalibrationJob,
@@ -3355,13 +3358,14 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
-  // GET /:id/label.zpl - Native ZPL for direct thermal printing
+  // GET /:id/label-commands - Native printer commands for direct thermal printing
   // =========================================================================
-  // Built server-side so the verification token stays off the client. The
-  // browser fetches this, then hands the ZPL to a transport (desktop
-  // local-server or Zebra Browser Print).
+  // Rendered server-side (the verification token isn't exposed in the general
+  // job DTO) in the requested language (?lang=zpl|tspl). The browser fetches
+  // this, then hands the commands to a transport (desktop local-server, Zebra
+  // Browser Print, WebUSB, or Web Serial).
   .get(
-    "/:id/label.zpl",
+    "/:id/label-commands",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
@@ -3399,7 +3403,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const dpi = c.req.query("dpi") === "300" ? 300 : 203;
-      const zpl = buildLabelZpl(
+      const language = c.req.query("lang") === "tspl" ? "tspl" : "zpl";
+      const commands = renderLabel(
         {
           certNumber: job.jobId,
           labName: job.labName ?? "Laboratório",
@@ -3408,10 +3413,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           // Same public verification URL the worker encodes into the PDF QR.
           verifyUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
         },
-        defaultRenderOptions(dpi),
+        defaultRenderOptions(language, dpi),
       );
 
-      return c.text(zpl);
+      return c.text(commands);
     },
   )
 

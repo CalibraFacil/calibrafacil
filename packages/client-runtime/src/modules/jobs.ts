@@ -166,16 +166,22 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         "Falha ao gerar link",
       );
     },
-    async getLabelZpl(jobId: string | number, options?: { dpi?: 203 | 300 }) {
+    async getLabelCommands(
+      jobId: string | number,
+      options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
+    ) {
+      const query: Record<string, string> = {};
+      if (options?.language) query.lang = options.language;
+      if (options?.dpi) query.dpi = String(options.dpi);
       const response: Response = await rawCloudClient.api.jobs[":id"][
-        "label.zpl"
+        "label-commands"
       ].$get({
         param: { id: apiRouteParam(jobId) },
-        query: options?.dpi ? { dpi: String(options.dpi) } : {},
+        query,
       });
       if (!response.ok) {
         throw new CalibraApiError(
-          await readApiError(response, "Falha ao gerar etiqueta ZPL"),
+          await readApiError(response, "Falha ao gerar comandos da etiqueta"),
           response.status,
           null,
         );

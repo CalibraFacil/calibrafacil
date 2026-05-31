@@ -51,9 +51,16 @@ type Draft = {
   host: string
   port: string
   dpi: '203' | '300'
+  language: 'zpl' | 'tspl'
 }
 
-const EMPTY_DRAFT: Draft = { name: '', host: '', port: '9100', dpi: '203' }
+const EMPTY_DRAFT: Draft = {
+  name: '',
+  host: '',
+  port: '9100',
+  dpi: '203',
+  language: 'zpl',
+}
 
 function dimensionsForDpi(dpi: 203 | 300) {
   return dpi === 300
@@ -90,6 +97,7 @@ function DesktopPrinterSettings() {
       {
         name,
         connection,
+        language: 'zpl',
         dpi: 203,
         ...dimensionsForDpi(203),
         isDefault: profiles.length === 0,
@@ -118,6 +126,7 @@ function DesktopPrinterSettings() {
           host: draft.host.trim(),
           port: Number(draft.port) || 9100,
         },
+        language: draft.language,
         dpi,
         ...dimensionsForDpi(dpi),
         isDefault: profiles.length === 0,
@@ -198,7 +207,7 @@ function DesktopPrinterSettings() {
                   {profile.connection.type === 'network'
                     ? `${profile.connection.host}:${profile.connection.port}`
                     : profile.connection.type}{' '}
-                  · {profile.dpi} dpi
+                  · {profile.dpi} dpi · {profile.language.toUpperCase()}
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
@@ -368,6 +377,23 @@ function DesktopPrinterSettings() {
             >
               <option value="203">203 dpi</option>
               <option value="300">300 dpi</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="printer-language">Linguagem</Label>
+            <select
+              id="printer-language"
+              className={FIELD_CLASS}
+              value={draft.language}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  language: event.target.value === 'tspl' ? 'tspl' : 'zpl',
+                })
+              }
+            >
+              <option value="zpl">ZPL (Zebra)</option>
+              <option value="tspl">TSPL (TSC)</option>
             </select>
           </div>
         </div>

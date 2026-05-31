@@ -123,16 +123,16 @@ export async function getDefaultBrowserPrintDevice(): Promise<BrowserPrintDevice
   }
 }
 
-export async function sendZplViaBrowserPrint(
+export async function sendViaBrowserPrint(
   device: BrowserPrintDevice,
-  zpl: string,
+  commands: string,
 ): Promise<void> {
   const response = await agentFetch(
     '/write',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ device, data: zpl }),
+      body: JSON.stringify({ device, data: commands }),
     },
     WRITE_TIMEOUT_MS,
   )

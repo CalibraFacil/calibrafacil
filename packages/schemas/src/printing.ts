@@ -1,21 +1,26 @@
 import { z } from "zod";
 
 // =============================================================================
-// THERMAL LABEL PRINTING SCHEMAS — Zebra / ZPL printers
+// THERMAL LABEL PRINTING SCHEMAS — Zebra (ZPL) / TSC (TSPL) printers
 // =============================================================================
 //
-// A "printer profile" describes how to reach a thermal printer (connection) and
-// how to lay out a label on it (dpi/darkness/speed/dimensions/offsets). Profiles
-// live in the local-server SQLite store (desktop) or are selected client-side
-// (cloud + Zebra Browser Print). The pure @calibra-facil/label-zpl builder reads
-// the layout fields; the transport adapters read the connection.
+// A "printer profile" describes how to reach a thermal printer (connection), the
+// command language it speaks, and how to lay out a label (dpi/darkness/speed/
+// dimensions/offsets). Profiles live in the local-server SQLite store (desktop)
+// or are selected client-side (cloud). The pure @calibra-facil/label-rendering
+// package turns label data + these fields into printer commands; the transport
+// adapters read the connection.
 
 /**
- * Supported printer resolutions (dots per inch). Zebra desktop units are 203 or
- * 300 dpi; the ZPL dot math for the 50×30 mm calibration label depends on it.
+ * Supported printer resolutions (dots per inch). Zebra/TSC desktop units are 203
+ * or 300 dpi; the dot math for the 50×30 mm calibration label depends on it.
  */
 export const PrinterDpiSchema = z.union([z.literal(203), z.literal(300)]);
 export type PrinterDpi = z.infer<typeof PrinterDpiSchema>;
+
+/** Printer command language. `zpl` = Zebra and compatibles; `tspl` = TSC. */
+export const PrinterLanguageSchema = z.enum(["zpl", "tspl"]);
+export type PrinterLanguage = z.infer<typeof PrinterLanguageSchema>;
 
 /**
  * How to physically reach the printer. Discriminated on `type` so each transport
@@ -62,8 +67,10 @@ export const PrinterProfileSchema = z.object({
   id: z.string().trim().min(1),
   name: z.string().trim().min(1, "Nome da impressora é obrigatório"),
   connection: PrinterConnectionSchema,
+  language: PrinterLanguageSchema.default("zpl"),
   dpi: PrinterDpiSchema,
-  // ~SD darkness (0–30) and ^PR print speed (1–14 ips); conservative defaults.
+  // Darkness/density (0–30) and print speed (1–14 ips); each renderer maps these
+  // onto its own range (e.g. TSPL DENSITY is 0–15). Conservative defaults.
   darkness: z.coerce.number().int().min(0).max(30).default(15),
   speed: z.coerce.number().int().min(1).max(14).default(4),
   widthDots: z.coerce.number().int().positive().default(400),
@@ -88,21 +95,23 @@ export const SavePrinterProfileSchema = PrinterProfileSchema.omit({
 export type SavePrinterProfileInput = z.input<typeof SavePrinterProfileSchema>;
 
 /**
- * A print request: either raw `zpl` to send verbatim or a `jobId` to render
- * server-side; targeting either a saved `profileId` or an inline `profile`.
+ * A print request: either raw `commands` (ZPL/TSPL) to send verbatim or a
+ * `jobId` to render server-side; targeting either a saved `profileId` or an
+ * inline `profile`.
  */
 export const PrintLabelRequestSchema = z
   .object({
     jobId: z.union([z.string(), z.coerce.number()]).optional(),
-    zpl: z.string().optional(),
+    commands: z.string().optional(),
     // Target printer: a saved profileId, an inline profile, or neither (the
     // server falls back to the configured default printer).
     profileId: z.string().trim().optional(),
     profile: PrinterProfileSchema.optional(),
   })
-  .refine((value) => value.jobId !== undefined || value.zpl !== undefined, {
-    message: "Informe jobId ou zpl",
-  });
+  .refine(
+    (value) => value.jobId !== undefined || value.commands !== undefined,
+    { message: "Informe jobId ou commands" },
+  );
 export type PrintLabelRequest = z.infer<typeof PrintLabelRequestSchema>;
 
 /** A "print a test label" request: just which printer to target. */

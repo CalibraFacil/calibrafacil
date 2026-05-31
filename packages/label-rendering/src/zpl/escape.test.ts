@@ -16,7 +16,6 @@ describe("escapeZplField", () => {
   });
 
   it("encodes Portuguese accents as UTF-8 hex (for ^CI28)", () => {
-    // ç = C3 A7, ã = C3 A3
     expect(escapeZplField("calibração")).toBe("calibra_C3_A7_C3_A3o");
   });
 

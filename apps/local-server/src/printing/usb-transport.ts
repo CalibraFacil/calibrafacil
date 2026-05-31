@@ -34,13 +34,13 @@ function describeUsbError(
 }
 
 /**
- * Send a ZPL payload to a USB printer via node-usb: claim interface 0, find the
- * bulk OUT endpoint, transfer, then release/close. On Linux a kernel driver
+ * Send printer commands to a USB printer via node-usb: claim interface 0, find
+ * the bulk OUT endpoint, transfer, then release/close. On Linux a kernel driver
  * (usblp) may own the device — detach it first.
  */
-export async function sendZplOverUsb(
+export async function sendCommandsOverUsb(
   connection: { vendorId: number; productId: number; serialNumber?: string },
-  zpl: string,
+  commands: string,
 ): Promise<number> {
   const usbModule = await loadUsb();
   const device = usbModule.findByIds(connection.vendorId, connection.productId);
@@ -69,7 +69,7 @@ export async function sendZplOverUsb(
           "A impressora USB não expôs um endpoint de saída.",
         );
       }
-      const payload = Buffer.from(zpl, "latin1");
+      const payload = Buffer.from(commands, "latin1");
       await outEndpoint.transferAsync(payload);
       return payload.byteLength;
     } finally {
