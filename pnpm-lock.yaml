@@ -634,6 +634,12 @@ importers:
       '@types/three':
         specifier: ^0.182.0
         version: 0.182.0
+      '@types/w3c-web-serial':
+        specifier: ^1.0.7
+        version: 1.0.8
+      '@types/w3c-web-usb':
+        specifier: ^1.0.10
+        version: 1.0.14
       '@vitejs/plugin-react':
         specifier: ^5.0.4
         version: 5.1.2(vite@7.3.2(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
@@ -4489,6 +4495,9 @@ packages:
 
   '@types/verror@1.10.11':
     resolution: {integrity: sha512-RlDm9K7+o5stv0Co8i8ZRGxDbrTxhJtgjqjFyVh/tXQyl/rYtTKlnTvZ88oSTeYREWurwx20Js4kTuKCsFkUtg==}
+
+  '@types/w3c-web-serial@1.0.8':
+    resolution: {integrity: sha512-QQOT+bxQJhRGXoZDZGLs3ksLud1dMNnMiSQtBA0w8KXvLpXX4oM4TZb6J0GgJ8UbCaHo5s9/4VQT8uXy9JER2A==}
 
   '@types/w3c-web-usb@1.0.14':
     resolution: {integrity: sha512-Qu3Nn6JFuF4+sHKYl+IcX9vYiI40ogleXzFFSxoE1W94rG98o/kXs8uJ0QSfFzuwBCZWlGfUGpPkgwuuX4PchA==}
@@ -12792,6 +12801,8 @@ snapshots:
 
   '@types/verror@1.10.11':
     optional: true
+
+  '@types/w3c-web-serial@1.0.8': {}
 
   '@types/w3c-web-usb@1.0.14': {}
 

@@ -8,12 +8,12 @@ import { isDesktopRuntime } from '@calibra-facil/client-runtime'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
-import { isBrowserPrintAvailable } from './browser-print'
+import { NoCloudPrinterError } from './print-label'
 import { PrinterSettingsDialog } from './printer-settings-dialog'
 import {
   usePrinterProfiles,
   usePrintJobLabel,
-  usePrintJobLabelViaBrowserPrint,
+  usePrintJobLabelCloud,
 } from './use-printers'
 
 const reportSuccess = () => toast.success('Etiqueta enviada para impressão.')
@@ -25,9 +25,10 @@ const reportError = (error: unknown) =>
 /**
  * "Imprimir Etiqueta (térmica)" action — native ZPL straight to a Zebra printer.
  * Desktop runtime prints via the local-server (configured network printer);
- * cloud runtime prints via the Zebra Browser Print agent. When no printer is
- * configured / the agent is absent, it opens the settings dialog (which guides
- * setup). The existing PDF "Baixar Etiqueta QR" remains the universal fallback.
+ * cloud runtime prints via the best available transport (Zebra Browser Print,
+ * then a granted WebUSB device, then a granted Web Serial port). When nothing is
+ * configured it opens the settings dialog (which guides setup). The existing PDF
+ * "Baixar Etiqueta QR" remains the universal fallback.
  */
 export function PrintLabelButton({
   jobId,
@@ -44,7 +45,7 @@ export function PrintLabelButton({
 
   const profilesQuery = usePrinterProfiles(isDesktop)
   const printDesktop = usePrintJobLabel()
-  const printCloud = usePrintJobLabelViaBrowserPrint()
+  const printCloud = usePrintJobLabelCloud()
 
   const isWorking = isDesktop ? printDesktop.isPending : isCloudWorking
 
@@ -63,17 +64,17 @@ export function PrintLabelButton({
   const printCloudLabel = async () => {
     setIsCloudWorking(true)
     try {
-      if (!(await isBrowserPrintAvailable())) {
-        toast.info(
-          'Instale o Zebra Browser Print para imprimir etiquetas térmicas.',
-        )
-        setSettingsOpen(true)
-        return
-      }
       await printCloud.mutateAsync({ jobId })
       reportSuccess()
     } catch (error) {
-      reportError(error)
+      if (error instanceof NoCloudPrinterError) {
+        toast.info(
+          'Configure uma impressora térmica (Browser Print, USB ou serial).',
+        )
+        setSettingsOpen(true)
+      } else {
+        reportError(error)
+      }
     } finally {
       setIsCloudWorking(false)
     }
