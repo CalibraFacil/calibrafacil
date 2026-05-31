@@ -93,6 +93,9 @@ export async function resolveReadBucketName(
 }
 
 export function createR2Client(env: R2Env): R2S3Client {
+  // R2 S3 endpoint is derived from the account id; credentials are an R2 API
+  // token's S3 pair (access key id + secret). Rotating the token requires
+  // updating R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY and redeploying.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
   return new S3Client({
     region: "auto",
