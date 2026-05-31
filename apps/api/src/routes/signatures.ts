@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
-import { memberVisualSignature, member } from "@calibra-facil/db/schema";
+import {
+  memberVisualSignature,
+  member,
+  organization,
+} from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import {
   withLabPermission,
@@ -9,10 +13,13 @@ import {
 import {
   createR2Client,
   generatePresignedUrl,
+  resolveBucketName,
+  resolveReadBucketName,
   uploadToR2,
   deleteFromR2,
   type R2Env,
 } from "../lib/storage";
+import { memberSignatureKey } from "@calibra-facil/shared/storage-keys";
 
 // =============================================================================
 // CONSTANTS
@@ -129,14 +136,22 @@ export const signaturesRouter = new Hono<{
           );
         }
 
-        // Generate R2 key
-        const r2Key = `signatures/${memberData.organizationId}/${memberData.id}.png`;
+        // Generate R2 key (readable org-slug prefix; media bucket)
+        const [orgRow] = await db
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, memberData.organizationId))
+          .limit(1);
+        const { bucket, key: r2Key } = memberSignatureKey({
+          org: { id: memberData.organizationId, slug: orgRow?.slug ?? "" },
+          memberId: memberData.id,
+        });
 
         // Upload to R2
         const r2Client = createR2Client(env);
         await uploadToR2(
           r2Client,
-          env.R2_BUCKET_NAME,
+          resolveBucketName(env, bucket),
           r2Key,
           buffer,
           file.type,
@@ -226,9 +241,15 @@ export const signaturesRouter = new Hono<{
 
         // Generate presigned URL
         const r2Client = createR2Client(env);
+        const bucketName = await resolveReadBucketName(
+          r2Client,
+          env,
+          "media",
+          signature.r2Key,
+        );
         const url = await generatePresignedUrl(
           r2Client,
-          env.R2_BUCKET_NAME,
+          bucketName,
           signature.r2Key,
           PRESIGNED_URL_EXPIRY,
         );
@@ -277,7 +298,13 @@ export const signaturesRouter = new Hono<{
 
         // Delete from R2
         const r2Client = createR2Client(env);
-        await deleteFromR2(r2Client, env.R2_BUCKET_NAME, signature.r2Key);
+        const bucketName = await resolveReadBucketName(
+          r2Client,
+          env,
+          "media",
+          signature.r2Key,
+        );
+        await deleteFromR2(r2Client, bucketName, signature.r2Key);
 
         // Delete from database
         await db
@@ -341,9 +368,15 @@ export const signaturesRouter = new Hono<{
 
         // Generate presigned URL with longer expiry for certificate generation
         const r2Client = createR2Client(env);
+        const bucketName = await resolveReadBucketName(
+          r2Client,
+          env,
+          "media",
+          signature.r2Key,
+        );
         const url = await generatePresignedUrl(
           r2Client,
-          env.R2_BUCKET_NAME,
+          bucketName,
           signature.r2Key,
           3600, // 1 hour for certificate generation
         );

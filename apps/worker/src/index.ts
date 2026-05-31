@@ -50,20 +50,35 @@ import {
   isMassMeasurementUnit,
   type MassUnit,
 } from "@calibra-facil/shared/mass-units";
+import {
+  getLogoKeyFromUrl,
+  getYear,
+  getYearMonth,
+  issuedCertificatePdfKey,
+  issuedCertificateXlsxKey,
+  jobLabelKey,
+  serviceOrderDocKey,
+  templatePreviewKey,
+  type OrgRef,
+  type StorageBucket,
+} from "@calibra-facil/shared/storage-keys";
 import { notifyCertificateReady } from "@calibra-facil/notifications";
 
+export interface R2BucketBinding {
+  get(key: string): Promise<{
+    arrayBuffer(): Promise<ArrayBuffer>;
+    httpMetadata?: { contentType?: string };
+  } | null>;
+  put(
+    key: string,
+    body: Buffer | Uint8Array | ArrayBuffer,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<void>;
+}
+
 export interface Env {
-  CERTIFICATES_BUCKET: {
-    get(key: string): Promise<{
-      arrayBuffer(): Promise<ArrayBuffer>;
-      httpMetadata?: { contentType?: string };
-    } | null>;
-    put(
-      key: string,
-      body: Buffer | Uint8Array | ArrayBuffer,
-      options?: { httpMetadata?: { contentType?: string } },
-    ): Promise<void>;
-  };
+  CERTIFICATES_BUCKET: R2BucketBinding;
+  MEDIA_BUCKET: R2BucketBinding;
   RUNTIME_ASSETS_BUCKET?: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
@@ -261,6 +276,7 @@ type JobData = {
   jobId: string;
   certificateName?: string | null;
   organizationId?: string | null;
+  organizationSlug?: string | null;
   unitId?: number | null;
   performedAt: Date | null;
   approvedAt: Date | null;
@@ -342,113 +358,43 @@ export interface MessageBatch<T> {
 
 type Dateish = Date | string | null | undefined;
 
-const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
-const ORGANIZATION_LOGO_URL_MARKER = "/api/organization-media/logo/";
-
-function encodeKeyPart(label: string, value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    throw new Error(`R2 key part "${label}" is empty`);
-  }
-  return encodeURIComponent(trimmed);
+/** Pick the concrete R2 binding for a logical storage bucket. */
+function bucketBinding(env: Env, bucket: StorageBucket): R2BucketBinding {
+  return bucket === "media" ? env.MEDIA_BUCKET : env.CERTIFICATES_BUCKET;
 }
 
-function getYearFromDateish(value: Dateish, label: string): number {
-  if (!value) {
-    throw new Error(`Missing ${label} for R2 key year`);
-  }
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) {
-      throw new Error(`Invalid ${label} for R2 key year`);
-    }
-    return value.getUTCFullYear();
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      throw new Error(`Invalid ${label} for R2 key year`);
-    }
-    const normalized = trimmed.replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T");
-    const parsed = new Date(normalized);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new Error(`Invalid ${label} for R2 key year`);
-    }
-    return parsed.getUTCFullYear();
-  }
-  throw new Error(`Invalid ${label} for R2 key year`);
+/**
+ * Read an object whose key is stored in the DB. The stored key tells us the key
+ * but not which bucket the object physically lives in: during/after the bucket
+ * split, newly written objects live in `preferred` while not-yet-backfilled
+ * ones may still be in the other bucket. Try the preferred binding, then fall
+ * back to the other so reads keep working across the migration window.
+ */
+async function getStoredObject(
+  env: Env,
+  preferred: StorageBucket,
+  key: string,
+) {
+  const primary = await bucketBinding(env, preferred).get(key);
+  if (primary) return primary;
+  const fallback: StorageBucket = preferred === "media" ? "documents" : "media";
+  return bucketBinding(env, fallback).get(key);
 }
 
-function buildR2Key(params: {
-  orgId: string;
-  jobId: string;
-  year: number;
-  type: "CERTIFICATE" | "LABEL";
-}): string {
-  const orgId = encodeKeyPart("orgId", params.orgId);
-  const jobId = encodeKeyPart("jobId", params.jobId);
-  const filename = params.type === "CERTIFICATE" ? "cert.pdf" : "label.pdf";
-  return `org/${orgId}/${params.year}/jobs/${jobId}/${filename}`;
-}
-
-function buildServiceOrderR2Key(params: {
-  orgId: string;
-  serviceOrderNumber: string;
-  year: number;
-  type: "INTAKE" | "TAG" | "QUOTE" | "DELIVERY";
-  version?: number;
-  tagNumber?: string;
-  quoteNumber?: string;
-}) {
-  const orgId = encodeKeyPart("orgId", params.orgId);
-  const serviceOrderNumber = encodeKeyPart(
-    "serviceOrderNumber",
-    params.serviceOrderNumber,
+/** Look up the stable org id + readable slug for org-scoped key building. */
+async function fetchOrgRefById(
+  client: Client,
+  organizationId: string,
+): Promise<OrgRef> {
+  const result = await client.query<{ id: string; slug: string | null }>(
+    `SELECT id, slug FROM organization WHERE id = $1`,
+    [organizationId],
   );
-  if (params.type === "INTAKE") {
-    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/intake-v${params.version ?? 1}.pdf`;
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error(`Organization not found: ${organizationId}`);
   }
-  if (params.type === "DELIVERY") {
-    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/delivery-v${params.version ?? 1}.pdf`;
-  }
-  if (params.type === "TAG") {
-    const tag = encodeKeyPart("tagNumber", params.tagNumber ?? "tag");
-    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/tag-${tag}.pdf`;
-  }
-  const quote = encodeKeyPart("quoteNumber", params.quoteNumber ?? "quote");
-  return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/quotes/${quote}-v${params.version ?? 1}.pdf`;
-}
-
-function buildXlsxPreviewR2Key(params: {
-  orgId: string;
-  previewId: number;
-  extension: "xlsx" | "pdf";
-}): string {
-  const orgId = encodeKeyPart("orgId", params.orgId);
-  return `org/${orgId}/certificate-template-previews/${params.previewId}/preview.${params.extension}`;
-}
-
-function buildIssuedXlsxR2Key(params: {
-  orgId: string;
-  jobId: string;
-  year: number;
-  issuedId: string;
-}): string {
-  const orgId = encodeKeyPart("orgId", params.orgId);
-  const jobId = encodeKeyPart("jobId", params.jobId);
-  const issuedId = encodeKeyPart("issuedId", params.issuedId);
-  return `org/${orgId}/${params.year}/jobs/${jobId}/issued/${issuedId}/cert.xlsx`;
-}
-
-function buildIssuedPdfR2Key(params: {
-  orgId: string;
-  jobId: string;
-  year: number;
-  issuedId: string;
-}): string {
-  const orgId = encodeKeyPart("orgId", params.orgId);
-  const jobId = encodeKeyPart("jobId", params.jobId);
-  const issuedId = encodeKeyPart("issuedId", params.issuedId);
-  return `org/${orgId}/${params.year}/jobs/${jobId}/issued/${issuedId}/cert.pdf`;
+  return { id: row.id, slug: row.slug ?? "" };
 }
 
 function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
@@ -965,6 +911,7 @@ async function fetchJobData(
       o.email as lab_email,
       o.website as lab_website,
       o.logo as lab_logo,
+      o.slug as organization_slug,
       o.technical_manager_name as lab_technical_manager_name,
       o.technical_manager_title as lab_technical_manager_title,
       -- Customer info (complete)
@@ -1079,7 +1026,9 @@ async function fetchJobData(
       const sigRow = sigResult.rows[0];
       // Fetch signature from R2 and convert to base64 data URL
       try {
-        const signatureObject = await env.CERTIFICATES_BUCKET.get(
+        const signatureObject = await getStoredObject(
+          env,
+          "media",
           sigRow.r2_key,
         );
         if (signatureObject) {
@@ -1097,6 +1046,7 @@ async function fetchJobData(
     jobId: row.job_id,
     certificateName: row.certificate_name,
     organizationId: row.organization_id,
+    organizationSlug: row.organization_slug,
     unitId: row.unit_id,
     performedAt: row.performed_at,
     approvedAt: row.approved_at,
@@ -1220,24 +1170,6 @@ async function fetchXlsxTemplateSelectionForJob(
   };
 }
 
-function decodeOrganizationLogoKey(value: string | null | undefined) {
-  if (!value) return null;
-
-  try {
-    const url = new URL(value);
-    const markerIndex = url.pathname.indexOf(ORGANIZATION_LOGO_URL_MARKER);
-    if (markerIndex === -1) return null;
-
-    const encodedKey = url.pathname.slice(
-      markerIndex + ORGANIZATION_LOGO_URL_MARKER.length,
-    );
-    const decoded = Buffer.from(encodedKey, "base64url").toString("utf8");
-    return decoded.startsWith(ORGANIZATION_LOGO_KEY_PREFIX) ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
 function inferImageContentType(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   if (
@@ -1279,11 +1211,11 @@ async function resolveOrganizationLogoDataUrl(
   logoUrl: string | null | undefined,
   jobId: number,
 ) {
-  const key = decodeOrganizationLogoKey(logoUrl);
+  const key = getLogoKeyFromUrl(logoUrl);
   if (!key) return logoUrl ?? null;
 
   try {
-    const logoObject = await env.CERTIFICATES_BUCKET.get(key);
+    const logoObject = await getStoredObject(env, "media", key);
     if (!logoObject) return logoUrl ?? null;
 
     const logoBuffer = await logoObject.arrayBuffer();
@@ -1778,18 +1710,19 @@ async function processServiceOrderIntakeDocument(
       React.createElement(ServiceOrderIntakeDocumentHtml, { data }),
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
-    const year = getYearFromDateish(data.openedAt, "openedAt");
-    const orgId = await withDbClient(env, (client) =>
-      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    const { year, month } = getYearMonth(data.openedAt, "openedAt");
+    const org = await withDbClient(env, (client) =>
+      fetchServiceOrderOrg(client, serviceOrderId),
     );
-    const key = buildServiceOrderR2Key({
-      orgId,
+    const { bucket, key } = serviceOrderDocKey({
+      org,
       serviceOrderNumber: data.serviceOrderNumber,
       year,
+      month,
       type: "INTAKE",
       version: 1,
     });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+    await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
     await withDbClient(env, async (client) => {
@@ -1816,20 +1749,22 @@ async function processServiceOrderIntakeDocument(
   }
 }
 
-async function fetchServiceOrderOrganizationId(
+async function fetchServiceOrderOrg(
   client: Client,
   serviceOrderId: number,
-) {
-  const result = await client.query<{ organization_id: string }>(
-    `SELECT organization_id FROM service_order WHERE id = $1`,
+): Promise<OrgRef> {
+  const result = await client.query<{ id: string; slug: string | null }>(
+    `SELECT o.id, o.slug
+     FROM service_order so
+     INNER JOIN organization o ON o.id = so.organization_id
+     WHERE so.id = $1`,
     [serviceOrderId],
   );
-  const organizationId = result.rows[0]?.organization_id;
-  if (!organizationId) {
+  const row = result.rows[0];
+  if (!row) {
     throw new Error("Service order organization not found");
   }
-
-  return organizationId;
+  return { id: row.id, slug: row.slug ?? "" };
 }
 
 async function processServiceOrderTag(
@@ -1876,17 +1811,21 @@ async function processServiceOrderTag(
       React.createElement(ServiceOrderTagHtml, { tag }),
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
-    const year = getYearFromDateish(data.opened_at, "openedAt");
+    const { year, month } = getYearMonth(data.opened_at, "openedAt");
     const tagNumber =
       data.tag_number ?? `${data.service_order_number}-TAG-${serviceOrderId}`;
-    const key = buildServiceOrderR2Key({
-      orgId: data.organization_id,
+    const org = await withDbClient(env, (client) =>
+      fetchServiceOrderOrg(client, serviceOrderId),
+    );
+    const { bucket, key } = serviceOrderDocKey({
+      org,
       serviceOrderNumber: data.service_order_number,
       year,
+      month,
       type: "TAG",
       tagNumber,
     });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+    await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
     await withDbClient(env, async (client) => {
@@ -1966,19 +1905,20 @@ async function processServiceOrderQuote(
       React.createElement(ServiceOrderQuoteHtml, { data }),
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
-    const year = getYearFromDateish(base.openedAt, "openedAt");
-    const orgId = await withDbClient(env, (client) =>
-      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    const { year, month } = getYearMonth(base.openedAt, "openedAt");
+    const org = await withDbClient(env, (client) =>
+      fetchServiceOrderOrg(client, serviceOrderId),
     );
-    const key = buildServiceOrderR2Key({
-      orgId,
+    const { bucket, key } = serviceOrderDocKey({
+      org,
       serviceOrderNumber: base.serviceOrderNumber,
       year,
+      month,
       type: "QUOTE",
       quoteNumber: quote.row.quote_number,
       version: quote.row.version,
     });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+    await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
     await withDbClient(env, (client) =>
@@ -2118,15 +2058,19 @@ async function processServiceOrderDeliveryReceipt(
       React.createElement(ServiceOrderDeliveryReceiptHtml, { data }),
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
-    const year = getYearFromDateish(base.openedAt, "openedAt");
-    const key = buildServiceOrderR2Key({
-      orgId: payload.order.organization_id,
+    const { year, month } = getYearMonth(base.openedAt, "openedAt");
+    const org = await withDbClient(env, (client) =>
+      fetchOrgRefById(client, payload.order.organization_id),
+    );
+    const { bucket, key } = serviceOrderDocKey({
+      org,
       serviceOrderNumber: base.serviceOrderNumber,
       year,
+      month,
       type: "DELIVERY",
       version: payload.document.version,
     });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+    await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
     await withDbClient(env, (client) =>
@@ -2231,17 +2175,19 @@ async function processLabelJob(
     if (!orgId) {
       throw new Error("Missing organization_id for label generation");
     }
-    const year = getYearFromDateish(
+    const year = getYear(
       data.approvedAt ?? data.label.calibrationDate,
       "approvedAt/performedAt",
     );
-    const key = buildR2Key({
-      orgId,
+    const org = await withDbClient(env, (client) =>
+      fetchOrgRefById(client, orgId),
+    );
+    const { bucket, key } = jobLabelKey({
+      org,
       jobId: data.label.jobId,
       year,
-      type: "LABEL",
     });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+    await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
     console.log(
@@ -2805,6 +2751,7 @@ async function processXlsxPreviewJob(
       const result = await client.query<{
         id: number;
         organization_id: string;
+        organization_slug: string | null;
         sample_data: Record<string, unknown> | null;
         xlsx_r2_key: string;
         xlsx_sha256: string;
@@ -2815,6 +2762,7 @@ async function processXlsxPreviewJob(
           select
             p.id,
             p.organization_id,
+            o.slug as organization_slug,
             p.sample_data,
             v.xlsx_r2_key,
             v.xlsx_sha256,
@@ -2823,6 +2771,8 @@ async function processXlsxPreviewJob(
           from certificate_template_preview p
           inner join certificate_template_version v
             on v.id = p.template_version_id
+          inner join organization o
+            on o.id = p.organization_id
           where p.id = $1
             and p.template_version_id = $2
         `,
@@ -2835,7 +2785,11 @@ async function processXlsxPreviewJob(
       throw new Error("XLSX preview not found");
     }
 
-    const sourceObject = await env.CERTIFICATES_BUCKET.get(preview.xlsx_r2_key);
+    const sourceObject = await getStoredObject(
+      env,
+      "media",
+      preview.xlsx_r2_key,
+    );
     if (!sourceObject) {
       throw new Error(`Template XLSX not found: ${preview.xlsx_r2_key}`);
     }
@@ -2859,24 +2813,34 @@ async function processXlsxPreviewJob(
       singlePageSheets: false,
     });
 
-    const filledXlsxR2Key = buildXlsxPreviewR2Key({
-      orgId: preview.organization_id,
+    const previewOrg: OrgRef = {
+      id: preview.organization_id,
+      slug: preview.organization_slug ?? "",
+    };
+    const filledXlsx = templatePreviewKey({
+      org: previewOrg,
       previewId: preview.id,
       extension: "xlsx",
     });
-    const pdfR2Key = buildXlsxPreviewR2Key({
-      orgId: preview.organization_id,
+    const pdfPreview = templatePreviewKey({
+      org: previewOrg,
       previewId: preview.id,
       extension: "pdf",
     });
+    const filledXlsxR2Key = filledXlsx.key;
+    const pdfR2Key = pdfPreview.key;
 
-    await env.CERTIFICATES_BUCKET.put(filledXlsxR2Key, filled.workbook, {
-      httpMetadata: {
-        contentType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    await bucketBinding(env, filledXlsx.bucket).put(
+      filledXlsxR2Key,
+      filled.workbook,
+      {
+        httpMetadata: {
+          contentType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
       },
-    });
-    await env.CERTIFICATES_BUCKET.put(pdfR2Key, converted.bytes, {
+    );
+    await bucketBinding(env, pdfPreview.bucket).put(pdfR2Key, converted.bytes, {
       httpMetadata: { contentType: "application/pdf" },
     });
 
@@ -3505,7 +3469,11 @@ async function processXlsxIssuedCertificate(
   }
 
   try {
-    const sourceObject = await env.CERTIFICATES_BUCKET.get(selection.xlsxR2Key);
+    const sourceObject = await getStoredObject(
+      env,
+      "media",
+      selection.xlsxR2Key,
+    );
     if (!sourceObject) {
       throw new Error(`Template XLSX not found: ${selection.xlsxR2Key}`);
     }
@@ -3539,31 +3507,40 @@ async function processXlsxIssuedCertificate(
     );
     const pdfBuffer = signed.pdfBuffer;
 
-    const year = getYearFromDateish(
+    const year = getYear(
       job.approvedAt ?? job.performedAt,
       "approvedAt/performedAt",
     );
     const issuedObjectId = randomUUID();
-    const pdfR2Key = buildIssuedPdfR2Key({
-      orgId: job.organizationId,
-      jobId: job.jobId,
-      year,
-      issuedId: issuedObjectId,
-    });
-    const filledXlsxR2Key = buildIssuedXlsxR2Key({
-      orgId: job.organizationId,
-      jobId: job.jobId,
-      year,
-      issuedId: issuedObjectId,
-    });
-
-    await env.CERTIFICATES_BUCKET.put(filledXlsxR2Key, filled.workbook, {
-      httpMetadata: {
-        contentType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    const certDescriptor = {
+      org: {
+        id: job.organizationId,
+        slug: job.organizationSlug ?? "",
       },
-    });
-    await env.CERTIFICATES_BUCKET.put(pdfR2Key, pdfBuffer, {
+      jobId: job.jobId,
+      issuedId: issuedObjectId,
+      certNumber: job.certificateName ?? job.jobId,
+      year,
+      companyName: job.customer.name,
+      assetTag: job.asset.tag,
+      brand: job.asset.manufacturer,
+    };
+    const pdf = issuedCertificatePdfKey(certDescriptor);
+    const filledXlsx = issuedCertificateXlsxKey(certDescriptor);
+    const pdfR2Key = pdf.key;
+    const filledXlsxR2Key = filledXlsx.key;
+
+    await bucketBinding(env, filledXlsx.bucket).put(
+      filledXlsxR2Key,
+      filled.workbook,
+      {
+        httpMetadata: {
+          contentType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      },
+    );
+    await bucketBinding(env, pdf.bucket).put(pdfR2Key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
 

@@ -6,9 +6,12 @@ import {
   createR2Client,
   deleteFromR2,
   generatePresignedUrl,
+  resolveBucketName,
+  resolveReadBucketName,
   uploadToR2,
   type R2Env,
 } from "../lib/storage";
+import { avatarKey } from "@calibra-facil/shared/storage-keys";
 import { requireAuth, type AuthVariables } from "../middleware/permission";
 
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
@@ -17,10 +20,6 @@ const AVATAR_URL_EXPIRY = 300;
 
 function getAvatarApiUrl(): string {
   return `${process.env.API_URL || "https://localhost:3000"}/api/profile-media/avatar`;
-}
-
-function getAvatarKey(userId: string): string {
-  return `avatars/${userId}`;
 }
 
 export const profileMediaRouter = new Hono<{
@@ -57,11 +56,12 @@ export const profileMediaRouter = new Hono<{
 
       const buffer = await file.arrayBuffer();
       const r2Client = createR2Client(env);
+      const avatar = avatarKey(session.user.id);
 
       await uploadToR2(
         r2Client,
-        env.R2_BUCKET_NAME,
-        getAvatarKey(session.user.id),
+        resolveBucketName(env, avatar.bucket),
+        avatar.key,
         buffer,
         file.type,
       );
@@ -90,10 +90,17 @@ export const profileMediaRouter = new Hono<{
 
     try {
       const r2Client = createR2Client(env);
+      const avatar = avatarKey(session.user.id);
+      const bucketName = await resolveReadBucketName(
+        r2Client,
+        env,
+        avatar.bucket,
+        avatar.key,
+      );
       const url = await generatePresignedUrl(
         r2Client,
-        env.R2_BUCKET_NAME,
-        getAvatarKey(session.user.id),
+        bucketName,
+        avatar.key,
         AVATAR_URL_EXPIRY,
       );
 
@@ -109,11 +116,16 @@ export const profileMediaRouter = new Hono<{
 
     try {
       const r2Client = createR2Client(env);
-      await deleteFromR2(
+      const avatar = avatarKey(session.user.id);
+      const bucketName = await resolveReadBucketName(
         r2Client,
-        env.R2_BUCKET_NAME,
-        getAvatarKey(session.user.id),
-      ).catch(() => undefined);
+        env,
+        avatar.bucket,
+        avatar.key,
+      );
+      await deleteFromR2(r2Client, bucketName, avatar.key).catch(
+        () => undefined,
+      );
 
       return c.json({ success: true });
     } catch (error) {

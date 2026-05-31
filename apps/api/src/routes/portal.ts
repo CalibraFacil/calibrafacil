@@ -102,6 +102,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import {
+  attachmentDisposition,
   createR2Client,
   generatePresignedUrl,
   extractKeyFromUrl,
@@ -1261,12 +1262,12 @@ export const portalRouter = new Hono<{
       const env = c.env;
       const key = extractKeyFromUrl(certificate.certificateUrl);
       const client = createR2Client(env);
-      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
-
-      return c.json({
-        url,
-        filename: `${sanitizeCertificateFilename(certificate.certificateName || `certificado-${certificate.jobId}`)}.pdf`,
+      const filename = `${sanitizeCertificateFilename(certificate.certificateName || `certificado-${certificate.jobId}`)}.pdf`;
+      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key, {
+        responseContentDisposition: attachmentDisposition(filename),
       });
+
+      return c.json({ url, filename });
     } catch (error) {
       console.error("Error generating certificate download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);

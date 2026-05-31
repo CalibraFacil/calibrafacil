@@ -7,9 +7,17 @@ import {
   createR2Client,
   deleteFromR2,
   generatePresignedUrl,
+  resolveBucketName,
+  resolveReadBucketName,
   uploadToR2,
   type R2Env,
 } from "../lib/storage";
+import {
+  buildOrganizationLogoUrl,
+  decodeLogoAssetKey,
+  getLogoKeyFromUrl,
+  organizationLogoKey,
+} from "@calibra-facil/shared/storage-keys";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import {
   type AuthVariables,
@@ -25,46 +33,6 @@ const ALLOWED_LOGO_CONTENT_TYPES = [
   "image/svg+xml",
 ];
 const LOGO_URL_EXPIRY = 900;
-const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
-
-function buildOrganizationLogoKey(organizationId: string): string {
-  return `${ORGANIZATION_LOGO_KEY_PREFIX}${organizationId}/${Date.now()}-${randomUUID()}`;
-}
-
-function encodeLogoAssetKey(key: string): string {
-  return Buffer.from(key, "utf8").toString("base64url");
-}
-
-function decodeLogoAssetKey(key: string): string | null {
-  try {
-    const decoded = Buffer.from(key, "base64url").toString("utf8");
-    return decoded.startsWith(ORGANIZATION_LOGO_KEY_PREFIX) ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
-function buildOrganizationLogoUrl(key: string, requestUrl: string): string {
-  const origin = new URL(requestUrl).origin;
-  return `${origin}/api/organization-media/logo/${encodeLogoAssetKey(key)}`;
-}
-
-function getLogoKeyFromUrl(value: string | null | undefined): string | null {
-  if (!value) return null;
-
-  try {
-    const url = new URL(value);
-    const marker = "/api/organization-media/logo/";
-    const markerIndex = url.pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-
-    const encodedKey = url.pathname.slice(markerIndex + marker.length);
-    return decodeLogoAssetKey(encodedKey);
-  } catch {
-    return null;
-  }
-}
-
 export const organizationMediaRouter = new Hono<{
   Variables: AuthVariables;
   Bindings: R2Env;
@@ -103,7 +71,7 @@ export const organizationMediaRouter = new Hono<{
         }
 
         const [currentOrg] = await db
-          .select({ logo: organization.logo })
+          .select({ logo: organization.logo, slug: organization.slug })
           .from(organization)
           .where(eq(organization.id, member.organizationId))
           .limit(1);
@@ -112,12 +80,25 @@ export const organizationMediaRouter = new Hono<{
           return c.json({ error: "Organização não encontrada" }, 404);
         }
 
-        const key = buildOrganizationLogoKey(member.organizationId);
+        const { bucket, key } = organizationLogoKey({
+          org: { id: member.organizationId, slug: currentOrg.slug },
+          timestamp: Date.now(),
+          uniqueId: randomUUID(),
+        });
         const buffer = await file.arrayBuffer();
         const r2Client = createR2Client(env);
-        await uploadToR2(r2Client, env.R2_BUCKET_NAME, key, buffer, file.type);
+        await uploadToR2(
+          r2Client,
+          resolveBucketName(env, bucket),
+          key,
+          buffer,
+          file.type,
+        );
 
-        const logoUrl = buildOrganizationLogoUrl(key, c.req.url);
+        const logoUrl = buildOrganizationLogoUrl(
+          key,
+          new URL(c.req.url).origin,
+        );
         await db
           .update(organization)
           .set({ logo: logoUrl })
@@ -125,7 +106,13 @@ export const organizationMediaRouter = new Hono<{
 
         const previousKey = getLogoKeyFromUrl(currentOrg.logo);
         if (previousKey && previousKey !== key) {
-          await deleteFromR2(r2Client, env.R2_BUCKET_NAME, previousKey).catch(
+          const previousBucket = await resolveReadBucketName(
+            r2Client,
+            env,
+            "media",
+            previousKey,
+          );
+          await deleteFromR2(r2Client, previousBucket, previousKey).catch(
             () => undefined,
           );
         }
@@ -179,7 +166,13 @@ export const organizationMediaRouter = new Hono<{
         const previousKey = getLogoKeyFromUrl(currentOrg.logo);
         if (previousKey) {
           const r2Client = createR2Client(env);
-          await deleteFromR2(r2Client, env.R2_BUCKET_NAME, previousKey).catch(
+          const previousBucket = await resolveReadBucketName(
+            r2Client,
+            env,
+            "media",
+            previousKey,
+          );
+          await deleteFromR2(r2Client, previousBucket, previousKey).catch(
             () => undefined,
           );
         }
@@ -211,9 +204,15 @@ export const organizationMediaRouter = new Hono<{
 
     try {
       const r2Client = createR2Client(env);
+      const bucketName = await resolveReadBucketName(
+        r2Client,
+        env,
+        "media",
+        decodedKey,
+      );
       const url = await generatePresignedUrl(
         r2Client,
-        env.R2_BUCKET_NAME,
+        bucketName,
         decodedKey,
         LOGO_URL_EXPIRY,
       );

@@ -129,6 +129,9 @@ function createEnv(): WorkerEnv {
   return {
     DATABASE_URL: databaseUrl,
     CERTIFICATES_BUCKET: createR2Bucket(),
+    MEDIA_BUCKET: createR2Bucket(
+      process.env.R2_MEDIA_BUCKET_NAME ?? "calibrafacil-media-dev",
+    ),
     RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
       ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
       : undefined,

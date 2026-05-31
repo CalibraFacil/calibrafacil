@@ -127,7 +127,8 @@ async function createEnv(): Promise<BunApiEnv> {
         NODE_ENV: Bun.env.NODE_ENV ?? "development",
         ...localUrlDefaults,
         R2_ACCOUNT_ID: "local",
-        R2_BUCKET_NAME: "calibrafacil-certificates-dev",
+        R2_BUCKET_NAME: "calibrafacil-documents-dev",
+        R2_MEDIA_BUCKET_NAME: "calibrafacil-media-dev",
         RESEND_FROM_EMAIL: "Calibra Facil <noreply@calibrafacil.com>",
       };
 
@@ -169,6 +170,7 @@ async function createEnv(): Promise<BunApiEnv> {
       "R2_ACCESS_KEY_ID",
       "R2_SECRET_ACCESS_KEY",
       "R2_BUCKET_NAME",
+      "R2_MEDIA_BUCKET_NAME",
       "RESEND_API_KEY",
     ]) {
       if (typeof env[key] !== "string" || env[key].length === 0) {

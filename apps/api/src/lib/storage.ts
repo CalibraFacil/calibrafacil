@@ -3,17 +3,39 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
 
 export interface R2Env {
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  /** Documents bucket: regulated lab records (certs, SO docs, standards, sync). */
   R2_BUCKET_NAME: string;
+  /** Media bucket: branding/media (logos, signatures, avatars, template sources). */
+  R2_MEDIA_BUCKET_NAME: string;
   CERTIFICATES_BUCKET?: R2BucketLike;
+  MEDIA_BUCKET?: R2BucketLike;
   NODE_ENV?: string;
   API_URL?: string;
+}
+
+/** Resolve a logical bucket to its concrete (env-configured) bucket name. */
+export function resolveBucketName(env: R2Env, bucket: StorageBucket): string {
+  return bucket === "media" ? env.R2_MEDIA_BUCKET_NAME : env.R2_BUCKET_NAME;
+}
+
+/**
+ * Build a Content-Disposition header value that forces a descriptive download
+ * filename. Includes both an ASCII fallback and an RFC 5987 UTF-8 form.
+ */
+export function attachmentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(
+    filename,
+  )}`;
 }
 
 export interface R2ObjectBodyLike {
@@ -30,7 +52,45 @@ export interface R2BucketLike {
 type R2S3Client = S3Client & {
   send(command: GetObjectCommand): Promise<unknown>;
   send(command: PutObjectCommand | DeleteObjectCommand): Promise<unknown>;
+  send(command: HeadObjectCommand): Promise<unknown>;
 };
+
+/** True if the object exists in the given bucket (HEAD returns 200). */
+export async function objectExists(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+): Promise<boolean> {
+  try {
+    await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve which concrete bucket actually holds an object. During the bucket
+ * split an object may live in `preferred` (new writes / after backfill), the
+ * other bucket (legacy, pre-backfill), or both (post-copy, pre delete-old).
+ * HEAD the preferred bucket first, then the other; default to preferred so a
+ * genuinely-missing object 404s consistently.
+ */
+export async function resolveReadBucketName(
+  client: R2S3Client,
+  env: R2Env,
+  preferred: StorageBucket,
+  key: string,
+): Promise<string> {
+  const preferredName = resolveBucketName(env, preferred);
+  if (await objectExists(client, preferredName, key)) return preferredName;
+  const otherName = resolveBucketName(
+    env,
+    preferred === "media" ? "documents" : "media",
+  );
+  if (await objectExists(client, otherName, key)) return otherName;
+  return preferredName;
+}
 
 export function createR2Client(env: R2Env): R2S3Client {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
@@ -44,14 +104,26 @@ export function createR2Client(env: R2Env): R2S3Client {
   }) as R2S3Client;
 }
 
+export interface PresignedUrlOptions {
+  expiresIn?: number; // seconds; default 900 (15 minutes)
+  /** Sets Content-Disposition on the response (e.g. a descriptive filename). */
+  responseContentDisposition?: string;
+}
+
 export async function generatePresignedUrl(
   client: R2S3Client,
   bucket: string,
   key: string,
-  expiresIn: number = 900, // 15 minutes
+  options: number | PresignedUrlOptions = 900,
 ): Promise<string> {
-  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-  return getSignedUrl(client, command, { expiresIn });
+  const opts: PresignedUrlOptions =
+    typeof options === "number" ? { expiresIn: options } : options;
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: opts.responseContentDisposition,
+  });
+  return getSignedUrl(client, command, { expiresIn: opts.expiresIn ?? 900 });
 }
 
 export async function generatePresignedUploadUrl(

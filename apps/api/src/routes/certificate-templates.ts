@@ -9,6 +9,7 @@ import {
   certificateTemplatePreview,
   certificateTemplateVersion,
   calibrationMethod,
+  organization,
   organizationUnit,
   service,
 } from "@calibra-facil/db/schema";
@@ -34,10 +35,13 @@ import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   createR2Client,
   downloadFromR2,
+  resolveBucketName,
+  resolveReadBucketName,
   uploadToR2,
   generatePresignedUrl,
   type R2Env,
 } from "../lib/storage";
+import { templateXlsxKey } from "@calibra-facil/shared/storage-keys";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -89,14 +93,6 @@ function slugifyTemplateName(value: string): string {
     .slice(0, 50);
 }
 
-function buildTemplateXlsxKey(
-  organizationId: string,
-  templateId: number,
-  version: number,
-): string {
-  return `certificate-templates/xlsx/${organizationId}/${templateId}/v${version}-${randomUUID()}.xlsx`;
-}
-
 function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
   return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
 }
@@ -123,8 +119,15 @@ function getR2Env(value: unknown): R2Env | null {
   const accessKeyId = getString(env.R2_ACCESS_KEY_ID);
   const secretAccessKey = getString(env.R2_SECRET_ACCESS_KEY);
   const bucketName = getString(env.R2_BUCKET_NAME);
+  const mediaBucketName = getString(env.R2_MEDIA_BUCKET_NAME);
 
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
+  if (
+    !accountId ||
+    !accessKeyId ||
+    !secretAccessKey ||
+    !bucketName ||
+    !mediaBucketName
+  ) {
     return null;
   }
 
@@ -133,8 +136,12 @@ function getR2Env(value: unknown): R2Env | null {
     R2_ACCESS_KEY_ID: accessKeyId,
     R2_SECRET_ACCESS_KEY: secretAccessKey,
     R2_BUCKET_NAME: bucketName,
+    R2_MEDIA_BUCKET_NAME: mediaBucketName,
     CERTIFICATES_BUCKET: isR2BucketLike(env.CERTIFICATES_BUCKET)
       ? env.CERTIFICATES_BUCKET
+      : undefined,
+    MEDIA_BUCKET: isR2BucketLike(env.MEDIA_BUCKET)
+      ? env.MEDIA_BUCKET
       : undefined,
     NODE_ENV: getString(env.NODE_ENV) ?? undefined,
     API_URL: getString(env.API_URL) ?? undefined,
@@ -544,6 +551,12 @@ export const certificateTemplatesRouter = new Hono<{
       const bindingManifestSha256 =
         hashCertificateXlsxBindingManifest(manifest);
       const r2Client = createR2Client(env);
+      const [orgRow] = await db
+        .select({ slug: organization.slug })
+        .from(organization)
+        .where(eq(organization.id, member.organizationId))
+        .limit(1);
+      const orgSlug = orgRow?.slug ?? "";
 
       const { version, nextVersion, xlsxR2Key } = await db.transaction(
         async (tx) => {
@@ -558,15 +571,17 @@ export const certificateTemplatesRouter = new Hono<{
             .orderBy(desc(certificateTemplateVersion.version))
             .limit(1);
           const nextVersion = (latestVersion?.version ?? 0) + 1;
-          const xlsxR2Key = buildTemplateXlsxKey(
-            member.organizationId,
-            template.id,
-            nextVersion,
-          );
+          const xlsx = templateXlsxKey({
+            org: { id: member.organizationId, slug: orgSlug },
+            templateId: template.id,
+            version: nextVersion,
+            uniqueId: randomUUID(),
+          });
+          const xlsxR2Key = xlsx.key;
 
           await uploadToR2(
             r2Client,
-            env.R2_BUCKET_NAME,
+            resolveBucketName(env, xlsx.bucket),
             xlsxR2Key,
             bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -694,9 +709,15 @@ export const certificateTemplatesRouter = new Hono<{
       }
 
       const r2Client = createR2Client(env);
+      const bucketName = await resolveReadBucketName(
+        r2Client,
+        env,
+        "media",
+        version.xlsxR2Key,
+      );
       const bytes = await downloadFromR2(
         r2Client,
-        env.R2_BUCKET_NAME,
+        bucketName,
         version.xlsxR2Key,
       );
       const analysis = await new ExcelTsCertificateWorkbookEngine().analyze(
@@ -839,9 +860,15 @@ export const certificateTemplatesRouter = new Hono<{
         existing.bindingManifest,
       );
       const r2Client = createR2Client(env);
+      const bucketName = await resolveReadBucketName(
+        r2Client,
+        env,
+        "media",
+        existing.xlsxR2Key,
+      );
       const bytes = await downloadFromR2(
         r2Client,
-        env.R2_BUCKET_NAME,
+        bucketName,
         existing.xlsxR2Key,
       );
       const analysis = await new ExcelTsCertificateWorkbookEngine().analyze(

@@ -52,6 +52,11 @@ import {
 import { createCalculationEngine } from "@calibra-facil/math-engine";
 import { toCanonicalMassValue } from "@calibra-facil/shared";
 import {
+  desktopCertificatePdfKey,
+  safeR2Segment,
+  syncAttachmentKey,
+} from "@calibra-facil/shared/storage-keys";
+import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
 } from "@calibra-facil/sync";
@@ -3529,15 +3534,23 @@ function readCertificatePdfUploadFields(
   };
 }
 
+// Desktop-originated certs and sync attachments are part of the offline
+// subsystem: they stay in the documents bucket and use the id-only org
+// partition (slug omitted). The attachment key also round-trips as the opaque
+// attachment id, so its byte layout must stay stable — org ids are URL-safe,
+// so the shared builder produces the same string as the previous local one.
 function buildDesktopCertificatePdfKey(input: {
   organizationId: string;
   year: number;
   jobId: string;
   draftId: string;
 }) {
-  return `org/${input.organizationId}/${input.year}/jobs/${safeR2Segment(
-    input.jobId,
-  )}/desktop-${safeR2Segment(input.draftId)}.pdf`;
+  return desktopCertificatePdfKey({
+    org: { id: input.organizationId, slug: "" },
+    year: input.year,
+    jobId: input.jobId,
+    draftId: input.draftId,
+  }).key;
 }
 
 function buildSyncAttachmentObjectKey(
@@ -3555,14 +3568,13 @@ function buildSyncAttachmentObjectKey(
     safeR2Segment(input.eventId),
   ].join("-");
 
-  return [
-    "org",
-    safeR2Segment(memberData.organizationId),
-    "sync-attachments",
-    safeR2Segment(input.entityType),
-    safeR2Segment(input.entityId),
-    `${fileIdentity}${safeAttachmentExtension(input.fileName)}`,
-  ].join("/");
+  return syncAttachmentKey({
+    org: { id: memberData.organizationId, slug: "" },
+    entityType: input.entityType,
+    entityId: input.entityId,
+    fileIdentity,
+    extension: safeAttachmentExtension(input.fileName),
+  }).key;
 }
 
 function encodeSyncAttachmentId(objectKey: string) {
@@ -3604,12 +3616,6 @@ function formString(formData: FormData, key: string) {
 function formNumber(formData: FormData, key: string) {
   const value = formString(formData, key);
   return value ? Number(value) : Number.NaN;
-}
-
-function safeR2Segment(value: string) {
-  return (
-    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
-  );
 }
 
 function methodDiagnostic(

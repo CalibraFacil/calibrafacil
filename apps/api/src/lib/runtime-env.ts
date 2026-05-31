@@ -33,6 +33,14 @@ export type WorkerRuntimeEnv = {
       options?: { httpMetadata?: { contentType?: string } },
     ): Promise<void>;
   };
+  MEDIA_BUCKET: {
+    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+    put(
+      key: string,
+      body: Buffer | Uint8Array | ArrayBuffer,
+      options?: { httpMetadata?: { contentType?: string } },
+    ): Promise<void>;
+  };
   RUNTIME_ASSETS_BUCKET?: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
@@ -66,6 +74,7 @@ const requiredProductionEnv = [
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
   "R2_BUCKET_NAME",
+  "R2_MEDIA_BUCKET_NAME",
   "RESEND_API_KEY",
 ] as const;
 
@@ -197,6 +206,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
   return {
     DATABASE_URL: databaseUrl,
     CERTIFICATES_BUCKET: createR2Bucket(),
+    MEDIA_BUCKET: createR2Bucket(requiredEnv("R2_MEDIA_BUCKET_NAME")),
     RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
       ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
       : undefined,

@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
+  organization,
   referenceStandard,
   referenceStandardAuditLog,
   referenceStandardCertificateDocument,
@@ -42,9 +43,11 @@ import {
 import {
   createR2Client,
   generatePresignedUrl,
+  resolveBucketName,
   uploadToR2,
   type R2Env,
 } from "../lib/storage";
+import { standardCertificateKey } from "@calibra-facil/shared/storage-keys";
 
 const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
 const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
@@ -146,15 +149,6 @@ function sanitizeStandardCertificateFileName(value: string) {
   return normalized.toLowerCase().endsWith(".pdf")
     ? normalized
     : `${normalized || "certificado"}.pdf`;
-}
-
-function buildStandardCertificateR2Key(params: {
-  organizationId: string;
-  standardId: number;
-  documentId: number;
-  fileName: string;
-}) {
-  return `org/${params.organizationId}/standards/${params.standardId}/certificates/${params.documentId}-${params.fileName}`;
 }
 
 function isFinalizedCertificateDocumentCondition() {
@@ -560,8 +554,13 @@ export const standardsRouter = new Hono<{
           return c.json({ error: "Falha ao registrar certificado" }, 500);
         }
 
-        const r2Key = buildStandardCertificateR2Key({
-          organizationId: standard.organizationId,
+        const [orgRow] = await db
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, standard.organizationId))
+          .limit(1);
+        const { bucket, key: r2Key } = standardCertificateKey({
+          org: { id: standard.organizationId, slug: orgRow?.slug ?? "" },
           standardId: standard.id,
           documentId: created.id,
           fileName: safeFileName,
@@ -570,7 +569,7 @@ export const standardsRouter = new Hono<{
         const r2Client = createR2Client(env);
         await uploadToR2(
           r2Client,
-          env.R2_BUCKET_NAME,
+          resolveBucketName(env, bucket),
           r2Key,
           buffer,
           STANDARD_CERTIFICATE_CONTENT_TYPE,

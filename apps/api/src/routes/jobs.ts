@@ -180,15 +180,25 @@ function r2EnvFromUnknown(value: unknown): R2Env {
   const bucket = env.CERTIFICATES_BUCKET;
   const bucketGet =
     bucket && typeof bucket === "object" ? Reflect.get(bucket, "get") : null;
+  const mediaBucket = env.MEDIA_BUCKET;
+  const mediaBucketGet =
+    mediaBucket && typeof mediaBucket === "object"
+      ? Reflect.get(mediaBucket, "get")
+      : null;
 
   return {
     R2_ACCOUNT_ID: stringFromUnknown(env.R2_ACCOUNT_ID),
     R2_ACCESS_KEY_ID: stringFromUnknown(env.R2_ACCESS_KEY_ID),
     R2_SECRET_ACCESS_KEY: stringFromUnknown(env.R2_SECRET_ACCESS_KEY),
     R2_BUCKET_NAME: stringFromUnknown(env.R2_BUCKET_NAME),
+    R2_MEDIA_BUCKET_NAME: stringFromUnknown(env.R2_MEDIA_BUCKET_NAME),
     CERTIFICATES_BUCKET:
       bucket && typeof bucketGet === "function"
         ? { get: (key) => bucketGet.call(bucket, key) }
+        : undefined,
+    MEDIA_BUCKET:
+      mediaBucket && typeof mediaBucketGet === "function"
+        ? { get: (key) => mediaBucketGet.call(mediaBucket, key) }
         : undefined,
     NODE_ENV:
       typeof env.NODE_ENV === "string" ? env.NODE_ENV : process.env.NODE_ENV,
@@ -1979,18 +1989,26 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
-      const performedAt = input.performedAt ? new Date(input.performedAt) : new Date();
+      const performedAt = input.performedAt
+        ? new Date(input.performedAt)
+        : new Date();
       if (Number.isNaN(performedAt.getTime())) {
         return c.json({ error: "Data de execução inválida" }, 400);
       }
       const now = new Date();
       if (performedAt.getTime() > now.getTime()) {
-        return c.json({ error: "A data de execução não pode estar no futuro" }, 400);
+        return c.json(
+          { error: "A data de execução não pode estar no futuro" },
+          400,
+        );
       }
       const diffMs = now.getTime() - performedAt.getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       const normalizedBackdateReason = input.backdateReason?.trim();
-      if (diffDays > BACKDATE_REASON_THRESHOLD_DAYS && !normalizedBackdateReason) {
+      if (
+        diffDays > BACKDATE_REASON_THRESHOLD_DAYS &&
+        !normalizedBackdateReason
+      ) {
         return c.json(
           {
             error: `Motivo obrigatório para lançamentos com mais de ${BACKDATE_REASON_THRESHOLD_DAYS} dias`,
@@ -2092,16 +2110,17 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: [
-          nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
-            ? "Submetido com condições ambientais fora dos limites"
-            : null,
-          diffDays > BACKDATE_REASON_THRESHOLD_DAYS
-            ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" | ") || undefined,
+        reason:
+          [
+            nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
+              ? "Submetido com condições ambientais fora dos limites"
+              : null,
+            diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+              ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" | ") || undefined,
       });
 
       // Send notifications to admins/owners (fire and forget)
@@ -2488,7 +2507,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                       ok: first.ok,
                       billingDocumentId: first.billingDocumentId ?? null,
                     },
-                    reason: first.ok ? undefined : (first.error ?? "send_failed"),
+                    reason: first.ok
+                      ? undefined
+                      : (first.error ?? "send_failed"),
                   };
                 } catch (error) {
                   return {
@@ -2501,10 +2522,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             });
           }
         } catch (error) {
-          console.error(
-            "[Jobs] Automatic-send wire-up failed:",
-            error,
-          );
+          console.error("[Jobs] Automatic-send wire-up failed:", error);
         }
       })();
 
