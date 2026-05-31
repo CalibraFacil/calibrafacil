@@ -114,6 +114,23 @@ See `docs/architecture/web-frontend-architecture.md`.
   payloads with `@calibra-facil/schemas` and keep parsing in testable `forms.ts` functions, not in
   JSX handlers.
 
+## Architecture: portal frontend (client portal)
+
+See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only client portal.
+
+- **Reuse the `instrument-panel` design system** (ported into
+  `apps/portal/src/components/instrument-panel.tsx`) — `Panel`/`PanelHeader`/`SignalTile`/
+  `BlueprintGrid`/`StaggerGroup` + the `SignalTone` vocabulary (ok/critical/warning/info/neutral) +
+  Geist Mono numerics. Not plain shadcn `Card`/`Badge`.
+- **Transport is its own narrow surface:** raw `fetch` to `/api/portal/*` with
+  `credentials: "include"`, wrapped in TanStack Query — the portal does not use
+  `@calibra-facil/client-runtime` and (like all frontend) must never import `@calibra-facil/api`.
+- Partially feature-first: extract pages into `apps/portal/src/features/<domain>/` as they grow
+  (`dashboard`, `service-orders` already are). Status maps through `lib/calibration-status.ts` +
+  `lib/status-labels.ts`. Customer-facing ids should be opaque (service orders route by `public_id`).
+- Page roots use the `.portal-shell` / `.portal-shell-sm` shells; copy is pt-BR. Same `useEffect`/
+  `as`-assertion bans apply.
+
 ## Other guards to be aware of
 
 - **`useEffect` is banned.** `scripts/check-no-use-effect.mjs` (part of `pnpm lint`) fails on any
