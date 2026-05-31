@@ -999,6 +999,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getLabelZpl",
+          "namespace": "jobs",
+          "policy": "cloud-only",
+        },
+        {
           "method": "amend",
           "namespace": "jobs",
           "policy": "cloud-only",

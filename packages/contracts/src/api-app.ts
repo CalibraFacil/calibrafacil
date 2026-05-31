@@ -198,6 +198,7 @@ type ApiRoutePath =
   | "/api/jobs/:id/download-label"
   | "/api/jobs/:id/execute"
   | "/api/jobs/:id/generate-label"
+  | "/api/jobs/:id/label.zpl"
   | "/api/jobs/:id/reject"
   | "/api/jobs/:id/submit"
   | "/api/jobs/technicians/list"

@@ -82,6 +82,9 @@ importers:
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
+      '@calibra-facil/label-zpl':
+        specifier: workspace:^
+        version: link:../../packages/label-zpl
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
         version: git+https://git@github.com:CalibraFacil/math-engine.git#5b598403aa31e491723fd4453efbd73f836ebf6e
@@ -259,6 +262,9 @@ importers:
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
+      '@calibra-facil/label-zpl':
+        specifier: workspace:^
+        version: link:../../packages/label-zpl
       '@calibra-facil/local-db':
         specifier: workspace:^
         version: link:../../packages/local-db
@@ -919,11 +925,30 @@ importers:
         specifier: 6.2.0
         version: 6.2.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
+  packages/label-zpl:
+    dependencies:
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:^
+        version: link:../typescript-config
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@types/node@22.19.3)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.32.0)(msw@2.12.4(@types/node@22.19.3)(typescript@5.9.3))(tsx@4.21.0)
+
   packages/local-db:
     dependencies:
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../contracts
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       '@calibra-facil/sync':
         specifier: workspace:*
         version: link:../sync

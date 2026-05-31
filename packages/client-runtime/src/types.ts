@@ -138,6 +138,11 @@ export interface JobsApi {
   ): Promise<JobDownloadUrlData>;
   generateLabel(jobId: string | number): Promise<unknown>;
   getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlData>;
+  /** Native ZPL for direct thermal printing (text). */
+  getLabelZpl(
+    jobId: string | number,
+    options?: { dpi?: 203 | 300 },
+  ): Promise<string>;
   amend(jobId: string | number, reason: string): Promise<JobAmendResult>;
 }
 

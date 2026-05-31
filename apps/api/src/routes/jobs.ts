@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
+import { buildLabelZpl, defaultRenderOptions } from "@calibra-facil/label-zpl";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   findServiceOrdersForCalibrationJob,
@@ -3350,6 +3351,67 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
       return c.json({ url });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/label.zpl - Native ZPL for direct thermal printing
+  // =========================================================================
+  // Built server-side so the verification token stays off the client. The
+  // browser fetches this, then hands the ZPL to a transport (desktop
+  // local-server or Zebra Browser Print).
+  .get(
+    "/:id/label.zpl",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const [job] = await db
+        .select({
+          jobId: calibrationJob.jobId,
+          performedAt: calibrationJob.performedAt,
+          verificationToken: calibrationJob.verificationToken,
+          labName: organization.name,
+          assetTag: asset.tag,
+        })
+        .from(calibrationJob)
+        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .leftJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const dpi = c.req.query("dpi") === "300" ? 300 : 203;
+      const zpl = buildLabelZpl(
+        {
+          certNumber: job.jobId,
+          labName: job.labName ?? "Laboratório",
+          assetTag: job.assetTag ?? "-",
+          calibrationDate: job.performedAt,
+          // Same public verification URL the worker encodes into the PDF QR.
+          verifyUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+        },
+        defaultRenderOptions(dpi),
+      );
+
+      return c.text(zpl);
     },
   )
 
