@@ -1,6 +1,7 @@
 import { z } from "zod";
 export * from "./commercial";
 export * from "./imports";
+export * from "./printing";
 export * from "./quality";
 export * from "./service-orders";
 

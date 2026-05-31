@@ -108,6 +108,13 @@ export {
   type LocalEffectiveEnvironmentalLimitsInput,
 } from "./environmental-limits";
 export {
+  deletePrinterProfile,
+  getDefaultPrinterProfile,
+  getPrinterProfile,
+  listPrinterProfiles,
+  upsertPrinterProfile,
+} from "./printer-profiles";
+export {
   createLocalServiceOrderDeliveryDocumentDraft,
   createLocalServiceOrderIntake,
   createLocalServiceOrderQuoteDraft,

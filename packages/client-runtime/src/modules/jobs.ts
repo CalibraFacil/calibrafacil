@@ -13,7 +13,8 @@ import type {
   JobExecutionPayload,
   ReferenceStandardsResponse,
 } from "../jobs";
-import { readJsonResponse } from "../transport/response";
+import { CalibraApiError } from "../transport/errors";
+import { readApiError, readJsonResponse } from "../transport/response";
 import { apiRouteParam } from "../transport/url";
 
 export function createJobsApi(rawCloudClient: any): JobsApi {
@@ -164,6 +165,22 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         }),
         "Falha ao gerar link",
       );
+    },
+    async getLabelZpl(jobId: string | number, options?: { dpi?: 203 | 300 }) {
+      const response: Response = await rawCloudClient.api.jobs[":id"][
+        "label.zpl"
+      ].$get({
+        param: { id: apiRouteParam(jobId) },
+        query: options?.dpi ? { dpi: String(options.dpi) } : {},
+      });
+      if (!response.ok) {
+        throw new CalibraApiError(
+          await readApiError(response, "Falha ao gerar etiqueta ZPL"),
+          response.status,
+          null,
+        );
+      }
+      return response.text();
     },
     async amend(jobId: string | number, reason: string) {
       return readJsonResponse<JobAmendResult>(

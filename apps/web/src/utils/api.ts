@@ -18,7 +18,7 @@ export function getApiBaseURL(): string {
   return getCloudApiBaseUrl()
 }
 
-function getLocalApiBaseURL(): string {
+export function getLocalApiBaseURL(): string {
   if (isDesktopRuntime()) {
     return import.meta.env.VITE_LOCAL_API_URL ?? getDefaultDesktopLocalApiUrl()
   }
@@ -128,7 +128,7 @@ export const calibraApi = calibraClient
 
 let desktopLocalApiTokenPromise: Promise<string | null> | null = null
 
-function getDesktopLocalApiToken() {
+export function getDesktopLocalApiToken() {
   if (typeof window === 'undefined' || !window.calibraBridge) {
     return null
   }

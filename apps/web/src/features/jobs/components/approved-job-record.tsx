@@ -96,6 +96,7 @@ import {
 } from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
 import { CertificateReleaseControl } from '@/features/finance/certificate-release'
+import { PrintLabelButton } from '@/features/printing/print-label-button'
 
 interface ApprovedJobRecordProps {
   job: ApprovedJobRecordData
@@ -942,6 +943,10 @@ export function ApprovedJobRecord({
                       ? 'Baixar Etiqueta QR'
                       : 'Gerar Etiqueta QR'}
                 </Button>
+                <PrintLabelButton
+                  jobId={job.id}
+                  className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start`}
+                />
                 <Button
                   variant="outline"
                   className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start`}

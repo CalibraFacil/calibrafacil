@@ -79,6 +79,7 @@ import {
   type LocalSyncRuntimeOptions,
 } from "./sync";
 import { executeLocalCompiledMethod } from "./execution";
+import { registerPrinterRoutes } from "./printing/routes";
 
 export type LocalServerInstance = {
   app: ReturnType<typeof createLocalServer>;
@@ -263,6 +264,8 @@ export function createLocalServer(
 
     await next();
   });
+
+  registerPrinterRoutes(app, database);
 
   app.get("/.well-known/calibra/local-environment", (c) => {
     const context = getLocalRequestContext(config, database);

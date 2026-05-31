@@ -1979,6 +1979,9 @@ export function createDesktopApiClient(
       async getLabelDownloadUrl() {
         throw desktopUnsupportedJobAction("Download de etiqueta publicada");
       },
+      async getLabelZpl() {
+        throw desktopUnsupportedJobAction("Geração de ZPL da etiqueta");
+      },
       async amend() {
         throw desktopUnsupportedJobAction("Retificação de certificado");
       },
