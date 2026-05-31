@@ -1,11 +1,5 @@
-// Typed ZPL II primitives. Each function returns a ZPL fragment string; callers
-// compose them into a full `^XA … ^XZ` label. Kept pure and dependency-free so
-// this runs identically in the worker, the local-server, and the browser.
-//
-// We deliberately hand-roll this instead of taking a dependency: the only
-// healthy native-ZPL npm package (jszpl) is GPL-3.0 (incompatible with this
-// proprietary codebase), and label generation for a fixed-format calibration
-// label is small and fully testable.
+// Typed ZPL II primitives. Each function returns a ZPL fragment string; the ZPL
+// renderer composes them. Pure and dependency-free.
 
 import { escapeZplField } from "./escape";
 
@@ -88,8 +82,8 @@ export interface QrFieldOptions {
 
 /**
  * `^FO … ^BQ … ^FH^FD … ^FS` — a native QR code. The `^FD` payload for `^BQ`
- * is `<errorCorrection><inputMode>,<data>`; we always use input mode `A`
- * (automatic) and hex-escape the data so it can't break out of the field.
+ * is `<errorCorrection><inputMode>,<data>`; input mode `A` (automatic), data
+ * hex-escaped so it can't break out of the field.
  */
 export function qrField(options: QrFieldOptions): string {
   const model = options.model ?? 2;

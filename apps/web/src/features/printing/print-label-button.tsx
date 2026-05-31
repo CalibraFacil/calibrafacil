@@ -50,13 +50,16 @@ export function PrintLabelButton({
   const isWorking = isDesktop ? printDesktop.isPending : isCloudWorking
 
   const printDesktopLabel = () => {
-    if ((profilesQuery.data?.length ?? 0) === 0) {
+    const profiles = profilesQuery.data ?? []
+    if (profiles.length === 0) {
       toast.info('Configure uma impressora térmica para imprimir etiquetas.')
       setSettingsOpen(true)
       return
     }
+    // Request the dialect of the printer the local-server will send to.
+    const target = profiles.find((profile) => profile.isDefault) ?? profiles[0]
     printDesktop.mutate(
-      { jobId },
+      { jobId, language: target?.language, profileId: target?.id },
       { onSuccess: reportSuccess, onError: reportError },
     )
   }

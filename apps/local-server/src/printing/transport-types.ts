@@ -1,24 +1,28 @@
 import type { PrinterProfile } from "@calibra-facil/schemas";
 
-import { sendZplOverNetwork } from "./network-transport";
-import { sendZplOverSerial } from "./serial-transport";
-import { sendZplOverUsb } from "./usb-transport";
+import { sendCommandsOverNetwork } from "./network-transport";
+import { sendCommandsOverSerial } from "./serial-transport";
+import { sendCommandsOverUsb } from "./usb-transport";
 
 /**
- * Send ZPL to a printer using the transport described by its profile. Returns
- * the number of bytes written.
+ * Send printer commands (ZPL/TSPL — opaque bytes here) to a printer using the
+ * transport described by its profile. Returns the number of bytes written.
  */
 export async function sendToPrinter(
   profile: PrinterProfile,
-  zpl: string,
+  commands: string,
 ): Promise<number> {
   const { connection } = profile;
   switch (connection.type) {
     case "network":
-      return sendZplOverNetwork(connection.host, connection.port, zpl);
+      return sendCommandsOverNetwork(
+        connection.host,
+        connection.port,
+        commands,
+      );
     case "usb":
-      return sendZplOverUsb(connection, zpl);
+      return sendCommandsOverUsb(connection, commands);
     case "serial":
-      return sendZplOverSerial(connection, zpl);
+      return sendCommandsOverSerial(connection, commands);
   }
 }

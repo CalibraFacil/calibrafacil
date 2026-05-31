@@ -1,4 +1,7 @@
-import type { SavePrinterProfileInput } from '@calibra-facil/schemas'
+import type {
+  PrinterLanguage,
+  SavePrinterProfileInput,
+} from '@calibra-facil/schemas'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -73,8 +76,15 @@ export function usePrintTestLabel() {
 
 export function usePrintJobLabel() {
   return useMutation({
-    mutationFn: (input: { jobId: string | number; profileId?: string }) =>
-      printJobLabel(input.jobId, { profileId: input.profileId }),
+    mutationFn: (input: {
+      jobId: string | number
+      language?: PrinterLanguage
+      profileId?: string
+    }) =>
+      printJobLabel(input.jobId, {
+        language: input.language,
+        profileId: input.profileId,
+      }),
   })
 }
 

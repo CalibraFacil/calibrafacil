@@ -26,7 +26,7 @@
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
-    "@calibra-facil/label-zpl": "workspace:^",
+    "@calibra-facil/label-rendering": "workspace:^",
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",

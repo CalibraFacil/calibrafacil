@@ -49,19 +49,19 @@ function describeSocketError(
 }
 
 /**
- * Send a ZPL payload to a network printer. Resolves with the number of bytes
+ * Send printer commands to a network printer. Resolves with the number of bytes
  * written, or rejects with a {@link PrinterTransportError}.
  */
-export function sendZplOverNetwork(
+export function sendCommandsOverNetwork(
   host: string,
   port: number,
-  zpl: string,
+  commands: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
-    // ZPL is single-byte (our builder hex-escapes anything non-ASCII), so latin1
-    // maps each code unit to one byte without mangling.
-    const payload = Buffer.from(zpl, "latin1");
+    // Commands are single-byte (ASCII / hex-escaped), so latin1 maps each code
+    // unit to one byte without mangling.
+    const payload = Buffer.from(commands, "latin1");
     const socket = new Socket();
     let settled = false;
 

@@ -10,7 +10,7 @@ import {
   setPrintSpeed,
   startLabel,
   textField,
-} from "./zpl-builder";
+} from "./builder";
 
 describe("zpl primitives", () => {
   it("emits the label envelope and encoding", () => {

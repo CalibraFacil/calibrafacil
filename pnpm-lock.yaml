@@ -82,9 +82,9 @@ importers:
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
-      '@calibra-facil/label-zpl':
+      '@calibra-facil/label-rendering':
         specifier: workspace:^
-        version: link:../../packages/label-zpl
+        version: link:../../packages/label-rendering
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
         version: git+https://git@github.com:CalibraFacil/math-engine.git#5b598403aa31e491723fd4453efbd73f836ebf6e
@@ -268,9 +268,9 @@ importers:
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
-      '@calibra-facil/label-zpl':
+      '@calibra-facil/label-rendering':
         specifier: workspace:^
-        version: link:../../packages/label-zpl
+        version: link:../../packages/label-rendering
       '@calibra-facil/local-db':
         specifier: workspace:^
         version: link:../../packages/local-db
@@ -450,9 +450,9 @@ importers:
       '@calibra-facil/documents':
         specifier: workspace:^
         version: link:../../packages/documents
-      '@calibra-facil/label-zpl':
+      '@calibra-facil/label-rendering':
         specifier: workspace:^
-        version: link:../../packages/label-zpl
+        version: link:../../packages/label-rendering
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
         version: git+https://git@github.com:CalibraFacil/math-engine.git#5b598403aa31e491723fd4453efbd73f836ebf6e
@@ -946,7 +946,7 @@ importers:
         specifier: 6.2.0
         version: 6.2.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
-  packages/label-zpl:
+  packages/label-rendering:
     dependencies:
       '@calibra-facil/schemas':
         specifier: workspace:^

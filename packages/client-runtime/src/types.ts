@@ -138,10 +138,10 @@ export interface JobsApi {
   ): Promise<JobDownloadUrlData>;
   generateLabel(jobId: string | number): Promise<unknown>;
   getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlData>;
-  /** Native ZPL for direct thermal printing (text). */
-  getLabelZpl(
+  /** Native printer commands (ZPL/TSPL) for direct thermal printing (text). */
+  getLabelCommands(
     jobId: string | number,
-    options?: { dpi?: 203 | 300 },
+    options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
   ): Promise<string>;
   amend(jobId: string | number, reason: string): Promise<JobAmendResult>;
 }
@@ -1697,9 +1697,7 @@ export interface BackofficeApi {
   revokeEntitlementOverride<TResponse = unknown>(
     id: string | number,
   ): Promise<TResponse>;
-  getOrganizationActivity<TResponse = unknown>(
-    id: string,
-  ): Promise<TResponse>;
+  getOrganizationActivity<TResponse = unknown>(id: string): Promise<TResponse>;
   listImportRuns<TResponse = unknown>(id: string): Promise<TResponse>;
   parseImportFile<TResponse = unknown>(
     id: string,

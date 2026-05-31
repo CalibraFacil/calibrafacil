@@ -278,7 +278,7 @@ export const calibraApiPolicyRegistry = {
     getCertificateDownloadUrl: "cloud-only",
     generateLabel: "cloud-only",
     getLabelDownloadUrl: "cloud-only",
-    getLabelZpl: "cloud-only",
+    getLabelCommands: "cloud-only",
     amend: "cloud-only",
   },
   serviceOrders: {

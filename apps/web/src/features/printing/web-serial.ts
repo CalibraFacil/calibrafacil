@@ -36,9 +36,9 @@ export async function getGrantedWebSerialPort(): Promise<SerialPort | null> {
   }
 }
 
-export async function sendZplViaWebSerial(
+export async function sendViaWebSerial(
   port: SerialPort,
-  zpl: string,
+  commands: string,
   baudRate: number = DEFAULT_BAUD_RATE,
 ): Promise<void> {
   await port.open({ baudRate })
@@ -49,7 +49,7 @@ export async function sendZplViaWebSerial(
     }
     const writer = writable.getWriter()
     try {
-      await writer.write(new TextEncoder().encode(zpl))
+      await writer.write(new TextEncoder().encode(commands))
     } finally {
       writer.releaseLock()
     }

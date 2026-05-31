@@ -8,7 +8,7 @@ import {
   upsertPrinterProfile,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
-import { buildTestLabelZpl } from "@calibra-facil/label-zpl";
+import { renderTestLabel } from "@calibra-facil/label-rendering";
 import {
   PrinterProfileSchema,
   PrintLabelRequestSchema,
@@ -32,12 +32,12 @@ function resolveProfile(
   return getDefaultPrinterProfile(database);
 }
 
-async function printZpl(
+async function printCommands(
   profile: PrinterProfile,
-  zpl: string,
+  commands: string,
 ): Promise<PrintResult> {
   try {
-    const bytesSent = await sendToPrinter(profile, zpl);
+    const bytesSent = await sendToPrinter(profile, commands);
     return { success: true, bytesSent };
   } catch (error) {
     if (error instanceof PrinterTransportError) {
@@ -102,13 +102,14 @@ export function registerPrinterRoutes(
         400,
       );
     }
-    // Phase 1: the client renders/fetches ZPL (cloud `label.zpl`) and posts it;
-    // building from `jobId` locally arrives with offline label data later.
-    if (!parsed.data.zpl) {
+    // The client renders/fetches the commands (cloud `label-commands`) and posts
+    // them; building from `jobId` locally arrives with offline label data later.
+    if (!parsed.data.commands) {
       return c.json(
         {
           success: false,
-          error: "ZPL é obrigatório. Gere a etiqueta antes de imprimir.",
+          error:
+            "Comandos são obrigatórios. Gere a etiqueta antes de imprimir.",
         },
         422,
       );
@@ -122,7 +123,7 @@ export function registerPrinterRoutes(
       );
     }
 
-    return c.json(await printZpl(profile, parsed.data.zpl));
+    return c.json(await printCommands(profile, parsed.data.commands));
   });
 
   app.post("/api/printer/test", async (c) => {
@@ -140,6 +141,7 @@ export function registerPrinterRoutes(
       );
     }
 
-    return c.json(await printZpl(profile, buildTestLabelZpl(profile)));
+    // The profile carries its own language, so the test prints in that dialect.
+    return c.json(await printCommands(profile, renderTestLabel(profile)));
   });
 }

@@ -15,15 +15,15 @@ async function loadSerial() {
 }
 
 /**
- * Send a ZPL payload to a serial printer: open the port, write, drain (wait for
- * the bytes to leave the buffer), then close.
+ * Send printer commands to a serial printer: open the port, write, drain (wait
+ * for the bytes to leave the buffer), then close.
  */
-export async function sendZplOverSerial(
+export async function sendCommandsOverSerial(
   connection: { path: string; baudRate: number },
-  zpl: string,
+  commands: string,
 ): Promise<number> {
   const { SerialPort } = await loadSerial();
-  const payload = Buffer.from(zpl, "latin1");
+  const payload = Buffer.from(commands, "latin1");
 
   return new Promise<number>((resolve, reject) => {
     let settled = false;

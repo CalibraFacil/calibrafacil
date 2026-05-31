@@ -67,9 +67,9 @@ function findOutEndpoint(
   return null
 }
 
-export async function sendZplViaWebUsb(
+export async function sendViaWebUsb(
   device: USBDevice,
-  zpl: string,
+  commands: string,
 ): Promise<void> {
   await device.open()
   try {
@@ -85,7 +85,7 @@ export async function sendZplViaWebUsb(
       // ZPL is ASCII (hex-escaped), so UTF-8 encoding is byte-identical.
       await device.transferOut(
         target.endpointNumber,
-        new TextEncoder().encode(zpl),
+        new TextEncoder().encode(commands),
       )
     } finally {
       await device.releaseInterface(target.interfaceNumber).catch(() => {})

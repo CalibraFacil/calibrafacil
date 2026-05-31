@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { LocalServerConfig } from "../bootstrap";
 import { createLocalServer } from "../server";
 import { PrinterTransportError } from "./errors";
-import { sendZplOverNetwork } from "./network-transport";
+import { sendCommandsOverNetwork } from "./network-transport";
 import { sendToPrinter } from "./transport-types";
 
 const tempDirectories: string[] = [];
@@ -86,7 +86,11 @@ afterEach(() => {
 describe("network transport", () => {
   it("writes ZPL bytes to a TCP socket", async () => {
     const server = await startCaptureServer();
-    const bytes = await sendZplOverNetwork("127.0.0.1", server.port, "^XA^XZ");
+    const bytes = await sendCommandsOverNetwork(
+      "127.0.0.1",
+      server.port,
+      "^XA^XZ",
+    );
     expect(bytes).toBe(6);
     expect(await server.received).toBe("^XA^XZ");
     server.close();
@@ -99,7 +103,7 @@ describe("network transport", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     await expect(
-      sendZplOverNetwork("127.0.0.1", port, "^XA^XZ", 2_000),
+      sendCommandsOverNetwork("127.0.0.1", port, "^XA^XZ", 2_000),
     ).rejects.toMatchObject({ code: "CONNECTION_REFUSED" });
   });
 
@@ -110,6 +114,7 @@ describe("network transport", () => {
         id: "p",
         name: "Zebra",
         connection: { type: "network", host: "127.0.0.1", port: server.port },
+        language: "zpl",
         dpi: 203,
         darkness: 15,
         speed: 4,
@@ -129,6 +134,7 @@ describe("network transport", () => {
           id: "u",
           name: "USB Zebra",
           connection: { type: "usb", vendorId: 0x0a5f, productId: 1 },
+          language: "zpl",
           dpi: 203,
           darkness: 15,
           speed: 4,
@@ -216,7 +222,7 @@ describe("printer routes", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          zpl: "^XAhello^XZ",
+          commands: "^XAhello^XZ",
           profile: {
             id: "p",
             name: "Bench Zebra",
