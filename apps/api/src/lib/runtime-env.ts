@@ -216,6 +216,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
     CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
+    // Gotenberg XLSX->PDF service (services/gotenberg on Cloudflare Containers).
     GOTENBERG_URL: process.env.GOTENBERG_URL,
     GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
