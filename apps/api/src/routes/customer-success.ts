@@ -129,6 +129,17 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
       ensureSuccessProfile(member.organizationId),
       listSupportRequests(member.organizationId, true),
     ]);
+    // The customer's CalibraFácil contact ("Gerente de sucesso") is the
+    // internal owner, NOT the account owner (which is the lab's own contact).
+    const internalOwner = profile.internalOwnerUserId
+      ? ((
+          await db
+            .select({ name: user.name, email: user.email })
+            .from(user)
+            .where(eq(user.id, profile.internalOwnerUserId))
+            .limit(1)
+        )[0] ?? null)
+      : null;
     const goLiveStatus = deriveGoLiveStatus({
       currentStatus: profile.goLiveStatus,
       goLiveActualDate: profile.goLiveActualDate,
@@ -192,6 +203,8 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
       profile: {
         ...profile,
         goLiveStatus,
+        internalOwnerName: internalOwner?.name ?? null,
+        internalOwnerEmail: internalOwner?.email ?? null,
       },
       publicSummary: {
         healthStatus,

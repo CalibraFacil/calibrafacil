@@ -221,7 +221,9 @@ function initialsOf(name: string | null | undefined) {
   return initials || 'CS'
 }
 
-function supportModeLabel(mode: SuccessProfileResponse['supportPolicy']['supportMode']) {
+function supportModeLabel(
+  mode: SuccessProfileResponse['supportPolicy']['supportMode'],
+) {
   return mode === 'dedicated'
     ? 'Atendimento dedicado'
     : mode === 'priority'
@@ -299,15 +301,15 @@ export function CustomerSuccessPage() {
 
   const supportRequests = requestsQuery.data?.data ?? []
   const health = HEALTH[payload.publicSummary.healthStatus]
-  const ownerName = payload.profile.accountOwnerName
-  const ownerEmail =
-    payload.profile.accountOwnerEmail ?? payload.profile.supportContactEmail
+  // "Seu contato na CalibraFácil" is the internal owner (the CalibraFácil CS
+  // manager), not the account owner (which is the lab's own contact).
+  const ownerName = payload.profile.internalOwnerName
+  const ownerEmail = payload.profile.internalOwnerEmail
   const onboardingStatus = payload.profile.onboardingStatus
   const onboardingIndex = ONBOARDING_INDEX[onboardingStatus]
   const isLive = onboardingStatus === 'LIVE'
   const isBlocked = onboardingStatus === 'BLOCKED'
-  const migrationRequired =
-    payload.profile.migrationStatus !== 'NOT_REQUIRED'
+  const migrationRequired = payload.profile.migrationStatus !== 'NOT_REQUIRED'
   const goLiveDay =
     formatDay(payload.profile.goLiveActualDate) ??
     formatDay(payload.profile.goLiveTargetDate)
@@ -480,7 +482,10 @@ export function CustomerSuccessPage() {
               <DialogTrigger
                 render={
                   <Button className={ACTION_BUTTON_CLASS}>
-                    <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 size-4"
+                    />
                     Abrir solicitação
                   </Button>
                 }
@@ -489,8 +494,8 @@ export function CustomerSuccessPage() {
                 <DialogHeader>
                   <DialogTitle>Abrir solicitação</DialogTitle>
                   <DialogDescription>
-                    Conte o que você precisa — onboarding, treinamento, migração,
-                    integrações ou um incidente.
+                    Conte o que você precisa — onboarding, treinamento,
+                    migração, integrações ou um incidente.
                   </DialogDescription>
                 </DialogHeader>
                 <form
@@ -635,7 +640,10 @@ export function CustomerSuccessPage() {
           {supportRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl bg-muted/30 px-6 py-12 text-center">
               <span className="flex size-11 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-5" />
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="size-5"
+                />
               </span>
               <p className="mt-3 text-sm font-medium">
                 Nenhuma solicitação aberta
@@ -656,8 +664,8 @@ export function CustomerSuccessPage() {
       </Panel>
 
       <p className="px-1 text-xs text-muted-foreground">
-        {activeOrg?.name ?? 'Seu laboratório'} · acompanhe e fale com a equipe de
-        sucesso da CalibraFácil por aqui.
+        {activeOrg?.name ?? 'Seu laboratório'} · acompanhe e fale com a equipe
+        de sucesso da CalibraFácil por aqui.
       </p>
     </div>
   )
@@ -704,7 +712,8 @@ function RequestItem({ request }: { request: SupportRequest }) {
             {!isResolved &&
               request.timeToSlaMs !== null &&
               ` · ${formatRelativeSla(request.timeToSlaMs)}`}
-            {request.resolvedAt && ` · resolvido em ${formatDay(request.resolvedAt)}`}
+            {request.resolvedAt &&
+              ` · resolvido em ${formatDay(request.resolvedAt)}`}
           </span>
           {hasThread && (
             <CollapsibleTrigger className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-foreground transition-colors hover:bg-muted">
