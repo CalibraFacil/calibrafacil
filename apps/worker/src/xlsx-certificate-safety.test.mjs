@@ -44,7 +44,9 @@ const issuedBody = extractSourceBlock(
   "export async function processBackgroundJob",
 );
 const existingSnapshotIndex = issuedBody.indexOf("existingSnapshot");
-const firstPutIndex = issuedBody.indexOf("CERTIFICATES_BUCKET.put");
+// Artifacts are stored via bucketBinding(env, <bucket>).put(...) after the
+// documents/media split, so match the `.put(` call rather than the old binding.
+const firstPutIndex = issuedBody.indexOf(".put(");
 const insertSnapshotIndex = issuedBody.indexOf(
   "insert into issued_certificate_snapshot",
 );
