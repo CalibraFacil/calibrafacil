@@ -52,10 +52,6 @@ vi.mock('@/components/dashboard-header', () => ({
   }) => <header>{suspendEntityQueries ? 'header suspended' : 'header'}</header>,
 }))
 
-vi.mock('@/components/unit-scope-banner', () => ({
-  UnitScopeBanner: () => <div>unit scope</div>,
-}))
-
 vi.mock('@/components/ui/sidebar', () => ({
   SidebarInset: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
