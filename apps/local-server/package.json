@@ -25,7 +25,9 @@
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@hono/node-server": "^1.19.10",
-    "hono": "^4.12.4"
+    "hono": "^4.12.4",
+    "serialport": "^13.0.0",
+    "usb": "^2.16.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",

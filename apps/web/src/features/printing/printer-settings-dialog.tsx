@@ -24,11 +24,16 @@ import {
   useBrowserPrintAvailable,
   useBrowserPrintDevices,
   useDeletePrinterProfile,
+  useDiscoverPrinters,
   usePrinterProfiles,
   usePrintTestLabel,
   useSavePrinterProfile,
   useTestBrowserPrint,
 } from './use-printers'
+
+function hex(value: number): string {
+  return `0x${value.toString(16).padStart(4, '0')}`
+}
 
 const FIELD_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
@@ -57,9 +62,39 @@ function DesktopPrinterSettings() {
   const saveMutation = useSavePrinterProfile()
   const deleteMutation = useDeletePrinterProfile()
   const testMutation = usePrintTestLabel()
+  const discoverMutation = useDiscoverPrinters()
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
 
   const profiles = profilesQuery.data ?? []
+
+  const saveDiscovered = (
+    name: string,
+    connection:
+      | {
+          type: 'usb'
+          vendorId: number
+          productId: number
+          serialNumber?: string
+        }
+      | { type: 'serial'; path: string },
+  ) => {
+    saveMutation.mutate(
+      {
+        name,
+        connection,
+        dpi: 203,
+        ...dimensionsForDpi(203),
+        isDefault: profiles.length === 0,
+      },
+      {
+        onSuccess: () => toast.success(`"${name}" adicionada.`),
+        onError: (error) =>
+          toast.error(
+            error instanceof Error ? error.message : 'Falha ao adicionar',
+          ),
+      },
+    )
+  }
 
   const handleAdd = () => {
     if (!draft.name.trim() || !draft.host.trim()) {
@@ -189,6 +224,86 @@ function DesktopPrinterSettings() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="space-y-2 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Impressoras USB / serial</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => discoverMutation.mutate()}
+            disabled={discoverMutation.isPending}
+          >
+            {discoverMutation.isPending ? (
+              <Spinner className="mr-2 h-4 w-4" />
+            ) : null}
+            Detectar
+          </Button>
+        </div>
+        {discoverMutation.data ? (
+          discoverMutation.data.usb.length === 0 &&
+          discoverMutation.data.serial.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma impressora USB/serial encontrada.
+            </p>
+          ) : (
+            <>
+              {discoverMutation.data.usb.map((device) => (
+                <div
+                  key={`usb-${device.vendorId}-${device.productId}`}
+                  className="flex items-center justify-between gap-2 rounded-md border p-2"
+                >
+                  <p className="truncate text-sm">
+                    USB {hex(device.vendorId)}:{hex(device.productId)}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={saveMutation.isPending}
+                    onClick={() =>
+                      saveDiscovered(
+                        `Zebra USB ${hex(device.vendorId)}:${hex(device.productId)}`,
+                        {
+                          type: 'usb',
+                          vendorId: device.vendorId,
+                          productId: device.productId,
+                          serialNumber: device.serialNumber,
+                        },
+                      )
+                    }
+                  >
+                    Adicionar
+                  </Button>
+                </div>
+              ))}
+              {discoverMutation.data.serial.map((port) => (
+                <div
+                  key={`serial-${port.path}`}
+                  className="flex items-center justify-between gap-2 rounded-md border p-2"
+                >
+                  <p className="truncate text-sm">
+                    {port.path}
+                    {port.manufacturer ? ` · ${port.manufacturer}` : ''}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={saveMutation.isPending}
+                    onClick={() =>
+                      saveDiscovered(`Serial ${port.path}`, {
+                        type: 'serial',
+                        path: port.path,
+                      })
+                    }
+                  >
+                    Adicionar
+                  </Button>
+                </div>
+              ))}
+            </>
+          )
+        ) : null}
       </div>
 
       <div className="space-y-3 border-t pt-4">

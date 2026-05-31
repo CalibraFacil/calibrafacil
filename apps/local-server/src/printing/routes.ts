@@ -19,6 +19,7 @@ import {
 } from "@calibra-facil/schemas";
 import type { Hono } from "hono";
 
+import { discoverPrinters } from "./discovery";
 import { PrinterTransportError } from "./errors";
 import { sendToPrinter } from "./transport-types";
 
@@ -59,6 +60,10 @@ export function registerPrinterRoutes(
 ): void {
   app.get("/api/printer/profiles", (c) => {
     return c.json({ profiles: listPrinterProfiles(database) });
+  });
+
+  app.get("/api/printer/discover", async (c) => {
+    return c.json(await discoverPrinters());
   });
 
   app.post("/api/printer/profiles", async (c) => {

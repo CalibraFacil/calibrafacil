@@ -5,8 +5,10 @@
  * Print) arrives in a later phase.
  */
 import {
+  PrinterDiscoverResultSchema,
   PrinterProfileSchema,
   PrintResultSchema,
+  type PrinterDiscoverResult,
   type PrinterProfile,
   type PrintResult,
   type SavePrinterProfileInput,
@@ -58,6 +60,15 @@ export async function savePrinterProfile(
   }
   const data: unknown = await response.json()
   return profileResponseSchema.parse(data).profile
+}
+
+export async function discoverPrinters(): Promise<PrinterDiscoverResult> {
+  const response = await localPrinterFetch('/api/printer/discover')
+  if (!response.ok) {
+    throw new Error('Falha ao detectar impressoras USB/serial')
+  }
+  const data: unknown = await response.json()
+  return PrinterDiscoverResultSchema.parse(data)
 }
 
 export async function deletePrinterProfileById(id: string): Promise<void> {

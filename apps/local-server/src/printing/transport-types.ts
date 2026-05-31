@@ -1,12 +1,12 @@
 import type { PrinterProfile } from "@calibra-facil/schemas";
 
-import { PrinterTransportError } from "./errors";
 import { sendZplOverNetwork } from "./network-transport";
+import { sendZplOverSerial } from "./serial-transport";
+import { sendZplOverUsb } from "./usb-transport";
 
 /**
  * Send ZPL to a printer using the transport described by its profile. Returns
- * the number of bytes written. USB/serial are stubbed until Phase 3 (native
- * modules); network printing works today with zero packaging changes.
+ * the number of bytes written.
  */
 export async function sendToPrinter(
   profile: PrinterProfile,
@@ -17,10 +17,8 @@ export async function sendToPrinter(
     case "network":
       return sendZplOverNetwork(connection.host, connection.port, zpl);
     case "usb":
+      return sendZplOverUsb(connection, zpl);
     case "serial":
-      throw new PrinterTransportError(
-        "UNSUPPORTED_TRANSPORT",
-        `A conexão "${connection.type}" será habilitada em uma próxima versão. Use uma impressora de rede (TCP/IP) por enquanto.`,
-      );
+      return sendZplOverSerial(connection, zpl);
   }
 }
