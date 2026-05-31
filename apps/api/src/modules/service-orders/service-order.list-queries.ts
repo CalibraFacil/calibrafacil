@@ -49,6 +49,29 @@ export async function getPortalCustomerForAuthOrganization(
   return linkedCustomer ?? null;
 }
 
+/**
+ * Resolve a service order's opaque public id to its numeric id, scoped to the
+ * given customer. Returns null when the order doesn't exist or isn't theirs,
+ * so the portal can route by `publicId` without exposing the serial id.
+ */
+export async function resolvePortalServiceOrderIdByPublicId(
+  publicId: string,
+  customerId: number,
+): Promise<number | null> {
+  const [row] = await db
+    .select({ id: serviceOrder.id })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.publicId, publicId),
+        eq(serviceOrder.customerId, customerId),
+      ),
+    )
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
 export async function listServiceOrdersForLab(
   member: AuthVariables["member"],
   query: ServiceOrdersListQuery,
@@ -291,6 +314,7 @@ export async function listServiceOrdersForPortalCustomer(
   const rows = await db
     .select({
       id: serviceOrder.id,
+      publicId: serviceOrder.publicId,
       serviceOrderNumber: serviceOrder.serviceOrderNumber,
       status: serviceOrder.status,
       openedAt: serviceOrder.openedAt,

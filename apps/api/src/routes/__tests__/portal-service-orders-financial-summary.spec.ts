@@ -4,6 +4,7 @@ import { portalServiceOrdersRouter } from "../service-orders";
 
 const mocks = vi.hoisted(() => ({
   getPortalCustomerForAuthOrganization: vi.fn(),
+  resolvePortalServiceOrderIdByPublicId: vi.fn(),
   getServiceOrderDetail: vi.fn(),
   buildPortalServiceOrderFinancialSummary: vi.fn(),
   r2Client: { send: vi.fn() },
@@ -59,6 +60,8 @@ vi.mock("../../middleware/permission", () => {
 vi.mock("../../modules/service-orders/service-order.list-queries", () => ({
   getPortalCustomerForAuthOrganization:
     mocks.getPortalCustomerForAuthOrganization,
+  resolvePortalServiceOrderIdByPublicId:
+    mocks.resolvePortalServiceOrderIdByPublicId,
   getServiceOrderSummaryReport: vi.fn(),
   listServiceOrdersForLab: vi.fn(),
   listServiceOrdersForPortalCustomer: vi.fn(),
@@ -112,6 +115,7 @@ describe("portal service-order financial summary route", () => {
       id: 10,
       labOrganizationId: "lab-org-1",
     });
+    mocks.resolvePortalServiceOrderIdByPublicId.mockResolvedValue(42);
     mocks.getServiceOrderDetail.mockResolvedValue({
       id: 42,
       customerId: 10,

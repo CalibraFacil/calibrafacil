@@ -52,6 +52,7 @@ import {
   getServiceOrderSummaryReport,
   listServiceOrdersForLab,
   listServiceOrdersForPortalCustomer,
+  resolvePortalServiceOrderIdByPublicId,
 } from "../modules/service-orders/service-order.list-queries";
 import {
   getServiceOrderDetail,
@@ -106,6 +107,12 @@ const QuoteParamSchema = z.object({
   quoteId: z.coerce.number().int().positive(),
 });
 const TokenParamSchema = z.object({ token: z.string().trim().min(16) });
+// Portal routes service orders by the opaque publicId, not the serial id.
+const PortalIdParamSchema = z.object({ id: z.string().trim().min(1) });
+const PortalQuoteParamSchema = z.object({
+  id: z.string().trim().min(1),
+  quoteId: z.coerce.number().int().positive(),
+});
 
 function requestIp(c: {
   req: { header: (name: string) => string | undefined };
@@ -799,7 +806,7 @@ export const portalServiceOrdersRouter = new Hono<{
     "/:id/financial-summary",
     ...requirePortalProtected,
     requirePermission({ service_order: ["read"] }),
-    zValidator("param", IdParamSchema),
+    zValidator("param", PortalIdParamSchema),
     async (c) => {
       if (c.get("authSource") !== "portal") {
         return c.json({ error: "OS nao encontrada" }, 404);
@@ -811,7 +818,11 @@ export const portalServiceOrdersRouter = new Hono<{
       );
       if (!linkedCustomer) return c.json({ error: "OS nao encontrada" }, 404);
 
-      const { id } = c.req.valid("param");
+      const id = await resolvePortalServiceOrderIdByPublicId(
+        c.req.valid("param").id,
+        linkedCustomer.id,
+      );
+      if (id === null) return c.json({ error: "OS nao encontrada" }, 404);
       const detail = await getServiceOrderDetail(
         id,
         linkedCustomer.labOrganizationId,
@@ -851,15 +862,20 @@ export const portalServiceOrdersRouter = new Hono<{
     "/:id",
     ...requirePortalProtected,
     requirePermission({ service_order: ["read"] }),
-    zValidator("param", IdParamSchema),
+    zValidator("param", PortalIdParamSchema),
     async (c) => {
       const member = c.get("member");
       const linkedCustomer = await getPortalCustomerForAuthOrganization(
         member.organizationId,
       );
       if (!linkedCustomer) return c.json({ error: "OS nao encontrada" }, 404);
-      const detail = await getServiceOrderDetail(
+      const orderId = await resolvePortalServiceOrderIdByPublicId(
         c.req.valid("param").id,
+        linkedCustomer.id,
+      );
+      if (orderId === null) return c.json({ error: "OS nao encontrada" }, 404);
+      const detail = await getServiceOrderDetail(
+        orderId,
         linkedCustomer.labOrganizationId,
       );
       if (!detail || detail.customerId !== linkedCustomer.id) {
@@ -872,12 +888,25 @@ export const portalServiceOrdersRouter = new Hono<{
     "/:id/quotes/:quoteId/approve",
     ...requirePortalProtected,
     requirePermission({ service_order: ["read"] }),
-    zValidator("param", QuoteParamSchema),
+    zValidator("param", PortalQuoteParamSchema),
     zValidator("json", ApproveServiceOrderQuotePortalSchema),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const { id, quoteId } = c.req.valid("param");
+      const { id: publicId, quoteId } = c.req.valid("param");
+      const linkedCustomer = await getPortalCustomerForAuthOrganization(
+        member.organizationId,
+      );
+      if (!linkedCustomer) {
+        return c.json({ error: "Orcamento nao encontrado" }, 404);
+      }
+      const id = await resolvePortalServiceOrderIdByPublicId(
+        publicId,
+        linkedCustomer.id,
+      );
+      if (id === null) {
+        return c.json({ error: "Orcamento nao encontrado" }, 404);
+      }
       const result = await approveServiceOrderQuoteByPortalUser({
         serviceOrderId: id,
         quoteId,
@@ -901,13 +930,26 @@ export const portalServiceOrdersRouter = new Hono<{
     "/:id/quotes/:quoteId/reject",
     ...requirePortalProtected,
     requirePermission({ service_order: ["read"] }),
-    zValidator("param", QuoteParamSchema),
+    zValidator("param", PortalQuoteParamSchema),
     zValidator("json", RejectServiceOrderQuotePortalSchema),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const { id, quoteId } = c.req.valid("param");
+      const { id: publicId, quoteId } = c.req.valid("param");
       const input = c.req.valid("json");
+      const linkedCustomer = await getPortalCustomerForAuthOrganization(
+        member.organizationId,
+      );
+      if (!linkedCustomer) {
+        return c.json({ error: "Orcamento nao encontrado" }, 404);
+      }
+      const id = await resolvePortalServiceOrderIdByPublicId(
+        publicId,
+        linkedCustomer.id,
+      );
+      if (id === null) {
+        return c.json({ error: "Orcamento nao encontrado" }, 404);
+      }
       const result = await rejectServiceOrderQuoteByPortalUser({
         serviceOrderId: id,
         quoteId,

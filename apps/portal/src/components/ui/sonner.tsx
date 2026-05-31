@@ -15,13 +15,7 @@ function Toaster({ ...props }: ToasterProps) {
     "--normal-border": "var(--border)",
   };
 
-  return (
-    <Sonner
-      className="toaster group"
-      style={style}
-      {...props}
-    />
-  );
+  return <Sonner className="toaster group" style={style} {...props} />;
 }
 
 export { Toaster };

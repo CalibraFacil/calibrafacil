@@ -370,6 +370,27 @@ export const CreateCalibrationRequestSchema = z.object({
     })
     .optional()
     .nullable(),
+  // How the customer gets the assets to the lab. When shipping via a carrier,
+  // they may attach the "nota fiscal de remessa para conserto".
+  deliveryMethod: z.enum(["dropoff", "carrier"]).default("dropoff"),
+  invoiceRemittanceNumber: z.string().trim().max(60).optional().nullable(),
+  invoiceRemittanceKey: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .nullable()
+    .refine((value) => !value || /^\d{44}$/.test(value.replace(/\D/g, "")), {
+      message: "A chave de acesso deve ter 44 dígitos",
+    }),
+  carrierName: z.string().trim().max(120).optional().nullable(),
+  invoiceRemittanceIssuedAt: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data de emissão inválida",
+    })
+    .optional()
+    .nullable(),
 });
 
 export type CreateCalibrationRequestInput = z.infer<

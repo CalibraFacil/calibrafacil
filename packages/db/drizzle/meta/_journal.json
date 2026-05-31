@@ -302,6 +302,20 @@
       "when": 1781481600000,
       "tag": "0042_operator_alert",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1781568000000,
+      "tag": "0043_calibration_request_remittance",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781654400000,
+      "tag": "0044_service_order_public_id",
+      "breakpoints": true
     }
   ]
 }

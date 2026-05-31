@@ -264,7 +264,7 @@ function CertificatesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="portal-shell space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Certificados</CardTitle>

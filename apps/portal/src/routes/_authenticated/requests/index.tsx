@@ -4,23 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
+  Alert02Icon,
   Cancel01Icon,
+  DashboardSquare01Icon,
   Notebook01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { Badge } from "@/components/ui/badge";
 import {
   Empty,
   EmptyContent,
@@ -36,18 +30,39 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { getApiBaseUrl } from "@/lib/utils";
+import { PageHeader } from "@/components/page-header";
+import {
+  Panel,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from "@/components/instrument-panel";
+import { StatusPill } from "@/components/status-pill";
+import { useOverview } from "@/features/dashboard/queries";
+import { cn, getApiBaseUrl } from "@/lib/utils";
+import { formatDate, pluralize } from "@/lib/format";
+import {
+  REQUEST_STATUS,
+  getRequestStatus,
+  normalizeRequestStatus,
+  type RequestStatus,
+} from "@/lib/status-labels";
+
+type RequestsSearch = {
+  status?: RequestStatus;
+};
 
 export const Route = createFileRoute("/_authenticated/requests/")({
+  validateSearch: (search: Record<string, unknown>): RequestsSearch => {
+    const status = search.status;
+    if (typeof status !== "string" || !(status in REQUEST_STATUS)) {
+      return {};
+    }
+    return { status: normalizeRequestStatus(status) };
+  },
   component: RequestsPage,
 });
-
-type RequestStatus =
-  | "PENDING"
-  | "UNDER_REVIEW"
-  | "APPROVED"
-  | "REJECTED"
-  | "CONVERTED";
 
 type CalibrationRequest = {
   id: number;
@@ -72,43 +87,6 @@ type RequestsResponse = {
   };
 };
 
-const statusLabels: Record<RequestStatus, string> = {
-  PENDING: "Pendente",
-  UNDER_REVIEW: "Em análise",
-  APPROVED: "Aprovada",
-  REJECTED: "Rejeitada",
-  CONVERTED: "Convertida",
-};
-
-const statusVariants: Record<
-  RequestStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  PENDING: "secondary",
-  UNDER_REVIEW: "outline",
-  APPROVED: "default",
-  REJECTED: "destructive",
-  CONVERTED: "outline",
-};
-
-function formatDate(date: string | null | undefined) {
-  if (!date) return "-";
-  return new Date(date).toLocaleDateString("pt-BR");
-}
-
-function parseRequestStatusFilter(value: string | null): RequestStatus | "" {
-  switch (value) {
-    case "PENDING":
-    case "UNDER_REVIEW":
-    case "APPROVED":
-    case "REJECTED":
-    case "CONVERTED":
-      return value;
-    default:
-      return "";
-  }
-}
-
 function getPortalErrorMessage(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -128,11 +106,17 @@ function getPortalErrorMessage(payload: unknown) {
 }
 
 function RequestsPage() {
+  const { status: initialStatus } = Route.useSearch();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | "">(
+    initialStatus ?? "",
+  );
   const deferredSearch = useDeferredValue(search.trim());
   const limit = 20;
+
+  const overview = useOverview();
+  const requestStats = overview.data?.requests;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["portal-requests", page, limit, deferredSearch, statusFilter],
@@ -141,31 +125,20 @@ function RequestsPage() {
         page: String(page),
         limit: String(limit),
       });
-
-      if (deferredSearch) {
-        params.set("query", deferredSearch);
-      }
-
-      if (statusFilter) {
-        params.set("status", statusFilter);
-      }
+      if (deferredSearch) params.set("query", deferredSearch);
+      if (statusFilter) params.set("status", statusFilter);
 
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/requests?${params.toString()}`,
-        {
-          credentials: "include",
-        },
+        { credentials: "include" },
       );
 
       if (!response.ok) {
         let errorMessage = `Falha ao carregar solicitacoes (${response.status})`;
         const jsonResponse = response.clone();
-
         try {
           const errorBody: unknown = await jsonResponse.json();
-          const parsedMessage = getPortalErrorMessage(errorBody);
-
-          errorMessage = parsedMessage || errorMessage;
+          errorMessage = getPortalErrorMessage(errorBody) || errorMessage;
         } catch {
           try {
             const errorText = await response.text();
@@ -176,13 +149,23 @@ function RequestsPage() {
             // Ignore parse failures and keep the default message.
           }
         }
-
         throw new Error(errorMessage);
       }
 
       return response.json();
     },
   });
+
+  function applyStatusFilter(next: RequestStatus | "") {
+    setStatusFilter(next);
+    setPage(1);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("");
+    setPage(1);
+  }
 
   const columns: Array<ColumnDef<CalibrationRequest>> = useMemo(
     () => [
@@ -192,16 +175,17 @@ function RequestsPage() {
           <DataTableColumnHeader column={column} title="Solicitação" />
         ),
         cell: ({ row }) => (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <Link
               to="/requests/$id"
               params={{ id: String(row.original.id) }}
               className="font-medium hover:underline"
             >
-              Solicitação #{row.original.id}
+              Solicitação{" "}
+              <span className="font-mono tabular-nums">#{row.original.id}</span>
             </Link>
-            <p className="text-xs text-muted-foreground">
-              {row.original.itemCount} ativo(s)
+            <p className="text-muted-foreground text-xs">
+              {pluralize(row.original.itemCount, "ativo", "ativos")}
             </p>
           </div>
         ),
@@ -212,7 +196,7 @@ function RequestsPage() {
           <DataTableColumnHeader column={column} title="Enviada em" />
         ),
         cell: ({ row }) => (
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground font-mono tabular-nums">
             {formatDate(row.original.submittedAt)}
           </span>
         ),
@@ -223,20 +207,9 @@ function RequestsPage() {
           <DataTableColumnHeader column={column} title="Prazo solicitado" />
         ),
         cell: ({ row }) => (
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground font-mono tabular-nums">
             {formatDate(row.original.requestedDueDate)}
           </span>
-        ),
-      },
-      {
-        accessorKey: "observations",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Observações" />
-        ),
-        cell: ({ row }) => (
-          <p className="max-w-[28rem] truncate text-muted-foreground">
-            {row.original.observations?.trim() || "Sem observações informadas."}
-          </p>
         ),
       },
       {
@@ -244,149 +217,206 @@ function RequestsPage() {
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Status" />
         ),
-        cell: ({ row }) => (
-          <Badge variant={statusVariants[row.original.status]}>
-            {statusLabels[row.original.status]}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const status = getRequestStatus(row.original.status);
+          return (
+            <StatusPill tone={status.tone} size="sm">
+              {status.label}
+            </StatusPill>
+          );
+        },
       },
     ],
     [],
   );
 
+  const hasFilters = Boolean(deferredSearch || statusFilter);
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Solicitações de Calibração</CardTitle>
-              <CardDescription>
-                Acompanhe as solicitações enviadas ao laboratório.
-              </CardDescription>
-            </div>
+    <div className="portal-shell space-y-6">
+      <PageHeader
+        eyebrow="Solicitações"
+        title="Solicitações de calibração"
+        description="Acompanhe os pedidos enviados ao laboratório, do envio à conversão em certificado."
+        actions={
+          <Button render={<Link to="/requests/new" />}>
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            Nova solicitação
+          </Button>
+        }
+      />
 
-            <Button render={<Link to="/requests/new" />}>
-              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-              Nova Solicitação
-            </Button>
+      {requestStats ? (
+        <StaggerGroup className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StaggerItem>
+            <SummaryTile
+              icon={Notebook01Icon}
+              label="Abertas"
+              value={requestStats.open}
+              tone={requestStats.open > 0 ? "info" : "neutral"}
+              active={statusFilter === "PENDING"}
+              onClick={() =>
+                applyStatusFilter(statusFilter === "PENDING" ? "" : "PENDING")
+              }
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SummaryTile
+              icon={Alert02Icon}
+              label="Recusadas"
+              value={requestStats.rejected}
+              tone={requestStats.rejected > 0 ? "critical" : "neutral"}
+              active={statusFilter === "REJECTED"}
+              onClick={() =>
+                applyStatusFilter(statusFilter === "REJECTED" ? "" : "REJECTED")
+              }
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <SummaryTile
+              icon={DashboardSquare01Icon}
+              label="Total"
+              value={requestStats.total}
+              tone="neutral"
+              active={statusFilter === ""}
+              onClick={() => applyStatusFilter("")}
+            />
+          </StaggerItem>
+        </StaggerGroup>
+      ) : null}
+
+      <Panel className="space-y-4 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative min-w-50 flex-1 sm:max-w-sm">
+            <HugeiconsIcon
+              icon={Search01Icon}
+              className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            <Input
+              placeholder="Buscar por número ou observações..."
+              aria-label="Buscar por número ou observações"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              className="pl-9"
+            />
           </div>
-        </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-              <div className="relative min-w-50 flex-1 sm:max-w-sm">
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  placeholder="Buscar por número ou observações..."
-                  aria-label="Buscar por número ou observações"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-9"
-                />
-              </div>
+          <Select
+            value={statusFilter || "all"}
+            onValueChange={(value) => {
+              applyStatusFilter(
+                value && value !== "all" ? normalizeRequestStatus(value) : "",
+              );
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <span>
+                {statusFilter ? REQUEST_STATUS[statusFilter].label : "Status"}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {Object.entries(REQUEST_STATUS).map(([value, meta]) => (
+                <SelectItem key={value} value={value}>
+                  {meta.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <Select
-                value={statusFilter || "all"}
-                onValueChange={(value) => {
-                  setStatusFilter(parseRequestStatusFilter(value));
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-48">
-                  <span>
-                    {statusFilter ? statusLabels[statusFilter] : "Status"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {hasFilters ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-9"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              Limpar filtros
+            </Button>
+          ) : null}
+        </div>
 
-              {(search || statusFilter) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearch("");
-                    setStatusFilter("");
-                    setPage(1);
-                  }}
-                  className="h-9"
-                >
-                  <HugeiconsIcon icon={Cancel01Icon} className="mr-2 size-4" />
+        {error ? (
+          <div className="bg-destructive/10 text-destructive rounded-xl p-4 text-center text-sm shadow-[inset_0_0_0_1px_rgba(220,38,38,0.25)]">
+            {error.message}
+          </div>
+        ) : null}
+
+        {!error && !isLoading && (data?.data.length ?? 0) === 0 ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <HugeiconsIcon icon={Notebook01Icon} />
+              </EmptyMedia>
+              <EmptyTitle>Nenhuma solicitação encontrada</EmptyTitle>
+              <EmptyDescription>
+                {hasFilters
+                  ? "Nenhuma solicitação corresponde aos filtros aplicados."
+                  : "Envie sua primeira solicitação de calibração para começar."}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              {hasFilters ? (
+                <Button variant="outline" onClick={clearFilters}>
                   Limpar filtros
                 </Button>
+              ) : (
+                <Button render={<Link to="/requests/new" />}>
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                  Criar solicitação
+                </Button>
               )}
-            </div>
-          </div>
+            </EmptyContent>
+          </Empty>
+        ) : null}
 
-          {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
-              {error.message}
-            </div>
-          )}
-
-          {!error && !isLoading && (data?.data.length ?? 0) === 0 && (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={Notebook01Icon} />
-                </EmptyMedia>
-                <EmptyTitle>Nenhuma solicitação encontrada</EmptyTitle>
-                <EmptyDescription>
-                  {deferredSearch || statusFilter
-                    ? "Nenhuma solicitação corresponde aos filtros aplicados."
-                    : "Envie sua primeira solicitação de calibração para começar."}
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                {deferredSearch || statusFilter ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearch("");
-                      setStatusFilter("");
-                      setPage(1);
-                    }}
-                  >
-                    Limpar filtros
-                  </Button>
-                ) : (
-                  <Button render={<Link to="/requests/new" />}>
-                    <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-                    Criar Solicitação
-                  </Button>
-                )}
-              </EmptyContent>
-            </Empty>
-          )}
-
-          {!error && ((data?.data.length ?? 0) > 0 || isLoading) && (
-            <DataTable
-              columns={columns}
-              data={data?.data ?? []}
-              isLoading={isLoading}
-              pagination={data?.pagination}
-              onPageChange={setPage}
-              itemName="solicitações"
-            />
-          )}
-        </CardContent>
-      </Card>
+        {!error && ((data?.data.length ?? 0) > 0 || isLoading) ? (
+          <DataTable
+            columns={columns}
+            data={data?.data ?? []}
+            isLoading={isLoading}
+            pagination={data?.pagination}
+            onPageChange={setPage}
+            itemName="solicitações"
+          />
+        ) : null}
+      </Panel>
     </div>
+  );
+}
+
+function SummaryTile({
+  icon,
+  label,
+  value,
+  tone,
+  active,
+  onClick,
+}: {
+  icon: Parameters<typeof SignalTile>[0]["icon"];
+  label: string;
+  value: number;
+  tone: SignalTone;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "block w-full rounded-xl text-left transition-[box-shadow,transform] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+        active && "ring-2 ring-ring/60",
+      )}
+    >
+      <SignalTile icon={icon} label={label} value={value} tone={tone} />
+    </button>
   );
 }

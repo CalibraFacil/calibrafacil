@@ -178,7 +178,7 @@ function PortalLayout() {
       <PortalSidebar />
       <SidebarInset>
         <PortalHeader />
-        <main className="flex-1 space-y-4 p-4">
+        <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
           {session.user.name.trim() ? null : <CompleteProfilePrompt />}
           <Outlet />
         </main>
