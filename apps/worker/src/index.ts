@@ -87,6 +87,7 @@ export interface Env {
   CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
   GOTENBERG_URL?: string;
+  GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
@@ -340,7 +341,10 @@ const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
 
 function createXlsxToPdfConverter(env: Env): XlsxToPdfConverter {
   if (env.GOTENBERG_URL) {
-    return new GotenbergXlsxToPdfConverter(env.GOTENBERG_URL);
+    return new GotenbergXlsxToPdfConverter(
+      env.GOTENBERG_URL,
+      env.GOTENBERG_TOKEN,
+    );
   }
 
   return new LocalLibreOfficeXlsxToPdfConverter();

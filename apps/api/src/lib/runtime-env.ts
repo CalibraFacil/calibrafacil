@@ -48,6 +48,7 @@ export type WorkerRuntimeEnv = {
   CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
   GOTENBERG_URL?: string;
+  GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
@@ -216,6 +217,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
     GOTENBERG_URL: process.env.GOTENBERG_URL,
+    GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
     RESEND_API_KEY: process.env.RESEND_API_KEY,

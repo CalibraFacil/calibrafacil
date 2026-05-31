@@ -1,0 +1,35 @@
+{
+  // Cloudflare Worker + Container that hosts Gotenberg for XLSX->PDF (and, if
+  // wanted later, HTML->PDF) certificate conversion. Requires the Workers Paid
+  // plan. Deploy with `wrangler deploy` (builds the Dockerfile and pushes the
+  // image to Cloudflare's managed registry).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calibrafacil-gotenberg",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-11-01",
+  "observability": { "enabled": true },
+
+  // The container image + the instance size it runs on. standard-2 = 1 vCPU /
+  // 6 GiB / 12 GB disk, comfortable for LibreOffice + Chromium at low volume.
+  "containers": [
+    {
+      "name": "gotenberg",
+      "class_name": "GotenbergContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard-2",
+      "max_instances": 3
+    }
+  ],
+
+  // Containers are backed by a Durable Object class.
+  "durable_objects": {
+    "bindings": [
+      { "name": "GOTENBERG_CONTAINER", "class_name": "GotenbergContainer" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GotenbergContainer"] }]
+
+  // GOTENBERG_TOKEN is a secret — set it with:
+  //   wrangler secret put GOTENBERG_TOKEN
+  // (do NOT put it here).
+}

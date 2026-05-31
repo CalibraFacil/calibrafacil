@@ -26,13 +26,18 @@ export interface XlsxToPdfConverter {
 
 export class GotenbergXlsxToPdfConverter implements XlsxToPdfConverter {
   private readonly url: string;
+  private readonly token?: string;
 
-  constructor(url = process.env.GOTENBERG_URL) {
+  constructor(
+    url = process.env.GOTENBERG_URL,
+    token = process.env.GOTENBERG_TOKEN,
+  ) {
     if (!url) {
       throw new Error("GOTENBERG_URL is required for XLSX to PDF conversion.");
     }
 
     this.url = url.replace(/\/$/, "");
+    this.token = token || undefined;
   }
 
   async convert(
@@ -66,6 +71,8 @@ export class GotenbergXlsxToPdfConverter implements XlsxToPdfConverter {
       const response = await fetch(`${this.url}/forms/libreoffice/convert`, {
         method: "POST",
         body: formData,
+        // Shared-secret gate enforced by the Gotenberg fronting Worker.
+        headers: this.token ? { "X-Gotenberg-Token": this.token } : undefined,
         signal: controller.signal,
       });
 
