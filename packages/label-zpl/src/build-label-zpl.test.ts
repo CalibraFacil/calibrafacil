@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildLabelZpl,
+  buildTestLabelZpl,
   defaultLabelDimensions,
+  defaultRenderOptions,
   formatLabelDate,
   type LabelZplInput,
 } from "./build-label-zpl";
@@ -103,5 +105,16 @@ describe("buildLabelZpl", () => {
     // Exactly two envelope tokens: the real start and end.
     expect(out.match(/\^XA/g)).toHaveLength(1);
     expect(out.match(/\^XZ/g)).toHaveLength(1);
+  });
+});
+
+describe("buildTestLabelZpl", () => {
+  it("renders a bordered diagnostic label at the given dimensions", () => {
+    const out = buildTestLabelZpl(defaultRenderOptions(203));
+    expect(out.startsWith("^XA\n^CI28\n^PW400^LL240")).toBe(true);
+    expect(out).toContain("^FO0,0^GB400,240,2^FS");
+    expect(out).toContain("^FDCALIBRA TESTE^FS");
+    expect(out).toContain("203 dpi");
+    expect(out.endsWith("^XZ")).toBe(true);
   });
 });

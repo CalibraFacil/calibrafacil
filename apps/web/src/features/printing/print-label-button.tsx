@@ -1,20 +1,33 @@
-import { isDesktopRuntime } from '@calibra-facil/client-runtime'
 import { PrinterIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+import { isDesktopRuntime } from '@calibra-facil/client-runtime'
+
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
+import { isBrowserPrintAvailable } from './browser-print'
 import { PrinterSettingsDialog } from './printer-settings-dialog'
-import { usePrinterProfiles, usePrintJobLabel } from './use-printers'
+import {
+  usePrinterProfiles,
+  usePrintJobLabel,
+  usePrintJobLabelViaBrowserPrint,
+} from './use-printers'
+
+const reportSuccess = () => toast.success('Etiqueta enviada para impressão.')
+const reportError = (error: unknown) =>
+  toast.error(
+    error instanceof Error ? error.message : 'Falha ao imprimir etiqueta',
+  )
 
 /**
- * "Imprimir Etiqueta (térmica)" action. Desktop-only in this phase: it prints
- * native ZPL straight to the configured Zebra printer via the local-server.
- * Cloud runtimes keep the existing PDF label download (Zebra Browser Print is a
- * later phase), so this renders nothing outside desktop.
+ * "Imprimir Etiqueta (térmica)" action — native ZPL straight to a Zebra printer.
+ * Desktop runtime prints via the local-server (configured network printer);
+ * cloud runtime prints via the Zebra Browser Print agent. When no printer is
+ * configured / the agent is absent, it opens the settings dialog (which guides
+ * setup). The existing PDF "Baixar Etiqueta QR" remains the universal fallback.
  */
 export function PrintLabelButton({
   jobId,
@@ -27,33 +40,51 @@ export function PrintLabelButton({
 }) {
   const isDesktop = isDesktopRuntime()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isCloudWorking, setIsCloudWorking] = useState(false)
+
   const profilesQuery = usePrinterProfiles(isDesktop)
-  const printMutation = usePrintJobLabel()
+  const printDesktop = usePrintJobLabel()
+  const printCloud = usePrintJobLabelViaBrowserPrint()
 
-  if (!isDesktop) {
-    return null
-  }
+  const isWorking = isDesktop ? printDesktop.isPending : isCloudWorking
 
-  const hasPrinter = (profilesQuery.data?.length ?? 0) > 0
-
-  const handlePrint = () => {
-    if (!hasPrinter) {
+  const printDesktopLabel = () => {
+    if ((profilesQuery.data?.length ?? 0) === 0) {
       toast.info('Configure uma impressora térmica para imprimir etiquetas.')
       setSettingsOpen(true)
       return
     }
-    printMutation.mutate(
+    printDesktop.mutate(
       { jobId },
-      {
-        onSuccess: () => toast.success('Etiqueta enviada para impressão.'),
-        onError: (error) =>
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : 'Falha ao imprimir etiqueta',
-          ),
-      },
+      { onSuccess: reportSuccess, onError: reportError },
     )
+  }
+
+  const printCloudLabel = async () => {
+    setIsCloudWorking(true)
+    try {
+      if (!(await isBrowserPrintAvailable())) {
+        toast.info(
+          'Instale o Zebra Browser Print para imprimir etiquetas térmicas.',
+        )
+        setSettingsOpen(true)
+        return
+      }
+      await printCloud.mutateAsync({ jobId })
+      reportSuccess()
+    } catch (error) {
+      reportError(error)
+    } finally {
+      setIsCloudWorking(false)
+    }
+  }
+
+  const handlePrint = () => {
+    if (isDesktop) {
+      printDesktopLabel()
+    } else {
+      void printCloudLabel()
+    }
   }
 
   return (
@@ -62,9 +93,9 @@ export function PrintLabelButton({
         variant="outline"
         className={className}
         onClick={handlePrint}
-        disabled={disabled || printMutation.isPending}
+        disabled={disabled || isWorking}
       >
-        {printMutation.isPending ? (
+        {isWorking ? (
           <Spinner className="mr-2 h-4 w-4" />
         ) : (
           <HugeiconsIcon icon={PrinterIcon} className="mr-2 h-4 w-4" />
