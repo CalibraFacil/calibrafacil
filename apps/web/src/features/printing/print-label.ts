@@ -1,5 +1,14 @@
+import {
+  buildTestLabelZpl,
+  defaultRenderOptions,
+} from '@calibra-facil/label-zpl'
+
 import { calibraApi } from '@/utils/api'
 
+import {
+  sendZplViaBrowserPrint,
+  type BrowserPrintDevice,
+} from './browser-print'
 import { printZplToLocalPrinter } from './local-printer-client'
 
 /**
@@ -24,4 +33,30 @@ export async function printJobLabel(
   if (!result.success) {
     throw new Error(result.error ?? 'Falha ao imprimir etiqueta')
   }
+}
+
+/**
+ * Print a calibration label via Zebra Browser Print (cloud runtime). Fetches
+ * native ZPL from the cloud API, then hands it to the local Browser Print agent.
+ */
+export async function printJobLabelViaBrowserPrint(
+  jobId: string | number,
+  device: BrowserPrintDevice,
+  options?: { dpi?: 203 | 300 },
+): Promise<void> {
+  const zpl = await calibraApi.jobs.getLabelZpl(
+    jobId,
+    options?.dpi ? { dpi: options.dpi } : undefined,
+  )
+  await sendZplViaBrowserPrint(device, zpl)
+}
+
+/** Send a diagnostic test label to a Browser Print device. */
+export async function printTestViaBrowserPrint(
+  device: BrowserPrintDevice,
+): Promise<void> {
+  await sendZplViaBrowserPrint(
+    device,
+    buildTestLabelZpl(defaultRenderOptions(203)),
+  )
 }

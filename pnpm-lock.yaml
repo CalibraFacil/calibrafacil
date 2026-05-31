@@ -438,6 +438,9 @@ importers:
       '@calibra-facil/documents':
         specifier: workspace:^
         version: link:../../packages/documents
+      '@calibra-facil/label-zpl':
+        specifier: workspace:^
+        version: link:../../packages/label-zpl
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
         version: git+https://git@github.com:CalibraFacil/math-engine.git#5b598403aa31e491723fd4453efbd73f836ebf6e

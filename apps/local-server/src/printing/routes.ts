@@ -8,6 +8,7 @@ import {
   upsertPrinterProfile,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
+import { buildTestLabelZpl } from "@calibra-facil/label-zpl";
 import {
   PrinterProfileSchema,
   PrintLabelRequestSchema,
@@ -19,7 +20,6 @@ import {
 import type { Hono } from "hono";
 
 import { PrinterTransportError } from "./errors";
-import { buildTestLabelZpl } from "./test-label";
 import { sendToPrinter } from "./transport-types";
 
 function resolveProfile(

@@ -148,3 +148,37 @@ export function buildLabelZpl(
 
   return lines.join("\n");
 }
+
+/**
+ * A minimal diagnostic label (border + text) for verifying connectivity, media
+ * size and top-of-form alignment without a real calibration job. Shared by the
+ * desktop local-server and the cloud Browser Print "test print".
+ */
+export function buildTestLabelZpl(options: LabelRenderOptions): string {
+  const width = Math.round(options.widthDots);
+  const height = Math.round(options.heightDots);
+
+  return [
+    startLabel(),
+    setEncodingUtf8(),
+    setLabelDimensions(width, height),
+    setDarkness(options.darkness),
+    setLabelHome(options.offsets.xDots, options.offsets.yDots),
+    `^FO0,0^GB${width},${height},2^FS`,
+    textField({
+      x: 20,
+      y: 24,
+      fontHeight: 30,
+      fontWidth: 30,
+      text: "CALIBRA TESTE",
+    }),
+    textField({
+      x: 20,
+      y: 70,
+      fontHeight: 20,
+      fontWidth: 20,
+      text: `${options.dpi} dpi · ${width}x${height}`,
+    }),
+    endLabel(),
+  ].join("\n");
+}

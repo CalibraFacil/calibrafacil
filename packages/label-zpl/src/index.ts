@@ -18,6 +18,7 @@ export type {
 } from "./zpl-builder";
 export {
   buildLabelZpl,
+  buildTestLabelZpl,
   defaultLabelDimensions,
   defaultRenderOptions,
   formatLabelDate,
