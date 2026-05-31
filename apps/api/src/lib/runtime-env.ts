@@ -115,6 +115,8 @@ function createLocalKv(): LocalKvNamespace {
 
 const apiRuntimeCache = createLocalKv();
 
+// R2 buckets are resolved from env: R2_BUCKET_NAME (documents) and
+// R2_MEDIA_BUCKET_NAME (media). createR2Bucket binds the documents bucket.
 type LocalS3Client = S3Client & {
   send(command: GetObjectCommand): Promise<{
     Body?: { transformToByteArray(): Promise<Uint8Array> };
