@@ -315,6 +315,14 @@ function readOsRelease() {
   }
 }
 
+// electron-builder's npmRebuild compiles native modules to Electron's ABI, but
+// the local-server runs as plain Node (ELECTRON_RUN_AS_NODE). better-sqlite3 is
+// a node-gyp single-binding module, so we must rebuild it back to the Node ABI.
+//
+// usb and serialport (@serialport/bindings-cpp) are intentionally NOT handled
+// here: they are N-API modules shipping napi prebuilds, and node-gyp-build
+// selects the napi prebuild at require time for either ABI — so they load
+// correctly under ELECTRON_RUN_AS_NODE without a rebuild.
 function restoreNodeBetterSqliteBuild() {
   const packageJsonPath = requireFromDesktop.resolve(
     "better-sqlite3/package.json",

@@ -9,6 +9,7 @@ import {
 } from './browser-print'
 import {
   deletePrinterProfileById,
+  discoverPrinters,
   fetchPrinterProfiles,
   printTestLabel,
   savePrinterProfile,
@@ -37,6 +38,10 @@ export function useSavePrinterProfile() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: PRINTER_PROFILES_KEY }),
   })
+}
+
+export function useDiscoverPrinters() {
+  return useMutation({ mutationFn: () => discoverPrinters() })
 }
 
 export function useDeletePrinterProfile() {

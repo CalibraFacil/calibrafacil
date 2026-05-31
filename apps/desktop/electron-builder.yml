@@ -5,6 +5,12 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**
+  # Thermal-printer native modules (.node binaries can't load from inside asar).
+  # usb + @serialport/bindings-cpp are N-API, so node-gyp-build picks the napi
+  # prebuild under both Node and Electron ABIs — no rebuild step needed.
+  - node_modules/usb/**
+  - node_modules/serialport/**
+  - node_modules/@serialport/**
 directories:
   output: out
   buildResources: assets

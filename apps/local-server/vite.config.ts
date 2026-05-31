@@ -17,7 +17,15 @@ export default defineConfig({
     },
     outDir: "dist",
     rollupOptions: {
-      external: [...nodeBuiltins, "better-sqlite3"],
+      // Native modules can't be bundled — they're required by name at runtime
+      // and unpacked from the asar (see electron-builder.yml asarUnpack).
+      external: [
+        ...nodeBuiltins,
+        "better-sqlite3",
+        "usb",
+        "serialport",
+        "@serialport/bindings-cpp",
+      ],
     },
     sourcemap: true,
     target: "node20",

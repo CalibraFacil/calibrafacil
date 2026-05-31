@@ -42,19 +42,23 @@ auditConfig:
     - GHSA-rmmr-r34h-pfm5
 
 onlyBuiltDependencies:
+  - "@serialport/bindings-cpp"
   - better-sqlite3
   - electron
   - electron-winstaller
   - esbuild
   - msw
   - sharp
+  - usb
   - workerd
 
 allowBuilds:
+  '@serialport/bindings-cpp': true
   better-sqlite3: true
   electron: true
   electron-winstaller: true
   esbuild: true
   msw: true
   sharp: true
+  usb: true
   workerd: true
