@@ -1,4 +1,3 @@
-import type { Browser, Page } from "puppeteer-core";
 import { createHash, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
@@ -79,13 +78,9 @@ export interface R2BucketBinding {
 export interface Env {
   CERTIFICATES_BUCKET: R2BucketBinding;
   MEDIA_BUCKET: R2BucketBinding;
-  RUNTIME_ASSETS_BUCKET?: {
-    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
-  };
   DATABASE_URL: string;
-  CHROME_EXECUTABLE_PATH?: string;
-  CHROMIUM_PACK_R2_KEY?: string;
-  CHROMIUM_PACK_URL?: string;
+  // HTML/XLSX -> PDF conversion runs on the hosted Gotenberg service
+  // (services/gotenberg on Cloudflare Containers); no in-function Chromium.
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
@@ -1700,7 +1695,6 @@ async function fetchServiceOrderDocumentData(
 
 async function processServiceOrderIntakeDocument(
   env: Env,
-  page: Page,
   serviceOrderId: number,
   documentId: number | undefined,
   userId: string,
@@ -1713,7 +1707,7 @@ async function processServiceOrderIntakeDocument(
     const html = renderToString(
       React.createElement(ServiceOrderIntakeDocumentHtml, { data }),
     );
-    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(data.openedAt, "openedAt");
     const org = await withDbClient(env, (client) =>
       fetchServiceOrderOrg(client, serviceOrderId),
@@ -1773,7 +1767,6 @@ async function fetchServiceOrderOrg(
 
 async function processServiceOrderTag(
   env: Env,
-  page: Page,
   serviceOrderId: number,
   tagId: number | undefined,
   userId: string,
@@ -1814,7 +1807,7 @@ async function processServiceOrderTag(
     const html = renderToString(
       React.createElement(ServiceOrderTagHtml, { tag }),
     );
-    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(data.opened_at, "openedAt");
     const tagNumber =
       data.tag_number ?? `${data.service_order_number}-TAG-${serviceOrderId}`;
@@ -1857,7 +1850,6 @@ async function processServiceOrderTag(
 
 async function processServiceOrderQuote(
   env: Env,
-  page: Page,
   serviceOrderId: number,
   quoteId: number | undefined,
 ): Promise<{ success: boolean; error?: string }> {
@@ -1908,7 +1900,7 @@ async function processServiceOrderQuote(
     const html = renderToString(
       React.createElement(ServiceOrderQuoteHtml, { data }),
     );
-    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(base.openedAt, "openedAt");
     const org = await withDbClient(env, (client) =>
       fetchServiceOrderOrg(client, serviceOrderId),
@@ -1942,7 +1934,6 @@ async function processServiceOrderQuote(
 
 async function processServiceOrderDeliveryReceipt(
   env: Env,
-  page: Page,
   serviceOrderId: number,
   documentId: number | undefined,
   userId: string,
@@ -2061,7 +2052,7 @@ async function processServiceOrderDeliveryReceipt(
     const html = renderToString(
       React.createElement(ServiceOrderDeliveryReceiptHtml, { data }),
     );
-    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(base.openedAt, "openedAt");
     const org = await withDbClient(env, (client) =>
       fetchOrgRefById(client, payload.order.organization_id),
@@ -2095,19 +2086,18 @@ async function processServiceOrderDeliveryReceipt(
 }
 
 /**
- * Generates a small PDF for thermal printer labels
+ * Generates a small PDF for thermal printer labels (50mm x 30mm) via Gotenberg.
  */
-async function generateLabelPdf(page: Page, html: string): Promise<Uint8Array> {
-  const fullHtml = `<!DOCTYPE html>${html}`;
-
-  await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
-
-  return await page.pdf({
-    width: "50mm",
-    height: "30mm",
-    printBackground: true,
-    preferCSSPageSize: true,
-    margin: { top: "0", bottom: "0", left: "0", right: "0" },
+async function generateLabelPdf(env: Env, html: string): Promise<Uint8Array> {
+  return gotenbergHtmlToPdf(env, html, {
+    paperWidth: "1.9685", // 50mm
+    paperHeight: "1.1811", // 30mm
+    printBackground: "true",
+    preferCssPageSize: "true",
+    marginTop: "0",
+    marginBottom: "0",
+    marginLeft: "0",
+    marginRight: "0",
   });
 }
 
@@ -2116,7 +2106,6 @@ async function generateLabelPdf(page: Page, html: string): Promise<Uint8Array> {
  */
 async function processLabelJob(
   env: Env,
-  page: Page,
   jobId: number,
   userId: string,
 ): Promise<{ success: boolean; labelUrl?: string; error?: string }> {
@@ -2168,7 +2157,7 @@ async function processLabelJob(
 
     // 4. Generate PDF
     const pdfStart = performance.now();
-    const pdfBuffer = await generateLabelPdf(page, html);
+    const pdfBuffer = await generateLabelPdf(env, html);
     console.log(
       `[LABEL ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`,
     );
@@ -2237,271 +2226,121 @@ async function withDbClient<T>(
   }
 }
 
-/**
- * Configures a page for optimal PDF generation
- */
-async function configurePage(page: Page): Promise<void> {
-  // Block all external network requests for maximum speed
-  await page.setRequestInterception(true);
-  page.on("request", (req) => {
-    const url = req.url();
-    // Allow data: URLs (inline resources) and about:blank
-    if (url.startsWith("data:") || url.startsWith("about:")) {
-      req.continue();
-    } else {
-      req.abort();
-    }
-  });
-
-  // Set viewport for A4 at 96dpi
-  await page.setViewport({ width: 794, height: 1123 });
-
-  // Emulate print media BEFORE loading content (avoids re-render)
-  await page.emulateMediaType("print");
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Render HTML to PDF via the Gotenberg Chromium engine (services/gotenberg),
+ * replacing the previous in-function headless Chromium so the Vercel worker no
+ * longer bundles puppeteer or downloads a Chromium pack.
+ */
+function requireGotenbergUrl(env: Env): string {
+  if (!env.GOTENBERG_URL) {
+    throw new Error("GOTENBERG_URL is required for HTML to PDF conversion.");
+  }
+  return env.GOTENBERG_URL.replace(/\/$/, "");
 }
 
-async function retryChromiumPackDownload<T>(
-  operation: () => Promise<T>,
-): Promise<T> {
-  const retryDelaysMs = [1_000, 3_000, 7_000];
-  let lastError: unknown;
+async function gotenbergHtmlToPdf(
+  env: Env,
+  html: string,
+  properties: Record<string, string>,
+  extraFiles: Record<string, string> = {},
+): Promise<Uint8Array> {
+  const url = requireGotenbergUrl(env);
+  const form = new FormData();
+  form.append(
+    "files",
+    new Blob([`<!DOCTYPE html>${html}`], { type: "text/html" }),
+    "index.html",
+  );
+  for (const [filename, content] of Object.entries(extraFiles)) {
+    form.append("files", new Blob([content], { type: "text/html" }), filename);
+  }
+  for (const [key, value] of Object.entries(properties)) {
+    form.set(key, value);
+  }
 
-  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
+  const headers: Record<string, string> = {};
+  if (env.GOTENBERG_TOKEN) {
+    headers["X-Gotenberg-Token"] = env.GOTENBERG_TOKEN;
+  }
 
-      const retryDelay = retryDelaysMs[attempt];
-      if (retryDelay === undefined) break;
-
-      console.warn(
-        `[JOB] Chromium pack download failed (attempt ${attempt + 1}/${retryDelaysMs.length + 1}); retrying in ${retryDelay}ms: ${getErrorMessage(error)}`,
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch(`${url}/forms/chromium/convert/html`, {
+      method: "POST",
+      body: form,
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Gotenberg HTML conversion failed with ${response.status} ${response.statusText}`,
       );
-      await delay(retryDelay);
     }
-  }
-
-  throw lastError;
-}
-
-function readTarString(bytes: Uint8Array, start: number, length: number) {
-  let end = start;
-  const maxEnd = start + length;
-  while (end < maxEnd && bytes[end] !== 0) end += 1;
-  return Buffer.from(bytes.subarray(start, end)).toString("utf8").trim();
-}
-
-function readTarSize(bytes: Uint8Array, start: number) {
-  const rawSize = readTarString(bytes, start, 12).replaceAll("\0", "").trim();
-  if (!rawSize) return 0;
-
-  const size = Number.parseInt(rawSize, 8);
-  if (!Number.isFinite(size) || size < 0) {
-    throw new Error(`Invalid Chromium pack tar entry size: ${rawSize}`);
-  }
-  return size;
-}
-
-function isEmptyTarBlock(bytes: Uint8Array, offset: number) {
-  for (let index = offset; index < offset + 512; index += 1) {
-    if (bytes[index] !== 0) return false;
-  }
-  return true;
-}
-
-async function extractTarToDirectory(
-  bytes: Uint8Array,
-  destinationDirectory: string,
-) {
-  const path = await import("node:path");
-  const { mkdir, writeFile } = await import("node:fs/promises");
-
-  let offset = 0;
-  while (offset + 512 <= bytes.byteLength) {
-    if (isEmptyTarBlock(bytes, offset)) break;
-
-    const name = readTarString(bytes, offset, 100);
-    const prefix = readTarString(bytes, offset + 345, 155);
-    const entryName = prefix ? `${prefix}/${name}` : name;
-    const size = readTarSize(bytes, offset + 124);
-    const type = String.fromCharCode(bytes[offset + 156] ?? 0);
-    const dataStart = offset + 512;
-    const dataEnd = dataStart + size;
-
-    if (!entryName) {
-      throw new Error("Invalid Chromium pack tar entry name");
-    }
-
-    const normalizedName = path.posix.normalize(entryName);
-    if (
-      normalizedName.startsWith("../") ||
-      normalizedName === ".." ||
-      path.posix.isAbsolute(normalizedName)
-    ) {
-      throw new Error(`Unsafe Chromium pack tar entry: ${entryName}`);
-    }
-
-    if (dataEnd > bytes.byteLength) {
-      throw new Error(`Invalid Chromium pack tar entry length: ${entryName}`);
-    }
-
-    const destinationPath = path.join(destinationDirectory, normalizedName);
-    if (type === "5") {
-      await mkdir(destinationPath, { recursive: true });
-    } else if (type === "0" || type === "\0") {
-      await mkdir(path.dirname(destinationPath), { recursive: true });
-      await writeFile(destinationPath, bytes.subarray(dataStart, dataEnd));
-    }
-
-    offset = dataStart + Math.ceil(size / 512) * 512;
+    return new Uint8Array(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
-async function downloadChromiumPackFromR2(env: Env): Promise<string> {
-  if (!env.CHROMIUM_PACK_R2_KEY) {
-    throw new Error(
-      "CHROMIUM_PACK_R2_KEY is required for authenticated Chromium pack download",
-    );
-  }
-  if (!env.RUNTIME_ASSETS_BUCKET) {
-    throw new Error(
-      "CHROMIUM_PACK_R2_BUCKET is required when CHROMIUM_PACK_R2_KEY is set",
-    );
-  }
+// A4 paper size in inches.
+const A4_PAPER = { paperWidth: "8.27", paperHeight: "11.69" } as const;
 
-  const { existsSync } = await import("node:fs");
-  const { mkdir, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const path = await import("node:path");
-  const packDirectory = path.join(tmpdir(), "chromium-pack-r2");
-
-  if (existsSync(path.join(packDirectory, "chromium.br"))) {
-    return packDirectory;
-  }
-
-  const object = await env.RUNTIME_ASSETS_BUCKET.get(env.CHROMIUM_PACK_R2_KEY);
-  if (!object) {
-    throw new Error(
-      `Chromium pack object not found in runtime R2 bucket: ${env.CHROMIUM_PACK_R2_KEY}`,
-    );
-  }
-
-  const arrayBuffer = await object.arrayBuffer();
-  await rm(packDirectory, { recursive: true, force: true });
-  await mkdir(packDirectory, { recursive: true });
-  await extractTarToDirectory(new Uint8Array(arrayBuffer), packDirectory);
-
-  if (!existsSync(path.join(packDirectory, "chromium.br"))) {
-    throw new Error("Chromium pack R2 object did not contain chromium.br");
-  }
-
-  return packDirectory;
-}
-
-async function getChromiumPackInput(env: Env): Promise<string> {
-  if (env.CHROMIUM_PACK_R2_KEY) {
-    return downloadChromiumPackFromR2(env);
-  }
-
-  if (env.CHROMIUM_PACK_URL) {
-    return env.CHROMIUM_PACK_URL;
-  }
-
-  throw new Error(
-    "CHROMIUM_PACK_R2_KEY with CHROMIUM_PACK_R2_BUCKET, or CHROMIUM_PACK_URL, is required for Vercel PDF generation",
-  );
-}
-
-async function launchBrowser(env: Env): Promise<Browser> {
-  const puppeteerCore = await import("puppeteer-core");
-
-  if (env.CHROME_EXECUTABLE_PATH) {
-    return puppeteerCore.default.launch({
-      executablePath: env.CHROME_EXECUTABLE_PATH,
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-  }
-
-  if (process.env.VERCEL) {
-    const chromium = await import("@sparticuz/chromium-min");
-    const executablePath = await retryChromiumPackDownload(async () =>
-      chromium.default.executablePath(await getChromiumPackInput(env)),
-    );
-
-    return puppeteerCore.default.launch({
-      executablePath,
-      headless: "shell",
-      args: [
-        ...chromium.default.args,
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-      ],
-    });
-  }
-
-  throw new Error(
-    "CHROME_EXECUTABLE_PATH is required for local PDF generation",
-  );
-}
+// Footer with page numbers (Chromium fills pageNumber/totalPages), matching the
+// previous puppeteer footerTemplate.
+const DOC_PAGE_FOOTER_HTML =
+  '<!DOCTYPE html><html><head><meta charset="utf-8" /></head>' +
+  '<body><div style="width:100%;font-size:9px;text-align:center;color:#666;">' +
+  'Página <span class="pageNumber"></span> de <span class="totalPages"></span>' +
+  "</div></body></html>";
 
 /**
- * Generates a PDF from HTML content using an existing page
+ * Generates an A4 PDF from HTML. Full-page certificate layouts honor their CSS
+ * @page size with zero margins; other documents get A4 margins + a
+ * "Página X de Y" footer (matching the previous puppeteer output).
  */
 async function generatePdfFromHtml(
-  page: Page,
+  env: Env,
   html: string,
 ): Promise<Uint8Array> {
-  const fullHtml = `<!DOCTYPE html>${html}`;
-  const isFullPageCertificate = html.includes('data-pdf-layout="full-page"');
-
-  // Load HTML - use domcontentloaded, NOT networkidle0!
-  await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
-
-  if (isFullPageCertificate) {
-    return await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: false,
-      margin: { top: "0", bottom: "0", left: "0", right: "0" },
+  if (html.includes('data-pdf-layout="full-page"')) {
+    return gotenbergHtmlToPdf(env, html, {
+      preferCssPageSize: "true",
+      printBackground: "true",
+      marginTop: "0",
+      marginBottom: "0",
+      marginLeft: "0",
+      marginRight: "0",
     });
   }
 
-  return await page.pdf({
-    format: "A4",
-    printBackground: true,
-    preferCSSPageSize: false,
-    displayHeaderFooter: true,
-    headerTemplate: "<div></div>",
-    footerTemplate: `
-            <div style="width: 100%; font-size: 9px; text-align: center; color: #666;">
-                Página <span class="pageNumber"></span> de <span class="totalPages"></span>
-            </div>
-        `,
-    margin: { top: "10mm", bottom: "15mm", left: "10mm", right: "10mm" },
-  });
+  return gotenbergHtmlToPdf(
+    env,
+    html,
+    {
+      ...A4_PAPER,
+      printBackground: "true",
+      marginTop: "0.3937", // 10mm
+      marginBottom: "0.5906", // 15mm — room for the footer
+      marginLeft: "0.3937",
+      marginRight: "0.3937",
+    },
+    { "footer.html": DOC_PAGE_FOOTER_HTML },
+  );
 }
 
 /**
- * Process a single job with an existing browser/page
+ * Process a single calibration-certificate job
  */
 async function processJob(
   env: Env,
-  page: Page,
   jobId: number,
   userId: string,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  void page;
   const totalStart = performance.now();
   console.log(`[JOB ${jobId}] Starting`);
 
@@ -2600,27 +2439,8 @@ function isCalibrationCertificateMessage(
   );
 }
 
-async function recordCertificateInfrastructureError(
-  env: Env,
-  message: BackgroundJobMessage,
-  error: unknown,
-) {
-  if (!isCalibrationCertificateMessage(message)) return;
-
-  const errorMessage = getErrorMessage(error);
-  await withDbClient(env, (client) =>
-    setJobError(client, message.jobId, errorMessage, message.userId),
-  ).catch((dbError) => {
-    console.error(
-      `[JOB ${message.jobId}] Failed to record infrastructure error:`,
-      dbError,
-    );
-  });
-}
-
 async function processDocumentMessage(
   env: Env,
-  page: Page,
   body: DocumentBackgroundJobMessage,
 ) {
   if (isServiceOrderDocumentMessage(body)) {
@@ -2628,7 +2448,6 @@ async function processDocumentMessage(
     if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
       result = await processServiceOrderIntakeDocument(
         env,
-        page,
         body.serviceOrderId,
         body.documentId,
         body.userId,
@@ -2636,7 +2455,6 @@ async function processDocumentMessage(
     } else if (body.type === "SERVICE_ORDER_TAG") {
       result = await processServiceOrderTag(
         env,
-        page,
         body.serviceOrderId,
         body.tagId,
         body.userId,
@@ -2644,14 +2462,12 @@ async function processDocumentMessage(
     } else if (body.type === "SERVICE_ORDER_QUOTE") {
       result = await processServiceOrderQuote(
         env,
-        page,
         body.serviceOrderId,
         body.quoteId,
       );
     } else {
       result = await processServiceOrderDeliveryReceipt(
         env,
-        page,
         body.serviceOrderId,
         body.documentId,
         body.userId,
@@ -2667,8 +2483,8 @@ async function processDocumentMessage(
   const messageType = body.type || "CERTIFICATE";
   const result =
     messageType === "LABEL"
-      ? await processLabelJob(env, page, body.jobId, body.userId)
-      : await processJob(env, page, body.jobId, body.userId);
+      ? await processLabelJob(env, body.jobId, body.userId)
+      : await processJob(env, body.jobId, body.userId);
 
   if (!result.success && messageType !== "LABEL") {
     await withDbClient(env, (client) =>
@@ -3687,36 +3503,9 @@ export async function processBackgroundJob(
     throw new Error(CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE);
   }
 
-  const browserStart = performance.now();
-  let browser: Browser | undefined;
-  let documentProcessingStarted = false;
-
-  try {
-    browser = await launchBrowser(env);
-    console.log(
-      `[JOB] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
-    );
-
-    const pageStart = performance.now();
-    const page = await browser.newPage();
-    await configurePage(page);
-    console.log(
-      `[JOB] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
-    );
-    documentProcessingStarted = true;
-    await processDocumentMessage(env, page, message);
-  } catch (error) {
-    if (!documentProcessingStarted) {
-      await recordCertificateInfrastructureError(env, message, error);
-    }
-    throw error;
-  } finally {
-    if (browser) {
-      await browser.close().catch((e) => {
-        console.error("[JOB] browser.close failed:", e);
-      });
-    }
-  }
+  // HTML/label documents render through the hosted Gotenberg service
+  // (services/gotenberg) — no in-function Chromium to launch.
+  await processDocumentMessage(env, message);
 }
 
 export async function processBackgroundJobBatch(
@@ -3745,52 +3534,20 @@ export async function processBackgroundJobBatch(
     await processXlsxPreviewJob(env, message);
   }
 
-  const browserDocumentMessages: DocumentBackgroundJobMessage[] = [];
+  const pendingDocumentMessages: DocumentBackgroundJobMessage[] = [];
   for (const message of documentMessages) {
     if (await processXlsxCertificateMessageIfSelected(env, message)) {
       continue;
     }
-    browserDocumentMessages.push(message);
+    pendingDocumentMessages.push(message);
   }
 
-  if (browserDocumentMessages.length === 0) return;
+  if (pendingDocumentMessages.length === 0) return;
 
-  const browserStart = performance.now();
-  let browser: Browser | undefined;
-  let readyForDocumentMessages = false;
-
-  try {
-    browser = await launchBrowser(env);
-    console.log(
-      `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
-    );
-
-    const pageStart = performance.now();
-    const page = await browser.newPage();
-    await configurePage(page);
-    console.log(
-      `[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
-    );
-    readyForDocumentMessages = true;
-
-    for (const message of browserDocumentMessages) {
-      await processDocumentMessage(env, page, message);
-    }
-  } catch (error) {
-    if (!readyForDocumentMessages) {
-      await Promise.all(
-        browserDocumentMessages.map((message) =>
-          recordCertificateInfrastructureError(env, message, error),
-        ),
-      );
-    }
-    throw error;
-  } finally {
-    if (browser) {
-      await browser.close().catch((e) => {
-        console.error("[BATCH] browser.close failed:", e);
-      });
-    }
+  // HTML/label documents render through the hosted Gotenberg service
+  // (services/gotenberg) — no in-function Chromium to launch.
+  for (const message of pendingDocumentMessages) {
+    await processDocumentMessage(env, message);
   }
 }
 

@@ -23,10 +23,8 @@
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",
     "@resvg/resvg-js": "2.6.2",
-    "@sparticuz/chromium-min": "^148.0.0",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.16.3",
-    "puppeteer-core": "^24.42.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

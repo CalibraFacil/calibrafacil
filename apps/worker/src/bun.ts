@@ -132,12 +132,6 @@ function createEnv(): WorkerEnv {
     MEDIA_BUCKET: createR2Bucket(
       process.env.R2_MEDIA_BUCKET_NAME ?? "calibrafacil-media-dev",
     ),
-    RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
-      ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
-      : undefined,
-    CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
-    CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
-    CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
     GOTENBERG_URL: process.env.GOTENBERG_URL,
     GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),

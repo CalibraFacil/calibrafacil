@@ -41,12 +41,6 @@ export type WorkerRuntimeEnv = {
       options?: { httpMetadata?: { contentType?: string } },
     ): Promise<void>;
   };
-  RUNTIME_ASSETS_BUCKET?: {
-    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
-  };
-  CHROME_EXECUTABLE_PATH?: string;
-  CHROMIUM_PACK_R2_KEY?: string;
-  CHROMIUM_PACK_URL?: string;
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string;
@@ -210,13 +204,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     DATABASE_URL: databaseUrl,
     CERTIFICATES_BUCKET: createR2Bucket(),
     MEDIA_BUCKET: createR2Bucket(requiredEnv("R2_MEDIA_BUCKET_NAME")),
-    RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
-      ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
-      : undefined,
-    CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
-    CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
-    CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
-    // Gotenberg XLSX->PDF service (services/gotenberg on Cloudflare Containers).
+    // Gotenberg HTML/XLSX->PDF service (services/gotenberg on Cloudflare Containers).
     GOTENBERG_URL: process.env.GOTENBERG_URL,
     GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
