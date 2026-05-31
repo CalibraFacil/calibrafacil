@@ -84,6 +84,8 @@ export type SuccessProfileResponse = {
     organizationId: string
     accountOwnerName: string | null
     accountOwnerEmail: string | null
+    internalOwnerName: string | null
+    internalOwnerEmail: string | null
     supportContactEmail: string | null
     onboardingStatus: OnboardingStatus
     migrationStatus: MigrationStatus
