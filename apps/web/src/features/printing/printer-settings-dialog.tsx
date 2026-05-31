@@ -23,13 +23,21 @@ import {
 import {
   useBrowserPrintAvailable,
   useBrowserPrintDevices,
+  useConnectWebSerial,
+  useConnectWebUsb,
   useDeletePrinterProfile,
   useDiscoverPrinters,
   usePrinterProfiles,
   usePrintTestLabel,
   useSavePrinterProfile,
   useTestBrowserPrint,
+  useTestWebSerial,
+  useTestWebUsb,
+  useWebSerialGrantedPort,
+  useWebUsbGrantedDevice,
 } from './use-printers'
+import { isWebSerialSupported } from './web-serial'
+import { isWebUsbSupported } from './web-usb'
 
 function hex(value: number): string {
   return `0x${value.toString(16).padStart(4, '0')}`
@@ -376,7 +384,7 @@ function DesktopPrinterSettings() {
 // Cloud — Zebra Browser Print devices exposed by the local agent
 // ---------------------------------------------------------------------------
 
-function CloudPrinterSettings() {
+function BrowserPrintSection() {
   const availableQuery = useBrowserPrintAvailable(true)
   const isAvailable = availableQuery.data === true
   const devicesQuery = useBrowserPrintDevices(isAvailable)
@@ -493,6 +501,151 @@ function CloudPrinterSettings() {
           )
         })
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Cloud — no-install WebUSB / Web Serial (Chromium, HTTPS, per-device prompt)
+// ---------------------------------------------------------------------------
+
+function CloudNoInstallSection() {
+  const usbSupported = isWebUsbSupported()
+  const serialSupported = isWebSerialSupported()
+  const usbGranted = useWebUsbGrantedDevice(usbSupported)
+  const connectUsb = useConnectWebUsb()
+  const testUsb = useTestWebUsb()
+  const serialGranted = useWebSerialGrantedPort(serialSupported)
+  const connectSerial = useConnectWebSerial()
+  const testSerial = useTestWebSerial()
+
+  if (!usbSupported && !serialSupported) {
+    return null
+  }
+
+  const handleConnectUsb = () => {
+    connectUsb.mutate(undefined, {
+      onSuccess: (device) =>
+        device
+          ? toast.success(
+              `"${device.productName ?? 'Impressora USB'}" conectada.`,
+            )
+          : toast.info('Nenhuma impressora selecionada.'),
+      onError: (error) =>
+        toast.error(
+          error instanceof Error ? error.message : 'Falha ao conectar',
+        ),
+    })
+  }
+
+  const handleTestUsb = () => {
+    const device = usbGranted.data
+    if (!device) return
+    testUsb.mutate(device, {
+      onSuccess: () => toast.success('Etiqueta de teste enviada.'),
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : 'Falha no teste'),
+    })
+  }
+
+  const handleConnectSerial = () => {
+    connectSerial.mutate(undefined, {
+      onSuccess: (port) =>
+        port
+          ? toast.success('Porta serial conectada.')
+          : toast.info('Nenhuma porta selecionada.'),
+      onError: (error) =>
+        toast.error(
+          error instanceof Error ? error.message : 'Falha ao conectar',
+        ),
+    })
+  }
+
+  const handleTestSerial = () => {
+    const port = serialGranted.data
+    if (!port) return
+    testSerial.mutate(port, {
+      onSuccess: () => toast.success('Etiqueta de teste enviada.'),
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : 'Falha no teste'),
+    })
+  }
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <p className="text-sm font-medium">
+        Sem instalação (WebUSB / Web Serial)
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Conecte uma impressora direto pelo navegador (Chrome/Edge, requer
+        HTTPS). Será solicitada permissão para o dispositivo uma vez.
+      </p>
+      {usbSupported && (
+        <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+          <p className="truncate text-sm">
+            USB:{' '}
+            {usbGranted.data
+              ? (usbGranted.data.productName ?? 'conectada')
+              : 'não conectada'}
+          </p>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleConnectUsb}
+              disabled={connectUsb.isPending}
+            >
+              {usbGranted.data ? 'Reconectar' : 'Conectar'}
+            </Button>
+            {usbGranted.data && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleTestUsb}
+                disabled={testUsb.isPending}
+              >
+                Teste
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {serialSupported && (
+        <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+          <p className="truncate text-sm">
+            Serial: {serialGranted.data ? 'conectada' : 'não conectada'}
+          </p>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleConnectSerial}
+              disabled={connectSerial.isPending}
+            >
+              {serialGranted.data ? 'Reconectar' : 'Conectar'}
+            </Button>
+            {serialGranted.data && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleTestSerial}
+                disabled={testSerial.isPending}
+              >
+                Teste
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CloudPrinterSettings() {
+  return (
+    <div className="space-y-4">
+      <BrowserPrintSection />
+      <CloudNoInstallSection />
     </div>
   )
 }

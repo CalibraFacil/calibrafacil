@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   isBrowserPrintAvailable,
   listBrowserPrintDevices,
-  resolveBrowserPrintDevice,
   type BrowserPrintDevice,
 } from './browser-print'
 import {
@@ -16,9 +15,21 @@ import {
 } from './local-printer-client'
 import {
   printJobLabel,
-  printJobLabelViaBrowserPrint,
+  printJobLabelCloud,
   printTestViaBrowserPrint,
+  printTestViaWebSerial,
+  printTestViaWebUsb,
 } from './print-label'
+import {
+  getGrantedWebSerialPort,
+  isWebSerialSupported,
+  requestWebSerialPort,
+} from './web-serial'
+import {
+  getGrantedWebUsbPrinter,
+  isWebUsbSupported,
+  requestWebUsbPrinter,
+} from './web-usb'
 
 const PRINTER_PROFILES_KEY = ['printer-profiles']
 
@@ -92,18 +103,11 @@ export function useBrowserPrintDevices(enabled: boolean) {
   })
 }
 
-export function usePrintJobLabelViaBrowserPrint() {
+/** Print via the best available cloud transport (Browser Print → WebUSB → Web Serial). */
+export function usePrintJobLabelCloud() {
   return useMutation({
-    mutationFn: async (input: {
-      jobId: string | number
-      device?: BrowserPrintDevice
-    }) => {
-      const device = input.device ?? (await resolveBrowserPrintDevice())
-      if (!device) {
-        throw new Error('Nenhuma impressora encontrada no Browser Print')
-      }
-      await printJobLabelViaBrowserPrint(input.jobId, device)
-    },
+    mutationFn: (input: { jobId: string | number }) =>
+      printJobLabelCloud(input.jobId),
   })
 }
 
@@ -111,5 +115,60 @@ export function useTestBrowserPrint() {
   return useMutation({
     mutationFn: (device: BrowserPrintDevice) =>
       printTestViaBrowserPrint(device),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Cloud runtime — no-install WebUSB / Web Serial fallback
+// ---------------------------------------------------------------------------
+
+const WEB_USB_GRANTED_KEY = ['web-usb-granted']
+const WEB_SERIAL_GRANTED_KEY = ['web-serial-granted']
+
+export function useWebUsbGrantedDevice(enabled: boolean) {
+  return useQuery({
+    queryKey: WEB_USB_GRANTED_KEY,
+    queryFn: getGrantedWebUsbPrinter,
+    enabled: enabled && isWebUsbSupported(),
+    staleTime: 30_000,
+  })
+}
+
+export function useConnectWebUsb() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => requestWebUsbPrinter(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: WEB_USB_GRANTED_KEY }),
+  })
+}
+
+export function useTestWebUsb() {
+  return useMutation({
+    mutationFn: (device: USBDevice) => printTestViaWebUsb(device),
+  })
+}
+
+export function useWebSerialGrantedPort(enabled: boolean) {
+  return useQuery({
+    queryKey: WEB_SERIAL_GRANTED_KEY,
+    queryFn: getGrantedWebSerialPort,
+    enabled: enabled && isWebSerialSupported(),
+    staleTime: 30_000,
+  })
+}
+
+export function useConnectWebSerial() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => requestWebSerialPort(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: WEB_SERIAL_GRANTED_KEY }),
+  })
+}
+
+export function useTestWebSerial() {
+  return useMutation({
+    mutationFn: (port: SerialPort) => printTestViaWebSerial(port),
   })
 }
