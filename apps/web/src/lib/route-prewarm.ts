@@ -6,14 +6,6 @@ import {
   prewarmAssetsIndex,
   prewarmNewAsset,
 } from '@/features/assets/queries'
-import {
-  prewarmBackofficeCommercialCheckouts,
-  prewarmBackofficeIndex,
-  prewarmBackofficeOrganizationDetail,
-  prewarmBackofficeOrganizations,
-  prewarmBackofficeSupport,
-  prewarmBackofficeUsers,
-} from '@/features/backoffice/queries'
 import { prewarmCertificateTemplates } from '@/features/certificate-templates/queries'
 import {
   prewarmCustomerAssets,
@@ -512,38 +504,6 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     id: 'dashboard:settings:notifications',
     match: /^\/dashboard\/settings\/notifications\/?$/,
     prewarm: ({ queryClient }) => prewarmNotificationSettings(queryClient),
-  },
-  {
-    id: 'backoffice:index',
-    match: /^\/backoffice\/?$/,
-    prewarm: ({ queryClient }) => prewarmBackofficeIndex(queryClient),
-  },
-  {
-    id: 'backoffice:organizations:index',
-    match: /^\/backoffice\/organizations\/?$/,
-    prewarm: ({ queryClient }) => prewarmBackofficeOrganizations(queryClient),
-  },
-  {
-    id: 'backoffice:organizations:detail',
-    match: /^\/backoffice\/organizations\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmBackofficeOrganizationDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'backoffice:support',
-    match: /^\/backoffice\/support\/?$/,
-    prewarm: ({ queryClient }) => prewarmBackofficeSupport(queryClient),
-  },
-  {
-    id: 'backoffice:users',
-    match: /^\/backoffice\/users\/?$/,
-    prewarm: ({ queryClient }) => prewarmBackofficeUsers(queryClient),
-  },
-  {
-    id: 'backoffice:commercial-checkouts',
-    match: /^\/backoffice\/commercial-checkouts\/?$/,
-    prewarm: ({ queryClient, url }) =>
-      prewarmBackofficeCommercialCheckouts(queryClient, url),
   },
   {
     id: 'accept-invitation',

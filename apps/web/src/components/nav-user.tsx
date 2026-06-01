@@ -11,14 +11,9 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useTheme } from 'next-themes'
 
-import {
-  backofficeSignOut,
-  signOut,
-  useBackofficeSession,
-  useSession,
-} from '@calibra-facil/auth/client'
+import { signOut, useSession } from '@calibra-facil/auth/client'
 import { canAccessBackoffice } from '@calibra-facil/auth/access'
-import { Link, useLocation } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -38,6 +33,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { calibraApi } from '@/utils/api'
+import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { markDesktopSignedOut } from '@/runtime/desktop-auth'
 
 function getStringProperty(source: unknown, key: string) {
@@ -52,16 +48,10 @@ function getStringProperty(source: unknown, key: string) {
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
-  const location = useLocation()
-  const isBackofficePath = location.pathname.startsWith('/backoffice')
+  // The backoffice is its own app now; this lab nav always uses the lab session.
   const labSessionQuery = useSession()
-  const backofficeSessionQuery = useBackofficeSession()
-  const session = isBackofficePath
-    ? backofficeSessionQuery.data
-    : labSessionQuery.data
-  const isPending = isBackofficePath
-    ? backofficeSessionQuery.isPending
-    : labSessionQuery.isPending
+  const session = labSessionQuery.data
+  const isPending = labSessionQuery.isPending
 
   const getInitials = (name: string) =>
     name
@@ -73,20 +63,16 @@ export function NavUser() {
       .toUpperCase()
 
   const handleSignOut = async () => {
-    if (isBackofficePath) {
-      await backofficeSignOut()
-    } else {
-      await signOut()
-    }
+    await signOut()
     markDesktopSignedOut()
-    window.location.replace(
-      isBackofficePath ? '/backoffice/sign-in' : '/sign-in',
-    )
+    window.location.replace('/sign-in')
   }
 
   const handleStopImpersonating = async () => {
+    // Impersonation is initiated from the backoffice; returning ends the
+    // session back in that (now separate) app.
     await calibraApi.backoffice.stopImpersonation()
-    window.location.assign('/backoffice')
+    window.location.assign(getBackofficeAppUrl())
   }
 
   if (isPending) {
@@ -157,34 +143,30 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              {isBackofficePath ? null : (
-                <>
-                  {showBackoffice ? (
-                    <DropdownMenuItem render={<Link to="/backoffice" />}>
-                      <HugeiconsIcon icon={BriefcaseIcon} />
-                      Backoffice
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem
-                    render={<Link to="/dashboard/settings/profile" />}
-                  >
-                    <HugeiconsIcon icon={CheckmarkBadge01Icon} />
-                    Conta
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    render={<Link to="/dashboard/settings/subscription" />}
-                  >
-                    <HugeiconsIcon icon={CreditCardIcon} />
-                    Assinatura
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    render={<Link to="/dashboard/settings/notifications" />}
-                  >
-                    <HugeiconsIcon icon={Notification02Icon} />
-                    Notificações
-                  </DropdownMenuItem>
-                </>
-              )}
+              {showBackoffice ? (
+                <DropdownMenuItem render={<a href={getBackofficeAppUrl()} />}>
+                  <HugeiconsIcon icon={BriefcaseIcon} />
+                  Backoffice
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                render={<Link to="/dashboard/settings/profile" />}
+              >
+                <HugeiconsIcon icon={CheckmarkBadge01Icon} />
+                Conta
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={<Link to="/dashboard/settings/subscription" />}
+              >
+                <HugeiconsIcon icon={CreditCardIcon} />
+                Assinatura
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={<Link to="/dashboard/settings/notifications" />}
+              >
+                <HugeiconsIcon icon={Notification02Icon} />
+                Notificações
+              </DropdownMenuItem>
               <DropdownMenuItem
                 closeOnClick={false}
                 onClick={() =>

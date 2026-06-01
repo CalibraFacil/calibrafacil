@@ -41,6 +41,27 @@ auditConfig:
   ignoreGhsas:
     - GHSA-rmmr-r34h-pfm5
 
+# Force pnpm to materialize ALL linux native optional binaries (glibc + musl,
+# x64 + arm64), not just the one matching the install machine. Vercel's
+# @vercel/nft file-tracer walks @resvg/resvg-js's optionalDependencies when
+# bundling the API serverless functions and stat()s every platform variant; if
+# the musl binary isn't on disk it fails the deploy with
+# "ENOENT ... @resvg+resvg-js-linux-x64-musl". Listing the architectures here
+# makes those packages present so the trace always resolves. (resvg only runs
+# at runtime on the deployed glibc target; the extra binaries are unused weight.)
+supportedArchitectures:
+  os:
+    - linux
+    - current
+  cpu:
+    - x64
+    - arm64
+    - current
+  libc:
+    - glibc
+    - musl
+    - current
+
 onlyBuiltDependencies:
   - "@serialport/bindings-cpp"
   - better-sqlite3
@@ -53,7 +74,7 @@ onlyBuiltDependencies:
   - workerd
 
 allowBuilds:
-  '@serialport/bindings-cpp': true
+  "@serialport/bindings-cpp": true
   better-sqlite3: true
   electron: true
   electron-winstaller: true

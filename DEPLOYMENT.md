@@ -10,6 +10,7 @@ This document describes how to deploy CalibraFacil to production.
 | Web             | Vercel                | calibrafacil.com        |
 | Portal          | Vercel                | portal.calibrafacil.com |
 | CMS (blog)      | Vercel                | blog.calibrafacil.com   |
+| Backoffice      | Vercel                | ops.calibrafacil.com    |
 | Background jobs | Vercel Queue and Cron | (API project)           |
 | Docs            | Cloudflare Pages      | docs.calibrafacil.com   |
 | Database        | Neon PostgreSQL       | (direct connection)     |
@@ -28,12 +29,13 @@ This document describes how to deploy CalibraFacil to production.
 The API, web, and portal apps deploy through Vercel. Each project should point at
 the matching app directory:
 
-| Project | Root Directory | Build                         |
-| ------- | -------------- | ----------------------------- |
-| API     | `apps/api`     | `pnpm build:vercel-functions` |
-| Web     | `apps/web`     | `pnpm build`                  |
-| Portal  | `apps/portal`  | `pnpm build`                  |
-| CMS     | `apps/cms`     | `pnpm build`                  |
+| Project    | Root Directory    | Build                         |
+| ---------- | ----------------- | ----------------------------- |
+| API        | `apps/api`        | `pnpm build:vercel-functions` |
+| Web        | `apps/web`        | `pnpm build`                  |
+| Portal     | `apps/portal`     | `pnpm build`                  |
+| CMS        | `apps/cms`        | `pnpm build`                  |
+| Backoffice | `apps/backoffice` | `pnpm build`                  |
 
 Vercel-specific routing, cron, queue, and output settings live in each app's
 `vercel.json`.
@@ -60,6 +62,20 @@ Vercel-specific routing, cron, queue, and output settings live in each app's
   `/api/payload-jobs/run`.
 - Admin UI at `/admin`; public blog at `/`, posts at `/posts/<slug>`; `sitemap.xml`,
   `robots.txt`, and `feed.xml` (RSS) are served by the app.
+
+#### Backoffice (internal operations)
+
+`apps/backoffice` is the internal operations console, extracted from `apps/web`
+into its own cloud-only Vite SPA at `ops.calibrafacil.com`:
+
+- **Own Vercel project**, root dir `apps/backoffice`, region `gru1`, SPA rewrites
+  (mirrors `apps/portal/vercel.json`).
+- Talks to the same `apps/api` backend (`/api/backoffice/*`); no API changes.
+- Auth via the dedicated backoffice Better-Auth instance; `ops.calibrafacil.com`
+  is registered in `trustedOrigins` (`packages/auth/src/auth.ts`) and shares
+  cookies across the `.calibrafacil.com` zone.
+- Set `VITE_LAB_APP_URL` if the lab app isn't at the default origin (used for
+  cross-app links back to the dashboard).
 
 ### 2. Configure Production Environment Variables
 

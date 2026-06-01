@@ -7,10 +7,12 @@ const allowedOrigins = new Set([
   "app://calibra-facil",
   "https://calibrafacil.com",
   "https://portal.calibrafacil.com",
+  "https://ops.calibrafacil.com",
   "https://verify.calibrafacil.com",
   "https://api.calibrafacil.com",
   "https://dev-web.calibrafacil.com",
   "https://dev-portal.calibrafacil.com",
+  "https://dev-ops.calibrafacil.com",
   "https://dev-api.calibrafacil.com",
 ]);
 
@@ -35,7 +37,7 @@ function isPrivateDevOrigin(origin: string, nodeEnv?: string): boolean {
     return (
       url.protocol === "http:" &&
       (hostname === "localhost" || isPrivateIpv4) &&
-      (port === "5173" || port === "5174")
+      (port === "5173" || port === "5174" || port === "5175")
     );
   } catch {
     return false;

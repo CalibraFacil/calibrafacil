@@ -24,6 +24,7 @@ const authMocks = vi.hoisted(() => ({
   getBackofficeAccess: vi.fn(),
   navigate: vi.fn(),
   ssoStart: vi.fn(),
+  locationAssign: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -53,10 +54,6 @@ vi.mock('@calibra-facil/auth/client', () => ({
   backofficeSignOut: authMocks.backofficeSignOut,
 }))
 
-vi.mock('@/features/backoffice/queries', () => ({
-  getBackofficeAccess: authMocks.getBackofficeAccess,
-}))
-
 vi.mock('@/runtime/desktop-auth', () => ({
   clearDesktopSignedOut: authMocks.clearDesktopSignedOut,
 }))
@@ -66,7 +63,14 @@ vi.mock('@/utils/api', () => ({
     sso: {
       start: authMocks.ssoStart,
     },
+    backoffice: {
+      getAccess: authMocks.getBackofficeAccess,
+    },
   },
+}))
+
+vi.mock('@/app/config/runtime', () => ({
+  getBackofficeAppUrl: () => 'https://ops.test',
 }))
 
 describe('startDesktopInitialSync', () => {
@@ -107,6 +111,11 @@ describe('SignInForm workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     installResizeObserver()
+    // The backoffice is a separate app now; sign-in there navigates cross-origin.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, assign: authMocks.locationAssign },
+    })
   })
 
   afterEach(() => {
@@ -260,9 +269,9 @@ describe('SignInForm workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
     await waitFor(() => {
-      expect(authMocks.navigate).toHaveBeenCalledWith({
-        to: '/backoffice/support',
-      })
+      expect(authMocks.locationAssign).toHaveBeenCalledWith(
+        'https://ops.test/backoffice/support',
+      )
     })
     expect(authMocks.backofficeSignOut).not.toHaveBeenCalled()
   })
@@ -280,9 +289,9 @@ describe('SignInForm workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
     await waitFor(() => {
-      expect(authMocks.navigate).toHaveBeenCalledWith({
-        to: '/backoffice/bootstrap',
-      })
+      expect(authMocks.locationAssign).toHaveBeenCalledWith(
+        'https://ops.test/bootstrap',
+      )
     })
     expect(authMocks.backofficeSignOut).not.toHaveBeenCalled()
   })
