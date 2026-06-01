@@ -10,6 +10,7 @@ const projects = new Map([
   ["web", "@calibra-facil/web"],
   ["portal", "@calibra-facil/portal"],
   ["docs", "@calibra-facil/docs"],
+  ["cms", "@calibra-facil/cms"],
   ["backoffice", "@calibra-facil/backoffice"],
 ]);
 
