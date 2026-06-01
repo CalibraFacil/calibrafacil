@@ -10,6 +10,7 @@ const projects = new Map([
   ["web", "@calibra-facil/web"],
   ["portal", "@calibra-facil/portal"],
   ["docs", "@calibra-facil/docs"],
+  ["backoffice", "@calibra-facil/backoffice"],
 ]);
 
 const globalBuildInputs = new Set([
