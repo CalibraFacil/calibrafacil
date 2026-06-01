@@ -26,6 +26,7 @@ import {
   useNewAssetCustomersData,
 } from '@/features/assets/queries'
 import {
+  buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetForm,
@@ -715,6 +716,9 @@ export function NewAssetPage() {
                           }
                           placeholder="Selecione a data…"
                           disabled={isSaving}
+                          presets={buildCalibrationPeriodicityPresets(
+                            () => formData.lastCalibrationDate ?? new Date(),
+                          )}
                         />
                       </Field>
                     </div>

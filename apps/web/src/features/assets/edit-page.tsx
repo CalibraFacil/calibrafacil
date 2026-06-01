@@ -9,6 +9,7 @@ import { calibraApi } from '@/utils/api'
 import { useAssetDetailData } from '@/features/assets/queries'
 import type { AssetDetail } from '@/features/assets/types'
 import {
+  buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetEditForm,
@@ -476,6 +477,9 @@ function EditAssetForm({
                   onChange={(date) => updateField('nextCalibrationDate', date)}
                   placeholder="Selecione a data"
                   disabled={isSaving}
+                  presets={buildCalibrationPeriodicityPresets(
+                    () => formData.lastCalibrationDate ?? new Date(),
+                  )}
                 />
               </Field>
             </div>
