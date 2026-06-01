@@ -8,9 +8,9 @@ import {
   signIn,
 } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
-import { getBackofficeAccess } from '@/features/backoffice/queries'
 import { calibraApi } from '@/utils/api'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
+import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { cn } from '@/lib/utils'
 import {
   sanitizeBackofficeRedirect,
@@ -92,15 +92,15 @@ export function SignInForm({
 
       clearDesktopSignedOut()
 
-      const access = await getBackofficeAccess()
+      const access = await calibraApi.backoffice.getAccess()
 
       if (access.allowed) {
-        navigate({ to: safeRedirect })
+        window.location.assign(`${getBackofficeAppUrl()}${safeRedirect}`)
         return
       }
 
       if (access.bootstrapAvailable) {
-        navigate({ to: '/backoffice/bootstrap' })
+        window.location.assign(`${getBackofficeAppUrl()}/bootstrap`)
         return
       }
 

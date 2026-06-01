@@ -174,9 +174,7 @@ function isProductionRuntime(): boolean {
 
 function createBaseUrlConfig(
   isProduction: boolean,
-):
-  | string
-  | { allowedHosts: string[]; protocol?: "http" | "https" | "auto" } {
+): string | { allowedHosts: string[]; protocol?: "http" | "https" | "auto" } {
   if (isProduction) {
     return getRequiredEnv("API_URL");
   }
@@ -281,15 +279,20 @@ const DEV_TRUSTED_ORIGINS = [
   "app://calibra-facil",
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5175",
   "https://localhost:5173",
   "https://localhost:5174",
+  "https://localhost:5175",
   "https://dev-web.calibrafacil.com",
   "https://dev-portal.calibrafacil.com",
+  "https://dev-ops.calibrafacil.com",
   "https://dev-api.calibrafacil.com",
   "http://192.168.0.10:5173",
   "http://192.168.0.10:5174",
+  "http://192.168.0.10:5175",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
+  "https://192.168.0.10:5175",
   "https://dev-portal.calibrafacil.com",
   "https://dev-web.calibrafacil.com",
 ];
@@ -299,6 +302,7 @@ const PROD_TRUSTED_ORIGINS = [
   "https://calibrafacil.com",
   "https://www.calibrafacil.com",
   "https://portal.calibrafacil.com",
+  "https://ops.calibrafacil.com",
 ];
 
 type AuthSurface = "lab" | "backoffice" | "portal";
@@ -431,7 +435,7 @@ function isPrivateDevWebOrigin(origin: string): boolean {
     return (
       url.protocol === "http:" &&
       (url.hostname === "localhost" || isPrivateIpv4(url.hostname)) &&
-      (url.port === "5173" || url.port === "5174")
+      (url.port === "5173" || url.port === "5174" || url.port === "5175")
     );
   } catch {
     return false;

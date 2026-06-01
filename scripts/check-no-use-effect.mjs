@@ -5,6 +5,7 @@ const roots = ["apps", "packages"];
 const allowedFiles = new Set([
   "apps/web/src/hooks/use-mount-effect.ts",
   "apps/portal/src/hooks/use-mount-effect.ts",
+  "apps/backoffice/src/hooks/use-mount-effect.ts",
 ]);
 const ignoredDirectories = new Set([
   ".next",

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type SessionData = {
@@ -31,9 +33,18 @@ async function loadDashboardSession(options: {
   vi.doMock('@/runtime/desktop', () => ({
     isDesktopRuntime: () => options.isDesktop ?? false,
   }))
+  vi.doMock('@/app/config/runtime', () => ({
+    getBackofficeAppUrl: () => 'https://ops.test',
+  }))
+
+  const locationReplace = vi.fn()
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, replace: locationReplace },
+  })
 
   const module = await import('./dashboard-session')
-  return { ...module, redirect, getSession, hasDesktopSession }
+  return { ...module, redirect, getSession, hasDesktopSession, locationReplace }
 }
 
 describe('dashboard session guard', () => {
@@ -98,14 +109,21 @@ describe('dashboard session guard', () => {
     expect(getSession).toHaveBeenCalledTimes(2)
   })
 
-  it('redirects non-impersonated backoffice users away from the dashboard', async () => {
-    const { dashboardBeforeLoad } = await loadDashboardSession({
-      session: labSession({ role: 'ADMIN' }),
-    })
+  it('redirects non-impersonated backoffice users to the backoffice app', async () => {
+    const { dashboardBeforeLoad, locationReplace } = await loadDashboardSession(
+      {
+        session: labSession({ role: 'ADMIN' }),
+      },
+    )
 
-    await expect(
-      dashboardBeforeLoad({ location: { pathname: '/dashboard' } }),
-    ).rejects.toEqual({ redirect: { to: '/backoffice' } })
+    // beforeLoad intentionally never resolves after firing the cross-origin
+    // redirect (it blocks so the lab route never mounts), so we don't await it;
+    // poll until the redirect fires instead of awaiting the (never-settling) call.
+    void dashboardBeforeLoad({ location: { pathname: '/dashboard' } })
+
+    await vi.waitFor(() =>
+      expect(locationReplace).toHaveBeenCalledWith('https://ops.test'),
+    )
   })
 
   it('allows impersonated backoffice users to stay in the dashboard', async () => {

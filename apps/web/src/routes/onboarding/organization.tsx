@@ -26,6 +26,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
+import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 
 type OnboardingSearch = {
@@ -45,9 +46,13 @@ export const Route = createFileRoute('/onboarding/organization')({
 
     if (
       canAccessBackoffice(session.user.role) &&
-      !session.session.impersonatedBy
+      !session.session.impersonatedBy &&
+      typeof window !== 'undefined'
     ) {
-      throw redirect({ to: '/backoffice' })
+      // The backoffice is a separate cross-origin app now. Block here while the
+      // browser navigates so the onboarding route never mounts for platform users.
+      window.location.replace(getBackofficeAppUrl())
+      await new Promise<never>(() => {})
     }
   },
   component: OrganizationOnboardingPage,

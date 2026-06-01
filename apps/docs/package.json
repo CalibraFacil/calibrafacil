@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 4321",
     "lint": "oxlint",
-    "check-types": "fumadocs-mdx && next typegen && tsc --noEmit",
+    "check-types": "node scripts/ensure-source.mjs && next typegen && tsc --noEmit",
     "deploy": "echo 'docs deploys via Vercel git integration (apps/docs/vercel.json)'"
   },
   "dependencies": {
