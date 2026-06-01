@@ -1,3 +1,5 @@
+import { addMonths } from 'date-fns'
+
 import {
   AssetStatusSchema,
   CreateAssetSchema,
@@ -14,6 +16,34 @@ import {
 } from '@/shared/forms/validation'
 
 export const ASSET_FORM_STATUSES = AssetStatusSchema.options
+
+/** Periodicity shortcuts (in months) offered when scheduling the next calibration. */
+export const CALIBRATION_PERIODICITY_MONTHS = [1, 2, 3, 6] as const
+
+export type CalibrationPeriodicityPreset = {
+  label: string
+  months: number
+  getDate: () => Date
+}
+
+export function calibrationPeriodicityLabel(months: number): string {
+  return `${months} ${months === 1 ? 'mês' : 'meses'}`
+}
+
+/**
+ * Builds the "próxima calibração" quick-select presets. Each preset adds its
+ * interval to the date returned by `getBaseDate` (the last calibration date,
+ * falling back to today), resolved at click time so it tracks form edits.
+ */
+export function buildCalibrationPeriodicityPresets(
+  getBaseDate: () => Date,
+): CalibrationPeriodicityPreset[] {
+  return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
+    label: calibrationPeriodicityLabel(months),
+    months,
+    getDate: () => addMonths(getBaseDate(), months),
+  }))
+}
 
 export type AssetFormData = {
   customerId: number | null

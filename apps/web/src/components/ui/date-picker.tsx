@@ -11,6 +11,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 
+/** A quick-select shortcut shown beside the calendar (e.g. periodicity intervals). */
+interface DatePickerPreset {
+  label: string
+  /** Resolves the date this preset selects, computed at click time. */
+  getDate: () => Date
+}
+
 interface DatePickerProps {
   id?: string
   name?: string
@@ -21,6 +28,8 @@ interface DatePickerProps {
   className?: string
   /** Format function for displaying the date */
   formatDate?: (date: Date) => string
+  /** Quick-select shortcuts rendered in a sidebar beside the calendar */
+  presets?: readonly DatePickerPreset[]
   /** Calendar props to pass through */
   calendarProps?: Omit<
     React.ComponentProps<typeof Calendar>,
@@ -41,12 +50,23 @@ function DatePicker({
   disabled = false,
   className,
   formatDate = defaultFormatDate,
+  presets,
   calendarProps,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  // Controlled so presets can move the visible month onto the chosen date.
+  const [month, setMonth] = React.useState<Date>(() => value ?? new Date())
+  const hasPresets = Boolean(presets && presets.length > 0)
+
+  function handleOpenChange(next: boolean) {
+    if (next && value) {
+      setMonth(value)
+    }
+    setOpen(next)
+  }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         disabled={disabled}
         render={
@@ -67,20 +87,44 @@ function DatePicker({
         {value ? formatDate(value) : <span>{placeholder}</span>}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={value}
-          onSelect={(date) => {
-            onChange?.(date)
-            setOpen(false)
-          }}
-          captionLayout="dropdown"
-          {...calendarProps}
-        />
+        <div className={cn('flex', hasPresets && 'max-sm:flex-col')}>
+          {hasPresets ? (
+            <div className="flex flex-col gap-1 p-2 max-sm:order-1 max-sm:border-t sm:border-e">
+              {presets?.map((preset) => (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start font-normal"
+                  onClick={() => {
+                    const date = preset.getDate()
+                    onChange?.(date)
+                    setMonth(date)
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <Calendar
+            mode="single"
+            selected={value}
+            month={month}
+            onMonthChange={setMonth}
+            onSelect={(date) => {
+              onChange?.(date)
+              setOpen(false)
+            }}
+            captionLayout="dropdown"
+            {...calendarProps}
+          />
+        </div>
       </PopoverContent>
     </Popover>
   )
 }
 
 export { DatePicker }
-export type { DatePickerProps }
+export type { DatePickerPreset, DatePickerProps }

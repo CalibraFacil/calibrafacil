@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildCalibrationPeriodicityPresets,
+  calibrationPeriodicityLabel,
+  CALIBRATION_PERIODICITY_MONTHS,
   isAssetFormStatus,
   parseAssetEditForm,
   parseAssetForm,
@@ -232,6 +235,54 @@ describe('asset feature forms', () => {
   it('narrows status select values before updating route state', () => {
     expect(isAssetFormStatus('ACTIVE')).toBe(true)
     expect(isAssetFormStatus('UNKNOWN')).toBe(false)
+  })
+})
+
+describe('calibration periodicity presets', () => {
+  it('labels singular and plural month intervals in pt-BR', () => {
+    expect(calibrationPeriodicityLabel(1)).toBe('1 mês')
+    expect(calibrationPeriodicityLabel(2)).toBe('2 meses')
+    expect(calibrationPeriodicityLabel(6)).toBe('6 meses')
+  })
+
+  it('offers a preset for every configured interval', () => {
+    const presets = buildCalibrationPeriodicityPresets(
+      () => new Date('2026-01-15T00:00:00.000Z'),
+    )
+
+    expect(presets.map((preset) => preset.months)).toEqual([
+      ...CALIBRATION_PERIODICITY_MONTHS,
+    ])
+    expect(presets.map((preset) => preset.label)).toEqual([
+      '1 mês',
+      '2 meses',
+      '3 meses',
+      '6 meses',
+    ])
+  })
+
+  it('adds each interval to the base date at resolve time', () => {
+    const presets = buildCalibrationPeriodicityPresets(
+      () => new Date('2026-01-15T00:00:00.000Z'),
+    )
+
+    expect(presets.map((preset) => preset.getDate().toISOString())).toEqual([
+      '2026-02-15T00:00:00.000Z',
+      '2026-03-15T00:00:00.000Z',
+      '2026-04-15T00:00:00.000Z',
+      '2026-07-15T00:00:00.000Z',
+    ])
+  })
+
+  it('tracks the latest base date returned by the getter', () => {
+    let base = new Date('2026-01-31T00:00:00.000Z')
+    const [oneMonth] = buildCalibrationPeriodicityPresets(() => base)
+
+    // Jan 31 + 1 month clamps to the last valid day of February.
+    expect(oneMonth?.getDate().toISOString()).toBe('2026-02-28T00:00:00.000Z')
+
+    base = new Date('2026-03-10T00:00:00.000Z')
+    expect(oneMonth?.getDate().toISOString()).toBe('2026-04-10T00:00:00.000Z')
   })
 })
 
