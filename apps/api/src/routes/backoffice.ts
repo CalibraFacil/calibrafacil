@@ -1455,7 +1455,9 @@ export const backofficeRouter = new Hono<{
 
         return createRedirectWithResponseCookies({
           response: impersonateResponse,
-          location: `${resolveAppUrl(c)}/dashboard`,
+          // Impersonation lands in the lab dashboard, not the request origin
+          // (the backoffice is its own app now and has no /dashboard route).
+          location: `${resolveTrustedAppUrl(c)}/dashboard`,
         });
       } catch (error) {
         await logPlatformEvent({
@@ -2011,76 +2013,84 @@ export const backofficeRouter = new Hono<{
   // Maker-checker approval queue — dual-control over sensitive, money-touching
   // actions (refunds, credits, adjustments). Any operator can open a request and
   // view the queue; only a platform admin who is NOT the requester may decide it.
-  .get("/approvals", zValidator("query", ApprovalListQuerySchema), async (c) => {
-    const input = c.req.valid("query");
+  .get(
+    "/approvals",
+    zValidator("query", ApprovalListQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
 
-    const conditions = [];
-    if (input.status && input.status !== "all") {
-      const statusByFilter = {
-        pending: "PENDING",
-        approved: "APPROVED",
-        rejected: "REJECTED",
-      } as const;
-      conditions.push(eq(approvalRequest.status, statusByFilter[input.status]));
-    }
-    if (input.organizationId) {
-      conditions.push(eq(approvalRequest.organizationId, input.organizationId));
-    }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+      const conditions = [];
+      if (input.status && input.status !== "all") {
+        const statusByFilter = {
+          pending: "PENDING",
+          approved: "APPROVED",
+          rejected: "REJECTED",
+        } as const;
+        conditions.push(
+          eq(approvalRequest.status, statusByFilter[input.status]),
+        );
+      }
+      if (input.organizationId) {
+        conditions.push(
+          eq(approvalRequest.organizationId, input.organizationId),
+        );
+      }
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const rows = await db
-      .select({
-        id: approvalRequest.id,
-        organizationId: approvalRequest.organizationId,
-        organizationName: organization.name,
-        kind: approvalRequest.kind,
-        summary: approvalRequest.summary,
-        amountCents: approvalRequest.amountCents,
-        status: approvalRequest.status,
-        requestedByUserId: approvalRequest.requestedByUserId,
-        decidedByUserId: approvalRequest.decidedByUserId,
-        decisionReason: approvalRequest.decisionReason,
-        createdAt: approvalRequest.createdAt,
-        decidedAt: approvalRequest.decidedAt,
-      })
-      .from(approvalRequest)
-      .leftJoin(
-        organization,
-        eq(organization.id, approvalRequest.organizationId),
-      )
-      .where(where)
-      .orderBy(desc(approvalRequest.createdAt))
-      .limit(200);
+      const rows = await db
+        .select({
+          id: approvalRequest.id,
+          organizationId: approvalRequest.organizationId,
+          organizationName: organization.name,
+          kind: approvalRequest.kind,
+          summary: approvalRequest.summary,
+          amountCents: approvalRequest.amountCents,
+          status: approvalRequest.status,
+          requestedByUserId: approvalRequest.requestedByUserId,
+          decidedByUserId: approvalRequest.decidedByUserId,
+          decisionReason: approvalRequest.decisionReason,
+          createdAt: approvalRequest.createdAt,
+          decidedAt: approvalRequest.decidedAt,
+        })
+        .from(approvalRequest)
+        .leftJoin(
+          organization,
+          eq(organization.id, approvalRequest.organizationId),
+        )
+        .where(where)
+        .orderBy(desc(approvalRequest.createdAt))
+        .limit(200);
 
-    const userIds = Array.from(
-      new Set(
-        rows
-          .flatMap((row) => [row.requestedByUserId, row.decidedByUserId])
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    const users =
-      userIds.length > 0
-        ? await db
-            .select({ id: userTable.id, name: userTable.name })
-            .from(userTable)
-            .where(inArray(userTable.id, userIds))
-        : [];
-    const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
+      const userIds = Array.from(
+        new Set(
+          rows
+            .flatMap((row) => [row.requestedByUserId, row.decidedByUserId])
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({ id: userTable.id, name: userTable.name })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const nameById = new Map(users.map((entry) => [entry.id, entry.name]));
 
-    const data = rows.map((row) => ({
-      ...row,
-      organizationName: row.organizationName ?? "—",
-      requestedByName: row.requestedByUserId
-        ? (nameById.get(row.requestedByUserId) ?? null)
-        : null,
-      decidedByName: row.decidedByUserId
-        ? (nameById.get(row.decidedByUserId) ?? null)
-        : null,
-    }));
+      const data = rows.map((row) => ({
+        ...row,
+        organizationName: row.organizationName ?? "—",
+        requestedByName: row.requestedByUserId
+          ? (nameById.get(row.requestedByUserId) ?? null)
+          : null,
+        decidedByName: row.decidedByUserId
+          ? (nameById.get(row.decidedByUserId) ?? null)
+          : null,
+      }));
 
-    return c.json({ data });
-  })
+      return c.json({ data });
+    },
+  )
   .post(
     "/approvals",
     zValidator("json", CreateApprovalRequestSchema),
@@ -2450,7 +2460,9 @@ export const backofficeRouter = new Hono<{
           channel: input.channel,
           direction: input.direction ?? "outbound",
           summary: input.summary,
-          occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
+          occurredAt: input.occurredAt
+            ? new Date(input.occurredAt)
+            : new Date(),
           createdByUserId: session.user.id,
         })
         .returning();
@@ -2919,7 +2931,9 @@ export const backofficeRouter = new Hono<{
       const session = c.get("session");
       const input = c.req.valid("json");
       const temporaryPassword = randomBytes(24).toString("base64url");
-      const appUrl = resolveAppUrl(c);
+      // Password setup/reset pages live in the lab app, not the request origin
+      // (the backoffice has no /reset-password route).
+      const appUrl = resolveTrustedAppUrl(c);
 
       const createdUser = await auth.api.createUser({
         body: {
@@ -3030,7 +3044,9 @@ export const backofficeRouter = new Hono<{
       return c.json({ error: "Usuário não encontrado" }, 404);
     }
 
-    const appUrl = resolveAppUrl(c);
+    // Password reset pages live in the lab app, not the request origin
+    // (the backoffice has no /reset-password route).
+    const appUrl = resolveTrustedAppUrl(c);
     const response = await forwardLabAuthResponse({
       c,
       path: "/api/auth/lab/request-password-reset",
