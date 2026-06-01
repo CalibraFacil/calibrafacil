@@ -338,6 +338,9 @@ importers:
       '@payloadcms/ui':
         specifier: 3.85.0
         version: 3.85.0(@types/react@19.2.7)(monaco-editor@0.55.1)(next@16.2.6(@playwright/test@1.60.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(payload@3.85.0(graphql@16.12.0)(typescript@5.9.2))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.2)
+      '@vercel/analytics':
+        specifier: 2.0.1
+        version: 2.0.1(next@16.2.6(@babel/core@7.28.5)(@playwright/test@1.60.0)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(react@19.2.3)
       graphql:
         specifier: ^16.11.0
         version: 16.12.0
@@ -412,6 +415,9 @@ importers:
 
   apps/docs:
     dependencies:
+      '@vercel/analytics':
+        specifier: ^1.4.1
+        version: 1.6.1(next@16.2.6(@playwright/test@1.60.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(react@19.2.3)
       fumadocs-core:
         specifier: ^15.6.0
         version: 15.8.5(@tanstack/react-router@1.141.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(lucide-react@1.16.0(react@19.2.3))(next@16.2.6(@playwright/test@1.60.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -5067,6 +5073,32 @@ packages:
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
     deprecated: Potential CWE-502 - Update to 1.3.1 or higher
+
+  '@vercel/analytics@1.6.1':
+    resolution: {integrity: sha512-oH9He/bEM+6oKlv3chWuOOcp8Y6fo6/PSro8hEkgCW3pu9/OiCXiUpRUogDh3Fs3LH2sosDrx8CxeOLBEE+afg==}
+    peerDependencies:
+      '@remix-run/react': ^2
+      '@sveltejs/kit': ^1 || ^2
+      next: 16.2.6
+      react: ^18 || ^19 || ^19.0.0-rc
+      svelte: '>= 4'
+      vue: ^3
+      vue-router: ^4
+    peerDependenciesMeta:
+      '@remix-run/react':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+      vue-router:
+        optional: true
 
   '@vercel/analytics@2.0.1':
     resolution: {integrity: sha512-MTQG6V9qQrt1tsDeF+2Uoo5aPjqbVPys1xvnIftXSJYG2SrwXRHnqEvVoYID7BTruDz4lCd2Z7rM1BdkUehk2g==}
@@ -14267,6 +14299,11 @@ snapshots:
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260421.2
 
   '@ungap/structured-clone@1.3.0': {}
+
+  '@vercel/analytics@1.6.1(next@16.2.6(@playwright/test@1.60.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(react@19.2.3)':
+    optionalDependencies:
+      next: 16.2.6(@babel/core@7.28.5)(@playwright/test@1.60.0)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4)
+      react: 19.2.3
 
   '@vercel/analytics@2.0.1(next@16.2.6(@babel/core@7.28.5)(@playwright/test@1.60.0)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.77.4))(react@19.2.3)':
     optionalDependencies:
