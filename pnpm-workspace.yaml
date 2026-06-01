@@ -28,6 +28,11 @@ overrides:
   undici: ^7.24.0
   "vite@>=6.0.0 <=6.4.1": ^6.4.2
   "vite@>=7.0.0 <=7.3.1": ^7.3.2
+  # GHSA-5xrq-8626-4rwp: vitest <4.1.0 UI-server arbitrary file read. Bump the
+  # 4.0.x line (pulled transitively via better-auth) to the patched 4.1.x. Scoped
+  # so the 3.2.x users (web/portal/backoffice) aren't forced to a major bump.
+  "vitest@>=4.0.0 <4.1.0": ^4.1.8
+  "@vitest/coverage-v8@>=4.0.0 <4.1.0": ^4.1.8
   "path-to-regexp@>=8.0.0 <8.4.0": ^8.4.0
   diff: ^8.0.3
   basic-ftp: ^5.3.1
@@ -83,3 +88,14 @@ allowBuilds:
   sharp: true
   usb: true
   workerd: true
+
+minimumReleaseAgeExclude:
+  - "@vitest/coverage-v8@4.1.8"
+  - "@vitest/expect@4.1.8"
+  - "@vitest/mocker@4.1.8"
+  - "@vitest/pretty-format@4.1.8"
+  - "@vitest/runner@4.1.8"
+  - "@vitest/snapshot@4.1.8"
+  - "@vitest/spy@4.1.8"
+  - "@vitest/utils@4.1.8"
+  - vitest@4.1.8
