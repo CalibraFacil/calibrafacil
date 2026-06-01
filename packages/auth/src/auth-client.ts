@@ -5,6 +5,7 @@ import {
   emailOTPClient,
   magicLinkClient,
   organizationClient,
+  twoFactorClient,
 } from "better-auth/client/plugins";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
@@ -162,6 +163,11 @@ export const backofficeAuthClient = createBetterAuthClient({
     customFetchImpl: desktopAuthFetch,
   },
   plugins: [
+    // Mandatory two-factor for internal operators. The form reads
+    // `data.twoFactorRedirect` from sign-in directly, so no redirect callback
+    // is configured here; the plugin's session-signal listeners keep
+    // `useBackofficeSession` in sync after enable/verify.
+    twoFactorClient(),
     adminClient({
       ac: platformAc,
       roles: platformRoles,
@@ -212,6 +218,7 @@ export const backofficeSignOut = backofficeAuthClient.signOut;
 export const useBackofficeSession = backofficeAuthClient.useSession;
 export const getBackofficeSession = () => backofficeAuthClient.getSession();
 export const backofficeAdmin = backofficeAuthClient.admin;
+export const backofficeTwoFactor = backofficeAuthClient.twoFactor;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES
