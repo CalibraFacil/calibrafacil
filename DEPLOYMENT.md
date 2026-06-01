@@ -9,6 +9,7 @@ This document describes how to deploy CalibraFacil to production.
 | API             | Vercel Functions      | api.calibrafacil.com    |
 | Web             | Vercel                | calibrafacil.com        |
 | Portal          | Vercel                | portal.calibrafacil.com |
+| CMS (blog)      | Vercel                | blog.calibrafacil.com   |
 | Background jobs | Vercel Queue and Cron | (API project)           |
 | Docs            | Cloudflare Pages      | docs.calibrafacil.com   |
 | Database        | Neon PostgreSQL       | (direct connection)     |
@@ -32,9 +33,33 @@ the matching app directory:
 | API     | `apps/api`     | `pnpm build:vercel-functions` |
 | Web     | `apps/web`     | `pnpm build`                  |
 | Portal  | `apps/portal`  | `pnpm build`                  |
+| CMS     | `apps/cms`     | `pnpm build`                  |
 
 Vercel-specific routing, cron, queue, and output settings live in each app's
 `vercel.json`.
+
+#### CMS (Payload — blog / content)
+
+`apps/cms` is a **Next.js 16 + Payload 3** app for the marketing blog and content
+(SEO), intentionally isolated from the rest of the platform:
+
+- **Own Vercel project**, root dir `apps/cms`, framework `nextjs`, region `gru1`.
+  Enable **Fluid Compute** to amortize Payload's cold-start initialization.
+- **Own database.** `DATABASE_URI` must point to a **dedicated Neon database/branch**
+  (or at minimum the dedicated `payload` Postgres schema the config declares) — never
+  the app's `DATABASE_URL`. Payload runs its own migrations (`payload migrate`); they
+  must never share a schema with the app's `drizzle-kit` migrations.
+- **Media** is stored in a **dedicated R2 bucket** (`S3_*` env) via the S3-compatible
+  API (`@payloadcms/storage-s3`) — not the regulated documents bucket.
+- **Auth** uses Payload's native auth for a small set of internal editors. Bridging to
+  Better-Auth is deferred (see `.goals/payload-blog-and-backoffice-extraction.md`).
+- **Env vars:** see `apps/cms/.env.example` (`DATABASE_URI`, `PAYLOAD_SECRET`,
+  `NEXT_PUBLIC_SERVER_URL`, `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`,
+  `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
+- **Scheduled publishing** uses Payload's Jobs Queue; on Vercel, add a Cron hitting
+  `/api/payload-jobs/run`.
+- Admin UI at `/admin`; public blog at `/`, posts at `/posts/<slug>`; `sitemap.xml`,
+  `robots.txt`, and `feed.xml` (RSS) are served by the app.
 
 ### 2. Configure Production Environment Variables
 

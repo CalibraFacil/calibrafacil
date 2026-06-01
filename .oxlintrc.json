@@ -34,6 +34,7 @@
     "*.config.js",
     "*.config.ts",
     "*.config.mjs",
-    "routeTree.gen.ts"
+    "routeTree.gen.ts",
+    "apps/cms/src/payload-types.ts"
   ]
 }
