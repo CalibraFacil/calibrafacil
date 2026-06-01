@@ -30,6 +30,7 @@ const footerColumns = [
     heading: 'Empresa',
     links: [
       { label: 'Documentação', href: 'https://docs.calibrafacil.com' },
+      { label: 'Blog', href: 'https://blog.calibrafacil.com' },
       { label: 'Status do sistema' },
       { label: 'Política de privacidade', href: '/privacidade' },
       { label: 'Termos de uso', href: '/termos-de-uso' },

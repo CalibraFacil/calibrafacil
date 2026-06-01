@@ -19,6 +19,7 @@ const navLinks = [
   { label: 'Capacidades', href: '#capacidades' },
   { label: 'Para quem', href: '#audiencias' },
   { label: 'Perguntas', href: '#perguntas' },
+  { label: 'Blog', href: 'https://blog.calibrafacil.com' },
 ]
 
 export function LandingNav() {
