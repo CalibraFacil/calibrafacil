@@ -435,7 +435,7 @@ function isPrivateDevWebOrigin(origin: string): boolean {
     return (
       url.protocol === "http:" &&
       (url.hostname === "localhost" || isPrivateIpv4(url.hostname)) &&
-      (url.port === "5173" || url.port === "5174")
+      (url.port === "5173" || url.port === "5174" || url.port === "5175")
     );
   } catch {
     return false;

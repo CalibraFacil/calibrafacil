@@ -50,8 +50,13 @@ export async function dashboardBeforeLoad({
     !isDesktopRuntime() &&
     typeof window !== 'undefined'
   ) {
-    // The backoffice is a separate cross-origin app now.
+    // The backoffice is a separate cross-origin app now. Kick off the
+    // navigation, then block beforeLoad indefinitely so TanStack Router does
+    // not mount the dashboard route or run child loaders while the browser
+    // completes the cross-origin redirect (a bare return would let lab code
+    // render for a beat first).
     window.location.replace(getBackofficeAppUrl())
+    await new Promise<never>(() => {})
   }
 }
 

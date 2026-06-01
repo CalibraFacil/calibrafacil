@@ -43,6 +43,12 @@ export function getBackofficeAppUrl() {
     return `${protocol}//${hostname}:${DEFAULT_DEVELOPMENT_BACKOFFICE_PORT}`
   }
 
+  // Served through the dev-web tunnel → send platform users to the matching dev
+  // backoffice tunnel instead of production.
+  if (hostname === 'dev-web.calibrafacil.com') {
+    return 'https://dev-ops.calibrafacil.com'
+  }
+
   return DEFAULT_PRODUCTION_BACKOFFICE_URL
 }
 

@@ -49,8 +49,10 @@ export const Route = createFileRoute('/onboarding/organization')({
       !session.session.impersonatedBy &&
       typeof window !== 'undefined'
     ) {
-      // The backoffice is a separate cross-origin app now.
+      // The backoffice is a separate cross-origin app now. Block here while the
+      // browser navigates so the onboarding route never mounts for platform users.
       window.location.replace(getBackofficeAppUrl())
+      await new Promise<never>(() => {})
     }
   },
   component: OrganizationOnboardingPage,

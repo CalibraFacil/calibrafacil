@@ -116,9 +116,14 @@ describe('dashboard session guard', () => {
       },
     )
 
-    await dashboardBeforeLoad({ location: { pathname: '/dashboard' } })
+    // beforeLoad intentionally never resolves after firing the cross-origin
+    // redirect (it blocks so the lab route never mounts), so we don't await it;
+    // poll until the redirect fires instead of awaiting the (never-settling) call.
+    void dashboardBeforeLoad({ location: { pathname: '/dashboard' } })
 
-    expect(locationReplace).toHaveBeenCalledWith('https://ops.test')
+    await vi.waitFor(() =>
+      expect(locationReplace).toHaveBeenCalledWith('https://ops.test'),
+    )
   })
 
   it('allows impersonated backoffice users to stay in the dashboard', async () => {

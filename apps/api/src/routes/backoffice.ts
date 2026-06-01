@@ -253,7 +253,10 @@ function getAppRedirectErrorUrl(c: {
   };
   env?: unknown;
 }) {
-  return `${resolveAppUrl(c)}/backoffice/users`;
+  // Impersonation is initiated from the backoffice app (ops.calibrafacil.com),
+  // whose users page is served at /users (the /backoffice prefix was dropped
+  // when it was extracted from the lab app).
+  return `${resolveAppUrl(c)}/users`;
 }
 
 function redirectToAppWithError(
