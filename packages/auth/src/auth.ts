@@ -9,6 +9,7 @@ import { admin as adminPlugin, organization } from "better-auth/plugins";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
+import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
@@ -1453,6 +1454,13 @@ export function createBackofficeAuth() {
       cookiePrefix: "backoffice",
     },
     plugins: [
+      // Two-factor is mandatory for the internal operations surface. Enrollment
+      // is enforced client-side (apps/backoffice forces TOTP setup before any
+      // page loads); the plugin only intercepts sign-in once a user is enrolled.
+      // TOTP authenticator app + encrypted backup codes only — no email OTP.
+      twoFactor({
+        issuer: "CalibraFácil Ops",
+      }),
       adminPlugin({
         ac: platformAc,
         roles: platformRoles,

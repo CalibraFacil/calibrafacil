@@ -109,6 +109,8 @@ export const user = pgTable("user", {
   banned: boolean("banned").default(false).notNull(),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
+  // Better Auth two-factor plugin (mounted on the backoffice surface only).
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -206,6 +208,26 @@ export const passkey = pgTable(
     index("passkey_user_id_idx").on(table.userId),
     uniqueIndex("passkey_credential_id_uidx").on(table.credentialID),
   ],
+);
+
+/**
+ * Better Auth two-factor plugin store (TOTP secret + backup codes).
+ * Field/column names must match the plugin schema so the Drizzle adapter can
+ * resolve them. Only the backoffice auth instance mounts the twoFactor plugin,
+ * but the table is shared like the other auth tables.
+ */
+export const twoFactor = pgTable(
+  "twoFactor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true).notNull(),
+  },
+  (table) => [index("two_factor_user_id_idx").on(table.userId)],
 );
 
 /** Backoffice-managed tenant lifecycle state. */
