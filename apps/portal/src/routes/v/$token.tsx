@@ -38,6 +38,34 @@ type VerificationData = {
   service: string;
   performedAt: string | null;
   approvedAt: string | null;
+  // Digital signature - ISO 17025 Clause 7.8.2.1(q)
+  digitalSignature:
+    | {
+        signed: true;
+        signedAt: string | null;
+        signerName: string | null;
+        signerCpfCnpj: string | null;
+        certificateSerial: string | null;
+        pdfHash: string | null;
+        ltvEnabled: boolean | null;
+      }
+    | { signed: false };
+  // Amendment lineage - ISO 17025 Clause 7.8.4.1
+  isSuperseded: boolean;
+  isAmendment: boolean;
+  amendmentNumber: number | null;
+  amendmentReason: string | null;
+  supersededAt: string | null;
+  supersededBy: {
+    id: number;
+    jobId: string;
+    verificationToken: string;
+  } | null;
+  supersedes: {
+    id: number;
+    jobId: string;
+    verificationToken: string;
+  } | null;
 };
 
 function VerifyPage() {
@@ -180,6 +208,105 @@ function VerifyPage() {
               <p className="text-muted-foreground">Laboratório</p>
               <p className="font-medium">{data.lab}</p>
             </div>
+          </div>
+
+          {/* Supersession status - ISO 17025 Clause 7.8.4.1 */}
+          {data.isSuperseded && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-900/20">
+              <p className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-400">
+                <HugeiconsIcon icon={AlertCircleIcon} className="size-4" />
+                Certificado substituído
+              </p>
+              <p className="mt-1 text-amber-700/80 dark:text-amber-400/80">
+                Este certificado foi substituído por uma versão mais recente
+                {data.supersededAt
+                  ? ` em ${formatDate(data.supersededAt)}`
+                  : ""}
+                .
+              </p>
+              {data.supersededBy && (
+                <a
+                  href={`/v/${data.supersededBy.verificationToken}`}
+                  className="mt-1 inline-block font-medium text-amber-800 underline dark:text-amber-300"
+                >
+                  Ver versão vigente: {data.supersededBy.jobId}
+                </a>
+              )}
+            </div>
+          )}
+
+          {data.isAmendment && (
+            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+              <p className="font-medium text-foreground">
+                Retificação
+                {data.amendmentNumber ? ` Nº ${data.amendmentNumber}` : ""}
+              </p>
+              {data.amendmentReason && (
+                <p className="mt-1 text-muted-foreground">
+                  {data.amendmentReason}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Digital signature - ISO 17025 Clause 7.8.2.1(q) */}
+          <div className="rounded-lg border border-border p-3 text-sm">
+            <p className="mb-2 flex items-center gap-2 font-medium text-foreground">
+              <HugeiconsIcon
+                icon={SecurityCheckIcon}
+                className={
+                  data.digitalSignature.signed
+                    ? "size-4 text-green-600 dark:text-green-500"
+                    : "size-4 text-muted-foreground"
+                }
+              />
+              Assinatura digital
+            </p>
+            {data.digitalSignature.signed ? (
+              <dl className="grid gap-1.5">
+                {data.digitalSignature.signerName && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Signatário</dt>
+                    <dd className="text-right font-medium">
+                      {data.digitalSignature.signerName}
+                    </dd>
+                  </div>
+                )}
+                {data.digitalSignature.signerCpfCnpj && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">CPF/CNPJ</dt>
+                    <dd className="text-right font-medium">
+                      {data.digitalSignature.signerCpfCnpj}
+                    </dd>
+                  </div>
+                )}
+                {data.digitalSignature.signedAt && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Assinado em</dt>
+                    <dd className="text-right font-medium">
+                      {formatDate(data.digitalSignature.signedAt)}
+                    </dd>
+                  </div>
+                )}
+                {data.digitalSignature.certificateSerial && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">
+                      Série do certificado
+                    </dt>
+                    <dd className="text-right font-mono text-xs">
+                      {data.digitalSignature.certificateSerial}
+                    </dd>
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Assinatura digital com certificado ICP-Brasil A1.
+                </p>
+              </dl>
+            ) : (
+              <p className="text-muted-foreground">
+                Este certificado não possui assinatura digital.
+              </p>
+            )}
           </div>
 
           {/* Download Button */}
