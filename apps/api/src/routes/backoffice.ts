@@ -2920,14 +2920,15 @@ export const backofficeRouter = new Hono<{
       // (one grouped scan using session_userId_idx). lastLoginAt ≈ most recent
       // session start; lastSeenAt ≈ most recent session refresh; isOnline = has a
       // non-expired session right now.
-      const now = new Date();
       const sessionAgg = userIds.length
         ? await db
             .select({
               userId: authSession.userId,
               lastLoginAt: max(authSession.createdAt),
               lastSeenAt: max(authSession.updatedAt),
-              activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > ${now})`,
+              // Use SQL now() — a raw-sql ${jsDate} param isn't type-aware and
+              // serializes to a non-ISO string Postgres rejects.
+              activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > now())`,
             })
             .from(authSession)
             .where(inArray(authSession.userId, userIds))
@@ -3245,12 +3246,11 @@ export const backofficeRouter = new Hono<{
       .where(eq(member.userId, id))
       .orderBy(asc(organization.name));
 
-    const now = new Date();
     const [agg] = await db
       .select({
         lastLoginAt: max(authSession.createdAt),
         lastSeenAt: max(authSession.updatedAt),
-        activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > ${now})`,
+        activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > now())`,
       })
       .from(authSession)
       .where(eq(authSession.userId, id));
