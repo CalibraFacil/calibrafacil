@@ -270,6 +270,7 @@ type AssetSnapshot = {
 
 type JobData = {
   jobId: string;
+  verificationToken: string;
   certificateName?: string | null;
   organizationId?: string | null;
   organizationSlug?: string | null;
@@ -889,6 +890,7 @@ async function fetchJobData(
       cj.data,
       cj.organization_id,
       cj.approved_by,
+      cj.verification_token,
       -- Amendment fields - ISO 17025 Clause 7.8.4.1
       cj.supersedes_id,
       cj.superseded_by_id,
@@ -1043,6 +1045,7 @@ async function fetchJobData(
 
   return {
     jobId: row.job_id,
+    verificationToken: row.verification_token,
     certificateName: row.certificate_name,
     organizationId: row.organization_id,
     organizationSlug: row.organization_slug,
@@ -3153,6 +3156,9 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
     certificate: {
       number: job.jobId,
       name: job.certificateName,
+      // Public verification URL — drives the QR code binding on the certificate
+      // PDF (same target as the thermal-label QR). See verifyRouter / verify page.
+      verificationUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
       issuedAt: toIsoDateish(job.approvedAt),
       issuedAtText: formatDateForXlsx(job.approvedAt),
       supersedesId: job.supersedesId,
