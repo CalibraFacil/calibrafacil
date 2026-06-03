@@ -7,6 +7,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/blog",
+      "destination": "https://blog.calibrafacil.com/blog"
+    },
+    {
+      "source": "/blog/:path*",
+      "destination": "https://blog.calibrafacil.com/blog/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
