@@ -22,7 +22,12 @@ export const REPORT_PERIOD_LABELS: Record<ReportPeriod, string> = {
   month: 'Mês atual',
 }
 
-export const REPORT_PERIOD_OPTIONS: ReportPeriod[] = ['7d', '30d', '90d', 'month']
+export const REPORT_PERIOD_OPTIONS: ReportPeriod[] = [
+  '7d',
+  '30d',
+  '90d',
+  'month',
+]
 
 export function getHealthBadgeVariant(
   status: ComparisonResponse['rows'][number]['healthStatus'],
@@ -125,16 +130,16 @@ export function getNextComparisonSort({
   }
 }
 
+const REPORT_RANGE_DATE_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+})
+
 export function formatReportRange(
   range: { startDate: string; endDate: string } | null | undefined,
 ) {
   if (!range) return 'Período selecionado'
 
-  const formatter = new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
-  })
-
-  return `${formatter.format(new Date(range.startDate))} até ${formatter.format(
-    new Date(range.endDate),
-  )}`
+  return `${REPORT_RANGE_DATE_FORMAT.format(
+    new Date(range.startDate),
+  )} até ${REPORT_RANGE_DATE_FORMAT.format(new Date(range.endDate))}`
 }

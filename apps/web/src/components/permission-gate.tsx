@@ -93,18 +93,19 @@ export function useCanPerformCalibrationAction(
  * // For technician: ["edit", "delete", "submit"]
  * // For admin: ["edit", "delete", "submit"]
  */
+const CALIBRATION_ACTIONS: Array<CalibrationAction> = [
+  'edit',
+  'delete',
+  'submit',
+  'approve',
+  'reject',
+]
+
 export function useAllowedCalibrationActions(
   state: CalibrationState,
 ): Array<CalibrationAction> {
   const role = useRole()
-  const actions: Array<CalibrationAction> = [
-    'edit',
-    'delete',
-    'submit',
-    'approve',
-    'reject',
-  ]
-  return actions.filter((action) =>
+  return CALIBRATION_ACTIONS.filter((action) =>
     canPerformCalibrationAction(role, state, action),
   )
 }

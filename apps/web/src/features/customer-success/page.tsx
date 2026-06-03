@@ -190,19 +190,23 @@ function requestStatusVariant(
   }
 }
 
+const DATETIME_MEDIUM_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
+const DATE_MEDIUM_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+})
+
 function formatDate(value: string | null) {
   if (!value) return 'Não definido'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return DATETIME_MEDIUM_FORMAT.format(new Date(value))
 }
 
 function formatDay(value: string | null) {
   if (!value) return null
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(
-    new Date(value),
-  )
+  return DATE_MEDIUM_FORMAT.format(new Date(value))
 }
 
 function formatRelativeSla(value: number | null) {

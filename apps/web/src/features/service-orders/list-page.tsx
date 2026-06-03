@@ -121,11 +121,13 @@ function formatDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleDateString('pt-BR') : '-'
 }
 
+const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+})
+
 function money(cents: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(cents / 100)
+  return BRL_FORMAT.format(cents / 100)
 }
 
 function serviceOrderPath(order: ServiceOrderListItem) {

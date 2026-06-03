@@ -14,20 +14,24 @@ interface InstallmentsBlockProps {
   maxRows?: number
 }
 
+const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+})
+
+const DATE_DMY_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+
 function formatBrl(cents: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(cents / 100)
+  return BRL_FORMAT.format(cents / 100)
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return null
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(value))
+  return DATE_DMY_FORMAT.format(new Date(value))
 }
 
 const INSTALLMENT_STATUS_LABEL: Record<ReceivableInstallmentStatus, string> = {
@@ -37,9 +41,7 @@ const INSTALLMENT_STATUS_LABEL: Record<ReceivableInstallmentStatus, string> = {
   VOID: 'Anulada',
 }
 
-function installmentToneClasses(
-  status: ReceivableInstallmentStatus,
-): string {
+function installmentToneClasses(status: ReceivableInstallmentStatus): string {
   switch (status) {
     case 'PAID':
       return 'text-emerald-600 border-emerald-500/40 bg-emerald-50'
@@ -59,8 +61,7 @@ function rowToneClasses(status: ReceivableInstallmentStatus): string {
 
 function sortInstallments(rows: FinancialInstallmentStatus[]) {
   return [...rows].sort((a, b) => {
-    const numericDelta =
-      (a.installmentNumber ?? 0) - (b.installmentNumber ?? 0)
+    const numericDelta = (a.installmentNumber ?? 0) - (b.installmentNumber ?? 0)
     if (numericDelta !== 0) return numericDelta
     const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0
     const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0

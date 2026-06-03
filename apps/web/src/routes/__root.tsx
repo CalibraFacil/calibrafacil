@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-router'
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { MotionConfig } from 'motion/react'
 import { Analytics } from '@vercel/analytics/react'
 
 import type { QueryClient } from '@tanstack/react-query'
@@ -42,14 +43,16 @@ function RootComponent() {
         storageKey="theme"
         forcedTheme={isLanding ? landingTheme : undefined}
       >
-        <SyncStatusProvider isDesktop={runtime.isDesktop}>
-          <OfflineBanner />
-          <NuqsAdapter>
-            <Outlet />
-          </NuqsAdapter>
-        </SyncStatusProvider>
-        {!runtime.isDesktop ? <Analytics /> : null}
-        <Toaster richColors position="top-center" />
+        <MotionConfig reducedMotion="user">
+          <SyncStatusProvider isDesktop={runtime.isDesktop}>
+            <OfflineBanner />
+            <NuqsAdapter>
+              <Outlet />
+            </NuqsAdapter>
+          </SyncStatusProvider>
+          {!runtime.isDesktop ? <Analytics /> : null}
+          <Toaster richColors position="top-center" />
+        </MotionConfig>
       </ThemeProvider>
     </QueryClientProvider>
   )

@@ -549,6 +549,7 @@ function rewriteRuntimeConditionals(
   let searchIndex = 0
 
   while (searchIndex < output.length) {
+    // react-doctor-disable-next-line react-doctor/js-set-map-lookups -- String.indexOf(substr, fromIndex) substring scan, not an array membership lookup
     const startIndex = output.indexOf('if_zero(', searchIndex)
     if (startIndex < 0) break
 

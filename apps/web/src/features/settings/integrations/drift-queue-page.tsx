@@ -51,12 +51,14 @@ function driftQueueQueryOptions() {
   })
 }
 
+const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
 function formatDate(value: string | null) {
   if (!value) return null
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return DATETIME_SHORT_FORMAT.format(new Date(value))
 }
 
 interface AcknowledgeDialogProps {
@@ -74,7 +76,9 @@ function AcknowledgeDialog({ open, linkId, onClose }: AcknowledgeDialogProps) {
   const mutation = useMutation({
     mutationFn: () => {
       if (linkId === null) throw new Error('Drift inválido')
-      return calibraApi.integrations.acknowledgeDrift(linkId, { reason: trimmed })
+      return calibraApi.integrations.acknowledgeDrift(linkId, {
+        reason: trimmed,
+      })
     },
     onSuccess: () => {
       toast.success('Divergência marcada como resolvida')
@@ -103,9 +107,8 @@ function AcknowledgeDialog({ open, linkId, onClose }: AcknowledgeDialogProps) {
         <DialogHeader>
           <DialogTitle>Marcar divergência como resolvida</DialogTitle>
           <DialogDescription>
-            Use quando a divergência foi tratada fora do CalibraFácil e não
-            deve mais aparecer na fila. O motivo fica registrado para
-            auditoria.
+            Use quando a divergência foi tratada fora do CalibraFácil e não deve
+            mais aparecer na fila. O motivo fica registrado para auditoria.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -168,8 +171,8 @@ export function IntegrationDriftQueuePage() {
           Divergências da integração financeira
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Registros locais sem correspondente remoto. Cada linha mostra o
-          objeto local, o provedor onde o remoto deveria existir, e a última
+          Registros locais sem correspondente remoto. Cada linha mostra o objeto
+          local, o provedor onde o remoto deveria existir, e a última
           verificação. Marque como resolvido quando a divergência tiver sido
           tratada externamente.
         </p>

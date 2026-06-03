@@ -4,11 +4,18 @@ import type {
 } from '@calibra-facil/shared'
 import { formatMoney } from '@calibra-facil/shared'
 
+const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+})
+
+const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
 export function formatTimelineDate(value?: string | null) {
   if (!value) return 'Não informado'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-  }).format(new Date(value))
+  return DATE_SHORT_FORMAT.format(new Date(value))
 }
 
 export function customerFinancialTimelineRow(
@@ -43,8 +50,7 @@ export function customerTimelineFreshnessLabel(
   if (!freshness) return 'Status local'
   if (!freshness.lastSyncedAt) return freshness.label
 
-  return `${freshness.label} em ${new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(freshness.lastSyncedAt))}`
+  return `${freshness.label} em ${DATETIME_SHORT_FORMAT.format(
+    new Date(freshness.lastSyncedAt),
+  )}`
 }

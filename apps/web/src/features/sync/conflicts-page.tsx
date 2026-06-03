@@ -359,9 +359,11 @@ function diffStateLabel(value: SyncConflictFieldDiff['state']) {
   return labels[value]
 }
 
+const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return DATETIME_SHORT_FORMAT.format(new Date(value))
 }

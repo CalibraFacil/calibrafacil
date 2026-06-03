@@ -872,8 +872,17 @@ export function ApprovedJobRecord({
               {job.certificateUrl ? (
                 <div className="space-y-3">
                   <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Abrir certificado em nova aba"
                     className="aspect-[3/4] cursor-pointer overflow-hidden rounded-lg bg-muted shadow-[0_1px_2px_rgba(15,23,42,0.08),0_16px_40px_rgba(15,23,42,0.08)] outline outline-1 outline-black/10 transition-[opacity,transform] hover:opacity-95 active:scale-[0.96] dark:outline-white/10"
                     onClick={handleDownloadCertificate}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        void handleDownloadCertificate()
+                      }
+                    }}
                   >
                     <iframe
                       src={`${certificatePreviewUrl ?? job.certificateUrl}#toolbar=0&navpanes=0`}

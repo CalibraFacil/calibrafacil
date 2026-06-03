@@ -49,6 +49,7 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    // react-doctor-disable-next-line react-doctor/click-events-have-key-events -- mouse-only convenience that forwards focus to the adjacent input; keyboard users tab directly to it
     <div
       role="group"
       data-slot="input-group-addon"

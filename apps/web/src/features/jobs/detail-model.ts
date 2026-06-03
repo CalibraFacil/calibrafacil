@@ -632,14 +632,15 @@ export function formatExpandedUncertainty(
   formulas: ReviewFormula[],
   displayUnitFor: (unit?: string | null) => string | undefined,
 ): string | null {
+  const formulasByOutputKey = new Map(
+    formulas.map((formula) => [formula.outputKey, formula]),
+  )
   for (const key of ['incerteza_expandida_apos', 'incerteza_expandida_antes']) {
     const values = numericValues(displayResults?.[key])
     if (values.length === 0) continue
 
     const max = Math.max(...values.map((value) => Math.abs(value)))
-    const unit = displayUnitFor(
-      formulas.find((formula) => formula.outputKey === key)?.unit,
-    )
+    const unit = displayUnitFor(formulasByOutputKey.get(key)?.unit)
     return `±${formatCalibrationValue(max)}${unit ? ` ${unit}` : ''}`
   }
 

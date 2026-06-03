@@ -534,7 +534,8 @@ function CheckoutFrame({ children }: { children: React.ReactNode }) {
           backgroundImage:
             'radial-gradient(circle, rgba(125,128,145,0.13) 1px, transparent 1px)',
           backgroundSize: '22px 22px',
-          maskImage: 'radial-gradient(120% 55% at 50% 0%, black, transparent 78%)',
+          maskImage:
+            'radial-gradient(120% 55% at 50% 0%, black, transparent 78%)',
           WebkitMaskImage:
             'radial-gradient(120% 55% at 50% 0%, black, transparent 78%)',
         }}
@@ -840,7 +841,9 @@ function TerminalStateDetails(props: {
         <div className="space-y-1">
           <p className="text-lg font-semibold">Pagamento confirmado</p>
           <p className="text-sm leading-6 text-muted-foreground">
-            {props.paidAt ? `Recebido em ${formatDateTime(props.paidAt)}. ` : ''}
+            {props.paidAt
+              ? `Recebido em ${formatDateTime(props.paidAt)}. `
+              : ''}
             Seu acesso foi liberado.
           </p>
         </div>
@@ -857,29 +860,29 @@ function TerminalStateDetails(props: {
 
   const content =
     props.state === 'EXPIRED'
+      ? {
+          title: 'Link expirado',
+          body: 'Peça uma nova emissão ao time comercial para continuar.',
+        }
+      : props.state === 'REVOKED'
         ? {
-            title: 'Link expirado',
-            body: 'Peça uma nova emissão ao time comercial para continuar.',
+            title: 'Oferta substituída',
+            body: 'Este link foi revogado e não aceita novas tentativas.',
           }
-        : props.state === 'REVOKED'
+        : props.state === 'OVERDUE'
           ? {
-              title: 'Oferta substituída',
-              body: 'Este link foi revogado e não aceita novas tentativas.',
+              title: 'Pagamento em atraso',
+              body: 'O vencimento foi ultrapassado. Solicite uma reemissão antes de tentar pagar.',
             }
-          : props.state === 'OVERDUE'
+          : props.state === 'REFUNDED'
             ? {
-                title: 'Pagamento em atraso',
-                body: 'O vencimento foi ultrapassado. Solicite uma reemissão antes de tentar pagar.',
+                title: 'Pagamento devolvido',
+                body: 'O pagamento foi estornado ou devolvido. Confirme os próximos passos com o laboratório.',
               }
-            : props.state === 'REFUNDED'
-              ? {
-                  title: 'Pagamento devolvido',
-                  body: 'O pagamento foi estornado ou devolvido. Confirme os próximos passos com o laboratório.',
-                }
-              : {
-                  title: 'Oferta cancelada',
-                  body: 'Esta oferta foi cancelada e o link não está mais disponível para pagamento.',
-                }
+            : {
+                title: 'Oferta cancelada',
+                body: 'Esta oferta foi cancelada e o link não está mais disponível para pagamento.',
+              }
 
   return (
     <Alert>
@@ -902,11 +905,13 @@ function paymentMethodLabel(method: 'PIX' | 'BOLETO' | 'CREDIT_CARD') {
   return 'Cartão de crédito'
 }
 
+const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+})
+
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value / 100)
+  return BRL_FORMAT.format(value / 100)
 }
 
 function formatDate(value: string | null | undefined) {
