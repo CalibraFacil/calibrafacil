@@ -1657,6 +1657,17 @@ export interface BackofficeApi {
   createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
   provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
   requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;
+  getUser<TResponse = unknown>(id: string): Promise<TResponse>;
+  listUserSessions<TResponse = unknown>(id: string): Promise<TResponse>;
+  revokeUserSession<TResponse = unknown>(
+    id: string,
+    sessionId: string,
+  ): Promise<TResponse>;
+  listUserActivity<TResponse = unknown>(
+    id: string,
+    input?: Record<string, unknown>,
+  ): Promise<TResponse>;
+  getPresence<TResponse = unknown>(): Promise<TResponse>;
   listAuditLog<TResponse = unknown>(
     input?: Record<string, unknown>,
   ): Promise<TResponse>;
