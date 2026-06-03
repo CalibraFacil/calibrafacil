@@ -97,6 +97,8 @@ type ApiRoutePath =
   | "/api/capa/:id/label"
   | "/api/capa/:id/verify"
   | "/api/capa/summary"
+  | "/api/authorized-signatories"
+  | "/api/authorized-signatories/:id/revoke"
   | "/api/certificate-numbering"
   | "/api/certificate-templates"
   | "/api/certificate-templates/:id/default"

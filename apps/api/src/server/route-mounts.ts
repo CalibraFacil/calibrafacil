@@ -5,6 +5,7 @@ import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
+import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { certificateTemplatesRouter } from "../routes/certificate-templates";
@@ -93,6 +94,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/nc", nonConformancesRouter)
     .route("/api/capa", capaRouter)
     .route("/api/environmental-limits", environmentalLimitsRouter)
+    .route("/api/authorized-signatories", authorizedSignatoriesRouter)
     .route("/api/competences", competencesRouter)
     .route("/api/training-records", trainingRecordsRouter)
     .route("/api/sessions", sessionsRouter)
