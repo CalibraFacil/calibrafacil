@@ -2392,6 +2392,34 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): the technician who
+      // executed — or the user who created — the calibration must not approve
+      // their own work. Auto-detected like the personnel-competence gate: it is
+      // enforced whenever the organization has another member, and a genuine
+      // solo lab (a single member) is exempt because separation of functions is
+      // physically impossible there.
+      const approverId = session.user.id;
+      if (
+        existing.technicianId === approverId ||
+        existing.createdBy === approverId
+      ) {
+        const [memberCount] = await db
+          .select({ total: count() })
+          .from(member)
+          .where(eq(member.organizationId, memberData.organizationId));
+
+        if ((memberCount?.total ?? 0) > 1) {
+          return c.json(
+            {
+              error:
+                "Separação de responsabilidades (ISO/IEC 17025): quem executou ou criou a calibração não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
+              code: "SELF_APPROVAL_BLOCKED",
+            },
+            403,
+          );
+        }
+      }
+
       // Check environmental conditions - block approval if out of limits without justification
       if (
         existing.environmentalSnapshot &&
