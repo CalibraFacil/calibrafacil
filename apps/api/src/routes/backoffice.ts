@@ -9,6 +9,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   ilike,
   inArray,
@@ -731,6 +732,18 @@ const AuditLogQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   cursor: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+// Single-user activity timeline (a scoped slice of the platformEventLog firehose
+// that /audit-log exposes; viewable at the backoffice-access level since it only
+// surfaces events about/by one user).
+const UserActivityQuerySchema = z.object({
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const RevokeUserSessionSchema = z.object({
+  sessionId: z.string().trim().min(1),
 });
 
 const ApprovalKindEnum = z.enum(["refund", "credit", "adjustment", "other"]);
@@ -2903,16 +2916,45 @@ export const backofficeRouter = new Hono<{
         membershipsByUser.set(row.userId, current);
       }
 
+      // Per-user session signals for observability, batched over the page's users
+      // (one grouped scan using session_userId_idx). lastLoginAt ≈ most recent
+      // session start; lastSeenAt ≈ most recent session refresh; isOnline = has a
+      // non-expired session right now.
+      const now = new Date();
+      const sessionAgg = userIds.length
+        ? await db
+            .select({
+              userId: authSession.userId,
+              lastLoginAt: max(authSession.createdAt),
+              lastSeenAt: max(authSession.updatedAt),
+              activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > ${now})`,
+            })
+            .from(authSession)
+            .where(inArray(authSession.userId, userIds))
+            .groupBy(authSession.userId)
+        : [];
+      const sessionAggByUser = new Map(
+        sessionAgg.map((row) => [row.userId, row]),
+      );
+
       return c.json({
-        users: users.map((user) => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          banned: user.banned,
-          createdAt: user.createdAt,
-          memberships: membershipsByUser.get(user.id) ?? [],
-        })),
+        users: users.map((user) => {
+          const agg = sessionAggByUser.get(user.id);
+          const activeSessionCount = Number(agg?.activeSessionCount ?? 0);
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            banned: user.banned,
+            createdAt: user.createdAt,
+            lastLoginAt: agg?.lastLoginAt ?? null,
+            lastSeenAt: agg?.lastSeenAt ?? null,
+            activeSessionCount,
+            isOnline: activeSessionCount > 0,
+            memberships: membershipsByUser.get(user.id) ?? [],
+          };
+        }),
         total: totalRows[0]?.total ?? 0,
         filters: {
           limit,
@@ -3036,6 +3078,7 @@ export const backofficeRouter = new Hono<{
   .use("/users/:id/role", requirePlatformAdmin)
   .use("/users/:id/ban", requirePlatformAdmin)
   .use("/users/:id/unban", requirePlatformAdmin)
+  .use("/users/:id/sessions/revoke", requirePlatformAdmin)
   .post("/users/:id/request-password-reset", async (c) => {
     const session = c.get("session");
     const userId = c.req.param("id");
@@ -3168,6 +3211,247 @@ export const backofficeRouter = new Hono<{
     });
 
     return c.json(result);
+  })
+  // ── User observability ────────────────────────────────────────────────────
+  // Single-user detail (profile + lab memberships + session signals), the
+  // per-user sessions list, the scoped activity timeline, and the platform-wide
+  // presence summary for the Comando dashboard. All read at backoffice-access
+  // level; only the session revoke (a force-logout) is platform-admin gated.
+  .get("/users/:id", async (c) => {
+    const id = c.req.param("id");
+    const target = await db.query.user.findFirst({
+      where: eq(userTable.id, id),
+    });
+
+    if (!target) {
+      return c.json({ error: "Usuário não encontrado" }, 404);
+    }
+
+    const memberships = await db
+      .select({
+        organizationId: organization.id,
+        organizationName: organization.name,
+        organizationSlug: organization.slug,
+        memberRole: member.role,
+      })
+      .from(member)
+      .innerJoin(
+        organization,
+        and(
+          eq(member.organizationId, organization.id),
+          eq(organization.type, "LAB"),
+        ),
+      )
+      .where(eq(member.userId, id))
+      .orderBy(asc(organization.name));
+
+    const now = new Date();
+    const [agg] = await db
+      .select({
+        lastLoginAt: max(authSession.createdAt),
+        lastSeenAt: max(authSession.updatedAt),
+        activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > ${now})`,
+      })
+      .from(authSession)
+      .where(eq(authSession.userId, id));
+
+    const activeSessionCount = Number(agg?.activeSessionCount ?? 0);
+
+    return c.json({
+      user: {
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        role: target.role,
+        banned: target.banned,
+        createdAt: target.createdAt,
+        lastLoginAt: agg?.lastLoginAt ?? null,
+        lastSeenAt: agg?.lastSeenAt ?? null,
+        activeSessionCount,
+        isOnline: activeSessionCount > 0,
+        memberships,
+      },
+    });
+  })
+  .get("/users/:id/sessions", async (c) => {
+    const id = c.req.param("id");
+    const now = new Date();
+    const rows = await db
+      .select({
+        id: authSession.id,
+        ipAddress: authSession.ipAddress,
+        userAgent: authSession.userAgent,
+        createdAt: authSession.createdAt,
+        updatedAt: authSession.updatedAt,
+        expiresAt: authSession.expiresAt,
+        activeOrganizationId: authSession.activeOrganizationId,
+        impersonatedBy: authSession.impersonatedBy,
+      })
+      .from(authSession)
+      .where(eq(authSession.userId, id))
+      .orderBy(desc(authSession.updatedAt));
+
+    return c.json({
+      sessions: rows.map((s) => ({
+        id: s.id,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent,
+        loginAt: s.createdAt,
+        lastActivityAt: s.updatedAt,
+        expiresAt: s.expiresAt,
+        isCurrentlyActive: s.expiresAt > now,
+        isImpersonated: Boolean(s.impersonatedBy),
+        // Approximate: Better Auth refreshes session.updatedAt on use, but with no
+        // explicit logout the true online time is unknowable without a heartbeat.
+        approxDurationMs: s.updatedAt.getTime() - s.createdAt.getTime(),
+        activeOrganizationId: s.activeOrganizationId,
+      })),
+    });
+  })
+  .get(
+    "/users/:id/activity",
+    zValidator("query", UserActivityQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("query");
+      const limit = input.limit ?? 50;
+
+      const conditions = [
+        or(
+          eq(platformEventLog.actorUserId, id),
+          eq(platformEventLog.targetUserId, id),
+        )!,
+      ];
+      if (input.cursor) conditions.push(lt(platformEventLog.id, input.cursor));
+
+      const rows = await db
+        .select({
+          id: platformEventLog.id,
+          action: platformEventLog.action,
+          entityType: platformEventLog.entityType,
+          entityId: platformEventLog.entityId,
+          details: platformEventLog.details,
+          createdAt: platformEventLog.createdAt,
+          actorUserId: platformEventLog.actorUserId,
+          targetUserId: platformEventLog.targetUserId,
+        })
+        .from(platformEventLog)
+        .where(and(...conditions))
+        .orderBy(desc(platformEventLog.id))
+        .limit(limit + 1);
+
+      const userIds = Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            [row.actorUserId, row.targetUserId].filter(
+              (value): value is string => Boolean(value),
+            ),
+          ),
+        ),
+      );
+      const users =
+        userIds.length > 0
+          ? await db
+              .select({
+                id: userTable.id,
+                name: userTable.name,
+                email: userTable.email,
+              })
+              .from(userTable)
+              .where(inArray(userTable.id, userIds))
+          : [];
+      const usersById = new Map(users.map((entry) => [entry.id, entry]));
+
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit);
+      const data = page.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        details: row.details,
+        createdAt: row.createdAt,
+        actorUser: row.actorUserId
+          ? (usersById.get(row.actorUserId) ?? null)
+          : null,
+        targetUser: row.targetUserId
+          ? (usersById.get(row.targetUserId) ?? null)
+          : null,
+      }));
+
+      const last = page.at(-1);
+      const nextCursor = hasMore && last ? last.id : null;
+
+      return c.json({ data, nextCursor });
+    },
+  )
+  .post(
+    "/users/:id/sessions/revoke",
+    zValidator("json", RevokeUserSessionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const { sessionId } = c.req.valid("json");
+
+      const [target] = await db
+        .select({
+          id: authSession.id,
+          userId: authSession.userId,
+          ipAddress: authSession.ipAddress,
+          userAgent: authSession.userAgent,
+          impersonatedBy: authSession.impersonatedBy,
+        })
+        .from(authSession)
+        .where(eq(authSession.id, sessionId))
+        .limit(1);
+
+      if (!target || target.userId !== id) {
+        return c.json({ error: "Sessão não encontrada" }, 404);
+      }
+
+      await db.delete(authSession).where(eq(authSession.id, target.id));
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId: id,
+        action: "backoffice.user.session.revoked",
+        entityType: "session",
+        entityId: sessionId,
+        details: {
+          ipAddress: target.ipAddress,
+          userAgent: target.userAgent,
+          impersonated: Boolean(target.impersonatedBy),
+        },
+      });
+
+      return c.json({ ok: true });
+    },
+  )
+  .get("/presence", async (c) => {
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [activeNow, logins24h, logins7d] = await Promise.all([
+      db
+        .select({ value: sql<number>`count(distinct ${authSession.userId})` })
+        .from(authSession)
+        .where(gt(authSession.expiresAt, now)),
+      db
+        .select({ value: sql<number>`count(distinct ${authSession.userId})` })
+        .from(authSession)
+        .where(gte(authSession.createdAt, dayAgo)),
+      db
+        .select({ value: sql<number>`count(distinct ${authSession.userId})` })
+        .from(authSession)
+        .where(gte(authSession.createdAt, weekAgo)),
+    ]);
+
+    return c.json({
+      activeUsersNow: Number(activeNow[0]?.value ?? 0),
+      logins24h: Number(logins24h[0]?.value ?? 0),
+      logins7d: Number(logins7d[0]?.value ?? 0),
+    });
   })
   .onError((error, c) => {
     if (error instanceof Response) {

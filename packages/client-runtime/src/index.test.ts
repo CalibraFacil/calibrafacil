@@ -379,6 +379,31 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getUser",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listUserSessions",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "revokeUserSession",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listUserActivity",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getPresence",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "listAuditLog",
           "namespace": "backoffice",
           "policy": "cloud-only",
