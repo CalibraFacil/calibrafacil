@@ -8,11 +8,11 @@
   "rewrites": [
     {
       "source": "/blog",
-      "destination": "https://blog.calibrafacil.com/blog"
+      "destination": "https://calibra-facil-cms.vercel.app/blog"
     },
     {
       "source": "/blog/:path*",
-      "destination": "https://blog.calibrafacil.com/blog/:path*"
+      "destination": "https://calibra-facil-cms.vercel.app/blog/:path*"
     },
     {
       "source": "/(.*)",
