@@ -76,10 +76,9 @@ export function buildInitialSampleData(
         for (const source of quantity.uncertainty.observations ?? []) {
           addMeasurementSourceSample(sample, source)
         }
-        if (quantity.uncertainty.observationsInputKey) {
-          sample[quantity.uncertainty.observationsInputKey] = sample[
-            quantity.uncertainty.observationsInputKey
-          ] ?? [0, 0]
+        const observationsInputKey = quantity.uncertainty.observationsInputKey
+        if (observationsInputKey) {
+          sample[observationsInputKey] = sample[observationsInputKey] ?? [0, 0]
         }
       }
     }

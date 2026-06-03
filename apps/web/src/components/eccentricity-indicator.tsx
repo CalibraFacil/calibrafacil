@@ -216,7 +216,6 @@ export function EccentricityIndicator({
                             aria-pressed={selected}
                             aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                             aria-disabled={!isInteractive}
-                            aria-readonly={readOnly || undefined}
                             title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                             onClick={() => togglePosition(option.value)}
                             className={cn(
@@ -291,7 +290,6 @@ export function EccentricityIndicator({
                           aria-pressed={selected}
                           aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                           aria-disabled={!isInteractive}
-                          aria-readonly={readOnly || undefined}
                           title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                           onClick={() => togglePosition(option.value)}
                           className={cn(

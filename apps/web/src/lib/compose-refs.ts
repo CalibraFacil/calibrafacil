@@ -60,7 +60,7 @@ function composeRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
  */
 function useComposedRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- refs is the dependency list by design.
-  return React.useCallback(composeRefs(...refs), refs)
+  return React.useCallback(composeRefs(...refs), refs) // react-doctor-disable-line react-doctor/exhaustive-deps -- composeRefs is built from the spread refs, which are the dependency list by design
 }
 
 export { composeRefs, useComposedRefs }

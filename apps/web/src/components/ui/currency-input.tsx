@@ -11,12 +11,16 @@ import { cn } from '@/lib/utils'
  * decimal mark). The pretty grouped/symbol rendering is the job of
  * `<Money>`/`formatFinanceMoney`; this is the edit affordance only.
  */
+const EDITING_NUMBER_FORMAT = new Intl.NumberFormat('pt-BR', {
+  useGrouping: false,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
 function formatCentsForEditing(cents: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    useGrouping: false,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format((Number.isFinite(cents) ? cents : 0) / 100)
+  return EDITING_NUMBER_FORMAT.format(
+    (Number.isFinite(cents) ? cents : 0) / 100,
+  )
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -55,13 +59,13 @@ export function CurrencyInput({
     formatCentsForEditing(valueCents),
   )
 
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+  function updateValueFromInput(event: React.ChangeEvent<HTMLInputElement>) {
     const next = event.target.value
     setDisplay(next)
     onValueChange(parseFinanceCurrencyInputToCents(next))
   }
 
-  function handleBlur(event: React.FocusEvent<HTMLInputElement>) {
+  function reformatOnBlur(event: React.FocusEvent<HTMLInputElement>) {
     const cents = parseFinanceCurrencyInputToCents(display)
     setDisplay(formatCentsForEditing(cents))
     onValueChange(cents)
@@ -80,8 +84,8 @@ export function CurrencyInput({
         type="text"
         inputMode="decimal"
         value={display}
-        onChange={handleChange}
-        onBlur={handleBlur}
+        onChange={updateValueFromInput}
+        onBlur={reformatOnBlur}
         className={cn('pl-10 text-right font-mono tabular-nums', className)}
       />
     </div>

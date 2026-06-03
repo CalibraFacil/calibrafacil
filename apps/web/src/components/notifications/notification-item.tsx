@@ -104,10 +104,9 @@ export function NotificationItem({
   const content = (
     <div
       className={cn(
-        'flex items-start gap-3 p-3 rounded-md transition-colors cursor-pointer',
+        'flex items-start gap-3 p-3 rounded-md transition-colors',
         isUnread ? 'bg-muted/50' : 'hover:bg-muted/30',
       )}
-      onClick={onClick}
     >
       <div className={cn('mt-0.5', iconColor)}>
         <HugeiconsIcon icon={icon} className="h-4 w-4" />
@@ -136,11 +135,23 @@ export function NotificationItem({
 
   if (notification.actionUrl) {
     return (
-      <Link to={notification.actionUrl} onClick={onClick}>
+      <Link
+        to={notification.actionUrl}
+        onClick={onClick}
+        className="block cursor-pointer"
+      >
         {content}
       </Link>
     )
   }
 
-  return content
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full cursor-pointer text-left"
+    >
+      {content}
+    </button>
+  )
 }

@@ -327,11 +327,13 @@ export function getGovernanceActivityDescription(
   return 'Alteração registrada na governança multiunidade.'
 }
 
+const GOVERNANCE_ACTIVITY_TIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
 export function formatGovernanceActivityTime(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return GOVERNANCE_ACTIVITY_TIME_FORMAT.format(new Date(value))
 }
 
 export function createAssignmentDrafts(
@@ -342,10 +344,11 @@ export function createAssignmentDrafts(
 
   for (const member of members) {
     drafts[member.id] = {}
+    const rolesByUnitId = new Map(
+      member.assignments.map((assignment) => [assignment.unitId, assignment]),
+    )
     for (const unit of units) {
-      drafts[member.id][unit.id] =
-        member.assignments.find((assignment) => assignment.unitId === unit.id)
-          ?.role ?? 'none'
+      drafts[member.id][unit.id] = rolesByUnitId.get(unit.id)?.role ?? 'none'
     }
   }
 

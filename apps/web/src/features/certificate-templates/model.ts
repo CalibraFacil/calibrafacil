@@ -169,15 +169,17 @@ export function buildXlsxAssignmentPayload(draft: XlsxAssignmentDraft) {
   }
 }
 
+const CERTIFICATE_TEMPLATE_DATETIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
 export function formatCertificateTemplateDateTime(
   value?: string | null,
 ): string {
   if (!value) return 'Nunca'
 
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return CERTIFICATE_TEMPLATE_DATETIME_FORMAT.format(new Date(value))
 }
 
 export function getXlsxStatusLabel(status?: string | null): string {

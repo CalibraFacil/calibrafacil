@@ -49,9 +49,10 @@ function ChartContainer({
 }) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, '')}`
+  const chartContextValue = React.useMemo(() => ({ config }), [config])
 
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext.Provider value={chartContextValue}>
       <div
         data-slot="chart"
         data-chart={chartId}
@@ -81,6 +82,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 
   return (
     <style
+      // react-doctor-disable-next-line react-doctor/no-danger -- CSS variables generated from developer-supplied ChartConfig (theme/color), never user input
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(

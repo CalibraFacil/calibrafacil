@@ -287,20 +287,21 @@ function rowsAreEqual(
   left: Array<Record<string, unknown>>,
   right: Array<Record<string, unknown>>,
 ) {
-  if (left.length !== right.length) return false
+  return (
+    left.length === right.length &&
+    left.every((leftRow, rowIndex) => {
+      const rightRow = right[rowIndex] ?? {}
+      const keys = new Set([...Object.keys(leftRow), ...Object.keys(rightRow)])
 
-  return left.every((leftRow, rowIndex) => {
-    const rightRow = right[rowIndex] ?? {}
-    const keys = new Set([...Object.keys(leftRow), ...Object.keys(rightRow)])
-
-    for (const key of keys) {
-      if (!valuesAreEqual(leftRow[key], rightRow[key])) {
-        return false
+      for (const key of keys) {
+        if (!valuesAreEqual(leftRow[key], rightRow[key])) {
+          return false
+        }
       }
-    }
 
-    return true
-  })
+      return true
+    })
+  )
 }
 
 function getWeighingRangeResolver(field: MethodInputField) {
@@ -449,13 +450,16 @@ export function applyTableWeighingRangeResolvers(
   return rowsAreEqual(rows, resolvedRows) ? rows : resolvedRows
 }
 
+const EMPTY_CERTIFIED_VALUE_OPTIONS: CertifiedValueOption[] = []
+const EMPTY_MASS_COMPOSITION_OPTIONS: MassCompositionOption[] = []
+
 export function TableInputRenderer({
   field,
   value,
   onChange,
   disabled = false,
-  certifiedValueOptions = [],
-  massCompositionOptions = [],
+  certifiedValueOptions = EMPTY_CERTIFIED_VALUE_OPTIONS,
+  massCompositionOptions = EMPTY_MASS_COMPOSITION_OPTIONS,
   assetSpecifications,
   phaseMode = 'before_and_after',
 }: TableInputRendererProps) {
@@ -1059,18 +1063,15 @@ function NumberCellWithPicker({
   const [open, setOpen] = useState(false)
 
   // Group options by standard name
-    const groupedOptions = certifiedValueOptions.reduce<
-      Record<string, CertifiedValueOption[]>
-    >(
-      (acc, opt) => {
-        if (!acc[opt.standardName]) {
-          acc[opt.standardName] = []
-      }
-      acc[opt.standardName].push(opt)
-      return acc
-    },
-      {},
-    )
+  const groupedOptions = certifiedValueOptions.reduce<
+    Record<string, CertifiedValueOption[]>
+  >((acc, opt) => {
+    if (!acc[opt.standardName]) {
+      acc[opt.standardName] = []
+    }
+    acc[opt.standardName].push(opt)
+    return acc
+  }, {})
 
   return (
     <div className="flex gap-1">

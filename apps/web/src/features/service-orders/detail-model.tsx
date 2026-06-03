@@ -124,11 +124,13 @@ export const SERVICE_ORDER_EVENT_LABELS: Record<string, string> = {
   'service_order.certificate_linked': 'Calibração vinculada',
 }
 
+const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+})
+
 export function money(cents: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(cents / 100)
+  return BRL_FORMAT.format(cents / 100)
 }
 
 type FinancialStatusBadgeVariant =
@@ -162,19 +164,23 @@ export function financialStatusBadgeVariant(
   }
 }
 
+const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
+const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+})
+
 export function formatDateTime(value?: string | null) {
   if (!value) return 'Não informado'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  return DATETIME_SHORT_FORMAT.format(new Date(value))
 }
 
 export function formatDate(value?: string | null) {
   if (!value) return 'Não informado'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-  }).format(new Date(value))
+  return DATE_SHORT_FORMAT.format(new Date(value))
 }
 
 export function serviceOrderFinancialStatusSummary(

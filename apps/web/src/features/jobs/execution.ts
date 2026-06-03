@@ -320,6 +320,9 @@ export interface OfficialCompiledExecution {
 }
 
 const CIRCULAR_ECCENTRICITY_LOAD_POSITIONS = ['A', 'B', 'C', 'D', 'E']
+const CIRCULAR_ECCENTRICITY_LOAD_POSITION_SET = new Set(
+  CIRCULAR_ECCENTRICITY_LOAD_POSITIONS,
+)
 
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -411,20 +414,17 @@ export function getCircularEccentricityLoadPositions(
 
   if (!positionColumn) return undefined
 
-  const positions: string[] = []
+  const positions = new Set<string>()
   for (const row of rows) {
     const value = String(row[positionColumn.key] ?? '')
       .trim()
       .toUpperCase()
-    if (
-      CIRCULAR_ECCENTRICITY_LOAD_POSITIONS.includes(value) &&
-      !positions.includes(value)
-    ) {
-      positions.push(value)
+    if (CIRCULAR_ECCENTRICITY_LOAD_POSITION_SET.has(value)) {
+      positions.add(value)
     }
   }
 
-  return positions.length > 0 ? positions : undefined
+  return positions.size > 0 ? [...positions] : undefined
 }
 
 export function getAssetIndicatorPosition(job: JobData) {
@@ -472,14 +472,17 @@ export function normalizeExecutionFormData({
   displayAssetSpecifications: Record<string, unknown> | null | undefined
 }): Record<string, unknown> {
   const normalized: Record<string, unknown> = {}
-  const manualKeys = new Set(manualFields.map((field) => field.key))
+  const manualFieldsByKey = new Map(
+    manualFields.map((field) => [field.key, field]),
+  )
+  const displayFieldsByKey = new Map(
+    displayManualFields.map((field) => [field.key, field]),
+  )
 
   for (const [key, value] of Object.entries(data)) {
-    const field = manualFields.find((candidate) => candidate.key === key)
-    const displayField = displayManualFields.find(
-      (candidate) => candidate.key === key,
-    )
-    if (!manualKeys.has(key) || !field) {
+    const field = manualFieldsByKey.get(key)
+    const displayField = displayFieldsByKey.get(key)
+    if (!field) {
       continue
     }
 

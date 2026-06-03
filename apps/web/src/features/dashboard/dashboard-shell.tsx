@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Outlet, useLocation } from '@tanstack/react-router'
 import {
   useActiveOrganization,
@@ -60,6 +61,14 @@ export function DashboardLayout() {
     cloudOnlyUnavailable &&
     isCloudOnlyDashboardPath(pathname)
 
+  const dashboardContextValue = useMemo(
+    () => ({
+      isContextSwitching,
+      activeOrganizationId: effectiveActiveOrganizationId,
+    }),
+    [isContextSwitching, effectiveActiveOrganizationId],
+  )
+
   if (shouldShowOnboarding) {
     return <DashboardOnboardingState />
   }
@@ -69,12 +78,7 @@ export function DashboardLayout() {
   }
 
   return (
-    <DashboardContextStateContext.Provider
-      value={{
-        isContextSwitching,
-        activeOrganizationId: effectiveActiveOrganizationId,
-      }}
-    >
+    <DashboardContextStateContext.Provider value={dashboardContextValue}>
       <DashboardLayoutMountMarker />
       {preferredDashboardOrganization ? (
         <PersistDashboardOrgSelection

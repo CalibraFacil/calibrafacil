@@ -33,13 +33,11 @@ import {
   StaggerItem,
 } from '@/components/instrument-panel'
 import { methodRouteId } from '@/lib/route-identifiers'
+import { formatFinanceMoney } from '@/lib/finance-formatters'
 
 function formatPrice(priceInCents: number | null, currency: string): string {
   if (priceInCents === null) return 'Sob consulta'
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: currency || 'BRL',
-  }).format(priceInCents / 100)
+  return formatFinanceMoney(priceInCents, currency || 'BRL')
 }
 
 function getMethodRouteParam(service: ServiceDetail): string {

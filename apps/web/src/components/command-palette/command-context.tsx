@@ -79,15 +79,15 @@ export function CommandPaletteProvider({
   const activePage = pages[pages.length - 1] ?? 'root'
 
   // Compute context actions based on current route
+  const pathname = location.pathname
   const contextActions = React.useMemo(() => {
-    const pathname = location.pathname
     for (const config of contextActionsRegistry) {
       if (config.routePattern.test(pathname)) {
         return config.actions
       }
     }
     return []
-  }, [location.pathname, contextActionsRegistry])
+  }, [pathname, contextActionsRegistry])
 
   const registerContextActions = React.useCallback(
     (config: ContextActionsConfig) => {
@@ -170,20 +170,33 @@ export function CommandPaletteProvider({
     }
   })
 
+  const contextValue = React.useMemo(
+    () => ({
+      open,
+      setOpen,
+      searchValue,
+      setSearchValue,
+      contextActions,
+      registerContextActions,
+      pages,
+      setPages,
+      activePage,
+    }),
+    [
+      open,
+      setOpen,
+      searchValue,
+      setSearchValue,
+      contextActions,
+      registerContextActions,
+      pages,
+      setPages,
+      activePage,
+    ],
+  )
+
   return (
-    <CommandPaletteContext.Provider
-      value={{
-        open,
-        setOpen,
-        searchValue,
-        setSearchValue,
-        contextActions,
-        registerContextActions,
-        pages,
-        setPages,
-        activePage,
-      }}
-    >
+    <CommandPaletteContext.Provider value={contextValue}>
       {children}
     </CommandPaletteContext.Provider>
   )

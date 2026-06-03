@@ -21,6 +21,7 @@ import {
 import type { ServiceListItem } from '@/features/services/types'
 import { cn } from '@/lib/utils'
 import { methodRouteId, serviceRouteId } from '@/lib/route-identifiers'
+import { formatFinanceMoney } from '@/lib/finance-formatters'
 
 export type Service = ServiceListItem
 
@@ -34,10 +35,7 @@ function formatPrice(priceInCents: number | null, currency: string): string {
     return 'Sob consulta'
   }
 
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: currency || 'BRL',
-  }).format(priceInCents / 100)
+  return formatFinanceMoney(priceInCents, currency || 'BRL')
 }
 
 function formatTat(tat: number | null): string {

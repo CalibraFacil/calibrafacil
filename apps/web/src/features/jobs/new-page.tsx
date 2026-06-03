@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { DatePicker } from '@/components/ui/date-picker'
+import { formatFinanceMoney } from '@/lib/finance-formatters'
 import {
   Field,
   FieldDescription,
@@ -50,10 +51,7 @@ function formatPrice(priceInCents: number | null, currency: string): string {
     return 'Sob consulta'
   }
 
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: currency || 'BRL',
-  }).format(priceInCents / 100)
+  return formatFinanceMoney(priceInCents, currency || 'BRL')
 }
 
 export function NewJobPage() {

@@ -86,12 +86,14 @@ function weighingRangesFromUnknown(value: unknown) {
  * Dynamic form component that renders specification fields based on asset type definition.
  * Supports text, number (with unit addon), and select field types.
  */
+const EMPTY_ERRORS: Record<string, string> = {}
+
 export function DynamicSpecsForm({
   definition,
   value,
   onChange,
   disabled = false,
-  errors = {},
+  errors = EMPTY_ERRORS,
   activeMassUnit = null,
 }: DynamicSpecsFormProps) {
   const updateField = (key: string, fieldValue: unknown) => {

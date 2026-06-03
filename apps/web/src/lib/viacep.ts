@@ -31,17 +31,15 @@ type ViaCepResponse = {
   erro?: boolean
 }
 
-const ViaCepResponseSchema = z
-  .object({
-    cep: z.string().optional(),
-    logradouro: z.string().optional(),
-    complemento: z.string().optional(),
-    bairro: z.string().optional(),
-    localidade: z.string().optional(),
-    uf: z.string().optional(),
-    erro: z.boolean().optional(),
-  })
-  .passthrough()
+const ViaCepResponseSchema = z.looseObject({
+  cep: z.string().optional(),
+  logradouro: z.string().optional(),
+  complemento: z.string().optional(),
+  bairro: z.string().optional(),
+  localidade: z.string().optional(),
+  uf: z.string().optional(),
+  erro: z.boolean().optional(),
+})
 
 export type ViaCepLookupStatus =
   | 'idle'
@@ -147,6 +145,7 @@ export function useViaCepLookup({
         setStatus('loading')
 
         try {
+          // react-doctor-disable-next-line react-doctor/async-defer-await -- the post-await guard discards results aborted mid-fetch; it cannot run before the await
           const address = await queryClient.fetchQuery({
             queryKey: ['viacep', cepDigits],
             queryFn: () => fetchViaCepAddress(cepDigits, controller.signal),

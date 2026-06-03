@@ -29,13 +29,15 @@ interface MarginEnvelope {
   byService: MarginRow[]
 }
 
+const PERCENT_FORMAT = new Intl.NumberFormat('pt-BR', {
+  style: 'percent',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+})
+
 function formatPercent(value: number | null) {
   if (value === null) return '—'
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value / 100)
+  return PERCENT_FORMAT.format(value / 100)
 }
 
 function marginTone(cents: number) {
@@ -99,9 +101,7 @@ const marginColumns: ColumnDef<MarginRow, unknown>[] = [
   {
     accessorKey: 'marginPercent',
     id: 'marginPercent',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="%" />
-    ),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="%" />,
     meta: { label: '%' },
     cell: ({ row }) => (
       <div className="text-right font-mono tabular-nums text-muted-foreground">

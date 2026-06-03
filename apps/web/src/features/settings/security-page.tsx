@@ -21,6 +21,11 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 
+const SESSION_DATETIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
 export function SecuritySettingsPage() {
   const {
     session,
@@ -74,10 +79,7 @@ export function SecuritySettingsPage() {
   }
 
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('pt-BR', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(date)
+    return SESSION_DATETIME_FORMAT.format(date)
   }
 
   const parseUserAgent = (userAgent: string | null | undefined) => {
