@@ -2,9 +2,9 @@
  * @see https://github.com/radix-ui/primitives/blob/main/packages/react/compose-refs/src/compose-refs.tsx
  */
 
-import * as React from 'react'
+import { Ref, RefCallback, useCallback } from 'react'
 
-type PossibleRef<T> = React.Ref<T> | undefined
+type PossibleRef<T> = Ref<T> | undefined
 
 /**
  * Set a given ref to a given value
@@ -24,7 +24,7 @@ function setRef<T>(ref: PossibleRef<T>, value: T) {
  * A utility to compose multiple refs together
  * Accepts callback refs and RefObject(s)
  */
-function composeRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
+function composeRefs<T>(...refs: PossibleRef<T>[]): RefCallback<T> {
   return (node) => {
     let hasCleanup = false
     const cleanups = refs.map((ref) => {
@@ -58,9 +58,9 @@ function composeRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
  * A custom hook that composes multiple refs
  * Accepts callback refs and RefObject(s)
  */
-function useComposedRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
+function useComposedRefs<T>(...refs: PossibleRef<T>[]): RefCallback<T> {
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- refs is the dependency list by design.
-  return React.useCallback(composeRefs(...refs), refs) // react-doctor-disable-line react-doctor/exhaustive-deps -- composeRefs is built from the spread refs, which are the dependency list by design
+  return useCallback(composeRefs(...refs), refs) // react-doctor-disable-line react-doctor/exhaustive-deps -- composeRefs is built from the spread refs, which are the dependency list by design
 }
 
 export { composeRefs, useComposedRefs }

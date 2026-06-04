@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ComponentProps, useState } from 'react'
 import { Calendar01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -32,7 +32,7 @@ interface DatePickerProps {
   presets?: readonly DatePickerPreset[]
   /** Calendar props to pass through */
   calendarProps?: Omit<
-    React.ComponentProps<typeof Calendar>,
+    ComponentProps<typeof Calendar>,
     'mode' | 'selected' | 'onSelect'
   >
 }
@@ -53,9 +53,9 @@ function DatePicker({
   presets,
   calendarProps,
 }: DatePickerProps) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = useState(false)
   // Controlled so presets can move the visible month onto the chosen date.
-  const [month, setMonth] = React.useState<Date>(() => value ?? new Date())
+  const [month, setMonth] = useState<Date>(() => value ?? new Date())
   const hasPresets = Boolean(presets && presets.length > 0)
 
   function handleOpenChange(next: boolean) {

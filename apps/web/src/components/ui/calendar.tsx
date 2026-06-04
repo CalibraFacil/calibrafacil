@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ComponentProps, useCallback } from 'react'
 import {
   DayPicker,
   getDefaultClassNames,
@@ -23,8 +23,8 @@ function Calendar({
   formatters,
   components,
   ...props
-}: React.ComponentProps<typeof DayPicker> & {
-  buttonVariant?: React.ComponentProps<typeof Button>['variant']
+}: ComponentProps<typeof DayPicker> & {
+  buttonVariant?: ComponentProps<typeof Button>['variant']
 }) {
   const defaultClassNames = getDefaultClassNames()
 
@@ -198,10 +198,10 @@ function CalendarDayButton({
   day,
   modifiers,
   ...props
-}: React.ComponentProps<typeof DayButton>) {
+}: ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames()
 
-  const ref = React.useCallback(
+  const ref = useCallback(
     (node: HTMLButtonElement | null) => {
       if (node && modifiers.focused) {
         node.focus()

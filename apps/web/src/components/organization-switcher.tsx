@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -54,7 +54,7 @@ export function OrganizationSwitcher() {
     hasMultiUnit,
   } = useDashboardUnits()
 
-  const organizations = React.useMemo(() => {
+  const organizations = useMemo(() => {
     if (!allOrganizations) return []
     return allOrganizations.filter((org) => org.type !== 'CLIENT')
   }, [allOrganizations])

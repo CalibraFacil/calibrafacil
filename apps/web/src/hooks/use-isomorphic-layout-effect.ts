@@ -1,5 +1,4 @@
-import * as React from 'react'
-
-const useIsomorphicLayoutEffect = React.useLayoutEffect
+import { useLayoutEffect } from 'react'
+const useIsomorphicLayoutEffect = useLayoutEffect
 
 export { useIsomorphicLayoutEffect }

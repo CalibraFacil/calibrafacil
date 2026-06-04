@@ -1,5 +1,4 @@
-import * as React from 'react'
-
+import { ChangeEvent, ComponentProps, FocusEvent, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { parseFinanceCurrencyInputToCents } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
@@ -30,7 +29,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 }
 
 type CurrencyInputProps = Omit<
-  React.ComponentProps<typeof Input>,
+  ComponentProps<typeof Input>,
   'value' | 'defaultValue' | 'onChange' | 'type' | 'inputMode'
 > & {
   /** Current amount in cents — the single value the parent owns. */
@@ -55,17 +54,17 @@ export function CurrencyInput({
   onBlur,
   ...props
 }: CurrencyInputProps) {
-  const [display, setDisplay] = React.useState(() =>
+  const [display, setDisplay] = useState(() =>
     formatCentsForEditing(valueCents),
   )
 
-  function updateValueFromInput(event: React.ChangeEvent<HTMLInputElement>) {
+  function updateValueFromInput(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.value
     setDisplay(next)
     onValueChange(parseFinanceCurrencyInputToCents(next))
   }
 
-  function reformatOnBlur(event: React.FocusEvent<HTMLInputElement>) {
+  function reformatOnBlur(event: FocusEvent<HTMLInputElement>) {
     const cents = parseFinanceCurrencyInputToCents(display)
     setDisplay(formatCentsForEditing(cents))
     onValueChange(cents)

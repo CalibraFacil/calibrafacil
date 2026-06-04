@@ -1,10 +1,10 @@
-import * as React from "react";
+import { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface FeatureGateProps {
   feature: string;
   isEnabled: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
   labName?: string;
 }
 
@@ -51,7 +51,7 @@ export function FeatureHidden({
   children,
 }: {
   isEnabled: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   if (!isEnabled) {
     return null;

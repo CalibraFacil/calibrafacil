@@ -1,6 +1,6 @@
 'use client'
 
-import * as React from 'react'
+import { ComponentProps, ReactNode } from 'react'
 import { Select as SelectPrimitive } from '@base-ui/react/select'
 
 import { cn } from '@/lib/utils'
@@ -28,7 +28,7 @@ function SelectValue({
   className,
   placeholder: _placeholder,
   ...props
-}: SelectPrimitive.Value.Props & { placeholder?: React.ReactNode }) {
+}: SelectPrimitive.Value.Props & { placeholder?: ReactNode }) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
@@ -172,7 +172,7 @@ function SelectSeparator({
 function SelectScrollUpButton({
   className,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollUpArrow>) {
+}: ComponentProps<typeof SelectPrimitive.ScrollUpArrow>) {
   return (
     <SelectPrimitive.ScrollUpArrow
       data-slot="select-scroll-up-button"
@@ -190,7 +190,7 @@ function SelectScrollUpButton({
 function SelectScrollDownButton({
   className,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollDownArrow>) {
+}: ComponentProps<typeof SelectPrimitive.ScrollDownArrow>) {
   return (
     <SelectPrimitive.ScrollDownArrow
       data-slot="select-scroll-down-button"
