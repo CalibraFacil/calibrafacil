@@ -20,7 +20,7 @@
   "license": "ISC",
   "dependencies": {
     "@calibra-facil/email": "workspace:*",
-    "@react-email/components": "^1.0.2",
+    "@react-email/components": "1.0.12",
     "@react-email/render": "^2.0.8",
     "resend": "^6.12.4"
   },
