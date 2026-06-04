@@ -32,7 +32,7 @@
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-zod": "^0.8.3",
-    "kysely": "^0.29.2",
+    "kysely": "^0.28.17",
     "postgres": "^3.4.9"
   },
   "peerDependencies": {
