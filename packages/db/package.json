@@ -26,7 +26,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
+    "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@neondatabase/serverless": "^1.1.0",
