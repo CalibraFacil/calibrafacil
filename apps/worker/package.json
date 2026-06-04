@@ -26,15 +26,15 @@
     "drizzle-orm": "^0.45.2",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251230.0",
+    "@cloudflare/workers-types": "^4.20260603.1",
     "@repo/typescript-config": "workspace:^",
     "@types/pg": "^8.16.0",
     "@types/qrcode": "^1.5.5",
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3"
   }
 }

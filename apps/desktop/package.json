@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
-    "better-sqlite3": "^12.0.0",
+    "better-sqlite3": "^12.10.0",
     "electron-updater": "^6.8.3",
     "serialport": "^13.0.0",
     "usb": "^2.16.0"

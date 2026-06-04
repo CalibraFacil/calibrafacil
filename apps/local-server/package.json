@@ -25,13 +25,13 @@
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@hono/node-server": "^1.19.10",
-    "hono": "^4.12.4",
+    "hono": "^4.12.23",
     "serialport": "^13.0.0",
     "usb": "^2.16.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^7.1.7",
     "vitest": "^4.0.17"

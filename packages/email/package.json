@@ -11,13 +11,13 @@
   },
   "dependencies": {
     "@react-email/components": "1.0.12",
-    "react-dom": "^19.0.0",
-    "react": "^19.0.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "react-email": "6.2.0",
     "@react-email/ui": "6.2.0",
-    "@types/react": "^19.0.1",
-    "@types/react-dom": "^19.0.1"
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.0.1",
+    "react-email": "6.2.0"
   }
 }
