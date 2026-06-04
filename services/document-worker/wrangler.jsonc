@@ -22,6 +22,14 @@
     "PORT": "8080",
     "QUEUE_BATCH_SIZE": "10",
     "QUEUE_STALE_AFTER_MS": "600000",
+    // Non-secret runtime config — these MUST live here, not just in the
+    // dashboard: `wrangler deploy` treats `vars` as authoritative and wipes any
+    // dashboard-added plaintext var not listed here. GOTENBERG_URL is what
+    // routes XLSX/HTML → PDF to Gotenberg (without it the worker falls back to
+    // local LibreOffice, which the container does not have).
+    "GOTENBERG_URL": "https://calibrafacil-gotenberg.example.workers.dev",
+    "APP_URL": "https://calibrafacil.com",
+    "RESEND_FROM_EMAIL": "no-reply@calibrafacil.com",
   },
 
   // standard-2 = 1 vCPU / 6 GiB / 12 GB disk, matching services/gotenberg.
