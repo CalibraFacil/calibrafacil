@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
-    "fumadocs-core": "^15.6.0",
-    "fumadocs-mdx": "^12.0.0",
-    "fumadocs-ui": "^15.6.0",
+    "fumadocs-core": "^16.9.3",
+    "fumadocs-mdx": "^15.0.10",
+    "fumadocs-ui": "^16.9.3",
     "katex": "^0.17.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
