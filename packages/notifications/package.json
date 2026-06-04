@@ -21,8 +21,8 @@
   "dependencies": {
     "@calibra-facil/email": "workspace:*",
     "@react-email/components": "^1.0.2",
-    "@react-email/render": "^2.0.0",
-    "resend": "^4.5.0"
+    "@react-email/render": "^2.0.8",
+    "resend": "^6.12.4"
   },
   "peerDependencies": {
     "@calibra-facil/db": "^1.0.0",

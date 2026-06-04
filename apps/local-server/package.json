@@ -24,7 +24,7 @@
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
-    "@hono/node-server": "^1.19.10",
+    "@hono/node-server": "^2.0.4",
     "hono": "^4.12.23",
     "serialport": "^13.0.0",
     "usb": "^2.16.0"
