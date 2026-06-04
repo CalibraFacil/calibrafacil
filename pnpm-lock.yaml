@@ -1270,7 +1270,17 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.9.1)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.1)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(tsx@4.22.4))
 
-  packages/shared: {}
+  packages/shared:
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:^
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^24.13.0
+        version: 24.13.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/signing:
     dependencies:
@@ -13168,13 +13178,13 @@ snapshots:
 
   '@types/busboy@1.5.4':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
       '@types/responselike': 1.0.3
 
   '@types/chai@5.2.3':
@@ -13184,7 +13194,7 @@ snapshots:
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 25.9.1
+      '@types/node': 24.13.0
 
   '@types/d3-array@3.2.2': {}
 
@@ -13226,7 +13236,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/hast@3.0.4':
     dependencies:
@@ -13240,7 +13250,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/lodash@4.17.24': {}
 
@@ -13254,7 +13264,7 @@ snapshots:
 
   '@types/node-forge@1.3.14':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/node@22.19.19':
     dependencies:
@@ -13286,7 +13296,7 @@ snapshots:
 
   '@types/plist@3.0.5':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
       xmlbuilder: 15.1.1
     optional: true
 
@@ -13312,11 +13322,11 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/stats.js@0.17.4': {}
 
@@ -13355,11 +13365,11 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 24.12.4
+      '@types/node': 24.13.0
     optional: true
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260421.2':
@@ -14491,7 +14501,7 @@ snapshots:
   engine.io@6.6.8:
     dependencies:
       '@types/cors': 2.8.19
-      '@types/node': 25.9.1
+      '@types/node': 24.13.0
       '@types/ws': 8.18.1
       accepts: 1.3.8
       base64id: 2.0.0
@@ -15192,7 +15202,7 @@ snapshots:
 
   happy-dom@20.9.0:
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 24.13.0
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       entities: 7.0.1

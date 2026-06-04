@@ -9,7 +9,8 @@
   "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
     "build": "tsgo",
-    "typecheck": "tsgo"
+    "typecheck": "tsgo",
+    "check-types": "tsgo --noEmit"
   },
   "keywords": [
     "notifications",

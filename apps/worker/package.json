@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "start": "bun src/bun.ts",
-    "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs"
+    "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs",
+    "check-types": "tsgo --noEmit"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -11,7 +11,8 @@
   },
   "description": "",
   "scripts": {
-    "build": "tsgo"
+    "build": "tsgo",
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@better-auth/passkey": "1.6.14",

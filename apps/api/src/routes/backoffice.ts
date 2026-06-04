@@ -1755,17 +1755,22 @@ export const backofficeRouter = new Hono<{
         .update(organization)
         .set(setValues)
         .where(eq(organization.id, id))
-        .returning({
-          id: organization.id,
-          status: organization.status,
-          suspendedAt: organization.suspendedAt,
-          suspensionReason: organization.suspensionReason,
-          deletionScheduledAt: organization.deletionScheduledAt,
-        });
-      const updated = updatedRows[0];
-      if (!updated) {
+        .returning();
+      const updatedRow = updatedRows[0];
+      if (!updatedRow) {
         return c.json({ error: "Falha ao atualizar a conta" }, 500);
       }
+      // `db` is a Proxy over a union of the neon + postgres-js drivers, so a
+      // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
+      // Use 0-arg returning and project explicitly so the response keeps its
+      // shape without leaking the full organization row.
+      const updated = {
+        id: updatedRow.id,
+        status: updatedRow.status,
+        suspendedAt: updatedRow.suspendedAt,
+        suspensionReason: updatedRow.suspensionReason,
+        deletionScheduledAt: updatedRow.deletionScheduledAt,
+      };
 
       await logPlatformEvent({
         actorUserId: session.user.id,
@@ -1876,14 +1881,13 @@ export const backofficeRouter = new Hono<{
         return c.json({ error: "Concessão inválida" }, 400);
       }
 
+      // 0-arg returning (the typed projection collapses to the 0-arg overload
+      // on the neon|postgres-js db union); `deleted` is only read for logging
+      // below and never returned to the client.
       const deletedRows = await db
         .delete(entitlementOverride)
         .where(eq(entitlementOverride.id, id))
-        .returning({
-          id: entitlementOverride.id,
-          organizationId: entitlementOverride.organizationId,
-          feature: entitlementOverride.feature,
-        });
+        .returning();
       const deleted = deletedRows[0];
       if (!deleted) {
         return c.json({ error: "Concessão não encontrada" }, 404);
