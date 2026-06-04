@@ -2,7 +2,7 @@
 // Run the GitHub CI gates locally — we're on the free plan and out of Actions
 // minutes, so PRs are validated here instead. Mirrors .github/workflows/ci.yml
 // (blocked-deps → frozen install → audit → lint → type-check → test) under
-// Node 22 + TZ=UTC to match the runners.
+// Node 24 + TZ=UTC to match the runners.
 //
 // It is intentionally a SUPERSET of GitHub CI: it also type-checks apps/api and
 // apps/worker, which `turbo run check-types` (and thus CI) silently skip because
@@ -99,10 +99,10 @@ const steps = [
 ];
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
-if (nodeMajor !== 22) {
+if (nodeMajor !== 24) {
   console.warn(
-    `\x1b[33m⚠ Running on Node ${process.versions.node}; CI uses Node 22. ` +
-      `Use the Node 22 toolchain (fnm/mise) for a faithful run.\x1b[0m`,
+    `\x1b[33m⚠ Running on Node ${process.versions.node}; CI uses Node 24. ` +
+      `Use the Node 24 toolchain (fnm/mise) for a faithful run.\x1b[0m`,
   );
 }
 
