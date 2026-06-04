@@ -6,9 +6,6 @@
   "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs api",
   "regions": ["gru1"],
   "functions": {
-    "api/[...route].js": {
-      "maxDuration": 30
-    },
     "api/index.js": {
       "maxDuration": 30
     },

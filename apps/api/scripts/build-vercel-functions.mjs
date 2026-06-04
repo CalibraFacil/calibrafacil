@@ -6,7 +6,11 @@ import { build } from "esbuild";
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const entries = [
-  ["vercel-src/[...route].ts", "vercel-functions/[...route].js"],
+  // Only one HTTP entrypoint (index) is built: the vercel.json rewrite
+  // `/api/(.*)` -> `/api` routes every request to api/index.js, so a separate
+  // catch-all `[...route]` function was an unreachable, byte-identical
+  // duplicate. Removing it drops one bundle from Vercel's per-function
+  // packaging step.
   ["vercel-src/index.ts", "vercel-functions/index.js"],
   ["vercel-src/queues/background.ts", "vercel-functions/queues/background.js"],
   ["vercel-src/cron/integrations.ts", "vercel-functions/cron/integrations.js"],
