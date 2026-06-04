@@ -34,7 +34,7 @@
   "devDependencies": {
     "@calibra-facil/db": "workspace:^",
     "@repo/typescript-config": "workspace:^",
-    "@types/node": "^22.19.19",
+    "@types/node": "^24.13.0",
     "drizzle-orm": "^0.45.2"
   }
 }
