@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ComponentProps, useCallback } from 'react'
 import {
   DayPicker,
   getDefaultClassNames,
@@ -23,8 +23,8 @@ function Calendar({
   formatters,
   components,
   ...props
-}: React.ComponentProps<typeof DayPicker> & {
-  buttonVariant?: React.ComponentProps<typeof Button>['variant']
+}: ComponentProps<typeof DayPicker> & {
+  buttonVariant?: ComponentProps<typeof Button>['variant']
 }) {
   const defaultClassNames = getDefaultClassNames()
 
@@ -87,7 +87,7 @@ function Calendar({
             : 'cn-calendar-caption-label rounded-(--cell-radius) flex items-center gap-1 text-sm  [&>svg]:text-muted-foreground [&>svg]:size-3.5',
           defaultClassNames.caption_label,
         ),
-        table: 'w-full border-collapse',
+        month_grid: 'w-full border-collapse',
         weekdays: cn('flex', defaultClassNames.weekdays),
         weekday: cn(
           'text-muted-foreground rounded-(--cell-radius) flex-1 font-normal text-[0.8rem] select-none',
@@ -198,10 +198,10 @@ function CalendarDayButton({
   day,
   modifiers,
   ...props
-}: React.ComponentProps<typeof DayButton>) {
+}: ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames()
 
-  const ref = React.useCallback(
+  const ref = useCallback(
     (node: HTMLButtonElement | null) => {
       if (node && modifiers.focused) {
         node.focus()

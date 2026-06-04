@@ -59,7 +59,7 @@ async function startCaptureServer(): Promise<CaptureServer> {
   });
 
   const server: Server = createServer((socket) => {
-    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
     socket.on("end", () =>
       resolveReceived(Buffer.concat(chunks).toString("latin1")),
     );

@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appDir = dirname(dirname(fileURLToPath(import.meta.url)));
-const sourceIndex = join(appDir, ".source", "index.ts");
+const sourceIndex = join(appDir, ".source", "server.ts");
 const REQUIRED_EXPORT = "export const docs";
 const MAX_ATTEMPTS = 3;
 

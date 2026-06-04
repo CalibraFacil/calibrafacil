@@ -19,7 +19,8 @@
     "db:seed:exemplo-reference-standards": "node ./scripts/seed-exemplo-reference-standards.mjs",
     "db:seed:exemplo-modelo-demo-job": "node ./scripts/seed-exemplo-modelo-demo-job.mjs",
     "db:seed:calibrafacil-conta-azul-demo": "node ./scripts/seed-calibrafacil-conta-azul-demo.mjs",
-    "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs"
+    "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs",
+    "check-types": "tsgo --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -28,22 +29,22 @@
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
-    "@neondatabase/serverless": "^1.0.2",
-    "dotenv": "^17.2.3",
-    "drizzle-kit": "^0.31.8",
+    "@neondatabase/serverless": "^1.1.0",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
     "drizzle-zod": "^0.8.3",
-    "kysely": "^0.28.14",
-    "postgres": "^3.4.7"
+    "kysely": "^0.28.17",
+    "postgres": "^3.4.9"
   },
   "peerDependencies": {
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.13.0",
     "drizzle-orm": "^0.45.2",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.17"
   }
 }

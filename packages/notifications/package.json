@@ -9,7 +9,8 @@
   "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
     "build": "tsgo",
-    "typecheck": "tsgo"
+    "typecheck": "tsgo",
+    "check-types": "tsgo --noEmit"
   },
   "keywords": [
     "notifications",
@@ -20,9 +21,9 @@
   "license": "ISC",
   "dependencies": {
     "@calibra-facil/email": "workspace:*",
-    "@react-email/components": "^1.0.2",
-    "@react-email/render": "^2.0.0",
-    "resend": "^4.5.0"
+    "@react-email/components": "1.0.12",
+    "@react-email/render": "^2.0.8",
+    "resend": "^6.12.4"
   },
   "peerDependencies": {
     "@calibra-facil/db": "^1.0.0",
@@ -31,8 +32,8 @@
   "devDependencies": {
     "@calibra-facil/db": "workspace:*",
     "@repo/typescript-config": "workspace:^",
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.13.0",
     "drizzle-orm": "^0.45.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

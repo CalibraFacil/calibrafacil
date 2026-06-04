@@ -141,6 +141,6 @@ place via `setQueryData`; aggregate views (overview) invalidate **once** with
 ## Verification
 
 CI parity is Node 22 + `TZ=UTC` (see the local-test-run note). Each wave:
-`pnpm --dir apps/web check-types` (tsgo), `oxlint`, `check-no-use-effect.mjs`,
+`pnpm --dir apps/web check-types` (tsgo), `oxlint` (incl. the no-useEffect rule),
 and `vitest run` under `TZ=UTC`. `dashboard-route-heads.test.ts` must stay green
 (every new renderable route carries `head` title metadata).

@@ -150,6 +150,7 @@ const AuthenticatedAssetsIdRoute = AuthenticatedAssetsIdRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
   '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
@@ -158,7 +159,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
-  '/': typeof AuthenticatedIndexRoute
   '/assets/$id': typeof AuthenticatedAssetsIdRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/requests/$id': typeof AuthenticatedRequestsIdRoute
@@ -166,7 +166,7 @@ export interface FileRoutesByFullPath {
   '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets/': typeof AuthenticatedAssetsIndexRoute
-  '/certificates': typeof AuthenticatedCertificatesIndexRoute
+  '/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -216,6 +216,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/accept-invite'
     | '/sign-in'
     | '/assets'
@@ -224,7 +225,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/service-order-access/$token'
     | '/v/$token'
-    | '/'
     | '/assets/$id'
     | '/certificates/$id'
     | '/requests/$id'
@@ -232,7 +232,7 @@ export interface FileRouteTypes {
     | '/service-orders/$id'
     | '/settings/appearance'
     | '/assets/'
-    | '/certificates'
+    | '/certificates/'
     | '/requests/'
     | '/service-orders/'
     | '/settings/'
@@ -306,7 +306,7 @@ declare module '@tanstack/react-router' {
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -383,7 +383,7 @@ declare module '@tanstack/react-router' {
     '/_authenticated/certificates/': {
       id: '/_authenticated/certificates/'
       path: '/certificates'
-      fullPath: '/certificates'
+      fullPath: '/certificates/'
       preLoaderRoute: typeof AuthenticatedCertificatesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }

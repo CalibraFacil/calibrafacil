@@ -1,6 +1,16 @@
 'use client'
 
-import * as React from 'react'
+import {
+  Dispatch,
+  ReactNode,
+  SetStateAction,
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { LEADER_KEYS, matchShortcutSequence } from './shortcuts'
@@ -20,7 +30,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export type CommandAction = {
   id: string
   label: string
-  icon?: React.ReactNode
+  icon?: ReactNode
   shortcut?: string
   onSelect: () => void
   keywords?: Array<string>
@@ -35,19 +45,20 @@ type CommandPaletteContextType = {
   open: boolean
   setOpen: (open: boolean) => void
   searchValue: string
-  setSearchValue: React.Dispatch<React.SetStateAction<string>>
+  setSearchValue: Dispatch<SetStateAction<string>>
   contextActions: Array<CommandAction>
   registerContextActions: (config: ContextActionsConfig) => () => void
   pages: Array<string>
-  setPages: React.Dispatch<React.SetStateAction<Array<string>>>
+  setPages: Dispatch<SetStateAction<Array<string>>>
   activePage: string
 }
 
-const CommandPaletteContext =
-  React.createContext<CommandPaletteContextType | null>(null)
+const CommandPaletteContext = createContext<CommandPaletteContextType | null>(
+  null,
+)
 
 export function useCommandPalette() {
-  const context = React.useContext(CommandPaletteContext)
+  const context = useContext(CommandPaletteContext)
   if (!context) {
     throw new Error(
       'useCommandPalette must be used within a CommandPaletteProvider',
@@ -56,31 +67,27 @@ export function useCommandPalette() {
   return context
 }
 
-export function CommandPaletteProvider({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const [open, setOpenState] = React.useState(false)
-  const [searchValue, setSearchValue] = React.useState('')
-  const [pages, setPages] = React.useState<Array<string>>(['root'])
-  const [contextActionsRegistry, setContextActionsRegistry] = React.useState<
+export function CommandPaletteProvider({ children }: { children: ReactNode }) {
+  const [open, setOpenState] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
+  const [pages, setPages] = useState<Array<string>>(['root'])
+  const [contextActionsRegistry, setContextActionsRegistry] = useState<
     Array<ContextActionsConfig>
   >([])
   const location = useLocation()
   const navigate = useNavigate()
 
   // Latest-value refs so the once-mounted key listener never goes stale.
-  const navigateRef = React.useRef(navigate)
+  const navigateRef = useRef(navigate)
   navigateRef.current = navigate
-  const openRef = React.useRef(open)
+  const openRef = useRef(open)
   openRef.current = open
 
   const activePage = pages[pages.length - 1] ?? 'root'
 
   // Compute context actions based on current route
   const pathname = location.pathname
-  const contextActions = React.useMemo(() => {
+  const contextActions = useMemo(() => {
     for (const config of contextActionsRegistry) {
       if (config.routePattern.test(pathname)) {
         return config.actions
@@ -89,19 +96,14 @@ export function CommandPaletteProvider({
     return []
   }, [pathname, contextActionsRegistry])
 
-  const registerContextActions = React.useCallback(
-    (config: ContextActionsConfig) => {
-      setContextActionsRegistry((prev) => [...prev, config])
-      return () => {
-        setContextActionsRegistry((prev) => prev.filter((c) => c !== config))
-      }
-    },
-    [],
-  )
+  const registerContextActions = useCallback((config: ContextActionsConfig) => {
+    setContextActionsRegistry((prev) => [...prev, config])
+    return () => {
+      setContextActionsRegistry((prev) => prev.filter((c) => c !== config))
+    }
+  }, [])
 
-  const setOpen = React.useCallback<
-    React.Dispatch<React.SetStateAction<boolean>>
-  >((value) => {
+  const setOpen = useCallback<Dispatch<SetStateAction<boolean>>>((value) => {
     setOpenState((prev) => {
       const next = typeof value === 'function' ? value(prev) : value
       if (!next) {
@@ -170,7 +172,7 @@ export function CommandPaletteProvider({
     }
   })
 
-  const contextValue = React.useMemo(
+  const contextValue = useMemo(
     () => ({
       open,
       setOpen,

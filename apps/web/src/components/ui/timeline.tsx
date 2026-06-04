@@ -1,7 +1,17 @@
 import { mergeProps } from '@base-ui/react/merge-props'
 import { useRender } from '@base-ui/react/use-render'
 import { cva } from 'class-variance-authority'
-import * as React from 'react'
+import {
+  ComponentProps,
+  RefObject,
+  createContext,
+  useCallback,
+  useContext,
+  useId,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react'
 import { cn } from '@/lib/utils'
 import { useIsomorphicLayoutEffect } from '@/hooks/use-isomorphic-layout-effect'
 import { useLazyRef } from '@/hooks/use-lazy-ref'
@@ -28,9 +38,7 @@ function getItemStatus(itemIndex: number, activeIndex?: number): Status {
   return 'pending'
 }
 
-function getSortedEntries(
-  entries: [string, React.RefObject<ItemElement | null>][],
-) {
+function getSortedEntries(entries: [string, RefObject<ItemElement | null>][]) {
   return entries.sort((a, b) => {
     const elementA = a[1].current
     const elementB = b[1].current
@@ -43,37 +51,34 @@ function getSortedEntries(
 }
 
 function useStore<T>(selector: (store: Store) => T): T {
-  const store = React.useContext(StoreContext)
+  const store = useContext(StoreContext)
   if (!store) {
     throw new Error(`\`useStore\` must be used within \`${ROOT_NAME}\``)
   }
 
-  const getSnapshot = React.useCallback(
-    () => selector(store),
-    [store, selector],
-  )
+  const getSnapshot = useCallback(() => selector(store), [store, selector])
 
-  return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
+  return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
 }
 
 interface StoreState {
-  items: Map<string, React.RefObject<ItemElement | null>>
+  items: Map<string, RefObject<ItemElement | null>>
 }
 
 interface Store {
   subscribe: (callback: () => void) => () => void
   getState: () => StoreState
   notify: () => void
-  onItemRegister: (id: string, ref: React.RefObject<ItemElement | null>) => void
+  onItemRegister: (id: string, ref: RefObject<ItemElement | null>) => void
   onItemUnregister: (id: string) => void
   getNextItemStatus: (id: string, activeIndex?: number) => Status | undefined
   getItemIndex: (id: string) => number
 }
 
-const StoreContext = React.createContext<Store | null>(null)
+const StoreContext = createContext<Store | null>(null)
 
 function useStoreContext(consumerName: string) {
-  const context = React.useContext(StoreContext)
+  const context = useContext(StoreContext)
   if (!context) {
     throw new Error(`\`${consumerName}\` must be used within \`${ROOT_NAME}\``)
   }
@@ -87,10 +92,10 @@ interface TimelineContextValue {
   activeIndex?: number
 }
 
-const TimelineContext = React.createContext<TimelineContextValue | null>(null)
+const TimelineContext = createContext<TimelineContextValue | null>(null)
 
 function useTimelineContext(consumerName: string) {
-  const context = React.useContext(TimelineContext)
+  const context = useContext(TimelineContext)
   if (!context) {
     throw new Error(`\`${consumerName}\` must be used within \`${ROOT_NAME}\``)
   }
@@ -140,7 +145,7 @@ const timelineVariants = cva(
 )
 
 interface TimelineProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {
   dir?: Direction
   orientation?: Orientation
   variant?: Variant
@@ -166,7 +171,7 @@ function Timeline(props: TimelineProps) {
     items: new Map(),
   }))
 
-  const store = React.useMemo<Store>(() => {
+  const store = useMemo<Store>(() => {
     return {
       subscribe: (cb) => {
         listenersRef.current.add(cb)
@@ -178,10 +183,7 @@ function Timeline(props: TimelineProps) {
           cb()
         }
       },
-      onItemRegister: (
-        id: string,
-        ref: React.RefObject<ItemElement | null>,
-      ) => {
+      onItemRegister: (id: string, ref: RefObject<ItemElement | null>) => {
         stateRef.current.items.set(id, ref)
         store.notify()
       },
@@ -209,7 +211,7 @@ function Timeline(props: TimelineProps) {
     }
   }, [listenersRef, stateRef])
 
-  const contextValue = React.useMemo<TimelineContextValue>(
+  const contextValue = useMemo<TimelineContextValue>(
     () => ({
       dir,
       orientation,
@@ -253,11 +255,10 @@ interface TimelineItemContextValue {
   isAlternateRight: boolean
 }
 
-const TimelineItemContext =
-  React.createContext<TimelineItemContextValue | null>(null)
+const TimelineItemContext = createContext<TimelineItemContextValue | null>(null)
 
 function useTimelineItemContext(consumerName: string) {
-  const context = React.useContext(TimelineItemContext)
+  const context = useContext(TimelineItemContext)
   if (!context) {
     throw new Error(`\`${consumerName}\` must be used within \`${ITEM_NAME}\``)
   }
@@ -316,7 +317,7 @@ const timelineItemVariants = cva('relative flex', {
 })
 
 interface TimelineItemProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {
   status?: Status
 }
 
@@ -327,14 +328,14 @@ function TimelineItem(props: TimelineItemProps) {
     useTimelineContext(ITEM_NAME)
   const store = useStoreContext(ITEM_NAME)
 
-  const instanceId = React.useId()
+  const instanceId = useId()
   const itemId = id ?? instanceId
-  const itemRef = React.useRef<ItemElement | null>(null)
+  const itemRef = useRef<ItemElement | null>(null)
   const composedRef = useComposedRefs(ref, itemRef)
 
   const itemIndex = useStore((state) => state.getItemIndex(itemId))
 
-  const status = React.useMemo<Status>(() => {
+  const status = useMemo<Status>(() => {
     return statusProp ?? getItemStatus(itemIndex, activeIndex)
   }, [activeIndex, itemIndex, statusProp])
 
@@ -347,7 +348,7 @@ function TimelineItem(props: TimelineItemProps) {
 
   const isAlternateRight = variant === 'alternate' && itemIndex % 2 === 1
 
-  const itemContextValue = React.useMemo<TimelineItemContextValue>(
+  const itemContextValue = useMemo<TimelineItemContextValue>(
     () => ({ id: itemId, status, isAlternateRight }),
     [itemId, status, isAlternateRight],
   )
@@ -431,7 +432,7 @@ const timelineContentVariants = cva('flex-1', {
 })
 
 interface TimelineContentProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
 
 function TimelineContent(props: TimelineContentProps) {
   const { render, className, ...contentProps } = props
@@ -525,7 +526,7 @@ const timelineDotVariants = cva(
 )
 
 interface TimelineDotProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
 
 function TimelineDot(props: TimelineDotProps) {
   const { render, className, ...dotProps } = props
@@ -620,7 +621,7 @@ const timelineConnectorVariants = cva('absolute z-0', {
 })
 
 interface TimelineConnectorProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {
   forceMount?: boolean
 }
 
@@ -672,7 +673,7 @@ function TimelineConnector(props: TimelineConnectorProps) {
 }
 
 interface TimelineHeaderProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
 
 function TimelineHeader(props: TimelineHeaderProps) {
   const { render, className, ...headerProps } = props
@@ -693,7 +694,7 @@ function TimelineHeader(props: TimelineHeaderProps) {
 }
 
 interface TimelineTitleProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
 
 function TimelineTitle(props: TimelineTitleProps) {
   const { render, className, ...titleProps } = props
@@ -714,7 +715,7 @@ function TimelineTitle(props: TimelineTitleProps) {
 }
 
 interface TimelineDescriptionProps
-  extends React.ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
+  extends ComponentProps<'div'>, useRender.ComponentProps<'div'> {}
 
 function TimelineDescription(props: TimelineDescriptionProps) {
   const { render, className, ...descriptionProps } = props
@@ -735,7 +736,7 @@ function TimelineDescription(props: TimelineDescriptionProps) {
 }
 
 interface TimelineTimeProps
-  extends React.ComponentProps<'time'>, useRender.ComponentProps<'time'> {}
+  extends ComponentProps<'time'>, useRender.ComponentProps<'time'> {}
 
 function TimelineTime(props: TimelineTimeProps) {
   const { render, className, ...timeProps } = props

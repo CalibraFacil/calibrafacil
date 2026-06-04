@@ -1,10 +1,9 @@
-import * as React from 'react'
-
+import { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 
-type NativeSelectProps = Omit<React.ComponentProps<'select'>, 'size'> & {
+type NativeSelectProps = Omit<ComponentProps<'select'>, 'size'> & {
   size?: 'sm' | 'default'
 }
 
@@ -39,14 +38,14 @@ function NativeSelect({
   )
 }
 
-function NativeSelectOption({ ...props }: React.ComponentProps<'option'>) {
+function NativeSelectOption({ ...props }: ComponentProps<'option'>) {
   return <option data-slot="native-select-option" {...props} />
 }
 
 function NativeSelectOptGroup({
   className,
   ...props
-}: React.ComponentProps<'optgroup'>) {
+}: ComponentProps<'optgroup'>) {
   return (
     <optgroup
       data-slot="native-select-optgroup"

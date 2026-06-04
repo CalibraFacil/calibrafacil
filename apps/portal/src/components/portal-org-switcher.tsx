@@ -1,5 +1,4 @@
-import * as React from "react";
-
+import { useMemo } from "react";
 import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -47,7 +46,7 @@ export function PortalOrgSwitcher() {
   const { data: activeOrg } = usePortalActiveOrganization();
 
   // Separate organizations by type
-  const { clientOrgs, labOrgs } = React.useMemo(() => {
+  const { clientOrgs, labOrgs } = useMemo(() => {
     if (!allOrganizations) return { clientOrgs: [], labOrgs: [] };
 
     return {
