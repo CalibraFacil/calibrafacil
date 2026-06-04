@@ -95,7 +95,7 @@
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "shadcn": "^3.6.2",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "vite": "^7.1.7",
     "vitest": "^4.1.8",
     "web-vitals": "^5.3.0"

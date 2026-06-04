@@ -50,7 +50,7 @@
     "@repo/typescript-config": "workspace:^",
     "@vitest/coverage-v8": "^4.0.17",
     "esbuild": "^0.25.12",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.17"
   }
 }

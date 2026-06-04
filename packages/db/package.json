@@ -43,7 +43,7 @@
     "@types/node": "^22.19.19",
     "drizzle-orm": "^0.45.2",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.17"
   }
 }
