@@ -27,7 +27,7 @@
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/label-rendering": "workspace:^",
-    "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
+    "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@dnd-kit/core": "^6.3.1",
