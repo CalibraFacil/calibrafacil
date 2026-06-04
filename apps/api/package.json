@@ -49,6 +49,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260603.1",
     "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
     "@vitejs/plugin-react": "6.0.2",
     "@vitest/coverage-v8": "^4.0.17",
     "esbuild": "^0.25.12",
