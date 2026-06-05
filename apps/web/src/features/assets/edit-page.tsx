@@ -477,9 +477,7 @@ function EditAssetForm({
                   onChange={(date) => updateField('nextCalibrationDate', date)}
                   placeholder="Selecione a data"
                   disabled={isSaving}
-                  presets={buildCalibrationPeriodicityPresets(
-                    () => formData.lastCalibrationDate ?? new Date(),
-                  )}
+                  presets={buildCalibrationPeriodicityPresets()}
                 />
               </Field>
             </div>

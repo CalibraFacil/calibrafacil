@@ -7,7 +7,6 @@ import {
   ArrowDown01Icon,
   CheckmarkCircle02Icon,
   Alert02Icon,
-  Download01Icon,
   SentIcon,
   DropletIcon,
 } from '@hugeicons/core-free-icons'
@@ -18,6 +17,9 @@ import { apiRouteParam } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { type DatePickerPreset } from '@/components/ui/date-picker'
+import { SaveButton } from '@/components/ui/save-button'
 import {
   Card,
   CardContent,
@@ -119,8 +121,26 @@ const BACKDATE_REASON_THRESHOLD_DAYS = 7
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 function formatDateForInput(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  // Local Y/M/D, not toISOString() — a local-midnight calendar date east of UTC
+  // would otherwise shift to the previous day and record the wrong calibration date.
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
+
+const PERFORMED_AT_PRESETS: readonly DatePickerPreset[] = [
+  { label: 'Hoje', getDate: () => new Date() },
+  { label: 'Ontem', getDate: () => new Date(Date.now() - MS_PER_DAY) },
+  {
+    label: 'Há 3 dias',
+    getDate: () => new Date(Date.now() - 3 * MS_PER_DAY),
+  },
+  {
+    label: 'Há uma semana',
+    getDate: () => new Date(Date.now() - 7 * MS_PER_DAY),
+  },
+]
 
 type ExecuteJobPageProps = {
   id: string
@@ -375,9 +395,8 @@ function ExecuteJobForm({
     validations: true,
     debug: false,
   })
-  const [performedAt, setPerformedAt] = useState<string>(() =>
-    formatDateForInput(new Date()),
-  )
+  // Starts empty so the operator makes a deliberate choice of execution date.
+  const [performedAt, setPerformedAt] = useState<string>('')
   const [backdateReason, setBackdateReason] = useState('')
 
   const assetSpecFields = useMemo(
@@ -968,9 +987,7 @@ function ExecuteJobForm({
   }
 
   // Backdate handling for the performed (execution) date
-  const performedDate = performedAt
-    ? new Date(`${performedAt}T00:00:00`)
-    : null
+  const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
   const isPerformedDateValid =
     performedDate != null &&
     !Number.isNaN(performedDate.getTime()) &&
@@ -1170,17 +1187,12 @@ function ExecuteJobForm({
 
           {isEditable && (
             <div className="flex flex-col gap-2 sm:flex-row xl:pt-10">
-              <Button
-                variant="outline"
-                onClick={() => saveMutation.mutate()}
-                disabled={
-                  saveMutation.isPending || missingAssetSpecFields.length > 0
-                }
-                className="h-10 justify-center px-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)] active:scale-[0.96]"
-              >
-                <HugeiconsIcon icon={Download01Icon} className="mr-2 h-4 w-4" />
-                {saveMutation.isPending ? 'Salvando...' : 'Salvar Rascunho'}
-              </Button>
+              <SaveButton
+                idleText="Salvar Rascunho"
+                savedText="Salvo"
+                disabled={missingAssetSpecFields.length > 0}
+                onSave={() => saveMutation.mutateAsync()}
+              />
               <Button
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending || !canSubmit}
@@ -1208,38 +1220,21 @@ function ExecuteJobForm({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 px-5 pb-5">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!isEditable}
-                  onClick={() => setPerformedAt(formatDateForInput(new Date()))}
-                >
-                  Hoje
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!isEditable}
-                  onClick={() =>
-                    setPerformedAt(
-                      formatDateForInput(new Date(Date.now() - MS_PER_DAY)),
-                    )
-                  }
-                >
-                  Ontem
-                </Button>
-              </div>
               <Field>
                 <FieldLabel>Data realizada</FieldLabel>
-                <Input
-                  type="date"
-                  value={performedAt}
+                <DateInput
+                  value={
+                    performedDate && !Number.isNaN(performedDate.getTime())
+                      ? performedDate
+                      : undefined
+                  }
                   disabled={!isEditable}
-                  onChange={(e) => setPerformedAt(e.target.value)}
+                  onChange={(date) =>
+                    setPerformedAt(date ? formatDateForInput(date) : '')
+                  }
                   max={formatDateForInput(new Date())}
+                  presets={PERFORMED_AT_PRESETS}
+                  calendarProps={{ disabled: { after: new Date() } }}
                 />
               </Field>
               {requiresBackdateReason && (
@@ -1910,8 +1905,8 @@ function ExecuteJobForm({
                     />
                   </div>
                   <CardDescription className="text-pretty">
-                    Variáveis e valores usados nos cálculos do método — a base de
-                    rastreabilidade do resultado.
+                    Variáveis e valores usados nos cálculos do método — a base
+                    de rastreabilidade do resultado.
                   </CardDescription>
                 </CardHeader>
               </CollapsibleTrigger>

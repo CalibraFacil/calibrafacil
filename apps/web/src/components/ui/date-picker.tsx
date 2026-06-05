@@ -117,7 +117,7 @@ function DatePicker({
               onChange?.(date)
               setOpen(false)
             }}
-            captionLayout="dropdown"
+            captionLayout="label"
             {...calendarProps}
           />
         </div>
