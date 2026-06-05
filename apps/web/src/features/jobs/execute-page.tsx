@@ -121,7 +121,12 @@ const BACKDATE_REASON_THRESHOLD_DAYS = 7
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 function formatDateForInput(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  // Local Y/M/D, not toISOString() — a local-midnight calendar date east of UTC
+  // would otherwise shift to the previous day and record the wrong calibration date.
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 const PERFORMED_AT_PRESETS: readonly DatePickerPreset[] = [

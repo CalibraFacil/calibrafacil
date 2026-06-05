@@ -1,4 +1,4 @@
-import { addMonths } from 'date-fns'
+import { addMonths, startOfDay } from 'date-fns'
 
 import {
   AssetStatusSchema,
@@ -33,7 +33,9 @@ export function calibrationPeriodicityLabel(months: number): string {
 /**
  * Builds the "próxima calibração" quick-select presets. Each preset adds its
  * interval to the date returned by `getBaseDate` (today by default), resolved
- * at click time so "1 mês" always means one month from now.
+ * at click time so "1 mês" always means one month from now. The base is
+ * normalized to the start of the day so presets land on midnight like manual
+ * calendar selections, keeping overdue comparisons consistent.
  */
 export function buildCalibrationPeriodicityPresets(
   getBaseDate: () => Date = () => new Date(),
@@ -41,7 +43,7 @@ export function buildCalibrationPeriodicityPresets(
   return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
     label: calibrationPeriodicityLabel(months),
     months,
-    getDate: () => addMonths(getBaseDate(), months),
+    getDate: () => addMonths(startOfDay(getBaseDate()), months),
   }))
 }
 
