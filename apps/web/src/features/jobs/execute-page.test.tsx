@@ -77,6 +77,10 @@ import { ExecuteJobPage } from './execute-page'
 
 describe('ExecuteJobPage workflow', () => {
   beforeEach(() => {
+    // Fake timers (advancing with the real clock so async queries still resolve)
+    // so SaveButton's success→saved setTimeout can be flushed on teardown
+    // instead of firing after jsdom is gone (ReferenceError: window).
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.clearAllMocks()
     apiMocks.saveExecution.mockResolvedValue({ id: 7 })
     apiMocks.submitExecution.mockResolvedValue({ id: 7 })
@@ -95,6 +99,9 @@ describe('ExecuteJobPage workflow', () => {
 
   afterEach(() => {
     cleanup()
+    // Flush SaveButton's pending timer while jsdom is still alive, then restore.
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
   })
 
   it('submits normalized execution data and returns to the jobs list', async () => {

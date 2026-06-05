@@ -7,7 +7,6 @@ import {
   ArrowDown01Icon,
   CheckmarkCircle02Icon,
   Alert02Icon,
-  Download01Icon,
   SentIcon,
   DropletIcon,
 } from '@hugeicons/core-free-icons'
@@ -20,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
 import { type DatePickerPreset } from '@/components/ui/date-picker'
+import { SaveButton } from '@/components/ui/save-button'
 import {
   Card,
   CardContent,
@@ -1187,17 +1187,12 @@ function ExecuteJobForm({
 
           {isEditable && (
             <div className="flex flex-col gap-2 sm:flex-row xl:pt-10">
-              <Button
-                variant="outline"
-                onClick={() => saveMutation.mutate()}
-                disabled={
-                  saveMutation.isPending || missingAssetSpecFields.length > 0
-                }
-                className="h-10 justify-center px-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)] active:scale-[0.96]"
-              >
-                <HugeiconsIcon icon={Download01Icon} className="mr-2 h-4 w-4" />
-                {saveMutation.isPending ? 'Salvando...' : 'Salvar Rascunho'}
-              </Button>
+              <SaveButton
+                idleText="Salvar Rascunho"
+                savedText="Salvo"
+                disabled={missingAssetSpecFields.length > 0}
+                onSave={() => saveMutation.mutateAsync()}
+              />
               <Button
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending || !canSubmit}
