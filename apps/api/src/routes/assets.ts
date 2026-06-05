@@ -243,6 +243,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             nextCalibrationDate,
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
+            subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
           })
           .returning();
 
@@ -425,6 +426,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
             comments: asset.comments,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
           })
@@ -552,6 +554,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
           comments: asset.comments,
+          subjectToLegalMetrology: asset.subjectToLegalMetrology,
           createdAt: asset.createdAt,
           updatedAt: asset.updatedAt,
         })
@@ -628,6 +631,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
             comments: asset.comments,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             deletedAt: asset.deletedAt,
             assetTypeDefinition: assetType.definition,
           })
@@ -707,6 +711,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.nextCalibrationDate = nextCalibrationDate;
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
+        if (input.subjectToLegalMetrology !== undefined)
+          updateData.subjectToLegalMetrology = input.subjectToLegalMetrology;
         if (input.specifications !== undefined) {
           const normalizedSpecifications =
             normalizeAssetSpecificationsFromInput({

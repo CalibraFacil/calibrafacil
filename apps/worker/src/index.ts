@@ -3149,6 +3149,10 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
         assetSpecifications.resolutionUnit ??
           firstWeighingRange?.resolutionUnit,
       ),
+      // Inmetro model approval / registration (Etiqueta de Reparo context).
+      // Sourced from the asset-type blueprint spec (like "Portaria"); backs the
+      // `{{asset.inmetroRegistration}}` certificate token (previously empty).
+      inmetroRegistration: assetSpecifications.inmetroRegistration,
     },
     certificate: {
       number: job.jobId,

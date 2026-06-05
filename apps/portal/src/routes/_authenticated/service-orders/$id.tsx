@@ -361,8 +361,10 @@ function ServiceOrderDetailPage() {
   const seals = [
     { label: "Lacre anterior", value: order.oldSealNumber },
     { label: "Lacre novo", value: order.newSealNumber },
-    { label: "Lacre de reparo", value: order.repairedSealNumber },
-    { label: "Lacre Inmetro", value: order.inmetroRepairSealNumber },
+    {
+      label: "Etiqueta de Reparo",
+      value: order.inmetroRepairSealNumber,
+    },
   ].filter((seal) => seal.value?.trim());
 
   const timeline: Array<TimelineItem> = [...(order.events ?? [])]
@@ -592,8 +594,8 @@ function ServiceOrderDetailPage() {
             <Panel className="p-5">
               <PanelHeader
                 eyebrow="Lacres"
-                title="Lacres e selos"
-                description="Selagem do instrumento (inclui selo Inmetro quando aplicável)."
+                title="Lacres e Etiqueta de Reparo"
+                description="Selagem do instrumento (inclui a Etiqueta de Reparo do Inmetro quando aplicável)."
               />
               <BlueprintGrid className="mt-4 sm:grid-cols-2">
                 {seals.map((seal) => (

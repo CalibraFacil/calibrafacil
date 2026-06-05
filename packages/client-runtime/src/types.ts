@@ -691,6 +691,7 @@ export type CreateAssetInput = {
   nextCalibrationDate?: string;
   comments?: string;
   specifications?: Record<string, unknown>;
+  subjectToLegalMetrology?: boolean;
 };
 
 export type AssetsListData = {
@@ -708,6 +709,7 @@ export type AssetsListData = {
     assetTypeName: string;
     status: AssetStatus;
     nextCalibrationDate?: string | null;
+    subjectToLegalMetrology: boolean;
   }>;
   pagination?: {
     page: number;

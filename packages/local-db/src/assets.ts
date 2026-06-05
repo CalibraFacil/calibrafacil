@@ -38,6 +38,7 @@ export type LocalAssetsListData = {
     lastCalibrationDate: string | null;
     nextCalibrationDate: string | null;
     comments: string | null;
+    subjectToLegalMetrology: boolean;
     createdAt: string;
     updatedAt: string;
     syncState: string;
@@ -65,6 +66,7 @@ export type CreateLocalAssetInput = {
   lastCalibrationDate?: string | null;
   nextCalibrationDate?: string | null;
   comments?: string | null;
+  subjectToLegalMetrology?: boolean;
   specifications?: Record<string, unknown> | null;
   actorUserId?: string | null;
   deviceId?: string | null;
@@ -82,6 +84,7 @@ export type UpdateLocalAssetInput = {
   lastCalibrationDate?: string | null;
   nextCalibrationDate?: string | null;
   comments?: string | null;
+  subjectToLegalMetrology?: boolean;
   specifications?: Record<string, unknown> | null;
   actorUserId?: string | null;
   deviceId?: string | null;
@@ -111,6 +114,7 @@ type LocalAssetListRow = {
   last_calibration_date: string | null;
   next_calibration_date: string | null;
   comments: string | null;
+  subject_to_legal_metrology: number;
   updated_at: string;
   sync_state: string;
 };
@@ -172,6 +176,7 @@ LIMIT 1
     lastCalibrationDate: input.lastCalibrationDate ?? null,
     nextCalibrationDate: input.nextCalibrationDate ?? null,
     comments: input.comments || null,
+    subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
     specifications: input.specifications ?? null,
   };
 
@@ -195,6 +200,7 @@ INSERT INTO assets (
   last_calibration_date,
   next_calibration_date,
   comments,
+  subject_to_legal_metrology,
   status,
   updated_at,
   sync_state
@@ -214,6 +220,7 @@ INSERT INTO assets (
   @lastCalibrationDate,
   @nextCalibrationDate,
   @comments,
+  @subjectToLegalMetrology,
   @status,
   @updatedAt,
   'local'
@@ -236,6 +243,7 @@ INSERT INTO assets (
         lastCalibrationDate: input.lastCalibrationDate ?? null,
         nextCalibrationDate: input.nextCalibrationDate ?? null,
         comments: input.comments || null,
+        subjectToLegalMetrology: input.subjectToLegalMetrology ? 1 : 0,
         status: input.status ?? "ACTIVE",
         updatedAt: now,
       });
@@ -328,6 +336,7 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
+  a.subject_to_legal_metrology,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -377,6 +386,7 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
+  a.subject_to_legal_metrology,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -430,6 +440,7 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
+  a.subject_to_legal_metrology,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -502,6 +513,10 @@ LIMIT 1
         ? row.next_calibration_date
         : input.nextCalibrationDate,
     comments: input.comments === undefined ? row.comments : input.comments,
+    subjectToLegalMetrology:
+      input.subjectToLegalMetrology === undefined
+        ? row.subject_to_legal_metrology === 1
+        : input.subjectToLegalMetrology,
     specifications:
       input.specifications === undefined
         ? parseJson(row.specifications_json)
@@ -524,6 +539,7 @@ SET name = @name,
   last_calibration_date = @lastCalibrationDate,
   next_calibration_date = @nextCalibrationDate,
   comments = @comments,
+  subject_to_legal_metrology = @subjectToLegalMetrology,
   updated_at = @updatedAt,
   sync_state = 'local'
 WHERE id = @id
@@ -542,6 +558,7 @@ WHERE id = @id
         lastCalibrationDate: values.lastCalibrationDate ?? null,
         nextCalibrationDate: values.nextCalibrationDate ?? null,
         comments: values.comments || null,
+        subjectToLegalMetrology: values.subjectToLegalMetrology ? 1 : 0,
         updatedAt: now,
       });
 
@@ -597,6 +614,7 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
+  a.subject_to_legal_metrology,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -666,6 +684,7 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
+  a.subject_to_legal_metrology,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -720,6 +739,7 @@ function toLocalAsset(row: LocalAssetListRow): LocalAsset {
     lastCalibrationDate: row.last_calibration_date,
     nextCalibrationDate: row.next_calibration_date,
     comments: row.comments,
+    subjectToLegalMetrology: row.subject_to_legal_metrology === 1,
     createdAt: row.updated_at,
     updatedAt: row.updated_at,
     syncState: row.sync_state,

@@ -60,6 +60,7 @@ export type AssetFormData = {
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
+  subjectToLegalMetrology: boolean
   specifications: Record<string, unknown>
 }
 
@@ -146,6 +147,7 @@ export function parseAssetForm(
     tag: data.tag.trim(),
     status: data.status,
     baseMeasurementUnit: data.baseMeasurementUnit,
+    subjectToLegalMetrology: data.subjectToLegalMetrology,
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
@@ -236,6 +238,7 @@ export function parseAssetEditForm(
     serialNumber: data.serialNumber.trim(),
     tag: data.tag.trim(),
     status: data.status,
+    subjectToLegalMetrology: data.subjectToLegalMetrology,
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),

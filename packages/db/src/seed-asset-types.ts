@@ -47,6 +47,12 @@ const assetTypes: Array<{
         required: false,
       },
       {
+        key: "inmetroRegistration",
+        label: "Registro/Aprovação Inmetro",
+        type: "text",
+        required: false,
+      },
+      {
         key: "linearity",
         label: "Linearidade",
         type: "number",

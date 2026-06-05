@@ -157,6 +157,7 @@ export type ServiceOrderDetail = {
   assetName: string
   assetTag?: string | null
   assetSerialNumber?: string | null
+  assetSubjectToLegalMetrology?: boolean | null
   unitName?: string | null
   assetSnapshot?: {
     assetName: string

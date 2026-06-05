@@ -2133,7 +2133,7 @@ export function createDesktopApiClient(
         throw desktopUnsupportedServiceOrderAction("Abertura de etiqueta");
       },
       async updateRepairSeal() {
-        throw desktopUnsupportedServiceOrderAction("Selo de reparado");
+        throw desktopUnsupportedServiceOrderAction("Etiqueta de Reparo");
       },
       async deliver() {
         throw desktopUnsupportedServiceOrderAction("Registro de entrega");

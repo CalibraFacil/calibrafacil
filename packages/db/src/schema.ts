@@ -2629,6 +2629,12 @@ export const asset = pgTable(
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
     comments: text("comments"), // Additional notes about the equipment
+    // Whether this instrument is subject to legal metrology (Inmetro): governs
+    // whether the repair seal (Etiqueta de Reparo) + security lacre fields are
+    // shown on its service orders. See docs token `asset.inmetroRegistration`.
+    subjectToLegalMetrology: boolean("subject_to_legal_metrology")
+      .default(false)
+      .notNull(),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -4710,9 +4716,15 @@ export const serviceOrder = pgTable(
     claimedDefect: text("claimed_defect").notNull(),
     intakeCondition: text("intake_condition").notNull(),
     accessories: text("accessories"),
+    // Lacre (security seal) numbers: rompido na entrada / afixado na saída.
     oldSealNumber: text("old_seal_number"),
     newSealNumber: text("new_seal_number"),
+    // DEPRECATED: orphaned column — no input UI, not rendered on certificates,
+    // redundant with inmetroRepairSealNumber (the Etiqueta de Reparo / selo).
+    // No longer displayed anywhere; drop in a future contract migration.
     repairedSealNumber: text("repaired_seal_number"),
+    // Etiqueta de Reparo (Inmetro "Marca de Instrumento Reparado") — the glued
+    // repair sticker. Kept the inmetroRepairSeal* column names for stability.
     inmetroRepairSealNumber: text("inmetro_repair_seal_number"),
     inmetroRepairSealIssuedAt: timestamp("inmetro_repair_seal_issued_at"),
     inmetroRepairSealAppliedAt: timestamp("inmetro_repair_seal_applied_at"),

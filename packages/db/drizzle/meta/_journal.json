@@ -323,6 +323,13 @@
       "when": 1781740800000,
       "tag": "0045_backoffice_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1781827200000,
+      "tag": "0046_asset_subject_to_legal_metrology",
+      "breakpoints": true
     }
   ]
 }
