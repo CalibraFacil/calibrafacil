@@ -18,6 +18,7 @@ import { apiRouteParam } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DatePicker, type DatePickerPreset } from '@/components/ui/date-picker'
 import {
   Card,
   CardContent,
@@ -121,6 +122,19 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24
 function formatDateForInput(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
+
+const PERFORMED_AT_PRESETS: readonly DatePickerPreset[] = [
+  { label: 'Hoje', getDate: () => new Date() },
+  { label: 'Ontem', getDate: () => new Date(Date.now() - MS_PER_DAY) },
+  {
+    label: 'Há 3 dias',
+    getDate: () => new Date(Date.now() - 3 * MS_PER_DAY),
+  },
+  {
+    label: 'Há uma semana',
+    getDate: () => new Date(Date.now() - 7 * MS_PER_DAY),
+  },
+]
 
 type ExecuteJobPageProps = {
   id: string
@@ -968,9 +982,7 @@ function ExecuteJobForm({
   }
 
   // Backdate handling for the performed (execution) date
-  const performedDate = performedAt
-    ? new Date(`${performedAt}T00:00:00`)
-    : null
+  const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
   const isPerformedDateValid =
     performedDate != null &&
     !Number.isNaN(performedDate.getTime()) &&
@@ -1208,38 +1220,28 @@ function ExecuteJobForm({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 px-5 pb-5">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!isEditable}
-                  onClick={() => setPerformedAt(formatDateForInput(new Date()))}
-                >
-                  Hoje
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!isEditable}
-                  onClick={() =>
-                    setPerformedAt(
-                      formatDateForInput(new Date(Date.now() - MS_PER_DAY)),
-                    )
-                  }
-                >
-                  Ontem
-                </Button>
-              </div>
               <Field>
                 <FieldLabel>Data realizada</FieldLabel>
-                <Input
-                  type="date"
-                  value={performedAt}
+                <DatePicker
+                  value={
+                    performedDate && !Number.isNaN(performedDate.getTime())
+                      ? performedDate
+                      : undefined
+                  }
                   disabled={!isEditable}
-                  onChange={(e) => setPerformedAt(e.target.value)}
-                  max={formatDateForInput(new Date())}
+                  onChange={(date) =>
+                    setPerformedAt(date ? formatDateForInput(date) : '')
+                  }
+                  placeholder="Selecione a data da calibração"
+                  presets={PERFORMED_AT_PRESETS}
+                  formatDate={(date) =>
+                    date.toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  }
+                  calendarProps={{ disabled: { after: new Date() } }}
                 />
               </Field>
               {requiresBackdateReason && (
@@ -1910,8 +1912,8 @@ function ExecuteJobForm({
                     />
                   </div>
                   <CardDescription className="text-pretty">
-                    Variáveis e valores usados nos cálculos do método — a base de
-                    rastreabilidade do resultado.
+                    Variáveis e valores usados nos cálculos do método — a base
+                    de rastreabilidade do resultado.
                   </CardDescription>
                 </CardHeader>
               </CollapsibleTrigger>

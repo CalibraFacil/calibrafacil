@@ -32,11 +32,11 @@ export function calibrationPeriodicityLabel(months: number): string {
 
 /**
  * Builds the "próxima calibração" quick-select presets. Each preset adds its
- * interval to the date returned by `getBaseDate` (the last calibration date,
- * falling back to today), resolved at click time so it tracks form edits.
+ * interval to the date returned by `getBaseDate` (today by default), resolved
+ * at click time so "1 mês" always means one month from now.
  */
 export function buildCalibrationPeriodicityPresets(
-  getBaseDate: () => Date,
+  getBaseDate: () => Date = () => new Date(),
 ): CalibrationPeriodicityPreset[] {
   return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
     label: calibrationPeriodicityLabel(months),
