@@ -1616,6 +1616,8 @@ export const ExecuteJobSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
   environment: EnvironmentalDataSchema.optional(),
+  // Persisted on draft saves so the chosen execution date survives a reload.
+  performedAt: z.string().datetime().optional(),
   calibrationLocation: CalibrationLocationInputSchema.optional(),
   calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });

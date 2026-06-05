@@ -2264,6 +2264,17 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const newStatus =
         existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
 
+      // Persist the chosen execution date on draft saves so it survives a
+      // reload. Only updated when a valid value is sent (never cleared here);
+      // the strict not-future / backdate-reason gating happens on submit.
+      const parsedPerformedAt = input.performedAt
+        ? new Date(input.performedAt)
+        : null;
+      const nextPerformedAt =
+        parsedPerformedAt && !Number.isNaN(parsedPerformedAt.getTime())
+          ? parsedPerformedAt
+          : null;
+
       // Update job with execution data
       const [updated] = await db
         .update(calibrationJob)
@@ -2276,6 +2287,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
           calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: newStatus,
+          ...(nextPerformedAt ? { performedAt: nextPerformedAt } : {}),
         })
         .where(eq(calibrationJob.id, id))
         .returning();
