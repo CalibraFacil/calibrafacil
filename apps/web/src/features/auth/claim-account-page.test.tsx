@@ -72,6 +72,10 @@ const readySetup = {
 
 describe('ClaimAccountPage', () => {
   beforeEach(() => {
+    // Fake timers (advancing with the real clock so async queries still resolve)
+    // so input-otp's password-manager-badge setTimeout can be flushed on
+    // teardown instead of firing after jsdom is gone (ReferenceError: window).
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.clearAllMocks()
     installResizeObserver()
     claimMocks.getSetup.mockResolvedValue(readySetup)
@@ -90,6 +94,9 @@ describe('ClaimAccountPage', () => {
 
   afterEach(() => {
     cleanup()
+    // Flush input-otp's pending timer while jsdom is still alive, then restore.
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
     vi.clearAllMocks()
     Reflect.deleteProperty(globalThis, 'ResizeObserver')
     Reflect.deleteProperty(window, 'PublicKeyCredential')
