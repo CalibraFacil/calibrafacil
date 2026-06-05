@@ -760,23 +760,14 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
-              <Badge
-                variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}
-                className={
-                  job.status === 'GENERATING_PDF'
-                    ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-                    : ''
-                }
-              >
-                {job.status === 'GENERATING_PDF' ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Spinner className="size-3" />
-                    Gerando PDF...
-                  </span>
-                ) : (
-                  JOB_STATUS_LABELS[normalizedJobStatus]
-                )}
-              </Badge>
+              {/* The generating state is conveyed by the animated approval
+                  button, so the status badge is hidden while the PDF renders
+                  instead of repeating an amber "Gerando PDF…" pill. */}
+              {!isGeneratingPdf && (
+                <Badge variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}>
+                  {JOB_STATUS_LABELS[normalizedJobStatus]}
+                </Badge>
+              )}
               {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
               <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
                 {getFinancialStatusLabel(normalizedFinancialStatus)}
