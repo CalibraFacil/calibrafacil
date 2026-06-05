@@ -371,18 +371,28 @@ export interface AuditLogRecord {
 }
 
 /**
+ * Internal/system audit actions that must not surface in the user-facing
+ * timeline (e.g. deterministic seed/reconcile operations run by our tooling).
+ * The records stay in the audit log for traceability — they're only hidden
+ * from the UI, where they'd otherwise render as raw, unmapped entries.
+ */
+const INTERNAL_AUDIT_ACTIONS = new Set(['seed_reconcile'])
+
+/**
  * Build timeline events from generic audit log records
  * Works with any entity's audit log (standards, methods, assets, services, etc.)
  */
 export function buildAuditTimelineEvents(
   logs: AuditLogRecord[],
 ): TimelineEvent[] {
-  return logs.map((log) => ({
-    id: String(log.id),
-    type: mapActionToEventType(log.action),
-    label: actionLabels[log.action] || log.action,
-    timestamp: log.performedAt,
-    actor: log.performerName ?? log.performedByName ?? log.performedBy,
-    details: log.reason || undefined,
-  }))
+  return logs
+    .filter((log) => !INTERNAL_AUDIT_ACTIONS.has(log.action))
+    .map((log) => ({
+      id: String(log.id),
+      type: mapActionToEventType(log.action),
+      label: actionLabels[log.action] || log.action,
+      timestamp: log.performedAt,
+      actor: log.performerName ?? log.performedByName ?? log.performedBy,
+      details: log.reason || undefined,
+    }))
 }
