@@ -28,6 +28,7 @@ import {
   type WorkbookWarning,
 } from "@calibra-facil/certificate-xlsx-template";
 import { processScheduledNotifications } from "./scheduled.js";
+import { formatNumberForXlsx } from "./xlsx-number-format.js";
 import {
   signPdf,
   decryptPassword,
@@ -2791,19 +2792,8 @@ function asFiniteNumber(value: unknown): number | null {
   return null;
 }
 
-function formatNumberForXlsx(value: number, fractionDigits?: number): string {
-  const decimals =
-    fractionDigits ??
-    (Number.isInteger(value)
-      ? 0
-      : Math.min(6, Math.max(1, String(value).split(".")[1]?.length ?? 1)));
-
-  return value.toLocaleString("pt-BR", {
-    useGrouping: false,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
+// formatNumberForXlsx is imported from ./xlsx-number-format.js (unit-tested;
+// correctly handles scientific-notation values that previously rendered "0,0").
 
 function formatMeasuredValueForXlsx(
   value: unknown,
