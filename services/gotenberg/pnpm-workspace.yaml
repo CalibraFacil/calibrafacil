@@ -1,0 +1,11 @@
+# Standalone pnpm root for this service — keeps it out of the repo-root
+# workspace (deployed independently via `wrangler deploy`). Mirrors the root's
+# approval of the native build scripts wrangler's deps ship.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

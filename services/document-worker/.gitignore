@@ -2,6 +2,3 @@ node_modules/
 .wrangler/
 .dev.vars
 worker-configuration.d.ts
-# Standalone install lockfile (this service is not in the pnpm workspace);
-# matches services/gotenberg, which commits no lockfile.
-pnpm-lock.yaml
