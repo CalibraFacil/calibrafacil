@@ -18,7 +18,8 @@ import { apiRouteParam } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { DatePicker, type DatePickerPreset } from '@/components/ui/date-picker'
+import { DateInput } from '@/components/ui/date-input'
+import { type DatePickerPreset } from '@/components/ui/date-picker'
 import {
   Card,
   CardContent,
@@ -389,9 +390,8 @@ function ExecuteJobForm({
     validations: true,
     debug: false,
   })
-  const [performedAt, setPerformedAt] = useState<string>(() =>
-    formatDateForInput(new Date()),
-  )
+  // Starts empty so the operator makes a deliberate choice of execution date.
+  const [performedAt, setPerformedAt] = useState<string>('')
   const [backdateReason, setBackdateReason] = useState('')
 
   const assetSpecFields = useMemo(
@@ -1222,7 +1222,7 @@ function ExecuteJobForm({
             <CardContent className="space-y-3 px-5 pb-5">
               <Field>
                 <FieldLabel>Data realizada</FieldLabel>
-                <DatePicker
+                <DateInput
                   value={
                     performedDate && !Number.isNaN(performedDate.getTime())
                       ? performedDate
@@ -1232,15 +1232,8 @@ function ExecuteJobForm({
                   onChange={(date) =>
                     setPerformedAt(date ? formatDateForInput(date) : '')
                   }
-                  placeholder="Selecione a data da calibração"
+                  max={formatDateForInput(new Date())}
                   presets={PERFORMED_AT_PRESETS}
-                  formatDate={(date) =>
-                    date.toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric',
-                    })
-                  }
                   calendarProps={{ disabled: { after: new Date() } }}
                 />
               </Field>

@@ -100,6 +100,11 @@ describe('ExecuteJobPage workflow', () => {
   it('submits normalized execution data and returns to the jobs list', async () => {
     renderExecutePage()
 
+    // The execution date starts empty and gates submission, so pick today first.
+    fireEvent.change(screen.getByLabelText('Data'), {
+      target: { value: new Date().toISOString().slice(0, 10) },
+    })
+
     fireEvent.click(
       screen.getByRole('button', { name: /enviar para revisão/i }),
     )
