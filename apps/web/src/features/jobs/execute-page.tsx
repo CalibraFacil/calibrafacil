@@ -395,8 +395,11 @@ function ExecuteJobForm({
     validations: true,
     debug: false,
   })
-  // Starts empty so the operator makes a deliberate choice of execution date.
-  const [performedAt, setPerformedAt] = useState<string>('')
+  // Hydrate from the persisted execution date (saved with the draft); otherwise
+  // start empty so the operator makes a deliberate choice.
+  const [performedAt, setPerformedAt] = useState<string>(() =>
+    job.performedAt ? formatDateForInput(new Date(job.performedAt)) : '',
+  )
   const [backdateReason, setBackdateReason] = useState('')
 
   const assetSpecFields = useMemo(
@@ -724,6 +727,10 @@ function ExecuteJobForm({
           environment: environmentPayload,
           calibrationLocation: calibrationLocationPayload,
           calibrationPhases: calibrationPhasesPayload,
+          // Persist the execution date with the draft so it survives a reload.
+          performedAt: performedAt
+            ? new Date(`${performedAt}T12:00:00`).toISOString()
+            : undefined,
         }),
       )
     },
