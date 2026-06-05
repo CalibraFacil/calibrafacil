@@ -7,6 +7,7 @@
     "start": "bun src/bun.ts",
     "serve": "bun src/serve.ts",
     "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs",
+    "test:xlsx-format": "bun src/xlsx-number-format.test.ts",
     "check-types": "tsgo --noEmit"
   },
   "main": "./src/index.ts",
