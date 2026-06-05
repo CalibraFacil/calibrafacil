@@ -200,6 +200,7 @@ export const syncRouter = new Hono<{
             model: asset.model,
             baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             status: asset.status,
             updatedAt: asset.updatedAt,
           })
@@ -776,6 +777,7 @@ async function loadCloudSyncEventsSince(
         model: asset.model,
         baseMeasurementUnit: asset.baseMeasurementUnit,
         specifications: asset.specifications,
+        subjectToLegalMetrology: asset.subjectToLegalMetrology,
         status: asset.status,
         updatedAt: asset.updatedAt,
       })
@@ -1730,6 +1732,7 @@ async function applyCreateLocalAsset(
         nextCalibrationDate,
         comments: values.comments || null,
         specifications: normalizedSpecifications.specifications || null,
+        subjectToLegalMetrology: values.subjectToLegalMetrology ?? false,
       })
       .returning();
 
@@ -1817,6 +1820,7 @@ async function applyUpdateLocalAsset(
       nextCalibrationDate: asset.nextCalibrationDate,
       comments: asset.comments,
       specifications: asset.specifications,
+      subjectToLegalMetrology: asset.subjectToLegalMetrology,
       assetTypeDefinition: assetType.definition,
     })
     .from(asset)
@@ -1874,6 +1878,8 @@ async function applyUpdateLocalAsset(
   }
   if (values.comments !== undefined)
     updateData.comments = values.comments || null;
+  if (values.subjectToLegalMetrology !== undefined)
+    updateData.subjectToLegalMetrology = values.subjectToLegalMetrology;
   if (values.specifications !== undefined) {
     const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
       specifications: values.specifications || null,

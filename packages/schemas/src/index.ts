@@ -309,6 +309,9 @@ export const CreateAssetSchema = z.object({
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
   specifications: z.record(z.string(), z.unknown()).optional(),
+  // Subject to legal metrology (Inmetro). Governs whether the service-order
+  // repair-seal (Etiqueta de Reparo) + lacre fields are shown for this asset.
+  subjectToLegalMetrology: z.boolean().optional().default(false),
 });
 
 export type CreateAssetInput = z.infer<typeof CreateAssetSchema>;

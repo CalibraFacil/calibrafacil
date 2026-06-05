@@ -116,7 +116,7 @@ export const SERVICE_ORDER_EVENT_LABELS: Record<string, string> = {
   'service_order.repair_started': 'Execução iniciada',
   'service_order.repair_finished': 'Execução finalizada',
   'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
-  'service_order.repair_seal_updated': 'Selo de reparado atualizado',
+  'service_order.repair_seal_updated': 'Etiqueta de Reparo atualizada',
   'service_order.ready_for_pickup': 'Disponível para retirada',
   'service_order.delivered': 'Entregue ao cliente',
   'service_order.closed': 'OS encerrada',

@@ -192,8 +192,28 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
+        subjectToLegalMetrology: false,
       },
     })
+  })
+
+  it('round-trips the legal-metrology flag on create', () => {
+    const off = parseAssetForm(validAssetForm())
+    expect(off.success && off.data.subjectToLegalMetrology).toBe(false)
+
+    const on = parseAssetForm({
+      ...validAssetForm(),
+      subjectToLegalMetrology: true,
+    })
+    expect(on.success && on.data.subjectToLegalMetrology).toBe(true)
+  })
+
+  it('round-trips the legal-metrology flag on update', () => {
+    const result = parseAssetEditForm({
+      ...validAssetEditForm(),
+      subjectToLegalMetrology: true,
+    })
+    expect(result.success && result.data.subjectToLegalMetrology).toBe(true)
   })
 
   it('maps asset update specification errors to edit route fields', () => {
@@ -310,6 +330,7 @@ function validAssetForm(): AssetFormData {
     lastCalibrationDate: undefined,
     nextCalibrationDate: undefined,
     comments: '',
+    subjectToLegalMetrology: false,
     specifications: {},
   }
 }
@@ -325,6 +346,7 @@ function validAssetEditForm(): AssetEditFormData {
     lastCalibrationDate: undefined,
     nextCalibrationDate: undefined,
     comments: '',
+    subjectToLegalMetrology: false,
     specifications: {},
   }
 }
