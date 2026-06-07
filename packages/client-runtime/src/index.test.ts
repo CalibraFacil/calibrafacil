@@ -909,6 +909,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-first-read-through-sync",
         },
         {
+          "method": "listCompositionProfiles",
+          "namespace": "standards",
+          "policy": "local-first-read-through-sync",
+        },
+        {
           "method": "auditLog",
           "namespace": "standards",
           "policy": "cloud-only",
