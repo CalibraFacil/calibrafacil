@@ -438,7 +438,7 @@ export function ApprovedJobRecord({
               </span>
               <div className="min-w-0">
                 <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Registro de qualidade · ISO/IEC 17025
+                  Registro de qualidade
                 </p>
                 <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                   {job.jobId}
@@ -541,9 +541,8 @@ export function ApprovedJobRecord({
           <div className="space-y-4 py-4">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="text-sm text-amber-800">
-                <strong>ISO 17025 Cláusula 7.8.4.1:</strong> Quando um
-                certificado emitido precisar ser alterado, cada alteração deve
-                ser identificada e conter referência ao original.
+                Quando um certificado emitido precisar ser alterado, cada
+                alteração deve ser identificada e conter referência ao original.
               </p>
             </div>
             <div className="space-y-2">

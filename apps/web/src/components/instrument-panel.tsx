@@ -201,17 +201,19 @@ export function SignalTile({
           />
         ) : null}
       </div>
-      <div className="mt-2 flex items-baseline gap-1.5">
+      <div className="mt-2 flex min-w-0 items-baseline gap-1.5">
         <span
           className={cn(
-            'font-mono text-2xl font-semibold leading-none tabular-nums',
+            'shrink-0 font-mono text-2xl font-semibold leading-none tabular-nums',
             TONE_VALUE[tone],
           )}
         >
           {value}
         </span>
         {hint ? (
-          <span className="text-xs text-muted-foreground">{hint}</span>
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            {hint}
+          </span>
         ) : null}
       </div>
     </div>
