@@ -541,9 +541,8 @@ export function ApprovedJobRecord({
           <div className="space-y-4 py-4">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="text-sm text-amber-800">
-                <strong>ISO 17025 Cláusula 7.8.4.1:</strong> Quando um
-                certificado emitido precisar ser alterado, cada alteração deve
-                ser identificada e conter referência ao original.
+                Quando um certificado emitido precisar ser alterado, cada
+                alteração deve ser identificada e conter referência ao original.
               </p>
             </div>
             <div className="space-y-2">
