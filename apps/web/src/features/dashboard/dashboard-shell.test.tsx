@@ -34,6 +34,10 @@ vi.mock('@/components/app-sidebar', () => ({
   AppSidebar: () => <aside>sidebar</aside>,
 }))
 
+vi.mock('@/components/sidebar-mobile-autoclose', () => ({
+  SidebarMobileAutoClose: () => null,
+}))
+
 vi.mock('@/components/command-palette/command-context', () => ({
   CommandPaletteProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
