@@ -127,19 +127,76 @@ function isDocumentWorkerJobType(
   return getDocumentWorkerJobTypes().has(resolveQueueJobType(message));
 }
 
-async function wakeDocumentWorker(baseUrl: string): Promise<void> {
+// The container scales to zero after 15m idle, so the first drain ping after an
+// idle period has to outlast a cold start: Cloudflare holds the request open
+// while the container boots, then the container answers 202 and drains
+// asynchronously. The previous single 4s timeout aborted mid cold-start — and
+// nothing re-claims an un-claimed PENDING row (stale-release only re-queues rows
+// already PROCESSING) — so a job enqueued while the container was asleep sat
+// stranded in PENDING / `GENERATING_PDF` until the next enqueue or a manual
+// drain. We now use a longer per-attempt timeout plus a couple of retries so the
+// wake reliably lands. Tunable via env without a redeploy.
+const DEFAULT_WAKE_TIMEOUT_MS = 12_000;
+const DEFAULT_WAKE_ATTEMPTS = 2;
+const DEFAULT_WAKE_RETRY_DELAY_MS = 500;
+
+function readWakeConfig() {
+  const timeoutMs = Number(process.env.DOCUMENT_WORKER_WAKE_TIMEOUT_MS);
+  const attempts = Number(process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS);
+  const retryDelayMs = Number(process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS);
+  return {
+    timeoutMs:
+      Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? timeoutMs
+        : DEFAULT_WAKE_TIMEOUT_MS,
+    attempts:
+      Number.isFinite(attempts) && attempts >= 1
+        ? Math.floor(attempts)
+        : DEFAULT_WAKE_ATTEMPTS,
+    retryDelayMs:
+      Number.isFinite(retryDelayMs) && retryDelayMs >= 0
+        ? retryDelayMs
+        : DEFAULT_WAKE_RETRY_DELAY_MS,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Exported for unit tests; not part of the module's public surface. Resolves as
+// soon as any attempt gets a 2xx (the container answers 202, then drains), and
+// throws only after every attempt fails.
+export async function wakeDocumentWorker(baseUrl: string): Promise<void> {
   const token = process.env.DOCUMENT_WORKER_TOKEN;
-  const timeoutMs = Number(
-    process.env.DOCUMENT_WORKER_WAKE_TIMEOUT_MS ?? 4_000,
-  );
+  const { timeoutMs, attempts, retryDelayMs } = readWakeConfig();
   const headers: Record<string, string> = {};
   if (token) headers["X-Worker-Token"] = token;
+  const url = new URL(DOCUMENT_WORKER_DRAIN_PATH, baseUrl);
 
-  await fetch(new URL(DOCUMENT_WORKER_DRAIN_PATH, baseUrl), {
-    method: "POST",
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- retries are inherently sequential: each attempt must wait for the previous one to fail.
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (response.ok) return;
+      lastError = new Error(`Drain ping returned HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts && retryDelayMs > 0) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- intentional backoff between sequential retry attempts.
+      await delay(retryDelayMs);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to wake document worker");
 }
 
 async function enqueueViaDocumentWorker(
@@ -148,8 +205,10 @@ async function enqueueViaDocumentWorker(
 ) {
   const jobId = await enqueueQueueJob(message);
 
-  // Best-effort wake: the job is durably enqueued regardless. A failed wake is
-  // recovered by the next enqueue's drain or the container's stale-job release.
+  // Fire-and-forget so the enqueueing request returns immediately; the wake runs
+  // after the HTTP response (within the function's maxDuration). The job is
+  // durably enqueued regardless, so a fully failed wake only delays the render
+  // until the next enqueue's drain or a manual drain.
   void wakeDocumentWorker(baseUrl).catch((error) => {
     console.error("[BackgroundJobs] Failed to wake document worker", {
       type: resolveQueueJobType(message),

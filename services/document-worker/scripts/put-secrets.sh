@@ -64,8 +64,11 @@ wput() { # wput NAME : pipe its value from $SRC into `wrangler secret put NAME`
   fi
 }
 
+# R2_BUCKET_NAME / R2_MEDIA_BUCKET_NAME are NOT secrets — they live in
+# wrangler.jsonc `vars` (a plaintext binding and a secret of the same name
+# collide), so they are intentionally absent from this list.
 echo "Container secrets → Cloudflare (calibrafacil-document-worker):"
-for n in DATABASE_URL R2_ACCOUNT_ID R2_BUCKET_NAME R2_MEDIA_BUCKET_NAME \
+for n in DATABASE_URL R2_ACCOUNT_ID \
   R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY GOTENBERG_URL GOTENBERG_TOKEN \
   SIGNING_MASTER_KEY INTEGRATIONS_MASTER_KEY RESEND_API_KEY \
   RESEND_FROM_EMAIL EMAIL_FROM EMAIL_LOGO_URL WEB_URL APP_URL; do

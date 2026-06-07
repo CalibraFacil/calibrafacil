@@ -18,7 +18,7 @@ vi.mock("../runtime-env", () => ({
   createWorkerRuntimeEnv: vi.fn(() => ({})),
 }));
 
-import { enqueueBackgroundJob } from "../background-jobs";
+import { enqueueBackgroundJob, wakeDocumentWorker } from "../background-jobs";
 
 const DOCUMENT_WORKER_ENV_KEYS = [
   "BACKGROUND_JOBS_MODE",
@@ -27,6 +27,8 @@ const DOCUMENT_WORKER_ENV_KEYS = [
   "DOCUMENT_WORKER_JOB_TYPES",
   "DOCUMENT_WORKER_TOKEN",
   "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
+  "DOCUMENT_WORKER_WAKE_ATTEMPTS",
+  "DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS",
 ] as const;
 
 const savedEnv: Record<string, string | undefined> = {};
@@ -59,6 +61,11 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     }
     // Force the production dispatch path (skip local/inline in-process modes).
     process.env.BACKGROUND_JOBS_MODE = "vercel";
+    // Single wake attempt with no backoff by default, so the fire-and-forget
+    // wake in enqueueBackgroundJob can't leak a retry into the next test. The
+    // retry-specific tests opt back into multiple attempts and await the wake.
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "1";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
     mocks.send.mockResolvedValue({ messageId: "vercel-message-1" });
     mocks.enqueueQueueJob.mockResolvedValue(42);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
@@ -161,5 +168,63 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(previewMessage);
     expect(result.messageId).toBe("app-queue-42");
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("retries the drain wake when the first attempt fails (cold start)", async () => {
+    process.env.DOCUMENT_WORKER_TOKEN = "secret-token";
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "3";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockRejectedValueOnce(new Error("cold start in progress"))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+
+    await expect(
+      wakeDocumentWorker("https://dw.example.com"),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      new Headers(fetchMock.mock.calls[0][1]?.headers).get("X-Worker-Token"),
+    ).toBe("secret-token");
+  });
+
+  it("retries when the drain ping returns a non-2xx response", async () => {
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "2";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+
+    await expect(
+      wakeDocumentWorker("https://dw.example.com"),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after exhausting the configured wake attempts", async () => {
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "2";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new Error("worker unreachable"));
+
+    await expect(
+      wakeDocumentWorker("https://dw.example.com"),
+    ).rejects.toThrow("worker unreachable");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops after the first successful attempt", async () => {
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "3";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+
+    await wakeDocumentWorker("https://dw.example.com");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
