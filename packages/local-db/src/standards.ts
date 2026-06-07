@@ -154,6 +154,27 @@ export function getLocalStandardDetail(
   return row ? toLocalStandard(row) : null;
 }
 
+/**
+ * The org's mass composition-profile catalog, mirrored from the cloud via sync.
+ * Shape mirrors the cloud GET /api/standards/composition-profiles response so the
+ * desktop client and runtime treat both transports identically.
+ */
+export function listLocalCompositionProfiles(database: LocalDatabase): {
+  data: unknown[];
+} {
+  const rows = database
+    .prepare<Record<string, never>, { snapshot_json: string }>(
+      `
+SELECT snapshot_json
+FROM mass_composition_profiles
+WHERE sync_state != 'deleted'
+ORDER BY profile_class ASC, nominal_g ASC
+`,
+    )
+    .all({});
+  return { data: rows.map((row) => JSON.parse(row.snapshot_json)) };
+}
+
 function resolveLocalStandardRow(
   database: LocalDatabase,
   identifier: string,

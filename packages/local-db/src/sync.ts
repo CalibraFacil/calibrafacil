@@ -495,6 +495,54 @@ ON CONFLICT(id) DO UPDATE SET
         });
     }
 
+    for (const item of bootstrap.massCompositionProfiles ?? []) {
+      const row = asRecord(item);
+      const id = requiredNumber(row, "id");
+      database
+        .prepare(
+          `
+INSERT INTO mass_composition_profiles (
+  id,
+  remote_id,
+  organization_id,
+  profile_key,
+  profile_class,
+  nominal_g,
+  snapshot_json,
+  pulled_at,
+  sync_state
+) VALUES (
+  @id,
+  @remoteId,
+  @organizationId,
+  @profileKey,
+  @profileClass,
+  @nominalG,
+  @snapshotJson,
+  @pulledAt,
+  'synced'
+)
+ON CONFLICT(id) DO UPDATE SET
+  profile_key = excluded.profile_key,
+  profile_class = excluded.profile_class,
+  nominal_g = excluded.nominal_g,
+  snapshot_json = excluded.snapshot_json,
+  pulled_at = excluded.pulled_at,
+  sync_state = excluded.sync_state
+`,
+        )
+        .run({
+          id: remoteLocalId("mass_composition_profile", id),
+          remoteId: id,
+          organizationId,
+          profileKey: getString(row, "profileKey") ?? "",
+          profileClass: getString(row, "profileClass") ?? "",
+          nominalG: getNumber(row, "nominalG") ?? 0,
+          snapshotJson: JSON.stringify(row),
+          pulledAt,
+        });
+    }
+
     for (const item of bootstrap.environmentalLimits) {
       const row = asRecord(item);
       const id = requiredNumber(row, "id");

@@ -31,6 +31,7 @@ import {
   listLocalCustomers,
   listLocalJobs,
   listLocalMethods,
+  listLocalCompositionProfiles,
   listLocalServices,
   listLocalServiceOrders,
   listLocalStandards,
@@ -1107,6 +1108,10 @@ export function createLocalServer(
       },
       409,
     );
+  });
+
+  app.get("/api/standards/composition-profiles", (c) => {
+    return c.json(listLocalCompositionProfiles(database));
   });
 
   app.get("/api/standards/:id/audit-log", (c) => {
