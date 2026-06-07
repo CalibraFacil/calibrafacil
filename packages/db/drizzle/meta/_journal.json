@@ -337,6 +337,13 @@
       "when": 1781913600000,
       "tag": "0047_authorized_signatory",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1782000000000,
+      "tag": "0048_mass_composition_profile",
+      "breakpoints": true
     }
   ]
 }

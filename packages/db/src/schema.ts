@@ -12,6 +12,7 @@ import {
   jsonb,
   integer,
   real,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import type {
   BillingCustomerStatus,
@@ -3454,6 +3455,65 @@ export const referenceStandard = pgTable(
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
   ],
 );
+
+/**
+ * Normalized catalog of mass composition-build profiles — the lab's available
+ * buildup weights by class + nominal (e.g. M1 1g..20kg). Previously stored as a
+ * byte-identical `compositionProfile: true` block copied onto every mass
+ * reference_standard.certified_values; this table is the single source of
+ * truth (one row per org+class+nominal, with provenance), and the runtime reads
+ * profiles from here. See .goals/composition-profile-catalog-normalization.md.
+ */
+export const massCompositionProfile = pgTable(
+  "mass_composition_profile",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    profileKey: text("profile_key").notNull(), // runtime key, e.g. "20kg-M1"
+    profileClass: text("profile_class").notNull(), // "M1" | "M2" | "F1"
+    // double precision (not real): faithfully preserves the float8 values that
+    // lived in certified_values JSONB, so buildMassCompositionValue is identical.
+    nominalG: doublePrecision("nominal_g").notNull(), // canonical nominal mass in grams (key dimension)
+    nominal: text("nominal").notNull(), // display label, e.g. "20 kg"
+    value: doublePrecision("value").notNull(),
+    uncertainty: doublePrecision("uncertainty").notNull(),
+    unit: text("unit").default("g").notNull(),
+    maxError: doublePrecision("max_error"),
+    drift: doublePrecision("drift"),
+    buoyancy: doublePrecision("buoyancy"),
+    coverageFactor: doublePrecision("coverage_factor"),
+    quantityAvailable: integer("quantity_available"),
+    // Provenance: which standard/certificate these values were sourced from.
+    sourceStandardId: integer("source_standard_id").references(
+      () => referenceStandard.id,
+      { onDelete: "set null" },
+    ),
+    sourceCertificate: text("source_certificate"),
+    status: text("status").default("ACTIVE").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("mass_composition_profile_org_idx").on(table.organizationId),
+    index("mass_composition_profile_class_idx").on(
+      table.organizationId,
+      table.profileClass,
+    ),
+    uniqueIndex("mass_composition_profile_org_class_nominal_uidx").on(
+      table.organizationId,
+      table.profileClass,
+      table.nominalG,
+    ),
+  ],
+);
+
+export type MassCompositionProfileRow = typeof massCompositionProfile.$inferSelect;
 
 export const referenceStandardCertificateDocument = pgTable(
   "reference_standard_certificate_document",
