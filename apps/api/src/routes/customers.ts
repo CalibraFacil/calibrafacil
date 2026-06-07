@@ -29,7 +29,6 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
-import { withCache, withInvalidation } from "../middleware/cache";
 import { getLabCustomerById } from "../lib/customer-access";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -107,7 +106,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ client: ["create"] }),
-    withInvalidation("customers"),
     zValidator("json", CreateCustomerSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -175,7 +173,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/search",
     ...withLabPermission({ client: ["read"] }),
-    withCache("customers-search", 30),
     zValidator("query", CommandPaletteCustomerSearchQuerySchema),
     async (c) => {
       const memberData = c.get("member");
@@ -347,7 +344,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ client: ["update"] }),
-    withInvalidation("customers"),
     zValidator("json", UpdateCustomerSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -423,69 +419,62 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete customer
   // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ client: ["delete"] }),
-    withInvalidation("customers"),
-    async (c) => {
-      const session = c.get("session");
-      const memberData = c.get("member");
-      const id = await resolveCustomerRouteId(
-        c.req.param("id"),
+  .delete("/:id", ...withLabPermission({ client: ["delete"] }), async (c) => {
+    const session = c.get("session");
+    const memberData = c.get("member");
+    const id = await resolveCustomerRouteId(
+      c.req.param("id"),
+      memberData.organizationId,
+    );
+
+    if (id === null) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    try {
+      const existingCustomer = await getLabCustomerById(
+        id,
         memberData.organizationId,
       );
 
-      if (id === null) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (!existingCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
       }
 
-      try {
-        const existingCustomer = await getLabCustomerById(
-          id,
-          memberData.organizationId,
+      // TODO: Check for active calibrations before deleting
+      // For now, we allow deletion
+
+      // Log audit entry before deletion
+      await db.insert(customerAuditLog).values({
+        customerId: id,
+        action: "delete",
+        changes: { customer: { old: existingCustomer, new: null } },
+        performedBy: session.user.id,
+        ipAddress:
+          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+      });
+
+      // Delete the customer (cascade will handle audit logs)
+      await db
+        .delete(customer)
+        .where(
+          and(
+            eq(customer.id, id),
+            eq(customer.labOrganizationId, memberData.organizationId),
+          ),
         );
 
-        if (!existingCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
+      // Also delete the associated organization
+      await db
+        .delete(organization)
+        .where(eq(organization.id, existingCustomer.authOrganizationId));
 
-        // TODO: Check for active calibrations before deleting
-        // For now, we allow deletion
-
-        // Log audit entry before deletion
-        await db.insert(customerAuditLog).values({
-          customerId: id,
-          action: "delete",
-          changes: { customer: { old: existingCustomer, new: null } },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-        });
-
-        // Delete the customer (cascade will handle audit logs)
-        await db
-          .delete(customer)
-          .where(
-            and(
-              eq(customer.id, id),
-              eq(customer.labOrganizationId, memberData.organizationId),
-            ),
-          );
-
-        // Also delete the associated organization
-        await db
-          .delete(organization)
-          .where(eq(organization.id, existingCustomer.authOrganizationId));
-
-        return c.json({ success: true });
-      } catch (error) {
-        console.error("Error deleting customer:", error);
-        return c.json({ error: "Erro ao excluir cliente" }, 500);
-      }
-    },
-  )
+      return c.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      return c.json({ error: "Erro ao excluir cliente" }, 500);
+    }
+  })
 
   // =========================================================================
   // GET /:id/members - List portal users for customer

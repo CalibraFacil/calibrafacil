@@ -22,13 +22,6 @@ import {
   type SubscriptionStatus,
 } from "@calibra-facil/shared";
 import type { AuthVariables } from "./permission";
-import {
-  kvGet,
-  kvPut,
-  subscriptionCacheKey,
-  usageCacheKey,
-  CACHE_TTL,
-} from "../lib/cache";
 
 // =============================================================================
 // TIER GUARD MIDDLEWARE
@@ -56,11 +49,10 @@ export async function assertPlanLimit(
   requested = 1,
 ) {
   const memberData = c.get("member");
-  const kv = getCacheNamespace(c.env);
   const requestedCount = Math.max(0, requested);
 
-  // Get subscription (cached)
-  const sub = await getCachedSubscription(kv, memberData.organizationId);
+  // Get subscription
+  const sub = await getSubscription(memberData.organizationId);
 
   // Determine effective plan (FREE if no subscription)
   const planId = toPlanId(sub?.planId);
@@ -93,12 +85,8 @@ export async function assertPlanLimit(
     resource
   ];
 
-  // Get current usage (cached)
-  const usage = await getCachedResourceUsage(
-    kv,
-    memberData.organizationId,
-    resource,
-  );
+  // Get current usage
+  const usage = await getResourceUsage(memberData.organizationId, resource);
   const projectedUsage = usage + requestedCount;
 
   // Check if limit exceeded
@@ -150,10 +138,9 @@ export function requirePlanLimit(resource: LimitResource) {
 export function requireFeature(feature: FeatureFlag) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const memberData = c.get("member");
-    const kv = getCacheNamespace(c.env);
 
-    // Get subscription (cached)
-    const sub = await getCachedSubscription(kv, memberData.organizationId);
+    // Get subscription
+    const sub = await getSubscription(memberData.organizationId);
 
     // Determine effective plan (FREE if no subscription)
     const planId = toPlanId(sub?.planId);
@@ -190,68 +177,30 @@ export function requireFeature(feature: FeatureFlag) {
 }
 
 // =============================================================================
-// CACHED LOOKUPS
+// SUBSCRIPTION LOOKUP
 // =============================================================================
 
-interface CachedSubscription {
+interface SubscriptionInfo {
   planId: PlanId;
   status: SubscriptionStatus;
 }
 
 /**
- * Get subscription data with KV caching.
- * Falls back to DB on cache miss or KV unavailability.
+ * Get subscription data for an organization.
  */
-async function getCachedSubscription(
-  kv: KVNamespace | undefined,
+async function getSubscription(
   organizationId: string,
-): Promise<CachedSubscription | null> {
-  const cacheKey = subscriptionCacheKey(organizationId);
-
-  // Try cache first
-  const cached = await kvGet<CachedSubscription>(kv, cacheKey);
-  if (cached !== null) return cached;
-
-  // Cache miss — query DB
+): Promise<SubscriptionInfo | null> {
   const sub = await db.query.subscription.findFirst({
     where: eq(subscription.organizationId, organizationId),
   });
 
-  if (!sub) {
-    // Cache the "no subscription" state too (avoids repeated DB misses)
-    await kvPut(kv, cacheKey, null, { ttl: CACHE_TTL.subscription });
-    return null;
-  }
+  if (!sub) return null;
 
-  const result: CachedSubscription = {
+  return {
     planId: toPlanId(sub.planId),
     status: toSubscriptionStatus(sub.status),
   };
-
-  await kvPut(kv, cacheKey, result, { ttl: CACHE_TTL.subscription });
-  return result;
-}
-
-/**
- * Get resource usage with KV caching.
- * Falls back to DB on cache miss.
- */
-async function getCachedResourceUsage(
-  kv: KVNamespace | undefined,
-  organizationId: string,
-  resource: LimitResource,
-): Promise<number> {
-  const cacheKey = usageCacheKey(organizationId, resource);
-
-  // Try cache first
-  const cached = await kvGet<number>(kv, cacheKey);
-  if (cached !== null) return cached;
-
-  // Cache miss — query DB
-  const usage = await getResourceUsage(organizationId, resource);
-
-  await kvPut(kv, cacheKey, usage, { ttl: CACHE_TTL.usage });
-  return usage;
 }
 
 // =============================================================================
@@ -368,30 +317,6 @@ export function withPlanLimit(resource: LimitResource) {
  */
 export function withFeature(feature: FeatureFlag) {
   return [requireFeature(feature)];
-}
-
-function getCacheNamespace(env: unknown): KVNamespace | undefined {
-  const cache = readProperty(env, "CACHE");
-  return isKvNamespace(cache) ? cache : undefined;
-}
-
-function isKvNamespace(value: unknown): value is KVNamespace {
-  return (
-    typeof readProperty(value, "get") === "function" &&
-    typeof readProperty(value, "put") === "function" &&
-    typeof readProperty(value, "delete") === "function"
-  );
-}
-
-function readProperty(value: unknown, key: string): unknown {
-  if (
-    value === null ||
-    (typeof value !== "object" && typeof value !== "function")
-  ) {
-    return undefined;
-  }
-
-  return Reflect.get(value, key);
 }
 
 function toPlanId(value: unknown): PlanId {

@@ -14,7 +14,6 @@ import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
 } from "../../lib/finance";
-import { withInvalidation } from "../../middleware/cache";
 import {
   withLabPermission,
   type AuthVariables,
@@ -246,7 +245,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ financial: ["contract_create"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     zValidator("json", CreateAgreementSchema),
     async (c) => {
       const member = c.get("member");
@@ -337,7 +335,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id",
     ...withLabPermission({ financial: ["contract_update"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     zValidator("json", UpdateAgreementSchema),
     async (c) => {
       const member = c.get("member");
@@ -439,7 +436,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/activate",
     ...withLabPermission({ financial: ["contract_update"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -488,7 +484,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/cancel",
     ...withLabPermission({ financial: ["contract_update"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");

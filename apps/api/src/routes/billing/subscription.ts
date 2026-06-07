@@ -17,7 +17,6 @@ import {
   isValidPlanId,
   type PlanId,
 } from "@calibra-facil/shared";
-import { withInvalidation } from "../../middleware/cache";
 
 // =============================================================================
 // SUBSCRIPTION ROUTES - Organization subscription management
@@ -88,85 +87,80 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE / - Cancel subscription
   // =========================================================================
-  .delete(
-    "/",
-    ...withLabPermission({ billing: ["update"] }),
-    withInvalidation("subscription"),
-    async (c) => {
-      const memberData = c.get("member");
+  .delete("/", ...withLabPermission({ billing: ["update"] }), async (c) => {
+    const memberData = c.get("member");
 
-      const sub = await db.query.subscription.findFirst({
-        where: eq(subscription.organizationId, memberData.organizationId),
-      });
+    const sub = await db.query.subscription.findFirst({
+      where: eq(subscription.organizationId, memberData.organizationId),
+    });
 
-      if (!sub) {
-        return c.json({ error: "Nenhuma assinatura encontrada" }, 404);
+    if (!sub) {
+      return c.json({ error: "Nenhuma assinatura encontrada" }, 404);
+    }
+
+    if (sub.status === "CANCELED") {
+      return c.json({ error: "Assinatura ja esta cancelada" }, 400);
+    }
+
+    // Cancel in Asaas if exists
+    if (sub.providerSubscriptionId) {
+      try {
+        const { cancelSubscription } = await import("../../services/asaas");
+        await cancelSubscription(sub.providerSubscriptionId);
+      } catch (error) {
+        console.error("Error canceling Asaas subscription:", error);
+        return c.json(
+          {
+            error:
+              "Falha ao cancelar assinatura no provedor de pagamento. Tente novamente.",
+          },
+          502,
+        );
       }
 
-      if (sub.status === "CANCELED") {
-        return c.json({ error: "Assinatura ja esta cancelada" }, 400);
+      try {
+        const [updated] = await db
+          .update(subscription)
+          .set({
+            status: "CANCELED",
+            canceledAt: new Date(),
+          })
+          .where(eq(subscription.id, sub.id))
+          .returning();
+
+        return c.json({
+          subscription: serializePublicSubscription(updated ?? null),
+        });
+      } catch (error) {
+        console.error("Error updating canceled subscription locally:", {
+          error,
+          subscriptionId: sub.id,
+          providerSubscriptionId: sub.providerSubscriptionId,
+        });
+        return c.json(
+          {
+            error:
+              "Assinatura cancelada no provedor, mas falhou ao atualizar o estado local. Contate o suporte.",
+          },
+          500,
+        );
       }
+    }
 
-      // Cancel in Asaas if exists
-      if (sub.providerSubscriptionId) {
-        try {
-          const { cancelSubscription } = await import("../../services/asaas");
-          await cancelSubscription(sub.providerSubscriptionId);
-        } catch (error) {
-          console.error("Error canceling Asaas subscription:", error);
-          return c.json(
-            {
-              error:
-                "Falha ao cancelar assinatura no provedor de pagamento. Tente novamente.",
-            },
-            502,
-          );
-        }
+    // Update local subscription
+    const [updated] = await db
+      .update(subscription)
+      .set({
+        status: "CANCELED",
+        canceledAt: new Date(),
+      })
+      .where(eq(subscription.id, sub.id))
+      .returning();
 
-        try {
-          const [updated] = await db
-            .update(subscription)
-            .set({
-              status: "CANCELED",
-              canceledAt: new Date(),
-            })
-            .where(eq(subscription.id, sub.id))
-            .returning();
-
-          return c.json({
-            subscription: serializePublicSubscription(updated ?? null),
-          });
-        } catch (error) {
-          console.error("Error updating canceled subscription locally:", {
-            error,
-            subscriptionId: sub.id,
-            providerSubscriptionId: sub.providerSubscriptionId,
-          });
-          return c.json(
-            {
-              error:
-                "Assinatura cancelada no provedor, mas falhou ao atualizar o estado local. Contate o suporte.",
-            },
-            500,
-          );
-        }
-      }
-
-      // Update local subscription
-      const [updated] = await db
-        .update(subscription)
-        .set({
-          status: "CANCELED",
-          canceledAt: new Date(),
-        })
-        .where(eq(subscription.id, sub.id))
-        .returning();
-
-      return c.json({
-        subscription: serializePublicSubscription(updated ?? null),
-      });
-    },
-  );
+    return c.json({
+      subscription: serializePublicSubscription(updated ?? null),
+    });
+  });
 
 // =============================================================================
 // HELPER FUNCTIONS

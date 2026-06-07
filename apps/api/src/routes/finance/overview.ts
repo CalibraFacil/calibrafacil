@@ -13,7 +13,6 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
-import { withCache } from "../../middleware/cache";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 function getAgingBucketLabel(daysOverdue: number) {
@@ -29,7 +28,6 @@ export const financeOverviewRouter = new Hono<{
   "/",
   ...withLabPermission({ financial: ["read"] }),
   requireFeature("financial"),
-  withCache("finance-overview", 60),
   async (c) => {
     const member = c.get("member");
     const [documentSummary] = await db

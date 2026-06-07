@@ -8,7 +8,6 @@ import {
   loadBillingDocumentExportPayload,
 } from "../../lib/finance";
 import type { IntegrationsEnv } from "../../lib/integrations";
-import { withInvalidation } from "../../middleware/cache";
 import {
   withLabPermission,
   type AuthVariables,
@@ -69,7 +68,6 @@ export const financeErpRouter = new Hono<{
     ...withLabPermission({ financial: ["export"] }),
     requireFeature("financial"),
     requireFeature("financial_integrations"),
-    withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");
       const documentId = Number.parseInt(c.req.param("id"), 10);

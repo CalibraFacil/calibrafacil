@@ -5,7 +5,6 @@ import { providerWebhookEvent } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { AsaasWebhookPayload } from "../services/asaas/types";
 import { reconcileCommercialWebhook } from "../services/commercial/reconcile-webhook";
-import { invalidateOnMutation } from "../lib/cache";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -34,9 +33,7 @@ export function verifyWebhookToken(request: Request): boolean {
   return timingSafeEqual(expected, received);
 }
 
-export const webhooksRouter = new Hono<{
-  Bindings: { CACHE?: KVNamespace };
-}>().post("/asaas", async (c) => {
+export const webhooksRouter = new Hono().post("/asaas", async (c) => {
   const contentLength = Number(c.req.header("content-length") ?? "0");
   if (
     Number.isFinite(contentLength) &&
@@ -60,14 +57,6 @@ export const webhooksRouter = new Hono<{
 
   try {
     const result = await reconcileCommercialWebhook(payload);
-
-    if (result.organizationId) {
-      await invalidateOnMutation(
-        c.env.CACHE,
-        result.organizationId,
-        "subscription",
-      );
-    }
 
     return c.json(
       { received: true, duplicate: result.duplicate ?? false },

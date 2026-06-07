@@ -13,8 +13,6 @@ import {
   withPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { withCache, withInvalidation } from "../middleware/cache";
-import { CACHE_TTL } from "../lib/cache";
 
 export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -23,7 +21,6 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withPermission({ equipment: ["read"] }),
-    withCache("asset-types", CACHE_TTL.assetTypes),
     zValidator("query", ListAssetTypesQuerySchema),
     async (c) => {
       const { query } = c.req.valid("query");
@@ -95,7 +92,6 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ equipment: ["create"] }),
-    withInvalidation("asset-types"),
     zValidator("json", CreateAssetTypeSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -141,7 +137,6 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ equipment: ["update"] }),
-    withInvalidation("asset-types"),
     zValidator("json", UpdateAssetTypeSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
@@ -209,7 +204,6 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ equipment: ["delete"] }),
-    withInvalidation("asset-types"),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
 
