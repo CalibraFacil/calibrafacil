@@ -7,6 +7,7 @@ import {
   defaultRenderOptions,
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { checkApproverIsAuthorizedSignatory } from "../lib/signatory";
 import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
@@ -2443,6 +2444,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             403,
           );
         }
+      }
+
+      // Authorized-signatory scope (ISO/IEC 17025 §6.2.6): when the organization
+      // maintains a signatory roster, the approver must be authorized to sign for
+      // this instrument's asset type (or be an org-wide signatory). Auto-detected
+      // — skipped when the org has no signatory records. Distinct from execution
+      // competence (which gates the technician at assignment) and from the
+      // self-approval gate above — four-eyes by identity vs. signatory scope.
+      const signatoryGate = await checkApproverIsAuthorizedSignatory({
+        organizationId: memberData.organizationId,
+        approverId,
+        assetId: existing.assetId,
+      });
+      if (!signatoryGate.ok) {
+        return c.json(
+          {
+            error:
+              "O aprovador não é um signatário autorizado para este tipo de instrumento (ISO/IEC 17025 §6.2.6). A liberação do certificado deve ser feita por um signatário autorizado.",
+            code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
+          },
+          403,
+        );
       }
 
       // Check environmental conditions - block approval if out of limits without justification

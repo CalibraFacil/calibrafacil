@@ -7519,6 +7519,105 @@ export const trainingRecordAuditLog = pgTable(
 );
 
 // =============================================================================
+// AUTHORIZED SIGNATORY - ISO 17025:2017 Clause 6.2.6 (Authorization of personnel)
+// =============================================================================
+
+/**
+ * Signatory authorization status.
+ */
+export type SignatoryAuthorizationStatus =
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "REVOKED"
+  | "EXPIRED";
+
+/**
+ * Authorized Signatory table - who may APPROVE / sign off calibration
+ * certificates, optionally scoped per asset type. ISO/IEC 17025:2017 Clause 6.2.6
+ * (authorization of personnel for specific lab activities, incl. issuing
+ * calibration reports).
+ *
+ * Distinct from `personnel_competence` (which authorizes who may EXECUTE a
+ * calibration): a quality/technical manager is commonly an authorized signatory
+ * across scopes without holding per-asset-type execution competence.
+ *
+ * - assetTypeId NULL = authorized to sign across ALL scopes (org-wide signatory).
+ * - Auto-detect enforcement: skip if the org has zero records, enforce once populated.
+ */
+export const authorizedSignatory = pgTable(
+  "authorized_signatory",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "set null",
+    }),
+    scopeDescription: text("scope_description"),
+    status: text("status")
+      .$type<SignatoryAuthorizationStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    authorizedBy: text("authorized_by")
+      .notNull()
+      .references(() => user.id),
+    authorizedAt: timestamp("authorized_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+    revokedBy: text("revoked_by").references(() => user.id),
+    revokedAt: timestamp("revoked_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("authorized_signatory_organization_id_idx").on(table.organizationId),
+    index("authorized_signatory_user_id_idx").on(table.userId),
+    index("authorized_signatory_asset_type_id_idx").on(table.assetTypeId),
+    index("authorized_signatory_status_idx").on(table.status),
+    index("authorized_signatory_expires_at_idx").on(table.expiresAt),
+    unique("authorized_signatory_org_user_asset_type_uidx")
+      .on(table.organizationId, table.userId, table.assetTypeId)
+      .nullsNotDistinct(),
+  ],
+);
+
+// =============================================================================
+// AUTHORIZED SIGNATORY AUDIT LOG - ISO 17025:2017 Clause 8.4
+// =============================================================================
+
+export const authorizedSignatoryAuditLog = pgTable(
+  "authorized_signatory_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    signatoryId: integer("signatory_id")
+      .notNull()
+      .references(() => authorizedSignatory.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by").notNull(),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("authorized_signatory_audit_log_signatory_id_idx").on(
+      table.signatoryId,
+    ),
+    index("authorized_signatory_audit_log_performed_at_idx").on(
+      table.performedAt,
+    ),
+  ],
+);
+
+// =============================================================================
 // PERSONNEL COMPETENCE & TRAINING RELATIONS
 // =============================================================================
 
