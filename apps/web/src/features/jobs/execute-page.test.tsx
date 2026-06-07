@@ -22,6 +22,7 @@ const apiMocks = vi.hoisted(() => ({
 
 const queryMocks = vi.hoisted(() => ({
   useActiveReferenceStandardsData: vi.fn(),
+  useCompositionProfilesData: vi.fn(),
   useEffectiveEnvironmentalLimitsData: vi.fn(),
   useJobDetailData: vi.fn(),
 }))
@@ -90,6 +91,9 @@ describe('ExecuteJobPage workflow', () => {
       isLoading: false,
     })
     queryMocks.useActiveReferenceStandardsData.mockReturnValue({
+      data: { data: [] },
+    })
+    queryMocks.useCompositionProfilesData.mockReturnValue({
       data: { data: [] },
     })
     queryMocks.useEffectiveEnvironmentalLimitsData.mockReturnValue({

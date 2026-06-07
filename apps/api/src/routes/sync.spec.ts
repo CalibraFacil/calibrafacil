@@ -257,7 +257,7 @@ describe("syncRouter", () => {
       offlineCertificatePublication: false,
     });
     expect(body.publishedMethods).toEqual([]);
-    expect(mocks.db.select).toHaveBeenCalledTimes(9);
+    expect(mocks.db.select).toHaveBeenCalledTimes(10);
   });
 
   it("includes measurement models in synced published methods", async () => {
