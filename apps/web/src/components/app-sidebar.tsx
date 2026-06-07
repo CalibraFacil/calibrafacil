@@ -37,7 +37,6 @@ import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
-import { SidebarFlyoutProvider } from './sidebar-flyout-nav'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 
 import {
@@ -121,10 +120,8 @@ export function AppSidebar() {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarFlyoutProvider>
-          <NavMain items={navMain} />
-          <NavMain items={managementItems} label="Gestão" />
-        </SidebarFlyoutProvider>
+        <NavMain items={navMain} />
+        <NavMain items={managementItems} label="Gestão" />
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
