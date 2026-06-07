@@ -1,4 +1,11 @@
-import * as React from 'react'
+import {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
@@ -67,10 +74,10 @@ interface SettingsContextValue {
 // CONTEXT
 // =============================================================================
 
-const SettingsContext = React.createContext<SettingsContextValue | null>(null)
+const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 export function useSettings() {
-  const context = React.useContext(SettingsContext)
+  const context = useContext(SettingsContext)
   if (!context) {
     throw new Error('useSettings must be used within SettingsProvider')
   }
@@ -81,14 +88,14 @@ export function useSettings() {
 // PROVIDER
 // =============================================================================
 
-export function SettingsProvider({ children }: { children: React.ReactNode }) {
+export function SettingsProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const { data: sessionData, isPending } = useSession()
 
-  const [isUpdating, setIsUpdating] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const clearError = React.useCallback(() => {
+  const clearError = useCallback(() => {
     setError(null)
   }, [])
 
@@ -107,17 +114,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     },
   })
 
-  const refreshSessions = React.useCallback(async () => {
+  const refreshSessions = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['settings', 'sessions'] })
     await queryClient.refetchQueries({ queryKey: ['settings', 'sessions'] })
   }, [queryClient])
-  const sessions = React.useMemo(
-    () => sessionsQuery.data ?? [],
-    [sessionsQuery.data],
-  )
+  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const sessionsLoading = sessionsQuery.isPending || sessionsQuery.isFetching
 
-  const updateProfile = React.useCallback(
+  const updateProfile = useCallback(
     async (data: { name?: string; image?: string }) => {
       setIsUpdating(true)
       setError(null)
@@ -144,7 +148,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  const changePassword = React.useCallback(
+  const changePassword = useCallback(
     async (data: {
       currentPassword: string
       newPassword: string
@@ -182,7 +186,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [refreshSessions],
   )
 
-  const revokeSession = React.useCallback(
+  const revokeSession = useCallback(
     async (sessionId: string) => {
       setIsUpdating(true)
       setError(null)
@@ -208,7 +212,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [queryClient, refreshSessions],
   )
 
-  const revokeOtherSessions = React.useCallback(async () => {
+  const revokeOtherSessions = useCallback(async () => {
     setIsUpdating(true)
     setError(null)
     try {
@@ -233,7 +237,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshSessions])
 
-  const revokeAllSessions = React.useCallback(async () => {
+  const revokeAllSessions = useCallback(async () => {
     setIsUpdating(true)
     setError(null)
     try {
@@ -259,7 +263,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const deleteAccount = React.useCallback(async (password: string) => {
+  const deleteAccount = useCallback(async (password: string) => {
     setIsUpdating(true)
     setError(null)
     try {
@@ -283,7 +287,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const value = React.useMemo<SettingsContextValue>(
+  const value = useMemo<SettingsContextValue>(
     () => ({
       user: sessionData?.user
         ? {

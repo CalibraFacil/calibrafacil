@@ -6,6 +6,7 @@ import { migration0005SyncConflictEventId } from "./0005_sync_conflict_event_id"
 import { migration0006CalibrationLocationSnapshot } from "./0006_calibration_location_snapshot";
 import { migration0007CalibrationPhaseSnapshot } from "./0007_calibration_phase_snapshot";
 import { migration0008PrinterProfiles } from "./0008_printer_profiles";
+import { migration0009AssetSubjectToLegalMetrology } from "./0009_asset_subject_to_legal_metrology";
 
 export type LocalDbMigration = {
   id: number;
@@ -22,6 +23,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0006CalibrationLocationSnapshot,
   migration0007CalibrationPhaseSnapshot,
   migration0008PrinterProfiles,
+  migration0009AssetSubjectToLegalMetrology,
 ];
 
 export const currentLocalDbSchemaVersion =

@@ -2,16 +2,18 @@
 // Generate the fumadocs `.source` index and verify it is complete before the
 // type-check proceeds.
 //
-// `fumadocs-mdx` occasionally returns before its write to
-// `.source/index.ts` is flushed, leaving an empty/partial file. When `tsc`
-// then reads it, the build fails intermittently in CI with
-// "File '.../.source/index.ts' is not a module" (and the downstream
-// PageData property errors). It only reproduced on cold CI checkouts, which is
-// why it looked flaky.
+// `next typegen` runs the fumadocs-mdx generator through the Next plugin, which
+// truncates `.source/server.ts` and then writes it back asynchronously without
+// awaiting the flush. On slower/cold CI runners `tsc` can read the file mid-
+// write and fail with "File '.../.source/server.ts' is not a module" (plus the
+// downstream PageData property errors) — which is why it looked flaky.
 //
-// This script runs the generator and confirms the output actually exports
+// IMPORTANT: this must run *after* `next typegen` (see the check-types script).
+// It regenerates `.source` synchronously (execFileSync waits for the child to
+// exit, so the writes are flushed) and confirms the output actually exports
 // `docs` (the symbol `lib/source.ts` imports), retrying a few times before
-// giving up. Deterministic output in, deterministic check-types out.
+// giving up. Being the last writer before `tsc`, it makes check-types
+// deterministic regardless of the typegen race.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
@@ -19,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appDir = dirname(dirname(fileURLToPath(import.meta.url)));
-const sourceIndex = join(appDir, ".source", "index.ts");
+const sourceIndex = join(appDir, ".source", "server.ts");
 const REQUIRED_EXPORT = "export const docs";
 const MAX_ATTEMPTS = 3;
 

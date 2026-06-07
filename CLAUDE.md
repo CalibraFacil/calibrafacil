@@ -17,7 +17,7 @@ pnpm dev              # all apps except email/worker (web :5173, portal :5174, a
 pnpm dev:all          # everything incl. email + worker
 pnpm dev:desktop      # web + Electron desktop shell
 pnpm build            # build all apps/packages
-pnpm lint             # check:no-use-effect guard + oxlint across the monorepo
+pnpm lint             # oxlint across the monorepo (incl. the no-useEffect rule)
 pnpm format           # Prettier on **/*.{ts,tsx,md}
 pnpm check-types      # type-check all packages
 ```
@@ -133,9 +133,10 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
 
 ## Other guards to be aware of
 
-- **`useEffect` is banned.** `scripts/check-no-use-effect.mjs` (part of `pnpm lint`) fails on any
-  direct `useEffect`. Use derived state, event handlers, data hooks, keyed remounts, or the
-  `use-mount-effect.ts` wrapper. Only the two listed wrapper files may use raw `useEffect`.
+- **`useEffect` is banned.** The oxlint `no-restricted-imports` rule (in `.oxlintrc.json`, part of
+  `pnpm lint`) fails on any `useEffect` import from `react`. Use derived state, event handlers, data
+  hooks, keyed remounts, or the `use-mount-effect.ts` wrapper. Only the `apps/*/src/hooks/use-mount-effect.ts`
+  wrappers may import raw `useEffect` (allowed via an `overrides` entry in `.oxlintrc.json`).
 - Sentry PII (`sendDefaultPii`) and session replay default to **off** and are opt-in via runtime
   config; desktop runtime must not initialize browser Sentry.
 

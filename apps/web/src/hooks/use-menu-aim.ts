@@ -1,4 +1,8 @@
-import * as React from 'react'
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useRef,
+} from 'react'
 
 import { useMountEffect } from './use-mount-effect'
 
@@ -75,27 +79,27 @@ export function useMenuAim<
   TParent extends HTMLElement,
   TFlyout extends HTMLElement,
 >({ open, onClose, closeDelay = 200 }: UseMenuAimOptions) {
-  const parentRef = React.useRef<TParent | null>(null)
-  const flyoutRef = React.useRef<TFlyout | null>(null)
-  const closeTimerRef = React.useRef<number | null>(null)
-  const pointerHistoryRef = React.useRef<Array<Point>>([])
-  const openRef = React.useRef(open)
-  const onCloseRef = React.useRef(onClose)
-  const handlePointerMoveRef = React.useRef<(event: PointerEvent) => void>(
+  const parentRef = useRef<TParent | null>(null)
+  const flyoutRef = useRef<TFlyout | null>(null)
+  const closeTimerRef = useRef<number | null>(null)
+  const pointerHistoryRef = useRef<Array<Point>>([])
+  const openRef = useRef(open)
+  const onCloseRef = useRef(onClose)
+  const handlePointerMoveRef = useRef<(event: PointerEvent) => void>(
     () => undefined,
   )
 
   openRef.current = open
   onCloseRef.current = onClose
 
-  const clearCloseTimer = React.useCallback(() => {
+  const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current) {
       window.clearTimeout(closeTimerRef.current)
       closeTimerRef.current = null
     }
   }, [])
 
-  const closeWithDelay = React.useCallback(() => {
+  const closeWithDelay = useCallback(() => {
     clearCloseTimer()
 
     closeTimerRef.current = window.setTimeout(() => {
@@ -104,7 +108,7 @@ export function useMenuAim<
     }, closeDelay)
   }, [clearCloseTimer, closeDelay])
 
-  const trackPointer = React.useCallback(
+  const trackPointer = useCallback(
     (event: Pick<PointerEvent, 'clientX' | 'clientY'>) => {
       const point = {
         x: event.clientX,
@@ -122,7 +126,7 @@ export function useMenuAim<
     [],
   )
 
-  const isPointProtected = React.useCallback((point: Point) => {
+  const isPointProtected = useCallback((point: Point) => {
     const parentRect = parentRef.current?.getBoundingClientRect()
     const flyoutRect = flyoutRef.current?.getBoundingClientRect()
 
@@ -158,7 +162,7 @@ export function useMenuAim<
     return pointInPolygon(point, safeCorridor)
   }, [])
 
-  const isMovingTowardFlyout = React.useCallback(() => {
+  const isMovingTowardFlyout = useCallback(() => {
     const history = pointerHistoryRef.current
     const currentPoint = getRecentPoint(history)
     const olderPoint = getOlderPoint(history)
@@ -188,7 +192,7 @@ export function useMenuAim<
     return pointInPolygon(currentPoint, triangle)
   }, [])
 
-  const requestClose = React.useCallback(() => {
+  const requestClose = useCallback(() => {
     const point = getRecentPoint(pointerHistoryRef.current)
 
     if (point && (isPointProtected(point) || isMovingTowardFlyout())) {
@@ -199,7 +203,7 @@ export function useMenuAim<
     closeWithDelay()
   }, [clearCloseTimer, closeWithDelay, isMovingTowardFlyout, isPointProtected])
 
-  const handlePointerMove = React.useCallback(
+  const handlePointerMove = useCallback(
     (event: PointerEvent) => {
       const point = trackPointer(event)
 
@@ -239,17 +243,17 @@ export function useMenuAim<
     }
   })
 
-  const getPointerHandlers = React.useCallback(
+  const getPointerHandlers = useCallback(
     () => ({
-      onPointerEnter: (event: React.PointerEvent) => {
+      onPointerEnter: (event: ReactPointerEvent) => {
         trackPointer(event)
         clearCloseTimer()
       },
-      onPointerMove: (event: React.PointerEvent) => {
+      onPointerMove: (event: ReactPointerEvent) => {
         trackPointer(event)
         clearCloseTimer()
       },
-      onPointerLeave: (event: React.PointerEvent) => {
+      onPointerLeave: (event: ReactPointerEvent) => {
         trackPointer(event)
         requestClose()
       },

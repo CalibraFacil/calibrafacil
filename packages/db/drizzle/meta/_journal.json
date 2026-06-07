@@ -328,7 +328,14 @@
       "idx": 46,
       "version": "7",
       "when": 1781827200000,
-      "tag": "0046_authorized_signatory",
+      "tag": "0046_asset_subject_to_legal_metrology",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1781913600000,
+      "tag": "0047_authorized_signatory",
       "breakpoints": true
     }
   ]

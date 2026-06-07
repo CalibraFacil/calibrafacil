@@ -1,6 +1,5 @@
-import * as React from 'react'
-
+import { useDeferredValue } from 'react'
 export function useDebouncedValue<T>(value: T, delay: number): T {
   void delay
-  return React.useDeferredValue(value)
+  return useDeferredValue(value)
 }

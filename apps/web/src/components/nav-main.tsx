@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import type * as React from 'react'
+import type { ReactNode } from 'react'
 
 import {
   SidebarGroup,
@@ -17,9 +17,9 @@ import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 export type NavMainItem = {
   title: string
   url: string
-  icon?: React.ReactNode
+  icon?: ReactNode
   items?: Array<{
-    icon?: React.ReactNode
+    icon?: ReactNode
     title: string
     url: string
   }>
@@ -80,7 +80,7 @@ function NavMainLink({
 }: {
   url: string
   isActive: boolean
-  icon?: React.ReactNode
+  icon?: ReactNode
   title: string
 }) {
   const prewarmIntentHandlers = usePathPrewarmIntent(
@@ -105,7 +105,7 @@ function NavMainSubLink({
   isActive,
   title,
 }: {
-  icon?: React.ReactNode
+  icon?: ReactNode
   url: string
   isActive: boolean
   title: string

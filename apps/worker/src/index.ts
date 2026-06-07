@@ -28,6 +28,7 @@ import {
   type WorkbookWarning,
 } from "@calibra-facil/certificate-xlsx-template";
 import { processScheduledNotifications } from "./scheduled.js";
+import { formatNumberForXlsx } from "./xlsx-number-format.js";
 import {
   signPdf,
   decryptPassword,
@@ -270,6 +271,7 @@ type AssetSnapshot = {
 
 type JobData = {
   jobId: string;
+  verificationToken: string;
   certificateName?: string | null;
   organizationId?: string | null;
   organizationSlug?: string | null;
@@ -889,6 +891,7 @@ async function fetchJobData(
       cj.data,
       cj.organization_id,
       cj.approved_by,
+      cj.verification_token,
       -- Amendment fields - ISO 17025 Clause 7.8.4.1
       cj.supersedes_id,
       cj.superseded_by_id,
@@ -1043,6 +1046,7 @@ async function fetchJobData(
 
   return {
     jobId: row.job_id,
+    verificationToken: row.verification_token,
     certificateName: row.certificate_name,
     organizationId: row.organization_id,
     organizationSlug: row.organization_slug,
@@ -2791,19 +2795,8 @@ function asFiniteNumber(value: unknown): number | null {
   return null;
 }
 
-function formatNumberForXlsx(value: number, fractionDigits?: number): string {
-  const decimals =
-    fractionDigits ??
-    (Number.isInteger(value)
-      ? 0
-      : Math.min(6, Math.max(1, String(value).split(".")[1]?.length ?? 1)));
-
-  return value.toLocaleString("pt-BR", {
-    useGrouping: false,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
+// formatNumberForXlsx is imported from ./xlsx-number-format.js (unit-tested;
+// correctly handles scientific-notation values that previously rendered "0,0").
 
 function formatMeasuredValueForXlsx(
   value: unknown,
@@ -3149,10 +3142,17 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
         assetSpecifications.resolutionUnit ??
           firstWeighingRange?.resolutionUnit,
       ),
+      // Inmetro model approval / registration (Etiqueta de Reparo context).
+      // Sourced from the asset-type blueprint spec (like "Portaria"); backs the
+      // `{{asset.inmetroRegistration}}` certificate token (previously empty).
+      inmetroRegistration: assetSpecifications.inmetroRegistration,
     },
     certificate: {
       number: job.jobId,
       name: job.certificateName,
+      // Public verification URL — drives the QR code binding on the certificate
+      // PDF (same target as the thermal-label QR). See verifyRouter / verify page.
+      verificationUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
       issuedAt: toIsoDateish(job.approvedAt),
       issuedAtText: formatDateForXlsx(job.approvedAt),
       supersedesId: job.supersedesId,

@@ -1,5 +1,4 @@
-import * as React from 'react'
-
+import { useSyncExternalStore } from 'react'
 function subscribe(callback: () => void) {
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', callback)
@@ -11,5 +10,5 @@ function getSnapshot() {
 }
 
 export function usePrefersDark() {
-  return React.useSyncExternalStore(subscribe, getSnapshot, () => false)
+  return useSyncExternalStore(subscribe, getSnapshot, () => false)
 }

@@ -12,21 +12,26 @@
     "test": "vitest",
     "test:run": "vitest run"
   },
-  "keywords": ["icp-brasil", "pdf", "signing", "pades"],
+  "keywords": [
+    "icp-brasil",
+    "pdf",
+    "signing",
+    "pades"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@signpdf/signpdf": "^3.2.5",
     "@signpdf/placeholder-pdf-lib": "^3.2.5",
     "@signpdf/signer-p12": "^3.2.5",
-    "pdf-lib": "^1.17.1",
-    "node-forge": "^1.3.1"
+    "@signpdf/signpdf": "^3.2.5",
+    "node-forge": "^1.3.1",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.13.0",
     "@types/node-forge": "^1.3.11",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.17"
   }
 }

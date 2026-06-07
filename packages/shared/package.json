@@ -13,8 +13,15 @@
     "./plans": "./src/plans.ts",
     "./storage-keys": "./src/storage-keys.ts"
   },
-  "scripts": {},
+  "scripts": {
+    "check-types": "tsgo --noEmit"
+  },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
+    "typescript": "^6.0.3"
+  }
 }

@@ -341,8 +341,9 @@ export const XLSX_TOKEN_CATALOG: XlsxTokenCatalogItem[] = [
     group: 'service',
     groupLabel: 'Ordem de serviço',
     path: 'serviceOrder.inmetroRepairSealNumber',
-    label: 'Lacre de reparo',
-    description: 'Número do lacre Inmetro registrado na ordem de serviço.',
+    label: 'Etiqueta de Reparo',
+    description:
+      'Número da Etiqueta de Reparo (Marca de Instrumento Reparado) registrado na ordem de serviço.',
     kind: 'Texto',
   },
   {

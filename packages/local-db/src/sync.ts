@@ -239,6 +239,7 @@ INSERT INTO assets (
   last_calibration_date,
   next_calibration_date,
   comments,
+  subject_to_legal_metrology,
   status,
   updated_at,
   sync_state
@@ -259,6 +260,7 @@ INSERT INTO assets (
   @lastCalibrationDate,
   @nextCalibrationDate,
   @comments,
+  @subjectToLegalMetrology,
   @status,
   @updatedAt,
   'synced'
@@ -276,6 +278,7 @@ ON CONFLICT(id) DO UPDATE SET
   last_calibration_date = excluded.last_calibration_date,
   next_calibration_date = excluded.next_calibration_date,
   comments = excluded.comments,
+  subject_to_legal_metrology = excluded.subject_to_legal_metrology,
   status = excluded.status,
   updated_at = excluded.updated_at,
   sync_state = excluded.sync_state
@@ -298,6 +301,9 @@ ON CONFLICT(id) DO UPDATE SET
           lastCalibrationDate: getDateString(row, "lastCalibrationDate"),
           nextCalibrationDate: getDateString(row, "nextCalibrationDate"),
           comments: getNullableString(row, "comments"),
+          subjectToLegalMetrology: getBoolean(row, "subjectToLegalMetrology")
+            ? 1
+            : 0,
           status: getString(row, "status") ?? "ACTIVE",
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
         });
