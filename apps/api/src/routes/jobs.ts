@@ -79,6 +79,7 @@ import {
   inArray,
   isNull,
   like,
+  ne,
   not,
   or,
   sql,
@@ -2402,6 +2403,46 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           },
           400,
         );
+      }
+
+      // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): the technician who
+      // executed — or the user who created — the calibration must not approve
+      // their own work. Auto-detected like the personnel-competence gate: it is
+      // enforced only when the organization actually has an *eligible alternate
+      // approver*, so a genuine solo lab — or one whose only other members are
+      // technicians/operators who cannot approve — is exempt rather than left
+      // with a REVIEW job nobody can release. An eligible approver is another
+      // member whose role grants `calibration.approve`, which access.ts grants
+      // to admin/owner only; both are global multi-unit roles, so any such
+      // member can access the job's unit by construction (no unit-scope join
+      // needed here).
+      const approverId = session.user.id;
+      if (
+        existing.technicianId === approverId ||
+        existing.createdBy === approverId
+      ) {
+        const [alternateApprover] = await db
+          .select({ id: member.id })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, memberData.organizationId),
+              inArray(member.role, ["admin", "owner"]),
+              ne(member.userId, approverId),
+            ),
+          )
+          .limit(1);
+
+        if (alternateApprover) {
+          return c.json(
+            {
+              error:
+                "Separação de responsabilidades (ISO/IEC 17025): quem executou ou criou a calibração não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
+              code: "SELF_APPROVAL_BLOCKED",
+            },
+            403,
+          );
+        }
       }
 
       // Check environmental conditions - block approval if out of limits without justification

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 4321",
     "lint": "oxlint",
-    "check-types": "node scripts/ensure-source.mjs && next typegen && tsc --noEmit",
+    "check-types": "next typegen && node scripts/ensure-source.mjs && tsc --noEmit",
     "deploy": "echo 'docs deploys via Vercel git integration (apps/docs/vercel.json)'"
   },
   "dependencies": {
