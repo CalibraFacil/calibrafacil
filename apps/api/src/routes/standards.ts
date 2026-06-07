@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
+  massCompositionProfile,
   organization,
   referenceStandard,
   referenceStandardAuditLog,
@@ -374,6 +375,51 @@ export const standardsRouter = new Hono<{
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
       });
+    },
+  )
+
+  // =========================================================================
+  // GET /composition-profiles - The org's mass composition-profile catalog
+  // (normalized buildup weights by class + nominal). Source of truth for the
+  // profile options in the mass-composition method runtime; the runtime
+  // attaches these to standards instead of reading compositionProfile entries
+  // out of certified_values. Registered before /:id so it is not shadowed.
+  // =========================================================================
+  .get(
+    "/composition-profiles",
+    ...withLabPermission({ standard: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const profiles = await db
+        .select({
+          id: massCompositionProfile.id,
+          profileKey: massCompositionProfile.profileKey,
+          profileClass: massCompositionProfile.profileClass,
+          nominal: massCompositionProfile.nominal,
+          nominalG: massCompositionProfile.nominalG,
+          value: massCompositionProfile.value,
+          uncertainty: massCompositionProfile.uncertainty,
+          unit: massCompositionProfile.unit,
+          maxError: massCompositionProfile.maxError,
+          drift: massCompositionProfile.drift,
+          buoyancy: massCompositionProfile.buoyancy,
+          coverageFactor: massCompositionProfile.coverageFactor,
+          quantityAvailable: massCompositionProfile.quantityAvailable,
+        })
+        .from(massCompositionProfile)
+        .where(
+          and(
+            eq(massCompositionProfile.organizationId, member.organizationId),
+            eq(massCompositionProfile.status, "ACTIVE"),
+            isNull(massCompositionProfile.deletedAt),
+          ),
+        )
+        .orderBy(
+          massCompositionProfile.profileClass,
+          massCompositionProfile.nominalG,
+        );
+
+      return c.json({ data: profiles });
     },
   )
 

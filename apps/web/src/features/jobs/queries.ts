@@ -118,6 +118,13 @@ export function activeReferenceStandardsQueryOptions<TStandard = unknown>() {
   })
 }
 
+export function compositionProfilesQueryOptions() {
+  return queryOptions({
+    queryKey: ['standards', 'composition-profiles'],
+    queryFn: () => calibraApi.standards.listCompositionProfiles(),
+  })
+}
+
 export function effectiveEnvironmentalLimitsQueryOptions<TLimits = unknown>({
   assetTypeId,
   unitId,
@@ -280,6 +287,10 @@ export function useNewJobServicesData({
 
 export function useActiveReferenceStandardsData<TStandard = unknown>() {
   return useQuery(activeReferenceStandardsQueryOptions<TStandard>())
+}
+
+export function useCompositionProfilesData() {
+  return useQuery(compositionProfilesQueryOptions())
 }
 
 export function useEffectiveEnvironmentalLimitsData<TLimits = unknown>({

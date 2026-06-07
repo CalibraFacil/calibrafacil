@@ -39,6 +39,7 @@ import type {
   ServicesListData,
   SsoSettingsResponse,
   StandardAuditLogData,
+  MassCompositionProfilesData,
   StandardData,
   StandardsListData,
   TechnicianListData,
@@ -1680,6 +1681,21 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<StandardData>(response);
+      },
+      async listCompositionProfiles() {
+        const response = await fetchImpl(
+          new URL("/api/standards/composition-profiles", options.baseUrl),
+          {
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Falha ao carregar perfis de composição");
+        }
+
+        return readDesktopJson<MassCompositionProfilesData>(response);
       },
       async auditLog<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
