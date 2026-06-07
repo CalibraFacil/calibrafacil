@@ -1,14 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
-  "installCommand": "bun ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile --filter \"@calibra-facil/api...\"",
+  "installCommand": "pnpm install --frozen-lockfile --filter \"@calibra-facil/api...\"",
   "buildCommand": "bun scripts/build-vercel-deployment.mjs",
   "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs api",
   "regions": ["gru1"],
   "functions": {
-    "api/[...route].js": {
-      "maxDuration": 30
-    },
     "api/index.js": {
       "maxDuration": 30
     },

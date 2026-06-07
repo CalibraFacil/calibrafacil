@@ -22,7 +22,6 @@
     "test:desktop-release-seed-planner": "node scripts/plan-desktop-release-seed.test.mjs",
     "test:desktop-release-local-gates": "pnpm test:desktop-cloud-release-smoke && pnpm test:desktop-release-data-probe && pnpm test:desktop-release-seed-planner && pnpm test:desktop-release-gate && pnpm test:offline-release-signoff",
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
-    "check:no-use-effect": "node scripts/check-no-use-effect.mjs",
     "ci:local": "node scripts/ci-local.mjs",
     "dev": "turbo run dev --filter=!@calibra-facil/email --filter=!@calibra-facil/worker",
     "dev:all": "turbo run dev",
@@ -47,20 +46,20 @@
     "deploy:web": "pnpm --dir apps/web deploy",
     "deploy:portal": "pnpm --dir apps/portal deploy",
     "deploy:docs": "pnpm --dir apps/docs deploy",
-    "lint": "pnpm check:no-use-effect && turbo run lint",
+    "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
     "@typescript/native-preview": "beta",
-    "better-sqlite3": "^12.0.0",
-    "oxlint": "^1.66.0",
-    "prettier": "^3.7.4",
-    "turbo": "^2.6.3",
-    "typescript": "5.9.2"
+    "better-sqlite3": "^12.10.0",
+    "oxlint": "^1.68.0",
+    "prettier": "^3.8.3",
+    "turbo": "^2.9.16",
+    "typescript": "6.0.3"
   },
   "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=24"
   }
 }

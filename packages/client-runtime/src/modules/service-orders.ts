@@ -156,7 +156,7 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
             json: input,
           },
         ),
-        "Erro ao salvar selo de reparado",
+        "Erro ao salvar a Etiqueta de Reparo",
       );
     },
     async deliver(id: string | number, input: DeliverServiceOrderInput) {

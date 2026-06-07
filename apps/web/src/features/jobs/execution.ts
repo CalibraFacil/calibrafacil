@@ -238,6 +238,8 @@ export interface JobData {
   id: number
   jobId: string
   status: string
+  /** ISO timestamp of the recorded calibration execution date, if set. */
+  performedAt?: string | null
   customerName: string
   customerAddress?: AddressData | null
   labName?: string | null

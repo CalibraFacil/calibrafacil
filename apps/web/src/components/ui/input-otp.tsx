@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ComponentProps, useContext } from 'react'
 import { OTPInput, OTPInputContext } from 'input-otp'
 
 import { cn } from '@/lib/utils'
@@ -7,7 +7,7 @@ function InputOTP({
   className,
   containerClassName,
   ...props
-}: React.ComponentProps<typeof OTPInput>) {
+}: ComponentProps<typeof OTPInput>) {
   return (
     <OTPInput
       data-slot="input-otp"
@@ -21,7 +21,7 @@ function InputOTP({
   )
 }
 
-function InputOTPGroup({ className, ...props }: React.ComponentProps<'div'>) {
+function InputOTPGroup({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="input-otp-group"
@@ -35,10 +35,10 @@ function InputOTPSlot({
   index,
   className,
   ...props
-}: React.ComponentProps<'div'> & {
+}: ComponentProps<'div'> & {
   index: number
 }) {
-  const inputOTPContext = React.useContext(OTPInputContext)
+  const inputOTPContext = useContext(OTPInputContext)
   const slot = inputOTPContext.slots[index]
 
   return (
@@ -63,10 +63,7 @@ function InputOTPSlot({
   )
 }
 
-function InputOTPSeparator({
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function InputOTPSeparator({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="input-otp-separator"

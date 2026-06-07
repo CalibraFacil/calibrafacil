@@ -9,7 +9,8 @@
     "declarationMap": false,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "jsxImportSource": "react",
+    "types": ["node"]
   },
   "include": ["src", "*.ts"],
   "exclude": ["node_modules", "dist"]

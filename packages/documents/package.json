@@ -1,18 +1,21 @@
 {
-    "name": "@calibra-facil/documents",
-    "version": "1.0.0",
-    "type": "module",
-    "exports": {
-        ".": "./src/index.ts"
-    },
-    "dependencies": {
-        "@calibra-facil/shared": "workspace:^",
-        "react": "^19.2.3",
-        "react-dom": "^19.2.3"
-    },
-    "devDependencies": {
-        "@types/react": "^19.0.1",
-        "@types/react-dom": "^19.0.1",
-        "@repo/typescript-config": "workspace:^"
-    }
+  "name": "@calibra-facil/documents",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@calibra-facil/shared": "workspace:^",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.0.1"
+  },
+  "scripts": {
+    "check-types": "tsgo --noEmit"
+  }
 }

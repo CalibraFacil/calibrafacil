@@ -11,8 +11,7 @@ import {
   getFilteredRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import * as React from 'react'
-
+import { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -50,10 +49,8 @@ export function DataTable<TData, TValue>({
   onRowClick,
   meta,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    [],
-  )
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   const table = useReactTable({
     data,

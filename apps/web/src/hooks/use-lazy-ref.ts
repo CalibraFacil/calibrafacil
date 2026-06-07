@@ -1,7 +1,6 @@
-import * as React from 'react'
-
+import { RefObject, useRef } from 'react'
 function useLazyRef<T>(fn: () => T) {
-  const ref = React.useRef<React.RefObject<T> | null>(null)
+  const ref = useRef<RefObject<T> | null>(null)
 
   if (ref.current === null) {
     let value: T

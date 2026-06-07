@@ -23,17 +23,17 @@
   },
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
-    "better-sqlite3": "^12.0.0",
+    "better-sqlite3": "^12.10.0",
     "electron-updater": "^6.8.3",
     "serialport": "^13.0.0",
     "usb": "^2.16.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "@types/node": "^22.10.2",
-    "electron": "^39.8.9",
+    "@types/node": "^24.13.0",
+    "electron": "^42.3.0",
     "electron-builder": "^26.0.12",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vite": "^7.1.7",
     "vitest": "^4.0.17"
   }

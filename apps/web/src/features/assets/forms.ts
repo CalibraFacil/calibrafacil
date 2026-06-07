@@ -1,4 +1,4 @@
-import { addMonths } from 'date-fns'
+import { addMonths, startOfDay } from 'date-fns'
 
 import {
   AssetStatusSchema,
@@ -32,16 +32,18 @@ export function calibrationPeriodicityLabel(months: number): string {
 
 /**
  * Builds the "próxima calibração" quick-select presets. Each preset adds its
- * interval to the date returned by `getBaseDate` (the last calibration date,
- * falling back to today), resolved at click time so it tracks form edits.
+ * interval to the date returned by `getBaseDate` (today by default), resolved
+ * at click time so "1 mês" always means one month from now. The base is
+ * normalized to the start of the day so presets land on midnight like manual
+ * calendar selections, keeping overdue comparisons consistent.
  */
 export function buildCalibrationPeriodicityPresets(
-  getBaseDate: () => Date,
+  getBaseDate: () => Date = () => new Date(),
 ): CalibrationPeriodicityPreset[] {
   return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
     label: calibrationPeriodicityLabel(months),
     months,
-    getDate: () => addMonths(getBaseDate(), months),
+    getDate: () => addMonths(startOfDay(getBaseDate()), months),
   }))
 }
 
@@ -58,6 +60,7 @@ export type AssetFormData = {
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
+  subjectToLegalMetrology: boolean
   specifications: Record<string, unknown>
 }
 
@@ -144,6 +147,7 @@ export function parseAssetForm(
     tag: data.tag.trim(),
     status: data.status,
     baseMeasurementUnit: data.baseMeasurementUnit,
+    subjectToLegalMetrology: data.subjectToLegalMetrology,
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
@@ -234,6 +238,7 @@ export function parseAssetEditForm(
     serialNumber: data.serialNumber.trim(),
     tag: data.tag.trim(),
     status: data.status,
+    subjectToLegalMetrology: data.subjectToLegalMetrology,
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),

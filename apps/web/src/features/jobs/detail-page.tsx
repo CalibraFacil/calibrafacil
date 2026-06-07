@@ -7,7 +7,6 @@ import {
   ArrowLeft01Icon,
   Calendar03Icon,
   Edit02Icon,
-  CheckmarkCircle02Icon,
   CheckmarkBadge02Icon,
   Cancel01Icon,
   MultiplicationSignIcon,
@@ -63,6 +62,7 @@ import {
   type FinancialStatus,
 } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from '@/features/jobs/components/approved-job-record'
+import { CertificateProgressButton } from '@/features/jobs/components/certificate-progress-button'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import {
@@ -760,23 +760,14 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
-              <Badge
-                variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}
-                className={
-                  job.status === 'GENERATING_PDF'
-                    ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-                    : ''
-                }
-              >
-                {job.status === 'GENERATING_PDF' ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Spinner className="size-3" />
-                    Gerando PDF...
-                  </span>
-                ) : (
-                  JOB_STATUS_LABELS[normalizedJobStatus]
-                )}
-              </Badge>
+              {/* The generating state is conveyed by the animated approval
+                  button, so the status badge is hidden while the PDF renders
+                  instead of repeating an amber "Gerando PDF…" pill. */}
+              {!isGeneratingPdf && (
+                <Badge variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}>
+                  {JOB_STATUS_LABELS[normalizedJobStatus]}
+                </Badge>
+              )}
               {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
               <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
                 {getFinancialStatusLabel(normalizedFinancialStatus)}
@@ -821,25 +812,13 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
               {isGeneratingPdf ? (
-                <div className="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-400">
-                  <Spinner className="size-4" />
-                  Gerando certificado…
-                </div>
+                <CertificateProgressButton status="running" />
               ) : canApprove ? (
                 <>
-                  <Button
-                    className={cn(
-                      ACTION_BUTTON_CLASS,
-                      'bg-emerald-600 text-white hover:bg-emerald-600/90',
-                    )}
-                    onClick={() => setApproveDialogOpen(true)}
-                  >
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle02Icon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    Aprovar certificado
-                  </Button>
+                  <CertificateProgressButton
+                    status="idle"
+                    onApprove={() => setApproveDialogOpen(true)}
+                  />
                   <Button
                     variant="destructive"
                     className={ACTION_BUTTON_CLASS}
