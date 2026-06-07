@@ -108,12 +108,21 @@ and the audit row is written — i.e. byte-for-byte the same as the Vercel path.
 
 Set these on the **API** project in Vercel (Production):
 
-| Env var                           | Value                                        |
-| --------------------------------- | -------------------------------------------- |
-| `DOCUMENT_WORKER_URL`             | the deployed Worker URL                      |
-| `DOCUMENT_WORKER_TOKEN`           | same value as the Worker secret              |
-| `DOCUMENT_WORKER_JOB_TYPES`       | comma list of job types to route (see below) |
-| `DOCUMENT_WORKER_WAKE_TIMEOUT_MS` | optional, default `4000`                     |
+| Env var                              | Value                                                              |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| `DOCUMENT_WORKER_URL`                | the deployed Worker URL                                           |
+| `DOCUMENT_WORKER_TOKEN`              | same value as the Worker secret                                  |
+| `DOCUMENT_WORKER_JOB_TYPES`          | comma list of job types to route (see below)                     |
+| `DOCUMENT_WORKER_WAKE_TIMEOUT_MS`    | optional, per-attempt drain-ping timeout, default `12000`        |
+| `DOCUMENT_WORKER_WAKE_ATTEMPTS`      | optional, drain-ping attempts, default `2`                       |
+| `DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS`| optional, backoff between wake attempts, default `500`           |
+
+> The wake ping has to outlast a **cold start** (the container scales to zero
+> after 15m idle; Cloudflare holds the request open while it boots, then it
+> answers `202` and drains). The defaults give ~25s of total wake budget across
+> attempts, comfortably inside the API function's 30s `maxDuration`. A single
+> short timeout would abort mid cold-start and strand the row in `PENDING` —
+> nothing re-claims an un-claimed PENDING row, so the job never renders.
 
 `DOCUMENT_WORKER_JOB_TYPES` is an **allowlist**. Empty / unset = everything stays
 on Vercel Queue (the default; deploying this service changes nothing until you
