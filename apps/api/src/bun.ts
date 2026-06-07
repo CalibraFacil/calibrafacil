@@ -20,24 +20,7 @@ type BunRuntime = {
 
 declare const Bun: BunRuntime;
 
-type LocalKvValue = {
-  value: string;
-  expiresAt?: number;
-};
-
-type LocalKvNamespace = {
-  get(key: string, type?: "text"): Promise<string | null>;
-  put(
-    key: string,
-    value: string,
-    options?: { expirationTtl?: number },
-  ): Promise<void>;
-  delete(key: string): Promise<void>;
-};
-
-type BunApiEnv = Record<string, unknown> & {
-  CACHE: LocalKvNamespace;
-};
+type BunApiEnv = Record<string, unknown>;
 
 const appDirectory = new URL("..", import.meta.url);
 const isProduction = Bun.env.NODE_ENV === "production";
@@ -86,35 +69,6 @@ async function loadLocalEnv() {
   }
 
   return env;
-}
-
-function createLocalKv(): LocalKvNamespace {
-  const values = new Map<string, LocalKvValue>();
-
-  return {
-    async get(key) {
-      const item = values.get(key);
-      if (!item) return null;
-
-      if (item.expiresAt !== undefined && item.expiresAt <= Date.now()) {
-        values.delete(key);
-        return null;
-      }
-
-      return item.value;
-    },
-    async put(key, value, options) {
-      values.set(key, {
-        value,
-        expiresAt: options?.expirationTtl
-          ? Date.now() + options.expirationTtl * 1000
-          : undefined,
-      });
-    },
-    async delete(key) {
-      values.delete(key);
-    },
-  };
 }
 
 async function createEnv(): Promise<BunApiEnv> {
@@ -179,10 +133,7 @@ async function createEnv(): Promise<BunApiEnv> {
     }
   }
 
-  const apiEnv: BunApiEnv = {
-    ...env,
-    CACHE: createLocalKv(),
-  };
+  const apiEnv: BunApiEnv = { ...env };
 
   for (const [key, value] of Object.entries(apiEnv)) {
     if (typeof value === "string") {

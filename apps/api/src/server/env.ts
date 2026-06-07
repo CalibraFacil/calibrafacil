@@ -11,6 +11,5 @@ export interface Env {
   DATABASE_URL: string;
   INTERNAL_OPERATOR_EMAILS?: string;
   BACKOFFICE_BOOTSTRAP_TOKEN?: string;
-  CACHE: KVNamespace;
   [key: string]: unknown;
 }
