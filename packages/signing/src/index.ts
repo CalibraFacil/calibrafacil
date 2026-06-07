@@ -49,3 +49,19 @@ export type {
 } from "./types.js";
 
 export { SigningError } from "./types.js";
+
+// Chain validation against the ICP-Brasil trust anchors
+export {
+  validateCertificateChain,
+  validatePkcs12Chain,
+  parsePemCertificates,
+  loadTrustStore,
+} from "./chain-validation.js";
+export type {
+  ChainValidationResult,
+  ChainValidationOptions,
+} from "./chain-validation.js";
+
+// RFC-3161 timestamp (carimbo de tempo) — PAdES-T building block
+export { addRfc3161Timestamp } from "./timestamp.js";
+export type { TimestampConfig, TimestampOutcome } from "./timestamp.js";
