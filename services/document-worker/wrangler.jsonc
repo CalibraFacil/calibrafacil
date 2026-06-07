@@ -30,6 +30,15 @@
     "GOTENBERG_URL": "https://calibrafacil-gotenberg.example.workers.dev",
     "APP_URL": "https://calibrafacil.com",
     "RESEND_FROM_EMAIL": "no-reply@calibrafacil.com",
+    // R2 bucket NAMES are not secrets — keep them here so `wrangler deploy` is
+    // authoritative and the container can't drift back onto the legacy
+    // `calibrafacil-certificates` bucket (which left certs unreadable by the API
+    // until the names were realigned). `documents` holds regulated records
+    // (certs, SO docs, standards); `media` holds branding. The matching R2
+    // *credentials* (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY)
+    // stay as `wrangler secret`s.
+    "R2_BUCKET_NAME": "calibrafacil-documents",
+    "R2_MEDIA_BUCKET_NAME": "calibrafacil-media",
   },
 
   // standard-2 = 1 vCPU / 6 GiB / 12 GB disk, matching services/gotenberg.
