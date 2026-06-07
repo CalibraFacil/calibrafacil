@@ -181,7 +181,14 @@ export function NewServiceOrderPage() {
     event.preventDefault()
     if (selectedCustomerIsSuspended) return
 
-    const parsed = parseServiceOrderForm(formData)
+    // The lacre only applies to instruments subject to legal metrology — never
+    // carry a typed value into the payload if the chosen asset isn't subject.
+    const parsed = parseServiceOrderForm({
+      ...formData,
+      oldSealNumber: selectedAsset?.subjectToLegalMetrology
+        ? formData.oldSealNumber
+        : '',
+    })
     if (!parsed.success) {
       setErrors(
         Object.fromEntries(
@@ -588,17 +595,24 @@ export function NewServiceOrderPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field>
-                  <FieldLabel>Lacre antigo</FieldLabel>
-                  <Input
-                    value={formData.oldSealNumber}
-                    onChange={(event) =>
-                      updateField('oldSealNumber', event.target.value)
-                    }
-                  />
-                </Field>
-              </div>
+              {selectedAsset?.subjectToLegalMetrology ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Lacre rompido na entrada</FieldLabel>
+                    <Input
+                      value={formData.oldSealNumber}
+                      onChange={(event) =>
+                        updateField('oldSealNumber', event.target.value)
+                      }
+                      placeholder="Nº do lacre de segurança rompido"
+                    />
+                    <FieldDescription>
+                      Lacre de segurança (metrologia legal) rompido para abrir o
+                      instrumento.
+                    </FieldDescription>
+                  </Field>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <Field>

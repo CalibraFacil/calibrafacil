@@ -1,7 +1,20 @@
 import { ArrowRight01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import * as React from 'react'
-
+import {
+  CSSProperties,
+  ComponentProps,
+  Dispatch,
+  ReactElement,
+  ReactNode,
+  SetStateAction,
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -12,14 +25,14 @@ import { cn } from '@/lib/utils'
 
 type SidebarFlyoutNavContextValue = {
   openItem: string | null
-  setOpenItem: React.Dispatch<React.SetStateAction<string | null>>
+  setOpenItem: Dispatch<SetStateAction<string | null>>
 }
 
 const SidebarFlyoutNavContext =
-  React.createContext<SidebarFlyoutNavContextValue | null>(null)
+  createContext<SidebarFlyoutNavContextValue | null>(null)
 
 function useSidebarFlyoutNav() {
-  const context = React.useContext(SidebarFlyoutNavContext)
+  const context = useContext(SidebarFlyoutNavContext)
 
   if (!context) {
     throw new Error('SidebarFlyoutItem must be used inside SidebarFlyoutNav.')
@@ -28,16 +41,9 @@ function useSidebarFlyoutNav() {
   return context
 }
 
-export function SidebarFlyoutProvider({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const [openItem, setOpenItem] = React.useState<string | null>(null)
-  const contextValue = React.useMemo(
-    () => ({ openItem, setOpenItem }),
-    [openItem],
-  )
+export function SidebarFlyoutProvider({ children }: { children: ReactNode }) {
+  const [openItem, setOpenItem] = useState<string | null>(null)
+  const contextValue = useMemo(() => ({ openItem, setOpenItem }), [openItem])
 
   return (
     <SidebarFlyoutNavContext.Provider value={contextValue}>
@@ -46,8 +52,8 @@ export function SidebarFlyoutProvider({
   )
 }
 
-export function SidebarFlyoutNav({ children }: { children: React.ReactNode }) {
-  const context = React.useContext(SidebarFlyoutNavContext)
+export function SidebarFlyoutNav({ children }: { children: ReactNode }) {
+  const context = useContext(SidebarFlyoutNavContext)
   const menu = <SidebarMenu>{children}</SidebarMenu>
 
   if (context) {
@@ -68,14 +74,14 @@ export function SidebarFlyoutItem({
   triggerProps,
   triggerType = 'button',
 }: {
-  children: React.ReactNode
+  children: ReactNode
   controlId: string
-  icon?: React.ReactNode
+  icon?: ReactNode
   isActive: boolean
   itemId: string
-  render?: React.ReactElement
+  render?: ReactElement
   title: string
-  triggerProps?: React.ComponentProps<'button'>
+  triggerProps?: ComponentProps<'button'>
   triggerType?: 'button' | 'link'
 }) {
   const { openItem, setOpenItem } = useSidebarFlyoutNav()
@@ -91,12 +97,12 @@ export function SidebarFlyoutItem({
       setOpenItem((current) => (current === itemId ? null : current))
     },
   })
-  const [panelPosition, setPanelPosition] = React.useState({
+  const [panelPosition, setPanelPosition] = useState({
     left: 0,
     top: 0,
   })
 
-  const openFlyout = React.useCallback(() => {
+  const openFlyout = useCallback(() => {
     const rect = parentRef.current?.getBoundingClientRect()
 
     if (rect) {
@@ -109,7 +115,7 @@ export function SidebarFlyoutItem({
     setOpenItem(itemId)
   }, [itemId, parentRef, setOpenItem])
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return
     }
@@ -221,10 +227,10 @@ export function SidebarFlyoutItem({
   )
 }
 
-export const SidebarFlyoutPanel = React.forwardRef<
+export const SidebarFlyoutPanel = forwardRef<
   HTMLDivElement,
   {
-    children: React.ReactNode
+    children: ReactNode
     controlId: string
     label: string
     onPointerHandlers: ReturnType<
@@ -232,7 +238,7 @@ export const SidebarFlyoutPanel = React.forwardRef<
         typeof useMenuAim<HTMLButtonElement, HTMLDivElement>
       >['getFlyoutPointerHandlers']
     >
-    style: React.CSSProperties
+    style: CSSProperties
   }
 >(function SidebarFlyoutPanel(
   { children, controlId, label, onPointerHandlers, style },

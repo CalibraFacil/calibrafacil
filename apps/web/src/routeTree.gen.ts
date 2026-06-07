@@ -801,8 +801,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/reset-password': typeof ResetPasswordIndexRoute
-  '/sign-in': typeof SignInIndexRoute
+  '/reset-password/': typeof ResetPasswordIndexRoute
+  '/sign-in/': typeof SignInIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
@@ -881,18 +881,18 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/integrations/drift': typeof DashboardSettingsIntegrationsDriftRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
-  '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
+  '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
   '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
-  '/dashboard/finance/receivables': typeof DashboardFinanceReceivablesIndexRoute
-  '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
-  '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
-  '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
+  '/dashboard/finance/receivables/': typeof DashboardFinanceReceivablesIndexRoute
+  '/dashboard/jobs/$id/': typeof DashboardJobsIdIndexRoute
+  '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
+  '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
   '/dashboard/personnel/$id/': typeof DashboardPersonnelIdIndexRoute
-  '/dashboard/requests/$id': typeof DashboardRequestsIdIndexRoute
-  '/dashboard/services/$id': typeof DashboardServicesIdIndexRoute
-  '/dashboard/standards/$id': typeof DashboardStandardsIdIndexRoute
+  '/dashboard/requests/$id/': typeof DashboardRequestsIdIndexRoute
+  '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
+  '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1146,8 +1146,8 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/onboarding/organization'
     | '/dashboard/'
-    | '/reset-password'
-    | '/sign-in'
+    | '/reset-password/'
+    | '/sign-in/'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/finance/contracts'
@@ -1226,18 +1226,18 @@ export interface FileRouteTypes {
     | '/dashboard/settings/integrations/drift'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id/'
-    | '/dashboard/capa/$id'
+    | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
     | '/dashboard/finance/contracts/'
     | '/dashboard/finance/documents/'
-    | '/dashboard/finance/receivables'
-    | '/dashboard/jobs/$id'
-    | '/dashboard/methods/$id'
-    | '/dashboard/nc/$id'
+    | '/dashboard/finance/receivables/'
+    | '/dashboard/jobs/$id/'
+    | '/dashboard/methods/$id/'
+    | '/dashboard/nc/$id/'
     | '/dashboard/personnel/$id/'
-    | '/dashboard/requests/$id'
-    | '/dashboard/services/$id'
-    | '/dashboard/standards/$id'
+    | '/dashboard/requests/$id/'
+    | '/dashboard/services/$id/'
+    | '/dashboard/standards/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1515,14 +1515,14 @@ declare module '@tanstack/react-router' {
     '/sign-in/': {
       id: '/sign-in/'
       path: '/sign-in'
-      fullPath: '/sign-in'
+      fullPath: '/sign-in/'
       preLoaderRoute: typeof SignInIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password/': {
       id: '/reset-password/'
       path: '/reset-password'
-      fullPath: '/reset-password'
+      fullPath: '/reset-password/'
       preLoaderRoute: typeof ResetPasswordIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -2089,21 +2089,21 @@ declare module '@tanstack/react-router' {
     '/dashboard/standards/$id/': {
       id: '/dashboard/standards/$id/'
       path: '/$id'
-      fullPath: '/dashboard/standards/$id'
+      fullPath: '/dashboard/standards/$id/'
       preLoaderRoute: typeof DashboardStandardsIdIndexRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
     }
     '/dashboard/services/$id/': {
       id: '/dashboard/services/$id/'
       path: '/$id'
-      fullPath: '/dashboard/services/$id'
+      fullPath: '/dashboard/services/$id/'
       preLoaderRoute: typeof DashboardServicesIdIndexRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
     }
     '/dashboard/requests/$id/': {
       id: '/dashboard/requests/$id/'
       path: '/$id'
-      fullPath: '/dashboard/requests/$id'
+      fullPath: '/dashboard/requests/$id/'
       preLoaderRoute: typeof DashboardRequestsIdIndexRouteImport
       parentRoute: typeof DashboardRequestsRouteRoute
     }
@@ -2117,28 +2117,28 @@ declare module '@tanstack/react-router' {
     '/dashboard/nc/$id/': {
       id: '/dashboard/nc/$id/'
       path: '/$id'
-      fullPath: '/dashboard/nc/$id'
+      fullPath: '/dashboard/nc/$id/'
       preLoaderRoute: typeof DashboardNcIdIndexRouteImport
       parentRoute: typeof DashboardNcRouteRoute
     }
     '/dashboard/methods/$id/': {
       id: '/dashboard/methods/$id/'
       path: '/$id'
-      fullPath: '/dashboard/methods/$id'
+      fullPath: '/dashboard/methods/$id/'
       preLoaderRoute: typeof DashboardMethodsIdIndexRouteImport
       parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/$id/': {
       id: '/dashboard/jobs/$id/'
       path: '/$id'
-      fullPath: '/dashboard/jobs/$id'
+      fullPath: '/dashboard/jobs/$id/'
       preLoaderRoute: typeof DashboardJobsIdIndexRouteImport
       parentRoute: typeof DashboardJobsRouteRoute
     }
     '/dashboard/finance/receivables/': {
       id: '/dashboard/finance/receivables/'
       path: '/receivables'
-      fullPath: '/dashboard/finance/receivables'
+      fullPath: '/dashboard/finance/receivables/'
       preLoaderRoute: typeof DashboardFinanceReceivablesIndexRouteImport
       parentRoute: typeof DashboardFinanceRouteRoute
     }
@@ -2166,7 +2166,7 @@ declare module '@tanstack/react-router' {
     '/dashboard/capa/$id/': {
       id: '/dashboard/capa/$id/'
       path: '/$id'
-      fullPath: '/dashboard/capa/$id'
+      fullPath: '/dashboard/capa/$id/'
       preLoaderRoute: typeof DashboardCapaIdIndexRouteImport
       parentRoute: typeof DashboardCapaRouteRoute
     }

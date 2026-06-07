@@ -7,17 +7,18 @@
   "scripts": {
     "build": "email build",
     "dev": "email dev --port 4000",
-    "export": "email export"
+    "export": "email export",
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@react-email/components": "1.0.12",
-    "react-dom": "^19.0.0",
-    "react": "^19.0.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "react-email": "6.2.0",
-    "@react-email/ui": "6.2.0",
-    "@types/react": "^19.0.1",
-    "@types/react-dom": "^19.0.1"
+    "@react-email/ui": "6.5.0",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.0.1",
+    "react-email": "6.5.0"
   }
 }

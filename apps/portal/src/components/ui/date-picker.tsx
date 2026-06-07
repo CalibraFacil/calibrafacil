@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useState } from "react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { DateRange } from "react-day-picker";
@@ -49,7 +49,7 @@ function DateRangePicker({
   disabled = false,
   className,
 }: DateRangePickerProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

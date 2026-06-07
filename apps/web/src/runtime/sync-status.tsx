@@ -1,4 +1,12 @@
-import * as React from 'react'
+import {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -73,7 +81,7 @@ function getServerBrowserOnlineSnapshot() {
 }
 
 function useBrowserOnlineStatus(isDesktop: boolean) {
-  return React.useSyncExternalStore(
+  return useSyncExternalStore(
     isDesktop ? subscribeToBrowserOnlineStatus : subscribeToNothing,
     getBrowserOnlineSnapshot,
     getServerBrowserOnlineSnapshot,
@@ -85,18 +93,16 @@ type SyncStatusContextValue = SyncStatusSnapshot & {
   refresh(): Promise<void>
 }
 
-const SyncStatusContext = React.createContext<SyncStatusContextValue | null>(
-  null,
-)
+const SyncStatusContext = createContext<SyncStatusContextValue | null>(null)
 
 export function SyncStatusProvider({
   children,
   isDesktop,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   isDesktop: boolean
 }) {
-  const bridgeSnapshot = React.useSyncExternalStore(
+  const bridgeSnapshot = useSyncExternalStore(
     isDesktop ? subscribeToBridgeSyncStatus : subscribeToNothing,
     getBridgeSnapshot,
     getBridgeSnapshot,
@@ -115,11 +121,11 @@ export function SyncStatusProvider({
   })
 
   const snapshot = bridgeSnapshot ?? data ?? initialSnapshot
-  const refresh = React.useCallback(async () => {
+  const refresh = useCallback(async () => {
     await refetch()
   }, [refetch])
 
-  const value = React.useMemo<SyncStatusContextValue>(
+  const value = useMemo<SyncStatusContextValue>(
     () => ({
       ...snapshot,
       isDesktop,
@@ -136,7 +142,7 @@ export function SyncStatusProvider({
 }
 
 export function useSyncStatus() {
-  const context = React.useContext(SyncStatusContext)
+  const context = useContext(SyncStatusContext)
   if (!context) {
     throw new Error('useSyncStatus must be used within SyncStatusProvider')
   }
@@ -291,14 +297,14 @@ export function DesktopSyncButton() {
 }
 
 function useDesktopManualSyncAction(sync: SyncStatusContextValue) {
-  const [isSyncing, setIsSyncing] = React.useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const canSync =
     sync.isDesktop &&
     typeof window !== 'undefined' &&
     Boolean(window.calibraBridge)
   const disabled = isSyncing || sync.state === 'syncing'
 
-  const run = React.useCallback(async () => {
+  const run = useCallback(async () => {
     if (!window.calibraBridge) return
 
     setIsSyncing(true)

@@ -1,5 +1,4 @@
-import * as React from 'react'
-
+import { KeyboardEvent, useCallback } from 'react'
 import { useCommandPalette } from './command-context'
 import { ContextGroup } from './groups/context-group'
 import { QuickCreateGroup } from './groups/quick-create'
@@ -20,7 +19,7 @@ export function CommandPalette() {
   const { open, setOpen, activePage, setPages, searchValue, setSearchValue } =
     useCommandPalette()
 
-  const handleOpenChange = React.useCallback(
+  const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
     },
@@ -28,8 +27,8 @@ export function CommandPalette() {
   )
 
   // Handle back navigation with Escape or Backspace on empty input
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (
         activePage !== 'root' &&
         (e.key === 'Escape' || (e.key === 'Backspace' && !searchValue))

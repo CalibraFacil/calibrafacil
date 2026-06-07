@@ -21,8 +21,28 @@
       }
     ],
     "unicorn/no-null": "off",
-    "unicorn/filename-case": "off"
+    "unicorn/filename-case": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "react",
+            "importNames": ["useEffect"],
+            "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+          }
+        ]
+      }
+    ]
   },
+  "overrides": [
+    {
+      "files": ["apps/*/src/hooks/use-mount-effect.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
   "ignorePatterns": [
     "node_modules",
     "dist",

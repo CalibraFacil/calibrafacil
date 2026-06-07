@@ -1,5 +1,5 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import * as React from "react";
+import { ComponentPropsWithoutRef, ComponentRef, forwardRef } from "react";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
@@ -42,22 +42,21 @@ const buttonVariants = cva(
   },
 );
 
-type ButtonProps = React.ComponentPropsWithoutRef<typeof ButtonPrimitive> &
+type ButtonProps = ComponentPropsWithoutRef<typeof ButtonPrimitive> &
   VariantProps<typeof buttonVariants>;
 
-const Button = React.forwardRef<
-  React.ComponentRef<typeof ButtonPrimitive>,
-  ButtonProps
->(({ className, variant = "default", size = "default", ...props }, ref) => {
-  return (
-    <ButtonPrimitive
-      ref={ref}
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  );
-});
+const Button = forwardRef<ComponentRef<typeof ButtonPrimitive>, ButtonProps>(
+  ({ className, variant = "default", size = "default", ...props }, ref) => {
+    return (
+      <ButtonPrimitive
+        ref={ref}
+        data-slot="button"
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...props}
+      />
+    );
+  },
+);
 
 Button.displayName = "Button";
 

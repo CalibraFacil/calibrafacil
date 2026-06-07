@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: "pnpm"
 
       - name: Setup Bun
@@ -41,17 +41,6 @@ jobs:
 
       - name: Check blocked dependencies
         run: bun scripts/check-blocked-deps.mjs
-
-      - name: Setup private Git dependencies
-        env:
-          MATH_ENGINE_GIT_TOKEN: ${{ secrets.MATH_ENGINE_GIT_TOKEN }}
-          MATH_ENGINE_DEPLOY_KEY: ${{ secrets.MATH_ENGINE_DEPLOY_KEY }}
-        run: |
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
-            bun scripts/setup-private-git-ssh.mjs --required
-          else
-            bun scripts/setup-private-git-ssh.mjs
-          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

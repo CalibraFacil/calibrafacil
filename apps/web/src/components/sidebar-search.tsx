@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { useState } from 'react'
 import { SearchIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -14,7 +14,7 @@ import {
 export function SidebarSearch() {
   const { setOpen } = useCommandPalette()
   const { state } = useSidebar()
-  const [isMac] = React.useState(
+  const [isMac] = useState(
     () => navigator.platform.toUpperCase().indexOf('MAC') >= 0,
   )
 

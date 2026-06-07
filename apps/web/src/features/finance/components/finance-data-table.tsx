@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ReactNode, useMemo, useState } from 'react'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -66,13 +66,11 @@ function globalIncludesFilter<TData>(
 ): boolean {
   const query = String(filterValue).trim().toLowerCase()
   if (!query) return true
-  return row
-    .getAllCells()
-    .some((cell) =>
-      String(cell.getValue() ?? '')
-        .toLowerCase()
-        .includes(query),
-    )
+  return row.getAllCells().some((cell) =>
+    String(cell.getValue() ?? '')
+      .toLowerCase()
+      .includes(query),
+  )
 }
 
 function createSelectionColumn<TData>(): ColumnDef<TData, unknown> {
@@ -137,24 +135,25 @@ export function FinanceDataTable<TData>({
   searchPlaceholder?: string
   enableSearch?: boolean
   enableRowSelection?: boolean | ((row: Row<TData>) => boolean)
-  bulkActions?: (selected: TData[], clearSelection: () => void) => React.ReactNode
+  bulkActions?: (selected: TData[], clearSelection: () => void) => ReactNode
   onRowClick?: (row: TData) => void
   initialSorting?: SortingState
   initialColumnFilters?: ColumnFiltersState
   pageSize?: number
-  emptyState?: React.ReactNode
+  emptyState?: ReactNode
 }) {
-  const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
+  const [sorting, setSorting] = useState<SortingState>(initialSorting)
   const [columnFilters, setColumnFilters] =
-    React.useState<ColumnFiltersState>(initialColumnFilters)
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
-  const [globalFilter, setGlobalFilter] = React.useState('')
+    useState<ColumnFiltersState>(initialColumnFilters)
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [rowSelection, setRowSelection] = useState({})
+  const [globalFilter, setGlobalFilter] = useState('')
 
-  const allColumns = React.useMemo<ColumnDef<TData, unknown>[]>(
+  const allColumns = useMemo<ColumnDef<TData, unknown>[]>(
     () =>
-      enableRowSelection ? [createSelectionColumn<TData>(), ...columns] : columns,
+      enableRowSelection
+        ? [createSelectionColumn<TData>(), ...columns]
+        : columns,
     [columns, enableRowSelection],
   )
 
@@ -307,7 +306,10 @@ export function FinanceDataTable<TData>({
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>

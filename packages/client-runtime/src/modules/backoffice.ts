@@ -102,6 +102,49 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao solicitar definição de senha",
       );
     },
+    async getUser<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.users[":id"].$get({
+          param: { id },
+        }),
+        "Falha ao carregar usuário",
+      );
+    },
+    async listUserSessions<TResponse = unknown>(id: string) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.users[":id"].sessions.$get({
+          param: { id },
+        }),
+        "Falha ao carregar sessões do usuário",
+      );
+    },
+    async revokeUserSession<TResponse = unknown>(
+      id: string,
+      sessionId: string,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.users[":id"].sessions.revoke.$post({
+          param: { id },
+          json: { sessionId },
+        }),
+        "Falha ao revogar sessão",
+      );
+    },
+    async listUserActivity<TResponse = unknown>(id: string, input = {}) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.users[":id"].activity.$get({
+          param: { id },
+          query: input,
+        }),
+        "Falha ao carregar atividade do usuário",
+      );
+    },
+    async getPresence<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.presence.$get(),
+        "Falha ao carregar presença de usuários",
+      );
+    },
     async listAuditLog<TResponse = unknown>(input = {}) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice["audit-log"].$get({ query: input }),
@@ -130,7 +173,9 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
     },
     async recomputeOperatorAlerts<TResponse = unknown>() {
       return readJsonResponse<TResponse>(
-        await rawCloudClient.api.backoffice["operator-alerts"].recompute.$post(),
+        await rawCloudClient.api.backoffice[
+          "operator-alerts"
+        ].recompute.$post(),
         "Falha ao recalcular alertas",
       );
     },

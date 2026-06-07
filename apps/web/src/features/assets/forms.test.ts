@@ -192,8 +192,28 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
+        subjectToLegalMetrology: false,
       },
     })
+  })
+
+  it('round-trips the legal-metrology flag on create', () => {
+    const off = parseAssetForm(validAssetForm())
+    expect(off.success && off.data.subjectToLegalMetrology).toBe(false)
+
+    const on = parseAssetForm({
+      ...validAssetForm(),
+      subjectToLegalMetrology: true,
+    })
+    expect(on.success && on.data.subjectToLegalMetrology).toBe(true)
+  })
+
+  it('round-trips the legal-metrology flag on update', () => {
+    const result = parseAssetEditForm({
+      ...validAssetEditForm(),
+      subjectToLegalMetrology: true,
+    })
+    expect(result.success && result.data.subjectToLegalMetrology).toBe(true)
   })
 
   it('maps asset update specification errors to edit route fields', () => {
@@ -274,6 +294,16 @@ describe('calibration periodicity presets', () => {
     ])
   })
 
+  it('normalizes the base to midnight so presets match date-only calendar picks', () => {
+    // A base with a time component must not leak hours/minutes into the result,
+    // otherwise the asset stays non-overdue for part of its due day.
+    const [oneMonth] = buildCalibrationPeriodicityPresets(
+      () => new Date('2026-01-15T15:30:00.000Z'),
+    )
+
+    expect(oneMonth?.getDate().toISOString()).toBe('2026-02-15T00:00:00.000Z')
+  })
+
   it('tracks the latest base date returned by the getter', () => {
     let base = new Date('2026-01-31T00:00:00.000Z')
     const [oneMonth] = buildCalibrationPeriodicityPresets(() => base)
@@ -300,6 +330,7 @@ function validAssetForm(): AssetFormData {
     lastCalibrationDate: undefined,
     nextCalibrationDate: undefined,
     comments: '',
+    subjectToLegalMetrology: false,
     specifications: {},
   }
 }
@@ -315,6 +346,7 @@ function validAssetEditForm(): AssetEditFormData {
     lastCalibrationDate: undefined,
     nextCalibrationDate: undefined,
     comments: '',
+    subjectToLegalMetrology: false,
     specifications: {},
   }
 }

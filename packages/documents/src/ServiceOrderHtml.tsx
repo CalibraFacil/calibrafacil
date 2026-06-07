@@ -446,7 +446,7 @@ function DeliveryReceiptCopy({
         </tbody>
       </table>
 
-      <div className="section-title">Selo de reparado Inmetro</div>
+      <div className="section-title">Etiqueta de Reparo (Inmetro)</div>
       <table className="form-table">
         <tbody>
           <tr>
@@ -458,11 +458,11 @@ function DeliveryReceiptCopy({
             <td rowSpan={2}>
               {copy === "lab" ? (
                 <div className="seal-box">
-                  Colar selo físico de reparado aqui
+                  Colar Etiqueta de Reparo aqui
                 </div>
               ) : (
                 <>
-                  <span className="cell-label">Selo entregue ao cliente</span>
+                  <span className="cell-label">Etiqueta entregue ao cliente</span>
                   <span className="cell-value">{text(sealNumber)}</span>
                 </>
               )}
@@ -560,7 +560,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
           <tr>
             <Cell
-              label="Nº selo reparado Inmetro"
+              label="Nº Etiqueta de Reparo"
               value={data.intake.inmetroRepairSealNumber}
               fallback=""
             />

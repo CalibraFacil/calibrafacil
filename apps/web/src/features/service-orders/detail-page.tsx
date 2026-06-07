@@ -441,6 +441,15 @@ function ServiceOrderDetailContent({
   const [repairSealApplied, setRepairSealApplied] = useState(
     Boolean(order.inmetroRepairSealAppliedAt),
   )
+  // The repair seal (Etiqueta de Reparo) + lacre only apply to instruments
+  // subject to legal metrology. Show the editor only for those; for others,
+  // surface any already-recorded value read-only so history never disappears.
+  const isSubjectToLegalMetrology = Boolean(order.assetSubjectToLegalMetrology)
+  const hasRepairSealRecord = Boolean(
+    order.inmetroRepairSealNumber ||
+      order.inmetroRepairSealNotes ||
+      order.inmetroRepairSealAppliedAt,
+  )
   const [activeTab, setActiveTab] =
     useState<(typeof WORKFLOW_TABS)[number]['value']>('evaluation')
   const quoteTotal = useMemo(() => quoteItemsTotal(quoteItems), [quoteItems])
@@ -624,13 +633,15 @@ function ServiceOrderDetailContent({
       })
     },
     onSuccess: () => {
-      toast.success('Selo de reparado atualizado')
+      toast.success('Etiqueta de Reparo atualizada')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
       returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : 'Erro ao salvar selo',
+        error instanceof Error
+          ? error.message
+          : 'Erro ao salvar a Etiqueta de Reparo',
       )
     },
   })
@@ -1364,10 +1375,10 @@ function ServiceOrderDetailContent({
               <CardHeader>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <CardTitle>Entrega e selo Inmetro</CardTitle>
+                    <CardTitle>Entrega e Etiqueta de Reparo</CardTitle>
                     <CardDescription>
                       Gere as duas vias do comprovante com valores, assinaturas
-                      e selo de reparado.
+                      e a Etiqueta de Reparo do Inmetro.
                     </CardDescription>
                   </div>
                   {latestDeliveryDocument ? (
@@ -1436,56 +1447,97 @@ function ServiceOrderDetailContent({
                   </div>
                 </div>
 
-                <div className="grid gap-4 rounded-lg bg-muted/40 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <div className="space-y-2">
-                    <Label>Nº do selo de reparado Inmetro</Label>
-                    <Input
-                      className="tabular-nums"
-                      value={repairSealNumber}
-                      onChange={(event) =>
-                        setRepairSealNumber(event.target.value)
-                      }
-                      placeholder="Número digitado que irá na via do cliente"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Status do selo físico</Label>
-                    <div className="flex min-h-10 items-center rounded-md bg-background px-3 text-sm shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
-                      {repairSealApplied
-                        ? 'Aplicado na via do laboratório'
-                        : 'Pendente de aplicação física'}
+                {isSubjectToLegalMetrology ? (
+                  <div className="grid gap-4 rounded-lg bg-muted/40 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="space-y-2 md:col-span-2">
+                      <p className="text-sm font-medium">
+                        Etiqueta de Reparo (Inmetro)
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nº da Etiqueta de Reparo</Label>
+                      <Input
+                        className="tabular-nums"
+                        value={repairSealNumber}
+                        onChange={(event) =>
+                          setRepairSealNumber(event.target.value)
+                        }
+                        placeholder="Número digitado que irá na via do cliente"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status da etiqueta física</Label>
+                      <div className="flex min-h-10 items-center rounded-md bg-background px-3 text-sm shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
+                        {repairSealApplied
+                          ? 'Aplicado na via do laboratório'
+                          : 'Pendente de aplicação física'}
+                      </div>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Observações da Etiqueta de Reparo</Label>
+                      <Input
+                        value={repairSealNotes}
+                        onChange={(event) =>
+                          setRepairSealNotes(event.target.value)
+                        }
+                        placeholder="Ex.: Etiqueta de Reparo será colada na via do laboratório após conferência."
+                      />
+                    </div>
+                    <label className="flex min-h-10 items-center gap-3 text-sm">
+                      <Checkbox
+                        checked={repairSealApplied}
+                        onCheckedChange={(checked) =>
+                          setRepairSealApplied(Boolean(checked))
+                        }
+                      />
+                      Etiqueta física aplicada
+                    </label>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        className="active:scale-[0.96] transition-transform"
+                        onClick={() => updateRepairSeal.mutate()}
+                        disabled={isDesktop || updateRepairSeal.isPending}
+                      >
+                        Salvar Etiqueta de Reparo
+                      </Button>
                     </div>
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Observações do selo</Label>
-                    <Input
-                      value={repairSealNotes}
-                      onChange={(event) =>
-                        setRepairSealNotes(event.target.value)
-                      }
-                      placeholder="Ex.: selo físico será colado na via do laboratório após conferência."
-                    />
+                ) : hasRepairSealRecord ? (
+                  <div className="grid gap-3 rounded-lg bg-muted/40 p-4 text-sm md:grid-cols-2">
+                    <div className="space-y-1 md:col-span-2">
+                      <p className="font-medium">
+                        Etiqueta de Reparo (registro existente)
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Instrumento não está marcado como sujeito a metrologia
+                        legal — exibindo apenas o registro já gravado.
+                      </p>
+                    </div>
+                    {order.inmetroRepairSealNumber ? (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Nº da etiqueta</p>
+                        <p className="font-medium tabular-nums">
+                          {order.inmetroRepairSealNumber}
+                        </p>
+                      </div>
+                    ) : null}
+                    {order.inmetroRepairSealAppliedAt ? (
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Etiqueta física</p>
+                        <p className="font-medium">Aplicado</p>
+                      </div>
+                    ) : null}
+                    {order.inmetroRepairSealNotes ? (
+                      <div className="space-y-1 md:col-span-2">
+                        <p className="text-muted-foreground">Observações</p>
+                        <p className="font-medium">
+                          {order.inmetroRepairSealNotes}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
-                  <label className="flex min-h-10 items-center gap-3 text-sm">
-                    <Checkbox
-                      checked={repairSealApplied}
-                      onCheckedChange={(checked) =>
-                        setRepairSealApplied(Boolean(checked))
-                      }
-                    />
-                    Selo físico aplicado
-                  </label>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      className="active:scale-[0.96] transition-transform"
-                      onClick={() => updateRepairSeal.mutate()}
-                      disabled={isDesktop || updateRepairSeal.isPending}
-                    >
-                      Salvar selo
-                    </Button>
-                  </div>
-                </div>
+                ) : null}
 
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button

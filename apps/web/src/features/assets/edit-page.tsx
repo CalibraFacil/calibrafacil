@@ -18,6 +18,7 @@ import {
 } from '@/features/assets/forms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import {
@@ -167,6 +168,7 @@ function EditAssetForm({
     lastCalibrationDate: parseDate(asset.lastCalibrationDate),
     nextCalibrationDate: parseDate(asset.nextCalibrationDate),
     comments: asset.comments || '',
+    subjectToLegalMetrology: asset.subjectToLegalMetrology ?? false,
     specifications: asset.specifications || {},
   })
   const [errors, setErrors] = useState<
@@ -418,6 +420,27 @@ function EditAssetForm({
                 </Select>
               </Field>
             </div>
+
+            <label className="mt-4 flex items-start gap-3 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={formData.subjectToLegalMetrology}
+                onCheckedChange={(checked) =>
+                  updateField('subjectToLegalMetrology', Boolean(checked))
+                }
+                disabled={isSaving}
+              />
+              <span>
+                <span className="font-medium">
+                  Sujeito a metrologia legal (Inmetro)
+                </span>
+                <span className="block text-muted-foreground">
+                  Instrumentos verificados pelo Inmetro (bombas de combustível,
+                  taxímetros, balanças comerciais…). Habilita os campos de lacre
+                  e Etiqueta de Reparo na ordem de serviço.
+                </span>
+              </span>
+            </label>
           </Panel>
 
           {hasSpecs || showEccentricityIndicator ? (
@@ -477,9 +500,7 @@ function EditAssetForm({
                   onChange={(date) => updateField('nextCalibrationDate', date)}
                   placeholder="Selecione a data"
                   disabled={isSaving}
-                  presets={buildCalibrationPeriodicityPresets(
-                    () => formData.lastCalibrationDate ?? new Date(),
-                  )}
+                  presets={buildCalibrationPeriodicityPresets()}
                 />
               </Field>
             </div>

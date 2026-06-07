@@ -1,4 +1,4 @@
-import * as React from 'react'
+import { ReactNode } from 'react'
 import {
   checkRolePermission,
   useActiveOrganization,
@@ -122,11 +122,11 @@ interface PermissionGateProps {
   /**
    * Content to render when the user has the required permissions
    */
-  children: React.ReactNode
+  children: ReactNode
   /**
    * Optional content to render when the user lacks permissions
    */
-  fallback?: React.ReactNode
+  fallback?: ReactNode
 }
 
 /**
@@ -167,11 +167,11 @@ interface RoleGateProps {
   /**
    * Content to render when the user has one of the allowed roles
    */
-  children: React.ReactNode
+  children: ReactNode
   /**
    * Optional content to render when the user's role is not allowed
    */
-  fallback?: React.ReactNode
+  fallback?: ReactNode
 }
 
 /**
@@ -209,11 +209,11 @@ interface CalibrationActionGateProps {
   /**
    * Content to render when the user can perform the action
    */
-  children: React.ReactNode
+  children: ReactNode
   /**
    * Optional content to render when the user cannot perform the action
    */
-  fallback?: React.ReactNode
+  fallback?: ReactNode
 }
 
 /**
@@ -257,7 +257,7 @@ interface ShowForRoleProps {
   /**
    * Content to render for the specified role(s)
    */
-  children: React.ReactNode
+  children: ReactNode
 }
 
 /**
@@ -286,7 +286,7 @@ interface HideFromRoleProps {
   /**
    * Content to hide from the specified role(s)
    */
-  children: React.ReactNode
+  children: ReactNode
 }
 
 /**
@@ -320,11 +320,11 @@ interface CanProps {
   /**
    * Content to render when the user has permission
    */
-  children: React.ReactNode
+  children: ReactNode
   /**
    * Optional content to render when permission is denied
    */
-  fallback?: React.ReactNode
+  fallback?: ReactNode
 }
 
 /**
