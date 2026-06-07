@@ -96,6 +96,7 @@ export {
 } from "./methods";
 export {
   getLocalStandardDetail,
+  listLocalCompositionProfiles,
   listLocalStandards,
   type LocalCertifiedValue,
   type LocalStandard,

@@ -539,9 +539,31 @@ export type StandardCertificateDocumentDownloadResponse = {
   filename: string;
 };
 
+/** A row of the normalized mass composition-profile catalog (per organization). */
+export type MassCompositionProfileDto = {
+  id: number;
+  profileKey: string;
+  profileClass: string;
+  nominal: string;
+  nominalG: number;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError: number | null;
+  drift: number | null;
+  buoyancy: number | null;
+  coverageFactor: number | null;
+  quantityAvailable: number | null;
+};
+
+export type MassCompositionProfilesData = {
+  data: MassCompositionProfileDto[];
+};
+
 export interface StandardsApi {
   list(input?: StandardsListInput): Promise<StandardsListData>;
   get(id: string | number): Promise<StandardData>;
+  listCompositionProfiles(): Promise<MassCompositionProfilesData>;
   auditLog<TRecord = unknown>(
     id: string | number,
   ): Promise<StandardAuditLogData<TRecord>>;

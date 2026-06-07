@@ -1,4 +1,5 @@
 import type {
+  MassCompositionProfilesData,
   StandardAuditLogData,
   StandardCertificateDocumentDownloadResponse,
   StandardCertificateDocumentUploadResponse,
@@ -57,6 +58,12 @@ export function createStandardsApi(
           param: { id: String(id) },
         }),
         "Falha ao carregar padrão",
+      );
+    },
+    async listCompositionProfiles() {
+      return readJsonResponse<MassCompositionProfilesData>(
+        await rawCloudClient.api.standards["composition-profiles"].$get(),
+        "Falha ao carregar perfis de composição",
       );
     },
     async auditLog<TRecord = unknown>(id: string | number) {

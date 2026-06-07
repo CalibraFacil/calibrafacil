@@ -71,6 +71,7 @@ import {
 } from '@/runtime/sync-conflict-return'
 import {
   useActiveReferenceStandardsData,
+  useCompositionProfilesData,
   useEffectiveEnvironmentalLimitsData,
   useJobDetailData,
 } from '@/features/jobs/queries'
@@ -83,6 +84,7 @@ import {
   buildEnvironmentWarnings,
   buildExecutionMutationPayload,
   buildExecutionFormulaContext,
+  attachCompositionProfiles,
   buildMassCompositionOptions,
   canSubmitExecution,
   defaultCalibrationPhases,
@@ -237,6 +239,19 @@ export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
   const { data: standardsData } =
     useActiveReferenceStandardsData<ReferenceStandard>()
 
+  // Composition-profile buildup options now come from the normalized catalog and
+  // are reconstituted (by class) onto each standard, so buildMassCompositionOptions
+  // behaves exactly as before normalization.
+  const { data: compositionProfilesData } = useCompositionProfilesData()
+  const standardsWithProfiles = useMemo(
+    () =>
+      attachCompositionProfiles(
+        standardsData?.data ?? [],
+        compositionProfilesData?.data ?? [],
+      ),
+    [standardsData, compositionProfilesData],
+  )
+
   const { data: envLimitsData } =
     useEffectiveEnvironmentalLimitsData<EffectiveLimits>({
       assetTypeId: job?.assetTypeId,
@@ -270,7 +285,7 @@ export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
     <ExecuteJobForm
       key={job.id}
       job={job}
-      standardsData={standardsData?.data ?? []}
+      standardsData={standardsWithProfiles}
       envLimits={envLimits}
       engine={engine}
       jobId={id}

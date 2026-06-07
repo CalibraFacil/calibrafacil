@@ -258,6 +258,7 @@ export const calibraApiPolicyRegistry = {
   standards: {
     list: "local-first-read-through-sync",
     get: "local-first-read-through-sync",
+    listCompositionProfiles: "local-first-read-through-sync",
     auditLog: "cloud-only",
     create: "cloud-only",
     update: "cloud-only",

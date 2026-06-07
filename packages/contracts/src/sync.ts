@@ -89,6 +89,7 @@ export const syncBootstrapResponseSchema = z.object({
   assets: z.array(z.unknown()),
   services: z.array(z.unknown()),
   standards: z.array(z.unknown()),
+  massCompositionProfiles: z.array(z.unknown()).optional(),
   environmentalLimits: z.array(z.unknown()),
   jobs: z.array(z.unknown()),
   serviceOrders: z.array(z.unknown()).default([]),

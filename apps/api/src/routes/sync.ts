@@ -32,6 +32,7 @@ import {
   type EnvironmentalSnapshot,
   jobAuditLog,
   organizationEventLog,
+  massCompositionProfile,
   referenceStandard,
   referenceStandardCertificateDocument,
   service,
@@ -358,6 +359,38 @@ export const syncRouter = new Hono<{
       const standardsWithDocuments =
         await attachReferenceStandardCertificateDocuments(standards);
 
+      const massCompositionProfileRows = await db
+        .select({
+          id: massCompositionProfile.id,
+          profileKey: massCompositionProfile.profileKey,
+          profileClass: massCompositionProfile.profileClass,
+          nominal: massCompositionProfile.nominal,
+          nominalG: massCompositionProfile.nominalG,
+          value: massCompositionProfile.value,
+          uncertainty: massCompositionProfile.uncertainty,
+          unit: massCompositionProfile.unit,
+          maxError: massCompositionProfile.maxError,
+          drift: massCompositionProfile.drift,
+          buoyancy: massCompositionProfile.buoyancy,
+          coverageFactor: massCompositionProfile.coverageFactor,
+          quantityAvailable: massCompositionProfile.quantityAvailable,
+        })
+        .from(massCompositionProfile)
+        .where(
+          and(
+            eq(
+              massCompositionProfile.organizationId,
+              memberData.organizationId,
+            ),
+            eq(massCompositionProfile.status, "ACTIVE"),
+            isNull(massCompositionProfile.deletedAt),
+          ),
+        )
+        .orderBy(
+          massCompositionProfile.profileClass,
+          massCompositionProfile.nominalG,
+        );
+
       return c.json(
         syncBootstrapResponseSchema.parse({
           serverTime: new Date().toISOString(),
@@ -393,6 +426,7 @@ export const syncRouter = new Hono<{
           assets,
           services,
           standards: standardsWithDocuments,
+          massCompositionProfiles: massCompositionProfileRows,
           environmentalLimits: environmentalLimitRows,
           jobs,
           serviceOrders,

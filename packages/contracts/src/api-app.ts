@@ -269,6 +269,7 @@ type ApiRoutePath =
   | "/api/sso/providers/:providerId/verify-domain"
   | "/api/sso/start"
   | "/api/standards"
+  | "/api/standards/composition-profiles"
   | "/api/standards/:id"
   | "/api/standards/:id/audit-log"
   | "/api/standards/:id/certificate-document"

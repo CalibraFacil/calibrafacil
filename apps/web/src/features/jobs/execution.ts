@@ -6,6 +6,7 @@ import {
   resolveMassDisplayUnit,
   type MassUnit,
 } from '@calibra-facil/shared'
+import type { MassCompositionProfileDto } from '@calibra-facil/client-runtime'
 
 import type {
   FormulaResult,
@@ -45,6 +46,7 @@ export interface ReferenceStandard {
   name: string
   kind?: string
   type?: string | null
+  model?: string | null
   serialNumber: string
   certificateNumber: string
   calibrationDate: string
@@ -1191,6 +1193,62 @@ export function buildMassCompositionOptions({
   }
 
   return [...individualOptions, ...profileOptions.values()]
+}
+
+const MASS_PROFILE_CLASS_RE = /\b([EFM][12])\b/i
+
+/** Derive the mass class (M1/M2/F1/…) from a standard's model label. */
+export function classOfStandard(standard: {
+  model?: string | null
+}): string | null {
+  const match = standard.model?.match(MASS_PROFILE_CLASS_RE)
+  return match ? match[1].toUpperCase() : null
+}
+
+/**
+ * Reconstitute the composition-profile buildup entries onto each standard's
+ * certifiedValues from the normalized mass_composition_profile catalog (profiles
+ * no longer live in certified_values). Each standard receives the catalog
+ * profiles of its own class, in the legacy CertifiedValue shape — so
+ * buildMassCompositionOptions and its standardIds aggregation stay byte-identical
+ * to the pre-normalization behavior.
+ */
+export function attachCompositionProfiles(
+  standards: ReferenceStandard[],
+  profiles: MassCompositionProfileDto[],
+): ReferenceStandard[] {
+  if (!profiles.length) return standards
+  const byClass = new Map<
+    string,
+    NonNullable<ReferenceStandard['certifiedValues']>
+  >()
+  for (const profile of profiles) {
+    const list = byClass.get(profile.profileClass) ?? []
+    list.push({
+      nominal: profile.nominal,
+      value: profile.value,
+      uncertainty: profile.uncertainty,
+      unit: profile.unit,
+      maxError: profile.maxError,
+      drift: profile.drift,
+      buoyancy: profile.buoyancy,
+      coverageFactor: profile.coverageFactor,
+      compositionProfile: true,
+      profileKey: profile.profileKey,
+      profileClass: profile.profileClass,
+      profileQuantityAvailable: profile.quantityAvailable,
+    })
+    byClass.set(profile.profileClass, list)
+  }
+  return standards.map((standard) => {
+    const cls = classOfStandard(standard)
+    const classProfiles = cls ? byClass.get(cls) : undefined
+    if (!classProfiles?.length) return standard
+    const real = (standard.certifiedValues ?? []).filter(
+      (value) => value.compositionProfile !== true,
+    )
+    return { ...standard, certifiedValues: [...real, ...classProfiles] }
+  })
 }
 
 export const JOB_STATUS_LABELS: Record<string, string> = {
