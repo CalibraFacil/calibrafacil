@@ -10,6 +10,7 @@ import {
   RefreshIcon,
   TaskDone01Icon,
   TextFontIcon,
+  Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
@@ -130,7 +131,16 @@ function LifecycleStepper({ status }: { status: string }) {
                       : 'bg-muted text-muted-foreground ring-1 ring-inset ring-foreground/15',
                 )}
               >
-                {done ? '✓' : index + 1}
+                {done ? (
+                  <HugeiconsIcon
+                    icon={Tick02Icon}
+                    className="size-3"
+                    strokeWidth={2.5}
+                    aria-hidden
+                  />
+                ) : (
+                  index + 1
+                )}
               </span>
               <span
                 className={cn(
