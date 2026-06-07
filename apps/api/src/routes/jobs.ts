@@ -79,6 +79,7 @@ import {
   inArray,
   isNull,
   like,
+  ne,
   not,
   or,
   sql,
@@ -2395,20 +2396,32 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): the technician who
       // executed — or the user who created — the calibration must not approve
       // their own work. Auto-detected like the personnel-competence gate: it is
-      // enforced whenever the organization has another member, and a genuine
-      // solo lab (a single member) is exempt because separation of functions is
-      // physically impossible there.
+      // enforced only when the organization actually has an *eligible alternate
+      // approver*, so a genuine solo lab — or one whose only other members are
+      // technicians/operators who cannot approve — is exempt rather than left
+      // with a REVIEW job nobody can release. An eligible approver is another
+      // member whose role grants `calibration.approve`, which access.ts grants
+      // to admin/owner only; both are global multi-unit roles, so any such
+      // member can access the job's unit by construction (no unit-scope join
+      // needed here).
       const approverId = session.user.id;
       if (
         existing.technicianId === approverId ||
         existing.createdBy === approverId
       ) {
-        const [memberCount] = await db
-          .select({ total: count() })
+        const [alternateApprover] = await db
+          .select({ id: member.id })
           .from(member)
-          .where(eq(member.organizationId, memberData.organizationId));
+          .where(
+            and(
+              eq(member.organizationId, memberData.organizationId),
+              inArray(member.role, ["admin", "owner"]),
+              ne(member.userId, approverId),
+            ),
+          )
+          .limit(1);
 
-        if ((memberCount?.total ?? 0) > 1) {
+        if (alternateApprover) {
           return c.json(
             {
               error:

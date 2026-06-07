@@ -299,7 +299,7 @@ function VerifyPage() {
                   </div>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Assinatura digital com certificado ICP-Brasil A1.
+                  Assinatura digital com certificado A1 (PAdES/PKCS#7).
                 </p>
               </dl>
             ) : (

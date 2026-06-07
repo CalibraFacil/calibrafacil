@@ -86,7 +86,12 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       );
     }
 
-    // If superseded, get the replacement job info
+    // If superseded, get the replacement job info — but only once the
+    // replacement is itself publicly verifiable. When an amendment is opened
+    // the replacement is created as DRAFT and supersededById is set on the
+    // original immediately; /verify only serves APPROVED/SUPERSEDED jobs, so
+    // surfacing a still-draft replacement would link auditors from a valid
+    // superseded certificate to an "invalid" page labelled as the current one.
     let supersededByInfo = null;
     if (job.supersededById) {
       const [replacement] = await db
@@ -96,7 +101,12 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
           verificationToken: calibrationJob.verificationToken,
         })
         .from(calibrationJob)
-        .where(eq(calibrationJob.id, job.supersededById))
+        .where(
+          and(
+            eq(calibrationJob.id, job.supersededById),
+            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          ),
+        )
         .limit(1);
 
       if (replacement) {
