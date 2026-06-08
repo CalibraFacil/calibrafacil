@@ -162,6 +162,11 @@ export const backofficeAuthClient = createBetterAuthClient({
     credentials: "include",
     customFetchImpl: desktopAuthFetch,
   },
+  // Parity with the lab/portal clients: don't refetch the session on every tab
+  // refocus. Without this the backoffice fires /get-session on each refocus.
+  sessionOptions: {
+    refetchOnWindowFocus: false,
+  },
   plugins: [
     // Mandatory two-factor for internal operators. The form reads
     // `data.twoFactorRedirect` from sign-in directly, so no redirect callback
@@ -216,7 +221,19 @@ export const labEmailOtp = labAuthClient.emailOtp;
 export const backofficeSignIn = backofficeAuthClient.signIn;
 export const backofficeSignOut = backofficeAuthClient.signOut;
 export const useBackofficeSession = backofficeAuthClient.useSession;
-export const getBackofficeSession = () => backofficeAuthClient.getSession();
+let inflightBackofficeSession: ReturnType<
+  typeof backofficeAuthClient.getSession
+> | null = null;
+// Deduped one-off read so concurrent backoffice route guards share a single
+// /get-session request instead of each firing their own.
+export const getBackofficeSession = () => {
+  inflightBackofficeSession ??= backofficeAuthClient
+    .getSession()
+    .finally(() => {
+      inflightBackofficeSession = null;
+    });
+  return inflightBackofficeSession;
+};
 export const backofficeAdmin = backofficeAuthClient.admin;
 export const backofficeTwoFactor = backofficeAuthClient.twoFactor;
 
