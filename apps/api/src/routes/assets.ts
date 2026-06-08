@@ -21,7 +21,6 @@ import {
   type AuthVariables,
   type MemberData,
 } from "../middleware/permission";
-import { withCache, withInvalidation } from "../middleware/cache";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
   parseLegacyNumericIdentifier,
@@ -131,7 +130,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ equipment: ["create"] }),
-    withInvalidation("assets"),
     zValidator("json", CreateAssetSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -289,7 +287,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/search",
     ...withLabPermission({ equipment: ["read"] }),
-    withCache("assets-search", 30),
     zValidator("query", CommandPaletteAssetSearchQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -600,7 +597,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ equipment: ["update"] }),
-    withInvalidation("assets"),
     zValidator("json", UpdateAssetSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -795,7 +791,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ equipment: ["delete"] }),
-    withInvalidation("assets"),
     async (c) => {
       const session = c.get("session");
       const member = c.get("member");

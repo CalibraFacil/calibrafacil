@@ -36,8 +36,6 @@ import {
   requireRole,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
-import { withCache, withInvalidation } from "../middleware/cache";
-import { CACHE_TTL } from "../lib/cache";
 import { alias } from "drizzle-orm/pg-core";
 import {
   buildMethodRouteIdentifier,
@@ -1095,7 +1093,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ template: ["read"] }),
-    withCache("methods", CACHE_TTL.referenceData),
     zValidator("query", ListMethodsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -1406,7 +1403,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ template: ["create"] }),
-    withInvalidation("methods"),
     zValidator("json", CreateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -1479,7 +1475,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ template: ["update"] }),
-    withInvalidation("methods"),
     zValidator("json", UpdateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -1648,7 +1643,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/request-approval",
     ...withLabPermission({ template: ["update"] }),
     requireFeature("approval_workflow"),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -1780,7 +1774,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["publish"] }),
     requireFeature("approval_workflow"),
     requireRole(["admin"]),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -1852,7 +1845,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["publish"] }),
     requireFeature("approval_workflow"),
     requireRole(["owner"]),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2030,7 +2022,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["update"] }),
     requireFeature("approval_workflow"),
     requireRole(["admin", "owner"]),
-    withInvalidation("methods"),
     zValidator("json", ReturnMethodToDraftSchema),
     async (c) => {
       const member = c.get("member");
@@ -2113,7 +2104,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["publish"] }),
     requireFeature("approval_workflow"),
     requireRole(["owner"]),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2291,7 +2281,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/archive",
     ...withLabPermission({ template: ["update"] }),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2359,7 +2348,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/new-version",
     ...withLabPermission({ template: ["create"] }),
-    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2487,57 +2475,52 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ template: ["delete"] }),
-    withInvalidation("methods"),
-    async (c) => {
-      const member = c.get("member");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+  .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
+    const member = c.get("member");
+    const id = await resolveMethodRouteId(
+      c.req.param("id"),
+      member.organizationId,
+    );
 
-      if (id === null) {
+    if (id === null) {
+      return c.json({ error: "Método nao encontrado" }, 404);
+    }
+
+    try {
+      const [existing] = await db
+        .select()
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
         return c.json({ error: "Método nao encontrado" }, 404);
       }
 
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
-
-        if (existing.status !== "DRAFT") {
-          return c.json(
-            {
-              error:
-                "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
-            },
-            400,
-          );
-        }
-
-        // Delete (audit logs will cascade)
-        await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
-
-        return c.json({ success: true });
-      } catch (error) {
-        console.error("Error deleting method:", error);
-        return c.json({ error: "Erro ao excluir método" }, 500);
+      if (existing.status !== "DRAFT") {
+        return c.json(
+          {
+            error:
+              "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
+          },
+          400,
+        );
       }
-    },
-  )
+
+      // Delete (audit logs will cascade)
+      await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
+
+      return c.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting method:", error);
+      return c.json({ error: "Erro ao excluir método" }, 500);
+    }
+  })
 
   // =========================================================================
   // GET /:id/versions - Get version history for a method

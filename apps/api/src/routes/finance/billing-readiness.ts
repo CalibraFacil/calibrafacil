@@ -6,7 +6,6 @@ import { getOrganizationPlanAccess } from "../../lib/organization-plan";
 import { computeBillingReadinessQueue } from "../../lib/billing-readiness";
 import { sendServiceOrdersToFinance } from "../../lib/finance";
 import type { IntegrationsEnv } from "../../lib/integrations";
-import { withInvalidation } from "../../middleware/cache";
 import {
   withLabPermission,
   type AuthVariables,
@@ -75,7 +74,6 @@ export const financeBillingReadinessRouter = new Hono<{
     ...withLabPermission({ financial: ["export"] }),
     requireFeature("financial"),
     requireFeature("financial_integrations"),
-    withInvalidation("finance"),
     zValidator("json", SendSchema),
     async (c) => {
       const member = c.get("member");

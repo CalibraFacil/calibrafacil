@@ -19,7 +19,6 @@ import {
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
   calculateFinancialDueDate,
 } from "@calibra-facil/shared";
-import { withInvalidation } from "../../middleware/cache";
 import {
   withLabPermission,
   type AuthVariables,
@@ -385,7 +384,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ financial: ["document_create"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     zValidator("json", CreateDocumentSchema),
     async (c) => {
       const member = c.get("member");
@@ -610,7 +608,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id",
     ...withLabPermission({ financial: ["document_create"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     zValidator("json", UpdateDocumentSchema),
     async (c) => {
       const member = c.get("member");
@@ -738,7 +735,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/issue",
     ...withLabPermission({ financial: ["document_issue"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -830,7 +826,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/void",
     ...withLabPermission({ financial: ["document_void"] }),
     requireFeature("financial"),
-    withInvalidation("finance"),
     zValidator("json", VoidDocumentSchema),
     async (c) => {
       const member = c.get("member");

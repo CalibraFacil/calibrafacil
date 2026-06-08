@@ -10,7 +10,6 @@ import {
   paymentReceipt,
   receivableInstallment,
 } from "@calibra-facil/db/schema";
-import { withInvalidation } from "../../middleware/cache";
 import {
   withLabPermission,
   type AuthVariables,
@@ -83,7 +82,6 @@ export const financeInstallmentsRouter = new Hono<{
   "/:id/receive",
   ...withLabPermission({ financial: ["receipt_record"] }),
   requireFeature("financial"),
-  withInvalidation("finance"),
   zValidator("json", RecordReceiptSchema),
   async (c) => {
     const member = c.get("member");
