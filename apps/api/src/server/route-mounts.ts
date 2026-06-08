@@ -49,6 +49,7 @@ import { standardsRouter } from "../routes/standards";
 import { syncRouter } from "../routes/sync";
 import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
+import { magicLinkRouter } from "../routes/magic-link";
 import { verifyRouter } from "../routes/verify";
 import { webhooksRouter } from "../routes/webhooks";
 import type { Env } from "./env";
@@ -83,6 +84,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/service-orders", serviceOrdersRouter)
     .route("/api/calibration-requests", calibrationRequestsRouter)
     .route("/api/verify", verifyRouter)
+    .route("/api/magic-link", magicLinkRouter)
     .route("/api/dashboard", dashboardRouter)
     .route("/api/reports", reportsRouter)
     .route("/api/billing", billingRouter)
