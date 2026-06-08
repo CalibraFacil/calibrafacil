@@ -4,24 +4,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 
-type LocalKvValue = {
-  value: string;
-  expiresAt?: number;
-};
-
-type LocalKvNamespace = {
-  get(key: string, type?: "text"): Promise<string | null>;
-  put(
-    key: string,
-    value: string,
-    options?: { expirationTtl?: number },
-  ): Promise<void>;
-  delete(key: string): Promise<void>;
-};
-
-export type ApiRuntimeEnv = Record<string, unknown> & {
-  CACHE: LocalKvNamespace;
-};
+export type ApiRuntimeEnv = Record<string, unknown>;
 
 export type WorkerRuntimeEnv = {
   DATABASE_URL: string;
@@ -78,37 +61,6 @@ function requiredEnv(name: string) {
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
-
-function createLocalKv(): LocalKvNamespace {
-  const values = new Map<string, LocalKvValue>();
-
-  return {
-    async get(key) {
-      const item = values.get(key);
-      if (!item) return null;
-
-      if (item.expiresAt !== undefined && item.expiresAt <= Date.now()) {
-        values.delete(key);
-        return null;
-      }
-
-      return item.value;
-    },
-    async put(key, value, options) {
-      values.set(key, {
-        value,
-        expiresAt: options?.expirationTtl
-          ? Date.now() + options.expirationTtl * 1000
-          : undefined,
-      });
-    },
-    async delete(key) {
-      values.delete(key);
-    },
-  };
-}
-
-const apiRuntimeCache = createLocalKv();
 
 // R2 buckets are resolved from env: R2_BUCKET_NAME (documents) and
 // R2_MEDIA_BUCKET_NAME (media). createR2Bucket binds the documents bucket.
@@ -183,7 +135,6 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
     APP_URL: process.env.APP_URL,
     PORTAL_APP_URL: process.env.PORTAL_APP_URL,
     ...process.env,
-    CACHE: apiRuntimeCache,
   };
 
   if (databaseUrl) {
