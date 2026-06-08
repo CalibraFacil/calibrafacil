@@ -1190,9 +1190,20 @@ function createSharedConfig(surface: AuthSurface) {
     },
     trustedOrigins: createTrustedOrigins(isProduction, surface),
     session: {
+      // Serve the session from a signed, short-lived cookie so routine
+      // get-session checks resolve without a Postgres read on every
+      // authenticated request. Trade-off: a revoked or role-changed session can
+      // remain valid on a given device for up to maxAge; mutations (sign-in,
+      // organization.setActive, session revoke) refresh the cookie immediately.
       cookieCache: {
-        enabled: false,
+        enabled: true,
+        maxAge: 60 * 5, // 5 minutes (lab + portal; backoffice overrides shorter)
       },
+      // Explicit lifetimes (previously implicit Better Auth defaults) for the
+      // regulated context. expiresIn = absolute lifetime; updateAge = how often
+      // a live session slides its expiry on use.
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // 1 day
     },
     advanced: {
       crossSubDomainCookies: useCrossSubDomainCookies
@@ -1445,6 +1456,18 @@ export function createBackofficeAuth() {
     ...sharedConfig,
     basePath: "/api/auth/backoffice",
     baseURL,
+    // Tighter than lab/portal for the privileged operations surface: a short
+    // cookie-cache window bounds how long a revoked operator session stays live,
+    // and a 1-day absolute lifetime forces a daily re-login (2FA "trust device"
+    // still suppresses repeated TOTP prompts within its own window).
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60, // 1 minute
+      },
+      expiresIn: 60 * 60 * 24, // 1 day
+      updateAge: 60 * 60 * 24, // 1 day
+    },
     emailAndPassword: {
       ...sharedConfig.emailAndPassword,
       disableSignUp: true,
