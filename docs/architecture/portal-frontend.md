@@ -103,6 +103,13 @@ if (!response.ok) throw new Error("Falha ao carregar o painel");
 return response.json();
 ```
 
+**Session and organization state are the exception:** those go through the Better
+Auth client (`portalAuthClient` — `usePortalSession`, `usePortalActiveOrganization`,
+magic-link sign-in), not raw `fetch`. That client is distinct from
+`@calibra-facil/client-runtime`, so the rule above still holds: the portal never
+imports `client-runtime` or `@calibra-facil/api`. Only business data under
+`/api/portal/*` uses raw `fetch`.
+
 - `getApiBaseUrl()` (`lib/utils.ts`) resolves the API origin per host
   (localhost:3000 in dev, `dev-*.calibrafacil.com` same-origin, else
   `api.calibrafacil.com`). Always go through it; never hardcode the origin.

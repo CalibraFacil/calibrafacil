@@ -28,6 +28,13 @@ import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
 import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
+import { getClientSession, readSessionWithRetry } from '@/lib/auth-session'
+
+// readSessionWithRetry's naked type parameter widens TSession to `{}`, so name
+// it explicitly off the auth client (same pattern as the dashboard guard).
+type OnboardingSession = NonNullable<
+  Awaited<ReturnType<typeof authClient.getSession>>['data']
+>
 
 type OnboardingSearch = {
   redirect?: string
@@ -38,7 +45,8 @@ export const Route = createFileRoute('/onboarding/organization')({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: async () => {
-    const { data: session } = await authClient.getSession()
+    const { data: session } =
+      await readSessionWithRetry<OnboardingSession>(getClientSession)
 
     if (!session) {
       throw redirect({ to: '/sign-in' })
