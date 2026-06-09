@@ -118,10 +118,8 @@ export function StandardsCompositionProfilesPage() {
             Perfis de composição
           </h1>
           <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
-            Pesos padrão compartilhados, organizados por classe, usados para
-            montar massas durante a calibração. Estes valores são a fonte única
-            do laboratório — cada padrão de referência usa este catálogo em vez
-            de manter cópias próprias.
+            Pesos padrão por classe (M1, F1, M2…) usados para compor a massa de
+            referência durante a calibração.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
