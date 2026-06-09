@@ -35,7 +35,19 @@ import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getApiBaseUrl } from "@/lib/utils";
 
+type CertificatesSearch = {
+  /** Per-instrument archive: deep-link the list scoped to one asset. */
+  assetId?: number;
+};
+
 export const Route = createFileRoute("/_authenticated/certificates/")({
+  validateSearch: (search: Record<string, unknown>): CertificatesSearch => {
+    const assetId = Number(search.assetId);
+    return {
+      assetId:
+        Number.isInteger(assetId) && assetId > 0 ? assetId : undefined,
+    };
+  },
   component: CertificatesPage,
 });
 
@@ -143,16 +155,25 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
 
 function CertificatesPage() {
   const navigate = useNavigate();
+  const { assetId } = Route.useSearch();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const limit = 20;
   const dateFrom = toDateParam(dateRange?.from);
   const dateTo = toDateParam(dateRange?.to);
-  const hasFilters = Boolean(search || dateFrom || dateTo);
+  const hasFilters = Boolean(search || dateFrom || dateTo || assetId);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-certificates", page, limit, search, dateFrom, dateTo],
+    queryKey: [
+      "portal-certificates",
+      page,
+      limit,
+      search,
+      dateFrom,
+      dateTo,
+      assetId ?? null,
+    ],
     queryFn: async (): Promise<CertificatesResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -169,6 +190,10 @@ function CertificatesPage() {
 
       if (dateTo) {
         params.set("dateTo", dateTo);
+      }
+
+      if (assetId) {
+        params.set("assetId", String(assetId));
       }
 
       const response = await fetch(
@@ -263,6 +288,26 @@ function CertificatesPage() {
     });
   };
 
+  // When scoped to one instrument every row shares the asset, so the first
+  // page row labels the chip; fall back to a generic label on an empty page.
+  const assetFilterLabel = assetId
+    ? (data?.data?.[0]?.assetTag ?? "filtrado")
+    : null;
+
+  const clearAssetFilter = () => {
+    setPage(1);
+    void navigate({ to: "/certificates", search: {}, replace: true });
+  };
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setDateRange(undefined);
+    setPage(1);
+    if (assetId) {
+      void navigate({ to: "/certificates", search: {}, replace: true });
+    }
+  };
+
   return (
     <div className="portal-shell space-y-6">
       <Card>
@@ -302,15 +347,26 @@ function CertificatesPage() {
               className="sm:w-64"
             />
 
+            {assetFilterLabel ? (
+              <button
+                type="button"
+                onClick={clearAssetFilter}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-transparent bg-primary/10 px-3 text-xs font-medium text-primary transition-transform active:scale-[0.96]"
+              >
+                Instrumento:{" "}
+                <span className="font-mono tabular-nums">
+                  {assetFilterLabel}
+                </span>
+                <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+                <span className="sr-only">Remover filtro de instrumento</span>
+              </button>
+            ) : null}
+
             {hasFilters && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setSearch("");
-                  setDateRange(undefined);
-                  setPage(1);
-                }}
+                onClick={clearAllFilters}
                 className="h-9"
               >
                 <HugeiconsIcon icon={Cancel01Icon} className="mr-2 size-4" />
@@ -340,14 +396,7 @@ function CertificatesPage() {
               </EmptyHeader>
               {hasFilters && (
                 <EmptyContent>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearch("");
-                      setDateRange(undefined);
-                      setPage(1);
-                    }}
-                  >
+                  <Button variant="outline" onClick={clearAllFilters}>
                     Limpar filtros
                   </Button>
                 </EmptyContent>

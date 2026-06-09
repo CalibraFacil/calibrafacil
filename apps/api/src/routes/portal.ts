@@ -59,6 +59,16 @@ const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
 
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
 
+// Upcoming-dues calendar: a bounded date window of instruments coming due.
+// The frontend asks for the visible month grid padded by a day on each side,
+// so the cap just guards against unbounded scans.
+const CALENDAR_MAX_RANGE_DAYS = 100;
+
+const PortalCalendarQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
 // An instrument is "in lab" while it has an open calibration job or an open
 // service order — i.e. it is physically at the laboratory right now. Open job
 // statuses are every non-terminal JobStatus; open service orders mirror the
@@ -958,6 +968,17 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
+        const assetCertificateWhere = and(
+          eq(calibrationJob.assetId, assetDetails.id),
+          eq(calibrationJob.customerId, linkedCustomer.id),
+          eq(calibrationJob.status, "APPROVED"),
+        );
+
+        const [certificateCountResult] = await db
+          .select({ total: count() })
+          .from(calibrationJob)
+          .where(assetCertificateWhere);
+
         const certificatesRaw = await db
           .select({
             id: calibrationJob.id,
@@ -977,13 +998,7 @@ export const portalRouter = new Hono<{
             organization,
             eq(calibrationJob.organizationId, organization.id),
           )
-          .where(
-            and(
-              eq(calibrationJob.assetId, assetDetails.id),
-              eq(calibrationJob.customerId, linkedCustomer.id),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
+          .where(assetCertificateWhere)
           .orderBy(desc(calibrationJob.approvedAt))
           .limit(5);
 
@@ -1003,11 +1018,98 @@ export const portalRouter = new Hono<{
                 baseMeasurementUnit: assetDetails.baseMeasurementUnit,
               }) ?? null,
             certificates,
+            certificateCount: certificateCountResult?.total ?? 0,
           },
         });
       } catch (error) {
         console.error("Error fetching portal asset:", error);
         return c.json({ error: "Erro ao buscar ativo" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /calendar - Instruments coming due inside a date window
+  // =========================================================================
+  // Powers the portal's upcoming-dues calendar. Same customer scoping as
+  // /assets; the window is inclusive of both bounds and capped so a client
+  // can't request an unbounded scan.
+  // =========================================================================
+  .get(
+    "/calendar",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    zValidator("query", PortalCalendarQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const { from, to } = c.req.valid("query");
+      const fromDate = new Date(`${from}T00:00:00.000Z`);
+      const toExclusive = new Date(`${to}T00:00:00.000Z`);
+      toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+
+      const rangeDays =
+        (toExclusive.getTime() - fromDate.getTime()) / 86_400_000;
+      if (
+        Number.isNaN(fromDate.getTime()) ||
+        Number.isNaN(toExclusive.getTime()) ||
+        rangeDays <= 0 ||
+        rangeDays > CALENDAR_MAX_RANGE_DAYS
+      ) {
+        return c.json({ error: "Periodo invalido" }, 400);
+      }
+
+      try {
+        const [linkedCustomer] = await db
+          .select({
+            id: customer.id,
+            labOrganizationId: customer.labOrganizationId,
+          })
+          .from(customer)
+          .where(eq(customer.authOrganizationId, member.organizationId))
+          .limit(1);
+
+        if (!linkedCustomer) {
+          return c.json({ data: [] });
+        }
+
+        if (
+          portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
+        ) {
+          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+        }
+
+        const dues = await db
+          .select({
+            id: asset.id,
+            name: asset.name,
+            tag: asset.tag,
+            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            inLab: assetInLabSql(),
+          })
+          .from(asset)
+          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(
+            and(
+              eq(asset.customerId, linkedCustomer.id),
+              eq(asset.status, "ACTIVE"),
+              isNull(asset.deletedAt),
+              gte(asset.nextCalibrationDate, fromDate),
+              lt(asset.nextCalibrationDate, toExclusive),
+            ),
+          )
+          .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
+
+        return c.json({ data: dues });
+      } catch (error) {
+        console.error("Error building portal calendar:", error);
+        return c.json({ error: "Erro ao carregar o calendário" }, 500);
       }
     },
   )
@@ -1036,6 +1138,17 @@ export const portalRouter = new Hono<{
       const query = c.req.query("query")?.trim();
       const dateFrom = c.req.query("dateFrom");
       const dateTo = c.req.query("dateTo");
+
+      // Per-instrument archive: scope the certificate list to one asset.
+      // Tenant safety is unchanged — the customerIds condition below still
+      // applies, so a foreign assetId just yields an empty page.
+      const assetIdParam = c.req.query("assetId")?.trim();
+      const assetId = assetIdParam
+        ? Number.parseInt(assetIdParam, 10)
+        : undefined;
+      if (assetIdParam && Number.isNaN(assetId)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
 
       // Get user's CLIENT organization IDs
       const userOrgs = await db
@@ -1085,6 +1198,7 @@ export const portalRouter = new Hono<{
       const whereCondition = and(
         inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
+        assetId !== undefined ? eq(calibrationJob.assetId, assetId) : undefined,
         query
           ? or(
               ilike(calibrationJob.jobId, `%${query}%`),

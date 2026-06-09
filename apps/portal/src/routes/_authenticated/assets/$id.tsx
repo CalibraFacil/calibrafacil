@@ -71,6 +71,8 @@ type AssetDetail = {
   createdAt: string;
   updatedAt: string;
   certificates: Array<AssetCertificate>;
+  /** Total approved certificates; `certificates` holds only the 5 newest. */
+  certificateCount: number;
 };
 
 const statusLabels: Record<AssetStatus, string> = {
@@ -181,7 +183,7 @@ function AssetDetailPage() {
 
   const calibration = getInstrumentStatus(asset);
   const specifications = Object.entries(asset.specifications ?? {});
-  const certificateCount = asset.certificates.length;
+  const certificateCount = asset.certificateCount;
 
   return (
     <div className="portal-shell space-y-6">
@@ -343,6 +345,23 @@ function AssetDetailPage() {
               eyebrow="Rastreabilidade"
               title="Histórico de calibrações"
               description="Certificados aprovados, do mais recente ao mais antigo."
+              action={
+                certificateCount > asset.certificates.length ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    render={
+                      <Link
+                        to="/certificates"
+                        search={{ assetId: asset.id }}
+                      />
+                    }
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    Ver todos ({certificateCount})
+                  </Button>
+                ) : undefined
+              }
             />
             <div className="mt-4">
               {asset.certificates.length > 0 ? (

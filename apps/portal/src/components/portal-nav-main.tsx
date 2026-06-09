@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Calendar03Icon,
   File01Icon,
   Home01Icon,
   Notebook01Icon,
@@ -47,6 +48,7 @@ const sections: Array<NavSection> = [
         icon: Wrench01Icon,
         badgeKey: "overdue",
       },
+      { title: "Calendário", url: "/calendar", icon: Calendar03Icon },
       { title: "Certificados", url: "/certificates", icon: File01Icon },
       { title: "Solicitações", url: "/requests", icon: Notebook01Icon },
     ],
