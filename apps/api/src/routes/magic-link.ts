@@ -28,6 +28,10 @@ export const magicLinkRouter = new Hono().get("/preview", async (c) => {
     return c.json({ found: false });
   }
 
+  // Which surface's org to resolve: lab dashboard (LAB) or client portal.
+  const organizationType =
+    c.req.query("surface") === "portal" ? "CLIENT" : "LAB";
+
   // Better Auth stores magic-link tokens as base64url(SHA-256(token)) — see
   // better-auth `defaultKeyHasher`. Hash the same way to look the row up.
   const hashedToken = createHash("sha256").update(token).digest("base64url");
@@ -67,13 +71,18 @@ export const magicLinkRouter = new Hono().get("/preview", async (c) => {
     return c.json({ found: false });
   }
 
-  // The user's primary lab organization (oldest membership), matching the
-  // active-org default applied at session creation.
+  // The user's primary organization for this surface (oldest membership),
+  // matching the active-org default applied at session creation.
   const [org] = await db
     .select({ name: organization.name, logo: organization.logo })
     .from(member)
     .innerJoin(organization, eq(member.organizationId, organization.id))
-    .where(and(eq(member.userId, account.id), eq(organization.type, "LAB")))
+    .where(
+      and(
+        eq(member.userId, account.id),
+        eq(organization.type, organizationType),
+      ),
+    )
     .orderBy(asc(member.createdAt))
     .limit(1);
 
