@@ -9,8 +9,8 @@ interface BrandLockupProps extends React.ComponentProps<"div"> {
 }
 
 // The mark is sized by HEIGHT with auto width, so a lab's white-label logo
-// (often wider than tall) fills the available height instead of being shrunk
-// into a square box. Callers pass a height class (e.g. `h-12`).
+// (often a wider-than-tall wordmark) fills the available height instead of
+// being shrunk into a square box. Callers pass a height class (e.g. `h-12`).
 export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
   const branding = useBranding();
   // Preserve an explicitly-empty alt (decorative usage); otherwise default to
@@ -28,7 +28,7 @@ export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
         <img
           src={branding.logo}
           alt={altText}
-          className="h-full w-auto max-w-[14rem] object-contain"
+          className="h-full w-auto max-w-[16rem] object-contain"
           draggable={false}
           {...props}
         />
@@ -58,6 +58,9 @@ export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
   );
 }
 
+// A white-label logo typically already contains the lab name (a wordmark), so
+// pairing it with the name text would duplicate it. In that case render the
+// logo alone; only the CalibraFácil icon mark is paired with the wordmark.
 export function BrandLockup({
   className,
   markClassName,
@@ -68,16 +71,25 @@ export function BrandLockup({
 
   return (
     <div className={cn("flex items-center gap-2.5", className)} {...props}>
-      <BrandMark
-        alt=""
-        aria-hidden="true"
-        className={cn("h-8", markClassName)}
-      />
-      <span
-        className={cn("text-lg font-semibold tracking-tight", textClassName)}
-      >
-        {branding.name}
-      </span>
+      {branding.logo ? (
+        <BrandMark className={cn("h-8", markClassName)} />
+      ) : (
+        <>
+          <BrandMark
+            alt=""
+            aria-hidden="true"
+            className={cn("h-8", markClassName)}
+          />
+          <span
+            className={cn(
+              "text-lg font-semibold tracking-tight",
+              textClassName,
+            )}
+          >
+            {branding.name}
+          </span>
+        </>
+      )}
     </div>
   );
 }
