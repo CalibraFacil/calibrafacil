@@ -3,10 +3,16 @@ import type { FormulaAstNode, SafeFunctionName } from "../parser/ast.js";
 import { evaluateAst } from "../evaluator/evaluate.js";
 
 function num(value: number | string): FormulaAstNode {
-  return { kind: "NumberLiteral", raw: typeof value === "number" ? value.toString() : value };
+  return {
+    kind: "NumberLiteral",
+    raw: typeof value === "number" ? value.toString() : value,
+  };
 }
 
-function call(functionName: SafeFunctionName, args: readonly FormulaAstNode[]): FormulaAstNode {
+function call(
+  functionName: SafeFunctionName,
+  args: readonly FormulaAstNode[],
+): FormulaAstNode {
   return { kind: "CallExpression", functionName, args };
 }
 
@@ -16,7 +22,11 @@ function unary(operator: "+" | "-", argument: FormulaAstNode): FormulaAstNode {
   return { kind: "UnaryExpression", operator, argument };
 }
 
-function binary(operator: "+" | "-" | "*" | "/" | "^", left: FormulaAstNode, right: FormulaAstNode): FormulaAstNode {
+function binary(
+  operator: "+" | "-" | "*" | "/" | "^",
+  left: FormulaAstNode,
+  right: FormulaAstNode,
+): FormulaAstNode {
   if (operator === "+") {
     if (isZero(left)) return right;
     if (isZero(right)) return left;
@@ -52,7 +62,10 @@ function isOne(node: FormulaAstNode): boolean {
   return isNumber(node, 1);
 }
 
-export function symbolicDerivative(ast: FormulaAstNode, variable: string): FormulaAstNode | null {
+export function symbolicDerivative(
+  ast: FormulaAstNode,
+  variable: string,
+): FormulaAstNode | null {
   switch (ast.kind) {
     case "NumberLiteral":
       return num(0);
@@ -68,31 +81,62 @@ export function symbolicDerivative(ast: FormulaAstNode, variable: string): Formu
       const dr = symbolicDerivative(ast.right, variable);
       if (dl === null || dr === null) return null;
       switch (ast.operator) {
-        case "+": return binary("+", dl, dr);
-        case "-": return binary("-", dl, dr);
-        case "*": return binary("+", binary("*", dl, ast.right), binary("*", ast.left, dr));
+        case "+":
+          return binary("+", dl, dr);
+        case "-":
+          return binary("-", dl, dr);
+        case "*":
+          return binary(
+            "+",
+            binary("*", dl, ast.right),
+            binary("*", ast.left, dr),
+          );
         case "/":
           return binary(
             "/",
             binary("-", binary("*", dl, ast.right), binary("*", ast.left, dr)),
-            binary("^", ast.right, num(2))
+            binary("^", ast.right, num(2)),
           );
         case "^": {
           if (ast.right.kind === "NumberLiteral") {
             const exponent = Number(ast.right.raw);
             if (Number.isFinite(exponent)) {
-              return binary("*", binary("*", num(exponent), binary("^", ast.left, num(exponent - 1))), dl);
+              return binary(
+                "*",
+                binary(
+                  "*",
+                  num(exponent),
+                  binary("^", ast.left, num(exponent - 1)),
+                ),
+                dl,
+              );
             }
           }
           return binary(
             "*",
             binary("^", ast.left, ast.right),
-            binary("+", binary("*", dr, call("log", [ast.left])), binary("*", ast.right, binary("/", dl, ast.left)))
+            binary(
+              "+",
+              binary("*", dr, call("log", [ast.left])),
+              binary("*", ast.right, binary("/", dl, ast.left)),
+            ),
           );
         }
       }
     }
     case "CallExpression": {
+      // if_zero(c, a, b) selects branch a or b by whether c == 0. Away from the
+      // measure-zero set c == 0 it is differentiable, and its derivative is the
+      // derivative of the taken branch: d/dx if_zero(c, a, b) = if_zero(c, a', b').
+      // Differentiating it symbolically (rather than falling back to a finite
+      // difference that straddles the discontinuity) yields the correct GUM
+      // sensitivity at the operating point (audit: if_zero non-smooth bypass).
+      if (ast.functionName === "if_zero" && ast.args.length === 3) {
+        const dThen = symbolicDerivative(ast.args[1]!, variable);
+        const dElse = symbolicDerivative(ast.args[2]!, variable);
+        if (dThen === null || dElse === null) return null;
+        return call("if_zero", [ast.args[0]!, dThen, dElse]);
+      }
       if (ast.args.length !== 1) return null;
       const arg = ast.args[0] as FormulaAstNode;
       const dArg = symbolicDerivative(arg, variable);
@@ -105,13 +149,32 @@ export function symbolicDerivative(ast: FormulaAstNode, variable: string): Formu
         case "cos":
           return binary("*", unary("-", call("sin", [arg])), dArg);
         case "tan":
-          return binary("*", binary("/", num(1), binary("^", call("cos", [arg]), num(2))), dArg);
+          return binary(
+            "*",
+            binary("/", num(1), binary("^", call("cos", [arg]), num(2))),
+            dArg,
+          );
         case "asin":
-          return binary("/", dArg, call("sqrt", [binary("-", num(1), binary("^", arg, num(2)))]));
+          return binary(
+            "/",
+            dArg,
+            call("sqrt", [binary("-", num(1), binary("^", arg, num(2)))]),
+          );
         case "acos":
-          return unary("-", binary("/", dArg, call("sqrt", [binary("-", num(1), binary("^", arg, num(2)))])));
+          return unary(
+            "-",
+            binary(
+              "/",
+              dArg,
+              call("sqrt", [binary("-", num(1), binary("^", arg, num(2)))]),
+            ),
+          );
         case "atan":
-          return binary("/", dArg, binary("+", num(1), binary("^", arg, num(2))));
+          return binary(
+            "/",
+            dArg,
+            binary("+", num(1), binary("^", arg, num(2))),
+          );
         case "log":
           return binary("/", dArg, arg);
         case "log10":
@@ -142,9 +205,12 @@ export function numericalDerivative(
   ast: FormulaAstNode,
   variable: string,
   estimates: Readonly<Record<string, number>>,
-  options: NumericalDerivativeOptions
+  options: NumericalDerivativeOptions,
 ): number {
-  const backend = new NumberBackend(options.decimalPrecision, options.maxExponentMagnitude);
+  const backend = new NumberBackend(
+    options.decimalPrecision,
+    options.maxExponentMagnitude,
+  );
   const x0 = estimates[variable];
   if (x0 === undefined || !Number.isFinite(x0)) {
     throw new Error(`Missing finite estimate for ${variable}`);
@@ -152,12 +218,21 @@ export function numericalDerivative(
   const relativeStep = options.relativeStep ?? 1e-6;
   const h = relativeStep * Math.max(Math.abs(x0), 1);
   const evaluateAt = (offset: number): number => {
-    const scope: Record<string, number> = { ...estimates, [variable]: x0 + offset };
+    const scope: Record<string, number> = {
+      ...estimates,
+      [variable]: x0 + offset,
+    };
     return backend.toNumber(evaluateAst(ast, scope, backend));
   };
 
   try {
-    return (-evaluateAt(2 * h) + 8 * evaluateAt(h) - 8 * evaluateAt(-h) + evaluateAt(-2 * h)) / (12 * h);
+    return (
+      (-evaluateAt(2 * h) +
+        8 * evaluateAt(h) -
+        8 * evaluateAt(-h) +
+        evaluateAt(-2 * h)) /
+      (12 * h)
+    );
   } catch {
     return (evaluateAt(h) - evaluateAt(-h)) / (2 * h);
   }

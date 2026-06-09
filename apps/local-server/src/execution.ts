@@ -2,6 +2,7 @@ import {
   executeCompiledMethod,
   type CompiledMethod,
 } from "@calibra-facil/method-definition";
+import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { createMethodDefinitionEngine } from "./method-engine";
 
 type ExecutionInput = {
@@ -115,7 +116,13 @@ function buildExecutionInputs(input: ExecutionInput) {
   }
 
   if (input.standardsSnapshot !== undefined) {
-    values.standards = input.standardsSnapshot ?? [];
+    // Normalize certified masses/uncertainties to grams exactly as the cloud does
+    // before official execution, so offline (desktop) results match what sync
+    // recomputes for non-gram labs (audit H4).
+    const snapshot = input.standardsSnapshot;
+    values.standards = Array.isArray(snapshot)
+      ? (normalizeStandardsForOfficialExecution(snapshot) ?? [])
+      : (snapshot ?? []);
   }
 
   return values;

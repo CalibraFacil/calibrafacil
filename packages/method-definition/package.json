@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@calibra-facil/math-engine": "workspace:^",
     "zod": "^4.4.3"
   },
   "devDependencies": {

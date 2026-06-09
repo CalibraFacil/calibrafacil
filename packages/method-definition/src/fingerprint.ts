@@ -1,3 +1,5 @@
+import { stableHash } from "@calibra-facil/math-engine";
+
 function normalizeJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizeJsonValue);
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -17,14 +19,13 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(normalizeJsonValue(value));
 }
 
-export function fingerprintText(text: string, prefix = "cf-fnv1a64"): string {
-  let hash = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= BigInt(text.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * prime);
-  }
-  return `${prefix}:${hash.toString(16).padStart(16, "0")}`;
+// Uses the same SHA-256 digest as @calibra-facil/math-engine's audit fingerprints
+// (previously a separate 64-bit FNV-1a) so method-level and engine-level audit
+// fingerprints share one cryptographic hash. For finite JSON data the canonical
+// form above is byte-identical to the engine's canonicalJson (V8 number formatting
+// equals the shortest round-trip form), keeping the two families consistent.
+export function fingerprintText(text: string, prefix = "cf-sha256"): string {
+  return `${prefix}:${stableHash(text)}`;
 }
 
 export function fingerprintJson(value: unknown, prefix?: string): string {

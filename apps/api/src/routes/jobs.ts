@@ -63,7 +63,7 @@ import {
 } from "../middleware/permission";
 import {
   normalizeMethodDataForStorage,
-  toCanonicalMassValue,
+  normalizeStandardsForOfficialExecution,
 } from "@calibra-facil/shared";
 import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import { requirePlanLimit } from "../middleware/tier-guard";
@@ -470,84 +470,6 @@ function createMethodExecutionEngine(): CalculationEngineLike {
   return createCalculationEngine(
     METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
-}
-
-function normalizeStandardNumberToGrams(
-  value: number | null | undefined,
-  unit: unknown,
-): { value: number | null | undefined; normalized: boolean } {
-  if (value === null || value === undefined) {
-    return { value, normalized: false };
-  }
-
-  const normalized = toCanonicalMassValue(value, unit);
-  return normalized === null
-    ? { value, normalized: false }
-    : { value: normalized, normalized: true };
-}
-
-function normalizeStandardsForOfficialExecution(
-  standards: StandardSnapshot[] | null | undefined,
-): StandardSnapshot[] | null | undefined {
-  if (!standards) {
-    return standards;
-  }
-
-  return standards.map((standard) => {
-    const certifiedValues = standard.certifiedValues?.map((certifiedValue) => {
-      const value = normalizeStandardNumberToGrams(
-        certifiedValue.value,
-        certifiedValue.unit,
-      );
-      const uncertainty = normalizeStandardNumberToGrams(
-        certifiedValue.uncertainty,
-        certifiedValue.unit,
-      );
-      const maxError = normalizeStandardNumberToGrams(
-        certifiedValue.maxError,
-        certifiedValue.unit,
-      );
-      const drift = normalizeStandardNumberToGrams(
-        certifiedValue.drift,
-        certifiedValue.unit,
-      );
-      const buoyancy = normalizeStandardNumberToGrams(
-        certifiedValue.buoyancy,
-        certifiedValue.unit,
-      );
-
-      return {
-        ...certifiedValue,
-        value: value.value ?? certifiedValue.value,
-        uncertainty: uncertainty.value ?? certifiedValue.uncertainty,
-        unit: value.normalized ? "g" : certifiedValue.unit,
-        maxError: maxError.value ?? certifiedValue.maxError,
-        drift: drift.value ?? certifiedValue.drift,
-        buoyancy: buoyancy.value ?? certifiedValue.buoyancy,
-      };
-    });
-
-    const driftUnit =
-      standard.certifiedValues?.[0]?.unit ?? standard.uncertaintyUnit;
-    const normalizedUncertainty = normalizeStandardNumberToGrams(
-      standard.uncertainty,
-      standard.uncertaintyUnit,
-    );
-    const normalizedDrift = normalizeStandardNumberToGrams(
-      standard.drift,
-      driftUnit,
-    );
-
-    return {
-      ...standard,
-      uncertainty: normalizedUncertainty.value ?? standard.uncertainty,
-      uncertaintyUnit: normalizedUncertainty.normalized
-        ? "g"
-        : standard.uncertaintyUnit,
-      drift: normalizedDrift.value ?? standard.drift,
-      certifiedValues: certifiedValues ?? null,
-    };
-  });
 }
 
 function standardCertificateDocumentSnapshot(

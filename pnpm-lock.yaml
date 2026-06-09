@@ -509,6 +509,9 @@ importers:
       '@calibra-facil/schemas':
         specifier: workspace:^
         version: link:../../packages/schemas
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)
@@ -1220,6 +1223,10 @@ importers:
         version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@6.0.3))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(tsx@4.22.4))
 
   packages/math-engine:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.2.0
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:^
@@ -1233,6 +1240,9 @@ importers:
 
   packages/method-definition:
     dependencies:
+      '@calibra-facil/math-engine':
+        specifier: workspace:^
+        version: link:../math-engine
       zod:
         specifier: ^4.4.3
         version: 4.4.3

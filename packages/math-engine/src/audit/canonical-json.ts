@@ -1,6 +1,6 @@
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
-import { canonicalNumber } from "../numeric/backend.js";
+import { canonicalRoundTripNumber } from "../numeric/backend.js";
 
 export type CanonicalJsonValue =
   | null
@@ -17,11 +17,15 @@ export function canonicalJson(value: CanonicalJsonValue): string {
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw makeError(ERROR_CODES.NON_FINITE_NUMBER, "Canonical JSON cannot serialize non-finite numbers.", {
-        value: String(value)
-      });
+      throw makeError(
+        ERROR_CODES.NON_FINITE_NUMBER,
+        "Canonical JSON cannot serialize non-finite numbers.",
+        {
+          value: String(value),
+        },
+      );
     }
-    return canonicalNumber(value);
+    return canonicalRoundTripNumber(value);
   }
 
   if (Array.isArray(value)) {
@@ -29,12 +33,20 @@ export function canonicalJson(value: CanonicalJsonValue): string {
   }
 
   if (typeof value === "object") {
-    const record = value as { readonly [key: string]: CanonicalJsonValue | undefined };
-    const keys = Object.keys(record).filter((key) => record[key] !== undefined).sort();
+    const record = value as {
+      readonly [key: string]: CanonicalJsonValue | undefined;
+    };
+    const keys = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort();
     return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as CanonicalJsonValue)}`).join(",")}}`;
   }
 
-  throw makeError(ERROR_CODES.INVALID_INPUT, "Value cannot be represented as canonical JSON.", { valueType: typeof value });
+  throw makeError(
+    ERROR_CODES.INVALID_INPUT,
+    "Value cannot be represented as canonical JSON.",
+    { valueType: typeof value },
+  );
 }
 
 export function canonicalClone<T extends CanonicalJsonValue>(value: T): T {
