@@ -24,6 +24,7 @@
     "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "@hono/node-server": "^2.0.4",
     "hono": "^4.12.23",
     "serialport": "^13.0.0",

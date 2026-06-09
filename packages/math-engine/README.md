@@ -2,9 +2,9 @@
 
 Secure, dependency-light, ESM-first TypeScript calculation engine for calibration formulas and GUM-aligned uncertainty propagation.
 
-**Status for this implementation:** PENDENTE DE APROVAÇÃO / NÃO LIBERADO PARA PRODUÇÃO REGULADA.
+**Status for this implementation:** Em produção no Calibra Fácil / In production use.
 
-This repository documents and tests only the new `@calibra-facil/math-engine` package and its current API. It is not a UI, report renderer, certificate generator, accreditation claim, legal-compliance claim, or substitute for laboratory method validation. The implementation is intended to be GUM-method compatible and audit-friendly, but regulated deployments require independent validation evidence generated for this package version.
+This package is the calculation core only — not a UI, report renderer, certificate generator, accreditation claim, legal-compliance claim, or substitute for laboratory method validation. It implements the GUM (JCGM 100:2008) methodology and is audit-friendly; regulated use relies on the validation evidence maintained per engine version (a fresh validation pass is expected on each `ENGINE_VERSION` bump).
 
 ## Build and test
 
@@ -33,17 +33,17 @@ const engine = createCalculationEngine({
   maxAstNodes: 512,
   maxExponentMagnitude: 12,
   maxNumericInputLength: 128,
-  maxSignificantDigits: 128
+  maxSignificantDigits: 128,
 });
 
 const formula = engine.compileFormula(
-  "((pontos_indicacao_antes_leitura_1 + pontos_indicacao_antes_leitura_2 + pontos_indicacao_antes_leitura_3) / 3)"
+  "((pontos_indicacao_antes_leitura_1 + pontos_indicacao_antes_leitura_2 + pontos_indicacao_antes_leitura_3) / 3)",
 );
 
 const result = formula.evaluate({
   pontos_indicacao_antes_leitura_1: 10.01,
   pontos_indicacao_antes_leitura_2: 10.03,
-  pontos_indicacao_antes_leitura_3: 10.02
+  pontos_indicacao_antes_leitura_3: 10.02,
 });
 
 console.log(result.value); // "10.02" in decimal mode
@@ -66,10 +66,10 @@ const uncertaintyResult = engine.evaluateMeasurementModel({
       standardUncertainty: 0.002,
       degreesOfFreedom: "Infinity",
       distribution: "normal",
-      certificateId: "CERT-REF-2026-001"
-    }
+      certificateId: "CERT-REF-2026-001",
+    },
   },
-  coverageProbability: 0.95
+  coverageProbability: 0.95,
 });
 
 console.log(uncertaintyResult.value);
@@ -102,6 +102,8 @@ Public APIs validate malformed JavaScript inputs before property access and thro
 
 Transcendental functions, Student's t coverage-factor calculations, and numerical differentiation use JavaScript `Math` / IEEE-754 double precision. Numerical sensitivity fallback emits a diagnostic. If nominal values needed for differentiation are outside the safe double-precision range, the engine rejects the model and requires explicit sensitivity coefficients.
 
+**Determinism scope.** Exact decimal arithmetic (`+ − × ÷` and integer powers) is bit-for-bit reproducible across runtimes. Transcendental functions and the Student's t quantile go through `Math.*`, which ECMA-262 leaves implementation-approximated (only `Math.sqrt` is correctly-rounded), so their last ULP — and therefore the canonical output string and fingerprint of a formula that uses them — may differ between JavaScript engines (e.g. V8 vs JavaScriptCore). Results are deterministic _per runtime_; recomputation across heterogeneous runtimes can differ in the last digit for transcendental-bearing formulas. The exponent limit (`maxExponentMagnitude`) applies to user-supplied literals and inputs only — engine-computed values (transcendental results, GUM outputs) are not constrained by it.
+
 `numericMode: "number"` uses native IEEE-754 binary64 numbers and returns numbers. `numericMode: "decimal"` returns canonical decimal strings. Rounding for display is separate from internal calculation; the core does not silently round user inputs.
 
 ## GUM propagation model
@@ -116,7 +118,7 @@ Units are metadata labels only. The package does not implement dimensional algeb
 
 ## Auditability
 
-Formula results and measurement-model results include normalized formula text, normalized AST, formula fingerprint, calculation fingerprint, diagnostics, and canonical result JSON. Fingerprints currently use a stable pure-JavaScript FNV-1a 64-bit hash over canonical JSON. This is deterministic traceability metadata, not a cryptographic signature.
+Formula results and measurement-model results include normalized formula text, normalized AST, formula fingerprint, calculation fingerprint, diagnostics, and canonical result JSON. Fingerprints use SHA-256 (via `@noble/hashes`, a synchronous pure-JavaScript implementation that runs identically in Node, Bun, the browser, and the container worker) over canonical JSON, prefixed `sha256:` / `ast-sha256:`. Canonical JSON serializes numbers in their shortest round-tripping form, so distinct double values never collapse to the same fingerprint. The digest gives preimage and collision resistance suitable as audit integrity evidence; it is still traceability metadata, not a signed attestation of authorship.
 
 ## Documentation
 

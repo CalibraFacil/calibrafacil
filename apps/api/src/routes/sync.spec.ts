@@ -119,6 +119,15 @@ vi.mock("../lib/storage", () => ({
 }));
 
 vi.mock("@calibra-facil/math-engine", () => ({
+  // Deterministic, input-sensitive stub so method-definition's SHA-256-based
+  // fingerprints still work under the mocked engine.
+  stableHash: (input: string) => {
+    let hash = 0;
+    for (let index = 0; index < input.length; index += 1) {
+      hash = (Math.imul(hash, 31) + input.charCodeAt(index)) | 0;
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  },
   normalizeEngineOptions: (options: Record<string, unknown> = {}) =>
     Object.freeze({
       ...options,

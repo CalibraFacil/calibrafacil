@@ -1,0 +1,462 @@
+% !TEX program = pdflatex
+% Dossiê de Validação — @calibra-facil/math-engine v0.3.0
+% Mantido pela CalibraFácil
+\documentclass[11pt,a4paper]{article}
+
+% ---------------------------------------------------------------------------
+% Packages
+% ---------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage[a4paper,margin=2.4cm,headheight=14pt]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage[
+  pdfauthor={CalibraFácil},
+  pdftitle={Dossiê de Validação — @calibra-facil/math-engine v0.3.0},
+  pdfsubject={Validação do motor matemático de cálculo de incerteza para uso em produção no CalibraFácil},
+  pdfkeywords={GUM, ISO/IEC 17025, incerteza de medição, calibração, validação de método},
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor={blue!50!black}
+]{hyperref}
+
+% ---------------------------------------------------------------------------
+% Document metadata
+% ---------------------------------------------------------------------------
+\newcommand{\docTitle}{Dossiê de Validação}
+\newcommand{\docSubject}{Motor Matemático \texttt{@calibra-facil/math-engine}}
+\newcommand{\docVersion}{0.3.0}
+\newcommand{\docId}{CF-VAL-MATH-ENGINE-0.3.0}
+\newcommand{\docDate}{\today}
+\newcommand{\organizationName}{CalibraFácil}
+
+% ---------------------------------------------------------------------------
+% Layout
+% ---------------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small \docId}
+\fancyhead[R]{\small Versão do pacote \docVersion}
+\fancyfoot[L]{\small \organizationName}
+\fancyfoot[C]{\small \thepage}
+\fancyfoot[R]{\small Documento controlado}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+
+\setlist[itemize]{itemsep=2pt, topsep=4pt}
+\setlist[enumerate]{itemsep=2pt, topsep=4pt}
+
+% ---------------------------------------------------------------------------
+% Cover
+% ---------------------------------------------------------------------------
+\begin{document}
+
+\begin{titlepage}
+  \begin{center}
+    \vspace*{1.5cm}
+    {\Huge\bfseries \docTitle\par}
+    \vspace{0.4cm}
+    {\Large \docSubject\par}
+    \vspace{2.5cm}
+    \begin{tabularx}{0.85\textwidth}{l X}
+      \toprule
+      \textbf{Identificação} & \docId \\
+      \textbf{Versão do pacote validado} & \texttt{@calibra-facil/math-engine} \docVersion \\
+      \textbf{Versão deste documento} & 1.0 \\
+      \textbf{Emitido por} & \organizationName \\
+      \textbf{Data} & \docDate \\
+      \textbf{Classificação} & Documento controlado --- distribuição mediante solicitação \\
+      \bottomrule
+    \end{tabularx}
+    \vfill
+    \begin{minipage}{0.85\textwidth}
+      \small\itshape
+      Este documento registra a validação técnica realizada pela \organizationName{} sobre o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{}, distribuído na plataforma CalibraFácil para cálculo de incerteza de medição em calibrações conforme \mbox{ISO/IEC 17025:2017}. O documento serve como evidência de validação reutilizável pelo laboratório usuário na composição da sua própria validação de método sob a referida norma.
+    \end{minipage}
+  \end{center}
+\end{titlepage}
+
+% ---------------------------------------------------------------------------
+% Approval block
+% ---------------------------------------------------------------------------
+\section*{Aprovação}
+\addcontentsline{toc}{section}{Aprovação}
+
+\begin{tabularx}{\textwidth}{l X l l}
+  \toprule
+  \textbf{Responsável} & \textbf{Nome} & \textbf{Assinatura} & \textbf{Data} \\
+  \midrule
+  Validação, qualidade e aprovação técnica\textsuperscript{*} & --- & \rule[-0.2em]{4cm}{0.4pt} & \rule[-0.2em]{2.5cm}{0.4pt} \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{0.3cm}
+{\small
+\textsuperscript{*}\,A \organizationName{} opera atualmente sob regime de fundador único. O signatário assina, neste documento, os papéis de validador, responsável da qualidade e aprovador técnico. A separação formal de responsabilidades será adotada quando o quadro de pessoal da \organizationName{} permitir, e será refletida em versão futura deste dossiê. A independência metrológica do conteúdo aqui registrado deriva da comparação com as planilhas de laboratório acreditado descritas no Apêndice~\ref{app:planilhas}.
+}
+
+\vspace{0.4cm}
+A versão eletrônica deste documento é a versão controlada. Cópias impressas devem ser tratadas como referência informativa, exceto quando assinadas na linha da tabela acima.
+
+% ---------------------------------------------------------------------------
+% TOC
+% ---------------------------------------------------------------------------
+\tableofcontents
+
+\clearpage
+
+% ---------------------------------------------------------------------------
+\section{Sumário Executivo}
+
+A \organizationName{} validou o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{} para uso em produção como componente de cálculo de incerteza de medição na plataforma CalibraFácil. A validação foi conduzida em duas camadas complementares:
+
+\begin{enumerate}
+  \item \textbf{Validação metrológica de referência:} comparação dos resultados do pacote com valores de referência publicados em normas reconhecidas internacionalmente --- JCGM 100:2008 (GUM) Anexo H, tabela t-Student NIST/SEMATECH e divisores GUM Tabela F.1.
+  \item \textbf{Validação por comparação operacional:} comparação dos resultados do pacote com planilhas Excel utilizadas como referência por laboratórios acreditados pelo Inmetro/RBC.
+\end{enumerate}
+
+Os resultados de ambas as camadas estão dentro das tolerâncias declaradas neste dossiê. \textbf{O pacote é aprovado para uso em produção na plataforma CalibraFácil} para as funções e regimes descritos na seção de escopo.
+
+A validação cobre o motor de cálculo \emph{conforme distribuído na plataforma}. O laboratório usuário utiliza esta evidência como insumo da sua própria validação de método sob a ISO/IEC 17025:2017, cláusula 7.2.2 (validação de métodos), e permanece responsável pela validação operacional das suas calibrações.
+
+\subsection{Alterações em relação à versão 0.2.4 (revalidação)}
+
+A versão \docVersion{} incorpora correções de robustez e de metodologia decorrentes de uma auditoria técnica do motor. Os valores de referência metrológicos da Seção~\ref{sec:resultados} foram \textbf{reverificados e permanecem inalterados} --- nenhuma das alterações abaixo modifica os resultados de modelos bem-condicionados:
+
+\begin{itemize}
+  \item \textbf{Tolerância de matriz de covariância/PSD relativa à escala de variância} (antes absoluta \(10^{-12}\)). Corrige tanto a aceitação indevida de uma matriz de correlação não-PSD em incertezas de pequena magnitude --- que podia zerar a variância combinada e levar \(U = 0\) a um certificado --- quanto a rejeição excessiva de matrizes arredondadas em grandes magnitudes. O \emph{clamp} de variância combinada negativa também passou a ser relativo.
+  \item \textbf{Diferenciação simbólica de \texttt{if\_zero}}: a sensibilidade passa a ser a do ramo efetivamente tomado (\(\partial/\partial x\,\texttt{if\_zero}(c,a,b) = \texttt{if\_zero}(c,a',b')\)), em vez de uma diferença finita atravessando a descontinuidade.
+  \item \textbf{\texttt{round()} exato} (arredondamento para cima na metade via \(\lfloor x + 1/2 \rfloor\)), eliminando erro de dupla-arredondamento em decimais exatos.
+  \item \textbf{Escopo do limite de expoente} restrito a literais e entradas do usuário; resultados computados pelo motor não são mais rejeitados por ele.
+  \item \textbf{Limite de magnitude do decimal exato}, protegendo a disponibilidade contra expressões que gerariam inteiros arbitrariamente grandes.
+  \item \textbf{Fingerprints migrados de FNV-1a 64-bit para SHA-256}; o JSON canônico passou a serializar números na forma decimal mais curta com \emph{round-trip}, de modo que valores \emph{double} distintos não colidam.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Identificação do Componente}
+
+\begin{tabularx}{\textwidth}{l X}
+  \toprule
+  Nome do pacote          & \texttt{@calibra-facil/math-engine} \\
+  Versão validada         & \docVersion \\
+  Constante de versão     & \texttt{ENGINE\_VERSION = "\docVersion"} \\
+  Tipo de pacote          & Biblioteca TypeScript ESM; única dependência de tempo de execução é \texttt{@noble/hashes} (implementação SHA-256 pura, síncrona e auditada) \\
+  Modo numérico           & \texttt{decimal} (determinístico) e \texttt{number} (IEEE-754 \texttt{binary64}) \\
+  API pública principal   & \texttt{createCalculationEngine}, \texttt{evaluateMeasurementModel}, \texttt{compileFormula}, \texttt{typeAFromRepeatedObservations}, \texttt{typeBStandardUncertainty}, \texttt{welchSatterthwaiteDegreesOfFreedom}, \texttt{coverageFactorForProbability}, \texttt{studentTQuantile}, \texttt{studentTCdf}, \texttt{normalQuantile} \\
+  Mecanismo de auditoria  & \texttt{canonical JSON} (números na forma decimal mais curta com \emph{round-trip}) + \emph{fingerprint} SHA-256 \\
+  Plataforma de execução  & Node.js \(\geq\) 20, runtime ESM; o mesmo motor é executado de forma idêntica em Node, Bun, navegador e contêiner (digest SHA-256 síncrono e independente de runtime) \\
+  \bottomrule
+\end{tabularx}
+
+% ---------------------------------------------------------------------------
+\section{Escopo}
+\label{sec:escopo}
+
+\subsection{Funções validadas}
+
+A validação cobre as seguintes funções, expostas pela API pública do pacote:
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{l X}
+    \toprule
+    \textbf{Função} & \textbf{Escopo da validação} \\
+    \midrule
+    \texttt{typeAFromRepeatedObservations} & Média aritmética, desvio padrão experimental \(s\), incerteza padrão da média \(u_A = s/\sqrt{n}\), graus de liberdade \(\nu_A = n - 1\). \\
+    \texttt{typeBStandardUncertainty} & Conversão de meio-intervalo em incerteza padrão para as distribuições \texttt{normal}, \texttt{rectangular} (\texttt{uniform}), \texttt{triangular}, \texttt{u-shaped}, \texttt{arcsine} e \texttt{custom}. \\
+    \texttt{evaluateMeasurementModel} & Combinação de contribuições conforme Equação 10 do GUM, com suporte a correlação \(r(x_i, x_j)\) e covariância \(u(x_i, x_j)\), incluindo validação de matriz PSD. \\
+    \texttt{welchSatterthwaiteDegreesOfFreedom} & Fórmula de Welch--Satterthwaite com truncamento para o inteiro inferior, conforme GUM §G.4.1. \\
+    \texttt{coverageFactorForProbability} + \texttt{studentTQuantile} & Quantil da distribuição t-Student para qualquer probabilidade de cobertura \(p \in (0,1)\). \\
+    \texttt{compileFormula} + \texttt{formula.evaluate} & Parser com gramática \emph{whitelist}, validação sintática, diferenciação simbólica de coeficientes de sensibilidade, congelamento da AST e \emph{fingerprint} canônico. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Fora do escopo}
+
+\begin{itemize}
+  \item \textbf{Método de Monte Carlo} (GUM Supplement 1) --- não implementado pelo motor. Modelos fortemente não-lineares, em que a propagação de primeira ordem é insuficiente, devem ser avaliados por método independente conforme a política metrológica do laboratório usuário.
+  \item \textbf{Álgebra dimensional de unidades} --- não implementada. Unidades são tratadas como metadados textuais; a coerência dimensional do modelo é responsabilidade do projeto do método.
+  \item \textbf{Funções não-suaves em propagação GUM} --- as funções \texttt{abs}, \texttt{floor}, \texttt{ceil}, \texttt{round}, \texttt{min} e \texttt{max} são rejeitadas pelo motor em propagação GUM, exceto quando o autor do método fornece coeficientes de sensibilidade explícitos e ativa a opção \texttt{allowNonSmoothWithExplicitSensitivities}.
+  \item \textbf{Certificação metrológica por terceiro independente} --- não foi conduzida. A validação registrada neste dossiê é interna à \organizationName{}.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Referências de Validação}
+\label{sec:referencias}
+
+\subsection{Referências normativas e metrológicas}
+
+\begin{enumerate}[label=R\arabic*., leftmargin=2.6em]
+  \item \textbf{JCGM 100:2008 (GUM)} --- \emph{Evaluation of measurement data --- Guide to the expression of uncertainty in measurement.} Em particular: §5 (incerteza combinada), §6 (incerteza expandida), §G.4 (graus de liberdade efetivos), Anexo F (divisores de distribuição), Anexo H (exemplos numéricos).
+  \item \textbf{JCGM 200:2012 (VIM)} --- \emph{International vocabulary of metrology --- Basic and general concepts and associated terms.}
+  \item \textbf{ISO/IEC 17025:2017} --- cláusula 7.2.2 (validação de métodos), em particular 7.2.2.1 (técnicas de validação, incluindo o item d: comparação dos resultados obtidos com outros métodos validados) e 7.2.2.4 (registros de validação).
+  \item \textbf{EA-4/02 M:2022} --- \emph{Evaluation of the Uncertainty of Measurement in Calibration.}
+  \item \textbf{NIST/SEMATECH e-Handbook of Statistical Methods} --- tabelas de quantis da distribuição t-Student.
+\end{enumerate}
+
+\subsection{Planilhas de cálculo de referência}
+
+As planilhas usadas na camada de validação operacional foram fornecidas por laboratório acreditado pelo Inmetro/RBC. A identificação detalhada da planilha, escopo metrológico declarado e responsável da origem são registrados no Apêndice~\ref{app:planilhas}.
+
+% ---------------------------------------------------------------------------
+\section{Metodologia da Validação}
+\label{sec:metodologia}
+
+A validação foi conduzida em duas camadas complementares e independentes em sua execução.
+
+\subsection{Camada 1: comparação com referências metrológicas normativas}
+
+Cada função coberta pelo pacote foi executada contra valores de referência publicados em R1 (GUM) e R5 (NIST/SEMATECH). A comparação utiliza tolerâncias numéricas declaradas para cada classe de função e está implementada na suíte de testes automatizados do pacote, executada em cada \emph{release} antes da liberação.
+
+\subsection{Camada 2: comparação operacional com planilhas acreditadas}
+
+Cada função e cada cenário operacional típico foi reproduzido nas planilhas de referência e executado também no motor. A comparação é numérica, ponto a ponto, dentro da tolerância declarada na seção~\ref{sec:tolerancias}. Esta camada confirma equivalência operacional com a prática estabelecida em laboratórios acreditados.
+
+\subsection{Critério de execução}
+
+A liberação de uma versão do pacote para uso em produção exige:
+
+\begin{enumerate}
+  \item passagem em 100\% dos testes automatizados da Camada 1, dentro das tolerâncias declaradas;
+  \item desvio máximo observado na Camada 2 inferior à tolerância declarada;
+  \item aprovação formal pelo responsável da qualidade da \organizationName{}, registrada na seção de Aprovação deste dossiê.
+\end{enumerate}
+
+Falha em qualquer um destes critérios bloqueia a liberação e exige investigação e correção antes de nova rodada de validação.
+
+% ---------------------------------------------------------------------------
+\section{Tolerâncias Declaradas}
+\label{sec:tolerancias}
+
+As tolerâncias declaradas para esta validação são:
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{l X r}
+    \toprule
+    \textbf{Classe de função} & \textbf{Referência} & \textbf{Tolerância} \\
+    \midrule
+    Estatística básica (média, desvio padrão, \(u_A\))             & GUM Anexo H            & \(\leq 10^{-12}\) \\
+    Divisores Tipo B (\(\sqrt{3}\), \(\sqrt{6}\), \(\sqrt{2}\))    & GUM Tabela F.1         & \(\leq 10^{-12}\) \\
+    Combinação RSS (\(u_c\))                                       & GUM Eq.~10             & \(\leq 5 \cdot 10^{-4}\) absoluta \\
+    Graus de liberdade efetivos (\(\nu_\text{eff}\))               & GUM §G.4               & \(\leq 1\) (inteiro) \\
+    Quantis t-Student (\(k\))                                      & Tabelas NIST/SEMATECH  & \(\leq 4 \cdot 10^{-3}\) absoluta \\
+    Incerteza expandida (\(U\))                                    & GUM Eq.~14             & \(\leq 3 \cdot 10^{-3}\) absoluta \\
+    Comparação operacional (planilhas)                             & Apêndice~\ref{app:planilhas} & Conforme registrado no Apêndice \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+As tolerâncias numéricas refletem a precisão exigida em calibrações industriais e laboratoriais típicas. Não substituem tolerâncias específicas adotadas em métodos de calibração particulares pelo laboratório usuário.
+
+% ---------------------------------------------------------------------------
+\section{Resultados}
+\label{sec:resultados}
+
+Os resultados a seguir são reproduzíveis a partir da versão \docVersion{} do pacote \texttt{@calibra-facil/math-engine} e da suíte de testes automatizada incluída na distribuição. No monorepo, a suíte de \emph{known-answer tests} \texttt{apps/api/src/lib/math-engine-kat.spec.ts} fixa a constante \texttt{ENGINE\_VERSION} nesta versão e falha em CI caso uma atualização do motor altere qualquer valor de referência.
+
+\subsection{Caso aditivo de referência (GUM Anexo H, recriado)}
+
+\textbf{Modelo:} \(y = a + b_1 + b_2\), com \(a\) avaliado como Tipo A a partir de 5 observações e \(b_1, b_2\) como Tipo B com distribuições retangular e triangular.
+
+\textbf{Observações:} \([0{,}1835,\ 0{,}1835,\ 0{,}197,\ 0{,}2105,\ 0{,}2105]\).
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{X r r r}
+    \toprule
+    \textbf{Grandeza} & \textbf{Valor de referência} & \textbf{Valor do motor} & \textbf{Tolerância} \\
+    \midrule
+    Média \(\bar{x}\)                                   & 0,1970                & 0,1970                & \(\leq 10^{-12}\) \\
+    Desvio padrão \(s\)                                 & 0,01350               & 0,01350               & \(\leq 10^{-12}\) \\
+    Incerteza Tipo A \(u_A = s/\sqrt{5}\)               & 0,006040              & 0,006040              & \(\leq 5 \cdot 10^{-6}\) \\
+    Tipo B retangular \(u_{B,1}\) (meio-intervalo 0,0649519\ldots)  & 0,03750   & 0,03750   & \(\leq 10^{-12}\) \\
+    Tipo B triangular \(u_{B,2}\) (meio-intervalo \(0{,}0167\sqrt{6}\)) & 0,01670 & 0,01670 & \(\leq 10^{-12}\) \\
+    Valor combinado \(y\)                               & 0,1970                & 0,1970                & \(\leq 10^{-12}\) \\
+    Incerteza combinada \(u_c\)                         & 0,04150               & 0,04150               & \(\leq 5 \cdot 10^{-4}\) \\
+    Graus de liberdade efetivos \(\nu_\text{eff}\)      & 35                    & 35                    & \(\leq 1\) \\
+    Fator de abrangência \(k\) (95,45\%)                & 2,07                  & 2,07                  & \(\leq 10^{-2}\) \\
+    Incerteza expandida \(U\)                           & 0,086                 & 0,086                 & \(\leq 3 \cdot 10^{-3}\) \\
+    \bottomrule
+  \end{tabularx}
+  \caption*{\small Resultado: \textbf{PASS}. Reproduzível executando o teste \texttt{recreated additive GUM-style reference values remain traceable} (\texttt{tests/reference-evidence.test.mjs}) na versão \docVersion{} do pacote.}
+\end{table}
+
+\subsection{Quantis da distribuição t-Student}
+
+Comparação entre os fatores de abrangência \(k(p, \nu)\) calculados pelo motor e os valores de referência NIST/SEMATECH para \(p \in \{0{,}95;\ 0{,}9545;\ 0{,}99\}\).
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{r r r r r r r}
+    \toprule
+    & \multicolumn{2}{c}{\(p = 0{,}95\)} & \multicolumn{2}{c}{\(p = 0{,}9545\)} & \multicolumn{2}{c}{\(p = 0{,}99\)} \\
+    \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+    \(\nu\) & \textbf{NIST} & \textbf{Motor} & \textbf{NIST} & \textbf{Motor} & \textbf{NIST} & \textbf{Motor} \\
+    \midrule
+    1   & 12,706 & 12,706 & 13,968 & 13,968 & 63,657 & 63,657 \\
+    2   & 4,303  & 4,303  & 4,527  & 4,527  & 9,925  & 9,925 \\
+    3   & 3,182  & 3,182  & 3,307  & 3,307  & 5,841  & 5,841 \\
+    4   & 2,776  & 2,776  & 2,869  & 2,869  & 4,604  & 4,604 \\
+    5   & 2,571  & 2,571  & 2,649  & 2,649  & 4,032  & 4,032 \\
+    10  & 2,228  & 2,228  & 2,284  & 2,284  & 3,169  & 3,169 \\
+    16  & 2,120  & 2,120  & 2,169  & 2,169  & 2,921  & 2,921 \\
+    20  & 2,086  & 2,086  & 2,133  & 2,133  & 2,845  & 2,845 \\
+    30  & 2,042  & 2,042  & 2,087  & 2,087  & 2,750  & 2,750 \\
+    35  & 2,030  & 2,030  & 2,074  & 2,074  & 2,724  & 2,724 \\
+    50  & 2,009  & 2,009  & 2,051  & 2,051  & 2,678  & 2,678 \\
+    100 & 1,984  & 1,984  & 2,025  & 2,025  & 2,626  & 2,626 \\
+    200 & 1,972  & 1,972  & 2,013  & 2,013  & 2,601  & 2,601 \\
+    500 & 1,965  & 1,965  & 2,005  & 2,005  & 2,586  & 2,586 \\
+    \bottomrule
+  \end{tabularx}
+  \caption*{\small Resultado: \textbf{PASS}. Tolerâncias declaradas: \(\leq 3 \cdot 10^{-3}\) para \(p = 0{,}95\) e \(\leq 4 \cdot 10^{-3}\) para \(p \in \{0{,}9545;\ 0{,}99\}\). Reproduzível executando \texttt{t-Student coverage factors match independently recreated reference values for 95\%, 95.45\%, and 99\%} (\texttt{tests/reference-evidence.test.mjs}).}
+\end{table}
+
+\subsection{Divisores de distribuição Tipo B}
+
+Comparação dos divisores aplicados na conversão de meio-intervalo em incerteza padrão para as distribuições suportadas, contra os valores publicados na Tabela F.1 do GUM.
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{l c c c}
+    \toprule
+    \textbf{Distribuição} & \textbf{Divisor de referência} & \textbf{Divisor do motor} & \textbf{Resultado} \\
+    \midrule
+    Retangular (alias \texttt{uniform}) & \(1/\sqrt{3} \approx 0{,}57735\)   & \(1/\sqrt{3}\)   & PASS \\
+    Triangular                          & \(1/\sqrt{6} \approx 0{,}40825\)   & \(1/\sqrt{6}\)   & PASS \\
+    Em U (\texttt{u-shaped})            & \(1/\sqrt{2} \approx 0{,}70711\)   & \(1/\sqrt{2}\)   & PASS \\
+    Arcsen (\texttt{arcsine})           & \(1/\sqrt{2}\)                     & \(1/\sqrt{2}\)   & PASS \\
+    Normal                              & \(U/k\) (do certificado)           & \(U/k\)          & PASS \\
+    Customizada                         & explícita pelo autor do método     & explícita        & PASS \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Comparação operacional com planilhas acreditadas}
+
+Os cenários operacionais selecionados nas planilhas de referência foram reproduzidos no motor. O detalhamento por cenário (entradas, valor de referência, valor do motor, desvio observado) é registrado no Apêndice~\ref{app:planilhas-resultados}.
+
+\textbf{Resultado consolidado:} todos os cenários executados produziram desvio inferior à tolerância declarada no Apêndice. Nenhum cenário foi reprovado.
+
+% ---------------------------------------------------------------------------
+\section{Garantias Adicionais Verificadas}
+
+Além das comparações numéricas acima, esta validação registrou as seguintes garantias arquiteturais do pacote, relevantes para integridade do cálculo e da trilha de auditoria:
+
+\begin{itemize}
+  \item \textbf{Sem execução dinâmica de código:} o motor não utiliza \texttt{eval}, \texttt{new Function}, \texttt{vm}, importações dinâmicas nem geração de código em tempo de execução.
+  \item \textbf{Gramática \emph{whitelist}:} apenas operadores e funções nomeadas explicitamente são aceitos. Identificadores como \texttt{\_\_proto\_\_}, \texttt{prototype}, \texttt{constructor}, \texttt{import}, \texttt{require}, \texttt{process}, \texttt{globalThis} são rejeitados antes da compilação.
+  \item \textbf{Limites de tamanho configuráveis:} comprimento máximo de expressão, profundidade da AST, número de nós, magnitude de expoente, comprimento de entrada numérica e dígitos significativos.
+  \item \textbf{Imutabilidade dos resultados:} fórmulas compiladas, ASTs e objetos de resultado são \emph{deep-frozen} após criação. Tentativas de mutação falham silenciosamente em modo \emph{strict} ou geram erro.
+  \item \textbf{Erros estruturados:} todas as falhas previstas são reportadas como \texttt{CalculationEngineError} com códigos estáveis em \texttt{ERROR\_CODES}. Entradas malformadas falham com erro estruturado em vez de \texttt{TypeError} cru.
+  \item \textbf{Validação de matriz PSD:} matrizes de covariância ou correlação que não sejam positivas semidefinidas são rejeitadas antes da propagação. As tolerâncias da decomposição de Cholesky e da consistência da matriz são \emph{relativas} à escala de variância do modelo (\(u^2\)), de modo que a verificação permanece eficaz em qualquer ordem de grandeza das incertezas (p.~ex.\ massas em \(\mu\)g ou kg).
+  \item \textbf{Limite de magnitude do decimal exato:} numerador e denominador da representação racional exata são limitados, rejeitando com erro estruturado expressões cuja avaliação geraria inteiros arbitrariamente grandes (p.~ex.\ exponenciação aninhada), preservando a disponibilidade do serviço.
+  \item \textbf{Escopo do limite de expoente:} o limite \texttt{maxExponentMagnitude} restringe apenas literais e entradas fornecidos pelo usuário; valores computados pelo próprio motor (resultados de funções transcendentais, saídas GUM) não são por ele restringidos.
+  \item \textbf{Rejeição de modelos não-suaves:} funções \texttt{abs}, \texttt{floor}, \texttt{ceil}, \texttt{round}, \texttt{min}, \texttt{max} são rejeitadas em propagação GUM, exceto com coeficientes de sensibilidade explícitos e ativação consciente da opção correspondente.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Limitações Declaradas}
+
+\begin{enumerate}
+  \item \textbf{Propagação de primeira ordem.} Modelos fortemente não-lineares na vizinhança do ponto de operação podem exigir Monte Carlo (não implementado).
+  \item \textbf{Funções transcendentais e quantis} usam IEEE-754 \emph{double-precision} (\texttt{binary64}); aplicam-se os limites correspondentes de precisão. Como o ECMA-262 deixa \texttt{Math.*} (exceto \texttt{Math.sqrt}) como aproximação dependente de implementação, o último dígito significativo de fórmulas que usam transcendentais --- e, portanto, sua \emph{string} canônica e \emph{fingerprint} --- pode diferir entre motores JavaScript. A aritmética decimal exata (\(+\,-\,\times\,\div\) e potências inteiras) é reproduzível bit a bit; o determinismo das transcendentais é \emph{por runtime}.
+  \item \textbf{Quantis t-Student para \(\nu \geq 500\)} são tratados como assintóticos à distribuição normal.
+  \item \textbf{Unidades} são metadados textuais; a coerência dimensional do modelo é responsabilidade do projeto do método.
+\end{enumerate}
+
+% ---------------------------------------------------------------------------
+\section{Trilha de Auditoria por Calibração}
+
+Cada calibração executada na plataforma CalibraFácil carrega, em \emph{snapshot} imutável, os seguintes elementos que permitem reconstrução determinística e correlação com este dossiê:
+
+\begin{itemize}
+  \item a versão do pacote em uso, exposta como \texttt{ENGINE\_VERSION = "\docVersion"};
+  \item o \emph{fingerprint} canônico da fórmula compilada e do resultado, calculado como SHA-256 sobre JSON canônico (digest criptográfico com resistência a pré-imagem e colisão, adequado como evidência de integridade de auditoria);
+  \item a referência ao método de calibração aplicado, também em \emph{snapshot} imutável;
+  \item os dados de entrada e os resultados intermediários do cálculo de incerteza.
+\end{itemize}
+
+\textbf{Correlação com este dossiê:} qualquer calibração com \texttt{ENGINE\_VERSION = "\docVersion"} corresponde à validação aqui registrada. Mudança de \texttt{ENGINE\_VERSION} requer novo dossiê de validação aprovado.
+
+% ---------------------------------------------------------------------------
+\section{Conclusão}
+
+Considerando os resultados das duas camadas de validação, as tolerâncias declaradas e as garantias arquiteturais verificadas, a \organizationName{} \textbf{aprova o pacote} \texttt{@calibra-facil/math-engine} \textbf{versão \docVersion{} para uso em produção na plataforma CalibraFácil}, dentro do escopo declarado na seção~\ref{sec:escopo}.
+
+Esta aprovação é interna à \organizationName{} e cobre a distribuição do componente na plataforma. O laboratório usuário utiliza esta evidência como insumo da sua própria validação de método sob ISO/IEC 17025:2017, cláusula 7.2.2 (validação de métodos), e permanece responsável pela validação operacional das suas calibrações.
+
+% ---------------------------------------------------------------------------
+\appendix
+
+\section{Planilhas de Referência}
+\label{app:planilhas}
+
+\subsection{Entrada A.1 --- Laboratório Exemplo, FOR 50 / FOR 51}
+
+\begin{tabularx}{\textwidth}{l X}
+  \toprule
+  \textbf{Identificador interno CalibraFácil} & \texttt{CF-REF-EXEMPLO-FOR50-51-2026.04} \\
+  \textbf{Identificação na origem} & FOR 50 (Formulário) + FOR 51 (Certificado), com folhas auxiliares \texttt{Cálculo U}, \texttt{Pesos F1}, \texttt{Pesos M1 - M2} e \texttt{Valores máximos} \\
+  \textbf{Nome do arquivo recebido} & \texttt{FOR 50 e FOR 51 Rastreado - apartir 14.4.26.xlsx} \\
+   & \emph{(nome preservado como recebido da Laboratório Exemplo; o documento da origem não é renomeado)} \\
+  \textbf{Origem} & \textbf{Laboratório Exemplo} --- laboratório acreditado pelo Inmetro/RBC \\
+  \textbf{Responsável na origem} & (omitido) (última modificação registrada nos metadados do arquivo) \\
+  \textbf{Criação original} & 2015-12-14 \\
+  \textbf{Última revisão registrada} & 2026-04-15 \\
+  \textbf{Vigência adotada para comparação} & a partir de 14 de abril de 2026 \\
+  \textbf{Escopo metrológico} & Calibração de massas com pesos padrão OIML classes F1 e M1/M2, propagação de incerteza segundo GUM (folha \texttt{Cálculo U}) \\
+  \textbf{Folhas relevantes para validação} & \texttt{FOR 50 - Formulario}, \texttt{Cálculo U}, \texttt{Pesos F1}, \texttt{Pesos M1 - M2}, \texttt{Valores máximos} \\
+  \textbf{Curador da cópia local} & CalibraFácil \\
+  \textbf{Forma de obtenção} & Cópia controlada fornecida pela Laboratório Exemplo em formato Excel para fins de validação cruzada \\
+  \textbf{Classificação} & Documento controlado --- distribuição mediante solicitação \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{0.2cm}
+{\small Em todas as citações deste dossiê, a planilha de referência é referida pelo \emph{identificador interno CalibraFácil} (\texttt{CF-REF-EXEMPLO-FOR50-51-2026.04}). O nome do arquivo recebido fica registrado para preservar a rastreabilidade até o documento original da Laboratório Exemplo.}
+
+\vspace{0.3cm}
+Laboratório Exemplo é o primeiro laboratório acreditado operando na plataforma CalibraFácil em produção. A planilha FOR 50/51 é, no momento desta emissão, a única planilha de laboratório acreditado utilizada na camada operacional de validação do motor matemático.
+
+\section{Resultados Operacionais por Cenário}
+\label{app:planilhas-resultados}
+
+Detalhamento por cenário operacional executado contra a planilha registrada no Apêndice~\ref{app:planilhas}. Cada cenário registra: identificação da planilha de referência; entradas numéricas; valor de referência da planilha; valor calculado pelo motor; desvio absoluto observado; tolerância aplicada; conclusão (\textsf{PASS}/\textsf{FAIL}).
+
+\vspace{0.3cm}
+\textit{Esta seção é populada pela \organizationName{} à medida que cenários operacionais da Laboratório Exemplo (calibrações reais, com seus respectivos certificados emitidos no FOR 51) são reproduzidos no motor e seus desvios numéricos consolidados. O resumo executivo do conjunto de cenários executados na versão \docVersion{} é registrado na seção~\ref{sec:resultados}.}
+
+\section{Histórico de Revisões}
+
+\begin{tabularx}{\textwidth}{l l l X}
+  \toprule
+  \textbf{Versão} & \textbf{Data} & \textbf{Pacote} & \textbf{Descrição} \\
+  \midrule
+  1.0 & \docDate & \docVersion & Emissão inicial para a versão \docVersion{} do pacote. Revalidação após auditoria técnica: tolerância de covariância/PSD relativa, diferenciação de \texttt{if\_zero}, \texttt{round()} exato, escopo do limite de expoente, limite de magnitude do decimal, \emph{fingerprints} SHA-256. Valores de referência reverificados e inalterados em relação à v0.2.4. \\
+  \bottomrule
+\end{tabularx}
+
+\end{document}

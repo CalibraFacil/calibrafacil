@@ -1,6 +1,6 @@
 {
   "name": "@calibra-facil/math-engine",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "type": "module",
   "sideEffects": false,
   "description": "Secure, deterministic, GUM-aligned calculation engine for calibration formulas.",
@@ -16,6 +16,9 @@
   "license": "ISC",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",

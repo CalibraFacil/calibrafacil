@@ -601,3 +601,103 @@ function toRecord(value: unknown): Record<string, unknown> {
 
   return Object.fromEntries(Object.entries(value));
 }
+
+export type NormalizableCertifiedValue = {
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+};
+
+export type NormalizableStandardSnapshot = {
+  uncertainty: number | null;
+  uncertaintyUnit: string | null;
+  drift: number | null;
+  certifiedValues: NormalizableCertifiedValue[] | null;
+};
+
+function normalizeStandardNumberToGrams(
+  value: number | null | undefined,
+  unit: unknown,
+): { value: number | null | undefined; normalized: boolean } {
+  if (value === null || value === undefined) {
+    return { value, normalized: false };
+  }
+
+  const normalized = toCanonicalMassValue(value, unit);
+  return normalized === null
+    ? { value, normalized: false }
+    : { value: normalized, normalized: true };
+}
+
+/**
+ * Convert a standards snapshot's certified values, uncertainty and drift to the
+ * canonical mass unit (grams) before official execution. This MUST run on every
+ * authoritative execution path — cloud (jobs/sync) and offline desktop — so that
+ * a non-gram lab gets identical results, acceptance verdicts and certificates
+ * online and offline (audit H4). Generic so each caller keeps its own snapshot
+ * type; Object.assign preserves all non-mass fields.
+ */
+export function normalizeStandardsForOfficialExecution<
+  T extends NormalizableStandardSnapshot,
+>(standards: readonly T[] | null | undefined): T[] | null | undefined {
+  if (!standards) {
+    return standards;
+  }
+
+  return standards.map((standard) => {
+    const certifiedValues = standard.certifiedValues?.map((certifiedValue) => {
+      const value = normalizeStandardNumberToGrams(
+        certifiedValue.value,
+        certifiedValue.unit,
+      );
+      const uncertainty = normalizeStandardNumberToGrams(
+        certifiedValue.uncertainty,
+        certifiedValue.unit,
+      );
+      const maxError = normalizeStandardNumberToGrams(
+        certifiedValue.maxError,
+        certifiedValue.unit,
+      );
+      const drift = normalizeStandardNumberToGrams(
+        certifiedValue.drift,
+        certifiedValue.unit,
+      );
+      const buoyancy = normalizeStandardNumberToGrams(
+        certifiedValue.buoyancy,
+        certifiedValue.unit,
+      );
+
+      return Object.assign({}, certifiedValue, {
+        value: value.value ?? certifiedValue.value,
+        uncertainty: uncertainty.value ?? certifiedValue.uncertainty,
+        unit: value.normalized ? "g" : certifiedValue.unit,
+        maxError: maxError.value ?? certifiedValue.maxError,
+        drift: drift.value ?? certifiedValue.drift,
+        buoyancy: buoyancy.value ?? certifiedValue.buoyancy,
+      });
+    });
+
+    const driftUnit =
+      standard.certifiedValues?.[0]?.unit ?? standard.uncertaintyUnit;
+    const normalizedUncertainty = normalizeStandardNumberToGrams(
+      standard.uncertainty,
+      standard.uncertaintyUnit,
+    );
+    const normalizedDrift = normalizeStandardNumberToGrams(
+      standard.drift,
+      driftUnit,
+    );
+
+    return Object.assign({}, standard, {
+      uncertainty: normalizedUncertainty.value ?? standard.uncertainty,
+      uncertaintyUnit: normalizedUncertainty.normalized
+        ? "g"
+        : standard.uncertaintyUnit,
+      drift: normalizedDrift.value ?? standard.drift,
+      certifiedValues: certifiedValues ?? null,
+    });
+  });
+}
