@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { PortalDomainResponse } from '@calibra-facil/client-runtime'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
@@ -68,6 +70,7 @@ export function PortalDomainSettingsPage() {
   const [hostname, setHostname] = useState('')
 
   const domainQuery = usePortalDomainData()
+  const { data: activeOrg } = useActiveOrganization()
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
@@ -158,6 +161,8 @@ export function PortalDomainSettingsPage() {
   }
 
   const domain = payload.domain
+  const orgName = activeOrg?.name ?? 'CalibraFácil'
+  const orgLogo = activeOrg?.logo ?? null
 
   return (
     <div className="space-y-6">
@@ -215,6 +220,40 @@ export function PortalDomainSettingsPage() {
               value={formatDateTime(domain?.activatedAt ?? null)}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pré-visualização do portal</CardTitle>
+          <CardDescription>
+            É assim que seus clientes veem a identidade ao acessar o portal pelo
+            seu domínio personalizado. Logo e nome vêm da identidade da
+            organização.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border bg-muted/30 p-6">
+            <div className="mx-auto flex max-w-xs flex-col items-center gap-3 text-center">
+              <PortalBrandPreviewMark logo={orgLogo} name={orgName} />
+              <p className="text-lg font-semibold tracking-tight">{orgName}</p>
+              <p className="text-sm text-muted-foreground">Portal do Cliente</p>
+              <p className="text-xs text-muted-foreground">Portal {orgName}</p>
+            </div>
+          </div>
+          {!orgLogo && (
+            <Alert>
+              <AlertDescription>
+                Envie o logo da sua organização para personalizar o portal.{' '}
+                <Link
+                  to="/dashboard/settings/organization"
+                  className="font-medium underline"
+                >
+                  Configurar identidade
+                </Link>
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -374,6 +413,28 @@ export function PortalDomainSettingsPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function PortalBrandPreviewMark({
+  logo,
+  name,
+}: {
+  logo: string | null
+  name: string
+}) {
+  if (logo) {
+    return (
+      <span className="inline-flex size-12 items-center justify-center overflow-hidden rounded-lg border bg-background">
+        <img src={logo} alt={name} className="size-full object-contain" />
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex size-12 items-center justify-center rounded-lg border bg-background text-lg font-semibold text-muted-foreground">
+      {name.charAt(0).toUpperCase()}
+    </span>
   )
 }
 

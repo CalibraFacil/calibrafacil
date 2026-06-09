@@ -375,6 +375,32 @@ export const portalRouter = new Hono<{
   Bindings: R2Env;
 }>()
   // =========================================================================
+  // GET /branding - Public white-label identity for the active portal host
+  // =========================================================================
+  // Unauthenticated on purpose: the sign-in page needs the lab's name + logo
+  // before a session exists. Resolved from the request Origin via the custom
+  // domain (getPortalLabScope). Degrades to nulls on the default portal host
+  // or an unrecognized domain, so the SPA falls back to CalibraFácil branding.
+  // =========================================================================
+  .get("/branding", async (c) => {
+    const portalLabScope = await getPortalLabScope(c);
+    if (!portalLabScope.labOrganizationId) {
+      return c.json({ name: null, logo: null });
+    }
+
+    const [labOrganization] = await db
+      .select({ name: organization.name, logo: organization.logo })
+      .from(organization)
+      .where(eq(organization.id, portalLabScope.labOrganizationId))
+      .limit(1);
+
+    return c.json({
+      name: labOrganization?.name ?? null,
+      logo: labOrganization?.logo ?? null,
+    });
+  })
+
+  // =========================================================================
   // GET /organizations - List CLIENT organizations for the portal
   // =========================================================================
   // Returns only organizations where:

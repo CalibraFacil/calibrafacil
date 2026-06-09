@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { useBranding } from "@/features/branding/branding-context";
 
 type BrandMarkProps = Omit<React.ComponentProps<"img">, "src">;
 
@@ -7,23 +8,38 @@ interface BrandLockupProps extends React.ComponentProps<"div"> {
   textClassName?: string;
 }
 
-export function BrandMark({
-  alt = "CalibraFácil",
-  className,
-  ...props
-}: BrandMarkProps) {
+export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
+  const branding = useBranding();
+  // Preserve an explicitly-empty alt (decorative usage); otherwise default to
+  // the resolved brand name.
+  const altText = alt ?? branding.name;
+
+  if (branding.logo) {
+    return (
+      <span className={cn("relative inline-flex size-8 shrink-0", className)}>
+        <img
+          src={branding.logo}
+          alt={altText}
+          className="size-full object-contain"
+          draggable={false}
+          {...props}
+        />
+      </span>
+    );
+  }
+
   return (
     <span className={cn("relative inline-flex size-8 shrink-0", className)}>
       <img
         src="/logo-mark-light.svg"
-        alt={alt}
+        alt={altText}
         className="size-full dark:hidden"
         draggable={false}
         {...props}
       />
       <img
         src="/logo-mark-dark.svg"
-        alt={alt}
+        alt={altText}
         className="hidden size-full dark:block"
         draggable={false}
         {...props}
@@ -38,6 +54,8 @@ export function BrandLockup({
   textClassName,
   ...props
 }: BrandLockupProps) {
+  const branding = useBranding();
+
   return (
     <div className={cn("flex items-center gap-2.5", className)} {...props}>
       <BrandMark
@@ -48,7 +66,7 @@ export function BrandLockup({
       <span
         className={cn("text-lg font-semibold tracking-tight", textClassName)}
       >
-        CalibraFácil
+        {branding.name}
       </span>
     </div>
   );
