@@ -74,31 +74,24 @@ function formatDate(dateString: string | Date): string {
 function formatUncertainty(standard: ReferenceStandard): string {
   const massCount = standard.metrologyData?.massValues.length ?? 0
   const channelCount = standard.metrologyData?.channels.length ?? 0
-  const profileCount = standard.metrologyData?.compositionProfiles.length ?? 0
 
-  if (massCount > 0 || channelCount > 0 || profileCount > 0) {
+  if (massCount > 0 || channelCount > 0) {
     const parts = []
     if (massCount > 0) parts.push(`${massCount} valores`)
     if (channelCount > 0) parts.push(`${channelCount} canais`)
-    if (profileCount > 0) parts.push(`${profileCount} perfis`)
     return parts.join(' + ')
   }
 
   if (standard.certifiedValues && standard.certifiedValues.length > 0) {
+    // Composition profiles are org-shared (the catalog), not per-standard, so
+    // they no longer count toward a standard's own certified values.
     const certifiedCount = standard.certifiedValues.filter(
       (value) => value.compositionProfile !== true,
     ).length
-    const profileCount = standard.certifiedValues.length - certifiedCount
 
-    if (certifiedCount > 0 && profileCount > 0) {
-      return `${certifiedCount} valores + ${profileCount} perfis`
+    if (certifiedCount > 0) {
+      return `${certifiedCount} valores`
     }
-
-    if (profileCount > 0) {
-      return `${profileCount} perfis`
-    }
-
-    return `${certifiedCount} valores`
   }
   if (standard.uncertainty != null && standard.uncertaintyUnit) {
     return `${standard.uncertainty} ${standard.uncertaintyUnit}`
