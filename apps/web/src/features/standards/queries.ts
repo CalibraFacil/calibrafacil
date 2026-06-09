@@ -1,4 +1,11 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
+import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -68,6 +75,22 @@ export function standardAuditLogQueryOptions(id: string) {
     queryFn: (): Promise<StandardAuditLogData> =>
       calibraApi.standards.auditLog<StandardAuditLogRecord>(id),
   })
+}
+
+// The org-shared mass composition profile catalog (normalized buildup weights,
+// keyed by class + nominal). Same query key as the execution-flow hook so the
+// React Query cache is shared. The API scopes by the session organization.
+export function compositionProfilesCatalogQueryOptions() {
+  return queryOptions({
+    queryKey: ['standards', 'composition-profiles'],
+    queryFn: () => calibraApi.standards.listCompositionProfiles(),
+  })
+}
+
+export async function loadCompositionProfilesCatalogData(
+  queryClient: QueryClient,
+) {
+  await queryClient.ensureQueryData(compositionProfilesCatalogQueryOptions())
 }
 
 export async function getStandardsIndexEssentialQueries(url?: URL) {
@@ -154,4 +177,51 @@ export function useStandardDetailData(id: string) {
 
 export function useStandardAuditLogData(id: string) {
   return useQuery(standardAuditLogQueryOptions(id))
+}
+
+export function useCompositionProfilesCatalog() {
+  return useQuery(compositionProfilesCatalogQueryOptions())
+}
+
+const compositionProfilesCatalogKey = ['standards', 'composition-profiles']
+
+export function useCreateCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: MassCompositionProfileWriteInput) =>
+      calibraApi.standards.createCompositionProfile(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
+}
+
+export function useUpdateCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number
+      input: Partial<MassCompositionProfileWriteInput>
+    }) => calibraApi.standards.updateCompositionProfile(id, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
+}
+
+export function useDeleteCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      calibraApi.standards.deleteCompositionProfile(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
 }

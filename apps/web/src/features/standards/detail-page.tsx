@@ -164,34 +164,9 @@ export function StandardDetailPage({ id }: { id: string }) {
         legacyCertifiedValues.filter(
           (value) => value.compositionProfile !== true,
         ))
-  const compositionProfiles =
-    metrologyData?.compositionProfiles.length === 0
-      ? legacyCertifiedValues.filter(
-          (value) => value.compositionProfile === true,
-        )
-      : (metrologyData?.compositionProfiles.map((profile) => ({
-          nominal: profile.nominal,
-          value: profile.value,
-          uncertainty: profile.uncertainty,
-          unit: profile.unit,
-          maxError: profile.maxError,
-          drift: profile.drift,
-          buoyancy: profile.buoyancy,
-          coverageFactor: profile.coverageFactor,
-          compositionProfile: true,
-          profileKey: profile.profileKey,
-          profileClass: profile.profileClass,
-          profileQuantityAvailable: profile.quantityAvailable,
-        })) ??
-        legacyCertifiedValues.filter(
-          (value) => value.compositionProfile === true,
-        ))
   const hasCertifiedValues = certificateValues.length > 0
   const hasChannels = channels.length > 0
-  const hasAdvancedCertifiedValues = [
-    ...certificateValues,
-    ...compositionProfiles,
-  ].some(
+  const hasAdvancedCertifiedValues = certificateValues.some(
     (cv) =>
       cv.maxError != null ||
       cv.drift != null ||
@@ -357,21 +332,11 @@ export function StandardDetailPage({ id }: { id: string }) {
               {hasChannels ? <ChannelsTable channels={channels} /> : null}
 
               {hasCertifiedValues ? (
-                <div className="space-y-6">
-                  <CertifiedValuesTable
-                    title="Valores do certificado"
-                    values={certificateValues}
-                    showAdvanced={hasAdvancedCertifiedValues}
-                  />
-                  {compositionProfiles.length > 0 ? (
-                    <CertifiedValuesTable
-                      title="Perfis de composição"
-                      values={compositionProfiles}
-                      showAdvanced={hasAdvancedCertifiedValues}
-                      profileTable
-                    />
-                  ) : null}
-                </div>
+                <CertifiedValuesTable
+                  title="Valores do certificado"
+                  values={certificateValues}
+                  showAdvanced={hasAdvancedCertifiedValues}
+                />
               ) : (
                 <BlueprintGrid className="sm:grid-cols-3">
                   <BlueprintField label="Valor de referência" mono>

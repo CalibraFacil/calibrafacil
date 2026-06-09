@@ -52,6 +52,7 @@ import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
+import { Route as DashboardStandardsCompositionProfilesRouteImport } from './routes/dashboard/standards/composition-profiles'
 import { Route as DashboardSettingsUnitsRouteImport } from './routes/dashboard/settings/units'
 import { Route as DashboardSettingsSubscriptionRouteImport } from './routes/dashboard/settings/subscription'
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
@@ -348,6 +349,12 @@ const DashboardStandardsNewRoute = DashboardStandardsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardStandardsRouteRoute,
 } as any)
+const DashboardStandardsCompositionProfilesRoute =
+  DashboardStandardsCompositionProfilesRouteImport.update({
+    id: '/composition-profiles',
+    path: '/composition-profiles',
+    getParentRoute: () => DashboardStandardsRouteRoute,
+  } as any)
 const DashboardSettingsUnitsRoute = DashboardSettingsUnitsRouteImport.update({
   id: '/units',
   path: '/units',
@@ -855,6 +862,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
+  '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -958,6 +966,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
+  '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
@@ -1080,6 +1089,7 @@ export interface FileRoutesById {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
+  '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -1203,6 +1213,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
+    | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
@@ -1306,6 +1317,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
+    | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets'
@@ -1427,6 +1439,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
+    | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
@@ -1789,6 +1802,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/dashboard/standards/new'
       preLoaderRoute: typeof DashboardStandardsNewRouteImport
+      parentRoute: typeof DashboardStandardsRouteRoute
+    }
+    '/dashboard/standards/composition-profiles': {
+      id: '/dashboard/standards/composition-profiles'
+      path: '/composition-profiles'
+      fullPath: '/dashboard/standards/composition-profiles'
+      preLoaderRoute: typeof DashboardStandardsCompositionProfilesRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
     }
     '/dashboard/settings/units': {
@@ -2717,6 +2737,7 @@ const DashboardSettingsRouteRouteWithChildren =
   )
 
 interface DashboardStandardsRouteRouteChildren {
+  DashboardStandardsCompositionProfilesRoute: typeof DashboardStandardsCompositionProfilesRoute
   DashboardStandardsNewRoute: typeof DashboardStandardsNewRoute
   DashboardStandardsIndexRoute: typeof DashboardStandardsIndexRoute
   DashboardStandardsIdEditRoute: typeof DashboardStandardsIdEditRoute
@@ -2725,6 +2746,8 @@ interface DashboardStandardsRouteRouteChildren {
 
 const DashboardStandardsRouteRouteChildren: DashboardStandardsRouteRouteChildren =
   {
+    DashboardStandardsCompositionProfilesRoute:
+      DashboardStandardsCompositionProfilesRoute,
     DashboardStandardsNewRoute: DashboardStandardsNewRoute,
     DashboardStandardsIndexRoute: DashboardStandardsIndexRoute,
     DashboardStandardsIdEditRoute: DashboardStandardsIdEditRoute,

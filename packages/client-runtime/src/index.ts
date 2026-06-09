@@ -841,7 +841,7 @@ export function createDesktopHybridApiClient(
       cloud.standards,
       local.standards,
       local,
-      ["list", "get"],
+      ["list", "get", "listCompositionProfiles"],
       requestBackgroundSync,
     ),
     environmentalLimits: withDesktopLocalFirstReadThroughSync(

@@ -914,6 +914,21 @@ describe("client runtime data policy registry", () => {
           "policy": "local-first-read-through-sync",
         },
         {
+          "method": "createCompositionProfile",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateCompositionProfile",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "deleteCompositionProfile",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
           "method": "auditLog",
           "namespace": "standards",
           "policy": "cloud-only",

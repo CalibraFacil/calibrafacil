@@ -131,13 +131,23 @@ export function StandardsListPage() {
             Gerencie os padrões e equipamentos de calibração do laboratório.
           </p>
         </div>
-        <Button
-          render={<Link to="/dashboard/standards/new" />}
-          className={`${ACTION_BUTTON_CLASS} shrink-0`}
-        >
-          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-          Novo Padrão
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            render={<Link to="/dashboard/standards/composition-profiles" />}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={RulerIcon} className="mr-2 size-4" />
+            Perfis de composição
+          </Button>
+          <Button
+            render={<Link to="/dashboard/standards/new" />}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+            Novo Padrão
+          </Button>
+        </div>
       </div>
 
       <Panel className="p-4 sm:p-5">
