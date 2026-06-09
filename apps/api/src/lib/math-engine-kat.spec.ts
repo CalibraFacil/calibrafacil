@@ -12,11 +12,11 @@ import {
 /**
  * Known-answer tests (KAT) against the REAL @calibra-facil/math-engine.
  *
- * The engine is an external, compiled, git-pinned package (v0.2.4) and its own
- * test suite is NOT vendored into this repo — every other GUM test here injects
- * a fake engine. These textbook reference values are the only in-repo guard
- * against a silent GUM-math regression when the engine tag is bumped: if any of
- * these fail in CI, the upgraded engine produced a wrong number.
+ * The engine is a vendored workspace package (v0.3.0) and its own test suite is
+ * NOT mirrored into this repo — every other GUM test here injects a fake engine.
+ * These textbook reference values are the only in-repo guard against a silent
+ * GUM-math regression when ENGINE_VERSION is bumped: if any of these fail in CI,
+ * the upgraded engine produced a wrong number.
  *
  * See .goals/claim-code-parity.md (B4) and
  * docs/estrategia/precificacao-posicionamento.md (A5 — validation dossier).

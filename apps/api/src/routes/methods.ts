@@ -69,7 +69,7 @@ function compileDraftWithEngine(
   } = {},
 ) {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine v0.2.4 has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine v0.3.0 has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible.
   const engine = createCalculationEngine(
     METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
