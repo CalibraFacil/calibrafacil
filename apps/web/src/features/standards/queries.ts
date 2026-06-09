@@ -70,6 +70,22 @@ export function standardAuditLogQueryOptions(id: string) {
   })
 }
 
+// The org-shared mass composition profile catalog (normalized buildup weights,
+// keyed by class + nominal). Same query key as the execution-flow hook so the
+// React Query cache is shared. The API scopes by the session organization.
+export function compositionProfilesCatalogQueryOptions() {
+  return queryOptions({
+    queryKey: ['standards', 'composition-profiles'],
+    queryFn: () => calibraApi.standards.listCompositionProfiles(),
+  })
+}
+
+export async function loadCompositionProfilesCatalogData(
+  queryClient: QueryClient,
+) {
+  await queryClient.ensureQueryData(compositionProfilesCatalogQueryOptions())
+}
+
 export async function getStandardsIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
@@ -154,4 +170,8 @@ export function useStandardDetailData(id: string) {
 
 export function useStandardAuditLogData(id: string) {
   return useQuery(standardAuditLogQueryOptions(id))
+}
+
+export function useCompositionProfilesCatalog() {
+  return useQuery(compositionProfilesCatalogQueryOptions())
 }
