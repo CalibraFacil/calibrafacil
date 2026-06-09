@@ -790,6 +790,9 @@ async function getCurrentLocalEnvironmentBootstrap() {
   try {
     const response = await fetch(
       `${localServer.baseUrl}/.well-known/calibra/local-environment`,
+      {
+        headers: createLocalApiHeaders(),
+      },
     );
     if (!response.ok) {
       throw new Error(

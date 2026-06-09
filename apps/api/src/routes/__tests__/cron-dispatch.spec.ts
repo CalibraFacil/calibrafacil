@@ -2,12 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../../../vercel-src/cron/dispatch";
 
 const mocks = vi.hoisted(() => ({
+  cleanupExpiredAuthRecords: vi.fn(),
   createWorkerRuntimeEnv: vi.fn(() => ({ DATABASE_URL: "postgres://test" })),
   enqueueBackgroundJob: vi.fn(),
   processScheduledContaAzulIntegrationSyncs: vi.fn(),
   processScheduledContaAzulPolls: vi.fn(),
   processScheduledIntegrationSyncs: vi.fn(),
   recomputeOperatorAlerts: vi.fn(),
+}));
+
+vi.mock("../../lib/auth-maintenance", () => ({
+  cleanupExpiredAuthRecords: mocks.cleanupExpiredAuthRecords,
 }));
 
 vi.mock("../../lib/background-jobs", () => ({
@@ -44,10 +49,18 @@ beforeEach(() => {
   delete process.env.VERCEL;
   delete process.env.NODE_ENV;
   vi.clearAllMocks();
-  mocks.createWorkerRuntimeEnv.mockReturnValue({ DATABASE_URL: "postgres://test" });
+  mocks.cleanupExpiredAuthRecords.mockResolvedValue({
+    deletedSessions: 0,
+    deletedVerifications: 0,
+  });
+  mocks.createWorkerRuntimeEnv.mockReturnValue({
+    DATABASE_URL: "postgres://test",
+  });
   mocks.enqueueBackgroundJob.mockResolvedValue({ enqueued: true });
   mocks.recomputeOperatorAlerts.mockResolvedValue({ alerts: 0 });
-  mocks.processScheduledIntegrationSyncs.mockResolvedValue({ scheduledRuns: 1 });
+  mocks.processScheduledIntegrationSyncs.mockResolvedValue({
+    scheduledRuns: 1,
+  });
   mocks.processScheduledContaAzulIntegrationSyncs.mockResolvedValue({
     completedRuns: 0,
     dueRuns: 1,
@@ -132,7 +145,9 @@ describe("integrations cron", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.processScheduledContaAzulIntegrationSyncs).toHaveBeenCalledWith(
+    expect(
+      mocks.processScheduledContaAzulIntegrationSyncs,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         env: { DATABASE_URL: "postgres://test" },
         dispatch: expect.any(Function),
@@ -187,13 +202,16 @@ describe("notifications cron", () => {
     expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
   });
 
-  it("runs without a CRON_SECRET configured (lenient auth)", async () => {
+  it("fails closed without a CRON_SECRET on Vercel", async () => {
     process.env.VERCEL = "1";
 
     const response = await GET(request("/api/cron/notifications"));
 
-    expect(response.status).toBe(200);
-    expect(mocks.enqueueBackgroundJob).toHaveBeenCalled();
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "CRON_SECRET não configurado",
+    });
+    expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
   });
 });
 
@@ -220,12 +238,59 @@ describe("operator-alerts cron", () => {
     expect(mocks.recomputeOperatorAlerts).not.toHaveBeenCalled();
   });
 
-  it("runs without a CRON_SECRET configured (lenient auth)", async () => {
+  it("fails closed without a CRON_SECRET on Vercel", async () => {
     process.env.VERCEL = "1";
 
     const response = await GET(request("/api/cron/operator-alerts"));
 
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "CRON_SECRET não configurado",
+    });
+    expect(mocks.recomputeOperatorAlerts).not.toHaveBeenCalled();
+  });
+});
+
+describe("auth-maintenance cron", () => {
+  it("deletes expired auth records and returns the counts", async () => {
+    process.env.CRON_SECRET = "secret-1";
+    mocks.cleanupExpiredAuthRecords.mockResolvedValue({
+      deletedSessions: 4,
+      deletedVerifications: 7,
+    });
+
+    const response = await GET(
+      request("/api/cron/auth-maintenance", {
+        authorization: "Bearer secret-1",
+      }),
+    );
+
     expect(response.status).toBe(200);
-    expect(mocks.recomputeOperatorAlerts).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toEqual({
+      deletedSessions: 4,
+      deletedVerifications: 7,
+    });
+    expect(mocks.cleanupExpiredAuthRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects invalid cron credentials", async () => {
+    process.env.CRON_SECRET = "secret-1";
+
+    const response = await GET(
+      request("/api/cron/auth-maintenance", { authorization: "Bearer wrong" }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(mocks.cleanupExpiredAuthRecords).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without a CRON_SECRET on Vercel", async () => {
+    process.env.VERCEL = "1";
+
+    const response = await GET(request("/api/cron/auth-maintenance"));
+
+    expect(response.status).toBe(503);
+    expect(mocks.cleanupExpiredAuthRecords).not.toHaveBeenCalled();
   });
 });

@@ -1655,8 +1655,18 @@ SELECT
     const unauthorized = await app.request("/api/local/app-info");
     expect(unauthorized.status).toBe(401);
 
+    // The environment bootstrap discloses the signed-in user/org/unit, so it
+    // is token-gated like /api/* (the desktop readiness probe sends the token).
+    const unauthorizedReadiness = await app.request(
+      "/.well-known/calibra/local-environment",
+    );
+    expect(unauthorizedReadiness.status).toBe(401);
+
     const readiness = await app.request(
       "/.well-known/calibra/local-environment",
+      {
+        headers: { "x-calibra-local-token": "local-test-token" },
+      },
     );
     expect(readiness.status).toBe(200);
     await expect(readiness.json()).resolves.toMatchObject({

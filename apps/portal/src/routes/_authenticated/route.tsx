@@ -2,12 +2,14 @@ import {
   Navigate,
   Outlet,
   createFileRoute,
+  redirect,
   useNavigate,
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  getPortalSession,
   portalAuthClient,
   portalOrganization,
   portalSignOut,
@@ -32,11 +34,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
+import { readSessionWithRetry } from "@/lib/auth-session";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
 
 export const Route = createFileRoute("/_authenticated")({
+  // Settle the session before any authenticated route renders (parity with
+  // apps/web and apps/backoffice). The component below keeps its own session
+  // check as defense in depth for sessions lost after load.
+  beforeLoad: async ({ location, preload }) => {
+    if (preload) return;
+
+    const { data: session } = await readSessionWithRetry(getPortalSession);
+
+    if (!session) {
+      throw redirect({
+        to: "/sign-in",
+        search: { redirect: sanitizePortalRedirect(location.href) },
+      });
+    }
+  },
   component: PortalLayout,
 });
 

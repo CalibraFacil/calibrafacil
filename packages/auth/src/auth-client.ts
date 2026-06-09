@@ -209,6 +209,17 @@ export const portalSignIn = portalAuthClient.signIn;
 export const portalSignUp = portalAuthClient.signUp;
 export const portalSignOut = portalAuthClient.signOut;
 export const usePortalSession = portalAuthClient.useSession;
+let inflightPortalSession: ReturnType<
+  typeof portalAuthClient.getSession
+> | null = null;
+// Deduped one-off read so concurrent portal route guards share a single
+// /get-session request instead of each firing their own.
+export const getPortalSession = () => {
+  inflightPortalSession ??= portalAuthClient.getSession().finally(() => {
+    inflightPortalSession = null;
+  });
+  return inflightPortalSession;
+};
 export const usePortalListOrganizations = portalAuthClient.useListOrganizations;
 export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;

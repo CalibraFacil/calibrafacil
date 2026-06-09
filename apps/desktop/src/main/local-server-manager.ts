@@ -344,7 +344,9 @@ export class LocalServerManager {
       }
 
       try {
-        const response = await fetch(readinessUrl);
+        const response = await fetch(readinessUrl, {
+          headers: { "x-calibra-local-token": this.#localApiToken },
+        });
         if (response.ok) {
           if (this.#stopping || startAttemptId !== this.#startAttemptId) {
             throw new Error("Local server start was cancelled");

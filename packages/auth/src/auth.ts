@@ -1283,6 +1283,50 @@ function createSharedConfig(surface: AuthSurface) {
   };
 }
 
+type CreatedAuthSessionRecord = {
+  id?: string;
+  userId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  impersonatedBy?: string | null;
+};
+
+/**
+ * Append a sign-in entry to the platform event log. Session creation is the
+ * one auth transition the audit trail previously missed (setup-token claims
+ * and impersonation were already logged). Failures are swallowed: an audit
+ * write must never block a sign-in.
+ */
+async function logAuthSessionCreated(
+  surface: AuthSurface,
+  session: CreatedAuthSessionRecord,
+) {
+  try {
+    await getDb()
+      .insert(schema.platformEventLog)
+      .values({
+        actorUserId: session.impersonatedBy ?? session.userId,
+        targetUserId: session.userId,
+        action: "auth.session_created",
+        entityType: "auth_session",
+        entityId: session.id ?? null,
+        details: {
+          surface,
+          ...(session.ipAddress ? { ipAddress: session.ipAddress } : {}),
+          ...(session.userAgent ? { userAgent: session.userAgent } : {}),
+          ...(session.impersonatedBy
+            ? { impersonatedBy: session.impersonatedBy }
+            : {}),
+        },
+      });
+  } catch (error) {
+    console.error(
+      `[Auth Audit] Failed to log ${surface} session creation`,
+      error,
+    );
+  }
+}
+
 async function findDefaultActiveOrganizationId(
   userId: string,
   organizationType: "CLIENT" | "LAB",
@@ -1452,6 +1496,9 @@ export function createLabAuth() {
               },
             };
           },
+          async after(session: CreatedAuthSessionRecord) {
+            await logAuthSessionCreated("lab", session);
+          },
         },
       },
     },
@@ -1535,6 +1582,15 @@ export function createBackofficeAuth() {
       ...sharedConfig.emailAndPassword,
       disableSignUp: true,
     },
+    databaseHooks: {
+      session: {
+        create: {
+          async after(session: CreatedAuthSessionRecord) {
+            await logAuthSessionCreated("backoffice", session);
+          },
+        },
+      },
+    },
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "backoffice",
@@ -1546,6 +1602,15 @@ export function createBackofficeAuth() {
       // TOTP authenticator app + encrypted backup codes only — no email OTP.
       twoFactor({
         issuer: "CalibraFácil Ops",
+        backupCodeOptions: {
+          // Better Auth stores backup codes as plain JSON unless told
+          // otherwise (the TOTP secret is always encrypted). Encrypt them at
+          // rest under the auth secret so a database leak doesn't yield
+          // working 2FA bypass codes. Rows enrolled before this option must
+          // be re-encrypted (packages/auth/scripts/encrypt-two-factor-backup-codes.ts)
+          // or regenerated. Note: rotating BETTER_AUTH_SECRET invalidates them.
+          storeBackupCodes: "encrypted",
+        },
       }),
       adminPlugin({
         ac: platformAc,
@@ -1602,6 +1667,9 @@ export function createPortalAuth() {
                 activeOrganizationId,
               },
             };
+          },
+          async after(session: CreatedAuthSessionRecord) {
+            await logAuthSessionCreated("portal", session);
           },
         },
       },
