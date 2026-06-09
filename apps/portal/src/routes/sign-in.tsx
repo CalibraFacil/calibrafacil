@@ -1,10 +1,10 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { portalAuthClient } from "@calibra-facil/auth/client";
 import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
-import { BrandLockup, BrandMark } from "@/components/brand";
+import { BrandLockup } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,19 +69,13 @@ function SignInPage() {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
-        <div className="flex justify-center gap-2 md:justify-start">
-          <Link to="/" className="flex items-center gap-2 font-medium">
-            <BrandLockup markClassName="h-7" />
-          </Link>
-        </div>
-
         <div className="flex flex-1 items-center justify-center">
           <form
             onSubmit={handleSubmit}
             className="flex w-full max-w-xs flex-col gap-6"
           >
             <div className="flex flex-col items-center gap-3 text-center">
-              <BrandMark className="h-16" />
+              <BrandLockup markClassName="h-16" textClassName="text-2xl" />
               <h1 className="text-2xl font-bold">Portal do Cliente</h1>
               <p className="text-muted-foreground text-sm text-balance">
                 Informe seu email para receber um link seguro de acesso.
