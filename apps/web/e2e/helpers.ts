@@ -1,4 +1,9 @@
 import { expect, type Page } from '@playwright/test'
+import type {
+  DesktopAuthFetchRequest,
+  DesktopSecretName,
+  DesktopSecretWrite,
+} from '@calibra-facil/contracts'
 
 export type JsonRouteOptions = {
   status?: number
@@ -89,15 +94,18 @@ export async function installDesktopBridge(
       activeOrganization: OrganizationFixture
       organizations: OrganizationFixture[]
     }) => {
+      const responseHeaders: [string, string][] = [
+        ['content-type', 'application/json'],
+      ]
       const jsonResponse = (body: unknown, status = 200) => ({
         status,
         statusText: status >= 400 ? 'Error' : 'OK',
-        headers: [['content-type', 'application/json']],
+        headers: responseHeaders,
         body: JSON.stringify(body),
       })
 
       window.calibraBridge = {
-        async authFetch(request: { url: string; body?: string | null }) {
+        async authFetch(request: DesktopAuthFetchRequest) {
           const path = new URL(request.url).pathname
 
           if (path.endsWith('/api/auth/lab/get-session')) {
@@ -133,7 +141,8 @@ export async function installDesktopBridge(
           }
 
           if (path.endsWith('/api/auth/lab/organization/set-active')) {
-            const body = request.body ? JSON.parse(request.body) : {}
+            const body =
+              typeof request.body === 'string' ? JSON.parse(request.body) : {}
             const target =
               organizations.find(
                 (organization) =>
@@ -168,31 +177,57 @@ export async function installDesktopBridge(
           return jsonResponse({})
         },
         async getAppInfo() {
-          return { version: 'e2e', platform: 'linux', arch: 'x64' }
+          return {
+            name: 'CalibraFácil',
+            version: 'e2e',
+            platform: 'linux',
+            arch: 'x64',
+            isPackaged: false,
+          }
         },
         async getLocalEnvironmentBootstrap() {
           return {
+            appVersion: 'e2e',
+            localServerVersion: 'e2e',
+            deviceId: 'device-e2e',
+            tenantId: null,
+            organizationId: activeOrganization.id,
+            unitId: null,
+            userId: 'user-1',
+            dbSchemaVersion: 1,
+            syncEnabled: false,
+            syncState: 'idle',
             httpBaseUrl: 'http://127.0.0.1:4317',
             localApiToken: 'local-e2e-token',
           }
         },
         async getSettings() {
-          return {}
+          return { autoStartSync: false, updateChannel: 'stable' }
         },
         async setSettings() {
-          return {}
+          return { autoStartSync: false, updateChannel: 'stable' }
         },
         async getSecretStatuses() {
           return []
         },
-        async setSecret(secret: unknown) {
-          return secret
+        async setSecret(secret: DesktopSecretWrite) {
+          return {
+            name: secret.name,
+            stored: true,
+            encryptionAvailable: true,
+            updatedAt: null,
+          }
         },
-        async deleteSecret(name: string) {
-          return { name, configured: false }
+        async deleteSecret(name: DesktopSecretName) {
+          return {
+            name,
+            stored: false,
+            encryptionAvailable: true,
+            updatedAt: null,
+          }
         },
         async getSyncState() {
-          return { state: 'idle' }
+          return 'idle'
         },
         async getSyncStatus() {
           return {
