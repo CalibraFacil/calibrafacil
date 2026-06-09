@@ -16,6 +16,8 @@ import {
   UpdateReferenceStandardSchema,
   ListReferenceStandardsQuerySchema,
   RenewCertificateSchema,
+  MassCompositionProfileCreateSchema,
+  MassCompositionProfileUpdateSchema,
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
@@ -57,6 +59,45 @@ const CommandPaletteStandardSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
   limit: z.coerce.number().min(1).max(10).default(5),
 });
+
+// Client-facing shape of a mass composition profile (the catalog DTO). Shared
+// by the list read (.select) and the CRUD writes (map over .returning()) so
+// they never drift.
+const compositionProfileDtoColumns = {
+  id: massCompositionProfile.id,
+  profileKey: massCompositionProfile.profileKey,
+  profileClass: massCompositionProfile.profileClass,
+  nominal: massCompositionProfile.nominal,
+  nominalG: massCompositionProfile.nominalG,
+  value: massCompositionProfile.value,
+  uncertainty: massCompositionProfile.uncertainty,
+  unit: massCompositionProfile.unit,
+  maxError: massCompositionProfile.maxError,
+  drift: massCompositionProfile.drift,
+  buoyancy: massCompositionProfile.buoyancy,
+  coverageFactor: massCompositionProfile.coverageFactor,
+  quantityAvailable: massCompositionProfile.quantityAvailable,
+};
+
+function toCompositionProfileDto(
+  row: typeof massCompositionProfile.$inferSelect,
+) {
+  return {
+    id: row.id,
+    profileKey: row.profileKey,
+    profileClass: row.profileClass,
+    nominal: row.nominal,
+    nominalG: row.nominalG,
+    value: row.value,
+    uncertainty: row.uncertainty,
+    unit: row.unit,
+    maxError: row.maxError,
+    drift: row.drift,
+    buoyancy: row.buoyancy,
+    coverageFactor: row.coverageFactor,
+    quantityAvailable: row.quantityAvailable,
+  };
+}
 
 async function resolveStandardRouteId(
   identifier: string,
@@ -389,21 +430,7 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const profiles = await db
-        .select({
-          id: massCompositionProfile.id,
-          profileKey: massCompositionProfile.profileKey,
-          profileClass: massCompositionProfile.profileClass,
-          nominal: massCompositionProfile.nominal,
-          nominalG: massCompositionProfile.nominalG,
-          value: massCompositionProfile.value,
-          uncertainty: massCompositionProfile.uncertainty,
-          unit: massCompositionProfile.unit,
-          maxError: massCompositionProfile.maxError,
-          drift: massCompositionProfile.drift,
-          buoyancy: massCompositionProfile.buoyancy,
-          coverageFactor: massCompositionProfile.coverageFactor,
-          quantityAvailable: massCompositionProfile.quantityAvailable,
-        })
+        .select(compositionProfileDtoColumns)
         .from(massCompositionProfile)
         .where(
           and(
@@ -418,6 +445,191 @@ export const standardsRouter = new Hono<{
         );
 
       return c.json({ data: profiles });
+    },
+  )
+
+  // =========================================================================
+  // POST /composition-profiles - Create (or revive) a catalog profile.
+  // (org, class, nominal_g) is unique; a soft-deleted row still holds the key,
+  // so revive it instead of failing. Registered before /:id.
+  // =========================================================================
+  .post(
+    "/composition-profiles",
+    ...withLabPermission({ standard: ["create"] }),
+    zValidator("json", MassCompositionProfileCreateSchema),
+    async (c) => {
+      const member = c.get("member");
+      const input = c.req.valid("json");
+
+      const [existing] = await db
+        .select({
+          id: massCompositionProfile.id,
+          deletedAt: massCompositionProfile.deletedAt,
+        })
+        .from(massCompositionProfile)
+        .where(
+          and(
+            eq(massCompositionProfile.organizationId, member.organizationId),
+            eq(massCompositionProfile.profileClass, input.profileClass),
+            eq(massCompositionProfile.nominalG, input.nominalG),
+          ),
+        )
+        .limit(1);
+
+      if (existing && existing.deletedAt === null) {
+        return c.json(
+          { error: "Já existe um perfil para esta classe e nominal." },
+          409,
+        );
+      }
+
+      const writableValues = {
+        profileKey: input.profileKey,
+        nominal: input.nominal,
+        value: input.value,
+        uncertainty: input.uncertainty,
+        unit: input.unit,
+        maxError: input.maxError ?? null,
+        drift: input.drift ?? null,
+        buoyancy: input.buoyancy ?? null,
+        coverageFactor: input.coverageFactor ?? null,
+        quantityAvailable: input.quantityAvailable ?? null,
+      };
+
+      const [row] = existing
+        ? await db
+            .update(massCompositionProfile)
+            .set({
+              ...writableValues,
+              status: "ACTIVE",
+              deletedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(massCompositionProfile.id, existing.id))
+            .returning()
+        : await db
+            .insert(massCompositionProfile)
+            .values({
+              organizationId: member.organizationId,
+              profileClass: input.profileClass,
+              nominalG: input.nominalG,
+              status: "ACTIVE",
+              ...writableValues,
+            })
+            .returning();
+
+      if (!row) {
+        return c.json({ error: "Falha ao salvar perfil" }, 500);
+      }
+      return c.json(toCompositionProfileDto(row), 201);
+    },
+  )
+
+  // =========================================================================
+  // PUT /composition-profiles/:id - Update a catalog profile
+  // =========================================================================
+  .put(
+    "/composition-profiles/:id",
+    ...withLabPermission({ standard: ["update"] }),
+    zValidator("json", MassCompositionProfileUpdateSchema),
+    async (c) => {
+      const member = c.get("member");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Perfil não encontrado" }, 404);
+      }
+
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+      for (const key of [
+        "profileKey",
+        "profileClass",
+        "nominal",
+        "nominalG",
+        "value",
+        "uncertainty",
+        "unit",
+        "maxError",
+        "drift",
+        "buoyancy",
+        "coverageFactor",
+        "quantityAvailable",
+      ] as const) {
+        if (input[key] !== undefined) updateData[key] = input[key];
+      }
+
+      let rows;
+      try {
+        rows = await db
+          .update(massCompositionProfile)
+          .set(updateData)
+          .where(
+            and(
+              eq(massCompositionProfile.id, id),
+              eq(massCompositionProfile.organizationId, member.organizationId),
+              isNull(massCompositionProfile.deletedAt),
+            ),
+          )
+          .returning();
+      } catch (error) {
+        // 23505 = unique_violation: identity moved onto an existing (class, nominal_g).
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "23505"
+        ) {
+          return c.json(
+            { error: "Já existe um perfil para esta classe e nominal." },
+            409,
+          );
+        }
+        throw error;
+      }
+
+      const [row] = rows;
+      if (!row) {
+        return c.json({ error: "Perfil não encontrado" }, 404);
+      }
+      return c.json(toCompositionProfileDto(row));
+    },
+  )
+
+  // =========================================================================
+  // DELETE /composition-profiles/:id - Soft-delete a catalog profile
+  // =========================================================================
+  .delete(
+    "/composition-profiles/:id",
+    ...withLabPermission({ standard: ["delete"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = Number.parseInt(c.req.param("id"), 10);
+
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Perfil não encontrado" }, 404);
+      }
+
+      const [row] = await db
+        .update(massCompositionProfile)
+        .set({
+          status: "INACTIVE",
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(massCompositionProfile.id, id),
+            eq(massCompositionProfile.organizationId, member.organizationId),
+            isNull(massCompositionProfile.deletedAt),
+          ),
+        )
+        .returning();
+
+      if (!row) {
+        return c.json({ error: "Perfil não encontrado" }, 404);
+      }
+      return c.json({ success: true, id: row.id });
     },
   )
 

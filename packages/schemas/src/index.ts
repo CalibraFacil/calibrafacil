@@ -1197,6 +1197,35 @@ export const ReferenceStandardCompositionProfileSchema = z.object({
   quantityAvailable: z.coerce.number().nullable().optional(),
 });
 
+/**
+ * Mass composition profile catalog — the org-shared, normalized buildup-weight
+ * inventory keyed by (organization, class, nominal_g). Edited in the catalog UI
+ * (not per-standard). Metrology numbers are gram-canonical (unit defaults "g").
+ */
+export const MassCompositionProfileCreateSchema = z.object({
+  profileKey: z.string().trim().min(1, "Perfil é obrigatório"),
+  profileClass: z.string().trim().min(1, "Classe é obrigatória"),
+  nominal: z.string().trim().min(1, "Valor nominal é obrigatório"),
+  nominalG: z.coerce.number().positive("Nominal (g) deve ser positivo"),
+  value: z.coerce.number({ message: "Valor é obrigatório" }),
+  uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
+  unit: z.string().trim().min(1, "Unidade é obrigatória").default("g"),
+  maxError: z.coerce.number().nullable().optional(),
+  drift: z.coerce.number().nullable().optional(),
+  buoyancy: z.coerce.number().nullable().optional(),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+  quantityAvailable: z.coerce.number().int().nonnegative().nullable().optional(),
+});
+export type MassCompositionProfileCreateInput = z.infer<
+  typeof MassCompositionProfileCreateSchema
+>;
+
+export const MassCompositionProfileUpdateSchema =
+  MassCompositionProfileCreateSchema.partial();
+export type MassCompositionProfileUpdateInput = z.infer<
+  typeof MassCompositionProfileUpdateSchema
+>;
+
 export const ReferenceStandardMetrologyDataSchema = z
   .object({
     version: z.literal(1).default(1),

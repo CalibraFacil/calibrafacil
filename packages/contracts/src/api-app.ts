@@ -270,6 +270,7 @@ type ApiRoutePath =
   | "/api/sso/start"
   | "/api/standards"
   | "/api/standards/composition-profiles"
+  | "/api/standards/composition-profiles/:id"
   | "/api/standards/:id"
   | "/api/standards/:id/audit-log"
   | "/api/standards/:id/certificate-document"

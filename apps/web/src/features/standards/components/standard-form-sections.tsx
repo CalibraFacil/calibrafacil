@@ -23,11 +23,9 @@ import {
   createChannelsForKind,
   createStandardCertifiedValueDraft,
   createStandardChannelDraft,
-  createStandardCompositionProfileDraft,
   createStandardPointDraft,
   STANDARD_STATUS_LABELS,
   type StandardCertifiedValueFormData,
-  type StandardCompositionProfileFormData,
   type StandardFormData,
   type StandardFormField,
   type StandardMetrologyChannelFormData,
@@ -188,19 +186,6 @@ export function StandardFormSections({
               ),
             }
           : channel,
-      ),
-    )
-  }
-
-  const updateProfile = (
-    index: number,
-    field: keyof StandardCompositionProfileFormData,
-    value: string,
-  ) => {
-    updateField(
-      'compositionProfiles',
-      formData.compositionProfiles.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
       ),
     )
   }
@@ -648,132 +633,6 @@ export function StandardFormSections({
               </Button>
               {errors.certifiedValues && (
                 <FieldError>{errors.certifiedValues}</FieldError>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-sm font-medium">Perfis de composição</h3>
-                <p className="text-sm text-muted-foreground">
-                  Perfis agregados usados para composições de carga.
-                </p>
-              </div>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-28">Perfil</TableHead>
-                      <TableHead className="min-w-20">Classe</TableHead>
-                      <TableHead className="min-w-28">Nominal</TableHead>
-                      <TableHead className="min-w-28">Valor</TableHead>
-                      <TableHead className="min-w-28">Incerteza</TableHead>
-                      <TableHead className="w-24">Unid.</TableHead>
-                      <TableHead className="w-24">Qtd.</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {formData.compositionProfiles.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={8}
-                          className="h-14 text-center text-muted-foreground"
-                        >
-                          Nenhum perfil cadastrado.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      formData.compositionProfiles.map((profile, index) => (
-                        <TableRow key={`${profile.profileKey}-${index}`}>
-                          <EditableCell
-                            value={profile.profileKey}
-                            onChange={(next) =>
-                              updateProfile(index, 'profileKey', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            value={profile.profileClass}
-                            onChange={(next) =>
-                              updateProfile(index, 'profileClass', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            value={profile.nominal}
-                            onChange={(next) =>
-                              updateProfile(index, 'nominal', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            type="number"
-                            value={profile.value}
-                            onChange={(next) =>
-                              updateProfile(index, 'value', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            type="number"
-                            value={profile.uncertainty}
-                            onChange={(next) =>
-                              updateProfile(index, 'uncertainty', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            value={profile.unit}
-                            onChange={(next) =>
-                              updateProfile(index, 'unit', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <EditableCell
-                            type="number"
-                            value={profile.quantityAvailable}
-                            onChange={(next) =>
-                              updateProfile(index, 'quantityAvailable', next)
-                            }
-                            disabled={disabled}
-                          />
-                          <TableCell>
-                            <RemoveRowButton
-                              label="Remover perfil"
-                              disabled={disabled}
-                              onClick={() =>
-                                updateField(
-                                  'compositionProfiles',
-                                  formData.compositionProfiles.filter(
-                                    (_, itemIndex) => itemIndex !== index,
-                                  ),
-                                )
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={disabled}
-                onClick={() =>
-                  updateField('compositionProfiles', [
-                    ...formData.compositionProfiles,
-                    createStandardCompositionProfileDraft(),
-                  ])
-                }
-              >
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-                Adicionar perfil
-              </Button>
-              {errors.compositionProfiles && (
-                <FieldError>{errors.compositionProfiles}</FieldError>
               )}
             </div>
           </div>

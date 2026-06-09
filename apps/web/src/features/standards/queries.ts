@@ -1,4 +1,11 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
+import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -174,4 +181,47 @@ export function useStandardAuditLogData(id: string) {
 
 export function useCompositionProfilesCatalog() {
   return useQuery(compositionProfilesCatalogQueryOptions())
+}
+
+const compositionProfilesCatalogKey = ['standards', 'composition-profiles']
+
+export function useCreateCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: MassCompositionProfileWriteInput) =>
+      calibraApi.standards.createCompositionProfile(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
+}
+
+export function useUpdateCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number
+      input: Partial<MassCompositionProfileWriteInput>
+    }) => calibraApi.standards.updateCompositionProfile(id, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
+}
+
+export function useDeleteCompositionProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      calibraApi.standards.deleteCompositionProfile(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: compositionProfilesCatalogKey,
+      }),
+  })
 }

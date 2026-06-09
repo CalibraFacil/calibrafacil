@@ -1,5 +1,7 @@
 import type {
+  MassCompositionProfileDto,
   MassCompositionProfilesData,
+  MassCompositionProfileWriteInput,
   StandardAuditLogData,
   StandardCertificateDocumentDownloadResponse,
   StandardCertificateDocumentUploadResponse,
@@ -64,6 +66,36 @@ export function createStandardsApi(
       return readJsonResponse<MassCompositionProfilesData>(
         await rawCloudClient.api.standards["composition-profiles"].$get(),
         "Falha ao carregar perfis de composição",
+      );
+    },
+    async createCompositionProfile(input: MassCompositionProfileWriteInput) {
+      return readJsonResponse<MassCompositionProfileDto>(
+        await rawCloudClient.api.standards["composition-profiles"].$post({
+          json: input,
+        }),
+        "Erro ao criar perfil de composição",
+      );
+    },
+    async updateCompositionProfile(
+      id: number,
+      input: Partial<MassCompositionProfileWriteInput>,
+    ) {
+      return readJsonResponse<MassCompositionProfileDto>(
+        await rawCloudClient.api.standards["composition-profiles"][":id"].$put({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao atualizar perfil de composição",
+      );
+    },
+    async deleteCompositionProfile(id: number) {
+      return readJsonResponse<{ success: boolean; id: number }>(
+        await rawCloudClient.api.standards["composition-profiles"][
+          ":id"
+        ].$delete({
+          param: { id: String(id) },
+        }),
+        "Erro ao remover perfil de composição",
       );
     },
     async auditLog<TRecord = unknown>(id: string | number) {

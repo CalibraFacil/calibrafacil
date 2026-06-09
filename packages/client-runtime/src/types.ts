@@ -560,10 +560,35 @@ export type MassCompositionProfilesData = {
   data: MassCompositionProfileDto[];
 };
 
+export type MassCompositionProfileWriteInput = {
+  profileKey: string;
+  profileClass: string;
+  nominal: string;
+  nominalG: number;
+  value: number;
+  uncertainty: number;
+  unit?: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  quantityAvailable?: number | null;
+};
+
 export interface StandardsApi {
   list(input?: StandardsListInput): Promise<StandardsListData>;
   get(id: string | number): Promise<StandardData>;
   listCompositionProfiles(): Promise<MassCompositionProfilesData>;
+  createCompositionProfile(
+    input: MassCompositionProfileWriteInput,
+  ): Promise<MassCompositionProfileDto>;
+  updateCompositionProfile(
+    id: number,
+    input: Partial<MassCompositionProfileWriteInput>,
+  ): Promise<MassCompositionProfileDto>;
+  deleteCompositionProfile(
+    id: number,
+  ): Promise<{ success: boolean; id: number }>;
   auditLog<TRecord = unknown>(
     id: string | number,
   ): Promise<StandardAuditLogData<TRecord>>;

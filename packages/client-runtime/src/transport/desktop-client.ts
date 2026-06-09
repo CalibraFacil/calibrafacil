@@ -39,7 +39,9 @@ import type {
   ServicesListData,
   SsoSettingsResponse,
   StandardAuditLogData,
+  MassCompositionProfileDto,
   MassCompositionProfilesData,
+  MassCompositionProfileWriteInput,
   StandardData,
   StandardsListData,
   TechnicianListData,
@@ -1696,6 +1698,69 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<MassCompositionProfilesData>(response);
+      },
+      async createCompositionProfile(input: MassCompositionProfileWriteInput) {
+        const response = await fetchImpl(
+          new URL("/api/standards/composition-profiles", options.baseUrl),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider, {
+              "Content-Type": "application/json",
+            }),
+            body: JSON.stringify(input),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Erro ao criar perfil de composição");
+        }
+
+        return readDesktopJson<MassCompositionProfileDto>(response);
+      },
+      async updateCompositionProfile(
+        id: number,
+        input: Partial<MassCompositionProfileWriteInput>,
+      ) {
+        const response = await fetchImpl(
+          new URL(
+            `/api/standards/composition-profiles/${encodeURIComponent(String(id))}`,
+            options.baseUrl,
+          ),
+          {
+            method: "PUT",
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider, {
+              "Content-Type": "application/json",
+            }),
+            body: JSON.stringify(input),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Erro ao atualizar perfil de composição");
+        }
+
+        return readDesktopJson<MassCompositionProfileDto>(response);
+      },
+      async deleteCompositionProfile(id: number) {
+        const response = await fetchImpl(
+          new URL(
+            `/api/standards/composition-profiles/${encodeURIComponent(String(id))}`,
+            options.baseUrl,
+          ),
+          {
+            method: "DELETE",
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Erro ao remover perfil de composição");
+        }
+
+        return readDesktopJson<{ success: boolean; id: number }>(response);
       },
       async auditLog<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
