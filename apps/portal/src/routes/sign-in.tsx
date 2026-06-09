@@ -5,7 +5,6 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup, BrandMark } from "@/components/brand";
-import { useBranding } from "@/features/branding/branding-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +23,6 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   const { redirect, error: magicLinkError } = Route.useSearch();
-  const branding = useBranding();
 
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -73,7 +71,7 @@ function SignInPage() {
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <Link to="/" className="flex items-center gap-2 font-medium">
-            <BrandLockup markClassName="size-7" />
+            <BrandLockup markClassName="h-7" />
           </Link>
         </div>
 
@@ -83,7 +81,7 @@ function SignInPage() {
             className="flex w-full max-w-xs flex-col gap-6"
           >
             <div className="flex flex-col items-center gap-3 text-center">
-              <BrandMark className="size-12" />
+              <BrandMark className="h-16" />
               <h1 className="text-2xl font-bold">Portal do Cliente</h1>
               <p className="text-muted-foreground text-sm text-balance">
                 Informe seu email para receber um link seguro de acesso.
@@ -163,15 +161,14 @@ function SignInPage() {
         <div className="absolute -top-1/2 -left-1/2 h-full w-full rounded-full bg-chart-1/20 blur-[100px]" />
         <div className="absolute -right-1/2 -bottom-1/2 h-full w-full rounded-full bg-primary/20 blur-[100px]" />
 
-        <div className="relative z-10 mt-auto max-w-md">
-          <blockquote className="space-y-2">
-            <p className="text-lg">
-              &ldquo;Centralize certificados, históricos de calibração e
-              documentos do laboratório em uma experiência simples para o
-              cliente.&rdquo;
-            </p>
-            <footer className="text-sm">Portal {branding.name}</footer>
-          </blockquote>
+        <div className="relative z-10 mt-auto max-w-md space-y-3">
+          <p className="text-2xl font-semibold tracking-tight text-balance">
+            Tudo da sua calibração em um só lugar
+          </p>
+          <p className="text-muted-foreground text-base text-balance">
+            Consulte certificados, acompanhe o status dos seus equipamentos e
+            baixe documentos a qualquer momento.
+          </p>
         </div>
       </div>
     </div>

@@ -8,6 +8,9 @@ interface BrandLockupProps extends React.ComponentProps<"div"> {
   textClassName?: string;
 }
 
+// The mark is sized by HEIGHT with auto width, so a lab's white-label logo
+// (often wider than tall) fills the available height instead of being shrunk
+// into a square box. Callers pass a height class (e.g. `h-12`).
 export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
   const branding = useBranding();
   // Preserve an explicitly-empty alt (decorative usage); otherwise default to
@@ -16,11 +19,16 @@ export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
 
   if (branding.logo) {
     return (
-      <span className={cn("relative inline-flex size-8 shrink-0", className)}>
+      <span
+        className={cn(
+          "inline-flex h-8 w-auto shrink-0 items-center",
+          className,
+        )}
+      >
         <img
           src={branding.logo}
           alt={altText}
-          className="size-full object-contain"
+          className="h-full w-auto max-w-[14rem] object-contain"
           draggable={false}
           {...props}
         />
@@ -29,18 +37,20 @@ export function BrandMark({ alt, className, ...props }: BrandMarkProps) {
   }
 
   return (
-    <span className={cn("relative inline-flex size-8 shrink-0", className)}>
+    <span
+      className={cn("inline-flex h-8 w-auto shrink-0 items-center", className)}
+    >
       <img
         src="/logo-mark-light.svg"
         alt={altText}
-        className="size-full dark:hidden"
+        className="h-full w-auto object-contain dark:hidden"
         draggable={false}
         {...props}
       />
       <img
         src="/logo-mark-dark.svg"
         alt={altText}
-        className="hidden size-full dark:block"
+        className="hidden h-full w-auto object-contain dark:block"
         draggable={false}
         {...props}
       />
@@ -61,7 +71,7 @@ export function BrandLockup({
       <BrandMark
         alt=""
         aria-hidden="true"
-        className={cn("size-8", markClassName)}
+        className={cn("h-8", markClassName)}
       />
       <span
         className={cn("text-lg font-semibold tracking-tight", textClassName)}
