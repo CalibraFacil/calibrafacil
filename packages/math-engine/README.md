@@ -2,9 +2,9 @@
 
 Secure, dependency-light, ESM-first TypeScript calculation engine for calibration formulas and GUM-aligned uncertainty propagation.
 
-**Status for this implementation:** PENDENTE DE APROVAÇÃO / NÃO LIBERADO PARA PRODUÇÃO REGULADA.
+**Status for this implementation:** Em produção no Calibra Fácil / In production use.
 
-This repository documents and tests only the new `@calibra-facil/math-engine` package and its current API. It is not a UI, report renderer, certificate generator, accreditation claim, legal-compliance claim, or substitute for laboratory method validation. The implementation is intended to be GUM-method compatible and audit-friendly, but regulated deployments require independent validation evidence generated for this package version.
+This package is the calculation core only — not a UI, report renderer, certificate generator, accreditation claim, legal-compliance claim, or substitute for laboratory method validation. It implements the GUM (JCGM 100:2008) methodology and is audit-friendly; regulated use relies on the validation evidence maintained per engine version (a fresh validation pass is expected on each `ENGINE_VERSION` bump).
 
 ## Build and test
 
