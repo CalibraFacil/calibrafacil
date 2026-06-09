@@ -58,6 +58,10 @@
       "destination": "/api/cron/operator-alerts"
     },
     {
+      "source": "/api/cron/auth-maintenance",
+      "destination": "/api/cron/auth-maintenance"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     }
