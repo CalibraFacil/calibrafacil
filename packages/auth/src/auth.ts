@@ -801,6 +801,37 @@ async function canSendLabPasswordlessEmail(email: string, setupToken?: string) {
   );
 }
 
+/**
+ * Point the magic-link email at the web confirmation page (`/magic-link`) instead of
+ * Better Auth's single-use `/magic-link/verify` GET. An email scanner or
+ * link-preview that prefetches the raw verify URL would consume the one-time
+ * token before the user clicks; the confirmation page only verifies on a real
+ * click, so sign-in survives prefetching. Falls back to the raw verify URL when
+ * the token isn't available or the URL can't be parsed.
+ */
+function buildLabMagicLinkAccessUrl(data: {
+  url: string;
+  token?: string;
+}): string {
+  if (!data.token) return data.url;
+
+  try {
+    const verifyUrl = new URL(data.url);
+    const callbackURL = verifyUrl.searchParams.get("callbackURL");
+    const confirmUrl = new URL(
+      "/magic-link",
+      resolveWebBaseUrl(isProductionRuntime()),
+    );
+    confirmUrl.searchParams.set("token", data.token);
+    if (callbackURL) {
+      confirmUrl.searchParams.set("callbackURL", callbackURL);
+    }
+    return confirmUrl.toString();
+  } catch {
+    return data.url;
+  }
+}
+
 async function sendLabMagicLink(
   data: { email: string; url: string; token?: string },
   ctx?: unknown,
@@ -834,20 +865,22 @@ async function sendLabMagicLink(
     process.env.EMAIL_FROM ||
     "Calibra Fácil <noreply@calibrafacil.com>";
 
+  const accessUrl = buildLabMagicLinkAccessUrl(data);
+
   await resend.emails.send({
     from: fromEmail,
     to: normalizedEmail,
     subject: "Acesse o CalibraFácil",
     react: LabAccessLinkEmail({
       recipientName: normalizedEmail,
-      accessUrl: data.url,
+      accessUrl,
       logoSrc: getEmailLogoSrc(),
     }),
     text: [
       "Acesse o CalibraFácil",
       "",
       "Use o link abaixo para entrar no dashboard:",
-      data.url,
+      accessUrl,
       "",
       "Se você não solicitou acesso, ignore esta mensagem.",
     ].join("\n"),

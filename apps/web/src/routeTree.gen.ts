@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermosDeUsoRouteImport } from './routes/termos-de-uso'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as MagicLinkRouteImport } from './routes/magic-link'
 import { Route as ClaimAccountRouteImport } from './routes/claim-account'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -136,6 +137,11 @@ const TermosDeUsoRoute = TermosDeUsoRouteImport.update({
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MagicLinkRoute = MagicLinkRouteImport.update({
+  id: '/magic-link',
+  path: '/magic-link',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClaimAccountRoute = ClaimAccountRouteImport.update({
@@ -778,6 +784,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/claim-account': typeof ClaimAccountRoute
+  '/magic-link': typeof MagicLinkRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
@@ -897,6 +904,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/claim-account': typeof ClaimAccountRoute
+  '/magic-link': typeof MagicLinkRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
@@ -1001,6 +1009,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/claim-account': typeof ClaimAccountRoute
+  '/magic-link': typeof MagicLinkRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
@@ -1123,6 +1132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/claim-account'
+    | '/magic-link'
     | '/privacidade'
     | '/termos-de-uso'
     | '/dashboard/assets'
@@ -1242,6 +1252,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/claim-account'
+    | '/magic-link'
     | '/privacidade'
     | '/termos-de-uso'
     | '/dashboard/internal'
@@ -1345,6 +1356,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/claim-account'
+    | '/magic-link'
     | '/privacidade'
     | '/termos-de-uso'
     | '/dashboard/assets'
@@ -1466,6 +1478,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   ClaimAccountRoute: typeof ClaimAccountRoute
+  MagicLinkRoute: typeof MagicLinkRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
@@ -1489,6 +1502,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidade'
       fullPath: '/privacidade'
       preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/magic-link': {
+      id: '/magic-link'
+      path: '/magic-link'
+      fullPath: '/magic-link'
+      preLoaderRoute: typeof MagicLinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/claim-account': {
@@ -2769,6 +2789,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
   ClaimAccountRoute: ClaimAccountRoute,
+  MagicLinkRoute: MagicLinkRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
