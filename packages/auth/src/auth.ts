@@ -680,6 +680,30 @@ async function hasExistingPortalAccess(email: string): Promise<boolean> {
   return Boolean(existingPortalMember);
 }
 
+/**
+ * Wrap a portal magic-link verify URL in the portal web confirmation page
+ * (`/magic-link`). The verify GET is single-use, so an email scanner/prefetcher
+ * that fetches the raw link would consume the token before the user clicks; the
+ * confirmation page only verifies on a real click. The portal origin is derived
+ * from the callbackURL (which carries it — and may be a custom domain). Falls
+ * back to the raw verify URL if it can't be rebuilt.
+ */
+function buildPortalMagicLinkAccessUrl(magicLinkUrl: string): string {
+  try {
+    const verifyUrl = new URL(magicLinkUrl);
+    const token = verifyUrl.searchParams.get("token");
+    const callbackURL = verifyUrl.searchParams.get("callbackURL");
+    if (!token || !callbackURL) return magicLinkUrl;
+
+    const confirmUrl = new URL("/magic-link", new URL(callbackURL).origin);
+    confirmUrl.searchParams.set("token", token);
+    confirmUrl.searchParams.set("callbackURL", callbackURL);
+    return confirmUrl.toString();
+  } catch {
+    return magicLinkUrl;
+  }
+}
+
 async function sendPortalMagicLink(
   data: { email: string; url: string },
   ctx?: unknown,
@@ -720,6 +744,12 @@ async function sendPortalMagicLink(
       magicLinkUrl = data.url;
     }
   }
+
+  // Route both the normal and invitation magic links through the portal
+  // confirmation page so an email scanner/prefetcher can't consume the
+  // single-use token before the user clicks. Falls back to the raw verify URL.
+  magicLinkUrl = buildPortalMagicLinkAccessUrl(magicLinkUrl);
+
   const labBrand = pendingInvitation
     ? await findLabBrandForClientOrganization(pendingInvitation.organizationId)
     : undefined;

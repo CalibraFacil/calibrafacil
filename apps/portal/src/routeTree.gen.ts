@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as MagicLinkRouteImport } from './routes/magic-link'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
@@ -34,6 +35,11 @@ import { Route as AuthenticatedAssetsIdRouteImport } from './routes/_authenticat
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MagicLinkRoute = MagicLinkRouteImport.update({
+  id: '/magic-link',
+  path: '/magic-link',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
@@ -152,6 +158,7 @@ const AuthenticatedAssetsIdRoute = AuthenticatedAssetsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/magic-link': typeof MagicLinkRoute
   '/sign-in': typeof SignInRoute
   '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
@@ -173,6 +180,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
+  '/magic-link': typeof MagicLinkRoute
   '/sign-in': typeof SignInRoute
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
+  '/magic-link': typeof MagicLinkRoute
   '/sign-in': typeof SignInRoute
   '/_authenticated/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/_authenticated/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/accept-invite'
+    | '/magic-link'
     | '/sign-in'
     | '/assets'
     | '/requests'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/accept-invite'
+    | '/magic-link'
     | '/sign-in'
     | '/service-order-access/$token'
     | '/v/$token'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/accept-invite'
+    | '/magic-link'
     | '/sign-in'
     | '/_authenticated/assets'
     | '/_authenticated/requests'
@@ -282,6 +294,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
+  MagicLinkRoute: typeof MagicLinkRoute
   SignInRoute: typeof SignInRoute
   ServiceOrderAccessTokenRoute: typeof ServiceOrderAccessTokenRoute
   VTokenRoute: typeof VTokenRoute
@@ -294,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/magic-link': {
+      id: '/magic-link'
+      path: '/magic-link'
+      fullPath: '/magic-link'
+      preLoaderRoute: typeof MagicLinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accept-invite': {
@@ -532,6 +552,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
+  MagicLinkRoute: MagicLinkRoute,
   SignInRoute: SignInRoute,
   ServiceOrderAccessTokenRoute: ServiceOrderAccessTokenRoute,
   VTokenRoute: VTokenRoute,
