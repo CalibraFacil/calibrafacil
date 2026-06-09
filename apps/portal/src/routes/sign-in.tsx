@@ -5,6 +5,7 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup, BrandMark } from "@/components/brand";
+import { useBranding } from "@/features/branding/branding-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   const { redirect, error: magicLinkError } = Route.useSearch();
+  const branding = useBranding();
 
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -168,7 +170,7 @@ function SignInPage() {
               documentos do laboratório em uma experiência simples para o
               cliente.&rdquo;
             </p>
-            <footer className="text-sm">Portal CalibraFácil</footer>
+            <footer className="text-sm">Portal {branding.name}</footer>
           </blockquote>
         </div>
       </div>

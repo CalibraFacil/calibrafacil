@@ -32,7 +32,7 @@ describe('dashboard route metadata', () => {
 
   it('keeps legacy dashboard redirects in route metadata', () => {
     expect(getDashboardRedirectPath('/dashboard/settings/branding')).toBe(
-      '/dashboard/certificate-templates',
+      '/dashboard/settings/portal-domain',
     )
     expect(getDashboardRedirectPath('/dashboard/settings/profile')).toBeNull()
   })

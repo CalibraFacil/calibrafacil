@@ -55,8 +55,9 @@ export const dashboardRouteMeta = [
 
 export const dashboardRedirectRouteMeta = [
   {
+    // Portal branding now lives alongside the custom-domain workspace.
     from: '/dashboard/settings/branding',
-    to: '/dashboard/certificate-templates',
+    to: '/dashboard/settings/portal-domain',
   },
   {
     // Documents + receipts merged into the unified Recebíveis workspace.
