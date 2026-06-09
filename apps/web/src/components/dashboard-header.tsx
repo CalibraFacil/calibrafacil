@@ -117,6 +117,7 @@ const routeLabels: Record<string, string> = {
   // Standards
   '/dashboard/standards': 'Padrões',
   '/dashboard/standards/new': 'Novo Padrão',
+  '/dashboard/standards/composition-profiles': 'Perfis de composição',
   '/dashboard/standards/$id': 'Padrão',
   '/dashboard/standards/$id/edit': 'Editar Padrão',
 
