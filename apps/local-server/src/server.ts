@@ -244,7 +244,10 @@ export function createLocalServer(
     }),
   );
 
-  app.use("/api/*", async (c, next) => {
+  const requireLocalApiToken: Parameters<typeof app.use>[1] = async (
+    c,
+    next,
+  ) => {
     if (!config.bootstrapToken) {
       await next();
       return;
@@ -264,20 +267,32 @@ export function createLocalServer(
     }
 
     await next();
-  });
+  };
+
+  app.use("/api/*", requireLocalApiToken);
 
   registerPrinterRoutes(app, database);
 
-  app.get("/.well-known/calibra/local-environment", (c) => {
-    const context = getLocalRequestContext(config, database);
-    return c.json({
-      ...createLocalEnvironmentBootstrap(config),
-      organizationId: context.organizationId,
-      unitId: context.unitId,
-      userId: context.userId,
-      dbSchemaVersion: getLocalSchemaVersion(database),
-    });
-  });
+  // The environment bootstrap reveals the signed-in user/org/unit, so any
+  // local process could otherwise enumerate who is logged in. It requires the
+  // same token as /api/* — the desktop main process, which spawns this server
+  // and generates the token, is its only consumer (readiness probe + IPC
+  // bootstrap). Standalone dev without a bootstrapToken skips the check,
+  // matching /api/*.
+  app.get(
+    "/.well-known/calibra/local-environment",
+    requireLocalApiToken,
+    (c) => {
+      const context = getLocalRequestContext(config, database);
+      return c.json({
+        ...createLocalEnvironmentBootstrap(config),
+        organizationId: context.organizationId,
+        unitId: context.unitId,
+        userId: context.userId,
+        dbSchemaVersion: getLocalSchemaVersion(database),
+      });
+    },
+  );
 
   app.get("/api/local/app-info", (c) => {
     const environment = createLocalEnvironmentBootstrap(config);

@@ -31,6 +31,7 @@ import {
   environmentalLimits,
   type EnvironmentalSnapshot,
   jobAuditLog,
+  member,
   organizationEventLog,
   massCompositionProfile,
   referenceStandard,
@@ -481,6 +482,8 @@ export const syncRouter = new Hono<{
         remotePayload: unknown;
       }> = [];
 
+      const actorMembershipCache = new Map<string, boolean>();
+
       for (const event of body.events) {
         if (event.organizationId !== memberData.organizationId) {
           rejected.push({
@@ -500,6 +503,23 @@ export const syncRouter = new Hono<{
             eventId: event.eventId,
             code: "UNIT_SCOPE_MISMATCH",
             reason: "Sync event unit is not accessible to this member.",
+          });
+          continue;
+        }
+
+        const claimedActorUserId = getClaimedSyncActorUserId(event.actorUserId);
+        const actorAllowed = await validateSyncActorScope(
+          claimedActorUserId,
+          memberData,
+          session.user.id,
+          actorMembershipCache,
+        );
+        if (!actorAllowed) {
+          rejected.push({
+            eventId: event.eventId,
+            code: "ACTOR_SCOPE_MISMATCH",
+            reason:
+              "Sync event actor is not a member of the active organization.",
           });
           continue;
         }
@@ -1221,6 +1241,26 @@ async function applyDesktopCertificatePdfUpload(
     });
   }
 
+  const actorAllowed = await validateSyncActorScope(
+    getClaimedSyncActorUserId(upload.actorUserId),
+    input.memberData,
+    input.sessionUserId,
+  );
+  if (!actorAllowed) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: upload.eventId,
+          code: "ACTOR_SCOPE_MISMATCH",
+          reason:
+            "Certificate PDF upload actor is not a member of the active organization.",
+        },
+      ],
+      conflicts: [],
+    });
+  }
+
   try {
     const existingRemoteKey = await findDesktopSyncRemoteEntityId(
       input.memberData.organizationId,
@@ -1428,6 +1468,11 @@ async function applyDesktopCertificatePdfUpload(
         portalVisible: true,
         contentHash,
         sizeBytes: bytes.byteLength,
+        // Keep the offline-actor vs pushing-user discrepancy visible in the
+        // audit trail (the actor was validated as an org member at push time).
+        ...(actorUserId !== input.sessionUserId
+          ? { pushedByUserId: input.sessionUserId }
+          : {}),
       },
     });
 
@@ -3692,6 +3737,11 @@ async function writeDesktopSyncAudit(
       localVersion: input.event.localVersion,
       payload: input.event.payload,
       localEntityId: input.event.entityId,
+      // Keep the offline-actor vs pushing-user discrepancy visible in the
+      // audit trail (the actor was validated as an org member at push time).
+      ...(actorUserId !== input.sessionUserId
+        ? { pushedByUserId: input.sessionUserId }
+        : {}),
       ...details,
     },
   });
@@ -3701,6 +3751,59 @@ function getSyncActorUserId(event: SyncEvent, fallbackUserId: string) {
   return event.actorUserId && event.actorUserId !== "local"
     ? event.actorUserId
     : fallbackUserId;
+}
+
+function getClaimedSyncActorUserId(actorUserId: string | null | undefined) {
+  const claimed = actorUserId?.trim();
+  return claimed && claimed !== "local" ? claimed : null;
+}
+
+async function isOrganizationMemberUser(
+  userId: string,
+  organizationId: string,
+) {
+  const [record] = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    )
+    .limit(1);
+
+  return Boolean(record);
+}
+
+/**
+ * Desktop sync events carry a client-asserted actorUserId (who performed the
+ * work offline). The pushing session proves org/unit scope, but the actor id
+ * itself must not be taken on faith: an arbitrary value would let a tampered
+ * client attribute creations/executions/approvals to someone else in the
+ * audit trail. Policy: the claimed actor must be the authenticated user or a
+ * member of the active organization (device-handoff case); anything else is
+ * rejected. When the claimed actor differs from the pushing user, audit
+ * entries additionally record pushedByUserId so the discrepancy stays
+ * visible.
+ */
+async function validateSyncActorScope(
+  claimedActorUserId: string | null,
+  memberData: MemberData,
+  sessionUserId: string,
+  cache?: Map<string, boolean>,
+) {
+  if (!claimedActorUserId || claimedActorUserId === sessionUserId) {
+    return true;
+  }
+
+  let isMember = cache?.get(claimedActorUserId);
+  if (isMember === undefined) {
+    isMember = await isOrganizationMemberUser(
+      claimedActorUserId,
+      memberData.organizationId,
+    );
+    cache?.set(claimedActorUserId, isMember);
+  }
+
+  return isMember;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

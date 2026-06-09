@@ -139,7 +139,11 @@ export const session = pgTable(
       onDelete: "set null",
     }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)],
+  (table) => [
+    index("session_userId_idx").on(table.userId),
+    // Expired-session cleanup (auth-maintenance cron) sweeps by expiry.
+    index("session_expires_at_idx").on(table.expiresAt),
+  ],
 );
 
 export const account = pgTable(
@@ -185,7 +189,11 @@ export const verification = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
+  (table) => [
+    index("verification_identifier_idx").on(table.identifier),
+    // Expired-verification cleanup (auth-maintenance cron) sweeps by expiry.
+    index("verification_expires_at_idx").on(table.expiresAt),
+  ],
 );
 
 export const passkey = pgTable(
@@ -3513,7 +3521,8 @@ export const massCompositionProfile = pgTable(
   ],
 );
 
-export type MassCompositionProfileRow = typeof massCompositionProfile.$inferSelect;
+export type MassCompositionProfileRow =
+  typeof massCompositionProfile.$inferSelect;
 
 export const referenceStandardCertificateDocument = pgTable(
   "reference_standard_certificate_document",

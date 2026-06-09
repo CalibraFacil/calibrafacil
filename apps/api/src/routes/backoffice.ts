@@ -3041,6 +3041,12 @@ export const backofficeRouter = new Hono<{
       const backofficeAuth = createBackofficeAuth();
       const session = c.get("session");
       const targetUserId = c.req.param("id");
+      // Access policy (deliberate): impersonation is available to
+      // platform_operator as well as platform_admin — customer-success
+      // operators use it for support — unlike the admin-only user-management
+      // routes below (role/ban/password-reset/session-revoke). The lab-side
+      // admin plugin still refuses to impersonate platform admins without the
+      // dedicated permission, and every attempt is audited.
       // Governance: impersonation requires a recorded justification (LGPD / trust).
       // The reason is written to the immutable platformEventLog and is visible in
       // the backoffice Audit Log.
