@@ -35,7 +35,8 @@ export type CalibrationStatus =
   | "OVERDUE"
   | "DUE_SOON"
   | "SCHEDULED"
-  | "UNSCHEDULED";
+  | "UNSCHEDULED"
+  | "IN_LAB";
 
 /** An instrument counts as "due soon" within this many days of its due date. */
 export const DUE_SOON_DAYS = 30;
@@ -56,6 +57,7 @@ const TONE_BY_STATUS: Record<CalibrationStatus, SignalTone> = {
   DUE_SOON: "warning",
   SCHEDULED: "ok",
   UNSCHEDULED: "neutral",
+  IN_LAB: "info",
 };
 
 const LABEL_BY_STATUS: Record<CalibrationStatus, string> = {
@@ -63,6 +65,7 @@ const LABEL_BY_STATUS: Record<CalibrationStatus, string> = {
   DUE_SOON: "Vence em breve",
   SCHEDULED: "Em dia",
   UNSCHEDULED: "Sem agenda",
+  IN_LAB: "No laboratório",
 };
 
 function toDate(value: string | Date | null | undefined): Date | null {
@@ -77,6 +80,8 @@ function pluralizeDays(count: number): string {
 
 function describe(status: CalibrationStatus, daysDelta: number | null): string {
   switch (status) {
+    case "IN_LAB":
+      return "Em atendimento no laboratório";
     case "UNSCHEDULED":
       return "Sem data de calibração";
     case "OVERDUE":
@@ -123,12 +128,38 @@ export function getCalibrationStatus(
   };
 }
 
+/**
+ * Status of an instrument as a whole: an instrument currently at the lab
+ * (open calibration job or open service order) reads "No laboratório",
+ * taking precedence over the date-derived status — it may well be overdue,
+ * but it is already being handled.
+ */
+export function getInstrumentStatus(
+  instrument: {
+    nextCalibrationDate: string | Date | null | undefined;
+    inLab?: boolean;
+  },
+  now: Date = new Date(),
+): CalibrationStatusInfo {
+  if (instrument.inLab) {
+    return {
+      status: "IN_LAB",
+      tone: TONE_BY_STATUS.IN_LAB,
+      label: LABEL_BY_STATUS.IN_LAB,
+      daysDelta: null,
+      description: describe("IN_LAB", null),
+    };
+  }
+  return getCalibrationStatus(instrument.nextCalibrationDate, now);
+}
+
 /** URL-safe filter values used to deep-link the equipment list to a status. */
 export const CALIBRATION_FILTERS = [
   "overdue",
   "due_soon",
   "scheduled",
   "unscheduled",
+  "in_lab",
 ] as const;
 
 export type CalibrationFilter = (typeof CALIBRATION_FILTERS)[number];
@@ -154,5 +185,7 @@ export function calibrationFilterToStatus(
       return "SCHEDULED";
     case "unscheduled":
       return "UNSCHEDULED";
+    case "in_lab":
+      return "IN_LAB";
   }
 }

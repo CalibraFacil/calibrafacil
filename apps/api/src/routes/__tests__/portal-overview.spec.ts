@@ -94,6 +94,7 @@ describe("GET /overview", () => {
       dueSoon: 0,
       scheduled: 0,
       unscheduled: 0,
+      inLab: 0,
       attention: [],
     });
     expect(body.certificates).toEqual({ available: 0, recent: [] });
@@ -103,7 +104,16 @@ describe("GET /overview", () => {
   it("assembles fleet-wide counts and action lists for a linked customer", async () => {
     dbQueue.push(
       [{ id: 1, labOrganizationId: "lab-1" }], // linkedCustomer
-      [{ total: 12, overdue: 3, dueSoon: 2, scheduled: 6, unscheduled: 1 }], // equipment counts
+      [
+        {
+          total: 12,
+          overdue: 3,
+          dueSoon: 2,
+          scheduled: 6,
+          unscheduled: 1,
+          inLab: 4,
+        },
+      ], // equipment counts
       [
         {
           id: 5,
@@ -167,6 +177,7 @@ describe("GET /overview", () => {
 
     const body = await res.json();
     expect(body.equipment.overdue).toBe(3);
+    expect(body.equipment.inLab).toBe(4);
     expect(body.equipment.attention).toHaveLength(1);
     expect(body.certificates.available).toBe(9);
     expect(body.certificates.recent[0]).toMatchObject({

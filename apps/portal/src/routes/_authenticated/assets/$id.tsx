@@ -27,7 +27,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from "@/components/instrument-panel";
-import { getCalibrationStatus } from "@/lib/calibration-status";
+import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatDate } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 
@@ -66,6 +66,7 @@ type AssetDetail = {
   specifications: Record<string, unknown> | null;
   lastCalibrationDate: string | null;
   nextCalibrationDate: string | null;
+  inLab: boolean;
   comments: string | null;
   createdAt: string;
   updatedAt: string;
@@ -178,7 +179,7 @@ function AssetDetailPage() {
     );
   }
 
-  const calibration = getCalibrationStatus(asset.nextCalibrationDate);
+  const calibration = getInstrumentStatus(asset);
   const specifications = Object.entries(asset.specifications ?? {});
   const certificateCount = asset.certificates.length;
 

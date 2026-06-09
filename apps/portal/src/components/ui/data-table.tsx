@@ -1,5 +1,6 @@
 import {
   type ColumnDef,
+  type OnChangeFn,
   type SortingState,
   type ColumnFiltersState,
   type TableMeta,
@@ -37,6 +38,13 @@ interface DataTableProps<TData, TValue> {
   onRowClick?: (row: TData) => void;
   meta?: TableMeta<TData>;
   itemName?: string;
+  /**
+   * Controlled sorting: when provided, the table stops sorting rows itself
+   * (`manualSorting`) and reports header clicks via `onSortingChange` — for
+   * server-side sorting alongside server-side pagination.
+   */
+  sorting?: SortingState;
+  onSortingChange?: OnChangeFn<SortingState>;
 }
 
 export function DataTable<TData, TValue>({
@@ -48,20 +56,27 @@ export function DataTable<TData, TValue>({
   onRowClick,
   meta,
   itemName,
+  sorting,
+  onSortingChange,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const sortingIsControlled = sorting !== undefined;
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    onSortingChange: setSorting,
+    manualSorting: sortingIsControlled,
+    onSortingChange:
+      sortingIsControlled && onSortingChange
+        ? onSortingChange
+        : setInternalSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     state: {
-      sorting,
+      sorting: sorting ?? internalSorting,
       columnFilters,
     },
     meta,

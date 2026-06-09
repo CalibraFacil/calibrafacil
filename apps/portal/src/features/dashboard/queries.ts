@@ -43,6 +43,7 @@ export type PortalOverview = {
     dueSoon: number;
     scheduled: number;
     unscheduled: number;
+    inLab: number;
     attention: Array<OverviewEquipmentItem>;
   };
   certificates: {

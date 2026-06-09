@@ -20,6 +20,8 @@ import {
   eq,
   and,
   inArray,
+  notInArray,
+  exists,
   asc,
   desc,
   like,
@@ -43,14 +45,51 @@ const DUE_SOON_DAYS = 30;
 
 // Portal-local extension of the shared asset query. Adds an optional
 // calibration-status filter so the command center can deep-link the equipment
-// list to "overdue" / "due soon" without touching the shared schema or web.
+// list to "overdue" / "due soon" without touching the shared schema or web,
+// plus server-side sorting (pagination is server-side, so sort must be too).
 const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
   dueStatus: z
-    .enum(["overdue", "due_soon", "scheduled", "unscheduled"])
+    .enum(["overdue", "due_soon", "scheduled", "unscheduled", "in_lab"])
     .optional(),
+  sortBy: z
+    .enum(["tag", "name", "nextCalibrationDate", "lastCalibrationDate"])
+    .default("tag"),
+  sortDir: z.enum(["asc", "desc"]).default("asc"),
 });
 
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
+
+// An instrument is "in lab" while it has an open calibration job or an open
+// service order — i.e. it is physically at the laboratory right now. Open job
+// statuses are every non-terminal JobStatus; open service orders mirror the
+// /overview "inProgress" definition (anything not yet returned to the client).
+function assetInLabSql() {
+  const openJob = db
+    .select({ one: sql`1` })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.assetId, asset.id),
+        inArray(calibrationJob.status, [
+          "DRAFT",
+          "IN_PROGRESS",
+          "REVIEW",
+          "GENERATING_PDF",
+        ]),
+      ),
+    );
+  const openServiceOrder = db
+    .select({ one: sql`1` })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.assetId, asset.id),
+        notInArray(serviceOrder.status, ["delivered", "closed", "canceled"]),
+      ),
+    );
+
+  return sql<boolean>`(${exists(openJob)} or ${exists(openServiceOrder)})`;
+}
 
 function buildDueStatusCondition(dueStatus: DueStatus) {
   if (!dueStatus) return undefined;
@@ -70,6 +109,8 @@ function buildDueStatusCondition(dueStatus: DueStatus) {
       return gt(asset.nextCalibrationDate, soon);
     case "unscheduled":
       return isNull(asset.nextCalibrationDate);
+    case "in_lab":
+      return assetInLabSql();
   }
 }
 
@@ -81,6 +122,7 @@ function emptyOverview() {
       dueSoon: 0,
       scheduled: 0,
       unscheduled: 0,
+      inLab: 0,
       attention: [],
     },
     certificates: { available: 0, recent: [] },
@@ -522,6 +564,7 @@ export const portalRouter = new Hono<{
             dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
             scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${soonUtc}) as int)`,
             unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
+            inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql()}) as int)`,
           })
           .from(asset)
           .where(equipmentWhere),
@@ -638,6 +681,7 @@ export const portalRouter = new Hono<{
         dueSoon: 0,
         scheduled: 0,
         unscheduled: 0,
+        inLab: 0,
       };
       const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
       const orders = serviceOrderCounts[0] ?? {
@@ -682,7 +726,8 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const { page, limit, query, dueStatus } = c.req.valid("query");
+        const { page, limit, query, dueStatus, sortBy, sortDir } =
+          c.req.valid("query");
         const offset = (page - 1) * limit;
 
         const [linkedCustomer] = await db
@@ -729,6 +774,19 @@ export const portalRouter = new Hono<{
           .from(asset)
           .where(whereCondition);
 
+        const sortColumn = {
+          tag: asset.tag,
+          name: asset.name,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          lastCalibrationDate: asset.lastCalibrationDate,
+        }[sortBy];
+        // "nulls last" so unscheduled instruments don't lead a desc date sort;
+        // tie-break on tag for a stable page order.
+        const primaryOrder =
+          sortDir === "desc"
+            ? sql`${sortColumn} desc nulls last`
+            : sql`${sortColumn} asc nulls last`;
+
         const assets = await db
           .select({
             id: asset.id,
@@ -748,6 +806,7 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            inLab: assetInLabSql(),
             comments: asset.comments,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
@@ -756,9 +815,42 @@ export const portalRouter = new Hono<{
           .innerJoin(customer, eq(asset.customerId, customer.id))
           .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(whereCondition)
-          .orderBy(asset.tag)
+          .orderBy(primaryOrder, asc(asset.tag))
           .limit(limit)
           .offset(offset);
+
+        // Latest approved certificate per instrument on this page, one query.
+        const assetIds = assets.map((assetItem) => assetItem.id);
+        const lastCertificateByAssetId = new Map<
+          number,
+          { id: number; jobId: string; approvedAt: string | Date | null }
+        >();
+        if (assetIds.length > 0) {
+          const lastCertificates = await db
+            .selectDistinctOn([calibrationJob.assetId], {
+              assetId: calibrationJob.assetId,
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              approvedAt: calibrationJob.approvedAt,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                inArray(calibrationJob.assetId, assetIds),
+                eq(calibrationJob.customerId, linkedCustomer.id),
+                eq(calibrationJob.status, "APPROVED"),
+              ),
+            )
+            .orderBy(calibrationJob.assetId, desc(calibrationJob.approvedAt));
+
+          for (const certificate of lastCertificates) {
+            lastCertificateByAssetId.set(certificate.assetId, {
+              id: certificate.id,
+              jobId: certificate.jobId,
+              approvedAt: certificate.approvedAt,
+            });
+          }
+        }
 
         return c.json({
           data: assets.map((assetItem) => ({
@@ -769,6 +861,8 @@ export const portalRouter = new Hono<{
                 definition: assetItem.assetTypeDefinition,
                 baseMeasurementUnit: assetItem.baseMeasurementUnit,
               }) ?? null,
+            lastCertificate:
+              lastCertificateByAssetId.get(assetItem.id) ?? null,
           })),
           pagination: {
             page,
@@ -843,6 +937,7 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            inLab: assetInLabSql(),
             comments: asset.comments,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
