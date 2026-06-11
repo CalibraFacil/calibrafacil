@@ -91,6 +91,9 @@ export function createLocalJobDraft(
     validations: getArray(methodPayload.validations),
     uncertaintyParams: getArray(methodPayload.uncertaintyParams),
     certificateContent: methodPayload.certificateContent ?? null,
+    // Freeze the ISO 17025 accredited-scope flag into the offline snapshot,
+    // matching the cloud path (see apps/api/src/lib/jobs.ts).
+    accreditedScope: methodPayload.accreditedScope === true,
   };
   const assetSnapshot = {
     assetId: asset.remote_id ?? stableLocalNumericId(asset.id),
