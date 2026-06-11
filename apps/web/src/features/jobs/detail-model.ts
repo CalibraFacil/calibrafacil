@@ -85,6 +85,7 @@ export type ReviewMethodSnapshot = {
   dataFields?: ReviewMethodField[] | null
   formulas?: ReviewFormula[] | null
   validations?: unknown[] | null
+  accreditedScope?: boolean | null
 }
 
 export type ReviewStandardSnapshot = {

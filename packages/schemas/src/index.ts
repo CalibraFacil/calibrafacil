@@ -1215,7 +1215,12 @@ export const MassCompositionProfileCreateSchema = z.object({
   drift: z.coerce.number().nullable().optional(),
   buoyancy: z.coerce.number().nullable().optional(),
   coverageFactor: z.coerce.number().positive().nullable().optional(),
-  quantityAvailable: z.coerce.number().int().nonnegative().nullable().optional(),
+  quantityAvailable: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
 });
 export type MassCompositionProfileCreateInput = z.infer<
   typeof MassCompositionProfileCreateSchema

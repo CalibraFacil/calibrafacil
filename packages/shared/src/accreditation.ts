@@ -60,5 +60,7 @@ export function shouldRenderAccreditationSeal(params: {
   lab: AccreditationProfile;
   methodAccreditedScope: boolean | null | undefined;
 }): boolean {
-  return isAccreditationActive(params.lab) && params.methodAccreditedScope === true;
+  return (
+    isAccreditationActive(params.lab) && params.methodAccreditedScope === true
+  );
 }

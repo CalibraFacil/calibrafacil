@@ -7,6 +7,7 @@ import {
   organization,
   customer,
   calibrationJob,
+  calibrationMethod,
   calibrationRequest,
   calibrationRequestItem,
   serviceOrder,
@@ -36,6 +37,10 @@ import {
   sql,
 } from "drizzle-orm";
 import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
+import {
+  normalizeAccreditationNumber,
+  shouldRenderAccreditationSeal,
+} from "@calibra-facil/shared";
 
 // Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
 // An instrument is "due soon" within this many days of its next calibration.
@@ -1144,6 +1149,10 @@ export const portalRouter = new Hono<{
           serviceName: service.name,
           labName: organization.name,
           labLogo: organization.logo,
+          // Accreditation seal - frozen method flag with current-method fallback
+          serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
+          labAccreditationActive: organization.accreditationActive,
+          labAccreditationNumber: organization.accreditationNumber,
         })
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -1152,6 +1161,7 @@ export const portalRouter = new Hono<{
           organization,
           eq(calibrationJob.organizationId, organization.id),
         )
+        .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
         .where(
           and(
             eq(calibrationJob.id, id),
@@ -1176,6 +1186,17 @@ export const portalRouter = new Hono<{
       );
       const releaseStatus = gated?.releaseStatus ?? "RELEASED";
 
+      const accredited = shouldRenderAccreditationSeal({
+        lab: {
+          accreditationActive: certificate.labAccreditationActive,
+          accreditationNumber: certificate.labAccreditationNumber,
+        },
+        methodAccreditedScope:
+          certificate.methodSnapshot?.accreditedScope ??
+          certificate.serviceMethodAccreditedScope ??
+          false,
+      });
+
       return c.json({
         ...certificate,
         certificateUrl:
@@ -1185,6 +1206,17 @@ export const portalRouter = new Hono<{
         releaseStatus,
         standardsSnapshot: undefined,
         referenceStandards,
+        accreditation: {
+          accredited,
+          number: accredited
+            ? normalizeAccreditationNumber(
+                certificate.labAccreditationNumber ?? "",
+              )
+            : null,
+        },
+        serviceMethodAccreditedScope: undefined,
+        labAccreditationActive: undefined,
+        labAccreditationNumber: undefined,
       });
     } catch (error) {
       console.error("Error fetching portal certificate:", error);
