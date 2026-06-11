@@ -322,6 +322,15 @@ export const XLSX_TOKEN_CATALOG: XlsxTokenCatalogItem[] = [
     kind: 'Imagem',
   },
   {
+    group: 'organization',
+    groupLabel: 'Organização',
+    path: 'organization.accreditationSealPng',
+    label: 'Selo de acreditação',
+    description:
+      'Selo RBC/ISO/IEC 17025, renderizado apenas em certificados de métodos com escopo acreditado quando a acreditação do laboratório está ativa.',
+    kind: 'Imagem',
+  },
+  {
     group: 'approval',
     groupLabel: 'Aprovação',
     path: 'approval.approvedBy.name',
