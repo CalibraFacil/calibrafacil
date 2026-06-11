@@ -25,6 +25,7 @@ export type LocalMethodsListData = {
     validations: unknown[];
     uncertaintyParams: unknown[];
     certificateContent: unknown | null;
+    accreditedScope: boolean;
     compiledMethod: unknown | null;
     methodFingerprint: string | null;
     methodEngine: {
@@ -258,6 +259,7 @@ function toLocalMethod(row: LocalMethodRow): LocalMethod {
     validations: getArray(normalized, "validations"),
     uncertaintyParams: getArray(normalized, "uncertaintyParams"),
     certificateContent: normalized.certificateContent ?? null,
+    accreditedScope: normalized.accreditedScope === true,
     compiledMethod: compiled,
     methodFingerprint: row.method_fingerprint,
     methodEngine: {
