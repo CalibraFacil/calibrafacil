@@ -17,7 +17,6 @@
 }
 
 .accreditation-seal--holo {
-  cursor: pointer;
   transform: rotateY(calc((var(--mx) - 0.5) * 14deg))
     rotateX(calc((var(--my) - 0.5) * -14deg));
   transition: transform 0.15s ease-out;
