@@ -2,6 +2,8 @@
 import { useId } from "react";
 import {
   ACCREDITATION_SEAL_SUBTITLE,
+  ACCREDITATION_SEAL_SUBTITLE_LINE1,
+  ACCREDITATION_SEAL_SUBTITLE_LINE2,
   ACCREDITATION_SEAL_TITLE,
   formatAccreditationNumber,
 } from "@calibra-facil/shared/accreditation";
@@ -104,26 +106,37 @@ export function AccreditationSealSvg({
       />
       <text
         x="65.5"
-        y="22.5"
+        y="16"
         textAnchor="middle"
         fontFamily={SEAL_FONT_FAMILY}
         fontSize="11"
         fontWeight="700"
-        letterSpacing="0.6"
+        letterSpacing="0.3"
         fill="#000000"
       >
         {ACCREDITATION_SEAL_TITLE}
       </text>
       <text
         x="65.5"
-        y="35"
+        y="28"
         textAnchor="middle"
         fontFamily={SEAL_FONT_FAMILY}
         fontSize="9"
         fontWeight="600"
         fill="#000000"
       >
-        {ACCREDITATION_SEAL_SUBTITLE}
+        {ACCREDITATION_SEAL_SUBTITLE_LINE1}
+      </text>
+      <text
+        x="65.5"
+        y="39"
+        textAnchor="middle"
+        fontFamily={SEAL_FONT_FAMILY}
+        fontSize="9"
+        fontWeight="600"
+        fill="#000000"
+      >
+        {ACCREDITATION_SEAL_SUBTITLE_LINE2}
       </text>
       <path d="M9.2 48.4V162.4H121.8V48.4H9.2Z" fill={`url(#${gradientId})`} />
       <g className="seal-glyph">

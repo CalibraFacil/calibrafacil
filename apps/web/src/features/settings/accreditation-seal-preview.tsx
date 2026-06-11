@@ -11,7 +11,7 @@ const STATUS_HINTS: Record<AccreditationStatus, string> = {
   incomplete:
     'Informe o número de acreditação para concluir a ativação do selo.',
   active:
-    'Acreditação ativa — o selo será emitido nos certificados de métodos com escopo acreditado.',
+    'Acreditação ativa. O selo será emitido nos certificados de métodos com escopo acreditado.',
 }
 
 /**

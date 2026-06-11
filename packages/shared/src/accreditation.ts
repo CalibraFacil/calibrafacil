@@ -7,9 +7,15 @@
 
 export const ACCREDITATION_NUMBER_PREFIX = "CAL";
 
-export const ACCREDITATION_SEAL_TITLE = "CALIBRAÇÃO";
+export const ACCREDITATION_SEAL_TITLE = "Calibração";
 
+/** Full prose form, used for labels/aria text. */
 export const ACCREDITATION_SEAL_SUBTITLE = "NBR ISO/IEC 17025";
+
+/** Seal header renders the subtitle split across two lines. */
+export const ACCREDITATION_SEAL_SUBTITLE_LINE1 = "NBR ISO/IEC";
+
+export const ACCREDITATION_SEAL_SUBTITLE_LINE2 = "17025";
 
 /**
  * Normalizes free-form input (pasted "RBC 0123", "CAL-0123", "0123") down to

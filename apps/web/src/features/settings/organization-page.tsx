@@ -1049,7 +1049,7 @@ function OrganizationSettingsPage({
                                 />
                               </InputGroup>
                               <FieldDescription>
-                                Apenas o número — o prefixo CAL é fixo no selo.
+                                Apenas o número. O prefixo CAL é fixo no selo.
                               </FieldDescription>
                             </Field>
                             <Field>
