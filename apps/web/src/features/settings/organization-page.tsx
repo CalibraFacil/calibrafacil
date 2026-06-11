@@ -13,6 +13,11 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
+import {
+  ACCREDITATION_NUMBER_PREFIX,
+  getAccreditationStatus,
+  normalizeAccreditationNumber,
+} from '@calibra-facil/shared'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
 import {
@@ -78,7 +83,15 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from '@/components/ui/input-group'
 import { MaskedInput } from '@/components/ui/masked-input'
+import { Switch } from '@/components/ui/switch'
+import { AccreditationSealPreview } from '@/features/settings/accreditation-seal-preview'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -116,6 +129,7 @@ type ActiveOrganization = NonNullable<
   cnpj?: string | null
   accreditationNumber?: string | null
   accreditationBody?: string | null
+  accreditationActive?: boolean | null
   street?: string | null
   number?: string | null
   complement?: string | null
@@ -198,6 +212,9 @@ function OrganizationSettingsPage({
   )
   const [accreditationBody, setAccreditationBody] = useState(
     isoDraft.accreditationBody,
+  )
+  const [accreditationActive, setAccreditationActive] = useState(
+    isoDraft.accreditationActive,
   )
   const [street, setStreet] = useState(isoDraft.street)
   const [number, setNumber] = useState(isoDraft.number)
@@ -482,6 +499,7 @@ function OrganizationSettingsPage({
           cnpj,
           accreditationNumber,
           accreditationBody,
+          accreditationActive,
           street,
           number,
           complement,
@@ -991,35 +1009,72 @@ function OrganizationSettingsPage({
                       </Field>
 
                       {/* Accreditation */}
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Field>
-                          <FieldLabel htmlFor="org-accreditation-number">
-                            Número de Acreditação
-                          </FieldLabel>
-                          <Input
-                            id="org-accreditation-number"
-                            value={accreditationNumber}
-                            onChange={(e) =>
-                              setAccreditationNumber(e.target.value)
-                            }
-                            disabled={isUpdatingIso}
-                            placeholder="RBC 0123"
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="org-accreditation-body">
-                            Órgão Acreditador
-                          </FieldLabel>
-                          <Input
-                            id="org-accreditation-body"
-                            value={accreditationBody}
-                            onChange={(e) =>
-                              setAccreditationBody(e.target.value)
-                            }
-                            disabled={isUpdatingIso}
-                            placeholder="CGCRE/Inmetro"
-                          />
-                        </Field>
+                      <div className="grid gap-6 sm:grid-cols-[1fr_auto]">
+                        <FieldGroup>
+                          <Field orientation="horizontal">
+                            <Switch
+                              id="org-accreditation-active"
+                              checked={accreditationActive}
+                              onCheckedChange={setAccreditationActive}
+                              disabled={isUpdatingIso}
+                            />
+                            <FieldLabel htmlFor="org-accreditation-active">
+                              Acreditação ativa
+                            </FieldLabel>
+                          </Field>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field>
+                              <FieldLabel htmlFor="org-accreditation-number">
+                                Número de Acreditação
+                              </FieldLabel>
+                              <InputGroup>
+                                <InputGroupAddon>
+                                  <InputGroupText className="font-semibold">
+                                    {ACCREDITATION_NUMBER_PREFIX}
+                                  </InputGroupText>
+                                </InputGroupAddon>
+                                <InputGroupInput
+                                  id="org-accreditation-number"
+                                  inputMode="numeric"
+                                  value={accreditationNumber}
+                                  onChange={(e) =>
+                                    setAccreditationNumber(
+                                      normalizeAccreditationNumber(
+                                        e.target.value,
+                                      ),
+                                    )
+                                  }
+                                  disabled={isUpdatingIso}
+                                  placeholder="0123"
+                                />
+                              </InputGroup>
+                              <FieldDescription>
+                                Apenas o número — o prefixo CAL é fixo no selo.
+                              </FieldDescription>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="org-accreditation-body">
+                                Órgão Acreditador
+                              </FieldLabel>
+                              <Input
+                                id="org-accreditation-body"
+                                value={accreditationBody}
+                                onChange={(e) =>
+                                  setAccreditationBody(e.target.value)
+                                }
+                                disabled={isUpdatingIso}
+                                placeholder="CGCRE/Inmetro"
+                              />
+                            </Field>
+                          </div>
+                        </FieldGroup>
+                        <AccreditationSealPreview
+                          status={getAccreditationStatus({
+                            accreditationActive,
+                            accreditationNumber,
+                          })}
+                          accreditationNumber={accreditationNumber}
+                        />
                       </div>
 
                       <Separator />
