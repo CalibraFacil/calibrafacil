@@ -2,12 +2,17 @@ import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
+  calibrationMethod,
   customer,
   asset,
   service,
   organization,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import {
+  normalizeAccreditationNumber,
+  shouldRenderAccreditationSeal,
+} from "@calibra-facil/shared";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -59,6 +64,11 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         assetTag: asset.tag,
         serviceName: service.name,
         labName: organization.name,
+        // Accreditation seal - frozen method flag with current-method fallback
+        methodSnapshot: calibrationJob.methodSnapshot,
+        serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
+        labAccreditationActive: organization.accreditationActive,
+        labAccreditationNumber: organization.accreditationNumber,
       })
       .from(calibrationJob)
       .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
@@ -68,6 +78,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         organization,
         eq(calibrationJob.organizationId, organization.id),
       )
+      .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
       .where(
         and(
           eq(calibrationJob.verificationToken, token),
@@ -140,12 +151,29 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       }
     }
 
+    const accredited = shouldRenderAccreditationSeal({
+      lab: {
+        accreditationActive: job.labAccreditationActive,
+        accreditationNumber: job.labAccreditationNumber,
+      },
+      methodAccreditedScope:
+        job.methodSnapshot?.accreditedScope ??
+        job.serviceMethodAccreditedScope ??
+        false,
+    });
+
     return c.json({
       valid: true,
       jobId: job.jobId,
       status: job.status,
       hasDocument: !!job.certificateUrl,
       lab: job.labName,
+      accreditation: {
+        accredited,
+        number: accredited
+          ? normalizeAccreditationNumber(job.labAccreditationNumber ?? "")
+          : null,
+      },
       customer: job.customerName,
       asset: {
         name: job.assetName,

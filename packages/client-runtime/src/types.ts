@@ -268,6 +268,7 @@ export type MethodsListData = {
     validations: unknown[];
     uncertaintyParams?: unknown[];
     certificateContent?: unknown;
+    accreditedScope?: boolean;
     compiledMethod?: unknown;
     methodFingerprint?: string | null;
     methodEngine?: { version?: string; optionsFingerprint?: string } | null;
@@ -305,6 +306,7 @@ export type MethodWriteInput = {
   validations?: unknown[];
   uncertaintyParams?: unknown[];
   certificateContent?: unknown;
+  accreditedScope?: boolean;
   reason?: string;
 };
 

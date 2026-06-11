@@ -998,6 +998,7 @@ export const CreateMethodSchema = z.object({
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -1214,7 +1215,12 @@ export const MassCompositionProfileCreateSchema = z.object({
   drift: z.coerce.number().nullable().optional(),
   buoyancy: z.coerce.number().nullable().optional(),
   coverageFactor: z.coerce.number().positive().nullable().optional(),
-  quantityAvailable: z.coerce.number().int().nonnegative().nullable().optional(),
+  quantityAvailable: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
 });
 export type MassCompositionProfileCreateInput = z.infer<
   typeof MassCompositionProfileCreateSchema
@@ -1445,6 +1451,7 @@ export const MethodSnapshotSchema = z.object({
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;

@@ -24,6 +24,7 @@ import {
   Panel,
   PanelHeader,
 } from "@/components/instrument-panel";
+import { AccreditationSeal } from "@/components/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
@@ -52,6 +53,10 @@ type Certificate = {
   serviceName: string;
   labName: string;
   labLogo: string | null;
+  accreditation?: {
+    accredited: boolean;
+    number: string | null;
+  };
   referenceStandards: Array<{
     id: number;
     name: string;
@@ -204,6 +209,9 @@ function CertificateDetailPage() {
           </Button>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <StatusPill tone="ok">Aprovado</StatusPill>
+            {certificate.accreditation?.accredited ? (
+              <StatusPill tone="info">Acreditado RBC</StatusPill>
+            ) : null}
             {isPaymentPending ? (
               <StatusPill tone="warning">Liberação pendente</StatusPill>
             ) : null}
@@ -302,21 +310,28 @@ function CertificateDetailPage() {
         {/* Calibration */}
         <Panel className="p-5">
           <PanelHeader eyebrow="Calibração" title="Serviço, método e datas" />
-          <BlueprintGrid className="mt-4 sm:grid-cols-2">
-            <BlueprintField label="Serviço" className="sm:col-span-2">
-              {certificate.serviceName}
-            </BlueprintField>
-            <BlueprintField label="Método">{method}</BlueprintField>
-            <BlueprintField label="Laboratório">
-              {certificate.labName}
-            </BlueprintField>
-            <BlueprintField label="Data de execução" mono>
-              {formatDate(certificate.performedAt)}
-            </BlueprintField>
-            <BlueprintField label="Data de aprovação" mono>
-              {formatDate(certificate.approvedAt)}
-            </BlueprintField>
-          </BlueprintGrid>
+          <div className="mt-4 flex items-start gap-5">
+            <BlueprintGrid className="min-w-0 flex-1 sm:grid-cols-2">
+              <BlueprintField label="Serviço" className="sm:col-span-2">
+                {certificate.serviceName}
+              </BlueprintField>
+              <BlueprintField label="Método">{method}</BlueprintField>
+              <BlueprintField label="Laboratório">
+                {certificate.labName}
+              </BlueprintField>
+              <BlueprintField label="Data de execução" mono>
+                {formatDate(certificate.performedAt)}
+              </BlueprintField>
+              <BlueprintField label="Data de aprovação" mono>
+                {formatDate(certificate.approvedAt)}
+              </BlueprintField>
+            </BlueprintGrid>
+            {certificate.accreditation?.accredited ? (
+              <AccreditationSeal
+                accreditationNumber={certificate.accreditation.number}
+              />
+            ) : null}
+          </div>
         </Panel>
       </div>
 
