@@ -264,6 +264,11 @@ export const organization = pgTable(
     cnpj: text("cnpj"),
     accreditationNumber: text("accreditation_number"),
     accreditationBody: text("accreditation_body"),
+    // Explicit toggle: the lab declares its CGCRE/RBC accreditation active.
+    // The accreditation seal only renders when this is on AND a number is set.
+    accreditationActive: boolean("accreditation_active")
+      .default(false)
+      .notNull(),
     street: text("street"),
     number: text("number"),
     complement: text("complement"),
@@ -2984,6 +2989,9 @@ export const calibrationMethod = pgTable(
     description: text("description"),
     version: integer("version").default(1).notNull(),
     status: text("status").$type<MethodStatus>().default("DRAFT").notNull(),
+    // ISO 17025 accredited scope: certificates issued from this method may
+    // carry the accreditation seal (traceable-only methods keep this off).
+    accreditedScope: boolean("accredited_scope").default(false).notNull(),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
     variableBindings: jsonb("variable_bindings")
@@ -3701,6 +3709,8 @@ export type MethodSnapshot = {
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];
   certificateContent?: MethodCertificateContent | null;
+  /** Frozen ISO 17025 accredited-scope flag (absent on legacy snapshots). */
+  accreditedScope?: boolean;
 };
 
 export type AssetSnapshot = {

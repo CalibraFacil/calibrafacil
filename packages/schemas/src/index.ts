@@ -998,6 +998,7 @@ export const CreateMethodSchema = z.object({
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -1445,6 +1446,7 @@ export const MethodSnapshotSchema = z.object({
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;

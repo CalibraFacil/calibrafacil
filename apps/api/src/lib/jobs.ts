@@ -391,6 +391,7 @@ async function persistCalibrationJob(
     validations: normalizeMethodValidationsInput(methodData.validations),
     uncertaintyParams: methodData.uncertaintyParams,
     certificateContent: methodData.certificateContent ?? null,
+    accreditedScope: methodData.accreditedScope ?? false,
   };
 
   validateRequiredAssetSpecs(
