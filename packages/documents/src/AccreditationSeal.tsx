@@ -110,7 +110,7 @@ export function AccreditationSealSvg({
         fontSize="11"
         fontWeight="700"
         letterSpacing="0.6"
-        fill="#FFFFFF"
+        fill="#000000"
       >
         {ACCREDITATION_SEAL_TITLE}
       </text>
@@ -121,7 +121,7 @@ export function AccreditationSealSvg({
         fontFamily={SEAL_FONT_FAMILY}
         fontSize="9"
         fontWeight="600"
-        fill="#FFFFFF"
+        fill="#000000"
       >
         {ACCREDITATION_SEAL_SUBTITLE}
       </text>
@@ -148,7 +148,7 @@ export function AccreditationSealSvg({
           fontSize="13"
           fontWeight="700"
           letterSpacing="1"
-          fill="#FFFFFF"
+          fill="#000000"
         >
           {formattedNumber}
         </text>
