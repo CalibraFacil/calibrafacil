@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
-import { convertMassValue, isMassUnit } from './weighing-range-utils'
+import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -75,20 +75,21 @@ export function MeasurementNumberCell({
   const [open, setOpen] = useState(false)
 
   const conversionActive =
-    isMassUnit(displayUnit) &&
-    isMassUnit(columnUnit) &&
+    unitKind(displayUnit) != null &&
+    unitKind(columnUnit) === unitKind(displayUnit) &&
     displayUnit !== columnUnit
 
   const toDisplay = (canonical: number): number => {
     if (!conversionActive) return canonical
-    return convertMassValue(canonical, columnUnit, displayUnit) ?? canonical
+    return convertUnitValue(canonical, columnUnit, displayUnit) ?? canonical
   }
 
   const toCanonical = (display: number, fromUnit?: string | null): number => {
     const sourceUnit = fromUnit ?? displayUnit
-    if (!isMassUnit(sourceUnit) || !isMassUnit(columnUnit)) return display
+    const sourceKind = unitKind(sourceUnit)
+    if (sourceKind == null || unitKind(columnUnit) !== sourceKind) return display
     if (sourceUnit === columnUnit) return display
-    const converted = convertMassValue(display, sourceUnit, columnUnit)
+    const converted = convertUnitValue(display, sourceUnit, columnUnit)
     if (converted == null) return display
     // Strip floating-point noise introduced by the unit conversion so stored
     // execution values stay clean for downstream certificates.

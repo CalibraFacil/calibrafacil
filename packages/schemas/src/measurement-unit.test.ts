@@ -9,8 +9,8 @@ import {
 
 describe("MeasurementUnitSchema", () => {
   it("stays in sync with the shared unit registry", () => {
-    expect([...MeasurementUnitSchema.options].sort()).toEqual(
-      [...MEASUREMENT_UNITS].sort(),
+    expect(MeasurementUnitSchema.options.toSorted()).toEqual(
+      MEASUREMENT_UNITS.toSorted(),
     );
   });
 

@@ -13,17 +13,20 @@ import {
   type MassCompositionValue,
 } from './mass-composition-utils'
 import {
-  convertMassValue,
   decimalsForResolution,
-  isMassUnit,
   parseNumericValue,
   resolveWeighingRange,
-  type MassUnit,
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
 import { MeasurementNumberCell } from './measurement-number-cell'
-import { resolveMassDisplayUnit } from '@calibra-facil/shared'
+import { isMassUnit, type MassUnit } from '@calibra-facil/shared'
+import {
+  convertUnitDelta,
+  convertUnitValue,
+  resolveDisplayUnit,
+  unitKind,
+} from '@calibra-facil/shared/units'
 import {
   Table,
   TableBody,
@@ -228,6 +231,9 @@ function setRangeTargetValue(
   targetName: keyof WeighingRangeResolverTargetColumns,
   value: unknown,
   valueUnit?: string,
+  // Resolutions are widths (deltas); bounds/labels are absolute. Matters for
+  // affine kinds (temperature); a no-op for the factor-only mass path.
+  mode: 'absolute' | 'delta' = 'absolute',
 ) {
   const targetKey = targetColumns[targetName]
   if (!targetKey) return
@@ -235,7 +241,9 @@ function setRangeTargetValue(
   if (typeof value === 'number' && valueUnit) {
     const targetColumn = columns?.find((col) => col.key === targetKey)
     const converted = targetColumn?.unit
-      ? convertMassValue(value, valueUnit, targetColumn.unit)
+      ? mode === 'delta'
+        ? convertUnitDelta(value, valueUnit, targetColumn.unit)
+        : convertUnitValue(value, valueUnit, targetColumn.unit)
       : value
 
     if (converted != null) {
@@ -262,7 +270,11 @@ function getAssetResolutionFallback(
   const resolution = parseNumber(assetSpecifications?.resolution)
   const resolutionUnit = assetSpecifications?.resolutionUnit ?? 'g'
 
-  if (resolution == null || !isMassUnit(resolutionUnit)) {
+  if (
+    resolution == null ||
+    typeof resolutionUnit !== 'string' ||
+    unitKind(resolutionUnit) == null
+  ) {
     return null
   }
 
@@ -397,21 +409,13 @@ function resolveRowResolutionDecimals(
   const resolution = resolveRowResolution(field, row, assetSpecifications)
   if (!resolution) return null
 
-  const targetUnit = isMassUnit(displayUnit)
-    ? displayUnit
-    : resolution.resolutionUnit
-  const inDisplayUnit =
-    isMassUnit(resolution.resolutionUnit) &&
-    isMassUnit(targetUnit) &&
-    resolution.resolutionUnit !== targetUnit
-      ? convertMassValue(
-          resolution.resolution,
-          resolution.resolutionUnit,
-          targetUnit,
-        )
-      : resolution.resolution
-
-  return inDisplayUnit == null ? null : decimalsForResolution(inDisplayUnit)
+  // Delta-convert the resolution into the display unit (no-op / same-kind
+  // fallback handled inside decimalsForResolution).
+  return decimalsForResolution(
+    resolution.resolution,
+    resolution.resolutionUnit,
+    displayUnit,
+  )
 }
 
 /**
@@ -515,6 +519,7 @@ export function applyTableWeighingRangeResolvers(
       'resolution',
       resolutionSource.resolution,
       resolutionSource.resolutionUnit,
+      'delta',
     )
     setRangeTargetValue(
       nextRow,
@@ -547,9 +552,7 @@ export function TableInputRenderer({
 }: TableInputRendererProps) {
   const eccentricityLoadPointConfig = getEccentricityLoadPoints(field)
   const hasFixedLoadPoints = Boolean(eccentricityLoadPointConfig)
-  const assetMassUnit: MassUnit | null = isMassUnit(assetBaseMeasurementUnit)
-    ? assetBaseMeasurementUnit
-    : null
+  const assetBaseUnit: string | null = assetBaseMeasurementUnit ?? null
   const rows = applyTableWeighingRangeResolvers(
     field,
     applyEccentricityLoadPoints(field, value || []),
@@ -791,8 +794,8 @@ export function TableInputRenderer({
           presentation={shouldUsePanelRows ? 'field' : 'cell'}
           target={resolveMassCompositionTarget(field, row)}
           previousComposition={previousComposition}
-          displayUnit={resolveMassDisplayUnit(
-            assetMassUnit,
+          displayUnit={resolveDisplayUnit(
+            assetBaseUnit,
             col.massComposition?.targetUnit ?? 'g',
           )}
         />
@@ -813,7 +816,7 @@ export function TableInputRenderer({
 
     if (col.type === 'number') {
       const isReadOnlyCell = disabled || isCalculatedTarget || isFixedLoadPoint
-      const displayUnit = resolveMassDisplayUnit(assetMassUnit, col.unit)
+      const displayUnit = resolveDisplayUnit(assetBaseUnit, col.unit)
       const maxDecimals = isResolutionConstrainedColumn(field, col)
         ? resolveRowResolutionDecimals(
             field,
