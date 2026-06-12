@@ -20,7 +20,9 @@ import {
 import {
   convertMassValue,
   isMassUnit,
+  parseNumericValue,
   resolveWeighingRange,
+  type MassUnit,
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
@@ -345,6 +347,24 @@ function resolveRowWeighingRange(
     weighingRangeResolver.pointUnit ?? weighingRangePointColumn?.unit,
     assetSpecifications?.[weighingRangeResolver.assetSpecKey],
   )
+}
+
+function resolveMassCompositionTarget(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+): { value: number; unit: MassUnit } | null {
+  const columns = field.columns || []
+  const resolver = getWeighingRangeResolver(field)
+  if (!resolver?.pointColumn) return null
+
+  const numeric = parseNumericValue(row[resolver.pointColumn])
+  if (numeric == null) return null
+
+  const pointColumn = columns.find((col) => col.key === resolver.pointColumn)
+  const unit = resolver.pointUnit ?? pointColumn?.unit
+  if (!isMassUnit(unit)) return null
+
+  return { value: numeric, unit }
 }
 
 export function applyTableWeighingRangeResolvers(
@@ -692,6 +712,10 @@ export function TableInputRenderer({
       isStandardRefColumn(col.key, col.label)
 
     if (col.role === 'mass_standard_composition') {
+      const prevValue = rowIndex > 0 ? rows[rowIndex - 1]?.[col.key] : undefined
+      const previousComposition = isMassCompositionValue(prevValue)
+        ? prevValue
+        : null
       return (
         <MassCompositionCell
           value={row[col.key]}
@@ -700,6 +724,8 @@ export function TableInputRenderer({
           config={col.massComposition}
           disabled={disabled || isInactivePhaseColumn}
           presentation={shouldUsePanelRows ? 'field' : 'cell'}
+          target={resolveMassCompositionTarget(field, row)}
+          previousComposition={previousComposition}
         />
       )
     }

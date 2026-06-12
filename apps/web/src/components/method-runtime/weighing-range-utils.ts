@@ -70,7 +70,7 @@ export function isWeighingRangeSpecArray(
   )
 }
 
-function parseNumericValue(value: unknown): number | null {
+export function parseNumericValue(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value.replace(',', '.'))
