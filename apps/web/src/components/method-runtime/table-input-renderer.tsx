@@ -789,6 +789,11 @@ export function TableInputRenderer({
         row,
         assetSpecifications,
       )
+      // Mass composition's accuracy-class suggestion is mass-only; narrow the
+      // (now kind-generic) resolution unit to a mass unit, skipping otherwise.
+      const rowResolutionMassUnit = rowResolution
+        ? normalizeMassUnit(rowResolution.resolutionUnit)
+        : null
       return (
         <MassCompositionCell
           value={row[col.key]}
@@ -804,10 +809,10 @@ export function TableInputRenderer({
             col.massComposition?.targetUnit ?? 'g',
           )}
           resolution={
-            rowResolution
+            rowResolution && rowResolutionMassUnit != null
               ? {
                   value: rowResolution.resolution,
-                  unit: rowResolution.resolutionUnit,
+                  unit: rowResolutionMassUnit,
                 }
               : null
           }
