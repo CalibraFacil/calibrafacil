@@ -45,6 +45,14 @@ overrides:
 auditConfig:
   ignoreGhsas:
     - GHSA-rmmr-r34h-pfm5
+    # GHSA-gv7w-rqvm-qjhr: esbuild <0.28.1 missing binary integrity verification
+    # in its *Deno* install module, exploitable only via an attacker-controlled
+    # NPM_CONFIG_REGISTRY. We consume esbuild purely as a build-time tool under
+    # Node/pnpm via vite (never the Deno module, never in the prod runtime), so
+    # the vector doesn't apply. The patched line (>=0.28.1) is newer than every
+    # vite in the tree expects (vite 7.3.x pins esbuild ^0.27.0, 6.4.x ^0.25.0),
+    # so we hold esbuild at ^0.25.12 (see overrides) instead of a forced bump.
+    - GHSA-gv7w-rqvm-qjhr
 
 # Force pnpm to materialize ALL linux native optional binaries (glibc + musl,
 # x64 + arm64), not just the one matching the install machine. Vercel's
