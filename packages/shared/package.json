@@ -12,9 +12,11 @@
     "./certificate-templates": "./src/certificate-templates.ts",
     "./mass-units": "./src/mass-units.ts",
     "./plans": "./src/plans.ts",
-    "./storage-keys": "./src/storage-keys.ts"
+    "./storage-keys": "./src/storage-keys.ts",
+    "./units": "./src/units/index.ts"
   },
   "scripts": {
+    "test": "vitest run --passWithNoTests",
     "check-types": "tsgo --noEmit"
   },
   "keywords": [],
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.17"
   }
 }
