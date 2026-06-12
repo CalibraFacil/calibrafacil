@@ -558,7 +558,7 @@ export function MassCompositionCell({
                     Nenhum peso encontrado.
                   </div>
                 ) : (
-                  <div className="grid max-h-[38vh] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-5">
+                  <div className="grid max-h-[38vh] grid-cols-2 gap-2 overflow-y-auto p-1 sm:grid-cols-3 lg:grid-cols-5">
                     {filteredOptions.map((option) => {
                       const key = optionKey(option)
                       const inComposition = quantityByKey.get(key)
@@ -582,7 +582,8 @@ export function MassCompositionCell({
                           }`}
                           className={cn(
                             'h-auto flex-col items-start gap-0.5 px-2.5 py-2 text-left',
-                            key === effectiveHighlightKey && 'ring-2 ring-ring',
+                            key === effectiveHighlightKey &&
+                              'ring-2 ring-inset ring-ring',
                           )}
                         >
                           <span className="flex w-full min-w-0 items-center gap-1">
