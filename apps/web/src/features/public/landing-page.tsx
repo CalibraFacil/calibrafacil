@@ -6,7 +6,6 @@ import { Hero } from './components/hero'
 import { HeroPreview } from './components/hero-preview'
 import { LandingFooter } from './components/landing-footer'
 import { LandingNav } from './components/landing-nav'
-import { ProofSection } from './components/proof-section'
 import { WorkflowSection } from './components/workflow-section'
 
 export function LandingPage() {
@@ -17,7 +16,6 @@ export function LandingPage() {
         <Hero />
         <HeroPreview />
         <WorkflowSection />
-        <ProofSection />
         <AudienceSection />
         <FeaturesSection />
         <FAQSection />
