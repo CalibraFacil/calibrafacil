@@ -2,10 +2,37 @@ import { describe, expect, it } from 'vitest'
 
 import {
   convertMassValue,
+  decimalsForResolution,
   formatWeighingRangeSpec,
   resolveWeighingRange,
   type WeighingRangeSpec,
 } from './weighing-range-utils'
+
+describe('decimalsForResolution', () => {
+  it('counts fractional digits of common resolutions', () => {
+    expect(decimalsForResolution(0.5)).toBe(1)
+    expect(decimalsForResolution(0.1)).toBe(1)
+    expect(decimalsForResolution(0.01)).toBe(2)
+    expect(decimalsForResolution(0.001)).toBe(3)
+    expect(decimalsForResolution(0.25)).toBe(2)
+  })
+
+  it('returns 0 for integer resolutions', () => {
+    expect(decimalsForResolution(1)).toBe(0)
+    expect(decimalsForResolution(2)).toBe(0)
+    expect(decimalsForResolution(10)).toBe(0)
+  })
+
+  it('handles very small resolutions in exponential form', () => {
+    expect(decimalsForResolution(1e-7)).toBe(7)
+  })
+
+  it('returns null for non-positive or non-finite values', () => {
+    expect(decimalsForResolution(0)).toBeNull()
+    expect(decimalsForResolution(-0.5)).toBeNull()
+    expect(decimalsForResolution(Number.NaN)).toBeNull()
+  })
+})
 
 const ranges: WeighingRangeSpec[] = [
   {

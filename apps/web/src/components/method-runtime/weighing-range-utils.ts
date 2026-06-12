@@ -139,6 +139,28 @@ export function resolveWeighingRange(
   return null
 }
 
+/**
+ * Number of fractional digits implied by a resolution value, used to cap how
+ * many decimals an operator may type for an instrument indication. Returns null
+ * when the resolution is not a usable positive number.
+ */
+export function decimalsForResolution(resolution: number): number | null {
+  if (!Number.isFinite(resolution) || resolution <= 0) return null
+
+  // Strip floating-point noise introduced by unit conversion before counting
+  // fractional digits (e.g. 500 g -> 0.5 kg stays exact, but guards arithmetic).
+  const normalized = Number(resolution.toPrecision(12))
+  const text = String(normalized)
+
+  const exponentMatch = text.match(/e-(\d+)/i)
+  if (exponentMatch) {
+    return Number.parseInt(exponentMatch[1], 10)
+  }
+
+  const fractional = text.split('.')[1]
+  return fractional ? fractional.length : 0
+}
+
 export function buildFallbackRangeLabel(range: WeighingRangeSpec): string {
   const unit = isMassUnit(range.rangeUnit) ? range.rangeUnit : ''
   const min = range.min == null ? '0' : String(range.min)

@@ -1,10 +1,5 @@
-import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Add01Icon,
-  Delete02Icon,
-  ArrowDown01Icon,
-} from '@hugeicons/core-free-icons'
+import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 
 import type { MethodInputField } from './types'
 
@@ -19,6 +14,7 @@ import {
 } from './mass-composition-utils'
 import {
   convertMassValue,
+  decimalsForResolution,
   isMassUnit,
   parseNumericValue,
   resolveWeighingRange,
@@ -26,6 +22,8 @@ import {
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
+import { MeasurementNumberCell } from './measurement-number-cell'
+import { resolveMassDisplayUnit } from '@calibra-facil/shared'
 import {
   Table,
   TableBody,
@@ -34,11 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 
 export interface CertifiedValueOption {
   label: string // e.g., "100g"
@@ -56,6 +49,8 @@ interface TableInputRendererProps {
   certifiedValueOptions?: CertifiedValueOption[]
   massCompositionOptions?: MassCompositionOption[]
   assetSpecifications?: Record<string, unknown> | null
+  /** Asset's base measurement unit; drives display/entry conversion of cells. */
+  assetBaseMeasurementUnit?: string | null
   phaseMode?:
     | 'before_and_after'
     | 'before_only'
@@ -367,6 +362,72 @@ function resolveMassCompositionTarget(
   return { value: numeric, unit }
 }
 
+/**
+ * The instrument resolution applicable to a row, falling back to the asset-level
+ * resolution when no weighing range is configured/matched.
+ */
+function resolveRowResolution(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+): Pick<ResolvedWeighingRange, 'resolution' | 'resolutionUnit'> | null {
+  const resolved = resolveRowWeighingRange(field, row, assetSpecifications)
+  if (resolved) {
+    return {
+      resolution: resolved.resolution,
+      resolutionUnit: resolved.resolutionUnit,
+    }
+  }
+
+  const configured = getConfiguredWeighingRanges(field, assetSpecifications)
+  if (!Array.isArray(configured) || configured.length === 0) {
+    return getAssetResolutionFallback(assetSpecifications)
+  }
+
+  return null
+}
+
+/** Max decimals an operator may type for an indication, in the display unit. */
+function resolveRowResolutionDecimals(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+  displayUnit: string | null | undefined,
+): number | null {
+  const resolution = resolveRowResolution(field, row, assetSpecifications)
+  if (!resolution) return null
+
+  const targetUnit = isMassUnit(displayUnit)
+    ? displayUnit
+    : resolution.resolutionUnit
+  const inDisplayUnit =
+    isMassUnit(resolution.resolutionUnit) &&
+    isMassUnit(targetUnit) &&
+    resolution.resolutionUnit !== targetUnit
+      ? convertMassValue(
+          resolution.resolution,
+          resolution.resolutionUnit,
+          targetUnit,
+        )
+      : resolution.resolution
+
+  return inDisplayUnit == null ? null : decimalsForResolution(inDisplayUnit)
+}
+
+/**
+ * Columns whose entry is a physical instrument indication or applied load, so
+ * their typed precision should be bounded by the resolution. Excludes derived
+ * columns (uncertainty components, computed totals).
+ */
+function isResolutionConstrainedColumn(
+  field: MethodInputField,
+  col: TableColumn,
+): boolean {
+  if (col.type !== 'number') return false
+  if (col.phase === 'before' || col.phase === 'after') return true
+  return getWeighingRangeResolver(field)?.pointColumn === col.key
+}
+
 export function applyTableWeighingRangeResolvers(
   field: MethodInputField,
   rows: Array<Record<string, unknown>>,
@@ -481,10 +542,14 @@ export function TableInputRenderer({
   certifiedValueOptions = EMPTY_CERTIFIED_VALUE_OPTIONS,
   massCompositionOptions = EMPTY_MASS_COMPOSITION_OPTIONS,
   assetSpecifications,
+  assetBaseMeasurementUnit = null,
   phaseMode = 'before_and_after',
 }: TableInputRendererProps) {
   const eccentricityLoadPointConfig = getEccentricityLoadPoints(field)
   const hasFixedLoadPoints = Boolean(eccentricityLoadPointConfig)
+  const assetMassUnit: MassUnit | null = isMassUnit(assetBaseMeasurementUnit)
+    ? assetBaseMeasurementUnit
+    : null
   const rows = applyTableWeighingRangeResolvers(
     field,
     applyEccentricityLoadPoints(field, value || []),
@@ -726,6 +791,10 @@ export function TableInputRenderer({
           presentation={shouldUsePanelRows ? 'field' : 'cell'}
           target={resolveMassCompositionTarget(field, row)}
           previousComposition={previousComposition}
+          displayUnit={resolveMassDisplayUnit(
+            assetMassUnit,
+            col.massComposition?.targetUnit ?? 'g',
+          )}
         />
       )
     }
@@ -742,47 +811,29 @@ export function TableInputRenderer({
       )
     }
 
-    if (showPicker) {
-      return (
-        <NumberCellWithPicker
-          value={row[col.key]}
-          onChange={(val) => updateCell(rowIndex, col.key, val)}
-          onBlur={(val) => updateCell(rowIndex, col.key, val)}
-          disabled={disabled || isCalculatedTarget}
-          certifiedValueOptions={certifiedValueOptions}
-        />
-      )
-    }
-
     if (col.type === 'number') {
+      const isReadOnlyCell = disabled || isCalculatedTarget || isFixedLoadPoint
+      const displayUnit = resolveMassDisplayUnit(assetMassUnit, col.unit)
+      const maxDecimals = isResolutionConstrainedColumn(field, col)
+        ? resolveRowResolutionDecimals(
+            field,
+            row,
+            assetSpecifications,
+            displayUnit,
+          )
+        : null
+
       return (
-        <Input
-          type="text"
-          inputMode="decimal"
-          value={row[col.key] != null ? String(row[col.key]) : ''}
-          onChange={(e) => {
-            const val = e.target.value
-            if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
-              const normalized = val.replace(',', '.')
-              updateCell(
-                rowIndex,
-                col.key,
-                normalized === '' ? null : normalized,
-              )
-            }
-          }}
-          onBlur={(e) => {
-            const val = e.target.value.replace(',', '.')
-            if (val !== '' && val !== '-' && val !== '.') {
-              const parsed = parseFloat(val)
-              if (!isNaN(parsed)) {
-                updateCell(rowIndex, col.key, parsed)
-              }
-            } else if (val === '' || val === '-' || val === '.') {
-              updateCell(rowIndex, col.key, null)
-            }
-          }}
-          disabled={disabled || isCalculatedTarget || isFixedLoadPoint}
+        <MeasurementNumberCell
+          value={row[col.key]}
+          onCommit={(val) => updateCell(rowIndex, col.key, val)}
+          columnUnit={col.unit}
+          displayUnit={displayUnit}
+          maxDecimals={maxDecimals}
+          disabled={isReadOnlyCell}
+          certifiedValueOptions={
+            showPicker && !isReadOnlyCell ? certifiedValueOptions : undefined
+          }
           className={`h-8 w-full ${isCalculatedTarget || isFixedLoadPoint ? 'bg-muted/50' : ''}`}
           title={
             isFixedLoadPoint
@@ -1066,111 +1117,6 @@ export function TableInputRenderer({
           Adicionar Linha
         </Button>
       )}
-    </div>
-  )
-}
-
-/**
- * Number cell with certified values picker
- */
-function NumberCellWithPicker({
-  value,
-  onChange,
-  onBlur,
-  disabled,
-  certifiedValueOptions,
-}: {
-  value: unknown
-  onChange: (val: number | string | null) => void
-  onBlur?: (val: number | null) => void
-  disabled: boolean
-  certifiedValueOptions: CertifiedValueOption[]
-}) {
-  const [open, setOpen] = useState(false)
-
-  // Group options by standard name
-  const groupedOptions = certifiedValueOptions.reduce<
-    Record<string, CertifiedValueOption[]>
-  >((acc, opt) => {
-    if (!acc[opt.standardName]) {
-      acc[opt.standardName] = []
-    }
-    acc[opt.standardName].push(opt)
-    return acc
-  }, {})
-
-  return (
-    <div className="flex gap-1">
-      <Input
-        type="text"
-        inputMode="decimal"
-        value={value != null ? String(value) : ''}
-        onChange={(e) => {
-          const val = e.target.value
-          // Allow empty, numbers, decimal points, and negative sign
-          if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
-            const normalized = val.replace(',', '.')
-            onChange(normalized === '' ? null : normalized)
-          }
-        }}
-        onBlur={(e) => {
-          // Parse to number on blur if valid
-          const val = e.target.value.replace(',', '.')
-          if (val !== '' && val !== '-' && val !== '.') {
-            const parsed = parseFloat(val)
-            if (!isNaN(parsed)) {
-              onBlur?.(parsed)
-            }
-          } else {
-            onBlur?.(null)
-          }
-        }}
-        disabled={disabled}
-        className="h-8 flex-1"
-      />
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          render={(props) => (
-            <Button
-              {...props}
-              variant="ghost"
-              size="icon"
-              disabled={disabled}
-              className="h-8 w-8 shrink-0"
-              title="Inserir valor certificado"
-            >
-              <HugeiconsIcon icon={ArrowDown01Icon} className="h-4 w-4" />
-            </Button>
-          )}
-        />
-        <PopoverContent align="end" className="w-64 p-2">
-          <div className="space-y-2 max-h-48 overflow-auto">
-            {Object.entries(groupedOptions).map(([standardName, options]) => (
-              <div key={standardName}>
-                <p className="text-xs font-medium text-muted-foreground px-2 py-1">
-                  {standardName}
-                </p>
-                {options.map((opt, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm flex justify-between items-center"
-                    onClick={() => {
-                      onChange(opt.value)
-                      setOpen(false)
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {opt.value.toFixed(5)} {opt.unit}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </PopoverContent>
-      </Popover>
     </div>
   )
 }

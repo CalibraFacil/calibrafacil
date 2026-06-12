@@ -883,6 +883,7 @@ function ExecuteJobForm({
             certifiedValueOptions={certifiedValueOptions}
             massCompositionOptions={massCompositionOptions}
             assetSpecifications={displayAssetSpecifications}
+            assetBaseMeasurementUnit={assetBaseMeasurementUnit}
             phaseMode={blockMode}
           />
         </Field>

@@ -13,6 +13,7 @@ import {
   buildMassCompositionValue,
   convertMassValue,
   isMassCompositionValue,
+  isMassUnit,
   normalizeMassUnit,
   type MassCompositionConfig,
   type MassCompositionItem,
@@ -55,6 +56,8 @@ interface MassCompositionCellProps {
   presentation?: 'cell' | 'field'
   target?: { value: number; unit: MassUnit } | null
   previousComposition?: MassCompositionValue | null
+  /** Unit used to present totals/target to match the execution table cells. */
+  displayUnit?: string | null
 }
 
 function optionKey(option: MassCompositionOption): string {
@@ -86,7 +89,8 @@ function formatCompositionItemLabel(item: MassCompositionItem): string {
 
 function formatCompositionSummary(
   composition: MassCompositionValue | null,
-  targetUnit: string,
+  formatUnit: string,
+  toFormatUnit: (valueInTargetUnit: number) => number,
 ): { equation: string; total: string } | null {
   if (!composition || composition.items.length === 0) return null
 
@@ -96,7 +100,10 @@ function formatCompositionSummary(
 
   return {
     equation,
-    total: formatNumber(composition.totals.certifiedValue, targetUnit),
+    total: formatNumber(
+      toFormatUnit(composition.totals.certifiedValue),
+      formatUnit,
+    ),
   }
 }
 
@@ -131,6 +138,7 @@ export function MassCompositionCell({
   presentation = 'cell',
   target = null,
   previousComposition = null,
+  displayUnit = null,
 }: MassCompositionCellProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -150,6 +158,20 @@ export function MassCompositionCell({
   const targetUnit = config?.targetUnit ?? composition?.targetUnit ?? 'g'
   const normalizedTargetUnit = normalizeMassUnit(targetUnit) ?? 'g'
   const optionSource = config?.optionSource ?? 'certified_values'
+
+  // Present totals/target in the asset's display unit (e.g. kg) to match the
+  // execution table cells, while all math stays in the canonical target unit.
+  const formatUnit: MassUnit =
+    displayUnit != null && isMassUnit(displayUnit)
+      ? displayUnit
+      : normalizedTargetUnit
+  const toFormatUnit = (valueInTargetUnit: number): number =>
+    convertMassValue(valueInTargetUnit, normalizedTargetUnit, formatUnit) ??
+    valueInTargetUnit
+  const formatTargetNumber = (valueInTargetUnit: number | null): string =>
+    valueInTargetUnit == null
+      ? '-'
+      : formatNumber(toFormatUnit(valueInTargetUnit), formatUnit)
 
   const resolvedTarget = useMemo(() => {
     if (!target) return null
@@ -181,8 +203,17 @@ export function MassCompositionCell({
     )
   }, [sortedOptions, quickQuery])
 
+  const manualTargetValue = parseNumericValue(manualTarget)
   const effectiveTarget =
-    resolvedTarget != null ? resolvedTarget : parseNumericValue(manualTarget)
+    resolvedTarget != null
+      ? resolvedTarget
+      : manualTargetValue == null
+        ? null
+        : (convertMassValue(
+            manualTargetValue,
+            formatUnit,
+            normalizedTargetUnit,
+          ) ?? manualTargetValue)
 
   const items = useMemo(() => composition?.items ?? [], [composition])
   const quantityByKey = useMemo(() => {
@@ -198,11 +229,16 @@ export function MassCompositionCell({
       : (filteredOptions[0] && optionKey(filteredOptions[0])) || null
 
   const total = composition?.totals.certifiedValue ?? 0
-  const delta = describeMassDelta(total, effectiveTarget, normalizedTargetUnit)
+  const delta = describeMassDelta(
+    toFormatUnit(total),
+    effectiveTarget == null ? null : toFormatUnit(effectiveTarget),
+    formatUnit,
+  )
 
   const compositionSummary = formatCompositionSummary(
     composition,
-    normalizedTargetUnit,
+    formatUnit,
+    toFormatUnit,
   )
   const canSuggest = effectiveTarget != null && visibleOptions.length > 0
 
@@ -257,9 +293,9 @@ export function MassCompositionCell({
         ? null
         : `Sugestão mais próxima: ${
             describeMassDelta(
-              suggestion.total,
-              effectiveTarget,
-              normalizedTargetUnit,
+              toFormatUnit(suggestion.total),
+              effectiveTarget == null ? null : toFormatUnit(effectiveTarget),
+              formatUnit,
             ).text
           }.`,
     )
@@ -400,7 +436,7 @@ export function MassCompositionCell({
                         variant="outline"
                         className="font-mono text-xs tabular-nums"
                       >
-                        {formatNumber(resolvedTarget, normalizedTargetUnit)}
+                        {formatTargetNumber(resolvedTarget)}
                       </Badge>
                     </div>
                   ) : (
@@ -420,7 +456,7 @@ export function MassCompositionCell({
                           className="h-9 w-28"
                         />
                         <span className="text-xs text-muted-foreground">
-                          {normalizedTargetUnit}
+                          {formatUnit}
                         </span>
                       </span>
                     </label>
@@ -462,7 +498,7 @@ export function MassCompositionCell({
                     Total
                   </span>
                   <span className="font-mono text-sm tabular-nums">
-                    {formatNumber(total, normalizedTargetUnit)}
+                    {formatTargetNumber(total)}
                   </span>
                 </div>
                 {effectiveTarget != null ? (
@@ -471,7 +507,7 @@ export function MassCompositionCell({
                       Alvo
                     </span>
                     <span className="font-mono text-sm tabular-nums">
-                      {formatNumber(effectiveTarget, normalizedTargetUnit)}
+                      {formatTargetNumber(effectiveTarget)}
                     </span>
                   </div>
                 ) : null}
@@ -763,10 +799,7 @@ export function MassCompositionCell({
                       Valor certificado
                     </p>
                     <p className="font-mono">
-                      {formatNumber(
-                        composition.totals.certifiedValue,
-                        normalizedTargetUnit,
-                      )}
+                      {formatTargetNumber(composition.totals.certifiedValue)}
                     </p>
                   </div>
                   <div>
@@ -774,37 +807,27 @@ export function MassCompositionCell({
                       Incerteza expandida
                     </p>
                     <p className="font-mono">
-                      {formatNumber(
+                      {formatTargetNumber(
                         composition.totals.expandedUncertainty,
-                        normalizedTargetUnit,
                       )}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Erro máximo</p>
                     <p className="font-mono">
-                      {formatNumber(
-                        composition.totals.maxError,
-                        normalizedTargetUnit,
-                      )}
+                      {formatTargetNumber(composition.totals.maxError)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Deriva</p>
                     <p className="font-mono">
-                      {formatNumber(
-                        composition.totals.drift,
-                        normalizedTargetUnit,
-                      )}
+                      {formatTargetNumber(composition.totals.drift)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Empuxo</p>
                     <p className="font-mono">
-                      {formatNumber(
-                        composition.totals.buoyancy,
-                        normalizedTargetUnit,
-                      )}
+                      {formatTargetNumber(composition.totals.buoyancy)}
                     </p>
                   </div>
                 </div>
