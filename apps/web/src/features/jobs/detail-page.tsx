@@ -63,6 +63,7 @@ import {
 } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from '@/features/jobs/components/approved-job-record'
 import { CertificateProgressButton } from '@/features/jobs/components/certificate-progress-button'
+import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import {
@@ -532,6 +533,21 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   const normalizedJobStatus = toJobStatus(job.status)
   const renderReviewFieldValue = (field: ReviewMethodField) => {
     const value = displayReviewData?.[field.key]
+
+    if (
+      field.type === 'table' &&
+      field.key === 'repetibilidade' &&
+      field.columns &&
+      Array.isArray(value)
+    ) {
+      return (
+        <RepeatabilityTable
+          columns={field.columns}
+          value={value}
+          displayUnit={displayUnitForReview}
+        />
+      )
+    }
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       const columns = field.columns
@@ -1774,8 +1790,8 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
           <DialogHeader>
             <DialogTitle>Cancelar Calibração</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja cancelar esta calibração? Esta ação não pode
-              ser desfeita.
+              Tem certeza que deseja cancelar esta calibração? Esta ação não
+              pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <Field>
