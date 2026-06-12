@@ -20,7 +20,7 @@ import {
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
 import { MeasurementNumberCell } from './measurement-number-cell'
-import { isMassUnit, type MassUnit } from '@calibra-facil/shared'
+import { normalizeMassUnit, type MassUnit } from '@calibra-facil/shared'
 import {
   convertUnitDelta,
   convertUnitValue,
@@ -368,8 +368,8 @@ function resolveMassCompositionTarget(
   if (numeric == null) return null
 
   const pointColumn = columns.find((col) => col.key === resolver.pointColumn)
-  const unit = resolver.pointUnit ?? pointColumn?.unit
-  if (!isMassUnit(unit)) return null
+  const unit = normalizeMassUnit(resolver.pointUnit ?? pointColumn?.unit)
+  if (unit == null) return null
 
   return { value: numeric, unit }
 }
