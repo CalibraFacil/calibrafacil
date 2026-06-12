@@ -4,16 +4,16 @@ import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import { Reveal } from './reveal'
 import { BlueprintGrid } from './hero'
 
-const caseMeta = [
+const proofMeta = [
   'Motor validado contra planilha de referência',
   'Calibração de massa',
   'Certificados em produção',
 ]
 
-export function CaseStudySection() {
+export function ProofSection() {
   return (
     <section
-      id="caso"
+      id="prova"
       className="relative isolate overflow-hidden border-t border-border/70 py-24"
     >
       <BlueprintGrid fine />
@@ -53,7 +53,7 @@ export function CaseStudySection() {
             </div>
 
             <div className="mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-mono text-xs text-muted-foreground">
-              {caseMeta.map((item, index) => (
+              {proofMeta.map((item, index) => (
                 <div key={item} className="flex items-center gap-3">
                   {index > 0 && (
                     <span className="size-1 rounded-full bg-foreground/30" />
