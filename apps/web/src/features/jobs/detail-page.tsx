@@ -76,6 +76,7 @@ import {
   formatDate,
   formatDateTime,
   formatReviewValue,
+  reviewColumnDisplayLabel,
   getFinancialVariant,
   JOB_STATUS_LABELS,
   JOB_STATUS_VARIANTS,
@@ -561,7 +562,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     key={column.key}
                     className="h-11 whitespace-nowrap px-3 text-xs"
                   >
-                    {column.label}
+                    {reviewColumnDisplayLabel(column)}
                     {displayUnitForReview(column.unit) && (
                       <span className="ml-1 text-xs text-muted-foreground">
                         ({displayUnitForReview(column.unit)})

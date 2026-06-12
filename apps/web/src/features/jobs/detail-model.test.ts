@@ -25,6 +25,7 @@ import {
   JOB_STATUS_VARIANTS,
   numberFromUnknown,
   numericValues,
+  reviewColumnDisplayLabel,
 } from './detail-model'
 
 describe('job detail model', () => {
@@ -402,5 +403,54 @@ describe('job detail model', () => {
     expect(desktopCloudActionError().message).toContain(
       'Esta ação exige validação online',
     )
+  })
+})
+
+describe('reviewColumnDisplayLabel', () => {
+  it('prefixes the phase for bare reading labels in flat tables', () => {
+    expect(
+      reviewColumnDisplayLabel({
+        key: 'leitura_1',
+        label: 'Leitura 1',
+        type: 'number',
+        phase: 'before',
+      }),
+    ).toBe('Antes do ajuste · Leitura 1')
+    expect(
+      reviewColumnDisplayLabel({
+        key: 'apos_leitura_1',
+        label: 'Leitura 1',
+        type: 'number',
+        phase: 'after',
+      }),
+    ).toBe('Após o ajuste · Leitura 1')
+  })
+
+  it('passes through labels that already mention the phase', () => {
+    expect(
+      reviewColumnDisplayLabel({
+        key: 'antes',
+        label: 'Antes do ajuste',
+        type: 'number',
+        phase: 'before',
+      }),
+    ).toBe('Antes do ajuste')
+    expect(
+      reviewColumnDisplayLabel({
+        key: 'leitura_1',
+        label: 'Antes leitura 1',
+        type: 'number',
+      }),
+    ).toBe('Antes leitura 1')
+  })
+
+  it('passes through columns without phase metadata', () => {
+    expect(
+      reviewColumnDisplayLabel({
+        key: 'condicao',
+        label: 'Condição',
+        type: 'text',
+      }),
+    ).toBe('Condição')
   })
 })
