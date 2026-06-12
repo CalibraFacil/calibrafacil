@@ -2761,7 +2761,7 @@ export type WeighingRangeResolverConfig = {
   enabled?: boolean;
   assetSpecKey?: string;
   pointColumn?: string;
-  pointUnit?: "mg" | "g" | "kg";
+  pointUnit?: MeasurementUnit;
   targetColumns?: {
     rangeLabel?: string;
     rangeMin?: string;
