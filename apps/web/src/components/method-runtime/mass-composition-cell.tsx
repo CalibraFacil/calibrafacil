@@ -58,6 +58,8 @@ interface MassCompositionCellProps {
   previousComposition?: MassCompositionValue | null
   /** Unit used to present totals/target to match the execution table cells. */
   displayUnit?: string | null
+  /** Instrument resolution at the point — drives accuracy-class suggestion. */
+  resolution?: { value: number; unit: MassUnit } | null
 }
 
 function optionKey(option: MassCompositionOption): string {
@@ -139,6 +141,7 @@ export function MassCompositionCell({
   target = null,
   previousComposition = null,
   displayUnit = null,
+  resolution = null,
 }: MassCompositionCellProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -286,12 +289,22 @@ export function MassCompositionCell({
     )
   }
 
+  const resolutionInTargetUnit =
+    resolution == null
+      ? null
+      : convertMassValue(
+          resolution.value,
+          resolution.unit,
+          normalizedTargetUnit,
+        )
+
   const applySuggestion = () => {
     if (effectiveTarget == null) return
     const suggestion = suggestMassComposition(
       effectiveTarget,
       normalizedTargetUnit,
       visibleOptions,
+      { resolution: resolutionInTargetUnit },
     )
     if (!suggestion) return
     setQuantityDrafts({})
