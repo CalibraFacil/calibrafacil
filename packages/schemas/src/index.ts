@@ -293,6 +293,52 @@ export const MassUnitSchema = z.enum(["mg", "g", "kg"]);
 export type MassUnit = z.infer<typeof MassUnitSchema>;
 
 /**
+ * Every measurement unit token understood by the kind-aware unit registry
+ * (`@calibra-facil/shared/units`). This is a strict *widening* of
+ * {@link MassUnitSchema}: old stored snapshots (mass-only) keep parsing, and
+ * the list must stay in sync with the registry (asserted by an enum-sync test).
+ */
+export const MeasurementUnitSchema = z.enum([
+  // mass
+  "mg",
+  "g",
+  "kg",
+  // length
+  "µm",
+  "mm",
+  "cm",
+  "m",
+  // temperature
+  "°C",
+  "°F",
+  "K",
+  // pressure
+  "Pa",
+  "kPa",
+  "MPa",
+  "bar",
+  "psi",
+  "kgf/cm²",
+  "mmHg",
+  "inHg",
+  // volume
+  "µL",
+  "mL",
+  "L",
+  // time
+  "ms",
+  "s",
+  "min",
+  "h",
+  // torque
+  "N·m",
+  "kgf·m",
+  // humidity
+  "%RH",
+]);
+export type MeasurementUnit = z.infer<typeof MeasurementUnitSchema>;
+
+/**
  * Schema for creating a new asset
  */
 export const CreateAssetSchema = z.object({
@@ -304,7 +350,7 @@ export const CreateAssetSchema = z.object({
   serialNumber: z.string().min(1, "Número de série é obrigatório"),
   tag: z.string().min(1, "Tag é obrigatória"),
   status: AssetStatusSchema.optional().default("ACTIVE"),
-  baseMeasurementUnit: MassUnitSchema.optional().nullable(),
+  baseMeasurementUnit: MeasurementUnitSchema.optional().nullable(),
   lastCalibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
@@ -568,7 +614,7 @@ export const WeighingRangeResolverConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
   assetSpecKey: z.string().min(1).optional(),
   pointColumn: z.string().min(1).optional(),
-  pointUnit: z.enum(["mg", "g", "kg"]).optional(),
+  pointUnit: MeasurementUnitSchema.optional(),
   targetColumns: z
     .object({
       rangeLabel: z.string().optional(),

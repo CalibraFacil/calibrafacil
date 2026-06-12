@@ -142,4 +142,24 @@ describe("normalizeUnitToken pitfalls", () => {
     expect(unitKind("%")).toBeNull();
     expect(unitKind("µm/(m·K)")).toBeNull();
   });
+
+  it("accepts every token used by the asset-type seeds verbatim", () => {
+    // Codepoints matter: N·m uses U+00B7, °C uses U+00B0, µ uses U+00B5,
+    // kgf/cm² uses U+00B2. µm/(m·K) is deliberately kind-less.
+    const seedTokens: Array<[string, string | null]> = [
+      ["mm", "mm"],
+      ["bar", "bar"],
+      ["N·m", "N·m"],
+      ["°C", "°C"],
+      ["s", "s"],
+      ["g", "g"],
+      ["µL", "µL"],
+      ["%RH", "%RH"],
+      ["kgf/cm²", "kgf/cm²"],
+      ["µm/(m·K)", null],
+    ];
+    for (const [token, expected] of seedTokens) {
+      expect(normalizeUnitToken(token)).toBe(expected);
+    }
+  });
 });
