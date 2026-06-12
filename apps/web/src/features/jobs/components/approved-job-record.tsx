@@ -89,6 +89,7 @@ import {
   formatDate,
   formatReviewValue,
   REVIEW_ACTION_BUTTON_CLASS,
+  reviewColumnDisplayLabel,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
 import {
@@ -276,7 +277,7 @@ export function ApprovedJobRecord({
                     key={col.key}
                     className="h-11 whitespace-nowrap px-3 text-xs"
                   >
-                    {col.label}
+                    {reviewColumnDisplayLabel(col)}
                     {displayUnitFor(col.unit) && (
                       <span className="text-xs text-muted-foreground ml-1">
                         ({displayUnitFor(col.unit)})

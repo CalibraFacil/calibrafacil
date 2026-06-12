@@ -54,24 +54,26 @@ describe('buildRepeatabilityGroups', () => {
     ])
   })
 
-  it('derives reading rows from the "do ajuste" method labels too', () => {
-    const ajusteColumns: ReviewMethodColumn[] = [
+  it('classifies columns by phase metadata with bare "Leitura N" labels', () => {
+    const phaseColumns: ReviewMethodColumn[] = [
       { key: 'condicao', label: 'Condição', type: 'text' },
       {
         key: 'leitura_1',
-        label: 'Antes do ajuste - leitura 1',
+        label: 'Leitura 1',
         type: 'number',
         unit: 'g',
+        phase: 'before',
       },
       {
         key: 'apos_leitura_1',
-        label: 'Após o ajuste - leitura 1',
+        label: 'Leitura 1',
         type: 'number',
         unit: 'g',
+        phase: 'after',
       },
     ]
 
-    const [group] = buildRepeatabilityGroups(ajusteColumns, [
+    const [group] = buildRepeatabilityGroups(phaseColumns, [
       { condicao: '1000 kg', leitura_1: 999, apos_leitura_1: 1000 },
     ])
 

@@ -55,6 +55,27 @@ export type ReviewMethodColumn = {
   label: string
   type: 'text' | 'number'
   unit?: string | null
+  phase?: string | null
+}
+
+export const PHASE_DISPLAY_LABELS: Record<'before' | 'after', string> = {
+  before: 'Antes do ajuste',
+  after: 'Após o ajuste',
+}
+
+/**
+ * Display label for a measurement-table column in flat (ungrouped) tables.
+ * Method labels carry only the replicate ("Leitura 1") while the phase lives
+ * in the column's `phase` metadata, so outside a phase-grouped layout the
+ * phase is prefixed back in to keep the column unambiguous. Labels that
+ * already mention the phase (older snapshots, eccentricity columns) pass
+ * through unchanged.
+ */
+export function reviewColumnDisplayLabel(column: ReviewMethodColumn): string {
+  const phase = column.phase
+  if (phase !== 'before' && phase !== 'after') return column.label
+  if (/antes|ap[óo]s/i.test(column.label)) return column.label
+  return `${PHASE_DISPLAY_LABELS[phase]} · ${column.label}`
 }
 
 export type ReviewMethodField = {

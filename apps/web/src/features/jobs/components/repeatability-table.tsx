@@ -7,7 +7,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import { formatReviewValue, type ReviewMethodColumn } from '../detail-model'
+import {
+  formatReviewValue,
+  PHASE_DISPLAY_LABELS,
+  type ReviewMethodColumn,
+} from '../detail-model'
 
 type RepeatabilityReading = {
   label: string
@@ -25,9 +29,14 @@ export type RepeatabilityGroup = {
 
 const AFTER_PREFIX = /^ap[óo]s\s+/i
 const READING_TOKEN = /leitura\s*\d+/i
-const READING_TAIL = /[\s\-–—:·,]*leitura\s*\d+.*$/i
 
+/**
+ * Phase classification prefers the column's `phase` metadata; the key/label
+ * sniffing is a fallback for older frozen snapshots that predate it.
+ */
 function isAfterColumn(column: ReviewMethodColumn): boolean {
+  if (column.phase === 'after') return true
+  if (column.phase === 'before') return false
   return (
     column.key.toLowerCase().startsWith('apos') ||
     AFTER_PREFIX.test(column.label)
@@ -35,24 +44,14 @@ function isAfterColumn(column: ReviewMethodColumn): boolean {
 }
 
 /**
- * Extracts the replicate label ("Leitura 1") from a method column label, whatever
- * phase wording precedes it (e.g. "Antes do ajuste - leitura 1" or "Antes leitura 1").
+ * Extracts the replicate label ("Leitura 1") from a method column label,
+ * tolerating older labels that prefixed the phase ("Antes leitura 1").
  */
 function readingLabel(rawLabel: string, index: number): string {
   const match = rawLabel.match(READING_TOKEN)
   if (!match) return `Leitura ${index + 1}`
   const token = match[0].toLowerCase().replace(/\s+/g, ' ')
   return token.charAt(0).toUpperCase() + token.slice(1)
-}
-
-/**
- * Derives the phase header ("Antes do ajuste") from a column label by dropping the
- * replicate portion, so the component mirrors whatever wording the method defines.
- */
-function phaseHeader(label: string | undefined, fallback: string): string {
-  if (!label) return fallback
-  const stripped = label.replace(READING_TAIL, '').trim()
-  return stripped || fallback
 }
 
 function toRows(value: unknown): Array<Record<string, unknown>> {
@@ -133,8 +132,8 @@ export function RepeatabilityTable({
   const afterColumn = columns.find(
     (column) => column.type === 'number' && isAfterColumn(column),
   )
-  const beforeHeader = phaseHeader(beforeColumn?.label, 'Antes')
-  const afterHeader = phaseHeader(afterColumn?.label, 'Após')
+  const beforeHeader = PHASE_DISPLAY_LABELS.before
+  const afterHeader = PHASE_DISPLAY_LABELS.after
   const hasAfter = afterColumn !== undefined
   const unit = displayUnit(beforeColumn?.unit ?? afterColumn?.unit)
 
