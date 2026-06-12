@@ -95,23 +95,23 @@ function FeatureCertificate() {
       title="Cada laboratório edita o próprio certificado. Em Excel mesmo."
       lead={
         <>
-          Sem aprender ferramenta nova. Sem depender de fornecedor pra cada
-          ajuste de modelo. O laboratório mantém o template em Excel ou
-          LibreOffice e usa os mecanismos nativos da ferramenta (bloqueio de
-          células, proteção por senha, controle de revisão supervisionada) para
-          atender ao requisito de controle de documentos da ISO/IEC 17025. O
-          CalibraFácil só preenche as variáveis nomeadas (
+          O Excel (ou LibreOffice) é só o layout visual — onde o laboratório
+          posiciona logo, cabeçalho e tabelas, sem aprender ferramenta nova nem
+          depender de fornecedor pra cada ajuste. O que conta para a ISO/IEC
+          17025 não mora nele: o cálculo e a evidência ficam no sistema
+          imutável, e o que vale juridicamente é o PDF congelado e assinado na
+          aprovação. O CalibraFácil preenche as variáveis nomeadas (
           <CodeChip>{'{{cliente}}'}</CodeChip>,{' '}
-          <CodeChip>{'{{u_expandida}}'}</CodeChip>) no template aprovado e gera
-          o PDF na aprovação.
+          <CodeChip>{'{{u_expandida}}'}</CodeChip>) e gera esse PDF — o template
+          Excel nunca é o documento controlado.
         </>
       }
       bullets={[
-        'Template editado em Excel ou LibreOffice, com bloqueio de células, senha e controle de revisão supervisionado pelo laboratório',
-        'Compatível com o controle de documentos exigido pela ISO/IEC 17025',
+        'O modelo Excel define só a aparência do certificado: logo, cabeçalho, tabelas, posição da assinatura',
+        'O documento controlado é o PDF congelado e assinado, não a planilha. O controle de documentos da ISO/IEC 17025 vive no sistema.',
         'Múltiplos modelos por escopo (massa, temperatura, pressão, dimensional)',
         'Variáveis nomeadas pra cada dado de calibração. Sem cópia manual, sem erro de digitação.',
-        'PDF gerado na aprovação e congelado. A versão aprovada não muda.',
+        'PDF gerado na aprovação, congelado e assinado em ICP-Brasil. A versão aprovada não muda.',
       ]}
       visual={<XlsxTemplate />}
     />
