@@ -102,6 +102,23 @@ describe('MeasurementNumberCell', () => {
     expect(onCommit).toHaveBeenLastCalledWith(1500)
   })
 
+  it('strips floating-point noise from converted commits', () => {
+    const onCommit = vi.fn()
+    render(
+      <MeasurementNumberCell
+        value={null}
+        onCommit={onCommit}
+        columnUnit="g"
+        displayUnit="mg"
+      />,
+    )
+    const input = getInput()
+    fireEvent.focus(input)
+    // 1.3 mg -> 0.0013 g would otherwise store 0.0013000000000000002.
+    fireEvent.change(input, { target: { value: '1.3' } })
+    expect(onCommit).toHaveBeenLastCalledWith(0.0013)
+  })
+
   it('commits null when cleared', () => {
     const onCommit = vi.fn()
     render(

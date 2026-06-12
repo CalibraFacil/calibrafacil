@@ -88,7 +88,11 @@ export function MeasurementNumberCell({
     const sourceUnit = fromUnit ?? displayUnit
     if (!isMassUnit(sourceUnit) || !isMassUnit(columnUnit)) return display
     if (sourceUnit === columnUnit) return display
-    return convertMassValue(display, sourceUnit, columnUnit) ?? display
+    const converted = convertMassValue(display, sourceUnit, columnUnit)
+    if (converted == null) return display
+    // Strip floating-point noise introduced by the unit conversion so stored
+    // execution values stay clean for downstream certificates.
+    return Number(converted.toPrecision(12))
   }
 
   const formatCanonicalForDisplay = (canonical: number | null): string => {
@@ -140,7 +144,7 @@ export function MeasurementNumberCell({
     setOpen(false)
   }
 
-  const input = (
+  const renderInput = (inputClassName: string) => (
     <Input
       type="text"
       inputMode="decimal"
@@ -152,13 +156,13 @@ export function MeasurementNumberCell({
       onChange={(event) => handleChange(event.target.value)}
       onBlur={handleBlur}
       disabled={disabled}
-      className={className ?? 'h-8 w-full'}
+      className={inputClassName}
       title={title}
     />
   )
 
   if (!certifiedValueOptions || certifiedValueOptions.length === 0) {
-    return input
+    return renderInput(className ?? 'h-8 w-full')
   }
 
   const groupedOptions = certifiedValueOptions.reduce<
@@ -171,20 +175,7 @@ export function MeasurementNumberCell({
 
   return (
     <div className="flex gap-1">
-      <Input
-        type="text"
-        inputMode="decimal"
-        value={inputValue}
-        onFocus={() => {
-          setDraft(formatCanonicalForDisplay(canonicalValue))
-          setFocused(true)
-        }}
-        onChange={(event) => handleChange(event.target.value)}
-        onBlur={handleBlur}
-        disabled={disabled}
-        className="h-8 flex-1"
-        title={title}
-      />
+      {renderInput('h-8 flex-1')}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={(props) => (

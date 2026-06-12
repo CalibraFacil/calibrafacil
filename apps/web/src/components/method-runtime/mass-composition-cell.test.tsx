@@ -259,6 +259,22 @@ describe('MassCompositionCell', () => {
     expect(onChange.mock.calls.at(-1)?.[0]).toBeNull()
   })
 
+  it('clears the search on Escape without closing the dialog', () => {
+    render(<Harness />)
+    openDialog()
+
+    const searchInput = screen.getByPlaceholderText(/buscar peso/i)
+    fireEvent.change(searchInput, { target: { value: '2 kg' } })
+    fireEvent.keyDown(searchInput, { key: 'Escape' })
+
+    if (!(searchInput instanceof HTMLInputElement)) {
+      throw new Error('search is not an input')
+    }
+    expect(searchInput.value).toBe('')
+    // Dialog stays open: its title is still in the document.
+    expect(screen.getByText('Composição dos pesos')).toBeTruthy()
+  })
+
   it('shows only composition profiles when configured', () => {
     const profile = option({
       certifiedValueIndex: 0,

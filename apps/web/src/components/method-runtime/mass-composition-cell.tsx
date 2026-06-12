@@ -267,10 +267,18 @@ export function MassCompositionCell({
     commitItems([...items, massCompositionItemFromOption(option, quantity)])
   }
 
+  // Drafts are keyed by item index, so any removal shifts the keys — clear them
+  // to avoid a stale draft briefly rendering against the wrong row.
+  const removeItemAt = (index: number) => {
+    setLastSuggestionNote(null)
+    setQuantityDrafts({})
+    commitItems(items.filter((_, i) => i !== index))
+  }
+
   const setItemQuantity = (index: number, quantity: number) => {
     setLastSuggestionNote(null)
     if (!Number.isInteger(quantity) || quantity < 1) {
-      commitItems(items.filter((_, i) => i !== index))
+      removeItemAt(index)
       return
     }
     commitItems(
@@ -726,9 +734,7 @@ export function MassCompositionCell({
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() =>
-                                commitItems(items.filter((_, i) => i !== index))
-                              }
+                              onClick={() => removeItemAt(index)}
                               aria-label="Remover peso"
                             >
                               <HugeiconsIcon
