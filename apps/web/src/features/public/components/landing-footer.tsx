@@ -88,7 +88,13 @@ export function LandingFooter() {
               <img
                 src="/icp-brasil.svg"
                 alt="ICP-Brasil"
-                className="h-8 w-auto shrink-0"
+                className="h-8 w-auto shrink-0 dark:hidden"
+                draggable={false}
+              />
+              <img
+                src="/icp-brasil-dark.svg"
+                alt="ICP-Brasil"
+                className="hidden h-8 w-auto shrink-0 dark:block"
                 draggable={false}
               />
               <span className="text-xs leading-snug text-muted-foreground">

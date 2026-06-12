@@ -382,7 +382,13 @@ function SignedCertificate() {
         <img
           src="/icp-brasil.svg"
           alt="ICP-Brasil"
-          className="h-7 w-auto shrink-0"
+          className="h-7 w-auto shrink-0 dark:hidden"
+          draggable={false}
+        />
+        <img
+          src="/icp-brasil-dark.svg"
+          alt="ICP-Brasil"
+          className="hidden h-7 w-auto shrink-0 dark:block"
           draggable={false}
         />
         <div className="min-w-0 text-right text-xs text-muted-foreground">
