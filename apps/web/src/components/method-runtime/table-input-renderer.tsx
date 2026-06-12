@@ -784,6 +784,11 @@ export function TableInputRenderer({
       const previousComposition = isMassCompositionValue(prevValue)
         ? prevValue
         : null
+      const rowResolution = resolveRowResolution(
+        field,
+        row,
+        assetSpecifications,
+      )
       return (
         <MassCompositionCell
           value={row[col.key]}
@@ -798,6 +803,14 @@ export function TableInputRenderer({
             assetBaseUnit,
             col.massComposition?.targetUnit ?? 'g',
           )}
+          resolution={
+            rowResolution
+              ? {
+                  value: rowResolution.resolution,
+                  unit: rowResolution.resolutionUnit,
+                }
+              : null
+          }
         />
       )
     }

@@ -164,6 +164,93 @@ describe('suggestMassComposition', () => {
   })
 })
 
+describe('suggestMassComposition class awareness', () => {
+  it('excludes weights too coarse for a fine resolution', () => {
+    const result = suggestMassComposition(
+      1,
+      'g',
+      [
+        option({
+          certifiedValueIndex: 0,
+          unit: 'g',
+          value: 1,
+          profileClass: 'F1',
+          maxError: 0.00001,
+        }),
+        option({
+          certifiedValueIndex: 1,
+          unit: 'g',
+          value: 1,
+          profileClass: 'M1',
+          maxError: 0.1,
+        }),
+      ],
+      { resolution: 0.1 },
+    )
+    expect(result?.items).toHaveLength(1)
+    expect(result?.items[0].profileClass).toBe('F1')
+  })
+
+  it('prefers the coarsest eligible class when several fit', () => {
+    const result = suggestMassComposition(
+      1000,
+      'g',
+      [
+        option({
+          certifiedValueIndex: 0,
+          unit: 'g',
+          value: 1000,
+          profileClass: 'F1',
+          maxError: 0.005,
+          uncertainty: 0.001,
+        }),
+        option({
+          certifiedValueIndex: 1,
+          unit: 'g',
+          value: 1000,
+          profileClass: 'M1',
+          maxError: 5,
+          uncertainty: 0.5,
+        }),
+      ],
+      { resolution: 500 },
+    )
+    expect(result?.items[0].profileClass).toBe('M1')
+  })
+
+  it('restricts to an explicit preferred class', () => {
+    const result = suggestMassComposition(
+      1000,
+      'g',
+      [
+        option({
+          certifiedValueIndex: 0,
+          unit: 'g',
+          value: 1000,
+          profileClass: 'F1',
+          maxError: 0.005,
+        }),
+        option({
+          certifiedValueIndex: 1,
+          unit: 'g',
+          value: 1000,
+          profileClass: 'M1',
+          maxError: 5,
+        }),
+      ],
+      { preferredClass: 'f1' },
+    )
+    expect(result?.items[0].profileClass).toBe('F1')
+  })
+
+  it('falls back to all classes when no criteria are given', () => {
+    const result = suggestMassComposition(2, 'kg', [
+      option({ certifiedValueIndex: 0, nominal: '2 kg', value: 2 }),
+    ])
+    expect(result?.items[0].value).toBe(2)
+  })
+})
+
 describe('sortMassOptionsDesc', () => {
   it('sorts descending by converted value, unconvertible last', () => {
     const sorted = sortMassOptionsDesc(

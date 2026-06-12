@@ -58,6 +58,8 @@ interface MassCompositionCellProps {
   previousComposition?: MassCompositionValue | null
   /** Unit used to present totals/target to match the execution table cells. */
   displayUnit?: string | null
+  /** Instrument resolution at the point — drives accuracy-class suggestion. */
+  resolution?: { value: number; unit: MassUnit } | null
 }
 
 function optionKey(option: MassCompositionOption): string {
@@ -139,6 +141,7 @@ export function MassCompositionCell({
   target = null,
   previousComposition = null,
   displayUnit = null,
+  resolution = null,
 }: MassCompositionCellProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -286,12 +289,22 @@ export function MassCompositionCell({
     )
   }
 
+  const resolutionInTargetUnit =
+    resolution == null
+      ? null
+      : convertMassValue(
+          resolution.value,
+          resolution.unit,
+          normalizedTargetUnit,
+        )
+
   const applySuggestion = () => {
     if (effectiveTarget == null) return
     const suggestion = suggestMassComposition(
       effectiveTarget,
       normalizedTargetUnit,
       visibleOptions,
+      { resolution: resolutionInTargetUnit },
     )
     if (!suggestion) return
     setQuantityDrafts({})
@@ -558,7 +571,7 @@ export function MassCompositionCell({
                     Nenhum peso encontrado.
                   </div>
                 ) : (
-                  <div className="grid max-h-[38vh] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-5">
+                  <div className="grid max-h-[38vh] grid-cols-2 gap-2 overflow-y-auto p-1 sm:grid-cols-3 lg:grid-cols-5">
                     {filteredOptions.map((option) => {
                       const key = optionKey(option)
                       const inComposition = quantityByKey.get(key)
@@ -582,7 +595,8 @@ export function MassCompositionCell({
                           }`}
                           className={cn(
                             'h-auto flex-col items-start gap-0.5 px-2.5 py-2 text-left',
-                            key === effectiveHighlightKey && 'ring-2 ring-ring',
+                            key === effectiveHighlightKey &&
+                              'ring-2 ring-inset ring-ring',
                           )}
                         >
                           <span className="flex w-full min-w-0 items-center gap-1">
