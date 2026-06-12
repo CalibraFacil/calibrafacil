@@ -83,6 +83,7 @@ import { AccreditationSeal } from '@/components/accreditation-seal'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
 import {
   buildApprovedJobRecordModel,
   formatDate,
@@ -248,6 +249,21 @@ export function ApprovedJobRecord({
     field: ApprovedJobRecordData['methodSnapshot']['dataFields'][0],
   ) => {
     const value = displayData?.[field.key]
+
+    if (
+      field.type === 'table' &&
+      field.key === 'repetibilidade' &&
+      field.columns &&
+      Array.isArray(value)
+    ) {
+      return (
+        <RepeatabilityTable
+          columns={field.columns}
+          value={value}
+          displayUnit={displayUnitFor}
+        />
+      )
+    }
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       return (
