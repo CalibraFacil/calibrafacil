@@ -85,25 +85,6 @@ export function Hero() {
               </div>
             ))}
           </div>
-
-          <div className="mx-auto mt-6 flex max-w-[600px] flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-border/60 pt-6 text-xs text-muted-foreground">
-            <img
-              src="/exemplo-black.svg"
-              alt="Laboratório Exemplo"
-              className="h-5 w-auto opacity-60 dark:hidden"
-              draggable={false}
-            />
-            <img
-              src="/exemplo-negativo.svg"
-              alt="Laboratório Exemplo"
-              className="hidden h-5 w-auto opacity-60 dark:block"
-              draggable={false}
-            />
-            <span className="text-muted-foreground/90">
-              Em produção · calibração de massa · motor validado contra a
-              planilha de referência do laboratório
-            </span>
-          </div>
         </div>
       </div>
     </section>
