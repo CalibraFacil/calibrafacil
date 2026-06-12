@@ -93,6 +93,82 @@ interface SuggestionCandidate {
   value: number
   uncertainty: number
   availability: number
+  maxError: number | null
+  profileClass: string | null
+}
+
+/**
+ * Selects which reference-weight accuracy class is appropriate for a point.
+ * `preferredClass` (from method/asset config) wins when its weights exist;
+ * otherwise weights are kept only when their maximum permissible error is small
+ * relative to the instrument resolution (EURAMET cg-18 style ⅓ rule), and the
+ * coarsest acceptable class is preferred so fine weights aren't wasted.
+ */
+export interface MassClassCriteria {
+  /** Instrument resolution at the point, in the target unit. */
+  resolution?: number | null
+  /** Explicit accuracy class to restrict to (e.g. "M1"). */
+  preferredClass?: string | null
+}
+
+/** Reference weight MPE should be ≤ this fraction of the instrument's at load. */
+const REFERENCE_WEIGHT_MPE_FRACTION = 1 / 3
+
+function normalizeClass(value: string | null | undefined): string | null {
+  return value ? value.trim().toUpperCase() : null
+}
+
+function optionMaxErrorIn(
+  option: MassCompositionOption,
+  targetUnit: MassUnit,
+): number | null {
+  if (option.maxError == null) return null
+  const converted = convertMassValue(
+    Math.abs(option.maxError),
+    option.unit,
+    targetUnit,
+  )
+  return converted == null ? null : converted
+}
+
+/** Coarser (larger maxError) first, so fine classes aren't burned needlessly. */
+function byCoarsestClass(
+  a: SuggestionCandidate,
+  b: SuggestionCandidate,
+): number {
+  const aError = a.maxError ?? Number.NEGATIVE_INFINITY
+  const bError = b.maxError ?? Number.NEGATIVE_INFINITY
+  if (aError !== bError) return bError - aError
+  return a.uncertainty - b.uncertainty
+}
+
+function selectEligibleCandidates(
+  candidates: SuggestionCandidate[],
+  criteria: MassClassCriteria,
+): SuggestionCandidate[] {
+  const preferred = normalizeClass(criteria.preferredClass)
+  if (preferred) {
+    const byClass = candidates.filter(
+      (candidate) => normalizeClass(candidate.profileClass) === preferred,
+    )
+    if (byClass.length > 0) return byClass
+  }
+
+  const { resolution } = criteria
+  if (
+    typeof resolution === 'number' &&
+    Number.isFinite(resolution) &&
+    resolution > 0
+  ) {
+    const limit = resolution * REFERENCE_WEIGHT_MPE_FRACTION
+    // Drop weights too coarse for this resolution; keep unknown-error weights.
+    const appropriate = candidates.filter(
+      (candidate) => candidate.maxError == null || candidate.maxError <= limit,
+    )
+    if (appropriate.length > 0) return appropriate
+  }
+
+  return candidates
 }
 
 function relativeTolerance(target: number): number {
@@ -114,34 +190,40 @@ function candidateAvailability(option: MassCompositionOption): number {
  * Suggests a weight composition that reaches `target` (in `targetUnit`) using
  * the available options.
  *
- * Strategy: prefer a single exact-match option; otherwise a largest-first
- * greedy decomposition with one closest-over refinement step. This is NOT an
- * optimal knapsack solver — it is tuned for the canonical 1-2-5 weight series
- * where greedy is optimal, and the technician can always edit the result.
+ * Strategy: restrict to the accuracy class appropriate for the point (see
+ * {@link selectEligibleCandidates}), then prefer a single exact-match option;
+ * otherwise a largest-first greedy decomposition with one closest-over
+ * refinement step. This is NOT an optimal knapsack solver — it is tuned for the
+ * canonical 1-2-5 weight series where greedy is optimal, and the technician can
+ * always edit the result.
  */
 export function suggestMassComposition(
   target: number,
   targetUnit: MassUnit,
   options: MassCompositionOption[],
+  criteria: MassClassCriteria = {},
 ): MassCompositionSuggestion | null {
   if (!Number.isFinite(target) || target <= 0) return null
 
   const tol = relativeTolerance(target)
 
-  const candidates: SuggestionCandidate[] = []
+  const allCandidates: SuggestionCandidate[] = []
   for (const option of options) {
     const value = optionValueIn(option, targetUnit)
     if (value == null || value <= 0) continue
     const availability = candidateAvailability(option)
     if (availability < 1) continue
-    candidates.push({
+    allCandidates.push({
       option,
       value,
       uncertainty: optionUncertaintyIn(option, targetUnit),
       availability,
+      maxError: optionMaxErrorIn(option, targetUnit),
+      profileClass: option.profileClass ?? null,
     })
   }
 
+  const candidates = selectEligibleCandidates(allCandidates, criteria)
   if (candidates.length === 0) return null
 
   const buildResult = (
@@ -158,17 +240,18 @@ export function suggestMassComposition(
     return { items, total, delta, exact: Math.abs(delta) <= tol }
   }
 
-  // Exact single-option preference (a single 2 kg beats 2× 1 kg).
+  // Exact single-option preference (a single 2 kg beats 2× 1 kg); among equals,
+  // the coarsest appropriate class.
   const exactSingles = candidates
     .filter((candidate) => Math.abs(candidate.value - target) <= tol)
-    .sort((a, b) => a.uncertainty - b.uncertainty)
+    .sort(byCoarsestClass)
   if (exactSingles[0]) {
     return buildResult([{ candidate: exactSingles[0], quantity: 1 }])
   }
 
   const sorted = [...candidates].sort((a, b) => {
     if (a.value !== b.value) return b.value - a.value
-    return a.uncertainty - b.uncertainty
+    return byCoarsestClass(a, b)
   })
 
   const picks = new Map<SuggestionCandidate, number>()
