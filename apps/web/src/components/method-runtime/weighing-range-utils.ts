@@ -67,7 +67,7 @@ export function isWeighingRangeSpecArray(
 function hasRangeBoundaryMatch(
   pointValue: number,
   range: WeighingRangeSpec,
-  pointUnit: string,
+  pointUnit: string | undefined,
 ): boolean {
   if (!sameKind(range.rangeUnit, pointUnit)) return false
 

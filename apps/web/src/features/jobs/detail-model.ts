@@ -1,11 +1,11 @@
+import { formatCalibrationValue } from '@calibra-facil/shared'
 import {
-  denormalizeAssetSpecificationsForDisplay,
   denormalizeMethodDataForDisplay,
   denormalizeMethodResultsForDisplay,
-  formatCalibrationValue,
-  resolveMassDisplayUnit,
-  type MassUnit,
-} from '@calibra-facil/shared'
+  denormalizeSpecificationsForDisplay,
+  resolveDisplayUnit,
+  type MeasurementUnit,
+} from '@calibra-facil/shared/units'
 
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
@@ -121,7 +121,7 @@ export type ReviewStandardSnapshot = {
 }
 
 export type ReviewAssetSnapshot = {
-  baseMeasurementUnit?: MassUnit | null
+  baseMeasurementUnit?: MeasurementUnit | null
   specifications?: Record<string, unknown> | null
 }
 
@@ -424,7 +424,7 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
   const assetBaseMeasurementUnit =
     job.assetSnapshot?.baseMeasurementUnit ?? null
   const displayUnitFor = (unit?: string | null) =>
-    resolveMassDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined
+    resolveDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined
   const displayData =
     denormalizeMethodDataForDisplay(
       data,
@@ -441,7 +441,7 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
     methodSnapshot.dataFields,
   )
   const displayAssetSpecs =
-    denormalizeAssetSpecificationsForDisplay(
+    denormalizeSpecificationsForDisplay(
       job.assetSnapshot?.specifications,
       assetSpecDefinitions,
       assetBaseMeasurementUnit,
@@ -753,10 +753,10 @@ export function buildJobReviewModel(
   const reviewAssetBaseUnit = job?.assetSnapshot?.baseMeasurementUnit ?? null
   const reviewStandards = job?.standardsSnapshot ?? []
   const displayUnitForReview = (unit?: string | null) =>
-    resolveMassDisplayUnit(reviewAssetBaseUnit, unit) ?? unit ?? undefined
+    resolveDisplayUnit(reviewAssetBaseUnit, unit) ?? unit ?? undefined
   const assetSpecDefinitions = buildReviewAssetSpecDefinitions(reviewDataFields)
   const displayAssetSpecs =
-    denormalizeAssetSpecificationsForDisplay(
+    denormalizeSpecificationsForDisplay(
       job?.assetSnapshot?.specifications,
       assetSpecDefinitions,
       reviewAssetBaseUnit,

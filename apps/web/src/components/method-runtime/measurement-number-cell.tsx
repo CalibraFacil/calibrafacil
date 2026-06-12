@@ -87,7 +87,8 @@ export function MeasurementNumberCell({
   const toCanonical = (display: number, fromUnit?: string | null): number => {
     const sourceUnit = fromUnit ?? displayUnit
     const sourceKind = unitKind(sourceUnit)
-    if (sourceKind == null || unitKind(columnUnit) !== sourceKind) return display
+    if (sourceKind == null || unitKind(columnUnit) !== sourceKind)
+      return display
     if (sourceUnit === columnUnit) return display
     const converted = convertUnitValue(display, sourceUnit, columnUnit)
     if (converted == null) return display
