@@ -895,7 +895,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 onClick={() => setCancelDialogOpen(true)}
               >
                 <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
-                Cancelar job
+                Cancelar calibração
               </Button>
             </div>
           )}
@@ -1772,10 +1772,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancelar Job</DialogTitle>
+            <DialogTitle>Cancelar Calibração</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja cancelar este job? Esta ação não pode ser
-              desfeita.
+              Tem certeza que deseja cancelar esta calibração? Esta ação não pode
+              ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <Field>
