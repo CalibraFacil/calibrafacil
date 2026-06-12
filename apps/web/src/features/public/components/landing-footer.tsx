@@ -23,6 +23,7 @@ const footerColumns = [
       { label: 'ISO/IEC 17025:2017' },
       { label: 'Portaria Inmetro nº 157' },
       { label: 'JCGM 100:2008 (GUM)' },
+      { label: 'Assinatura ICP-Brasil A1 (PAdES)' },
       { label: 'LGPD' },
     ],
   },
@@ -81,6 +82,17 @@ export function LandingFooter() {
                   className="size-3 text-emerald-500"
                 />
                 Brasil
+              </span>
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <img
+                src="/icp-brasil.svg"
+                alt="ICP-Brasil"
+                className="h-8 w-auto shrink-0"
+                draggable={false}
+              />
+              <span className="text-xs leading-snug text-muted-foreground">
+                Certificados assinados com certificado digital ICP-Brasil A1.
               </span>
             </div>
           </div>
