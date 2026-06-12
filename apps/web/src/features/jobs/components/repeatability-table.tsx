@@ -24,7 +24,8 @@ export type RepeatabilityGroup = {
 }
 
 const AFTER_PREFIX = /^ap[óo]s\s+/i
-const BEFORE_PREFIX = /^antes\s+/i
+const READING_TOKEN = /leitura\s*\d+/i
+const READING_TAIL = /[\s\-–—:·,]*leitura\s*\d+.*$/i
 
 function isAfterColumn(column: ReviewMethodColumn): boolean {
   return (
@@ -33,13 +34,25 @@ function isAfterColumn(column: ReviewMethodColumn): boolean {
   )
 }
 
+/**
+ * Extracts the replicate label ("Leitura 1") from a method column label, whatever
+ * phase wording precedes it (e.g. "Antes do ajuste - leitura 1" or "Antes leitura 1").
+ */
 function readingLabel(rawLabel: string, index: number): string {
-  const stripped = rawLabel
-    .replace(AFTER_PREFIX, '')
-    .replace(BEFORE_PREFIX, '')
-    .trim()
-  if (!stripped) return `Leitura ${index + 1}`
-  return stripped.charAt(0).toUpperCase() + stripped.slice(1)
+  const match = rawLabel.match(READING_TOKEN)
+  if (!match) return `Leitura ${index + 1}`
+  const token = match[0].toLowerCase().replace(/\s+/g, ' ')
+  return token.charAt(0).toUpperCase() + token.slice(1)
+}
+
+/**
+ * Derives the phase header ("Antes do ajuste") from a column label by dropping the
+ * replicate portion, so the component mirrors whatever wording the method defines.
+ */
+function phaseHeader(label: string | undefined, fallback: string): string {
+  if (!label) return fallback
+  const stripped = label.replace(READING_TAIL, '').trim()
+  return stripped || fallback
 }
 
 function toRows(value: unknown): Array<Record<string, unknown>> {
@@ -114,11 +127,16 @@ export function RepeatabilityTable({
   const groups = buildRepeatabilityGroups(columns, value)
   if (groups.length === 0) return null
 
-  const readingColumn = columns.find((column) => column.type === 'number')
-  const hasAfter = columns.some(
+  const beforeColumn = columns.find(
+    (column) => column.type === 'number' && !isAfterColumn(column),
+  )
+  const afterColumn = columns.find(
     (column) => column.type === 'number' && isAfterColumn(column),
   )
-  const unit = displayUnit(readingColumn?.unit)
+  const beforeHeader = phaseHeader(beforeColumn?.label, 'Antes')
+  const afterHeader = phaseHeader(afterColumn?.label, 'Após')
+  const hasAfter = afterColumn !== undefined
+  const unit = displayUnit(beforeColumn?.unit ?? afterColumn?.unit)
 
   return (
     <div className="flex flex-col gap-4">
@@ -144,7 +162,7 @@ export function RepeatabilityTable({
               <TableRow>
                 <TableHead className="h-10 px-3 text-xs">Leitura</TableHead>
                 <TableHead className="h-10 px-3 text-xs">
-                  Antes
+                  {beforeHeader}
                   {unit && (
                     <span className="ml-1 text-xs text-muted-foreground">
                       ({unit})
@@ -153,7 +171,7 @@ export function RepeatabilityTable({
                 </TableHead>
                 {hasAfter && (
                   <TableHead className="h-10 px-3 text-xs">
-                    Após
+                    {afterHeader}
                     {unit && (
                       <span className="ml-1 text-xs text-muted-foreground">
                         ({unit})

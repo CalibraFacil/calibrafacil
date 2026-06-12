@@ -54,6 +54,32 @@ describe('buildRepeatabilityGroups', () => {
     ])
   })
 
+  it('derives reading rows from the "do ajuste" method labels too', () => {
+    const ajusteColumns: ReviewMethodColumn[] = [
+      { key: 'condicao', label: 'Condição', type: 'text' },
+      {
+        key: 'leitura_1',
+        label: 'Antes do ajuste - leitura 1',
+        type: 'number',
+        unit: 'g',
+      },
+      {
+        key: 'apos_leitura_1',
+        label: 'Após o ajuste - leitura 1',
+        type: 'number',
+        unit: 'g',
+      },
+    ]
+
+    const [group] = buildRepeatabilityGroups(ajusteColumns, [
+      { condicao: '1000 kg', leitura_1: 999, apos_leitura_1: 1000 },
+    ])
+
+    expect(group.readings).toEqual([
+      { label: 'Leitura 1', before: 999, after: 1000 },
+    ])
+  })
+
   it('ignores non-record and empty values', () => {
     expect(buildRepeatabilityGroups(columns, null)).toEqual([])
     expect(buildRepeatabilityGroups(columns, [null, 'x', 42])).toEqual([])
