@@ -2,6 +2,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
   BookOpen01Icon,
+  Certificate01Icon,
   DocumentValidationIcon,
   Link01Icon,
   SecurityCheckIcon,
@@ -17,6 +18,7 @@ const heroMeta = [
     icon: DocumentValidationIcon,
     label: 'Cálculo de incerteza conforme o GUM',
   },
+  { icon: Certificate01Icon, label: 'Assinatura ICP-Brasil A1 nativa' },
   { icon: SecurityCheckIcon, label: 'Trilha de auditoria nativa' },
   { icon: Link01Icon, label: 'Rastreabilidade ponta a ponta' },
 ]
