@@ -1,4 +1,5 @@
 import { AudienceSection } from './components/audience-section'
+import { CaseStudySection } from './components/case-study-section'
 import { ClosingCTA } from './components/closing-cta'
 import { FAQSection } from './components/faq-section'
 import { FeaturesSection } from './components/features-section'
@@ -18,6 +19,7 @@ export function LandingPage() {
         <WorkflowSection />
         <AudienceSection />
         <FeaturesSection />
+        <CaseStudySection />
         <FAQSection />
         <ClosingCTA />
       </main>
