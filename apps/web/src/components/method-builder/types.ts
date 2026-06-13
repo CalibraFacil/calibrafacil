@@ -7,12 +7,32 @@ export type MethodDraftStatus =
 
 export type MethodDraftInputType = 'text' | 'number' | 'select' | 'table'
 
+/**
+ * Semantic role of a numeric field/column. Delta-valued roles
+ * (correction/tolerance/uncertainty/resolution) convert factor-only for affine
+ * kinds (temperature) — see DELTA_QUANTITY_KINDS in @calibra-facil/shared.
+ * Mirrors the ScalarInput.quantityKind enum in @calibra-facil/method-definition.
+ */
+export const methodDraftQuantityKinds = [
+  'indication',
+  'reference',
+  'environment',
+  'correction',
+  'tolerance',
+  'uncertainty',
+  'resolution',
+  'other',
+] as const
+
+export type MethodDraftQuantityKind = (typeof methodDraftQuantityKinds)[number]
+
 export interface MethodDraftTableColumn {
   key: string
   label: string
   type: 'text' | 'number'
   unit?: string
   role?: 'standard_value' | 'mass_standard_composition'
+  quantityKind?: MethodDraftQuantityKind
   massComposition?: {
     targetUnit?: 'mg' | 'g' | 'kg'
     optionSource?: 'certified_values' | 'composition_profiles'
@@ -56,6 +76,7 @@ export interface MethodDraftInput {
   label: string
   type: MethodDraftInputType
   unit?: string
+  quantityKind?: MethodDraftQuantityKind
   required?: boolean
   options?: Array<string>
   defaultValue?: string | number

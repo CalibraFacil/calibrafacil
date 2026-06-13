@@ -1,4 +1,14 @@
-export type MassUnit = 'mg' | 'g' | 'kg'
+import {
+  convertMassValue,
+  isMassUnit,
+  normalizeMassUnit,
+  type MassUnit,
+} from '@calibra-facil/shared'
+
+// Re-exported so existing importers (mass-composition-suggest, etc.) keep their
+// import site. Mass composition stays mass-only; these delegate to the shared
+// kind-aware registry with mass pinned.
+export { convertMassValue, isMassUnit, normalizeMassUnit, type MassUnit }
 
 export interface MassCompositionTargetColumns {
   certifiedValue?: string
@@ -59,36 +69,6 @@ export interface MassCompositionOption extends Omit<
   'quantity'
 > {
   optionLabel: string
-}
-
-export function isMassUnit(unit: string): unit is MassUnit {
-  const normalized = unit.trim().toLowerCase()
-  return normalized === 'mg' || normalized === 'g' || normalized === 'kg'
-}
-
-export function normalizeMassUnit(unit: string): MassUnit | null {
-  const normalized = unit.trim().toLowerCase()
-  return isMassUnit(normalized) ? normalized : null
-}
-
-export function convertMassValue(
-  value: number,
-  fromUnit: string,
-  toUnit: MassUnit,
-): number | null {
-  const normalizedFrom = normalizeMassUnit(fromUnit)
-  if (!normalizedFrom) return null
-
-  const valueInGrams =
-    normalizedFrom === 'mg'
-      ? value / 1000
-      : normalizedFrom === 'kg'
-        ? value * 1000
-        : value
-
-  if (toUnit === 'mg') return valueInGrams * 1000
-  if (toUnit === 'kg') return valueInGrams / 1000
-  return valueInGrams
 }
 
 export function isMassCompositionValue(

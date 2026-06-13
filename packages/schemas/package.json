@@ -26,6 +26,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@calibra-facil/shared": "workspace:*",
     "vitest": "^4.0.17"
   }
 }

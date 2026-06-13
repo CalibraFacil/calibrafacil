@@ -149,7 +149,11 @@ export type ScalarInput = {
     | "indication"
     | "reference"
     | "environment"
+    // Delta-valued roles: convert factor-only for affine kinds (temperature).
     | "correction"
+    | "tolerance"
+    | "uncertainty"
+    | "resolution"
     | "other";
   unit?: string;
   required: boolean;
@@ -179,6 +183,15 @@ export type TableColumn = {
   type: "text" | "number";
   unit?: string;
   role?: "standard_value" | "mass_standard_composition";
+  quantityKind?:
+    | "indication"
+    | "reference"
+    | "environment"
+    | "correction"
+    | "tolerance"
+    | "uncertainty"
+    | "resolution"
+    | "other";
   phase?: CalibrationPhase | "always";
   massComposition?: {
     targetUnit?: "mg" | "g" | "kg";

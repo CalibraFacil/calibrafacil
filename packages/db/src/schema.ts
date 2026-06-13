@@ -68,7 +68,7 @@ import type {
   AutomaticSendOutcome,
   SupplierKind,
   BillingGroupStatus,
-  MassUnit,
+  MeasurementUnit,
   ServiceOrderActorType,
   ServiceOrderClosingReason,
   ServiceOrderDeliveryMethod,
@@ -2639,7 +2639,7 @@ export const asset = pgTable(
     serialNumber: text("serial_number").notNull(), // Manufacturer's serial number
     tag: text("tag").notNull().unique(), // Internal Lab ID / Asset ID (unique across lab)
     status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
-    baseMeasurementUnit: text("base_measurement_unit").$type<MassUnit>(),
+    baseMeasurementUnit: text("base_measurement_unit").$type<MeasurementUnit>(),
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
     comments: text("comments"), // Additional notes about the equipment
@@ -2761,7 +2761,7 @@ export type WeighingRangeResolverConfig = {
   enabled?: boolean;
   assetSpecKey?: string;
   pointColumn?: string;
-  pointUnit?: "mg" | "g" | "kg";
+  pointUnit?: MeasurementUnit;
   targetColumns?: {
     rangeLabel?: string;
     rangeMin?: string;
@@ -2800,6 +2800,9 @@ export type MethodInputField = {
   label: string; // Display label, e.g., "Reading 1"
   type: "text" | "number" | "select" | "table";
   unit?: string; // e.g., "mm", "°C"
+  // Semantic role; delta-valued roles (correction/uncertainty/resolution/…)
+  // convert factor-only for affine kinds. See DELTA_QUANTITY_KINDS in shared.
+  quantityKind?: string;
   required?: boolean;
   options?: string[]; // For select type
   defaultValue?: string | number;
@@ -2817,6 +2820,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: MethodTableColumnRole;
+    quantityKind?: string;
     phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
   }>;
@@ -3718,7 +3722,7 @@ export type AssetSnapshot = {
   assetTypeId: number;
   assetTypeName: string;
   assetTypeSlug: string;
-  baseMeasurementUnit: MassUnit | null;
+  baseMeasurementUnit: MeasurementUnit | null;
   name: string;
   tag: string;
   serialNumber: string;

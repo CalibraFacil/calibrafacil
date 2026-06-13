@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { convertMassValue } from '@calibra-facil/shared'
+
 import {
-  convertMassValue,
   decimalsForResolution,
   formatWeighingRangeSpec,
   resolveWeighingRange,
@@ -97,6 +98,37 @@ describe('weighing-range-utils', () => {
     expect(convertMassValue(1500, 'mg', 'g')).toBe(1.5)
     expect(convertMassValue(1.5, 'kg', 'g')).toBe(1500)
     expect(convertMassValue(2500, 'g', 'kg')).toBe(2.5)
+  })
+
+  it('resolves a length-kind range for a caliper (mm)', () => {
+    const lengthRanges: WeighingRangeSpec[] = [
+      {
+        label: '0 a 150 mm',
+        min: 0,
+        max: 150,
+        rangeUnit: 'mm',
+        resolution: 0.01,
+        resolutionUnit: 'mm',
+      },
+    ]
+    expect(resolveWeighingRange(75, 'mm', lengthRanges)).toMatchObject({
+      label: '0 a 150 mm',
+      resolution: 0.01,
+      resolutionUnit: 'mm',
+    })
+    // A range expressed in cm still matches a point given in mm (same kind).
+    expect(
+      resolveWeighingRange(75, 'mm', [
+        {
+          label: '0 a 15 cm',
+          min: 0,
+          max: 15,
+          rangeUnit: 'cm',
+          resolution: 0.1,
+          resolutionUnit: 'mm',
+        },
+      ]),
+    ).toMatchObject({ label: '0 a 15 cm', resolution: 0.1 })
   })
 
   it('returns null for unsupported units or missing ranges', () => {

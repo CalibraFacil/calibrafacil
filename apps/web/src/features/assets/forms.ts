@@ -6,14 +6,33 @@ import {
   UpdateAssetSchema,
   type AssetStatus,
   type CreateAssetInput,
-  type MassUnit,
+  type MeasurementUnit,
   type UpdateAssetInput,
 } from '@calibra-facil/schemas'
+import {
+  dominantKindForAssetType,
+  MEASUREMENT_UNITS,
+  unitsForKind,
+  type SpecificationFieldLike,
+} from '@calibra-facil/shared/units'
 
 import {
   zodFormError,
   type FeatureFormValidationResult,
 } from '@/shared/forms/validation'
+
+/**
+ * Unit options for the asset's base-unit picker, narrowed to the dominant
+ * quantity kind of the selected asset type's field definition (e.g. a balance
+ * → mg/g/kg, a paquímetro → length units). Falls back to every registry unit
+ * when no field carries a recognizable unit.
+ */
+export function baseMeasurementUnitOptions(
+  definition: SpecificationFieldLike[] | null | undefined,
+): readonly MeasurementUnit[] {
+  const kind = dominantKindForAssetType(definition)
+  return kind ? unitsForKind(kind) : MEASUREMENT_UNITS
+}
 
 export const ASSET_FORM_STATUSES = AssetStatusSchema.options
 
@@ -56,7 +75,7 @@ export type AssetFormData = {
   serialNumber: string
   tag: string
   status: AssetStatus
-  baseMeasurementUnit: MassUnit | null
+  baseMeasurementUnit: MeasurementUnit | null
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
