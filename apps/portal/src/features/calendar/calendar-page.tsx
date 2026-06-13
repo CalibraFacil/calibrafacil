@@ -308,6 +308,21 @@ export function CalendarPage({
               </div>
             ) : null}
           </div>
+          {/* One-click recall for everything due on the selected day */}
+          {selectedDues.length > 0 ? (
+            <Button
+              className={cn("mt-4 w-full", ACTION_BUTTON_CLASS)}
+              render={
+                <Link
+                  to="/requests/new"
+                  search={{ assetIds: selectedDues.map((due) => due.id) }}
+                />
+              }
+            >
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              Solicitar calibração ({selectedDues.length})
+            </Button>
+          ) : null}
         </Panel>
       </div>
     </div>

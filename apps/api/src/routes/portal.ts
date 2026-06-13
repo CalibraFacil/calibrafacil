@@ -62,6 +62,18 @@ const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
     .enum(["tag", "name", "nextCalibrationDate", "lastCalibrationDate"])
     .default("tag"),
   sortDir: z.enum(["asc", "desc"]).default("asc"),
+  // Exact-id lookup used by the self-service recall flow to resolve the
+  // preselected instruments. Comma-separated, bounded; still combined with
+  // the customer scope below, so foreign ids simply drop out.
+  ids: z
+    .string()
+    .regex(/^\d+(,\d+)*$/)
+    .optional()
+    .transform((value) => {
+      if (!value) return undefined;
+      const ids = value.split(",").map((id) => Number.parseInt(id, 10));
+      return ids.slice(0, 50);
+    }),
 });
 
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
@@ -750,7 +762,7 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const { page, limit, query, dueStatus, sortBy, sortDir } =
+        const { page, limit, query, dueStatus, sortBy, sortDir, ids } =
           c.req.valid("query");
         const offset = (page - 1) * limit;
 
@@ -781,6 +793,7 @@ export const portalRouter = new Hono<{
           eq(asset.customerId, linkedCustomer.id),
           eq(asset.status, "ACTIVE"),
           isNull(asset.deletedAt),
+          ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
           query
             ? or(
                 ilike(asset.name, `%${query}%`),

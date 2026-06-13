@@ -1,6 +1,9 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { RepeatIcon } from "@hugeicons/core-free-icons";
 
+import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { StatusPill } from "@/components/status-pill";
 import { getInstrumentStatus } from "@/lib/calibration-status";
@@ -114,5 +117,25 @@ export const fleetColumns: ColumnDef<FleetAsset>[] = [
         </div>
       );
     },
+  },
+  {
+    id: "actions",
+    header: "",
+    cell: ({ row }) => (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`Solicitar calibração de ${row.original.name}`}
+        render={
+          <Link
+            to="/requests/new"
+            search={{ assetIds: [row.original.id] }}
+            onClick={(event) => event.stopPropagation()}
+          />
+        }
+      >
+        <HugeiconsIcon icon={RepeatIcon} strokeWidth={2} />
+      </Button>
+    ),
   },
 ];
