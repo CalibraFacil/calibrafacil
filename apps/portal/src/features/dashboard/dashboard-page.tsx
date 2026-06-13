@@ -10,6 +10,7 @@ import {
   DashboardSquare01Icon,
   DownloadCircle01Icon,
   File01Icon,
+  FlaskConicalIcon,
   Invoice01Icon,
   Notebook01Icon,
   RefreshIcon,
@@ -237,7 +238,7 @@ function ComplianceVitals({
       </div>
 
       {/* Vitals tiles */}
-      <StaggerGroup className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <StaggerGroup className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StaggerItem>
           <VitalTileLink
             icon={Alert02Icon}
@@ -263,6 +264,15 @@ function ComplianceVitals({
             value={equipment.scheduled}
             tone={equipment.scheduled > 0 ? "ok" : "neutral"}
             dueStatus="scheduled"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <VitalTileLink
+            icon={FlaskConicalIcon}
+            label="No laboratório"
+            value={equipment.inLab}
+            tone={equipment.inLab > 0 ? "info" : "neutral"}
+            dueStatus="in_lab"
           />
         </StaggerItem>
         <StaggerItem>

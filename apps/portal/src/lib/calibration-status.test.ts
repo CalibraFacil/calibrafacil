@@ -4,6 +4,7 @@ import {
   DUE_SOON_DAYS,
   calibrationFilterToStatus,
   getCalibrationStatus,
+  getInstrumentStatus,
   isCalibrationFilter,
 } from "./calibration-status";
 
@@ -57,10 +58,40 @@ describe("getCalibrationStatus", () => {
   });
 });
 
+describe("getInstrumentStatus", () => {
+  it("gives IN_LAB precedence over an overdue date", () => {
+    const info = getInstrumentStatus(
+      { nextCalibrationDate: "2026-05-27T12:00:00Z", inLab: true },
+      NOW,
+    );
+    expect(info.status).toBe("IN_LAB");
+    expect(info.tone).toBe("info");
+    expect(info.label).toBe("No laboratório");
+    expect(info.daysDelta).toBeNull();
+    expect(info.description).toBe("Em atendimento no laboratório");
+  });
+
+  it("falls back to the date-derived status when not in lab", () => {
+    const info = getInstrumentStatus(
+      { nextCalibrationDate: "2026-05-27T12:00:00Z", inLab: false },
+      NOW,
+    );
+    expect(info.status).toBe("OVERDUE");
+    expect(info.description).toBe("Vencida há 3 dias");
+
+    const unscheduled = getInstrumentStatus(
+      { nextCalibrationDate: null },
+      NOW,
+    );
+    expect(unscheduled.status).toBe("UNSCHEDULED");
+  });
+});
+
 describe("calibration filters", () => {
   it("recognizes valid filter values", () => {
     expect(isCalibrationFilter("overdue")).toBe(true);
     expect(isCalibrationFilter("due_soon")).toBe(true);
+    expect(isCalibrationFilter("in_lab")).toBe(true);
     expect(isCalibrationFilter("nonsense")).toBe(false);
     expect(isCalibrationFilter(42)).toBe(false);
   });
@@ -68,5 +99,6 @@ describe("calibration filters", () => {
   it("maps filters to statuses", () => {
     expect(calibrationFilterToStatus("overdue")).toBe("OVERDUE");
     expect(calibrationFilterToStatus("unscheduled")).toBe("UNSCHEDULED");
+    expect(calibrationFilterToStatus("in_lab")).toBe("IN_LAB");
   });
 });
