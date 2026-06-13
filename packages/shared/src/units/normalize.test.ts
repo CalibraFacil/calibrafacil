@@ -96,6 +96,78 @@ describe("method data normalization", () => {
     expect(backRow.indicacao).toBeCloseTo(212, 9);
     expect(backRow.umidade).toBe(55);
   });
+
+  // The bug class this guards: a delta-valued input (uncertainty/resolution/
+  // correction) in °F/K must convert factor-only. Without quantityKind it would
+  // be normalized as an absolute value, injecting the 32° zero-point into the
+  // GUM budget while every value test still passes.
+  it("converts delta-valued scalar inputs factor-only, absolute inputs affine", () => {
+    const deltaFields: MethodInputFieldLike[] = [
+      { key: "indicacao", type: "number", unit: "°C", quantityKind: "indication" },
+      {
+        key: "incerteza_padrao",
+        type: "number",
+        unit: "°C",
+        quantityKind: "uncertainty",
+      },
+    ];
+
+    const stored = normalizeMethodDataForStorage(
+      { indicacao: 212, incerteza_padrao: 0.1 },
+      deltaFields,
+      "°F",
+    );
+    // absolute reading: 212 °F -> 100 °C (offset applied)
+    expect(stored.data?.indicacao).toBeCloseTo(100, 9);
+    // delta uncertainty: 0.1 °F -> 0.0555.. °C (factor-only, NO +32° offset)
+    expect(stored.data?.incerteza_padrao).toBeCloseTo((0.1 * 5) / 9, 9);
+
+    const back = denormalizeMethodDataForDisplay(stored.data, deltaFields, "°F");
+    expect(back?.indicacao).toBeCloseTo(212, 9);
+    expect(back?.incerteza_padrao).toBeCloseTo(0.1, 9);
+  });
+
+  it("converts delta-valued table columns factor-only", () => {
+    const tableFields: MethodInputFieldLike[] = [
+      {
+        key: "pontos",
+        type: "table",
+        columns: [
+          { key: "indicacao", type: "number", unit: "°C" },
+          {
+            key: "resolucao",
+            type: "number",
+            unit: "°C",
+            quantityKind: "resolution",
+          },
+        ],
+      },
+    ];
+
+    const stored = normalizeMethodDataForStorage(
+      { pontos: [{ indicacao: 212, resolucao: 0.1 }] },
+      tableFields,
+      "°F",
+    );
+    const row = Array.isArray(stored.data?.pontos) ? stored.data.pontos[0] : null;
+    expect(row.indicacao).toBeCloseTo(100, 9);
+    expect(row.resolucao).toBeCloseTo((0.1 * 5) / 9, 9);
+  });
+
+  it("is byte-identical for mass regardless of quantityKind", () => {
+    const massFields: MethodInputFieldLike[] = [
+      { key: "leitura", type: "number", unit: "g", quantityKind: "indication" },
+      { key: "u", type: "number", unit: "g", quantityKind: "uncertainty" },
+    ];
+    const stored = normalizeMethodDataForStorage(
+      { leitura: 1.5, u: 0.002 },
+      massFields,
+      "kg",
+    );
+    // mass is factor-only: absolute and delta coincide (1.5 kg -> 1500 g, etc.)
+    expect(stored.data?.leitura).toBe(1500);
+    expect(stored.data?.u).toBe(2);
+  });
 });
 
 describe("mass golden-value regression", () => {

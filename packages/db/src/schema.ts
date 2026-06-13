@@ -2800,6 +2800,9 @@ export type MethodInputField = {
   label: string; // Display label, e.g., "Reading 1"
   type: "text" | "number" | "select" | "table";
   unit?: string; // e.g., "mm", "°C"
+  // Semantic role; delta-valued roles (correction/uncertainty/resolution/…)
+  // convert factor-only for affine kinds. See DELTA_QUANTITY_KINDS in shared.
+  quantityKind?: string;
   required?: boolean;
   options?: string[]; // For select type
   defaultValue?: string | number;
@@ -2817,6 +2820,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: MethodTableColumnRole;
+    quantityKind?: string;
     phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
   }>;

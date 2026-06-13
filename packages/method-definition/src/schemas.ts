@@ -30,7 +30,17 @@ const BaseInputSchema = z.object({
 export const ScalarInputSchema = BaseInputSchema.extend({
   kind: z.literal("scalar"),
   quantityKind: z
-    .enum(["indication", "reference", "environment", "correction", "other"])
+    .enum([
+      "indication",
+      "reference",
+      "environment",
+      // Delta-valued roles: convert factor-only for affine kinds (temperature).
+      "correction",
+      "tolerance",
+      "uncertainty",
+      "resolution",
+      "other",
+    ])
     .optional(),
   defaultValue: NumericValueSchema.optional(),
   constraints: z
@@ -68,6 +78,18 @@ export const TableColumnSchema = z
     type: z.enum(["text", "number"]),
     unit: z.string().trim().optional(),
     role: z.enum(["standard_value", "mass_standard_composition"]).optional(),
+    quantityKind: z
+      .enum([
+        "indication",
+        "reference",
+        "environment",
+        "correction",
+        "tolerance",
+        "uncertainty",
+        "resolution",
+        "other",
+      ])
+      .optional(),
     phase: z.enum(["before", "after", "always"]).optional(),
     massComposition: z
       .object({

@@ -584,6 +584,10 @@ export const MethodTableColumnSchema = z.object({
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
   role: MethodTableColumnRoleSchema.optional(),
+  // Semantic role used to pick absolute vs. delta unit conversion for affine
+  // kinds (temperature). Kept a permissive string for forward/import
+  // compatibility; classified by DELTA_QUANTITY_KINDS in @calibra-facil/shared.
+  quantityKind: z.string().optional(),
   phase: z.enum(["before", "after", "always"]).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
 });
@@ -645,6 +649,9 @@ export const MethodInputFieldSchema = z
     label: z.string().min(1, "Rótulo é obrigatório"),
     type: z.enum(["text", "number", "select", "table"]),
     unit: z.string().optional(),
+    // Semantic role used to pick absolute vs. delta unit conversion for affine
+    // kinds (temperature). Permissive string; classified by DELTA_QUANTITY_KINDS.
+    quantityKind: z.string().optional(),
     required: z.boolean().optional().default(false),
     options: z.array(z.string()).optional(),
     defaultValue: z.union([z.string(), z.number()]).optional(),

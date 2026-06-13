@@ -37,6 +37,8 @@ export type MethodTableColumnLike = {
   key: string;
   type: "text" | "number";
   unit?: string | null;
+  /** Semantic role; delta-valued roles convert factor-only. See {@link DELTA_QUANTITY_KINDS}. */
+  quantityKind?: string | null;
 };
 
 export type MethodInputFieldLike = {
@@ -44,6 +46,8 @@ export type MethodInputFieldLike = {
   type: "text" | "number" | "select" | "table";
   unit?: string | null;
   source?: string | null;
+  /** Semantic role; delta-valued roles convert factor-only. See {@link DELTA_QUANTITY_KINDS}. */
+  quantityKind?: string | null;
   columns?: MethodTableColumnLike[] | null;
 };
 
@@ -123,6 +127,40 @@ export function dominantKindForAssetType(
 }
 
 type ConvertMode = "absolute" | "delta";
+
+/**
+ * Quantity roles whose magnitude is a *delta* — a difference, half-width or
+ * dispersion — rather than an absolute point on the scale. For affine kinds
+ * (temperature) these MUST convert factor-only: applying the offset would inject
+ * the scale's zero-point (e.g. the +32 °F or −273.15 K origin) into an
+ * uncertainty / resolution / correction, silently corrupting the GUM budget
+ * while passing every value test. For every factor-only kind (everything except
+ * temperature) absolute and delta coincide, so this is a no-op for mass et al.
+ */
+export const DELTA_QUANTITY_KINDS: ReadonlySet<string> = new Set([
+  "correction",
+  "error",
+  "deviation",
+  "tolerance",
+  "uncertainty",
+  "resolution",
+  "drift",
+  "span",
+]);
+
+/**
+ * Conversion mode for a method input field / table column, derived from its
+ * semantic `quantityKind`. Delta-valued roles (see {@link DELTA_QUANTITY_KINDS})
+ * convert factor-only; measured/indicated/reference/nominal values, and any
+ * unmarked field, convert as an absolute value (today's behaviour, mass-safe).
+ */
+export function conversionModeForQuantityKind(
+  quantityKind: string | null | undefined,
+): ConvertMode {
+  return quantityKind && DELTA_QUANTITY_KINDS.has(quantityKind)
+    ? "delta"
+    : "absolute";
+}
 
 function denormalize(
   value: number,
@@ -397,10 +435,11 @@ export function normalizeMethodDataForStorage(
         continue;
       }
 
-      const normalizedValue = convertUnitValue(
+      const normalizedValue = normalizeToCanonical(
         numericValue,
         baseUnit,
         canonical,
+        conversionModeForQuantityKind(field.quantityKind),
       );
       if (normalizedValue == null) {
         continue;
@@ -439,10 +478,11 @@ export function normalizeMethodDataForStorage(
           continue;
         }
 
-        const normalizedValue = convertUnitValue(
+        const normalizedValue = normalizeToCanonical(
           numericValue,
           baseUnit,
           canonical,
+          conversionModeForQuantityKind(column.quantityKind),
         );
         if (normalizedValue == null) {
           continue;
@@ -495,7 +535,12 @@ export function denormalizeMethodDataForDisplay(
         continue;
       }
 
-      const displayValue = convertUnitValue(numericValue, canonical, baseUnit);
+      const displayValue = denormalize(
+        numericValue,
+        canonical,
+        baseUnit,
+        conversionModeForQuantityKind(field.quantityKind),
+      );
       if (displayValue != null) {
         nextData[field.key] = displayValue;
       }
@@ -523,7 +568,12 @@ export function denormalizeMethodDataForDisplay(
           continue;
         }
 
-        const displayValue = convertUnitValue(numericValue, canonical, baseUnit);
+        const displayValue = denormalize(
+          numericValue,
+          canonical,
+          baseUnit,
+          conversionModeForQuantityKind(column.quantityKind),
+        );
         if (displayValue != null) {
           nextRow[column.key] = displayValue;
         }
