@@ -73,7 +73,7 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
           unit: input.unit || undefined,
           required: Boolean(input.required),
           defaultValue: input.defaultValue,
-          quantityKind: 'other',
+          quantityKind: input.quantityKind ?? 'other',
         }
       }
 

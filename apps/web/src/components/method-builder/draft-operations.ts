@@ -57,6 +57,8 @@ export function setDraftInputType(
     label: input.label,
     type,
     unit: input.unit,
+    // quantityKind only applies to scalar number fields; clear it otherwise.
+    quantityKind: type === 'number' ? input.quantityKind : undefined,
     required: input.required,
     options: input.options,
     defaultValue: input.defaultValue,

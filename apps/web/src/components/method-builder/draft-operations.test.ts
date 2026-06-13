@@ -76,6 +76,31 @@ describe('method builder draft operations', () => {
     expect(nextDraft.inputs[0]?.allowOverride).toBeUndefined()
   })
 
+  it('keeps quantityKind on number fields and clears it when leaving number', () => {
+    const draft = makeDraft({
+      inputs: [
+        {
+          key: 'u_padrao',
+          label: 'Incerteza padrão',
+          type: 'number',
+          unit: '°C',
+          quantityKind: 'uncertainty',
+        },
+      ],
+    })
+
+    // number -> number-ish edit keeps it; switching to text clears it.
+    expect(setDraftInputType(draft, 0, 'number').inputs[0]?.quantityKind).toBe(
+      'uncertainty',
+    )
+    expect(
+      setDraftInputType(draft, 0, 'text').inputs[0]?.quantityKind,
+    ).toBeUndefined()
+    expect(
+      setDraftInputType(draft, 0, 'table').inputs[0]?.quantityKind,
+    ).toBeUndefined()
+  })
+
   it('adds variables bound to the first available input', () => {
     const draft = makeDraft({
       inputs: [{ key: 'measurement', label: 'Medição', type: 'number' }],
