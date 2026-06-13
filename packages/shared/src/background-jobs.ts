@@ -38,6 +38,15 @@ export type ScheduledNotificationsBackgroundJobMessage = {
   type: "SCHEDULED_NOTIFICATIONS";
 };
 
+/**
+ * Daily timer that fans out the client-portal due-calibration digest emails.
+ * Like SCHEDULED_NOTIFICATIONS it carries no payload — the worker derives
+ * which digest frequencies fire from the current date.
+ */
+export type PortalDigestBackgroundJobMessage = {
+  type: "PORTAL_DIGEST";
+};
+
 export type CertificateXlsxPreviewBackgroundJobMessage = {
   type: "CERTIFICATE_XLSX_PREVIEW";
   previewId: number;
@@ -49,6 +58,7 @@ export type BackgroundJobMessage =
   | DocumentBackgroundJobMessage
   | IntegrationSyncBackgroundJobMessage
   | ScheduledNotificationsBackgroundJobMessage
+  | PortalDigestBackgroundJobMessage
   | CertificateXlsxPreviewBackgroundJobMessage;
 
 export function isBackgroundJobMessage(
@@ -59,7 +69,9 @@ export function isBackgroundJobMessage(
   const message = Object.fromEntries(Object.entries(value));
   const type = message.type;
 
-  if (type === "SCHEDULED_NOTIFICATIONS") return true;
+  if (type === "SCHEDULED_NOTIFICATIONS" || type === "PORTAL_DIGEST") {
+    return true;
+  }
 
   if (type === "CERTIFICATE_XLSX_PREVIEW") {
     return (

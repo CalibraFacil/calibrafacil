@@ -27,7 +27,10 @@ import {
   type XlsxToPdfConverter,
   type WorkbookWarning,
 } from "@calibra-facil/certificate-xlsx-template";
-import { processScheduledNotifications } from "./scheduled.js";
+import {
+  processPortalDigest,
+  processScheduledNotifications,
+} from "./scheduled.js";
 import { formatNumberForXlsx } from "./xlsx-number-format.js";
 import {
   signPdf,
@@ -2396,6 +2399,7 @@ function isDocumentMessage(
   return (
     message.type !== "INTEGRATION_SYNC" &&
     message.type !== "SCHEDULED_NOTIFICATIONS" &&
+    message.type !== "PORTAL_DIGEST" &&
     message.type !== "CERTIFICATE_XLSX_PREVIEW"
   );
 }
@@ -3482,6 +3486,11 @@ export async function processBackgroundJob(
     return;
   }
 
+  if (message.type === "PORTAL_DIGEST") {
+    await processPortalDigest();
+    return;
+  }
+
   if (await processXlsxCertificateMessageIfSelected(env, message)) {
     return;
   }
@@ -3516,6 +3525,9 @@ export async function processBackgroundJobBatch(
   const scheduledNotificationMessages = messages.filter(
     (message) => message.type === "SCHEDULED_NOTIFICATIONS",
   );
+  const portalDigestMessages = messages.filter(
+    (message) => message.type === "PORTAL_DIGEST",
+  );
   const xlsxPreviewMessages = messages.filter(
     (message): message is CertificateXlsxPreviewBackgroundJobMessage =>
       message.type === "CERTIFICATE_XLSX_PREVIEW",
@@ -3528,6 +3540,10 @@ export async function processBackgroundJobBatch(
 
   for (const _message of scheduledNotificationMessages) {
     await processScheduledNotifications(env);
+  }
+
+  for (const _message of portalDigestMessages) {
+    await processPortalDigest();
   }
 
   for (const message of xlsxPreviewMessages) {

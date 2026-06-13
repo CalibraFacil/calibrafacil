@@ -11,7 +11,7 @@ import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 
 // One function serves all Vercel cron jobs so Vercel packages a single bundle
 // instead of one per job. The vercel.json crons still hit the semantic paths
-// /api/cron/{integrations,notifications,operator-alerts,auth-maintenance};
+// /api/cron/{integrations,notifications,portal-digest,operator-alerts,auth-maintenance};
 // the matching dynamic shim api/cron/[job].js routes them all here and we
 // dispatch on the trailing path segment. Auth is uniform and fail-closed: on
 // prod/Vercel a CRON_SECRET is REQUIRED for every job (503 when unset), and
@@ -131,6 +131,19 @@ async function handleNotifications(request: Request) {
   return Response.json(result);
 }
 
+async function handlePortalDigest(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  const result = await enqueueBackgroundJob(
+    { type: "PORTAL_DIGEST" },
+    { idempotencyKey: `portal-digest-${todayKey()}` },
+  );
+
+  return Response.json(result);
+}
+
 async function handleOperatorAlerts(request: Request) {
   if (!isCronAuthorized(request)) {
     return cronAuthFailureResponse();
@@ -152,6 +165,7 @@ async function handleAuthMaintenance(request: Request) {
 const JOB_HANDLERS: Record<string, (request: Request) => Promise<Response>> = {
   integrations: handleIntegrations,
   notifications: handleNotifications,
+  "portal-digest": handlePortalDigest,
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
 };

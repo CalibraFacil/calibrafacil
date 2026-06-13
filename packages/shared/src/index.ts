@@ -11,3 +11,4 @@ export * from "./calibration-format";
 export * from "./mass-units";
 export * from "./service-orders";
 export * from "./background-jobs";
+export * from "./portal-digest";

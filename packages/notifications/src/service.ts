@@ -13,13 +13,25 @@ import {
   calibrationRequest,
   calibrationRequestItem,
   organization,
+  organizationCustomDomain,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
   type NotificationRelatedEntity,
   type NotificationPreferenceMap,
 } from "@calibra-facil/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  asc,
+  inArray,
+  isNull,
+  isNotNull,
+  lt,
+  lte,
+  sql,
+} from "drizzle-orm";
+import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
@@ -33,6 +45,8 @@ import {
   CompetenceNotificationEmail,
   CustomerSuccessEmail,
   CalibrationRequestEmail,
+  PortalDueDigestEmail,
+  type PortalDueDigestItem,
   type EmailBrand,
 } from "@calibra-facil/email";
 
@@ -2309,4 +2323,255 @@ export async function notifyCompetenceApproved(
       },
     },
   });
+}
+
+// =============================================================================
+// PORTAL DUE-CALIBRATION DIGEST
+// =============================================================================
+// Opt-in summary email for client-portal users: their instruments that are
+// overdue or due within the next 30 days, branded as the lab. Fired by the
+// daily portal-digest cron via the PORTAL_DIGEST background job; which users
+// receive it on a given run is decided by `portalDigestFrequenciesFor` (DAILY
+// every run, WEEKLY on Mondays UTC) against `notification_preference.
+// digest_frequency` — this is that dormant column's first consumer.
+
+/** Mirrors the portal's DUE_SOON window (apps/portal calibration-status). */
+const PORTAL_DIGEST_DUE_SOON_DAYS = 30;
+/** Instruments listed in the email body; the rest become "e mais N". */
+const PORTAL_DIGEST_MAX_ITEMS = 15;
+
+const PORTAL_DIGEST_DATE = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "America/Sao_Paulo",
+});
+
+export type PortalDigestRunResult = {
+  recipients: number;
+  sent: number;
+  skippedEmpty: number;
+  errors: number;
+};
+
+function describePortalDigestDue(due: Date, now: Date): string {
+  const days = Math.round(
+    (due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  const dateLabel = PORTAL_DIGEST_DATE.format(due);
+  if (days < 0) {
+    const overdueDays = Math.abs(days);
+    return `Vencida há ${overdueDays} ${overdueDays === 1 ? "dia" : "dias"} (${dateLabel})`;
+  }
+  if (days === 0) return `Vence hoje (${dateLabel})`;
+  return `Vence em ${days} ${days === 1 ? "dia" : "dias"} (${dateLabel})`;
+}
+
+/**
+ * Portal base URL for a lab: its verified custom portal domain when active,
+ * otherwise the default portal host. (Plan entitlement is not re-checked here
+ * — a stale-but-still-bound domain only changes which host serves the link.)
+ */
+async function getPortalDigestBaseUrl(
+  labOrganizationId: string,
+): Promise<string> {
+  const [domain] = await db
+    .select({ hostname: organizationCustomDomain.hostname })
+    .from(organizationCustomDomain)
+    .where(
+      and(
+        eq(organizationCustomDomain.organizationId, labOrganizationId),
+        eq(organizationCustomDomain.isActive, true),
+        isNotNull(organizationCustomDomain.verifiedAt),
+      ),
+    )
+    .limit(1);
+
+  return domain?.hostname ? `https://${domain.hostname}` : getPortalBaseUrl();
+}
+
+export async function sendPortalDueDigests(
+  now: Date = new Date(),
+): Promise<PortalDigestRunResult> {
+  const result: PortalDigestRunResult = {
+    recipients: 0,
+    sent: 0,
+    skippedEmpty: 0,
+    errors: 0,
+  };
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  if (!resendApiKey || !fromEmail) {
+    console.error(
+      "[PortalDigest] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set; skipping run.",
+    );
+    return result;
+  }
+
+  const frequencies = portalDigestFrequenciesFor(now);
+
+  // Every opted-in portal member, once per (user, customer) pair. The role
+  // literal mirrors PORTAL_ACCESS_ROLES (packages/auth/src/access.ts), which
+  // this package doesn't depend on.
+  const recipients = await db
+    .selectDistinct({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      frequency: notificationPreference.digestFrequency,
+      customerId: customer.id,
+      labOrganizationId: customer.labOrganizationId,
+    })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .innerJoin(customer, eq(customer.authOrganizationId, organization.id))
+    .innerJoin(user, eq(member.userId, user.id))
+    .innerJoin(
+      notificationPreference,
+      eq(notificationPreference.userId, member.userId),
+    )
+    .where(
+      and(
+        eq(organization.type, "CLIENT"),
+        eq(member.role, "client_user"),
+        inArray(notificationPreference.digestFrequency, frequencies),
+        eq(notificationPreference.emailEnabled, true),
+      ),
+    );
+
+  result.recipients = recipients.length;
+  if (recipients.length === 0) return result;
+
+  const resend = new Resend(resendApiKey);
+  const logoSrc = getEmailLogoSrc();
+  const brandByLab = new Map<string, EmailBrand | undefined>();
+  const portalUrlByLab = new Map<string, string>();
+
+  const soon = new Date(now);
+  soon.setUTCDate(soon.getUTCDate() + PORTAL_DIGEST_DUE_SOON_DAYS);
+
+  for (const recipient of recipients) {
+    if (!recipient.email) continue;
+
+    try {
+      const dueWhere = and(
+        eq(asset.customerId, recipient.customerId),
+        eq(asset.status, "ACTIVE"),
+        isNull(asset.deletedAt),
+        isNotNull(asset.nextCalibrationDate),
+        lte(asset.nextCalibrationDate, soon),
+      );
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- digests are sent sequentially per recipient on purpose (cron job, small volume).
+      const [counts] = await db
+        .select({
+          total: sql<number>`cast(count(*) as int)`,
+          overdue: sql<number>`cast(count(*) filter (where ${lt(asset.nextCalibrationDate, now)}) as int)`,
+        })
+        .from(asset)
+        .where(dueWhere);
+
+      const total = counts?.total ?? 0;
+      if (total === 0) {
+        result.skippedEmpty += 1;
+        continue;
+      }
+      const overdueCount = counts?.overdue ?? 0;
+      const dueSoonCount = total - overdueCount;
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
+      const dueAssets = await db
+        .select({
+          name: asset.name,
+          tag: asset.tag,
+          nextCalibrationDate: asset.nextCalibrationDate,
+        })
+        .from(asset)
+        .where(dueWhere)
+        .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag))
+        .limit(PORTAL_DIGEST_MAX_ITEMS);
+
+      const items: PortalDueDigestItem[] = dueAssets.flatMap((item) => {
+        if (!item.nextCalibrationDate) return [];
+        return [
+          {
+            tag: item.tag,
+            name: item.name,
+            statusLabel: describePortalDigestDue(
+              item.nextCalibrationDate,
+              now,
+            ),
+            overdue: item.nextCalibrationDate.getTime() < now.getTime(),
+          },
+        ];
+      });
+
+      let emailBrand = brandByLab.get(recipient.labOrganizationId);
+      if (!brandByLab.has(recipient.labOrganizationId)) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- cached per lab across the run.
+        emailBrand = await getLabEmailBrand(recipient.labOrganizationId);
+        brandByLab.set(recipient.labOrganizationId, emailBrand);
+      }
+
+      let portalBaseUrl = portalUrlByLab.get(recipient.labOrganizationId);
+      if (!portalBaseUrl) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- cached per lab across the run.
+        portalBaseUrl = await getPortalDigestBaseUrl(
+          recipient.labOrganizationId,
+        );
+        portalUrlByLab.set(recipient.labOrganizationId, portalBaseUrl);
+      }
+
+      const frequencyLabel =
+        recipient.frequency === "WEEKLY" ? "semanal" : "diário";
+      const portalUrl =
+        overdueCount > 0
+          ? `${portalBaseUrl}/assets?dueStatus=overdue`
+          : `${portalBaseUrl}/calendar`;
+
+      const emailElement = PortalDueDigestEmail({
+        recipientName: recipient.name ?? "Usuário",
+        frequencyLabel,
+        overdueCount,
+        dueSoonCount,
+        items,
+        moreCount: Math.max(0, total - items.length),
+        portalUrl,
+        logoSrc,
+        brand: emailBrand,
+      });
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
+      const html = await render(emailElement);
+
+      const overdueLabel = `${overdueCount} ${overdueCount === 1 ? "vencida" : "vencidas"}`;
+      const dueSoonLabel = `${dueSoonCount} a vencer`;
+      const subjectParts = [
+        overdueCount > 0 ? overdueLabel : null,
+        dueSoonCount > 0 ? dueSoonLabel : null,
+      ].filter(Boolean);
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
+      await resend.emails.send({
+        from: formatFromEmail(fromEmail, emailBrand),
+        to: recipient.email,
+        subject: `Resumo de calibrações: ${subjectParts.join(" · ")}`,
+        html,
+        replyTo: getReplyToEmail(emailBrand),
+      });
+
+      result.sent += 1;
+    } catch (error) {
+      result.errors += 1;
+      console.error("[PortalDigest] Failed to send digest", {
+        userId: recipient.userId,
+        customerId: recipient.customerId,
+        error: error instanceof Error ? error.message : "unknown error",
+      });
+    }
+  }
+
+  console.log("[PortalDigest] Run complete", result);
+  return result;
 }
