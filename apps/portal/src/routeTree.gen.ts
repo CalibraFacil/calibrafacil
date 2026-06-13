@@ -26,6 +26,7 @@ import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
 import { Route as AuthenticatedCalendarIndexRouteImport } from './routes/_authenticated/calendar/index'
 import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
+import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedServiceOrdersIdRouteImport } from './routes/_authenticated/service-orders/$id'
 import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
@@ -127,6 +128,12 @@ const AuthenticatedAssetsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedAssetsRouteRoute,
   } as any)
+const AuthenticatedSettingsNotificationsRoute =
+  AuthenticatedSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
 const AuthenticatedSettingsAppearanceRoute =
   AuthenticatedSettingsAppearanceRouteImport.update({
     id: '/appearance',
@@ -179,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/assets/': typeof AuthenticatedAssetsIndexRoute
   '/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/certificates/': typeof AuthenticatedCertificatesIndexRoute
@@ -199,6 +207,7 @@ export interface FileRoutesByTo {
   '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/assets': typeof AuthenticatedAssetsIndexRoute
   '/calendar': typeof AuthenticatedCalendarIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
@@ -225,6 +234,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
   '/_authenticated/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
   '/_authenticated/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
@@ -251,6 +261,7 @@ export interface FileRouteTypes {
     | '/requests/new'
     | '/service-orders/$id'
     | '/settings/appearance'
+    | '/settings/notifications'
     | '/assets/'
     | '/calendar/'
     | '/certificates/'
@@ -271,6 +282,7 @@ export interface FileRouteTypes {
     | '/requests/new'
     | '/service-orders/$id'
     | '/settings/appearance'
+    | '/settings/notifications'
     | '/assets'
     | '/calendar'
     | '/certificates'
@@ -296,6 +308,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/new'
     | '/_authenticated/service-orders/$id'
     | '/_authenticated/settings/appearance'
+    | '/_authenticated/settings/notifications'
     | '/_authenticated/assets/'
     | '/_authenticated/calendar/'
     | '/_authenticated/certificates/'
@@ -434,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAssetsIndexRouteImport
       parentRoute: typeof AuthenticatedAssetsRouteRoute
     }
+    '/_authenticated/settings/notifications': {
+      id: '/_authenticated/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
     '/_authenticated/settings/appearance': {
       id: '/_authenticated/settings/appearance'
       path: '/appearance'
@@ -531,12 +551,15 @@ const AuthenticatedServiceOrdersRouteRouteWithChildren =
 
 interface AuthenticatedSettingsRouteRouteChildren {
   AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
+  AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
   {
     AuthenticatedSettingsAppearanceRoute: AuthenticatedSettingsAppearanceRoute,
+    AuthenticatedSettingsNotificationsRoute:
+      AuthenticatedSettingsNotificationsRoute,
     AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
   }
 

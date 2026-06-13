@@ -65,7 +65,7 @@ function AppearancePage() {
     ];
 
   return (
-    <div className="portal-shell-sm space-y-6">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Aparencia</CardTitle>

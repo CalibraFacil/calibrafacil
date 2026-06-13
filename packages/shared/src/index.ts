@@ -18,4 +18,5 @@ export * from "./units/convert";
 export * from "./mass-units";
 export * from "./service-orders";
 export * from "./background-jobs";
+export * from "./portal-digest";
 export * from "./accreditation";

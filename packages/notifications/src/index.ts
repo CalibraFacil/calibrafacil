@@ -25,6 +25,8 @@ export {
   notifyCalibrationRequestApproved,
   notifyCalibrationRequestRejected,
   notifyCalibrationRequestConverted,
+  sendPortalDueDigests,
+  type PortalDigestRunResult,
   type SendNotificationOptions,
   type NotificationResult,
 } from "./service";

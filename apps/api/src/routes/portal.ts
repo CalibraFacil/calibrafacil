@@ -15,7 +15,9 @@ import {
   assetType,
   service,
   referenceStandardCertificateDocument,
+  notificationPreference,
 } from "@calibra-facil/db/schema";
+import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
   eq,
@@ -72,6 +74,13 @@ const CALENDAR_MAX_RANGE_DAYS = 100;
 const PortalCalendarQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+// Opt-in due-calibration digest email. The frequency lives on the user's
+// notification_preference row (the portal-digest cron is its first consumer);
+// the portal exposes only this one field.
+const PortalNotificationPreferencesSchema = z.object({
+  digestFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
 });
 
 // An instrument is "in lab" while it has an open calibration job or an open
@@ -1115,6 +1124,69 @@ export const portalRouter = new Hono<{
       } catch (error) {
         console.error("Error building portal calendar:", error);
         return c.json({ error: "Erro ao carregar o calendário" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /notification-preferences - Digest opt-in for the portal user
+  // =========================================================================
+  .get("/notification-preferences", ...requirePortalProtected, async (c) => {
+    const session = c.get("session");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const [prefs] = await db
+        .select({
+          digestFrequency: notificationPreference.digestFrequency,
+        })
+        .from(notificationPreference)
+        .where(eq(notificationPreference.userId, session.user.id))
+        .limit(1);
+
+      return c.json({ digestFrequency: prefs?.digestFrequency ?? "NONE" });
+    } catch (error) {
+      console.error("Error reading portal notification preferences:", error);
+      return c.json({ error: "Erro ao carregar preferências" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // PUT /notification-preferences - Update digest opt-in
+  // =========================================================================
+  .put(
+    "/notification-preferences",
+    ...requirePortalProtected,
+    zValidator("json", PortalNotificationPreferencesSchema),
+    async (c) => {
+      const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const { digestFrequency } = c.req.valid("json");
+
+      try {
+        await db
+          .insert(notificationPreference)
+          .values({
+            userId: session.user.id,
+            preferences: DEFAULT_PREFERENCES,
+            digestFrequency,
+          })
+          .onConflictDoUpdate({
+            target: notificationPreference.userId,
+            set: { digestFrequency },
+          });
+
+        return c.json({ digestFrequency });
+      } catch (error) {
+        console.error("Error saving portal notification preferences:", error);
+        return c.json({ error: "Erro ao salvar preferências" }, 500);
       }
     },
   )

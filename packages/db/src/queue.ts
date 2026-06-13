@@ -12,7 +12,7 @@ import {
 
 export type QueueMessage = Exclude<
   BackgroundJobMessage,
-  { type: "SCHEDULED_NOTIFICATIONS" }
+  { type: "SCHEDULED_NOTIFICATIONS" } | { type: "PORTAL_DIGEST" }
 >;
 
 export type ClaimedQueueJob = {
@@ -46,7 +46,8 @@ function getInsertedQueueJobId(result: unknown): number | null {
 function isQueueMessage(value: unknown): value is QueueMessage {
   return (
     isBackgroundJobMessage(value) &&
-    value.type !== "SCHEDULED_NOTIFICATIONS"
+    value.type !== "SCHEDULED_NOTIFICATIONS" &&
+    value.type !== "PORTAL_DIGEST"
   );
 }
 

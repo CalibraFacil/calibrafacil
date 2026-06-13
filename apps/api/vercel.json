@@ -32,6 +32,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/portal-digest",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/operator-alerts",
       "schedule": "*/30 * * * *"
     },
@@ -52,6 +56,10 @@
     {
       "source": "/api/cron/notifications",
       "destination": "/api/cron/notifications"
+    },
+    {
+      "source": "/api/cron/portal-digest",
+      "destination": "/api/cron/portal-digest"
     },
     {
       "source": "/api/cron/operator-alerts",
