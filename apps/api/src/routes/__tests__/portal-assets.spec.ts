@@ -158,6 +158,31 @@ describe("GET /assets", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects a malformed ids filter", async () => {
+    const res = await portalRouter.request("/assets?ids=1,abc", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts an exact-id lookup (recall preselection)", async () => {
+    dbQueue.push(
+      [{ id: 1, labOrganizationId: "lab-1" }], // linkedCustomer
+      [{ total: 1 }], // count
+      [fleetAssetRow({ id: 7, tag: "EQ-7" })], // asset page
+      [], // latest certificates
+    );
+
+    const res = await portalRouter.request("/assets?ids=7,8", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: 7, tag: "EQ-7" });
+  });
+
   it("accepts the in_lab due-status filter", async () => {
     dbQueue.push(
       [{ id: 1, labOrganizationId: "lab-1" }], // linkedCustomer

@@ -229,7 +229,9 @@ function AssetDetailPage() {
           </div>
 
           <Button
-            render={<Link to="/requests/new" />}
+            render={
+              <Link to="/requests/new" search={{ assetIds: [asset.id] }} />
+            }
             className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon icon={Wrench01Icon} strokeWidth={2} />

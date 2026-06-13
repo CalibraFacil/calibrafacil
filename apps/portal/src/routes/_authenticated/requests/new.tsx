@@ -28,7 +28,23 @@ import { getCalibrationStatus } from "@/lib/calibration-status";
 import { pluralize } from "@/lib/format";
 import { cn, getApiBaseUrl } from "@/lib/utils";
 
+type NewRequestSearch = {
+  /** Self-service recall: instruments to preselect (e.g. from asset detail). */
+  assetIds?: Array<number>;
+};
+
+function parseAssetIds(value: unknown): Array<number> | undefined {
+  const raw = Array.isArray(value) ? value : value !== undefined ? [value] : [];
+  const ids = raw
+    .map((item) => Number(item))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return ids.length > 0 ? [...new Set(ids)].slice(0, 50) : undefined;
+}
+
 export const Route = createFileRoute("/_authenticated/requests/new")({
+  validateSearch: (search: Record<string, unknown>): NewRequestSearch => ({
+    assetIds: parseAssetIds(search.assetIds),
+  }),
   component: NewRequestPage,
 });
 
@@ -77,8 +93,44 @@ function getCreatedRequestId(result: unknown) {
 function NewRequestPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { assetIds } = Route.useSearch();
 
   const [selectedAssets, setSelectedAssets] = useState<Array<PortalAsset>>([]);
+
+  // One-click recall: resolve the deep-linked instruments and seed the
+  // selection once per assetIds value. Seeding happens during render (the
+  // sanctioned setState-during-render adjustment — no useEffect), so the user
+  // can still unselect them afterwards.
+  const preselectKey =
+    assetIds && assetIds.length > 0
+      ? [...assetIds].sort((a, b) => a - b).join(",")
+      : null;
+  const preselectQuery = useQuery({
+    queryKey: ["portal-request-preselect", preselectKey],
+    enabled: preselectKey !== null,
+    staleTime: Infinity,
+    queryFn: async (): Promise<AssetsResponse> => {
+      const params = new URLSearchParams({
+        ids: preselectKey ?? "",
+        limit: "50",
+      });
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets?${params.toString()}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Falha ao carregar ativos");
+      return response.json();
+    },
+  });
+  const [seededKey, setSeededKey] = useState<string | null>(null);
+  if (preselectKey && seededKey !== preselectKey && preselectQuery.data) {
+    setSeededKey(preselectKey);
+    const fetched = preselectQuery.data.data;
+    setSelectedAssets((current) => {
+      const have = new Set(current.map((item) => item.id));
+      return [...current, ...fetched.filter((item) => !have.has(item.id))];
+    });
+  }
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
