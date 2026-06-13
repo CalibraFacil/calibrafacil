@@ -1,4 +1,13 @@
-export type MassUnit = 'mg' | 'g' | 'kg'
+import {
+  convertUnitValue,
+  decimalsForResolution,
+  parseNumericValue,
+  unitKind,
+} from '@calibra-facil/shared/units'
+
+// Re-exported so existing importers keep their import site stable. These now
+// come from the kind-aware registry (mass stays byte-identical).
+export { decimalsForResolution, parseNumericValue }
 
 export type WeighingRangeSpec = {
   label?: string
@@ -13,9 +22,9 @@ export type ResolvedWeighingRange = {
   label: string
   min: number | null
   max: number | null
-  rangeUnit: MassUnit
+  rangeUnit: string
   resolution: number
-  resolutionUnit: MassUnit
+  resolutionUnit: string
 }
 
 export type WeighingRangeResolverTargetColumns = {
@@ -31,29 +40,14 @@ export type WeighingRangeResolverConfig = {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string
-  pointUnit?: MassUnit
+  pointUnit?: string
   targetColumns?: WeighingRangeResolverTargetColumns
 }
 
-const MASS_UNIT_FACTORS_TO_G: Record<MassUnit, number> = {
-  mg: 0.001,
-  g: 1,
-  kg: 1000,
-}
-
-export function isMassUnit(unit: unknown): unit is MassUnit {
-  return unit === 'mg' || unit === 'g' || unit === 'kg'
-}
-
-export function convertMassValue(
-  value: number,
-  fromUnit: string | undefined,
-  toUnit: string | undefined,
-): number | null {
-  if (!isMassUnit(fromUnit) || !isMassUnit(toUnit)) return null
-  return (
-    (value * MASS_UNIT_FACTORS_TO_G[fromUnit]) / MASS_UNIT_FACTORS_TO_G[toUnit]
-  )
+/** Whether two unit tokens belong to the same (recognized) quantity kind. */
+function sameKind(a: unknown, b: unknown): boolean {
+  const kindA = unitKind(a)
+  return kindA != null && kindA === unitKind(b)
 }
 
 export function isWeighingRangeSpecArray(
@@ -70,30 +64,21 @@ export function isWeighingRangeSpecArray(
   )
 }
 
-function parseNumericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value.replace(',', '.'))
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
 function hasRangeBoundaryMatch(
   pointValue: number,
   range: WeighingRangeSpec,
-  pointUnit: MassUnit,
+  pointUnit: string | undefined,
 ): boolean {
-  if (!isMassUnit(range.rangeUnit)) return false
+  if (!sameKind(range.rangeUnit, pointUnit)) return false
 
   const min =
     range.min == null
       ? null
-      : convertMassValue(range.min, range.rangeUnit, pointUnit)
+      : convertUnitValue(range.min, range.rangeUnit, pointUnit)
   const max =
     range.max == null
       ? null
-      : convertMassValue(range.max, range.rangeUnit, pointUnit)
+      : convertUnitValue(range.max, range.rangeUnit, pointUnit)
 
   if (range.min != null && min == null) return false
   if (range.max != null && max == null) return false
@@ -109,13 +94,13 @@ export function resolveWeighingRange(
   ranges: unknown,
 ): ResolvedWeighingRange | null {
   const numericPointValue = parseNumericValue(pointValue)
-  if (numericPointValue == null || !isMassUnit(pointUnit)) return null
+  if (numericPointValue == null || unitKind(pointUnit) == null) return null
   if (!isWeighingRangeSpecArray(ranges)) return null
 
   for (const range of ranges) {
     if (
-      !isMassUnit(range.rangeUnit) ||
-      !isMassUnit(range.resolutionUnit) ||
+      !sameKind(range.rangeUnit, pointUnit) ||
+      !sameKind(range.resolutionUnit, pointUnit) ||
       typeof range.resolution !== 'number' ||
       !Number.isFinite(range.resolution)
     ) {
@@ -130,9 +115,9 @@ export function resolveWeighingRange(
       label: range.label?.trim() || buildFallbackRangeLabel(range),
       min: range.min ?? null,
       max: range.max ?? null,
-      rangeUnit: range.rangeUnit,
+      rangeUnit: range.rangeUnit ?? '',
       resolution: range.resolution,
-      resolutionUnit: range.resolutionUnit,
+      resolutionUnit: range.resolutionUnit ?? '',
     }
   }
 
@@ -140,7 +125,7 @@ export function resolveWeighingRange(
 }
 
 export function buildFallbackRangeLabel(range: WeighingRangeSpec): string {
-  const unit = isMassUnit(range.rangeUnit) ? range.rangeUnit : ''
+  const unit = unitKind(range.rangeUnit) != null ? range.rangeUnit : ''
   const min = range.min == null ? '0' : String(range.min)
   const max = range.max == null ? 'acima' : String(range.max)
   return `${min} a ${max}${unit ? ` ${unit}` : ''}`
@@ -148,10 +133,9 @@ export function buildFallbackRangeLabel(range: WeighingRangeSpec): string {
 
 export function formatWeighingRangeSpec(range: WeighingRangeSpec): string {
   const label = range.label?.trim() || buildFallbackRangeLabel(range)
-  const rangeUnit = isMassUnit(range.rangeUnit) ? range.rangeUnit : ''
-  const resolutionUnit = isMassUnit(range.resolutionUnit)
-    ? range.resolutionUnit
-    : ''
+  const rangeUnit = unitKind(range.rangeUnit) != null ? range.rangeUnit : ''
+  const resolutionUnit =
+    unitKind(range.resolutionUnit) != null ? range.resolutionUnit : ''
   const min = range.min == null ? '0' : String(range.min)
   const max = range.max == null ? 'acima' : String(range.max)
   const resolution =

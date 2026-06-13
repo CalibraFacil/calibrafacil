@@ -1,11 +1,11 @@
+import { formatCalibrationValue } from '@calibra-facil/shared'
 import {
-  denormalizeAssetSpecificationsForDisplay,
   denormalizeMethodDataForDisplay,
   denormalizeMethodResultsForDisplay,
-  formatCalibrationValue,
-  resolveMassDisplayUnit,
-  type MassUnit,
-} from '@calibra-facil/shared'
+  denormalizeSpecificationsForDisplay,
+  resolveDisplayUnit,
+  type MeasurementUnit,
+} from '@calibra-facil/shared/units'
 
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
@@ -55,6 +55,27 @@ export type ReviewMethodColumn = {
   label: string
   type: 'text' | 'number'
   unit?: string | null
+  phase?: string | null
+}
+
+export const PHASE_DISPLAY_LABELS: Record<'before' | 'after', string> = {
+  before: 'Antes do ajuste',
+  after: 'Após o ajuste',
+}
+
+/**
+ * Display label for a measurement-table column in flat (ungrouped) tables.
+ * Method labels carry only the replicate ("Leitura 1") while the phase lives
+ * in the column's `phase` metadata, so outside a phase-grouped layout the
+ * phase is prefixed back in to keep the column unambiguous. Labels that
+ * already mention the phase (older snapshots, eccentricity columns) pass
+ * through unchanged.
+ */
+export function reviewColumnDisplayLabel(column: ReviewMethodColumn): string {
+  const phase = column.phase
+  if (phase !== 'before' && phase !== 'after') return column.label
+  if (/antes|ap[óo]s/i.test(column.label)) return column.label
+  return `${PHASE_DISPLAY_LABELS[phase]} · ${column.label}`
 }
 
 export type ReviewMethodField = {
@@ -85,6 +106,7 @@ export type ReviewMethodSnapshot = {
   dataFields?: ReviewMethodField[] | null
   formulas?: ReviewFormula[] | null
   validations?: unknown[] | null
+  accreditedScope?: boolean | null
 }
 
 export type ReviewStandardSnapshot = {
@@ -99,7 +121,7 @@ export type ReviewStandardSnapshot = {
 }
 
 export type ReviewAssetSnapshot = {
-  baseMeasurementUnit?: MassUnit | null
+  baseMeasurementUnit?: MeasurementUnit | null
   specifications?: Record<string, unknown> | null
 }
 
@@ -402,7 +424,7 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
   const assetBaseMeasurementUnit =
     job.assetSnapshot?.baseMeasurementUnit ?? null
   const displayUnitFor = (unit?: string | null) =>
-    resolveMassDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined
+    resolveDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined
   const displayData =
     denormalizeMethodDataForDisplay(
       data,
@@ -419,7 +441,7 @@ export function buildApprovedJobRecordModel(job: ApprovedJobRecordData) {
     methodSnapshot.dataFields,
   )
   const displayAssetSpecs =
-    denormalizeAssetSpecificationsForDisplay(
+    denormalizeSpecificationsForDisplay(
       job.assetSnapshot?.specifications,
       assetSpecDefinitions,
       assetBaseMeasurementUnit,
@@ -731,10 +753,10 @@ export function buildJobReviewModel(
   const reviewAssetBaseUnit = job?.assetSnapshot?.baseMeasurementUnit ?? null
   const reviewStandards = job?.standardsSnapshot ?? []
   const displayUnitForReview = (unit?: string | null) =>
-    resolveMassDisplayUnit(reviewAssetBaseUnit, unit) ?? unit ?? undefined
+    resolveDisplayUnit(reviewAssetBaseUnit, unit) ?? unit ?? undefined
   const assetSpecDefinitions = buildReviewAssetSpecDefinitions(reviewDataFields)
   const displayAssetSpecs =
-    denormalizeAssetSpecificationsForDisplay(
+    denormalizeSpecificationsForDisplay(
       job?.assetSnapshot?.specifications,
       assetSpecDefinitions,
       reviewAssetBaseUnit,

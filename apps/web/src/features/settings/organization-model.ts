@@ -1,3 +1,5 @@
+import { normalizeAccreditationNumber } from '@calibra-facil/shared'
+
 import type {
   EditableUnitAssignmentRole,
   GovernanceActivityEntry,
@@ -58,6 +60,7 @@ export type OrganizationIsoInput = {
   cnpj?: string | null
   accreditationNumber?: string | null
   accreditationBody?: string | null
+  accreditationActive?: boolean | null
   street?: string | null
   number?: string | null
   complement?: string | null
@@ -81,6 +84,7 @@ export type OrganizationIsoDraft = {
   cnpj: string
   accreditationNumber: string
   accreditationBody: string
+  accreditationActive: boolean
   street: string
   number: string
   complement: string
@@ -171,8 +175,12 @@ export function createOrganizationIsoDraft(
 ): OrganizationIsoDraft {
   return {
     cnpj: organization.cnpj ?? '',
-    accreditationNumber: organization.accreditationNumber ?? '',
+    // Stored values may predate digits-only normalization ("RBC 0123").
+    accreditationNumber: normalizeAccreditationNumber(
+      organization.accreditationNumber ?? '',
+    ),
     accreditationBody: organization.accreditationBody ?? '',
+    accreditationActive: organization.accreditationActive ?? false,
     street: organization.street ?? '',
     number: organization.number ?? '',
     complement: organization.complement ?? '',
@@ -191,8 +199,10 @@ export function createOrganizationIsoDraft(
 export function buildOrganizationIsoPayload(draft: OrganizationIsoDraft) {
   return {
     cnpj: optionalTrimmed(draft.cnpj),
-    accreditationNumber: optionalTrimmed(draft.accreditationNumber),
+    accreditationNumber:
+      normalizeAccreditationNumber(draft.accreditationNumber) || undefined,
     accreditationBody: optionalTrimmed(draft.accreditationBody),
+    accreditationActive: draft.accreditationActive,
     street: optionalTrimmed(draft.street),
     number: optionalTrimmed(draft.number),
     complement: optionalTrimmed(draft.complement),

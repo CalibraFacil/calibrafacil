@@ -1,0 +1,29 @@
+.accreditation-seal {
+  display: inline-block;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.25));
+}
+
+/*
+ * Presentation-only specular sweep on hover (the seal at rest is the
+ * canonical regulated artwork, identical to the issued PDF).
+ */
+.accreditation-seal .seal-sheen {
+  mix-blend-mode: screen;
+  transform: rotate(18deg) translateX(-90px);
+  opacity: 0;
+}
+
+.accreditation-seal:hover .seal-sheen {
+  transform: rotate(18deg) translateX(235px);
+  opacity: 0.8;
+  transition:
+    transform 1s cubic-bezier(0.3, 0.6, 0.3, 1),
+    opacity 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accreditation-seal .seal-sheen {
+    transition: none !important;
+    opacity: 0 !important;
+  }
+}

@@ -1038,6 +1038,12 @@ function createOrganizationPlugin() {
           cnpj: { type: "string", input: true },
           accreditationNumber: { type: "string", input: true },
           accreditationBody: { type: "string", input: true },
+          accreditationActive: {
+            type: "boolean",
+            input: true,
+            required: false,
+            defaultValue: false,
+          },
           street: { type: "string", input: true },
           number: { type: "string", input: true },
           complement: { type: "string", input: true },

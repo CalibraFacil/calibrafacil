@@ -293,6 +293,52 @@ export const MassUnitSchema = z.enum(["mg", "g", "kg"]);
 export type MassUnit = z.infer<typeof MassUnitSchema>;
 
 /**
+ * Every measurement unit token understood by the kind-aware unit registry
+ * (`@calibra-facil/shared/units`). This is a strict *widening* of
+ * {@link MassUnitSchema}: old stored snapshots (mass-only) keep parsing, and
+ * the list must stay in sync with the registry (asserted by an enum-sync test).
+ */
+export const MeasurementUnitSchema = z.enum([
+  // mass
+  "mg",
+  "g",
+  "kg",
+  // length
+  "µm",
+  "mm",
+  "cm",
+  "m",
+  // temperature
+  "°C",
+  "°F",
+  "K",
+  // pressure
+  "Pa",
+  "kPa",
+  "MPa",
+  "bar",
+  "psi",
+  "kgf/cm²",
+  "mmHg",
+  "inHg",
+  // volume
+  "µL",
+  "mL",
+  "L",
+  // time
+  "ms",
+  "s",
+  "min",
+  "h",
+  // torque
+  "N·m",
+  "kgf·m",
+  // humidity
+  "%RH",
+]);
+export type MeasurementUnit = z.infer<typeof MeasurementUnitSchema>;
+
+/**
  * Schema for creating a new asset
  */
 export const CreateAssetSchema = z.object({
@@ -304,7 +350,7 @@ export const CreateAssetSchema = z.object({
   serialNumber: z.string().min(1, "Número de série é obrigatório"),
   tag: z.string().min(1, "Tag é obrigatória"),
   status: AssetStatusSchema.optional().default("ACTIVE"),
-  baseMeasurementUnit: MassUnitSchema.optional().nullable(),
+  baseMeasurementUnit: MeasurementUnitSchema.optional().nullable(),
   lastCalibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
@@ -538,6 +584,10 @@ export const MethodTableColumnSchema = z.object({
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
   role: MethodTableColumnRoleSchema.optional(),
+  // Semantic role used to pick absolute vs. delta unit conversion for affine
+  // kinds (temperature). Kept a permissive string for forward/import
+  // compatibility; classified by DELTA_QUANTITY_KINDS in @calibra-facil/shared.
+  quantityKind: z.string().optional(),
   phase: z.enum(["before", "after", "always"]).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
 });
@@ -568,7 +618,7 @@ export const WeighingRangeResolverConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
   assetSpecKey: z.string().min(1).optional(),
   pointColumn: z.string().min(1).optional(),
-  pointUnit: z.enum(["mg", "g", "kg"]).optional(),
+  pointUnit: MeasurementUnitSchema.optional(),
   targetColumns: z
     .object({
       rangeLabel: z.string().optional(),
@@ -599,6 +649,9 @@ export const MethodInputFieldSchema = z
     label: z.string().min(1, "Rótulo é obrigatório"),
     type: z.enum(["text", "number", "select", "table"]),
     unit: z.string().optional(),
+    // Semantic role used to pick absolute vs. delta unit conversion for affine
+    // kinds (temperature). Permissive string; classified by DELTA_QUANTITY_KINDS.
+    quantityKind: z.string().optional(),
     required: z.boolean().optional().default(false),
     options: z.array(z.string()).optional(),
     defaultValue: z.union([z.string(), z.number()]).optional(),
@@ -998,6 +1051,7 @@ export const CreateMethodSchema = z.object({
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -1214,7 +1268,12 @@ export const MassCompositionProfileCreateSchema = z.object({
   drift: z.coerce.number().nullable().optional(),
   buoyancy: z.coerce.number().nullable().optional(),
   coverageFactor: z.coerce.number().positive().nullable().optional(),
-  quantityAvailable: z.coerce.number().int().nonnegative().nullable().optional(),
+  quantityAvailable: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
 });
 export type MassCompositionProfileCreateInput = z.infer<
   typeof MassCompositionProfileCreateSchema
@@ -1445,6 +1504,7 @@ export const MethodSnapshotSchema = z.object({
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
+  accreditedScope: z.boolean().optional(),
 });
 
 export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;

@@ -61,10 +61,8 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import {
-  normalizeMethodDataForStorage,
-  normalizeStandardsForOfficialExecution,
-} from "@calibra-facil/shared";
+import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
+import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
 import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";

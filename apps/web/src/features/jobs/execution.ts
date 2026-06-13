@@ -1,11 +1,17 @@
 import {
-  convertMassValue,
-  denormalizeMethodResultsForDisplay,
   formatCalibrationValue,
   isMassMeasurementUnit,
-  resolveMassDisplayUnit,
   type MassUnit,
 } from '@calibra-facil/shared'
+import {
+  canonicalUnitFor,
+  convertUnitDelta,
+  convertUnitValue,
+  denormalizeMethodResultsForDisplay,
+  resolveDisplayUnit,
+  unitKind,
+  type MeasurementUnit,
+} from '@calibra-facil/shared/units'
 import type { MassCompositionProfileDto } from '@calibra-facil/client-runtime'
 
 import type {
@@ -217,7 +223,7 @@ export interface AssetSnapshot {
   assetTypeId: number
   assetTypeName: string
   assetTypeSlug: string
-  baseMeasurementUnit?: MassUnit | null
+  baseMeasurementUnit?: MeasurementUnit | null
   name: string
   tag: string
   serialNumber: string
@@ -385,12 +391,17 @@ function toOfficialCompiledExecution(
   }
 }
 
-function resolveDisplayMassUnit(
-  baseMeasurementUnit: MassUnit | null | undefined,
-  unit: MassUnit | undefined,
-) {
-  const displayUnit = resolveMassDisplayUnit(baseMeasurementUnit, unit)
-  return isMassMeasurementUnit(displayUnit) ? displayUnit : unit
+/**
+ * The weighing-range resolver's `pointUnit` is mass-only by type. Resolve it to
+ * the asset's base unit when both are mass; otherwise keep the original literal
+ * (a non-mass base unit never retargets a mass weighing-range point).
+ */
+function resolvePointDisplayUnit(
+  baseMeasurementUnit: MeasurementUnit | null | undefined,
+  pointUnit: MassUnit | undefined,
+): MassUnit | undefined {
+  const displayUnit = resolveDisplayUnit(baseMeasurementUnit, pointUnit)
+  return isMassMeasurementUnit(displayUnit) ? displayUnit : pointUnit
 }
 
 export function normalizeText(value: string | null | undefined) {
@@ -750,6 +761,17 @@ export function buildExecutionFormulaContext({
     }
   }
 
+  // Standards are reported in the asset's quantity kind; convert their certified
+  // values/uncertainties into that kind's canonical unit so the formula context
+  // stays unit-consistent. Absolute readings use convertUnitValue; uncertainty
+  // and drift are deltas and use convertUnitDelta (identical to value for mass).
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null
+  const assetKind = unitKind(assetBaseMeasurementUnit)
+  const canonicalUnit = assetKind ? canonicalUnitFor(assetKind) : null
+  const sameKindAsAsset = (unit: unknown) =>
+    assetKind != null && unitKind(unit) === assetKind
+
   const standardsById = new Map(
     standardsData.map((standard) => [standard.id, standard]),
   )
@@ -761,40 +783,45 @@ export function buildExecutionFormulaContext({
       metrologyData: standard.metrologyData ?? null,
       uncertainty:
         standard.uncertainty != null &&
-        isMassMeasurementUnit(standard.uncertaintyUnit)
-          ? convertMassValue(
+        canonicalUnit &&
+        sameKindAsAsset(standard.uncertaintyUnit)
+          ? convertUnitDelta(
               standard.uncertainty,
               standard.uncertaintyUnit,
-              'g',
+              canonicalUnit,
             )
           : standard.uncertainty,
       coverageFactor: standard.coverageFactor,
       drift:
-        standard.drift != null && standard.certifiedValues?.[0]?.unit
-          ? (convertMassValue(
+        standard.drift != null &&
+        canonicalUnit &&
+        sameKindAsAsset(standard.certifiedValues?.[0]?.unit)
+          ? (convertUnitDelta(
               standard.drift,
-              standard.certifiedValues[0].unit,
-              'g',
+              standard.certifiedValues?.[0]?.unit,
+              canonicalUnit,
             ) ?? standard.drift)
           : standard.drift,
       certifiedValues:
         standard.certifiedValues?.map((certifiedValue) => ({
           nominal: certifiedValue.nominal,
           authentication: certifiedValue.authentication,
-          value: isMassMeasurementUnit(certifiedValue.unit)
-            ? (convertMassValue(
-                certifiedValue.value,
-                certifiedValue.unit,
-                'g',
-              ) ?? certifiedValue.value)
-            : certifiedValue.value,
-          uncertainty: isMassMeasurementUnit(certifiedValue.unit)
-            ? (convertMassValue(
-                certifiedValue.uncertainty,
-                certifiedValue.unit,
-                'g',
-              ) ?? certifiedValue.uncertainty)
-            : certifiedValue.uncertainty,
+          value:
+            canonicalUnit && sameKindAsAsset(certifiedValue.unit)
+              ? (convertUnitValue(
+                  certifiedValue.value,
+                  certifiedValue.unit,
+                  canonicalUnit,
+                ) ?? certifiedValue.value)
+              : certifiedValue.value,
+          uncertainty:
+            canonicalUnit && sameKindAsAsset(certifiedValue.unit)
+              ? (convertUnitDelta(
+                  certifiedValue.uncertainty,
+                  certifiedValue.unit,
+                  canonicalUnit,
+                ) ?? certifiedValue.uncertainty)
+              : certifiedValue.uncertainty,
         })) ?? null,
     }))
 
@@ -871,7 +898,7 @@ export function evaluateExecutionFormulaResults({
   context: FormulaContext
   normalizedFormData: Record<string, unknown>
   activeCalculationFormulas: MethodFormula[]
-  assetBaseMeasurementUnit: MassUnit | null | undefined
+  assetBaseMeasurementUnit: MeasurementUnit | null | undefined
 }) {
   const results: Record<string, FormulaResult> = {}
   const runningContext: FormulaContext = { ...context }
@@ -947,7 +974,7 @@ export function getDisplayedFormulaResults({
   jobResults,
 }: {
   activeCalculationFormulas: MethodFormula[]
-  assetBaseMeasurementUnit: MassUnit | null | undefined
+  assetBaseMeasurementUnit: MeasurementUnit | null | undefined
   formulaResults: Record<string, FormulaResult>
   jobResults: Record<string, unknown> | null
 }) {
@@ -1391,7 +1418,7 @@ export function formatLabAddress(job: JobData) {
 
 export function resolveFieldForDisplay(
   field: MethodInputField,
-  baseMeasurementUnit: MassUnit | null | undefined,
+  baseMeasurementUnit: MeasurementUnit | null | undefined,
 ): MethodInputField {
   if (!baseMeasurementUnit) {
     return field
@@ -1399,26 +1426,28 @@ export function resolveFieldForDisplay(
 
   return {
     ...field,
-    unit: resolveMassDisplayUnit(baseMeasurementUnit, field.unit),
+    unit: resolveDisplayUnit(baseMeasurementUnit, field.unit),
     weighingRangeResolver: field.weighingRangeResolver
       ? {
           ...field.weighingRangeResolver,
-          pointUnit:
-            resolveDisplayMassUnit(
-              baseMeasurementUnit,
-              field.weighingRangeResolver.pointUnit,
-            ) ?? field.weighingRangeResolver.pointUnit,
+          pointUnit: resolvePointDisplayUnit(
+            baseMeasurementUnit,
+            field.weighingRangeResolver.pointUnit,
+          ),
         }
       : field.weighingRangeResolver,
     columns: field.columns?.map((column) => ({
       ...column,
-      unit: resolveMassDisplayUnit(baseMeasurementUnit, column.unit),
+      unit: resolveDisplayUnit(baseMeasurementUnit, column.unit),
       massComposition: column.massComposition
         ? {
             ...column.massComposition,
+            // Mass composition is mass-only: only retarget when the asset's base
+            // unit is itself a mass unit.
             targetUnit:
               column.massComposition.targetUnit &&
-              isMassMeasurementUnit(column.massComposition.targetUnit)
+              isMassMeasurementUnit(column.massComposition.targetUnit) &&
+              isMassMeasurementUnit(baseMeasurementUnit)
                 ? baseMeasurementUnit
                 : column.massComposition.targetUnit,
           }

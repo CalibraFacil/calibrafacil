@@ -1,10 +1,5 @@
-import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Add01Icon,
-  Delete02Icon,
-  ArrowDown01Icon,
-} from '@hugeicons/core-free-icons'
+import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 
 import type { MethodInputField } from './types'
 
@@ -18,12 +13,20 @@ import {
   type MassCompositionValue,
 } from './mass-composition-utils'
 import {
-  convertMassValue,
-  isMassUnit,
+  decimalsForResolution,
+  parseNumericValue,
   resolveWeighingRange,
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
 } from './weighing-range-utils'
+import { MeasurementNumberCell } from './measurement-number-cell'
+import { normalizeMassUnit, type MassUnit } from '@calibra-facil/shared'
+import {
+  convertUnitDelta,
+  convertUnitValue,
+  resolveDisplayUnit,
+  unitKind,
+} from '@calibra-facil/shared/units'
 import {
   Table,
   TableBody,
@@ -32,11 +35,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 
 export interface CertifiedValueOption {
   label: string // e.g., "100g"
@@ -54,6 +52,8 @@ interface TableInputRendererProps {
   certifiedValueOptions?: CertifiedValueOption[]
   massCompositionOptions?: MassCompositionOption[]
   assetSpecifications?: Record<string, unknown> | null
+  /** Asset's base measurement unit; drives display/entry conversion of cells. */
+  assetBaseMeasurementUnit?: string | null
   phaseMode?:
     | 'before_and_after'
     | 'before_only'
@@ -231,6 +231,9 @@ function setRangeTargetValue(
   targetName: keyof WeighingRangeResolverTargetColumns,
   value: unknown,
   valueUnit?: string,
+  // Resolutions are widths (deltas); bounds/labels are absolute. Matters for
+  // affine kinds (temperature); a no-op for the factor-only mass path.
+  mode: 'absolute' | 'delta' = 'absolute',
 ) {
   const targetKey = targetColumns[targetName]
   if (!targetKey) return
@@ -238,7 +241,9 @@ function setRangeTargetValue(
   if (typeof value === 'number' && valueUnit) {
     const targetColumn = columns?.find((col) => col.key === targetKey)
     const converted = targetColumn?.unit
-      ? convertMassValue(value, valueUnit, targetColumn.unit)
+      ? mode === 'delta'
+        ? convertUnitDelta(value, valueUnit, targetColumn.unit)
+        : convertUnitValue(value, valueUnit, targetColumn.unit)
       : value
 
     if (converted != null) {
@@ -265,7 +270,11 @@ function getAssetResolutionFallback(
   const resolution = parseNumber(assetSpecifications?.resolution)
   const resolutionUnit = assetSpecifications?.resolutionUnit ?? 'g'
 
-  if (resolution == null || !isMassUnit(resolutionUnit)) {
+  if (
+    resolution == null ||
+    typeof resolutionUnit !== 'string' ||
+    unitKind(resolutionUnit) == null
+  ) {
     return null
   }
 
@@ -345,6 +354,82 @@ function resolveRowWeighingRange(
     weighingRangeResolver.pointUnit ?? weighingRangePointColumn?.unit,
     assetSpecifications?.[weighingRangeResolver.assetSpecKey],
   )
+}
+
+function resolveMassCompositionTarget(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+): { value: number; unit: MassUnit } | null {
+  const columns = field.columns || []
+  const resolver = getWeighingRangeResolver(field)
+  if (!resolver?.pointColumn) return null
+
+  const numeric = parseNumericValue(row[resolver.pointColumn])
+  if (numeric == null) return null
+
+  const pointColumn = columns.find((col) => col.key === resolver.pointColumn)
+  const unit = normalizeMassUnit(resolver.pointUnit ?? pointColumn?.unit)
+  if (unit == null) return null
+
+  return { value: numeric, unit }
+}
+
+/**
+ * The instrument resolution applicable to a row, falling back to the asset-level
+ * resolution when no weighing range is configured/matched.
+ */
+function resolveRowResolution(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+): Pick<ResolvedWeighingRange, 'resolution' | 'resolutionUnit'> | null {
+  const resolved = resolveRowWeighingRange(field, row, assetSpecifications)
+  if (resolved) {
+    return {
+      resolution: resolved.resolution,
+      resolutionUnit: resolved.resolutionUnit,
+    }
+  }
+
+  const configured = getConfiguredWeighingRanges(field, assetSpecifications)
+  if (!Array.isArray(configured) || configured.length === 0) {
+    return getAssetResolutionFallback(assetSpecifications)
+  }
+
+  return null
+}
+
+/** Max decimals an operator may type for an indication, in the display unit. */
+function resolveRowResolutionDecimals(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+  displayUnit: string | null | undefined,
+): number | null {
+  const resolution = resolveRowResolution(field, row, assetSpecifications)
+  if (!resolution) return null
+
+  // Delta-convert the resolution into the display unit (no-op / same-kind
+  // fallback handled inside decimalsForResolution).
+  return decimalsForResolution(
+    resolution.resolution,
+    resolution.resolutionUnit,
+    displayUnit,
+  )
+}
+
+/**
+ * Columns whose entry is a physical instrument indication or applied load, so
+ * their typed precision should be bounded by the resolution. Excludes derived
+ * columns (uncertainty components, computed totals).
+ */
+function isResolutionConstrainedColumn(
+  field: MethodInputField,
+  col: TableColumn,
+): boolean {
+  if (col.type !== 'number') return false
+  if (col.phase === 'before' || col.phase === 'after') return true
+  return getWeighingRangeResolver(field)?.pointColumn === col.key
 }
 
 export function applyTableWeighingRangeResolvers(
@@ -434,6 +519,7 @@ export function applyTableWeighingRangeResolvers(
       'resolution',
       resolutionSource.resolution,
       resolutionSource.resolutionUnit,
+      'delta',
     )
     setRangeTargetValue(
       nextRow,
@@ -461,10 +547,12 @@ export function TableInputRenderer({
   certifiedValueOptions = EMPTY_CERTIFIED_VALUE_OPTIONS,
   massCompositionOptions = EMPTY_MASS_COMPOSITION_OPTIONS,
   assetSpecifications,
+  assetBaseMeasurementUnit = null,
   phaseMode = 'before_and_after',
 }: TableInputRendererProps) {
   const eccentricityLoadPointConfig = getEccentricityLoadPoints(field)
   const hasFixedLoadPoints = Boolean(eccentricityLoadPointConfig)
+  const assetBaseUnit: string | null = assetBaseMeasurementUnit ?? null
   const rows = applyTableWeighingRangeResolvers(
     field,
     applyEccentricityLoadPoints(field, value || []),
@@ -692,6 +780,20 @@ export function TableInputRenderer({
       isStandardRefColumn(col.key, col.label)
 
     if (col.role === 'mass_standard_composition') {
+      const prevValue = rowIndex > 0 ? rows[rowIndex - 1]?.[col.key] : undefined
+      const previousComposition = isMassCompositionValue(prevValue)
+        ? prevValue
+        : null
+      const rowResolution = resolveRowResolution(
+        field,
+        row,
+        assetSpecifications,
+      )
+      // Mass composition's accuracy-class suggestion is mass-only; narrow the
+      // (now kind-generic) resolution unit to a mass unit, skipping otherwise.
+      const rowResolutionMassUnit = rowResolution
+        ? normalizeMassUnit(rowResolution.resolutionUnit)
+        : null
       return (
         <MassCompositionCell
           value={row[col.key]}
@@ -700,6 +802,20 @@ export function TableInputRenderer({
           config={col.massComposition}
           disabled={disabled || isInactivePhaseColumn}
           presentation={shouldUsePanelRows ? 'field' : 'cell'}
+          target={resolveMassCompositionTarget(field, row)}
+          previousComposition={previousComposition}
+          displayUnit={resolveDisplayUnit(
+            assetBaseUnit,
+            col.massComposition?.targetUnit ?? 'g',
+          )}
+          resolution={
+            rowResolution && rowResolutionMassUnit != null
+              ? {
+                  value: rowResolution.resolution,
+                  unit: rowResolutionMassUnit,
+                }
+              : null
+          }
         />
       )
     }
@@ -716,47 +832,29 @@ export function TableInputRenderer({
       )
     }
 
-    if (showPicker) {
-      return (
-        <NumberCellWithPicker
-          value={row[col.key]}
-          onChange={(val) => updateCell(rowIndex, col.key, val)}
-          onBlur={(val) => updateCell(rowIndex, col.key, val)}
-          disabled={disabled || isCalculatedTarget}
-          certifiedValueOptions={certifiedValueOptions}
-        />
-      )
-    }
-
     if (col.type === 'number') {
+      const isReadOnlyCell = disabled || isCalculatedTarget || isFixedLoadPoint
+      const displayUnit = resolveDisplayUnit(assetBaseUnit, col.unit)
+      const maxDecimals = isResolutionConstrainedColumn(field, col)
+        ? resolveRowResolutionDecimals(
+            field,
+            row,
+            assetSpecifications,
+            displayUnit,
+          )
+        : null
+
       return (
-        <Input
-          type="text"
-          inputMode="decimal"
-          value={row[col.key] != null ? String(row[col.key]) : ''}
-          onChange={(e) => {
-            const val = e.target.value
-            if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
-              const normalized = val.replace(',', '.')
-              updateCell(
-                rowIndex,
-                col.key,
-                normalized === '' ? null : normalized,
-              )
-            }
-          }}
-          onBlur={(e) => {
-            const val = e.target.value.replace(',', '.')
-            if (val !== '' && val !== '-' && val !== '.') {
-              const parsed = parseFloat(val)
-              if (!isNaN(parsed)) {
-                updateCell(rowIndex, col.key, parsed)
-              }
-            } else if (val === '' || val === '-' || val === '.') {
-              updateCell(rowIndex, col.key, null)
-            }
-          }}
-          disabled={disabled || isCalculatedTarget || isFixedLoadPoint}
+        <MeasurementNumberCell
+          value={row[col.key]}
+          onCommit={(val) => updateCell(rowIndex, col.key, val)}
+          columnUnit={col.unit}
+          displayUnit={displayUnit}
+          maxDecimals={maxDecimals}
+          disabled={isReadOnlyCell}
+          certifiedValueOptions={
+            showPicker && !isReadOnlyCell ? certifiedValueOptions : undefined
+          }
           className={`h-8 w-full ${isCalculatedTarget || isFixedLoadPoint ? 'bg-muted/50' : ''}`}
           title={
             isFixedLoadPoint
@@ -1040,111 +1138,6 @@ export function TableInputRenderer({
           Adicionar Linha
         </Button>
       )}
-    </div>
-  )
-}
-
-/**
- * Number cell with certified values picker
- */
-function NumberCellWithPicker({
-  value,
-  onChange,
-  onBlur,
-  disabled,
-  certifiedValueOptions,
-}: {
-  value: unknown
-  onChange: (val: number | string | null) => void
-  onBlur?: (val: number | null) => void
-  disabled: boolean
-  certifiedValueOptions: CertifiedValueOption[]
-}) {
-  const [open, setOpen] = useState(false)
-
-  // Group options by standard name
-  const groupedOptions = certifiedValueOptions.reduce<
-    Record<string, CertifiedValueOption[]>
-  >((acc, opt) => {
-    if (!acc[opt.standardName]) {
-      acc[opt.standardName] = []
-    }
-    acc[opt.standardName].push(opt)
-    return acc
-  }, {})
-
-  return (
-    <div className="flex gap-1">
-      <Input
-        type="text"
-        inputMode="decimal"
-        value={value != null ? String(value) : ''}
-        onChange={(e) => {
-          const val = e.target.value
-          // Allow empty, numbers, decimal points, and negative sign
-          if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
-            const normalized = val.replace(',', '.')
-            onChange(normalized === '' ? null : normalized)
-          }
-        }}
-        onBlur={(e) => {
-          // Parse to number on blur if valid
-          const val = e.target.value.replace(',', '.')
-          if (val !== '' && val !== '-' && val !== '.') {
-            const parsed = parseFloat(val)
-            if (!isNaN(parsed)) {
-              onBlur?.(parsed)
-            }
-          } else {
-            onBlur?.(null)
-          }
-        }}
-        disabled={disabled}
-        className="h-8 flex-1"
-      />
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          render={(props) => (
-            <Button
-              {...props}
-              variant="ghost"
-              size="icon"
-              disabled={disabled}
-              className="h-8 w-8 shrink-0"
-              title="Inserir valor certificado"
-            >
-              <HugeiconsIcon icon={ArrowDown01Icon} className="h-4 w-4" />
-            </Button>
-          )}
-        />
-        <PopoverContent align="end" className="w-64 p-2">
-          <div className="space-y-2 max-h-48 overflow-auto">
-            {Object.entries(groupedOptions).map(([standardName, options]) => (
-              <div key={standardName}>
-                <p className="text-xs font-medium text-muted-foreground px-2 py-1">
-                  {standardName}
-                </p>
-                {options.map((opt, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm flex justify-between items-center"
-                    onClick={() => {
-                      onChange(opt.value)
-                      setOpen(false)
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {opt.value.toFixed(5)} {opt.unit}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </PopoverContent>
-      </Popover>
     </div>
   )
 }

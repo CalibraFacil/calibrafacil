@@ -1,0 +1,68 @@
+.accreditation-seal-stage {
+  perspective: 600px;
+  display: flex;
+  justify-content: center;
+}
+
+.accreditation-seal {
+  --mx: 0.5;
+  --my: 0.5;
+  display: inline-block;
+}
+
+.accreditation-seal--idle {
+  filter: grayscale(0.85) opacity(0.55)
+    drop-shadow(0 6px 14px rgb(0 0 0 / 0.25));
+  transition: filter 0.6s ease;
+}
+
+.accreditation-seal--holo {
+  transform: rotateY(calc((var(--mx) - 0.5) * 14deg))
+    rotateX(calc((var(--my) - 0.5) * -14deg));
+  transition: transform 0.15s ease-out;
+  filter: drop-shadow(0 10px 22px rgb(0 0 0 / 0.35));
+  will-change: transform;
+}
+
+.accreditation-seal--holo.accreditation-seal--leaving {
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.accreditation-seal--holo .seal-foil {
+  mix-blend-mode: color-dodge;
+  opacity: 0;
+  transform: translate(
+    calc((var(--mx) - 0.5) * -110px),
+    calc((var(--my) - 0.5) * -80px)
+  );
+  transition: opacity 0.3s ease;
+}
+
+.accreditation-seal--holo .seal-glare {
+  mix-blend-mode: screen;
+  opacity: 0;
+  transform: translate(
+    calc((var(--mx) - 0.5) * 110px),
+    calc((var(--my) - 0.5) * 150px)
+  );
+  transition: opacity 0.3s ease;
+}
+
+.accreditation-seal--holo:hover .seal-foil {
+  opacity: 0.7;
+}
+
+.accreditation-seal--holo:hover .seal-glare {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accreditation-seal,
+  .accreditation-seal * {
+    transition: none !important;
+  }
+
+  .accreditation-seal--holo {
+    transform: none !important;
+  }
+}

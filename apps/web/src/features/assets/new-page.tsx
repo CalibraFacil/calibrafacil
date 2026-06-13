@@ -26,6 +26,7 @@ import {
   useNewAssetCustomersData,
 } from '@/features/assets/queries'
 import {
+  baseMeasurementUnitOptions,
   buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
   isAssetSpecificationErrorField,
@@ -73,6 +74,10 @@ import {
   isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
 import { isMassAssetTypeDefinition, isMassUnit } from '@calibra-facil/shared'
+import {
+  dominantKindForAssetType,
+  isMeasurementUnit,
+} from '@calibra-facil/shared/units'
 import type { CreateAssetInput } from '@calibra-facil/schemas'
 import { cn } from '@/lib/utils'
 
@@ -180,8 +185,22 @@ export function NewAssetPage() {
   const requiresMassBaseUnit =
     selectedAssetType !== null &&
     isMassAssetTypeDefinition(selectedAssetType.definition, selectedAssetType)
-  const hasSpecsSection =
+  // Any asset type with a recognizable measurable kind offers a base-unit
+  // picker; mass types additionally *require* it (enforced below + by the API).
+  const offersBaseUnit =
     requiresMassBaseUnit ||
+    (selectedAssetType !== null &&
+      dominantKindForAssetType(selectedAssetType.definition) !== null)
+  const baseUnitOptions = useMemo(
+    () => baseMeasurementUnitOptions(selectedAssetType?.definition),
+    [selectedAssetType?.definition],
+  )
+  // The spec sub-forms below are mass-only; pass the base unit narrowed to mass.
+  const activeMassUnit = isMassUnit(formData.baseMeasurementUnit)
+    ? formData.baseMeasurementUnit
+    : null
+  const hasSpecsSection =
+    offersBaseUnit ||
     visibleAssetTypeDefinition.length > 0 ||
     showEccentricityIndicator
 
@@ -637,18 +656,19 @@ export function NewAssetPage() {
                       description="Dados que acompanham o ativo nas calibrações e certificados."
                     />
                     <div className="mt-4 space-y-6">
-                      {requiresMassBaseUnit ? (
+                      {offersBaseUnit ? (
                         <div className="grid gap-4 md:grid-cols-2">
                           <Field>
                             <FieldLabel htmlFor="baseMeasurementUnit">
-                              Unidade base do instrumento *
+                              Unidade base do instrumento
+                              {requiresMassBaseUnit ? ' *' : ''}
                             </FieldLabel>
                             <Select
                               value={formData.baseMeasurementUnit ?? ''}
                               onValueChange={(value) =>
                                 updateField(
                                   'baseMeasurementUnit',
-                                  isMassUnit(value) ? value : null,
+                                  isMeasurementUnit(value) ? value : null,
                                 )
                               }
                               disabled={isSaving}
@@ -660,9 +680,11 @@ export function NewAssetPage() {
                                 </span>
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="kg">kg</SelectItem>
-                                <SelectItem value="g">g</SelectItem>
-                                <SelectItem value="mg">mg</SelectItem>
+                                {baseUnitOptions.map((unit) => (
+                                  <SelectItem key={unit} value={unit}>
+                                    {unit}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FieldDescription>
@@ -687,7 +709,7 @@ export function NewAssetPage() {
                           }
                           disabled={isSaving}
                           errors={specErrors}
-                          activeMassUnit={formData.baseMeasurementUnit}
+                          activeMassUnit={activeMassUnit}
                         />
                       ) : null}
 
@@ -697,7 +719,7 @@ export function NewAssetPage() {
                           onChange={updateIndicatorPosition}
                           disabled={isSaving}
                           className={
-                            requiresMassBaseUnit ||
+                            offersBaseUnit ||
                             visibleAssetTypeDefinition.length > 0
                               ? undefined
                               : 'border-t-0 pt-0'
@@ -808,7 +830,7 @@ export function NewAssetPage() {
                         <BlueprintField label="Modelo">
                           {formData.model || '—'}
                         </BlueprintField>
-                        {requiresMassBaseUnit ? (
+                        {offersBaseUnit ? (
                           <BlueprintField label="Unidade base" mono>
                             {formData.baseMeasurementUnit || '—'}
                           </BlueprintField>
@@ -829,7 +851,7 @@ export function NewAssetPage() {
                           <SpecificationsDisplay
                             definition={visibleAssetTypeDefinition}
                             specifications={formData.specifications}
-                            activeMassUnit={formData.baseMeasurementUnit}
+                            activeMassUnit={activeMassUnit}
                           />
                         </div>
                       ) : null}

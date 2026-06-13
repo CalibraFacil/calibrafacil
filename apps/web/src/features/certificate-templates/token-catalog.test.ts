@@ -34,5 +34,14 @@ describe('certificate template token catalog', () => {
       group: 'tables',
       kind: 'Lista',
     })
+    expect(
+      XLSX_TOKEN_CATALOG.find(
+        (token) => token.path === 'organization.accreditationSealPng',
+      ),
+    ).toMatchObject({
+      group: 'organization',
+      label: 'Selo de acreditação',
+      kind: 'Imagem',
+    })
   })
 })

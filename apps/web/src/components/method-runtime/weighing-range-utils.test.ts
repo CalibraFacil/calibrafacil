@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest'
 
+import { convertMassValue } from '@calibra-facil/shared'
+
 import {
-  convertMassValue,
+  decimalsForResolution,
   formatWeighingRangeSpec,
   resolveWeighingRange,
   type WeighingRangeSpec,
 } from './weighing-range-utils'
+
+describe('decimalsForResolution', () => {
+  it('counts fractional digits of common resolutions', () => {
+    expect(decimalsForResolution(0.5)).toBe(1)
+    expect(decimalsForResolution(0.1)).toBe(1)
+    expect(decimalsForResolution(0.01)).toBe(2)
+    expect(decimalsForResolution(0.001)).toBe(3)
+    expect(decimalsForResolution(0.25)).toBe(2)
+  })
+
+  it('returns 0 for integer resolutions', () => {
+    expect(decimalsForResolution(1)).toBe(0)
+    expect(decimalsForResolution(2)).toBe(0)
+    expect(decimalsForResolution(10)).toBe(0)
+  })
+
+  it('handles very small resolutions in exponential form', () => {
+    expect(decimalsForResolution(1e-7)).toBe(7)
+  })
+
+  it('returns null for non-positive or non-finite values', () => {
+    expect(decimalsForResolution(0)).toBeNull()
+    expect(decimalsForResolution(-0.5)).toBeNull()
+    expect(decimalsForResolution(Number.NaN)).toBeNull()
+  })
+})
 
 const ranges: WeighingRangeSpec[] = [
   {
@@ -70,6 +98,37 @@ describe('weighing-range-utils', () => {
     expect(convertMassValue(1500, 'mg', 'g')).toBe(1.5)
     expect(convertMassValue(1.5, 'kg', 'g')).toBe(1500)
     expect(convertMassValue(2500, 'g', 'kg')).toBe(2.5)
+  })
+
+  it('resolves a length-kind range for a caliper (mm)', () => {
+    const lengthRanges: WeighingRangeSpec[] = [
+      {
+        label: '0 a 150 mm',
+        min: 0,
+        max: 150,
+        rangeUnit: 'mm',
+        resolution: 0.01,
+        resolutionUnit: 'mm',
+      },
+    ]
+    expect(resolveWeighingRange(75, 'mm', lengthRanges)).toMatchObject({
+      label: '0 a 150 mm',
+      resolution: 0.01,
+      resolutionUnit: 'mm',
+    })
+    // A range expressed in cm still matches a point given in mm (same kind).
+    expect(
+      resolveWeighingRange(75, 'mm', [
+        {
+          label: '0 a 15 cm',
+          min: 0,
+          max: 15,
+          rangeUnit: 'cm',
+          resolution: 0.1,
+          resolutionUnit: 'mm',
+        },
+      ]),
+    ).toMatchObject({ label: '0 a 15 cm', resolution: 0.1 })
   })
 
   it('returns null for unsupported units or missing ranges', () => {
