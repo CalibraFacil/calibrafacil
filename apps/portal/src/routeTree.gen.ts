@@ -24,6 +24,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedServiceOrdersIndexRouteImport } from './routes/_authenticated/service-orders/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
+import { Route as AuthenticatedCalendarIndexRouteImport } from './routes/_authenticated/calendar/index'
 import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedServiceOrdersIdRouteImport } from './routes/_authenticated/service-orders/$id'
@@ -114,6 +115,12 @@ const AuthenticatedCertificatesIndexRoute =
     path: '/certificates/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCalendarIndexRoute =
+  AuthenticatedCalendarIndexRouteImport.update({
+    id: '/calendar/',
+    path: '/calendar/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAssetsIndexRoute =
   AuthenticatedAssetsIndexRouteImport.update({
     id: '/',
@@ -173,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets/': typeof AuthenticatedAssetsIndexRoute
+  '/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
@@ -192,6 +200,7 @@ export interface FileRoutesByTo {
   '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets': typeof AuthenticatedAssetsIndexRoute
+  '/calendar': typeof AuthenticatedCalendarIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/service-orders': typeof AuthenticatedServiceOrdersIndexRoute
@@ -217,6 +226,7 @@ export interface FileRoutesById {
   '/_authenticated/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
+  '/_authenticated/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/service-orders/$id'
     | '/settings/appearance'
     | '/assets/'
+    | '/calendar/'
     | '/certificates/'
     | '/requests/'
     | '/service-orders/'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/service-orders/$id'
     | '/settings/appearance'
     | '/assets'
+    | '/calendar'
     | '/certificates'
     | '/requests'
     | '/service-orders'
@@ -285,6 +297,7 @@ export interface FileRouteTypes {
     | '/_authenticated/service-orders/$id'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/assets/'
+    | '/_authenticated/calendar/'
     | '/_authenticated/certificates/'
     | '/_authenticated/requests/'
     | '/_authenticated/service-orders/'
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/certificates'
       fullPath: '/certificates/'
       preLoaderRoute: typeof AuthenticatedCertificatesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/calendar/': {
+      id: '/_authenticated/calendar/'
+      path: '/calendar'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof AuthenticatedCalendarIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/assets/': {
@@ -532,6 +552,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedCertificatesIdRoute: typeof AuthenticatedCertificatesIdRoute
+  AuthenticatedCalendarIndexRoute: typeof AuthenticatedCalendarIndexRoute
   AuthenticatedCertificatesIndexRoute: typeof AuthenticatedCertificatesIndexRoute
 }
 
@@ -543,6 +564,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedCertificatesIdRoute: AuthenticatedCertificatesIdRoute,
+  AuthenticatedCalendarIndexRoute: AuthenticatedCalendarIndexRoute,
   AuthenticatedCertificatesIndexRoute: AuthenticatedCertificatesIndexRoute,
 }
 
