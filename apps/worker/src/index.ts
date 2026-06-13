@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
+  AccreditationSealSvg,
   LabelHtml,
   type LabelData,
   ServiceOrderDeliveryReceiptHtml,
@@ -44,6 +45,8 @@ import {
   type IntegrationSyncQueueMessage,
 } from "./integrations.js";
 import {
+  formatAccreditationNumber,
+  shouldRenderAccreditationSeal,
   type BackgroundJobMessage,
   type CertificateXlsxPreviewBackgroundJobMessage,
   type DocumentBackgroundJobMessage,
@@ -195,6 +198,7 @@ type MethodSnapshot = {
   dataFields?: MethodInputField[];
   formulas?: MethodFormula[];
   certificateContent?: MethodCertificateContent | null;
+  accreditedScope?: boolean;
 };
 
 type CertifiedValue = {
@@ -289,6 +293,7 @@ type JobData = {
     cnpj?: string | null;
     accreditationNumber?: string | null;
     accreditationBody?: string | null;
+    accreditationActive?: boolean | null;
     street?: string | null;
     number?: string | null;
     complement?: string | null;
@@ -905,6 +910,7 @@ async function fetchJobData(
       o.cnpj as lab_cnpj,
       o.accreditation_number as lab_accreditation_number,
       o.accreditation_body as lab_accreditation_body,
+      o.accreditation_active as lab_accreditation_active,
       o.street as lab_street,
       o.number as lab_number,
       o.complement as lab_complement,
@@ -936,9 +942,13 @@ async function fetchJobData(
       -- Original job info (if this is an amendment)
       original.job_id as original_job_id,
       original.approved_at as original_approved_at,
-      service_order_link.inmetro_repair_seal_number
+      service_order_link.inmetro_repair_seal_number,
+      snapshot_method.accredited_scope as method_accredited_scope_current
     FROM calibration_job cj
     LEFT JOIN organization o ON cj.organization_id = o.id
+    LEFT JOIN calibration_method snapshot_method
+      ON snapshot_method.id = NULLIF(cj.method_snapshot->>'methodId', '')::int
+      AND snapshot_method.organization_id = cj.organization_id
     LEFT JOIN customer c ON cj.customer_id = c.id
     LEFT JOIN asset a ON cj.asset_id = a.id
     LEFT JOIN "user" u ON cj.approved_by = u.id
@@ -1061,6 +1071,7 @@ async function fetchJobData(
       cnpj: row.lab_cnpj,
       accreditationNumber: row.lab_accreditation_number,
       accreditationBody: row.lab_accreditation_body,
+      accreditationActive: row.lab_accreditation_active,
       street: row.lab_street,
       number: row.lab_number,
       complement: row.lab_complement,
@@ -1089,7 +1100,17 @@ async function fetchJobData(
       model: row.model,
       manufacturer: row.manufacturer,
     },
-    methodSnapshot: row.method_snapshot,
+    // Legacy/offline snapshots may predate the accredited-scope flag; fall
+    // back to the method's current flag so older jobs still seal correctly.
+    methodSnapshot: row.method_snapshot
+      ? {
+          ...row.method_snapshot,
+          accreditedScope:
+            row.method_snapshot.accreditedScope ??
+            row.method_accredited_scope_current ??
+            false,
+        }
+      : row.method_snapshot,
     assetSnapshot: row.asset_snapshot,
     standardsSnapshot: row.standards_snapshot,
     serviceOrder: {
@@ -3068,6 +3089,16 @@ function normalizeMassCompositionsForXlsx(job: JobData) {
   return compositions;
 }
 
+function renderAccreditationSealDataUrl(
+  accreditationNumber: string | null | undefined,
+): string {
+  const svg = renderToString(
+    React.createElement(AccreditationSealSvg, { accreditationNumber }),
+  );
+  // workbookImageFromDataUrl rasterizes SVG data URLs to PNG via Resvg.
+  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
+}
+
 function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
   const standards = normalizeStandardsForXlsx(job);
   const resultRows = normalizeResultRowsForXlsx(job);
@@ -3084,11 +3115,25 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
   const calibrationResults = resultRows.filter(
     (row) => row.group === "calibration_result",
   );
+  const certificateAccredited = shouldRenderAccreditationSeal({
+    lab: job.lab,
+    methodAccreditedScope: job.methodSnapshot?.accreditedScope,
+  });
+  const accreditationNumberFormatted = formatAccreditationNumber(
+    job.lab.accreditationNumber,
+  );
   const lab = {
     name: job.lab.name,
     cnpj: job.lab.cnpj,
     accreditationNumber: job.lab.accreditationNumber,
+    accreditationNumberFormatted,
     accreditationBody: job.lab.accreditationBody,
+    accreditationActive: job.lab.accreditationActive ?? false,
+    // Existing template manifests bind the seal image to
+    // `organization.accreditationSealPng`; absent (null) means no seal cell.
+    accreditationSealPng: certificateAccredited
+      ? renderAccreditationSealDataUrl(job.lab.accreditationNumber)
+      : null,
     address: formatLabAddress(job),
     street: job.lab.street,
     number: job.lab.number,
@@ -3118,6 +3163,14 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
     },
     lab,
     organization: lab,
+    accreditation: {
+      accredited: certificateAccredited,
+      labActive: job.lab.accreditationActive ?? false,
+      methodAccreditedScope: job.methodSnapshot?.accreditedScope ?? false,
+      number: job.lab.accreditationNumber,
+      numberFormatted: accreditationNumberFormatted,
+      body: job.lab.accreditationBody,
+    },
     customer: {
       name: job.customer.name,
       taxId: job.customer.taxId,

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { AccreditationSeal } from "@/components/accreditation-seal";
 import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/v/$token")({
@@ -38,6 +39,10 @@ type VerificationData = {
   service: string;
   performedAt: string | null;
   approvedAt: string | null;
+  accreditation?: {
+    accredited: boolean;
+    number: string | null;
+  };
   // Digital signature - ISO 17025 Clause 7.8.2.1(q)
   digitalSignature:
     | {
@@ -209,6 +214,28 @@ function VerifyPage() {
               <p className="font-medium">{data.lab}</p>
             </div>
           </div>
+
+          {/* Accreditation seal - only for accredited-scope certificates */}
+          {data.accreditation?.accredited && (
+            <div className="flex items-center gap-4 rounded-lg border border-border p-3">
+              <AccreditationSeal
+                accreditationNumber={data.accreditation.number}
+                width={72}
+              />
+              <div className="text-sm">
+                <p className="font-medium text-foreground">
+                  Calibração acreditada NBR ISO/IEC 17025
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  Emitido sob o escopo acreditado do laboratório
+                  {data.accreditation.number
+                    ? ` (CAL ${data.accreditation.number})`
+                    : ""}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Supersession status - ISO 17025 Clause 7.8.4.1 */}
           {data.isSuperseded && (

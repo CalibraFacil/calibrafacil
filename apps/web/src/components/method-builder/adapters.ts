@@ -17,6 +17,7 @@ export function methodDataToDraft(
     name: method.name ?? '',
     description: method.description ?? '',
     assetTypeId: method.assetTypeId ?? undefined,
+    accreditedScope: method.accreditedScope ?? false,
     version: method.version ?? 1,
     status: method.status ?? 'DRAFT',
     inputs: method.dataFields ?? [],
@@ -39,6 +40,7 @@ export function draftToMethodSavePayload(
     name: draft.name.trim(),
     description: draft.description?.trim() || null,
     assetTypeId: draft.assetTypeId ?? null,
+    accreditedScope: draft.accreditedScope ?? false,
     dataFields: draft.inputs,
     variableBindings: draft.variables,
     formulas: draft.formulas,
@@ -71,7 +73,7 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
           unit: input.unit || undefined,
           required: Boolean(input.required),
           defaultValue: input.defaultValue,
-          quantityKind: 'other',
+          quantityKind: input.quantityKind ?? 'other',
         }
       }
 

@@ -3,6 +3,8 @@ import {
   AlertCircleIcon,
   ArrowRight01Icon,
   Calendar03Icon,
+  Certificate01Icon,
+  CheckmarkCircle02Icon,
   Table01Icon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
@@ -18,10 +20,11 @@ export function FeaturesSection() {
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
           title="Recursos da plataforma"
-          lead="Três blocos sustentam a operação diária e a defesa em auditoria: geração do certificado a partir do modelo do laboratório, portal restrito ao cliente final e gestão proativa de vencimentos."
+          lead="Quatro blocos sustentam a operação diária e a defesa em auditoria: geração do certificado a partir do modelo do laboratório, assinatura digital ICP-Brasil ligada à versão imutável, portal restrito ao cliente final e gestão proativa de vencimentos."
         />
 
         <FeatureCertificate />
+        <FeatureSignature />
         <FeaturePortal />
         <FeatureExpirations />
       </div>
@@ -92,25 +95,53 @@ function FeatureCertificate() {
       title="Cada laboratório edita o próprio certificado. Em Excel mesmo."
       lead={
         <>
-          Sem aprender ferramenta nova. Sem depender de fornecedor pra cada
-          ajuste de modelo. O laboratório mantém o template em Excel ou
-          LibreOffice e usa os mecanismos nativos da ferramenta (bloqueio de
-          células, proteção por senha, controle de revisão supervisionada) para
-          atender ao requisito de controle de documentos da ISO/IEC 17025. O
-          CalibraFácil só preenche as variáveis nomeadas (
+          O Excel (ou LibreOffice) é só o layout visual — onde o laboratório
+          posiciona logo, cabeçalho e tabelas, sem aprender ferramenta nova nem
+          depender de fornecedor pra cada ajuste. O que conta para a ISO/IEC
+          17025 não mora nele: o cálculo e a evidência ficam no sistema
+          imutável, e o que vale juridicamente é o PDF congelado e assinado na
+          aprovação. O CalibraFácil preenche as variáveis nomeadas (
           <CodeChip>{'{{cliente}}'}</CodeChip>,{' '}
-          <CodeChip>{'{{u_expandida}}'}</CodeChip>) no template aprovado e gera
-          o PDF na aprovação.
+          <CodeChip>{'{{u_expandida}}'}</CodeChip>) e gera esse PDF — o template
+          Excel nunca é o documento controlado.
         </>
       }
       bullets={[
-        'Template editado em Excel ou LibreOffice, com bloqueio de células, senha e controle de revisão supervisionado pelo laboratório',
-        'Compatível com o controle de documentos exigido pela ISO/IEC 17025',
+        'O modelo Excel define só a aparência do certificado: logo, cabeçalho, tabelas, posição da assinatura',
+        'O documento controlado é o PDF congelado e assinado, não a planilha. O controle de documentos da ISO/IEC 17025 vive no sistema.',
         'Múltiplos modelos por escopo (massa, temperatura, pressão, dimensional)',
         'Variáveis nomeadas pra cada dado de calibração. Sem cópia manual, sem erro de digitação.',
-        'PDF gerado na aprovação e congelado. A versão aprovada não muda.',
+        'PDF gerado na aprovação, congelado e assinado em ICP-Brasil. A versão aprovada não muda.',
       ]}
       visual={<XlsxTemplate />}
+    />
+  )
+}
+
+function FeatureSignature() {
+  return (
+    <Feature
+      reverse
+      title="O certificado sai assinado em ICP-Brasil. Com validade legal, não só um nome no rodapé."
+      lead={
+        <>
+          A aprovação não apenas congela o PDF — assina o arquivo com o
+          certificado digital ICP-Brasil A1 (<CodeChip>.p12</CodeChip>/
+          <CodeChip>.pfx</CodeChip>) do responsável técnico, no padrão PAdES.
+          Carimbo de tempo (RFC-3161) e cadeia validada até a AC-Raiz ficam
+          embutidos no próprio documento. Qualquer validador oficial
+          (validar.iti.gov.br, Adobe Reader) confirma quem assinou e que nada
+          mudou desde a aprovação.
+        </>
+      }
+      bullets={[
+        'Assinatura PAdES com certificado ICP-Brasil A1 (.p12/.pfx), aplicada na própria aprovação do certificado',
+        'Carimbo de tempo RFC-3161 (PAdES-T) e validação da cadeia até a AC-Raiz da ICP-Brasil',
+        'Atende à identificação do signatário exigida pela ISO/IEC 17025 (7.8.2.1)',
+        'Cada unidade mantém sua carteira de certificados e define o padrão de assinatura',
+        'A assinatura cobre a versão congelada — qualquer alteração posterior quebra a validação.',
+      ]}
+      visual={<SignedCertificate />}
     />
   )
 }
@@ -118,7 +149,6 @@ function FeatureCertificate() {
 function FeaturePortal() {
   return (
     <Feature
-      reverse
       title="Cliente baixa o que é dele. Você ganha o tempo de volta."
       lead="Menos email pedindo certificado. Menos tempo procurando documento antigo. Zero risco de mandar PDF errado pro cliente errado. Pro cliente final, autonomia pra baixar certificado, conferir histórico e ver o que está vencendo — direto no portal, sem depender da sua equipe."
       bullets={[
@@ -135,6 +165,7 @@ function FeaturePortal() {
 function FeatureExpirations() {
   return (
     <Feature
+      reverse
       title="Vencimento de padrão nunca pega de surpresa."
       lead="O sistema acompanha cada padrão de referência do laboratório e cada certificado emitido para os clientes. Você sabe quem vence em 30, 60 e 90 dias; o cliente recebe aviso pelo portal antes da calibração expirar. Acaba o padrão vencido pego em auditoria."
       bullets={[
@@ -301,6 +332,69 @@ function XlsxTemplate() {
           <span className="text-xs text-muted-foreground opacity-70">
             versão aprovada · imutável
           </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const signatureRows: { label: string; value: React.ReactNode }[] = [
+  { label: 'Signatário', value: 'Mariana Silva · Resp. Técnica' },
+  { label: 'CPF', value: '123.456.789-00' },
+  { label: 'Emissor (AC)', value: 'AC SOLUTI Múltipla v5' },
+  { label: 'Padrão', value: 'PAdES-T · SHA-256' },
+  { label: 'Carimbo de tempo', value: '12/06/2026 14:32 (RFC-3161)' },
+  { label: 'Cadeia', value: 'validada até a AC-Raiz ICP-Brasil' },
+]
+
+function SignedCertificate() {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-card font-mono text-xs">
+      <div className="flex items-center gap-2.5 border-b border-border/80 bg-background/50 px-3.5 py-2.5">
+        <HugeiconsIcon
+          icon={Certificate01Icon}
+          className="size-3.5 text-emerald-500"
+        />
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          CC-2026-0231.pdf
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded bg-emerald-500/15 px-2 py-1 text-xs tracking-wider text-emerald-500 uppercase">
+          <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
+          Assinatura válida
+        </span>
+      </div>
+
+      <div className="divide-y divide-border/40">
+        {signatureRows.map((row) => (
+          <div
+            key={row.label}
+            className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-3 px-3.5 py-2.5 sm:grid-cols-[132px_minmax(0,1fr)]"
+          >
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="min-w-0 truncate text-foreground">
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-3.5 py-3.5">
+        <img
+          src="/icp-brasil.svg"
+          alt="ICP-Brasil"
+          className="h-7 w-auto shrink-0 dark:hidden"
+          draggable={false}
+        />
+        <img
+          src="/icp-brasil-dark.svg"
+          alt="ICP-Brasil"
+          className="hidden h-7 w-auto shrink-0 dark:block"
+          draggable={false}
+        />
+        <div className="min-w-0 text-right text-xs text-muted-foreground">
+          <span className="text-foreground/80">hash a3f1…e9b7</span>
+          <br />
+          <span className="opacity-70">versão aprovada · imutável</span>
         </div>
       </div>
     </div>

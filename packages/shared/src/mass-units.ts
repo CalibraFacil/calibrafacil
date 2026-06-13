@@ -1,68 +1,36 @@
+/**
+ * Mass-unit back-compat layer.
+ *
+ * Every export here keeps its original name and signature but now delegates to
+ * the kind-aware unit registry in `./units` with mass pinned. This keeps mass
+ * behaviour byte-identical (factor-only conversions, canonical = grams) while
+ * the rest of the codebase migrates onto the generic API. For non-mass kinds,
+ * import directly from `@calibra-facil/shared/units`.
+ */
+
+import {
+  type SpecificationFieldLike,
+  type MethodInputFieldLike,
+  type MethodFormulaLike,
+  type UnitConversionTrace,
+  convertUnitValue,
+  resolveDisplayUnit,
+  normalizeSpecificationsForStorage,
+  denormalizeSpecificationsForDisplay,
+  normalizeMethodDataForStorage as genNormalizeMethodDataForStorage,
+  denormalizeMethodDataForDisplay as genDenormalizeMethodDataForDisplay,
+  denormalizeMethodResultsForDisplay as genDenormalizeMethodResultsForDisplay,
+  normalizeRangeSpecsForStorage,
+  normalizeRangeSpecsForDisplay,
+} from "./units";
+
 export type MassUnit = "mg" | "g" | "kg";
 
 export const CANONICAL_MASS_UNIT = "g" as const;
 
-export type AssetSpecificationFieldLike = {
-  key: string;
-  type: "text" | "number" | "select" | "weighing_ranges";
-  unit?: string | null;
-};
+export type AssetSpecificationFieldLike = SpecificationFieldLike;
 
-export type MethodTableColumnLike = {
-  key: string;
-  type: "text" | "number";
-  unit?: string | null;
-};
-
-export type MethodInputFieldLike = {
-  key: string;
-  type: "text" | "number" | "select" | "table";
-  unit?: string | null;
-  source?: string | null;
-  columns?: MethodTableColumnLike[] | null;
-};
-
-export type MethodFormulaLike = {
-  outputKey: string;
-  unit?: string | null;
-};
-
-export type WeighingRangeSpecLike = {
-  label?: string | null;
-  min?: number | null;
-  max?: number | null;
-  rangeUnit?: string | null;
-  resolution?: number | null;
-  resolutionUnit?: string | null;
-};
-
-export type MassConversionTrace = {
-  fieldPath: string;
-  originalValue: number;
-  originalUnit: MassUnit;
-  normalizedValue: number;
-  normalizedUnit: MassUnit;
-  reason: string;
-};
-
-const MASS_FACTORS_TO_G: Record<MassUnit, number> = {
-  mg: 0.001,
-  g: 1,
-  kg: 1000,
-};
-
-function parseNumericValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
+export type MassConversionTrace = UnitConversionTrace;
 
 export function isMassUnit(unit: unknown): unit is MassUnit {
   return unit === "mg" || unit === "g" || unit === "kg";
@@ -89,10 +57,7 @@ export function convertMassValue(
     return null;
   }
 
-  return (
-    (value * MASS_FACTORS_TO_G[normalizedFrom]) /
-    MASS_FACTORS_TO_G[normalizedTo]
-  );
+  return convertUnitValue(value, normalizedFrom, normalizedTo);
 }
 
 export function toCanonicalMassValue(
@@ -117,11 +82,7 @@ export function resolveMassDisplayUnit(
   baseMeasurementUnit: MassUnit | null | undefined,
   literalUnit: string | null | undefined,
 ): string | undefined {
-  if (baseMeasurementUnit && isMassMeasurementUnit(literalUnit)) {
-    return baseMeasurementUnit;
-  }
-
-  return literalUnit ?? undefined;
+  return resolveDisplayUnit(baseMeasurementUnit, literalUnit);
 }
 
 export function isMassSpecificationField(
@@ -187,85 +148,14 @@ export function normalizeWeighingRangeSpecsForStorage(
   value: unknown;
   conversions: MassConversionTrace[];
 } {
-  if (!displayUnit || !Array.isArray(value)) {
-    return { value, conversions: [] };
-  }
-
-  const conversions: MassConversionTrace[] = [];
-  const nextRanges = value.map((item, index) => {
-    if (!item || typeof item !== "object") {
-      return item;
-    }
-
-    const range = toRecord(item);
-    const nextRange: Record<string, unknown> = {
-      ...range,
-      rangeUnit: CANONICAL_MASS_UNIT,
-      resolutionUnit: CANONICAL_MASS_UNIT,
-    };
-
-    for (const key of ["min", "max", "resolution"] as const) {
-      const numericValue = parseNumericValue(range[key]);
-      if (numericValue == null) {
-        nextRange[key] = range[key];
-        continue;
-      }
-
-      const normalizedValue = toCanonicalMassValue(numericValue, displayUnit);
-      if (normalizedValue == null) {
-        nextRange[key] = range[key];
-        continue;
-      }
-
-      nextRange[key] = normalizedValue;
-      conversions.push({
-        fieldPath: `${fieldPath}[${index}].${key}`,
-        originalValue: numericValue,
-        originalUnit: displayUnit,
-        normalizedValue,
-        normalizedUnit: CANONICAL_MASS_UNIT,
-        reason: "asset_specification",
-      });
-    }
-
-    return nextRange;
-  });
-
-  return { value: nextRanges, conversions };
+  return normalizeRangeSpecsForStorage(value, displayUnit, fieldPath);
 }
 
 export function denormalizeWeighingRangeSpecsForDisplay(
   value: unknown,
   displayUnit: MassUnit | null | undefined,
 ): unknown {
-  if (!displayUnit || !Array.isArray(value)) {
-    return value;
-  }
-
-  return value.map((item) => {
-    if (!item || typeof item !== "object") {
-      return item;
-    }
-
-    const range = toRecord(item);
-    const nextRange: Record<string, unknown> = {
-      ...range,
-      rangeUnit: displayUnit,
-      resolutionUnit: displayUnit,
-    };
-
-    for (const key of ["min", "max", "resolution"] as const) {
-      const numericValue = parseNumericValue(range[key]);
-      if (numericValue == null) {
-        nextRange[key] = range[key];
-        continue;
-      }
-
-      nextRange[key] = fromCanonicalMassValue(numericValue, displayUnit);
-    }
-
-    return nextRange;
-  });
+  return normalizeRangeSpecsForDisplay(value, displayUnit);
 }
 
 export function normalizeAssetSpecificationsForStorage(
@@ -276,59 +166,11 @@ export function normalizeAssetSpecificationsForStorage(
   specifications: Record<string, unknown> | null | undefined;
   conversions: MassConversionTrace[];
 } {
-  if (!specifications || !definition?.length || !baseMeasurementUnit) {
-    return { specifications, conversions: [] };
-  }
-
-  const nextSpecifications: Record<string, unknown> = { ...specifications };
-  const conversions: MassConversionTrace[] = [];
-
-  for (const field of definition) {
-    const rawValue = specifications[field.key];
-    if (rawValue === undefined) {
-      continue;
-    }
-
-    if (field.type === "weighing_ranges") {
-      const normalized = normalizeWeighingRangeSpecsForStorage(
-        rawValue,
-        baseMeasurementUnit,
-        field.key,
-      );
-      nextSpecifications[field.key] = normalized.value;
-      conversions.push(...normalized.conversions);
-      continue;
-    }
-
-    if (field.type !== "number" || !isMassMeasurementUnit(field.unit)) {
-      continue;
-    }
-
-    const numericValue = parseNumericValue(rawValue);
-    if (numericValue == null) {
-      continue;
-    }
-
-    const normalizedValue = toCanonicalMassValue(
-      numericValue,
-      baseMeasurementUnit,
-    );
-    if (normalizedValue == null) {
-      continue;
-    }
-
-    nextSpecifications[field.key] = normalizedValue;
-    conversions.push({
-      fieldPath: field.key,
-      originalValue: numericValue,
-      originalUnit: baseMeasurementUnit,
-      normalizedValue,
-      normalizedUnit: CANONICAL_MASS_UNIT,
-      reason: "asset_specification",
-    });
-  }
-
-  return { specifications: nextSpecifications, conversions };
+  return normalizeSpecificationsForStorage(
+    specifications,
+    definition,
+    baseMeasurementUnit,
+  );
 }
 
 export function denormalizeAssetSpecificationsForDisplay(
@@ -336,47 +178,11 @@ export function denormalizeAssetSpecificationsForDisplay(
   definition: AssetSpecificationFieldLike[] | null | undefined,
   baseMeasurementUnit: MassUnit | null | undefined,
 ): Record<string, unknown> | null | undefined {
-  if (!specifications || !definition?.length || !baseMeasurementUnit) {
-    return specifications;
-  }
-
-  const nextSpecifications: Record<string, unknown> = { ...specifications };
-
-  for (const field of definition) {
-    const rawValue = specifications[field.key];
-    if (rawValue === undefined) {
-      continue;
-    }
-
-    if (field.type === "weighing_ranges") {
-      nextSpecifications[field.key] = denormalizeWeighingRangeSpecsForDisplay(
-        rawValue,
-        baseMeasurementUnit,
-      );
-      continue;
-    }
-
-    if (field.type !== "number" || !isMassMeasurementUnit(field.unit)) {
-      continue;
-    }
-
-    const numericValue = parseNumericValue(rawValue);
-    if (numericValue == null) {
-      continue;
-    }
-
-    const displayValue = fromCanonicalMassValue(
-      numericValue,
-      baseMeasurementUnit,
-    );
-    if (displayValue == null) {
-      continue;
-    }
-
-    nextSpecifications[field.key] = displayValue;
-  }
-
-  return nextSpecifications;
+  return denormalizeSpecificationsForDisplay(
+    specifications,
+    definition,
+    baseMeasurementUnit,
+  );
 }
 
 export function normalizeMethodDataForStorage(
@@ -387,94 +193,7 @@ export function normalizeMethodDataForStorage(
   data: Record<string, unknown> | null | undefined;
   conversions: MassConversionTrace[];
 } {
-  if (!data || !fields?.length || !baseMeasurementUnit) {
-    return { data, conversions: [] };
-  }
-
-  const nextData: Record<string, unknown> = { ...data };
-  const conversions: MassConversionTrace[] = [];
-
-  for (const field of fields) {
-    if (field.source === "asset_spec") {
-      continue;
-    }
-
-    const rawValue = data[field.key];
-    if (rawValue === undefined) {
-      continue;
-    }
-
-    if (field.type === "number" && isMassMeasurementUnit(field.unit)) {
-      const numericValue = parseNumericValue(rawValue);
-      if (numericValue == null) {
-        continue;
-      }
-
-      const normalizedValue = toCanonicalMassValue(
-        numericValue,
-        baseMeasurementUnit,
-      );
-      if (normalizedValue == null) {
-        continue;
-      }
-
-      nextData[field.key] = normalizedValue;
-      conversions.push({
-        fieldPath: field.key,
-        originalValue: numericValue,
-        originalUnit: baseMeasurementUnit,
-        normalizedValue,
-        normalizedUnit: CANONICAL_MASS_UNIT,
-        reason: "job_input",
-      });
-      continue;
-    }
-
-    if (field.type !== "table" || !Array.isArray(rawValue) || !field.columns) {
-      continue;
-    }
-
-    nextData[field.key] = rawValue.map((row, rowIndex) => {
-      if (!row || typeof row !== "object") {
-        return row;
-      }
-
-      const nextRow = toRecord(row);
-
-      for (const column of field.columns ?? []) {
-        if (!isMassMeasurementUnit(column.unit)) {
-          continue;
-        }
-
-        const numericValue = parseNumericValue(nextRow[column.key]);
-        if (numericValue == null) {
-          continue;
-        }
-
-        const normalizedValue = toCanonicalMassValue(
-          numericValue,
-          baseMeasurementUnit,
-        );
-        if (normalizedValue == null) {
-          continue;
-        }
-
-        nextRow[column.key] = normalizedValue;
-        conversions.push({
-          fieldPath: `${field.key}[${rowIndex}].${column.key}`,
-          originalValue: numericValue,
-          originalUnit: baseMeasurementUnit,
-          normalizedValue,
-          normalizedUnit: CANONICAL_MASS_UNIT,
-          reason: "job_input",
-        });
-      }
-
-      return nextRow;
-    });
-  }
-
-  return { data: nextData, conversions };
+  return genNormalizeMethodDataForStorage(data, fields, baseMeasurementUnit);
 }
 
 export function denormalizeMethodDataForDisplay(
@@ -482,73 +201,7 @@ export function denormalizeMethodDataForDisplay(
   fields: MethodInputFieldLike[] | null | undefined,
   baseMeasurementUnit: MassUnit | null | undefined,
 ): Record<string, unknown> | null | undefined {
-  if (!data || !fields?.length || !baseMeasurementUnit) {
-    return data;
-  }
-
-  const nextData: Record<string, unknown> = { ...data };
-
-  for (const field of fields) {
-    if (field.source === "asset_spec") {
-      continue;
-    }
-
-    const rawValue = data[field.key];
-    if (rawValue === undefined) {
-      continue;
-    }
-
-    if (field.type === "number" && isMassMeasurementUnit(field.unit)) {
-      const numericValue = parseNumericValue(rawValue);
-      if (numericValue == null) {
-        continue;
-      }
-
-      const displayValue = fromCanonicalMassValue(
-        numericValue,
-        baseMeasurementUnit,
-      );
-      if (displayValue != null) {
-        nextData[field.key] = displayValue;
-      }
-      continue;
-    }
-
-    if (field.type !== "table" || !Array.isArray(rawValue) || !field.columns) {
-      continue;
-    }
-
-    nextData[field.key] = rawValue.map((row) => {
-      if (!row || typeof row !== "object") {
-        return row;
-      }
-
-      const nextRow = toRecord(row);
-
-      for (const column of field.columns ?? []) {
-        if (!isMassMeasurementUnit(column.unit)) {
-          continue;
-        }
-
-        const numericValue = parseNumericValue(nextRow[column.key]);
-        if (numericValue == null) {
-          continue;
-        }
-
-        const displayValue = fromCanonicalMassValue(
-          numericValue,
-          baseMeasurementUnit,
-        );
-        if (displayValue != null) {
-          nextRow[column.key] = displayValue;
-        }
-      }
-
-      return nextRow;
-    });
-  }
-
-  return nextData;
+  return genDenormalizeMethodDataForDisplay(data, fields, baseMeasurementUnit);
 }
 
 export function denormalizeMethodResultsForDisplay(
@@ -556,50 +209,11 @@ export function denormalizeMethodResultsForDisplay(
   formulas: MethodFormulaLike[] | null | undefined,
   baseMeasurementUnit: MassUnit | null | undefined,
 ): Record<string, unknown> | null | undefined {
-  if (!results || !formulas?.length || !baseMeasurementUnit) {
-    return results;
-  }
-
-  const formulaMap = new Map(
-    formulas.map((formula) => [formula.outputKey, formula]),
+  return genDenormalizeMethodResultsForDisplay(
+    results,
+    formulas,
+    baseMeasurementUnit,
   );
-  const nextResults: Record<string, unknown> = { ...results };
-
-  const denormalizeResultValue = (value: unknown): unknown => {
-    if (Array.isArray(value)) {
-      return value.map((item) => denormalizeResultValue(item));
-    }
-
-    const numericValue = parseNumericValue(value);
-    if (numericValue == null) {
-      return value;
-    }
-
-    const displayValue = fromCanonicalMassValue(
-      numericValue,
-      baseMeasurementUnit,
-    );
-    return displayValue ?? value;
-  };
-
-  for (const [key, rawValue] of Object.entries(results)) {
-    const formula = formulaMap.get(key);
-    if (!formula || !isMassMethodFormula(formula)) {
-      continue;
-    }
-
-    nextResults[key] = denormalizeResultValue(rawValue);
-  }
-
-  return nextResults;
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
 }
 
 export type NormalizableCertifiedValue = {

@@ -15,6 +15,7 @@ import {
   UpdateAssetSchema,
   ListAssetsQuerySchema,
 } from "@calibra-facil/schemas";
+import type { MeasurementUnit } from "@calibra-facil/shared";
 import { eq, ilike, or, count, and, isNull, desc } from "drizzle-orm";
 import {
   withLabPermission,
@@ -47,7 +48,7 @@ function serializeAssetForResponse<
   T extends {
     specifications: Record<string, unknown> | null;
     assetTypeDefinition?: AssetTypeFieldDefinition[] | null;
-    baseMeasurementUnit?: "mg" | "g" | "kg" | null;
+    baseMeasurementUnit?: MeasurementUnit | null;
   },
 >(assetRecord: T): T {
   const specifications = denormalizeAssetSpecificationsForResponse({

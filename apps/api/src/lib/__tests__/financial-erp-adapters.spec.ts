@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
@@ -1133,7 +1133,11 @@ describe("financial ERP adapters", () => {
       if (init?.method === "GET") {
         return Response.json({
           items: [
-            { id: "remote-service-1", codigo: "CAL-001", descricao: "Calibração" },
+            {
+              id: "remote-service-1",
+              codigo: "CAL-001",
+              descricao: "Calibração",
+            },
           ],
           totalItems: 1,
         });
@@ -2448,6 +2452,10 @@ describe("financial ERP adapters", () => {
       config: normalizeContaAzulConnectionConfig(),
       accessToken: "access-1",
       fetchImpl,
+      // Disable the request rate limiter: its delay derives from Date.now(),
+      // and the pinned-back clock below would otherwise schedule a real
+      // multi-day setTimeout and hang the test.
+      minRequestIntervalMs: 0,
       links: {
         async getExistingRemoteId(params) {
           if (params.target === "customer") return "remote-customer-1";
@@ -2469,7 +2477,20 @@ describe("financial ERP adapters", () => {
       throw new Error("expected Conta Azul contract support");
     }
 
-    await expect(adapter.upsertContract(payload)).resolves.toMatchObject({
+    // Pin "today" before the contract's first due date so the due-date
+    // roll-forward (Conta Azul rejects a primeira_data_vencimento in the past)
+    // stays deterministic. Fake only Date so the async fetchImpl flow runs on
+    // real timers/microtasks.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-28T12:00:00Z"));
+    let contractResult;
+    try {
+      contractResult = await adapter.upsertContract(payload);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(contractResult).toMatchObject({
       remoteEntityId: "remote-contract-1",
       remoteDisplayId: "4512645",
       remoteEntityType: "conta_azul_contract",

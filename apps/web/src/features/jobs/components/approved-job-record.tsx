@@ -72,15 +72,24 @@ import {
   useJobCertificateDownloadUrlData,
 } from '@/features/jobs/queries'
 import { useNavigate } from '@tanstack/react-router'
-import { convertMassValue, formatCalibrationValue } from '@calibra-facil/shared'
+import {
+  convertMassValue,
+  formatCalibrationValue,
+  normalizeAccreditationNumber,
+  shouldRenderAccreditationSeal,
+} from '@calibra-facil/shared'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { AccreditationSeal } from '@/components/accreditation-seal'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
 import {
   buildApprovedJobRecordModel,
   formatDate,
   formatReviewValue,
   REVIEW_ACTION_BUTTON_CLASS,
+  reviewColumnDisplayLabel,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
 import {
@@ -126,6 +135,22 @@ export function ApprovedJobRecord({
   const isSuperseded = job.status === 'SUPERSEDED'
   const standardsCount = standardsSnapshot?.length ?? 0
   const navigate = useNavigate()
+  const { data: activeOrg } = useActiveOrganization()
+  // Accreditation additional fields are not part of the inferred client type.
+  const orgAccreditation: {
+    accreditationActive?: boolean | null
+    accreditationNumber?: string | null
+  } = activeOrg ?? {}
+  const accreditationNumber = normalizeAccreditationNumber(
+    orgAccreditation.accreditationNumber ?? '',
+  )
+  const certificateAccredited = shouldRenderAccreditationSeal({
+    lab: {
+      accreditationActive: orgAccreditation.accreditationActive,
+      accreditationNumber,
+    },
+    methodAccreditedScope: methodSnapshot.accreditedScope ?? false,
+  })
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
   const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
@@ -226,6 +251,21 @@ export function ApprovedJobRecord({
   ) => {
     const value = displayData?.[field.key]
 
+    if (
+      field.type === 'table' &&
+      field.key === 'repetibilidade' &&
+      field.columns &&
+      Array.isArray(value)
+    ) {
+      return (
+        <RepeatabilityTable
+          columns={field.columns}
+          value={value}
+          displayUnit={displayUnitFor}
+        />
+      )
+    }
+
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       return (
         <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
@@ -237,7 +277,7 @@ export function ApprovedJobRecord({
                     key={col.key}
                     className="h-11 whitespace-nowrap px-3 text-xs"
                   >
-                    {col.label}
+                    {reviewColumnDisplayLabel(col)}
                     {displayUnitFor(col.unit) && (
                       <span className="text-xs text-muted-foreground ml-1">
                         ({displayUnitFor(col.unit)})
@@ -655,11 +695,19 @@ export function ApprovedJobRecord({
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">
-            <PanelHeader
-              eyebrow="Identificação"
-              title="Cliente, ativo e método"
-              description="Dados congelados no momento da aprovação, que formam a base imutável deste certificado."
-            />
+            <div className="flex items-start justify-between gap-4">
+              <PanelHeader
+                eyebrow="Identificação"
+                title="Cliente, ativo e método"
+                description="Dados congelados no momento da aprovação, que formam a base imutável deste certificado."
+              />
+              {certificateAccredited ? (
+                <AccreditationSeal
+                  accreditationNumber={accreditationNumber}
+                  width={76}
+                />
+              ) : null}
+            </div>
             <BlueprintGrid className="mt-4 sm:grid-cols-2 lg:grid-cols-4">
               <BlueprintField label="Cliente">
                 <span className="font-medium">{job.customerName || '-'}</span>

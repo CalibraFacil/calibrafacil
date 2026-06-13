@@ -47,16 +47,19 @@ import {
 } from '@/components/method-runtime/table-input-renderer'
 import type { MassCompositionOption } from '@/components/method-runtime/mass-composition-utils'
 import {
-  convertMassValue,
-  denormalizeAssetSpecificationsForDisplay,
-  denormalizeMethodDataForDisplay,
-  denormalizeWeighingRangeSpecsForDisplay,
   formatCalibrationValue,
-  isMassMeasurementUnit,
-  normalizeMethodDataForStorage,
-  resolveMassDisplayUnit,
   type AssetSpecificationFieldLike,
 } from '@calibra-facil/shared'
+import {
+  canonicalUnitFor,
+  convertUnitValue,
+  denormalizeMethodDataForDisplay,
+  denormalizeSpecificationsForDisplay,
+  normalizeMethodDataForStorage,
+  normalizeRangeSpecsForDisplay,
+  resolveDisplayUnit,
+  unitKind,
+} from '@calibra-facil/shared/units'
 import { EccentricityIndicator } from '@/components/eccentricity-indicator'
 import type {
   MethodInputField,
@@ -316,32 +319,38 @@ function ExecuteJobForm({
     job.assetSnapshot?.baseMeasurementUnit ?? null
   const displayUnitFor = useCallback(
     (unit?: string | null) =>
-      resolveMassDisplayUnit(assetBaseMeasurementUnit, unit) ??
-      unit ??
-      undefined,
+      resolveDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined,
     [assetBaseMeasurementUnit],
   )
   const convertValueToDisplayUnit = useCallback(
     (value: number, unit?: string | null) => {
-      if (!assetBaseMeasurementUnit || !isMassMeasurementUnit(unit)) {
+      const kind = unitKind(assetBaseMeasurementUnit)
+      if (kind == null || unitKind(unit) !== kind) {
         return value
       }
 
-      return convertMassValue(value, unit, assetBaseMeasurementUnit) ?? value
+      return convertUnitValue(value, unit, assetBaseMeasurementUnit) ?? value
     },
     [assetBaseMeasurementUnit],
   )
   const convertCanonicalValueToDisplayUnit = useCallback(
     (value: unknown, unit?: string | null) => {
+      const kind = unitKind(assetBaseMeasurementUnit)
       if (
         typeof value !== 'number' ||
-        !assetBaseMeasurementUnit ||
-        !isMassMeasurementUnit(unit)
+        kind == null ||
+        unitKind(unit) !== kind
       ) {
         return value
       }
 
-      return convertMassValue(value, 'g', assetBaseMeasurementUnit) ?? value
+      return (
+        convertUnitValue(
+          value,
+          canonicalUnitFor(kind),
+          assetBaseMeasurementUnit,
+        ) ?? value
+      )
     },
     [assetBaseMeasurementUnit],
   )
@@ -460,7 +469,7 @@ function ExecuteJobForm({
   const displayAssetSpecifications = useMemo(() => {
     const rawSpecifications = job.assetSnapshot?.specifications ?? null
     const denormalized =
-      denormalizeAssetSpecificationsForDisplay(
+      denormalizeSpecificationsForDisplay(
         rawSpecifications,
         displayAssetSpecificationDefinition,
         assetBaseMeasurementUnit,
@@ -472,7 +481,7 @@ function ExecuteJobForm({
 
     return {
       ...denormalized,
-      weighingRanges: denormalizeWeighingRangeSpecsForDisplay(
+      weighingRanges: normalizeRangeSpecsForDisplay(
         rawSpecifications?.weighingRanges,
         assetBaseMeasurementUnit,
       ),
@@ -883,6 +892,7 @@ function ExecuteJobForm({
             certifiedValueOptions={certifiedValueOptions}
             massCompositionOptions={massCompositionOptions}
             assetSpecifications={displayAssetSpecifications}
+            assetBaseMeasurementUnit={assetBaseMeasurementUnit}
             phaseMode={blockMode}
           />
         </Field>

@@ -1151,6 +1151,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             measurementModels: calibrationMethod.measurementModels,
             validations: calibrationMethod.validations,
             certificateContent: calibrationMethod.certificateContent,
+            accreditedScope: calibrationMethod.accreditedScope,
             methodFingerprint: calibrationMethod.methodFingerprint,
             methodEngine: calibrationMethod.methodEngine,
             methodCompiledAt: calibrationMethod.methodCompiledAt,
@@ -1352,6 +1353,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           validations: calibrationMethod.validations,
           uncertaintyParams: calibrationMethod.uncertaintyParams,
           certificateContent: calibrationMethod.certificateContent,
+          accreditedScope: calibrationMethod.accreditedScope,
           compiledMethod: calibrationMethod.compiledMethod,
           methodFingerprint: calibrationMethod.methodFingerprint,
           methodEngine: calibrationMethod.methodEngine,
@@ -1444,6 +1446,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             validations: input.validations,
             uncertaintyParams: input.uncertaintyParams,
             certificateContent: input.certificateContent ?? null,
+            accreditedScope: input.accreditedScope ?? false,
             createdBy: session.user.id,
           })
           .returning();
@@ -1600,6 +1603,16 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           changes.certificateContent = {
             old: existing.certificateContent,
             new: input.certificateContent,
+          };
+        }
+        if (
+          input.accreditedScope !== undefined &&
+          input.accreditedScope !== existing.accreditedScope
+        ) {
+          updateData.accreditedScope = input.accreditedScope;
+          changes.accreditedScope = {
+            old: existing.accreditedScope,
+            new: input.accreditedScope,
           };
         }
 
@@ -2442,6 +2455,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             validations: normalizeMethodValidationsInput(existing.validations),
             uncertaintyParams: existing.uncertaintyParams,
             certificateContent: existing.certificateContent,
+            accreditedScope: existing.accreditedScope,
             parentId: existing.id,
             createdBy: session.user.id,
           })

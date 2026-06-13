@@ -184,6 +184,7 @@ function createDefaultXlsxBindingManifest(
           imageKind:
             | "signature"
             | "organization_logo"
+            | "accreditation_seal"
             | "eccentricity_indicator";
         } => item.imageKind != null,
       )
@@ -216,13 +217,22 @@ function createDefaultXlsxBindingManifest(
 
 function getImageKindForFieldPath(
   fieldPath: string,
-): "signature" | "organization_logo" | "eccentricity_indicator" | null {
+):
+  | "signature"
+  | "organization_logo"
+  | "accreditation_seal"
+  | "eccentricity_indicator"
+  | null {
   if (fieldPath === "approval.signatureUrl") {
     return "signature";
   }
 
   if (fieldPath === "organization.logo") {
     return "organization_logo";
+  }
+
+  if (fieldPath === "organization.accreditationSealPng") {
+    return "accreditation_seal";
   }
 
   if (fieldPath === "graphics.eccentricityIndicator") {

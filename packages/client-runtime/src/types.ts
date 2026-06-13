@@ -268,6 +268,7 @@ export type MethodsListData = {
     validations: unknown[];
     uncertaintyParams?: unknown[];
     certificateContent?: unknown;
+    accreditedScope?: boolean;
     compiledMethod?: unknown;
     methodFingerprint?: string | null;
     methodEngine?: { version?: string; optionsFingerprint?: string } | null;
@@ -305,6 +306,7 @@ export type MethodWriteInput = {
   validations?: unknown[];
   uncertaintyParams?: unknown[];
   certificateContent?: unknown;
+  accreditedScope?: boolean;
   reason?: string;
 };
 
@@ -724,6 +726,42 @@ export type AssetsListInput = {
 
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
+/**
+ * Every measurement unit token accepted as an asset's base unit. Mirrors
+ * `MeasurementUnitSchema` in `@calibra-facil/schemas` / the kind-aware registry
+ * in `@calibra-facil/shared/units`; kept as a local literal union so the SDK
+ * contract has no runtime/server dependency. Keep in sync with that enum.
+ */
+export type MeasurementUnit =
+  | "mg"
+  | "g"
+  | "kg"
+  | "µm"
+  | "mm"
+  | "cm"
+  | "m"
+  | "°C"
+  | "°F"
+  | "K"
+  | "Pa"
+  | "kPa"
+  | "MPa"
+  | "bar"
+  | "psi"
+  | "kgf/cm²"
+  | "mmHg"
+  | "inHg"
+  | "µL"
+  | "mL"
+  | "L"
+  | "ms"
+  | "s"
+  | "min"
+  | "h"
+  | "N·m"
+  | "kgf·m"
+  | "%RH";
+
 export type CreateAssetInput = {
   customerId: number;
   assetTypeId: number;
@@ -733,7 +771,7 @@ export type CreateAssetInput = {
   serialNumber: string;
   tag: string;
   status?: AssetStatus;
-  baseMeasurementUnit?: "mg" | "g" | "kg" | null;
+  baseMeasurementUnit?: MeasurementUnit | null;
   lastCalibrationDate?: string;
   nextCalibrationDate?: string;
   comments?: string;

@@ -68,7 +68,7 @@ import type {
   AutomaticSendOutcome,
   SupplierKind,
   BillingGroupStatus,
-  MassUnit,
+  MeasurementUnit,
   ServiceOrderActorType,
   ServiceOrderClosingReason,
   ServiceOrderDeliveryMethod,
@@ -264,6 +264,11 @@ export const organization = pgTable(
     cnpj: text("cnpj"),
     accreditationNumber: text("accreditation_number"),
     accreditationBody: text("accreditation_body"),
+    // Explicit toggle: the lab declares its CGCRE/RBC accreditation active.
+    // The accreditation seal only renders when this is on AND a number is set.
+    accreditationActive: boolean("accreditation_active")
+      .default(false)
+      .notNull(),
     street: text("street"),
     number: text("number"),
     complement: text("complement"),
@@ -2634,7 +2639,7 @@ export const asset = pgTable(
     serialNumber: text("serial_number").notNull(), // Manufacturer's serial number
     tag: text("tag").notNull().unique(), // Internal Lab ID / Asset ID (unique across lab)
     status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
-    baseMeasurementUnit: text("base_measurement_unit").$type<MassUnit>(),
+    baseMeasurementUnit: text("base_measurement_unit").$type<MeasurementUnit>(),
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
     comments: text("comments"), // Additional notes about the equipment
@@ -2756,7 +2761,7 @@ export type WeighingRangeResolverConfig = {
   enabled?: boolean;
   assetSpecKey?: string;
   pointColumn?: string;
-  pointUnit?: "mg" | "g" | "kg";
+  pointUnit?: MeasurementUnit;
   targetColumns?: {
     rangeLabel?: string;
     rangeMin?: string;
@@ -2795,6 +2800,9 @@ export type MethodInputField = {
   label: string; // Display label, e.g., "Reading 1"
   type: "text" | "number" | "select" | "table";
   unit?: string; // e.g., "mm", "°C"
+  // Semantic role; delta-valued roles (correction/uncertainty/resolution/…)
+  // convert factor-only for affine kinds. See DELTA_QUANTITY_KINDS in shared.
+  quantityKind?: string;
   required?: boolean;
   options?: string[]; // For select type
   defaultValue?: string | number;
@@ -2812,6 +2820,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: MethodTableColumnRole;
+    quantityKind?: string;
     phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
   }>;
@@ -2984,6 +2993,9 @@ export const calibrationMethod = pgTable(
     description: text("description"),
     version: integer("version").default(1).notNull(),
     status: text("status").$type<MethodStatus>().default("DRAFT").notNull(),
+    // ISO 17025 accredited scope: certificates issued from this method may
+    // carry the accreditation seal (traceable-only methods keep this off).
+    accreditedScope: boolean("accredited_scope").default(false).notNull(),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
     variableBindings: jsonb("variable_bindings")
@@ -3701,6 +3713,8 @@ export type MethodSnapshot = {
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];
   certificateContent?: MethodCertificateContent | null;
+  /** Frozen ISO 17025 accredited-scope flag (absent on legacy snapshots). */
+  accreditedScope?: boolean;
 };
 
 export type AssetSnapshot = {
@@ -3708,7 +3722,7 @@ export type AssetSnapshot = {
   assetTypeId: number;
   assetTypeName: string;
   assetTypeSlug: string;
-  baseMeasurementUnit: MassUnit | null;
+  baseMeasurementUnit: MeasurementUnit | null;
   name: string;
   tag: string;
   serialNumber: string;

@@ -18,6 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAssetTypesData } from '@/features/assets/queries'
 import { FormField as Field } from '@/shared/forms/form-field'
@@ -506,6 +507,29 @@ export function MethodBuilder({
                       rows={3}
                     />
                   </Field>
+                </div>
+                <div className="md:col-span-2 flex items-start gap-3 rounded-lg border p-3">
+                  <Switch
+                    id="mb-accredited-scope"
+                    checked={draft.accreditedScope ?? false}
+                    onCheckedChange={(checked) =>
+                      updateDraft({ accreditedScope: checked })
+                    }
+                  />
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="mb-accredited-scope"
+                      className="text-sm font-medium leading-none"
+                    >
+                      Escopo acreditado (RBC)
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Certificados emitidos por este método recebem o selo de
+                      acreditação NBR ISO/IEC 17025 quando a acreditação do
+                      laboratório está ativa. Métodos apenas rastreáveis devem
+                      manter esta opção desligada.
+                    </p>
+                  </div>
                 </div>
               </div>
             </Panel>

@@ -15,15 +15,18 @@ const browserCandidates = [
 
 const jobs = [
   {
-    input: resolve('public/og/calibrafacil-cover-dark.html'),
-    output: resolve('public/og/calibrafacil-cover-dark.png'),
-    tempOutput: '/tmp/calibrafacil-cover-dark.raw.png',
+    input: resolve('public/og/calibrafacil-cover-banner.html'),
+    output: resolve('public/og/calibrafacil-cover.png'),
+    tempOutput: '/tmp/calibrafacil-cover-banner.raw.png',
   },
-  {
-    input: resolve('public/og/calibrafacil-cover-light.html'),
-    output: resolve('public/og/calibrafacil-cover-light.png'),
-    tempOutput: '/tmp/calibrafacil-cover-light.raw.png',
-  },
+]
+
+// The brand banner is a single design (no dark/light variant); keep the
+// historical filenames as aliases so any cached or external references to
+// them resolve to the current cover.
+const aliases = [
+  resolve('public/og/calibrafacil-cover-dark.png'),
+  resolve('public/og/calibrafacil-cover-light.png'),
 ]
 
 function findBrowser() {
@@ -75,11 +78,10 @@ for (const job of jobs) {
   )
 }
 
-runOrThrow(
-  'cp',
-  [
-    resolve('public/og/calibrafacil-cover-dark.png'),
-    resolve('public/og/calibrafacil-cover.png'),
-  ],
-  'OG canonical copy',
-)
+for (const alias of aliases) {
+  runOrThrow(
+    'cp',
+    [resolve('public/og/calibrafacil-cover.png'), alias],
+    `OG alias copy for ${alias}`,
+  )
+}

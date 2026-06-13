@@ -53,6 +53,8 @@ export interface MethodTableColumn {
   type: 'text' | 'number'
   unit?: string
   role?: MethodTableColumnRole
+  /** Semantic role; delta-valued roles convert factor-only for affine kinds. */
+  quantityKind?: string
   phase?: 'before' | 'after' | 'always'
   massComposition?: MassCompositionConfig
 }
@@ -62,6 +64,8 @@ export interface MethodInputField {
   label: string
   type: MethodInputType
   unit?: string
+  /** Semantic role; delta-valued roles convert factor-only for affine kinds. */
+  quantityKind?: string
   required?: boolean
   options?: Array<string>
   defaultValue?: string | number

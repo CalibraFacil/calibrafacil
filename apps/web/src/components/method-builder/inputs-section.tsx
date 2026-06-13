@@ -8,17 +8,21 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { FormField as Field } from '@/shared/forms/form-field'
 
 import { SectionCard } from './section-card'
-import type {
-  MethodDraftInput,
-  MethodDraftInputType,
-  MethodDraftTableColumn,
+import {
+  methodDraftQuantityKinds,
+  type MethodDraftInput,
+  type MethodDraftInputType,
+  type MethodDraftQuantityKind,
+  type MethodDraftTableColumn,
 } from './types'
 
 const inputTypes: Array<MethodDraftInputType> = [
@@ -32,6 +36,32 @@ const tableColumnRoles = [
   'standard_value',
   'mass_standard_composition',
 ] as const
+
+// Quantity-kind options split by conversion semantics. Delta-valued roles
+// convert factor-only for affine kinds (temperature); absolute roles apply the
+// scale offset. Order within each group is the display order in the picker.
+const absoluteQuantityKinds: Array<MethodDraftQuantityKind> = [
+  'indication',
+  'reference',
+  'environment',
+  'other',
+]
+const deltaQuantityKinds: Array<MethodDraftQuantityKind> = [
+  'correction',
+  'tolerance',
+  'uncertainty',
+  'resolution',
+]
+const quantityKindLabels: Record<MethodDraftQuantityKind, string> = {
+  indication: 'Indicação',
+  reference: 'Referência',
+  environment: 'Ambiente',
+  correction: 'Correção',
+  tolerance: 'Tolerância',
+  uncertainty: 'Incerteza',
+  resolution: 'Resolução',
+  other: 'Outro',
+}
 
 const massCompositionOptionSources = [
   'certified_values',
@@ -47,10 +77,8 @@ const massUnits = ['mg', 'g', 'kg'] as const
 
 type MassUnit = (typeof massUnits)[number]
 type TableColumnRole = (typeof tableColumnRoles)[number]
-type MassCompositionOptionSource =
-  (typeof massCompositionOptionSources)[number]
-type MassCompositionQuantityMode =
-  (typeof massCompositionQuantityModes)[number]
+type MassCompositionOptionSource = (typeof massCompositionOptionSources)[number]
+type MassCompositionQuantityMode = (typeof massCompositionQuantityModes)[number]
 
 const massCompositionTargetFields = [
   ['certifiedValue', 'Valor certificado'],
@@ -102,6 +130,52 @@ export function InputsSection({
         />
       ))}
     </SectionCard>
+  )
+}
+
+function QuantityKindField({
+  value,
+  onChange,
+}: {
+  value: MethodDraftQuantityKind | undefined
+  onChange: (quantityKind: MethodDraftQuantityKind | undefined) => void
+}) {
+  return (
+    <Field label="Papel da grandeza">
+      <Select
+        value={value ?? 'none'}
+        onValueChange={(next) =>
+          onChange(next === 'none' ? undefined : toQuantityKind(next))
+        }
+      >
+        <SelectTrigger>
+          <span>
+            {value
+              ? quantityKindLabels[value]
+              : 'Não definido (valor absoluto)'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Não definido (valor absoluto)</SelectItem>
+          <SelectGroup>
+            <SelectLabel>Valores absolutos</SelectLabel>
+            {absoluteQuantityKinds.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {quantityKindLabels[kind]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Deltas (convertem sem offset)</SelectLabel>
+            {deltaQuantityKinds.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {quantityKindLabels[kind]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
   )
 }
 
@@ -227,6 +301,20 @@ function InputEditor({
           </>
         )}
       </div>
+      {input.type === 'number' && input.source !== 'asset_spec' && (
+        <div className="mt-3 space-y-1">
+          <div className="md:max-w-xs">
+            <QuantityKindField
+              value={input.quantityKind}
+              onChange={(quantityKind) => onChange({ quantityKind })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Deltas (incerteza, resolução, correção, tolerância) convertem sem o
+            offset da escala entre °C, °F e K.
+          </p>
+        </div>
+      )}
       {input.type === 'select' && (
         <Field label="Opções">
           <Textarea
@@ -580,6 +668,16 @@ function TableColumnsEditor({
               }
             />
           </div>
+          {column.type === 'number' && (
+            <div className="md:max-w-xs">
+              <QuantityKindField
+                value={column.quantityKind}
+                onChange={(quantityKind) =>
+                  updateColumn(index, { quantityKind })
+                }
+              />
+            </div>
+          )}
           {column.role === 'mass_standard_composition' && (
             <MassCompositionColumnEditor
               column={column}
@@ -788,6 +886,10 @@ function toTableColumnRole(value: unknown): TableColumnRole {
     default:
       return 'standard_value'
   }
+}
+
+function toQuantityKind(value: unknown): MethodDraftQuantityKind {
+  return methodDraftQuantityKinds.find((kind) => kind === value) ?? 'other'
 }
 
 function toMassCompositionOptionSource(

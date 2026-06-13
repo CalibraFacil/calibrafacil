@@ -18,6 +18,10 @@ const faqItems = [
     a: 'A aprovação congela o certificado e todas as evidências referenciadas (orçamento de incerteza, certificados dos padrões usados, condições ambientais, identidade do signatário). A partir desse momento, a versão aprovada não pode mais ser editada. Se for preciso corrigir, o sistema gera uma nova revisão; a versão original permanece exatamente como foi assinada.',
   },
   {
+    q: 'Os certificados são assinados digitalmente com ICP-Brasil?',
+    a: 'Sim, de forma nativa. Na aprovação, o PDF é assinado com o certificado digital ICP-Brasil A1 (.p12/.pfx) do responsável técnico, no padrão PAdES — com carimbo de tempo (RFC-3161) e validação da cadeia até a AC-Raiz da ICP-Brasil. A assinatura fica embutida no próprio arquivo e cobre a versão congelada: qualquer alteração posterior quebra a validação. Cada unidade gerencia a própria carteira de certificados e define o padrão de assinatura.',
+  },
+  {
     q: 'Como funciona o controle de acesso?',
     a: 'Cada organização entra com seus próprios usuários e não enxerga dados de outra. É o padrão, não uma configuração opcional. Dentro da organização, cada usuário tem um papel (técnico, revisor, signatário, administrador) que define o que ele pode ver, criar, revisar e aprovar.',
   },
@@ -32,10 +36,6 @@ const faqItems = [
   {
     q: 'Como funciona durante uma auditoria?',
     a: 'O avaliador recebe um acesso somente-leitura, com escopo limitado e tempo definido. A trilha de auditoria já registra tudo que foi feito antes. Você não "prepara documentação para auditoria"; você concede acesso ao que já está registrado.',
-  },
-  {
-    q: 'Os certificados têm assinatura digital?',
-    a: 'O signatário do certificado é identificado pelo sistema (nome e perfil) e a aprovação fica vinculada à conta dele. Integração com assinadores externos (ICP-Brasil) é tratada caso a caso na implantação.',
   },
 ]
 

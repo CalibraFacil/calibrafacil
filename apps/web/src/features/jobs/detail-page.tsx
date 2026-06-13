@@ -63,6 +63,7 @@ import {
 } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from '@/features/jobs/components/approved-job-record'
 import { CertificateProgressButton } from '@/features/jobs/components/certificate-progress-button'
+import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import {
@@ -75,6 +76,7 @@ import {
   formatDate,
   formatDateTime,
   formatReviewValue,
+  reviewColumnDisplayLabel,
   getFinancialVariant,
   JOB_STATUS_LABELS,
   JOB_STATUS_VARIANTS,
@@ -533,6 +535,21 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   const renderReviewFieldValue = (field: ReviewMethodField) => {
     const value = displayReviewData?.[field.key]
 
+    if (
+      field.type === 'table' &&
+      field.key === 'repetibilidade' &&
+      field.columns &&
+      Array.isArray(value)
+    ) {
+      return (
+        <RepeatabilityTable
+          columns={field.columns}
+          value={value}
+          displayUnit={displayUnitForReview}
+        />
+      )
+    }
+
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       const columns = field.columns
       return (
@@ -545,7 +562,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     key={column.key}
                     className="h-11 whitespace-nowrap px-3 text-xs"
                   >
-                    {column.label}
+                    {reviewColumnDisplayLabel(column)}
                     {displayUnitForReview(column.unit) && (
                       <span className="ml-1 text-xs text-muted-foreground">
                         ({displayUnitForReview(column.unit)})
@@ -895,7 +912,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 onClick={() => setCancelDialogOpen(true)}
               >
                 <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
-                Cancelar job
+                Cancelar calibração
               </Button>
             </div>
           )}
@@ -1772,10 +1789,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancelar Job</DialogTitle>
+            <DialogTitle>Cancelar Calibração</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja cancelar este job? Esta ação não pode ser
-              desfeita.
+              Tem certeza que deseja cancelar esta calibração? Esta ação não
+              pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <Field>

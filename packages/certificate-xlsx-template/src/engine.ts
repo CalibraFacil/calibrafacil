@@ -167,8 +167,11 @@ export class ExcelTsCertificateWorkbookEngine implements CertificateWorkbookEngi
           contentType: normalizedImage.contentType,
           extension: normalizedImage.extension,
           name: binding.placeholderName ?? binding.sourcePath,
+          // Logos and the accreditation seal are regulated artwork - never
+          // stretch them to the target range.
           fit:
-            binding.imageKind === "organization_logo"
+            binding.imageKind === "organization_logo" ||
+            binding.imageKind === "accreditation_seal"
               ? ("contain" as const)
               : ("stretch" as const),
           insetRatio: binding.imageKind === "organization_logo" ? 0.06 : 0,
