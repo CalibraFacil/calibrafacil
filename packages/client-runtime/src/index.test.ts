@@ -770,6 +770,31 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "list",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "addBranch",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removeBranch",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
           "namespace": "assets",
           "policy": "local-first-read-through-sync",
         },
