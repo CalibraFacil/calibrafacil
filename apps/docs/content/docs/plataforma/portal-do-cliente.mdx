@@ -32,14 +32,19 @@ O ciclo de vida do domínio segue estas etapas:
 3. validar o domínio no painel;
 4. ativar o domínio para uso em produção.
 
+O portal é o **cockpit do programa de metrologia do cliente**: toda a frota de instrumentos, situação de calibração, arquivo de certificados, calendário de vencimentos e recalibração self-service em um só lugar.
+
 ## Funcionalidades
 
 <CardGrid>
   <Card title="Painel de controle" icon="open-book">
     Central de ações, não apenas um resumo: instrumentos vencidos e a vencer, certificados disponíveis, orçamentos aguardando aprovação do cliente, ordens em andamento e atividade recente — cada bloco leva direto à ação correspondente.
   </Card>
-  <Card title="Ativos" icon="setting">
-    Lista completa dos instrumentos do cliente, com tag, número de série, tipo, status e datas de calibração. Filtros por situação de calibração (vencidos, a vencer, agendados, sem agendamento) e histórico de calibrações por instrumento.
+  <Card title="Frota de instrumentos" icon="setting">
+    Lista completa dos instrumentos do cliente, com tag, número de série, tipo, situação de calibração, último certificado e próxima calibração. Busca, ordenação por coluna e filtros por situação — incluindo **No laboratório** para os que estão em atendimento.
+  </Card>
+  <Card title="Calendário de calibrações" icon="open-book">
+    Visão mensal dos vencimentos da frota, com cada dia colorido pela situação mais crítica. Clicar em um dia lista os instrumentos que vencem ali e permite solicitar a recalibração de todos de uma vez.
   </Card>
   <Card title="Solicitações de Calibração" icon="add-document">
     Submissão de novas solicitações pelo próprio cliente — incluindo forma de entrega e nota fiscal de remessa para conserto quando o envio é por transportadora — com acompanhamento de status até a aprovação pelo laboratório.
@@ -48,20 +53,64 @@ O ciclo de vida do domínio segue estas etapas:
     Acompanhamento das ordens de serviço derivadas das solicitações: diagnóstico, peças e serviços executados, lacres, garantia e linha do tempo de eventos, com aprovação eletrônica de orçamento e visibilidade do prazo.
   </Card>
   <Card title="Certificados" icon="document">
-    Acesso direto aos certificados de calibração aprovados. Download do PDF com um clique e link de verificação pública.
+    Acesso direto aos certificados de calibração aprovados, com filtro por instrumento (arquivo por equipamento), download do PDF com um clique e link de verificação pública.
   </Card>
   <Card title="Configurações" icon="pencil">
-    Preferências de aparência (tema claro/escuro).
+    Preferências de aparência (tema claro/escuro) e do **resumo de calibrações por email** (desativado, diário ou semanal).
   </Card>
 </CardGrid>
 
 Uma **busca global** localiza instrumentos e certificados a partir de qualquer tela.
+
+## Situação de Calibração da Frota
+
+A situação de cada instrumento deriva da mesma fonte de verdade em todas as telas (painel, frota, detalhe do instrumento, calendário): a **data da próxima calibração** comparada com a data de hoje, e o **estado operacional** do instrumento no laboratório.
+
+| Situação | Significado |
+| :--- | :--- |
+| **Vencida** | A data de próxima calibração já passou |
+| **Vence em breve** | Vence nos próximos 30 dias |
+| **Em dia** | Vence em mais de 30 dias |
+| **Sem agenda** | Sem data de próxima calibração registrada |
+| **No laboratório** | Há uma calibração em andamento ou uma ordem de serviço aberta para o instrumento |
+
+O painel e a tela de frota trazem essas situações como indicadores que **também funcionam como filtros** — clicar em "Vencidas" filtra a frota para os instrumentos vencidos. A situação **No laboratório** tem precedência sobre a data: um instrumento vencido que já está em atendimento no laboratório aparece como "No laboratório", e não como "Vencida".
+
+<Aside type="note">
+  A situação reflete o estado registrado pelo laboratório no momento da consulta. A tela de frota mostra o horário da última atualização dos dados ("Dados atualizados em…").
+</Aside>
+
+## Calendário de Calibrações
+
+O **Calendário** (`/calendar`) apresenta os vencimentos da frota em uma grade mensal:
+
+- cada dia exibe quantos instrumentos vencem e a cor da situação mais crítica daquele dia;
+- selecionar um dia lista os instrumentos correspondentes, com a situação de cada um;
+- o botão **Solicitar calibração (N)** abre uma nova solicitação já com todos os instrumentos do dia pré-selecionados.
+
+Os tiles do topo resumem o mês: total de vencimentos, vencidas e instrumentos no laboratório.
+
+## Arquivo de Certificados por Instrumento
+
+Além da lista geral de certificados, o cliente pode abrir o **arquivo de um instrumento específico**. No detalhe do instrumento, "Ver todos (N)" leva à lista de certificados já filtrada por aquele equipamento, exibida com um chip removível "Instrumento: TAG". É o histórico de rastreabilidade completo do equipamento, do mais recente ao mais antigo.
+
+## Solicitação de Recalibração com Um Clique
+
+A solicitação de calibração pode ser iniciada já com os instrumentos selecionados, a partir de qualquer ponto em que o cliente vê um equipamento que precisa de atenção:
+
+- no **detalhe do instrumento**, em **Solicitar calibração**;
+- na **tabela da frota**, pela ação de recalibração na linha do instrumento;
+- no **calendário**, pelo botão do dia selecionado (recall em lote dos vencimentos daquele dia).
+
+Em todos os casos a tela de nova solicitação abre com os instrumentos pré-marcados; o cliente ainda pode remover, adicionar outros, definir a forma de envio e enviar. A partir daí o fluxo é o mesmo de qualquer solicitação: o laboratório revisa e converte em ordens de calibração, com o status visível de ponta a ponta.
 
 ## O Que o Cliente Pode Fazer
 
 | Ação | Disponível |
 | :--- | :--- |
 | Visualizar seus ativos/instrumentos | Sim |
+| Acompanhar a frota por situação, calendário e arquivo por instrumento | Sim |
+| **Solicitar recalibração com um clique** | **Sim** — a partir do instrumento, da frota ou do calendário |
 | **Submeter solicitações de calibração** | **Sim** — veja [Solicitações](/operacao-comercial/solicitacoes) |
 | **Acompanhar ordens de serviço derivadas** | **Sim** — veja [Ordens de Serviço](/operacao-comercial/ordens-de-servico) |
 | **Aprovar ou rejeitar orçamentos** | **Sim** — eletronicamente, com carimbo de tempo e identidade |
@@ -81,6 +130,22 @@ Usuários do portal recebem notificações por email nos seguintes eventos:
 | :--- | :--- |
 | **Certificado disponível** | Certificado de calibração pronto para download |
 | **Certificado retificado** | Uma nova versão do certificado foi emitida em substituição |
+
+### Resumo de Calibrações (opt-in)
+
+Em **Configurações → Notificações**, o usuário pode ativar um **resumo periódico por email** dos instrumentos vencidos ou que vencem nos próximos 30 dias:
+
+| Frequência | Quando é enviado |
+| :--- | :--- |
+| **Desativado** | Nenhum resumo (padrão) |
+| **Diário** | Todas as manhãs |
+| **Semanal** | Às segundas-feiras |
+
+O resumo é **opt-in** — nenhum email é enviado até o usuário escolher diário ou semanal. Quando a frota não tem nada vencido ou a vencer, nenhum resumo é disparado. O email leva a marca do laboratório e direciona ao portal (ao filtro de vencidos ou ao calendário).
+
+<Aside type="note">
+  Cada usuário do portal controla sua própria frequência de resumo, de forma independente dos demais usuários da mesma organização.
+</Aside>
 
 ## Verificação Pública de Certificados
 
