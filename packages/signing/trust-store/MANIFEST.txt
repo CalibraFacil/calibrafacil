@@ -1,0 +1,6 @@
+ICP-Brasil AC trust store (vendored from ITI)
+Source:  https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip
+SHA-512: 3f0a7f649f6abbeaf8b31b291f326ab9fdba71586a9ac5b0d1aec13c21121a2702cca53c9006850404ea467c55bc87adb5d8f74d913ea63eccf9dd48444b445e
+Files:   172
+
+Regenerate with: node scripts/fetch-icp-brasil-trust-store.mjs
