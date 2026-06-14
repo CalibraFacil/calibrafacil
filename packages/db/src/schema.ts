@@ -2633,13 +2633,16 @@ export const customerRelations = relations(customer, ({ one, many }) => ({
   assets: many(asset),
 }));
 
-export const customerGroupRelations = relations(customerGroup, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [customerGroup.authOrganizationId],
-    references: [organization.id],
+export const customerGroupRelations = relations(
+  customerGroup,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [customerGroup.authOrganizationId],
+      references: [organization.id],
+    }),
+    branches: many(customer),
   }),
-  branches: many(customer),
-}));
+);
 
 export const customerAuditLogRelations = relations(
   customerAuditLog,
@@ -4018,6 +4021,29 @@ export const calibrationJob = pgTable(
       signerCpfCnpj: string | null;
       pdfHash: string; // SHA-256 hash of signed PDF
       ltvEnabled: boolean;
+    }>(),
+    /**
+     * At-issue signature-integrity verdict (`@calibra-facil/signing` verifyPdf),
+     * computed once when the certificate is signed. The public verification page
+     * serves this directly and may additionally recheck the chain "now". NULL
+     * when the certificate is unsigned or predates this column. Shape mirrors
+     * VerifyPdfResult plus the timestamp it was computed at.
+     */
+    signatureVerdict: jsonb("signature_verdict").$type<{
+      hashMatch: boolean | null;
+      signatureCryptographicallyValid: boolean;
+      chainValid: boolean;
+      signerChainsToIcpRoot: boolean;
+      certNotExpiredAtCheckDate: boolean;
+      signaturePresent: boolean;
+      signer: {
+        commonName: string | null;
+        cpfCnpj: string | null;
+        certificateSerial: string | null;
+      };
+      overall: "VALID" | "ALTERED" | "UNSIGNED" | "UNVERIFIABLE";
+      details: string[];
+      computedAt: string; // ISO timestamp
     }>(),
   },
   (table) => [

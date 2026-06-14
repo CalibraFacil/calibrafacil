@@ -14,11 +14,29 @@ import {
   shouldRenderAccreditationSeal,
 } from "@calibra-facil/shared";
 import {
+  verifyPdf,
+  getIcpBrasilTrustAnchors,
+  type VerifyPdfResult,
+} from "@calibra-facil/signing";
+import {
   createR2Client,
   generatePresignedUrl,
   extractKeyFromUrl,
+  downloadFromR2,
   type R2Env,
 } from "../lib/storage";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Per-instance, best-effort cache of live signature rechecks. The verdict is
+// deterministic per signed-PDF hash, so caching by pdfHash keeps the public
+// endpoint cheap and bounds the R2-download + crypto cost under repeated scans.
+const LIVE_VERDICT_TTL_MS = 10 * 60 * 1000;
+const liveVerdictCache = new Map<
+  string,
+  { verdict: VerifyPdfResult; expiresAt: number }
+>();
 
 /**
  * Public Verification Router - NO AUTH REQUIRED
@@ -203,6 +221,124 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       supersededBy: supersededByInfo,
       supersedes: supersedesInfo,
     });
+  })
+
+  // =========================================================================
+  // GET /:token/signature - Signature-integrity verdict (public)
+  //
+  // Fast path: serve the at-issue verdict precomputed by the worker
+  // (calibration_job.signature_verdict). Live path (no stored verdict, or
+  // ?recheck=1): download the signed PDF and re-verify "now" — bounded by a
+  // per-instance TTL cache. Degrades gracefully; never 500s.
+  // =========================================================================
+  .get("/:token/signature", async (c) => {
+    const token = c.req.param("token");
+    if (!UUID_REGEX.test(token)) {
+      return c.json({ error: "Token invalido" }, 400);
+    }
+
+    const [job] = await db
+      .select({
+        signatureMetadata: calibrationJob.signatureMetadata,
+        signatureVerdict: calibrationJob.signatureVerdict,
+        certificateUrl: calibrationJob.certificateUrl,
+      })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.verificationToken, token),
+          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        ),
+      )
+      .limit(1);
+
+    if (!job) {
+      return c.json({ error: "Certificado nao encontrado" }, 404);
+    }
+
+    // Unsigned certificate — nothing to verify cryptographically.
+    if (!job.signatureMetadata) {
+      return c.json({
+        signed: false,
+        source: null,
+        computedAt: null,
+        verdict: null,
+      });
+    }
+
+    const recheck = c.req.query("recheck") === "1";
+
+    // Fast path: the at-issue verdict, with no R2 round-trip.
+    if (job.signatureVerdict && !recheck) {
+      const { computedAt, ...verdict } = job.signatureVerdict;
+      return c.json({ signed: true, source: "issue", computedAt, verdict });
+    }
+
+    // Live recheck (legacy certs without a stored verdict, or ?recheck=1).
+    const pdfHash = job.signatureMetadata.pdfHash;
+    const nowMs = Date.now();
+    const cached = liveVerdictCache.get(pdfHash);
+    if (cached && cached.expiresAt > nowMs) {
+      c.header("Cache-Control", "public, max-age=300");
+      return c.json({
+        signed: true,
+        source: "live",
+        computedAt: new Date(nowMs).toISOString(),
+        verdict: cached.verdict,
+      });
+    }
+
+    try {
+      if (!job.certificateUrl) {
+        throw new Error("Documento ainda nao disponivel");
+      }
+      const env = c.env;
+      const key = extractKeyFromUrl(job.certificateUrl);
+      const client = createR2Client(env);
+      const bytes = await downloadFromR2(client, env.R2_BUCKET_NAME, key);
+      const verdict = await verifyPdf(bytes, {
+        expectedSha256: pdfHash,
+        trustAnchors: getIcpBrasilTrustAnchors(),
+        checkDate: new Date(),
+      });
+
+      if (liveVerdictCache.size > 1000) liveVerdictCache.clear();
+      liveVerdictCache.set(pdfHash, {
+        verdict,
+        expiresAt: nowMs + LIVE_VERDICT_TTL_MS,
+      });
+
+      c.header("Cache-Control", "public, max-age=300");
+      return c.json({
+        signed: true,
+        source: "live",
+        computedAt: new Date(nowMs).toISOString(),
+        verdict,
+      });
+    } catch {
+      // Fall back to a stored verdict if present, else a minimal "couldn't
+      // verify right now" result built from the signature metadata.
+      if (job.signatureVerdict) {
+        const { computedAt, ...verdict } = job.signatureVerdict;
+        return c.json({ signed: true, source: "issue", computedAt, verdict });
+      }
+      const verdict: VerifyPdfResult = {
+        hashMatch: null,
+        signatureCryptographicallyValid: false,
+        chainValid: false,
+        signerChainsToIcpRoot: false,
+        certNotExpiredAtCheckDate: false,
+        signaturePresent: true,
+        signer: {
+          commonName: job.signatureMetadata.signerName,
+          cpfCnpj: job.signatureMetadata.signerCpfCnpj,
+          certificateSerial: job.signatureMetadata.signerCertificateSerial,
+        },
+        overall: "UNVERIFIABLE",
+        details: ["Não foi possível verificar a assinatura no momento."],
+      };
+      return c.json({ signed: true, source: null, computedAt: null, verdict });
+    }
   })
 
   // =========================================================================

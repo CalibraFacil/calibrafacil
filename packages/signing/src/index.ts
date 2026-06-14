@@ -53,14 +53,26 @@ export { SigningError } from "./types.js";
 // Chain validation against the ICP-Brasil trust anchors
 export {
   validateCertificateChain,
+  validatePkijsChain,
   validatePkcs12Chain,
   parsePemCertificates,
   loadTrustStore,
+  getIcpBrasilTrustAnchors,
 } from "./chain-validation.js";
 export type {
   ChainValidationResult,
   ChainValidationOptions,
+  PkijsChainValidationOptions,
 } from "./chain-validation.js";
+
+// Public PDF signature verification (powers the verification page)
+export { verifyPdf } from "./verify.js";
+export type {
+  VerifyPdfResult,
+  VerifyPdfOptions,
+  VerifyPdfSigner,
+  VerifyOverall,
+} from "./verify.js";
 
 // RFC-3161 timestamp (carimbo de tempo) — PAdES-T building block
 export { addRfc3161Timestamp } from "./timestamp.js";

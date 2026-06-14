@@ -95,6 +95,67 @@ export function useVerification(token: string) {
   });
 }
 
+// — Signature integrity (Phase 1) — `/api/verify/:token/signature` —————————————
+
+const verdictSignerSchema = z.object({
+  commonName: z.string().nullable(),
+  cpfCnpj: z.string().nullable(),
+  certificateSerial: z.string().nullable(),
+});
+
+const signatureVerdictSchema = z.object({
+  hashMatch: z.boolean().nullable(),
+  signatureCryptographicallyValid: z.boolean(),
+  chainValid: z.boolean(),
+  signerChainsToIcpRoot: z.boolean(),
+  certNotExpiredAtCheckDate: z.boolean(),
+  signaturePresent: z.boolean(),
+  signer: verdictSignerSchema,
+  overall: z.enum(["VALID", "ALTERED", "UNSIGNED", "UNVERIFIABLE"]),
+  details: z.array(z.string()),
+});
+
+const signatureVerificationSchema = z.object({
+  signed: z.boolean(),
+  source: z.enum(["issue", "live"]).nullable(),
+  computedAt: z.string().nullable(),
+  verdict: signatureVerdictSchema.nullable(),
+});
+
+export type SignatureVerdict = z.infer<typeof signatureVerdictSchema>;
+export type SignatureVerdictOverall = SignatureVerdict["overall"];
+export type SignatureVerification = z.infer<typeof signatureVerificationSchema>;
+
+async function fetchSignatureVerification(
+  token: string,
+): Promise<SignatureVerification> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/verify/${token}/signature`,
+  );
+  if (!response.ok) {
+    throw new Error("Erro ao verificar a assinatura.");
+  }
+  const parsed = signatureVerificationSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error("Resposta de verificação inválida.");
+  }
+  return parsed.data;
+}
+
+/**
+ * Lazily resolves the signature-integrity verdict. `enabled` gates the request
+ * to certificates that actually carry a digital signature.
+ */
+export function useSignatureVerdict(token: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["verification-signature", token],
+    queryFn: () => fetchSignatureVerification(token),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /** Resolves the public download URL (presigned R2) for the signed certificate PDF. */
 export async function fetchCertificateDownloadUrl(
   token: string,

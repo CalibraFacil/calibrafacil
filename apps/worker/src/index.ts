@@ -35,10 +35,16 @@ import {
 import { formatNumberForXlsx } from "./xlsx-number-format.js";
 import {
   signPdf,
+  verifyPdf,
+  getIcpBrasilTrustAnchors,
   decryptPassword,
   decryptBinary,
   type SignatureMetadata,
+  type VerifyPdfResult,
 } from "@calibra-facil/signing";
+
+/** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
+type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
 import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
@@ -1317,6 +1323,7 @@ async function updateJobWithCertificate(
   certificateUrl: string,
   userId: string,
   signatureMetadata?: SignatureMetadata,
+  signatureVerdict?: StoredSignatureVerdict,
   options: { preserveSignatureMetadata?: boolean } = {},
 ): Promise<void> {
   const now = new Date();
@@ -1339,6 +1346,11 @@ async function updateJobWithCertificate(
       ? parseSignatureMetadata(statusResult.rows[0]?.signature_metadata)
       : undefined);
 
+  // The verdict travels with the signature: write it only when a fresh one is
+  // supplied, otherwise keep whatever is stored (regeneration / watermark paths
+  // pass no verdict and must not wipe it).
+  const writeSignatureVerdict = signatureVerdict !== undefined;
+
   // Only update status to APPROVED if not already SUPERSEDED
   // SUPERSEDED jobs are being regenerated with watermark and should keep their status
   await client.query(
@@ -1348,6 +1360,7 @@ async function updateJobWithCertificate(
       status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
       certificate_url = $2,
       signature_metadata = CASE WHEN $5 THEN signature_metadata ELSE $3::jsonb END,
+      signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
       updated_at = $4
     WHERE id = $1
     `,
@@ -1357,6 +1370,8 @@ async function updateJobWithCertificate(
       signatureMetadata ? JSON.stringify(signatureMetadata) : null,
       now,
       shouldPreserveSignatureMetadata,
+      writeSignatureVerdict,
+      signatureVerdict ? JSON.stringify(signatureVerdict) : null,
     ],
   );
 
@@ -1406,7 +1421,11 @@ async function signPdfWithUnitCertificate(
   organizationId: string | null | undefined,
   unitId: number | null | undefined,
   pdfBuffer: Buffer,
-): Promise<{ pdfBuffer: Buffer; signatureMetadata?: SignatureMetadata }> {
+): Promise<{
+  pdfBuffer: Buffer;
+  signatureMetadata?: SignatureMetadata;
+  signatureVerdict?: StoredSignatureVerdict;
+}> {
   if (!env.SIGNING_MASTER_KEY) {
     return { pdfBuffer };
   }
@@ -1452,9 +1471,28 @@ async function signPdfWithUnitCertificate(
     console.log(
       `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
     );
+
+    // Precompute the at-issue signature-integrity verdict so the public
+    // verification page can serve it without re-downloading + re-verifying the
+    // PDF on every hit. Best-effort — verifyPdf never throws, but a verdict
+    // failure must never block issuance.
+    let signatureVerdict: StoredSignatureVerdict | undefined;
+    try {
+      const verdict = await verifyPdf(result.signedPdf, {
+        expectedSha256: result.metadata.pdfHash,
+        trustAnchors: getIcpBrasilTrustAnchors(),
+        checkDate: new Date(result.metadata.signedAt),
+      });
+      signatureVerdict = { ...verdict, computedAt: result.metadata.signedAt };
+      console.log(`[JOB ${jobId}] verifyPdf: overall=${verdict.overall}`);
+    } catch (verifyError) {
+      console.error(`[JOB ${jobId}] verifyPdf failed:`, verifyError);
+    }
+
     return {
       pdfBuffer: Buffer.from(result.signedPdf),
       signatureMetadata: result.metadata,
+      signatureVerdict,
     };
   } catch (signError) {
     console.error(
@@ -3335,6 +3373,7 @@ async function processXlsxIssuedCertificate(
         certificateUrl,
         userId,
         parseSignatureMetadata(existingSnapshot.signature_metadata),
+        undefined,
         { preserveSignatureMetadata: true },
       ),
     );
@@ -3508,6 +3547,7 @@ async function processXlsxIssuedCertificate(
           : parseSignatureMetadata(
               existingSnapshotAfterConflict?.signature_metadata,
             ),
+        insertedSnapshotPdfR2Key ? signed.signatureVerdict : undefined,
         { preserveSignatureMetadata: !insertedSnapshotPdfR2Key },
       );
       return snapshotPdfR2Key;
