@@ -14,6 +14,7 @@ import {
   calibrationRequestItem,
   organization,
   organizationCustomDomain,
+  customerGroup,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
@@ -2411,10 +2412,30 @@ export async function sendPortalDueDigests(
 
   const frequencies = portalDigestFrequenciesFor(now);
 
-  // Every opted-in portal member, once per (user, customer) pair. The role
-  // literal mirrors PORTAL_ACCESS_ROLES (packages/auth/src/access.ts), which
-  // this package doesn't depend on.
-  const recipients = await db
+  // A digest recipient is a (user, scope) pair where the scope is the set of
+  // branch customers to aggregate. Branch-org members scope to their one
+  // customer; group-org members scope to all of the group's branches (one
+  // consolidated digest). The "client_user" literal mirrors PORTAL_ACCESS_ROLES
+  // (packages/auth/src/access.ts), which this package doesn't depend on.
+  type DigestRecipient = {
+    userId: string;
+    email: string | null;
+    name: string | null;
+    frequency: string;
+    labOrganizationId: string;
+    customerIds: number[];
+    scopeLabel: string;
+  };
+
+  const optedInWhere = and(
+    eq(organization.type, "CLIENT"),
+    eq(member.role, "client_user"),
+    inArray(notificationPreference.digestFrequency, frequencies),
+    eq(notificationPreference.emailEnabled, true),
+  );
+
+  // Members of a branch customer's CLIENT org → one customer each.
+  const customerRecipients = await db
     .selectDistinct({
       userId: user.id,
       email: user.email,
@@ -2431,14 +2452,73 @@ export async function sendPortalDueDigests(
       notificationPreference,
       eq(notificationPreference.userId, member.userId),
     )
-    .where(
-      and(
-        eq(organization.type, "CLIENT"),
-        eq(member.role, "client_user"),
-        inArray(notificationPreference.digestFrequency, frequencies),
-        eq(notificationPreference.emailEnabled, true),
-      ),
-    );
+    .where(optedInWhere);
+
+  // Members of a customer-group's CLIENT org → consolidated over its branches.
+  const groupRecipients = await db
+    .selectDistinct({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      frequency: notificationPreference.digestFrequency,
+      groupId: customerGroup.id,
+      labOrganizationId: customerGroup.labOrganizationId,
+    })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .innerJoin(
+      customerGroup,
+      eq(customerGroup.authOrganizationId, organization.id),
+    )
+    .innerJoin(user, eq(member.userId, user.id))
+    .innerJoin(
+      notificationPreference,
+      eq(notificationPreference.userId, member.userId),
+    )
+    .where(optedInWhere);
+
+  // Resolve each group's branch customer ids in one query.
+  const branchesByGroup = new Map<number, number[]>();
+  const groupIds = [...new Set(groupRecipients.map((row) => row.groupId))];
+  if (groupIds.length > 0) {
+    const branches = await db
+      .select({ id: customer.id, groupId: customer.groupId })
+      .from(customer)
+      .where(inArray(customer.groupId, groupIds));
+    for (const branch of branches) {
+      if (branch.groupId === null) continue;
+      const list = branchesByGroup.get(branch.groupId) ?? [];
+      list.push(branch.id);
+      branchesByGroup.set(branch.groupId, list);
+    }
+  }
+
+  const recipients: DigestRecipient[] = [
+    ...customerRecipients.map((row) => ({
+      userId: row.userId,
+      email: row.email,
+      name: row.name,
+      frequency: row.frequency,
+      labOrganizationId: row.labOrganizationId,
+      customerIds: [row.customerId],
+      scopeLabel: `customer:${row.customerId}`,
+    })),
+    ...groupRecipients.flatMap((row) => {
+      const customerIds = branchesByGroup.get(row.groupId) ?? [];
+      if (customerIds.length === 0) return [];
+      return [
+        {
+          userId: row.userId,
+          email: row.email,
+          name: row.name,
+          frequency: row.frequency,
+          labOrganizationId: row.labOrganizationId,
+          customerIds,
+          scopeLabel: `group:${row.groupId}`,
+        },
+      ];
+    }),
+  ];
 
   result.recipients = recipients.length;
   if (recipients.length === 0) return result;
@@ -2452,11 +2532,11 @@ export async function sendPortalDueDigests(
   soon.setUTCDate(soon.getUTCDate() + PORTAL_DIGEST_DUE_SOON_DAYS);
 
   for (const recipient of recipients) {
-    if (!recipient.email) continue;
+    if (!recipient.email || recipient.customerIds.length === 0) continue;
 
     try {
       const dueWhere = and(
-        eq(asset.customerId, recipient.customerId),
+        inArray(asset.customerId, recipient.customerIds),
         eq(asset.status, "ACTIVE"),
         isNull(asset.deletedAt),
         isNotNull(asset.nextCalibrationDate),
@@ -2566,7 +2646,7 @@ export async function sendPortalDueDigests(
       result.errors += 1;
       console.error("[PortalDigest] Failed to send digest", {
         userId: recipient.userId,
-        customerId: recipient.customerId,
+        scope: recipient.scopeLabel,
         error: error instanceof Error ? error.message : "unknown error",
       });
     }
