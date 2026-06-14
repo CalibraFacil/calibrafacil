@@ -19,6 +19,7 @@ import forge from "node-forge";
 
 import { SigningError } from "./types.js";
 import type { CertificateInfo } from "./types.js";
+import { ICP_BRASIL_TRUST_STORE_PEM } from "./trust-store.generated.js";
 
 // pkijs resolves its crypto engine from globalThis.crypto (WebCrypto), which is
 // present in Node 18+, Bun, and Cloudflare Workers — so no explicit setEngine is
@@ -107,12 +108,25 @@ export interface ChainValidationOptions {
   checkDate?: Date;
 }
 
+export interface PkijsChainValidationOptions {
+  /** ICP-Brasil trust anchors (AC-Raiz + intermediates) as pkijs certificates. */
+  trustAnchors: pkijs.Certificate[];
+  /** Intermediates accompanying the leaf (e.g. embedded in the CMS). */
+  intermediates?: pkijs.Certificate[];
+  /** Pre-fetched CRLs to check (live OCSP/CRL fetching is a follow-up). */
+  crls?: pkijs.CertificateRevocationList[];
+  /** Validation reference time (default: now). */
+  checkDate?: Date;
+}
+
 /**
- * Validate an end-entity certificate's chain to an ICP-Brasil trust anchor.
+ * Path-validate an already-pkijs leaf certificate against trust anchors. Shared
+ * by {@link validateCertificateChain} (forge entry point) and the PDF signature
+ * verifier, which already holds the signer cert as a pkijs object.
  */
-export async function validateCertificateChain(
-  certificate: forge.pki.Certificate,
-  options: ChainValidationOptions,
+export async function validatePkijsChain(
+  leaf: pkijs.Certificate,
+  options: PkijsChainValidationOptions,
 ): Promise<ChainValidationResult> {
   if (options.trustAnchors.length === 0) {
     throw new SigningError(
@@ -121,14 +135,9 @@ export async function validateCertificateChain(
     );
   }
 
-  const leaf = forgeCertificateToPkijs(certificate);
-  const intermediates = (options.intermediates ?? []).map(
-    forgeCertificateToPkijs,
-  );
-
   const engine = new pkijs.CertificateChainValidationEngine({
     trustedCerts: options.trustAnchors,
-    certs: [...intermediates, leaf],
+    certs: [...(options.intermediates ?? []), leaf],
     crls: options.crls ?? [],
     checkDate: options.checkDate ?? new Date(),
   });
@@ -159,6 +168,35 @@ export async function validateCertificateChain(
   }
 
   return { valid: true };
+}
+
+/**
+ * Validate an end-entity certificate's chain to an ICP-Brasil trust anchor.
+ */
+export async function validateCertificateChain(
+  certificate: forge.pki.Certificate,
+  options: ChainValidationOptions,
+): Promise<ChainValidationResult> {
+  return validatePkijsChain(forgeCertificateToPkijs(certificate), {
+    trustAnchors: options.trustAnchors,
+    intermediates: (options.intermediates ?? []).map(forgeCertificateToPkijs),
+    crls: options.crls,
+    checkDate: options.checkDate,
+  });
+}
+
+let cachedAnchors: pkijs.Certificate[] | null = null;
+
+/**
+ * The bundled ICP-Brasil trust anchors, parsed once. Empty until the vendored
+ * trust store has been fetched and `scripts/build-trust-store.mjs` run — callers
+ * treat an empty set as "chain validation unavailable" rather than an error.
+ */
+export function getIcpBrasilTrustAnchors(): pkijs.Certificate[] {
+  if (cachedAnchors === null) {
+    cachedAnchors = parsePemCertificates(ICP_BRASIL_TRUST_STORE_PEM);
+  }
+  return cachedAnchors;
 }
 
 /**
