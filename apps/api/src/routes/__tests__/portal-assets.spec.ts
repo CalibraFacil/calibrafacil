@@ -18,6 +18,7 @@ vi.mock("@calibra-facil/db", () => {
     "innerJoin",
     "leftJoin",
     "where",
+    "groupBy",
     "orderBy",
     "limit",
     "offset",
@@ -150,6 +151,52 @@ describe("GET /units", () => {
     expect(body.units.map((unit: { name: string }) => unit.name)).toEqual([
       "Unidade Norte",
       "Unidade Sul",
+    ]);
+  });
+});
+
+describe("GET /units/summary", () => {
+  it("returns per-unit counts worst-first in group mode", async () => {
+    dbQueue.push(
+      [], // resolver: not a direct customer
+      [{ id: 3, labOrganizationId: "lab-1" }], // resolver: group org
+      [
+        { id: 10, name: "Unidade Norte", labOrganizationId: "lab-1" },
+        { id: 11, name: "Unidade Sul", labOrganizationId: "lab-1" },
+      ], // resolver: branches
+      [
+        { customerId: 10, total: 5, overdue: 1, dueSoon: 2 },
+        { customerId: 11, total: 4, overdue: 3, dueSoon: 0 },
+      ], // grouped counts
+    );
+
+    const res = await portalRouter.request("/units/summary", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    // Sul (3 overdue) outranks Norte (1 overdue).
+    expect(body.units.map((unit: { name: string }) => unit.name)).toEqual([
+      "Unidade Sul",
+      "Unidade Norte",
+    ]);
+    expect(body.units[0]).toMatchObject({ overdue: 3, dueSoon: 0, total: 4 });
+  });
+
+  it("fills zero counts for units with no assets", async () => {
+    dbQueue.push(
+      [{ id: 1, name: "Cliente", labOrganizationId: "lab-1" }], // resolver: single
+      [], // no grouped counts
+    );
+
+    const res = await portalRouter.request("/units/summary", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.units).toEqual([
+      { id: 1, name: "Cliente", total: 0, overdue: 0, dueSoon: 0 },
     ]);
   });
 });

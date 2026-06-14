@@ -1184,6 +1184,76 @@ export const portalRouter = new Hono<{
   })
 
   // =========================================================================
+  // GET /units/summary - Per-unit calibration status breakdown (group KPIs)
+  // =========================================================================
+  // For the network manager: each unit (branch) with its overdue / due-soon /
+  // total active-instrument counts, worst-first. Single mode returns one row;
+  // the portal shows the breakdown only in group mode.
+  // =========================================================================
+  .get("/units/summary", ...requirePortalProtected, async (c) => {
+    const member = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
+
+      if (!scope || scope.customerIds.length === 0) {
+        return c.json({ units: [] });
+      }
+
+      const nowUtc = sql`(now() at time zone 'utc')`;
+      const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+
+      const rows = await db
+        .select({
+          customerId: asset.customerId,
+          total: sql<number>`cast(count(*) as int)`,
+          overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
+          dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
+        })
+        .from(asset)
+        .where(
+          and(
+            inArray(asset.customerId, scope.customerIds),
+            eq(asset.status, "ACTIVE"),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .groupBy(asset.customerId);
+
+      const byId = new Map(rows.map((row) => [row.customerId, row]));
+      const units = [...scope.customerById.values()]
+        .map((unit) => {
+          const counts = byId.get(unit.id);
+          return {
+            id: unit.id,
+            name: unit.name,
+            total: counts?.total ?? 0,
+            overdue: counts?.overdue ?? 0,
+            dueSoon: counts?.dueSoon ?? 0,
+          };
+        })
+        .sort(
+          (left, right) =>
+            right.overdue - left.overdue ||
+            right.dueSoon - left.dueSoon ||
+            left.name.localeCompare(right.name, "pt-BR"),
+        );
+
+      return c.json({ mode: scope.mode, units });
+    } catch (error) {
+      console.error("Error building portal unit summary:", error);
+      return c.json({ error: "Erro ao carregar o resumo por unidade" }, 500);
+    }
+  })
+
+  // =========================================================================
   // GET /notification-preferences - Digest opt-in for the portal user
   // =========================================================================
   .get("/notification-preferences", ...requirePortalProtected, async (c) => {

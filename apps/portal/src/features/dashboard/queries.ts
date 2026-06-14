@@ -83,3 +83,34 @@ export function useOverview() {
     staleTime: 60_000,
   });
 }
+
+export type UnitSummaryItem = {
+  id: number;
+  name: string;
+  total: number;
+  overdue: number;
+  dueSoon: number;
+};
+
+type UnitSummaryResponse = {
+  mode?: "single" | "group";
+  units: Array<UnitSummaryItem>;
+};
+
+/** Per-unit calibration breakdown; more than one unit only in group mode. */
+export function useUnitSummary() {
+  return useQuery({
+    queryKey: ["portal-unit-summary"],
+    queryFn: async (): Promise<UnitSummaryResponse> => {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/units/summary`,
+        { credentials: "include" },
+      );
+      if (!response.ok) {
+        throw new Error("Falha ao carregar o resumo por unidade");
+      }
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+}
