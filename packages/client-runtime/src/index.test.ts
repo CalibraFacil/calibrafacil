@@ -794,6 +794,36 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listMembers",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listInvitations",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createInvitation",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "resendInvitation",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "cancelInvitation",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removeMember",
+          "namespace": "customerGroups",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "assets",
           "policy": "local-first-read-through-sync",

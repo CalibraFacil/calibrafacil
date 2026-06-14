@@ -622,6 +622,8 @@ export type CustomersListData = {
     email: string | null;
     phone?: string | null;
     authOrganizationId: string | null;
+    groupId?: number | null;
+    groupName?: string | null;
     compliance?: {
       qualificationStatus?: "pending" | "qualified" | "suspended" | "expired";
     } | null;
@@ -668,6 +670,8 @@ export type CustomerDetailData = CustomersListData["data"][number] & {
     overdueBalanceFlag: boolean;
   };
   activeCommercialAgreement?: unknown;
+  /** Parent customer group (rede), resolved on the detail payload. */
+  group?: { id: number; name: string } | null;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
 };
@@ -736,6 +740,10 @@ export type CustomerGroupBranch = {
   id: number;
   name: string;
   taxId: string | null;
+  /** Active-instrument counts for the branch (overview KPIs). */
+  total: number;
+  overdue: number;
+  dueSoon: number;
 };
 
 export type CustomerGroupDetailData = {
@@ -765,6 +773,17 @@ export interface CustomerGroupsApi {
     groupId: string | number,
     customerId: string | number,
   ): Promise<{ success: boolean }>;
+  listMembers<TMember = unknown>(id: string | number): Promise<TMember[]>;
+  listInvitations<TInvitation = unknown>(
+    id: string | number,
+  ): Promise<TInvitation[]>;
+  createInvitation<TInvitation = unknown>(
+    id: string | number,
+    input: { email: string; role: string },
+  ): Promise<TInvitation>;
+  resendInvitation(id: string | number, invitationId: string): Promise<unknown>;
+  cancelInvitation(id: string | number, invitationId: string): Promise<unknown>;
+  removeMember(id: string | number, memberId: string): Promise<unknown>;
 }
 
 export type AssetsListInput = {

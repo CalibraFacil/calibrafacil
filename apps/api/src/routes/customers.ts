@@ -285,8 +285,40 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         const total = countResult[0]?.total ?? 0;
 
+        // Resolve group names for the rows on this page (batched single query).
+        const pageGroupIds = [
+          ...new Set(
+            customers
+              .map((row) => row.groupId)
+              .filter((groupId): groupId is number => groupId !== null),
+          ),
+        ];
+        const groupNameById = new Map<number, string>();
+        if (pageGroupIds.length > 0) {
+          const groups = await db
+            .select({ id: customerGroup.id, name: customerGroup.name })
+            .from(customerGroup)
+            .where(
+              and(
+                eq(customerGroup.labOrganizationId, memberData.organizationId),
+                inArray(customerGroup.id, pageGroupIds),
+              ),
+            );
+          for (const group of groups) {
+            groupNameById.set(group.id, group.name);
+          }
+        }
+
+        const data = customers.map((row) => ({
+          ...row,
+          groupName:
+            row.groupId === null
+              ? null
+              : (groupNameById.get(row.groupId) ?? null),
+        }));
+
         return c.json({
-          data: customers,
+          data,
           pagination: {
             page,
             limit,
