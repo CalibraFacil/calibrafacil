@@ -139,16 +139,21 @@ describe("GET /assets", () => {
     });
   });
 
-  it("rejects a customer linked to a different lab than the portal host", async () => {
+  it("returns empty for a customer linked to a different lab than the portal host", async () => {
     vi.mocked(resolveLabOrganizationIdByPortalHostname).mockResolvedValue(
       "lab-A",
     );
-    dbQueue.push([{ id: 1, labOrganizationId: "lab-B" }]); // linkedCustomer
+    // Resolver finds the customer but its lab does not match the host lab, so
+    // the scope is null and the endpoint returns an empty page (no disclosure).
+    dbQueue.push([{ id: 1, labOrganizationId: "lab-B" }]); // direct customer
 
     const res = await portalRouter.request("/assets", {
       headers: LOCAL_ORIGIN,
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toEqual([]);
+    expect(body.pagination.total).toBe(0);
   });
 
   it("rejects an unknown sortBy value", async () => {
@@ -246,5 +251,45 @@ describe("GET /assets", () => {
       total: 2,
       totalPages: 1,
     });
+  });
+
+  it("aggregates assets across branches when the active org is a group", async () => {
+    dbQueue.push(
+      [], // resolver: active org is not a direct customer
+      [{ id: 3, labOrganizationId: "lab-1" }], // resolver: group org
+      [
+        { id: 10, name: "Unidade Norte", labOrganizationId: "lab-1" },
+        { id: 11, name: "Unidade Sul", labOrganizationId: "lab-1" },
+      ], // resolver: branches
+      [{ total: 2 }], // count
+      [
+        fleetAssetRow({
+          id: 1,
+          tag: "EQ-1",
+          customerId: 10,
+          customerName: "Unidade Norte",
+        }),
+        fleetAssetRow({
+          id: 2,
+          tag: "EQ-2",
+          serialNumber: "SN-2",
+          customerId: 11,
+          customerName: "Unidade Sul",
+        }),
+      ], // asset page across both branches
+      [], // latest certificates
+    );
+
+    const res = await portalRouter.request("/assets", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((row: { customerName: string }) => row.customerName)).toEqual([
+      "Unidade Norte",
+      "Unidade Sul",
+    ]);
   });
 });

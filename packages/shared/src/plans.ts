@@ -40,6 +40,7 @@ export type FeatureFlag =
   | "custom_templates" // Professional+: Custom certificate templates
   | "priority_support" // Professional+: Priority support SLAs
   | "multi_unit" // Enterprise: Multi-unit / multi-branch operations
+  | "customer_group" // Professional+: Multi-unit client groups (consolidated portal cockpit)
   | "custom_integrations"; // Enterprise: Custom integrations and workflows
 
 /**
@@ -61,7 +62,7 @@ export interface PlanEntitlements {
     boolean
   >;
   operations: Record<"priority_support", boolean>;
-  scale: Record<"multi_unit" | "custom_integrations", boolean>;
+  scale: Record<"multi_unit" | "customer_group" | "custom_integrations", boolean>;
 }
 
 export interface EntitlementMetadata {
@@ -202,6 +203,12 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
     name: "Multiunidade",
     description: "Operação de múltiplas unidades ou filiais",
   },
+  customer_group: {
+    category: "scale",
+    name: "Grupos de clientes",
+    description:
+      "Redes/grupos de clientes com visão consolidada no portal do cliente",
+  },
   custom_integrations: {
     category: "scale",
     name: "Integrações Personalizadas",
@@ -222,6 +229,7 @@ export const FEATURE_FLAGS = [
   "custom_templates",
   "priority_support",
   "multi_unit",
+  "customer_group",
   "custom_integrations",
 ] as const satisfies readonly FeatureFlag[];
 
@@ -243,6 +251,7 @@ const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   custom_templates: ["custom_templates"],
   priority_support: ["priority_support"],
   multi_unit: ["multi_unit"],
+  customer_group: ["customer_group"],
   custom_integrations: ["custom_integrations"],
 };
 
@@ -267,6 +276,7 @@ function createEntitlements(enabled: FeatureFlag[]): PlanEntitlements {
     },
     scale: {
       multi_unit: has("multi_unit"),
+      customer_group: has("customer_group"),
       custom_integrations: has("custom_integrations"),
     },
   };
@@ -322,6 +332,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "advanced_audit_trail",
       "custom_templates",
       "priority_support",
+      "customer_group",
     ]),
     support: SUPPORT_POLICIES.PROFESSIONAL,
   },
@@ -347,6 +358,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "custom_templates",
       "priority_support",
       "multi_unit",
+      "customer_group",
       "custom_integrations",
     ]),
     support: SUPPORT_POLICIES.ENTERPRISE,

@@ -6,6 +6,7 @@ import {
   member,
   organization,
   customer,
+  customerGroup,
   calibrationJob,
   calibrationMethod,
   calibrationRequest,
@@ -74,6 +75,9 @@ const PortalListAssetsQuerySchema = ListAssetsQuerySchema.extend({
       const ids = value.split(",").map((id) => Number.parseInt(id, 10));
       return ids.slice(0, 50);
     }),
+  // Group cockpit: narrow the consolidated view to one unit (= branch customer
+  // id). Ignored in single mode (only that customer is ever in scope).
+  unitId: z.coerce.number().int().positive().optional(),
 });
 
 type DueStatus = z.infer<typeof PortalListAssetsQuerySchema>["dueStatus"];
@@ -86,6 +90,8 @@ const CALENDAR_MAX_RANGE_DAYS = 100;
 const PortalCalendarQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Group cockpit: narrow to one unit (= branch customer id). Ignored in single mode.
+  unitId: z.coerce.number().int().positive().optional(),
 });
 
 // Opt-in due-calibration digest email. The frequency lives on the user's
@@ -192,6 +198,11 @@ import {
   applyPortalCertificateReleaseGate,
   loadPortalReleaseStatuses,
 } from "../lib/portal-certificate-release-gate";
+import {
+  applyUnitFilter,
+  resolvePortalAccessibleCustomerIds,
+  resolvePortalCustomerScope,
+} from "../lib/portal-customer-scope";
 
 type PortalReferenceStandardDocument = {
   documentId: number;
@@ -496,8 +507,10 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      // Query member table joined with organization
-      // Filter by user ID, organization type CLIENT, and external portal roles
+      // A CLIENT org the user belongs to is either a branch customer's org or a
+      // customer-group org (the consolidated "rede" view). Left-join both so a
+      // group org — which has no `customer` row — is not dropped, and tag each
+      // with `kind` to drive the switcher label ("unit" vs "group · consolidado").
       const clientOrganizations = await db
         .select({
           id: organization.id,
@@ -507,17 +520,31 @@ export const portalRouter = new Hono<{
           type: organization.type,
           createdAt: organization.createdAt,
           memberRole: member.role,
+          kind: sql<"unit" | "group">`case when ${customerGroup.id} is not null then 'group' else 'unit' end`,
         })
         .from(member)
         .innerJoin(organization, eq(member.organizationId, organization.id))
         .leftJoin(customer, eq(customer.authOrganizationId, organization.id))
+        .leftJoin(
+          customerGroup,
+          eq(customerGroup.authOrganizationId, organization.id),
+        )
         .where(
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
             inArray(member.role, PORTAL_ACCESS_ROLES),
             portalLabScope.labOrganizationId
-              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
+              ? or(
+                  eq(
+                    customer.labOrganizationId,
+                    portalLabScope.labOrganizationId,
+                  ),
+                  eq(
+                    customerGroup.labOrganizationId,
+                    portalLabScope.labOrganizationId,
+                  ),
+                )
               : undefined,
           ),
         );
@@ -544,22 +571,17 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      const [linkedCustomer] = await db
-        .select({
-          id: customer.id,
-          labOrganizationId: customer.labOrganizationId,
-        })
-        .from(customer)
-        .where(eq(customer.authOrganizationId, member.organizationId))
-        .limit(1);
+      // Resolve the active org to a single branch customer or, for a group org,
+      // the whole set of branch customers (consolidated cockpit).
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
 
-      if (
-        !linkedCustomer ||
-        (portalLabScope.labOrganizationId &&
-          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId)
-      ) {
+      if (!scope || scope.customerIds.length === 0) {
         return c.json(emptyOverview());
       }
+      const { customerIds } = scope;
 
       // Compare against the DB clock in UTC. Binding raw JS Date objects inside
       // a sql`` template fails under postgres.js (it can't encode a bare Date),
@@ -568,19 +590,18 @@ export const portalRouter = new Hono<{
       const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
 
       const equipmentWhere = and(
-        eq(asset.customerId, linkedCustomer.id),
+        inArray(asset.customerId, customerIds),
         eq(asset.status, "ACTIVE"),
         isNull(asset.deletedAt),
       );
-      const requestWhere = and(
-        eq(calibrationRequest.customerId, linkedCustomer.id),
-        eq(calibrationRequest.authOrganizationId, member.organizationId),
-      );
+      // Group mode aggregates requests across branches whose authOrg differs
+      // from the active (group) org, so scope by customerId alone.
+      const requestWhere = inArray(calibrationRequest.customerId, customerIds);
       const certificateWhere = and(
-        eq(calibrationJob.customerId, linkedCustomer.id),
+        inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
       );
-      const serviceOrderWhere = eq(serviceOrder.customerId, linkedCustomer.id);
+      const serviceOrderWhere = inArray(serviceOrder.customerId, customerIds);
 
       const [
         equipmentCounts,
@@ -610,8 +631,11 @@ export const portalRouter = new Hono<{
             name: asset.name,
             tag: asset.tag,
             nextCalibrationDate: asset.nextCalibrationDate,
+            customerId: asset.customerId,
+            customerName: customer.name,
           })
           .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
           .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
           .orderBy(asc(asset.nextCalibrationDate))
           .limit(6),
@@ -699,7 +723,7 @@ export const portalRouter = new Hono<{
       const recentCertificates = (
         await applyPortalCertificateReleaseGate(
           recentCertificatesRaw,
-          linkedCustomer.labOrganizationId,
+          scope.labOrganizationId,
         )
       ).map((cert) => ({
         id: cert.id,
@@ -762,35 +786,32 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const { page, limit, query, dueStatus, sortBy, sortDir, ids } =
+        const { page, limit, query, dueStatus, sortBy, sortDir, ids, unitId } =
           c.req.valid("query");
         const offset = (page - 1) * limit;
 
-        const [linkedCustomer] = await db
-          .select({
-            id: customer.id,
-            labOrganizationId: customer.labOrganizationId,
-          })
-          .from(customer)
-          .where(eq(customer.authOrganizationId, member.organizationId))
-          .limit(1);
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: member.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
-        if (!linkedCustomer) {
+        if (!scope) {
           return c.json({
             data: [],
             pagination: { page, limit, total: 0, totalPages: 0 },
           });
         }
 
-        if (
-          portalLabScope.labOrganizationId &&
-          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
-        ) {
-          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+        const customerIds = applyUnitFilter(scope, unitId);
+        if (customerIds.length === 0) {
+          return c.json({
+            data: [],
+            pagination: { page, limit, total: 0, totalPages: 0 },
+          });
         }
 
         const whereCondition = and(
-          eq(asset.customerId, linkedCustomer.id),
+          inArray(asset.customerId, customerIds),
           eq(asset.status, "ACTIVE"),
           isNull(asset.deletedAt),
           ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
@@ -874,7 +895,7 @@ export const portalRouter = new Hono<{
             .where(
               and(
                 inArray(calibrationJob.assetId, assetIds),
-                eq(calibrationJob.customerId, linkedCustomer.id),
+                inArray(calibrationJob.customerId, customerIds),
                 eq(calibrationJob.status, "APPROVED"),
               ),
             )
@@ -935,25 +956,15 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const [linkedCustomer] = await db
-          .select({
-            id: customer.id,
-            labOrganizationId: customer.labOrganizationId,
-          })
-          .from(customer)
-          .where(eq(customer.authOrganizationId, portalMember.organizationId))
-          .limit(1);
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
-        if (!linkedCustomer) {
+        if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
-
-        if (
-          portalLabScope.labOrganizationId &&
-          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
-        ) {
-          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
-        }
+        const { customerIds } = scope;
 
         const [assetDetails] = await db
           .select({
@@ -985,7 +996,7 @@ export const portalRouter = new Hono<{
           .where(
             and(
               eq(asset.id, id),
-              eq(asset.customerId, linkedCustomer.id),
+              inArray(asset.customerId, customerIds),
               isNull(asset.deletedAt),
             ),
           )
@@ -997,7 +1008,7 @@ export const portalRouter = new Hono<{
 
         const assetCertificateWhere = and(
           eq(calibrationJob.assetId, assetDetails.id),
-          eq(calibrationJob.customerId, linkedCustomer.id),
+          inArray(calibrationJob.customerId, customerIds),
           eq(calibrationJob.status, "APPROVED"),
         );
 
@@ -1032,7 +1043,7 @@ export const portalRouter = new Hono<{
         // Phase 2 slice 1: hide certificateUrl for held releases.
         const certificates = await applyPortalCertificateReleaseGate(
           certificatesRaw,
-          linkedCustomer.labOrganizationId,
+          scope.labOrganizationId,
         );
 
         return c.json({
@@ -1074,7 +1085,7 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const { from, to } = c.req.valid("query");
+      const { from, to, unitId } = c.req.valid("query");
       const fromDate = new Date(`${from}T00:00:00.000Z`);
       const toExclusive = new Date(`${to}T00:00:00.000Z`);
       toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
@@ -1091,24 +1102,17 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const [linkedCustomer] = await db
-          .select({
-            id: customer.id,
-            labOrganizationId: customer.labOrganizationId,
-          })
-          .from(customer)
-          .where(eq(customer.authOrganizationId, member.organizationId))
-          .limit(1);
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: member.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
-        if (!linkedCustomer) {
+        if (!scope) {
           return c.json({ data: [] });
         }
-
-        if (
-          portalLabScope.labOrganizationId &&
-          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
-        ) {
-          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+        const customerIds = applyUnitFilter(scope, unitId);
+        if (customerIds.length === 0) {
+          return c.json({ data: [] });
         }
 
         const dues = await db
@@ -1119,12 +1123,15 @@ export const portalRouter = new Hono<{
             assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
             nextCalibrationDate: asset.nextCalibrationDate,
             inLab: assetInLabSql(),
+            customerId: asset.customerId,
+            customerName: customer.name,
           })
           .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
           .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(
             and(
-              eq(asset.customerId, linkedCustomer.id),
+              inArray(asset.customerId, customerIds),
               eq(asset.status, "ACTIVE"),
               isNull(asset.deletedAt),
               gte(asset.nextCalibrationDate, fromDate),
@@ -1240,49 +1247,19 @@ export const portalRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      // Get user's CLIENT organization IDs
-      const userOrgs = await db
-        .select({ orgId: member.organizationId })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(organization.type, "CLIENT"),
-            inArray(member.role, PORTAL_ACCESS_ROLES),
-          ),
-        );
+      // All customers this user can access (direct branch orgs + group orgs).
+      const customerIds = await resolvePortalAccessibleCustomerIds({
+        userId: session.user.id,
+        labScope: portalLabScope.labOrganizationId,
+      });
 
-      if (userOrgs.length === 0) {
+      if (customerIds.length === 0) {
         return c.json({
           data: [],
           pagination: { page, limit, total: 0, totalPages: 0 },
         });
       }
 
-      const orgIds = userOrgs.map((o) => o.orgId);
-
-      // Get customers for these organizations
-      const customers = await db
-        .select({ id: customer.id })
-        .from(customer)
-        .where(
-          and(
-            inArray(customer.authOrganizationId, orgIds),
-            portalLabScope.labOrganizationId
-              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
-              : undefined,
-          ),
-        );
-
-      if (customers.length === 0) {
-        return c.json({
-          data: [],
-          pagination: { page, limit, total: 0, totalPages: 0 },
-        });
-      }
-
-      const customerIds = customers.map((cust) => cust.id);
       const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
 
       const whereCondition = and(
@@ -1383,43 +1360,14 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      // Get user's CLIENT organization IDs
-      const userOrgs = await db
-        .select({ orgId: member.organizationId })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(organization.type, "CLIENT"),
-            inArray(member.role, PORTAL_ACCESS_ROLES),
-          ),
-        );
+      const customerIds = await resolvePortalAccessibleCustomerIds({
+        userId: session.user.id,
+        labScope: portalLabScope.labOrganizationId,
+      });
 
-      if (userOrgs.length === 0) {
+      if (customerIds.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
-
-      const orgIds = userOrgs.map((o) => o.orgId);
-
-      // Get customers for these organizations
-      const customers = await db
-        .select({ id: customer.id })
-        .from(customer)
-        .where(
-          and(
-            inArray(customer.authOrganizationId, orgIds),
-            portalLabScope.labOrganizationId
-              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
-              : undefined,
-          ),
-        );
-
-      if (customers.length === 0) {
-        return c.json({ error: "Certificado nao encontrado" }, 404);
-      }
-
-      const customerIds = customers.map((cust) => cust.id);
 
       // Get certificate with all details
       const [certificate] = await db
@@ -1534,43 +1482,14 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      // Get user's CLIENT organization IDs
-      const userOrgs = await db
-        .select({ orgId: member.organizationId })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(organization.type, "CLIENT"),
-            inArray(member.role, PORTAL_ACCESS_ROLES),
-          ),
-        );
+      const customerIds = await resolvePortalAccessibleCustomerIds({
+        userId: session.user.id,
+        labScope: portalLabScope.labOrganizationId,
+      });
 
-      if (userOrgs.length === 0) {
+      if (customerIds.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
-
-      const orgIds = userOrgs.map((o) => o.orgId);
-
-      // Get customers for these organizations
-      const customers = await db
-        .select({ id: customer.id })
-        .from(customer)
-        .where(
-          and(
-            inArray(customer.authOrganizationId, orgIds),
-            portalLabScope.labOrganizationId
-              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
-              : undefined,
-          ),
-        );
-
-      if (customers.length === 0) {
-        return c.json({ error: "Certificado nao encontrado" }, 404);
-      }
-
-      const customerIds = customers.map((cust) => cust.id);
 
       // Get certificate
       const [certificate] = await db
@@ -1646,41 +1565,12 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const userOrgs = await db
-          .select({ orgId: member.organizationId })
-          .from(member)
-          .innerJoin(organization, eq(member.organizationId, organization.id))
-          .where(
-            and(
-              eq(member.userId, session.user.id),
-              eq(organization.type, "CLIENT"),
-              inArray(member.role, PORTAL_ACCESS_ROLES),
-            ),
-          );
+        const customerIds = await resolvePortalAccessibleCustomerIds({
+          userId: session.user.id,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
-        if (userOrgs.length === 0) {
-          return c.json({ error: "Certificado nao encontrado" }, 404);
-        }
-
-        const customers = await db
-          .select({ id: customer.id })
-          .from(customer)
-          .where(
-            and(
-              inArray(
-                customer.authOrganizationId,
-                userOrgs.map((org) => org.orgId),
-              ),
-              portalLabScope.labOrganizationId
-                ? eq(
-                    customer.labOrganizationId,
-                    portalLabScope.labOrganizationId,
-                  )
-                : undefined,
-            ),
-          );
-
-        if (customers.length === 0) {
+        if (customerIds.length === 0) {
           return c.json({ error: "Certificado nao encontrado" }, 404);
         }
 
@@ -1692,10 +1582,7 @@ export const portalRouter = new Hono<{
           .where(
             and(
               eq(calibrationJob.id, id),
-              inArray(
-                calibrationJob.customerId,
-                customers.map((cust) => cust.id),
-              ),
+              inArray(calibrationJob.customerId, customerIds),
               eq(calibrationJob.status, "APPROVED"),
             ),
           )

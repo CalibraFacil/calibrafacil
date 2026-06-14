@@ -45,6 +45,24 @@ export const CreateCustomerSchema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
   address: AddressSchema.optional(),
+  // Optional parent group (rede). null detaches; omitted leaves unchanged on update.
+  groupId: z.number().int().positive().nullable().optional(),
+});
+
+/**
+ * Schema for creating/updating a customer group (a network/rede of branches).
+ */
+export const CreateCustomerGroupSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+});
+
+export type CreateCustomerGroupInput = z.infer<
+  typeof CreateCustomerGroupSchema
+>;
+
+export const AssignCustomerGroupBranchSchema = z.object({
+  customerId: z.number().int().positive(),
 });
 
 export type CreateCustomerInput = z.infer<typeof CreateCustomerSchema>;

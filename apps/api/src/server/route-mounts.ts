@@ -10,6 +10,7 @@ import { capaRouter } from "../routes/capa";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { certificateTemplatesRouter } from "../routes/certificate-templates";
 import { competencesRouter } from "../routes/competences";
+import { customerGroupsRouter } from "../routes/customer-groups";
 import { customerSuccessRouter } from "../routes/customer-success";
 import { customersRouter } from "../routes/customers";
 import { dashboardRouter } from "../routes/dashboard";
@@ -70,6 +71,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     )
     .get("/hello", (c) => c.json({ message: "Hello!" }))
     .route("/api/customers", customersRouter)
+    .route("/api/customer-groups", customerGroupsRouter)
     .route("/api/invitations", invitationsRouter)
     .route("/api/lab-setup", labSetupRouter)
     .route("/api/portal", portalRouter)
