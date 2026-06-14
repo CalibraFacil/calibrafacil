@@ -61,6 +61,43 @@ function validPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function signaturePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    signed: true,
+    source: "issue",
+    computedAt: "2026-05-03T12:00:00.000Z",
+    verdict: {
+      hashMatch: true,
+      signatureCryptographicallyValid: true,
+      chainValid: true,
+      signerChainsToIcpRoot: true,
+      certNotExpiredAtCheckDate: true,
+      signaturePresent: true,
+      signer: {
+        commonName: "Maria Souza",
+        cpfCnpj: "123.456.789-00",
+        certificateSerial: "0A1B2C",
+      },
+      overall: "VALID",
+      details: [],
+    },
+    ...overrides,
+  };
+}
+
+/** Route the mocked fetch: `/signature` → verdict payload, everything else → verification. */
+function stubFetch(
+  verification: unknown,
+  signature: unknown = signaturePayload(),
+) {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : String(input);
+    return Promise.resolve(
+      jsonResponse(url.endsWith("/signature") ? signature : verification),
+    );
+  });
+}
+
 function renderPage(token = "11111111-1111-1111-1111-111111111111") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -82,8 +119,8 @@ describe("VerificationPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders an authentic signed certificate", async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(validPayload()));
+  it("renders an authentic signed certificate with a VALID integrity verdict", async () => {
+    stubFetch(validPayload());
 
     renderPage();
 
@@ -96,12 +133,40 @@ describe("VerificationPage", () => {
     expect(
       screen.getByText("Assinatura digital com certificado A1 (PAdES/PKCS#7)."),
     ).toBeTruthy();
+    expect(
+      await screen.findByText("Assinatura íntegra e confiável"),
+    ).toBeTruthy();
+  });
+
+  it("flags an altered document in the integrity verdict", async () => {
+    stubFetch(
+      validPayload(),
+      signaturePayload({
+        verdict: {
+          hashMatch: false,
+          signatureCryptographicallyValid: true,
+          chainValid: true,
+          signerChainsToIcpRoot: true,
+          certNotExpiredAtCheckDate: true,
+          signaturePresent: true,
+          signer: {
+            commonName: "Maria Souza",
+            cpfCnpj: null,
+            certificateSerial: null,
+          },
+          overall: "ALTERED",
+          details: ["O conteúdo do PDF não corresponde ao registro."],
+        },
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Documento alterado")).toBeTruthy();
   });
 
   it("shows the cloud-only note for an unsigned certificate", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse(validPayload({ digitalSignature: { signed: false } })),
-    );
+    stubFetch(validPayload({ digitalSignature: { signed: false } }));
 
     renderPage();
 
@@ -111,19 +176,17 @@ describe("VerificationPage", () => {
   });
 
   it("flags a superseded certificate and links to the current version", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse(
-        validPayload({
-          status: "SUPERSEDED",
-          isSuperseded: true,
-          supersededAt: "2026-06-01T12:00:00.000Z",
-          supersededBy: {
-            id: 2,
-            jobId: "CAL-2026-0002",
-            verificationToken: "22222222-2222-2222-2222-222222222222",
-          },
-        }),
-      ),
+    stubFetch(
+      validPayload({
+        status: "SUPERSEDED",
+        isSuperseded: true,
+        supersededAt: "2026-06-01T12:00:00.000Z",
+        supersededBy: {
+          id: 2,
+          jobId: "CAL-2026-0002",
+          verificationToken: "22222222-2222-2222-2222-222222222222",
+        },
+      }),
     );
 
     renderPage();

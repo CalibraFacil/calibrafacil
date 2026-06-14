@@ -20,12 +20,15 @@ import {
   BlueprintOverlay,
   Panel,
   PanelHeader,
+  SignalTile,
   type SignalTone,
 } from "@/components/instrument-panel";
 
 import {
   fetchCertificateDownloadUrl,
+  useSignatureVerdict,
   useVerification,
+  type SignatureVerdictOverall,
   type VerificationData,
 } from "./queries";
 
@@ -166,6 +169,108 @@ function DownloadButton({ token }: { token: string }) {
         </>
       )}
     </Button>
+  );
+}
+
+const OVERALL_TONE: Record<SignatureVerdictOverall, SignalTone> = {
+  VALID: "ok",
+  ALTERED: "critical",
+  UNSIGNED: "neutral",
+  UNVERIFIABLE: "warning",
+};
+
+const OVERALL_LABEL: Record<SignatureVerdictOverall, string> = {
+  VALID: "Assinatura íntegra e confiável",
+  ALTERED: "Documento alterado",
+  UNSIGNED: "Sem assinatura digital",
+  UNVERIFIABLE: "Não foi possível confirmar",
+};
+
+/** A single boolean integrity check rendered as a tonal instrument tile. */
+function VerdictTile({
+  label,
+  state,
+  falseTone = "critical",
+  hint,
+}: {
+  label: string;
+  state: boolean | null;
+  falseTone?: SignalTone;
+  hint?: string;
+}) {
+  const tone: SignalTone =
+    state === null ? "neutral" : state ? "ok" : falseTone;
+  const value = state === null ? "—" : state ? "OK" : "Falha";
+  const icon =
+    state === null ? undefined : state ? CheckmarkCircle02Icon : Alert02Icon;
+  return (
+    <SignalTile
+      label={label}
+      value={value}
+      tone={tone}
+      icon={icon}
+      hint={hint}
+    />
+  );
+}
+
+/** Lazily-fetched cryptographic verdict for a signed certificate. */
+function SignatureIntegrity({ token }: { token: string }) {
+  const query = useSignatureVerdict(token, true);
+
+  if (query.isPending) {
+    return (
+      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner className="size-4" />
+        Verificando integridade da assinatura…
+      </div>
+    );
+  }
+
+  const verdict = query.data?.verdict;
+  if (query.isError || !verdict) {
+    return (
+      <p className="mt-4 text-sm text-muted-foreground">
+        Não foi possível verificar a integridade da assinatura no momento.
+      </p>
+    );
+  }
+
+  const tone = OVERALL_TONE[verdict.overall];
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className={cn("rounded-xl p-3", TILE_RING, TONE_SURFACE[tone])}>
+        <p
+          className={cn("flex items-center gap-2 font-medium", TONE_TEXT[tone])}
+        >
+          <HugeiconsIcon
+            icon={
+              verdict.overall === "VALID" ? CheckmarkCircle02Icon : Alert02Icon
+            }
+            className="size-4 shrink-0"
+          />
+          {OVERALL_LABEL[verdict.overall]}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <VerdictTile label="Conteúdo" state={verdict.hashMatch} />
+        <VerdictTile
+          label="Assinatura"
+          state={verdict.signatureCryptographicallyValid}
+        />
+        <VerdictTile
+          label="Cadeia ICP-Brasil"
+          state={verdict.signerChainsToIcpRoot}
+          falseTone="warning"
+        />
+        <VerdictTile
+          label="Validade"
+          state={verdict.certNotExpiredAtCheckDate}
+          falseTone="warning"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -330,6 +435,7 @@ export function VerificationPage({ token }: { token: string }) {
             <p className="mt-3 text-xs text-muted-foreground">
               Assinatura digital com certificado A1 (PAdES/PKCS#7).
             </p>
+            <SignatureIntegrity token={token} />
           </>
         ) : (
           <div
