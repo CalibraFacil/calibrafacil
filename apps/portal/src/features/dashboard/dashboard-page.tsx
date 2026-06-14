@@ -602,7 +602,7 @@ function RecentCertificates({
                 <StaggerItem key={certificate.id}>
                   <Link
                     to="/certificates/$id"
-                    params={{ id: String(certificate.id) }}
+                    params={{ id: certificate.jobId }}
                     className="group flex min-h-16 items-center gap-3 rounded-xl px-3 py-2.5 transition-[background-color,box-shadow] hover:bg-muted/60 hover:shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
                   >
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">

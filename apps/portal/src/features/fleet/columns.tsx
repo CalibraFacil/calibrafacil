@@ -82,7 +82,7 @@ export const fleetColumns: ColumnDef<FleetAsset>[] = [
         <div className="text-sm">
           <Link
             to="/certificates/$id"
-            params={{ id: String(certificate.id) }}
+            params={{ id: certificate.jobId }}
             className="font-mono tabular-nums hover:underline"
             onClick={(event) => event.stopPropagation()}
           >

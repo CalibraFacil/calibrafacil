@@ -700,7 +700,7 @@ function ServiceOrderDetailPage() {
                   <Link
                     key={link.id}
                     to="/certificates/$id"
-                    params={{ id: String(link.certificateJobId) }}
+                    params={{ id: link.jobId || String(link.certificateJobId) }}
                     className="group flex min-h-12 items-center gap-3 rounded-xl p-2.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] transition-[background-color] hover:bg-muted/50 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
                   >
                     <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg">
