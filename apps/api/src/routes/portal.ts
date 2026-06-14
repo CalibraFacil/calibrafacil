@@ -1508,6 +1508,8 @@ export const portalRouter = new Hono<{
           serviceName: service.name,
           labName: organization.name,
           labLogo: organization.logo,
+          labEmail: organization.email,
+          labPhone: organization.phone,
           // Accreditation seal - frozen method flag with current-method fallback
           serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
           labAccreditationActive: organization.accreditationActive,
