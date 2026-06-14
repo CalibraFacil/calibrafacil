@@ -91,6 +91,7 @@ import { Route as DashboardFinanceBillingReadinessRouteImport } from './routes/d
 import { Route as DashboardFinanceAutomationRouteImport } from './routes/dashboard/finance/automation'
 import { Route as DashboardFinanceAnalyticsRouteImport } from './routes/dashboard/finance/analytics'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
+import { Route as DashboardClientsGroupsRouteImport } from './routes/dashboard/clients/groups'
 import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/new'
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
 import { Route as DashboardPersonnelIdRouteRouteImport } from './routes/dashboard/personnel/$id/route'
@@ -574,6 +575,11 @@ const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardClientsRouteRoute,
 } as any)
+const DashboardClientsGroupsRoute = DashboardClientsGroupsRouteImport.update({
+  id: '/groups',
+  path: '/groups',
+  getParentRoute: () => DashboardClientsRouteRoute,
+} as any)
 const DashboardCapaNewRoute = DashboardCapaNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -824,6 +830,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
+  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -928,6 +935,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInIndexRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
+  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -1051,6 +1059,7 @@ export interface FileRoutesById {
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
+  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -1175,6 +1184,7 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
+    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -1279,6 +1289,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
+    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -1401,6 +1412,7 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
+    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -2077,6 +2089,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClientsNewRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
     }
+    '/dashboard/clients/groups': {
+      id: '/dashboard/clients/groups'
+      path: '/groups'
+      fullPath: '/dashboard/clients/groups'
+      preLoaderRoute: typeof DashboardClientsGroupsRouteImport
+      parentRoute: typeof DashboardClientsRouteRoute
+    }
     '/dashboard/capa/new': {
       id: '/dashboard/capa/new'
       path: '/new'
@@ -2420,12 +2439,14 @@ const DashboardClientsIdRouteRouteWithChildren =
 
 interface DashboardClientsRouteRouteChildren {
   DashboardClientsIdRouteRoute: typeof DashboardClientsIdRouteRouteWithChildren
+  DashboardClientsGroupsRoute: typeof DashboardClientsGroupsRoute
   DashboardClientsNewRoute: typeof DashboardClientsNewRoute
   DashboardClientsIndexRoute: typeof DashboardClientsIndexRoute
 }
 
 const DashboardClientsRouteRouteChildren: DashboardClientsRouteRouteChildren = {
   DashboardClientsIdRouteRoute: DashboardClientsIdRouteRouteWithChildren,
+  DashboardClientsGroupsRoute: DashboardClientsGroupsRoute,
   DashboardClientsNewRoute: DashboardClientsNewRoute,
   DashboardClientsIndexRoute: DashboardClientsIndexRoute,
 }

@@ -80,6 +80,18 @@ export const dashboardPrimaryNavItems = [
     title: 'Clientes',
     url: '/dashboard/clients',
     icon: 'customers',
+    items: [
+      {
+        title: 'Todos os clientes',
+        url: '/dashboard/clients',
+        icon: 'customers',
+      },
+      {
+        title: 'Grupos',
+        url: '/dashboard/clients/groups',
+        icon: 'building',
+      },
+    ],
   },
   {
     title: 'Ativos',
