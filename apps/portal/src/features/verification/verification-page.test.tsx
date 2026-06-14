@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,16 +85,27 @@ function signaturePayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Route the mocked fetch: `/signature` → verdict payload, everything else → verification. */
+function matchPayload(match = true) {
+  return {
+    match,
+    expectedSha256: "abc123",
+    uploadedSha256: match ? "abc123" : "def456",
+    uploadedVerdict: signaturePayload().verdict,
+  };
+}
+
+/** Route the mocked fetch by URL suffix: `/signature`, `/match`, else verification. */
 function stubFetch(
   verification: unknown,
   signature: unknown = signaturePayload(),
+  match: unknown = matchPayload(),
 ) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : String(input);
-    return Promise.resolve(
-      jsonResponse(url.endsWith("/signature") ? signature : verification),
-    );
+    if (url.endsWith("/signature"))
+      return Promise.resolve(jsonResponse(signature));
+    if (url.endsWith("/match")) return Promise.resolve(jsonResponse(match));
+    return Promise.resolve(jsonResponse(verification));
   });
 }
 
@@ -195,6 +206,24 @@ describe("VerificationPage", () => {
       await screen.findByRole("heading", { name: "Certificado substituído" }),
     ).toBeTruthy();
     expect(screen.getByText("Ver versão vigente: CAL-2026-0002")).toBeTruthy();
+  });
+
+  it("confirms an uploaded file that matches the record", async () => {
+    stubFetch(validPayload());
+
+    const { container } = renderPage();
+    await screen.findByRole("heading", { name: "Certificado autêntico" });
+
+    const input = container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("file input not found");
+    }
+    const file = new File([new Uint8Array([1, 2, 3])], "cert.pdf", {
+      type: "application/pdf",
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByText("Confere")).toBeTruthy();
   });
 
   it("renders a clear not-found state for an unknown token", async () => {

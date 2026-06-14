@@ -156,6 +156,38 @@ export function useSignatureVerdict(token: string, enabled: boolean) {
   });
 }
 
+// — Upload-to-verify (Phase 2) — `POST /api/verify/:token/match` ——————————————
+
+const matchResultSchema = z.object({
+  match: z.boolean(),
+  expectedSha256: z.string(),
+  uploadedSha256: z.string(),
+  uploadedVerdict: signatureVerdictSchema,
+});
+
+export type CertificateMatchResult = z.infer<typeof matchResultSchema>;
+
+/** Upload a PDF and check it byte-for-byte against this certificate's record. */
+export async function matchCertificateUpload(
+  token: string,
+  file: File,
+): Promise<CertificateMatchResult> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(`${getApiBaseUrl()}/api/verify/${token}/match`, {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    throw new Error("Não foi possível conferir o arquivo.");
+  }
+  const parsed = matchResultSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error("Resposta de conferência inválida.");
+  }
+  return parsed.data;
+}
+
 /** Resolves the public download URL (presigned R2) for the signed certificate PDF. */
 export async function fetchCertificateDownloadUrl(
   token: string,

@@ -1,11 +1,13 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Alert02Icon,
   CheckmarkCircle02Icon,
   Download04Icon,
+  File01Icon,
   SecurityCheckIcon,
 } from "@hugeicons/core-free-icons";
 
@@ -26,6 +28,7 @@ import {
 
 import {
   fetchCertificateDownloadUrl,
+  matchCertificateUpload,
   useSignatureVerdict,
   useVerification,
   type SignatureVerdictOverall,
@@ -274,6 +277,79 @@ function SignatureIntegrity({ token }: { token: string }) {
   );
 }
 
+/** Upload-to-verify: confirm a held PDF is byte-identical to the issued record. */
+function UploadMatch({ token }: { token: string }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const mutation = useMutation({
+    mutationFn: (file: File) => matchCertificateUpload(token, file),
+  });
+
+  const handlePick = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) mutation.mutate(file);
+  };
+
+  const result = mutation.data;
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Anti-fraude"
+        title="Confira o seu arquivo"
+        description="Envie o PDF que você recebeu para conferir se é idêntico ao documento emitido."
+      />
+      <div className="mt-4">
+        <Button
+          onClick={() => inputRef.current?.click()}
+          disabled={mutation.isPending}
+          variant="outline"
+          className={cn("w-full", ACTION_BUTTON_CLASS)}
+        >
+          {mutation.isPending ? (
+            <>
+              <Spinner className="mr-2 size-4" />
+              Conferindo...
+            </>
+          ) : (
+            <>
+              <HugeiconsIcon icon={File01Icon} className="mr-2 size-4" />
+              Enviar PDF para conferência
+            </>
+          )}
+        </Button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handlePick}
+        />
+      </div>
+      {mutation.isError ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Não foi possível conferir o arquivo. Tente novamente.
+        </p>
+      ) : null}
+      {result ? (
+        <div className="mt-3">
+          <SignalTile
+            label="Resultado"
+            value={result.match ? "Confere" : "Difere"}
+            tone={result.match ? "ok" : "critical"}
+            icon={result.match ? CheckmarkCircle02Icon : Alert02Icon}
+            hint={
+              result.match
+                ? "Idêntico ao documento emitido"
+                : "Este arquivo não corresponde ao registro"
+            }
+          />
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
 export function VerificationPage({ token }: { token: string }) {
   const query = useVerification(token);
 
@@ -458,6 +534,8 @@ export function VerificationPage({ token }: { token: string }) {
           Documento ainda não disponível para download.
         </p>
       )}
+
+      {data.hasDocument ? <UploadMatch token={token} /> : null}
     </PageShell>
   );
 }
