@@ -1,17 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Add01Icon,
-  ArrowRight01Icon,
-  Building03Icon,
-} from '@hugeicons/core-free-icons'
+import { Building02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
-import { Badge } from '@/components/ui/badge'
 import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import {
@@ -24,27 +19,41 @@ import {
 } from '@/components/ui/dialog'
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { DataTable } from '@/components/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
+import {
+  type CustomerGroupRow,
+  customerGroupsColumns,
+} from '@/features/customer-groups/components/columns'
 import {
   useCreateCustomerGroupMutation,
   useCustomerGroupsList,
 } from './queries'
 
 export function CustomerGroupsPage() {
+  const navigate = useNavigate()
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
   const [createOpen, setCreateOpen] = useState(false)
 
-  const groupsQuery = useCustomerGroupsList(
+  const { data, isLoading, error } = useCustomerGroupsList(
     activeOrganizationId,
     !isContextSwitching,
   )
-  const groups = groupsQuery.data?.data ?? []
+  const groups = data?.data ?? []
+
+  const handleRowClick = (group: CustomerGroupRow) => {
+    navigate({
+      to: '/dashboard/clients/groups/$groupId/overview',
+      params: { groupId: String(group.id) },
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -65,73 +74,50 @@ export function CustomerGroupsPage() {
           className={`${ACTION_BUTTON_CLASS} shrink-0`}
           onClick={() => setCreateOpen(true)}
         >
-          <HugeiconsIcon
-            icon={Add01Icon}
-            strokeWidth={2}
-            className="mr-2 size-4"
-          />
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
           Novo grupo
         </Button>
       </div>
 
-      {groupsQuery.isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="size-7" />
-        </div>
-      ) : groups.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <HugeiconsIcon icon={Building03Icon} />
-            </EmptyMedia>
-            <EmptyTitle>Nenhum grupo cadastrado</EmptyTitle>
-            <EmptyDescription>
-              Crie um grupo para reunir as unidades de uma rede de clientes e dar
-              ao gestor uma visão consolidada no portal.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <Panel className="p-2">
-          <ul className="divide-y divide-border/70">
-            {groups.map((group) => (
-              <li key={group.id}>
-                <Link
-                  to="/dashboard/clients/groups/$groupId/overview"
-                  params={{ groupId: String(group.id) }}
-                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-foreground/10"
-                    >
-                      <HugeiconsIcon icon={Building03Icon} className="size-4" />
-                    </span>
-                    <span className="min-w-0 truncate text-sm font-medium">
-                      {group.name}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <Badge
-                      variant="secondary"
-                      className="font-mono tabular-nums"
-                    >
-                      {group.branchCount}{' '}
-                      {group.branchCount === 1 ? 'unidade' : 'unidades'}
-                    </Badge>
-                    <HugeiconsIcon
-                      icon={ArrowRight01Icon}
-                      className="size-4 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
+      <Panel className="p-4 sm:p-5">
+        {error ? (
+          <div className="text-destructive py-8 text-center">
+            Erro ao carregar grupos. Tente novamente.
+          </div>
+        ) : !isLoading && groups.length === 0 ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <HugeiconsIcon icon={Building02Icon} />
+              </EmptyMedia>
+              <EmptyTitle>Nenhum grupo cadastrado</EmptyTitle>
+              <EmptyDescription>
+                Crie um grupo para reunir as unidades de uma rede de clientes e
+                dar ao gestor uma visão consolidada no portal.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={() => setCreateOpen(true)}>
+                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                Novo grupo
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : isLoading && !data ? (
+          <DataTable
+            columns={customerGroupsColumns}
+            data={[]}
+            isLoading={true}
+          />
+        ) : (
+          <DataTable
+            columns={customerGroupsColumns}
+            data={groups}
+            isLoading={isLoading}
+            onRowClick={handleRowClick}
+          />
+        )}
+      </Panel>
 
       <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
