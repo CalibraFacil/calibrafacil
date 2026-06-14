@@ -41,8 +41,10 @@ import {
 } from "@/components/instrument-panel";
 import {
   useOverview,
+  useUnitSummary,
   type OverviewCertificate,
   type PortalOverview,
+  type UnitSummaryItem,
 } from "./queries";
 
 /** Tonal surface + icon classes, matching instrument-panel's SignalTone maps. */
@@ -166,6 +168,7 @@ export function DashboardPage() {
       ) : (
         <>
           <ComplianceVitals equipment={data.equipment} />
+          <UnitBreakdown />
           <AttentionPanel data={data} />
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.8fr)]">
             <RecentCertificates certificates={data.certificates} />
@@ -176,6 +179,73 @@ export function DashboardPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Per-unit breakdown — only meaningful for a consolidated (group) cockpit     */
+/* -------------------------------------------------------------------------- */
+
+function UnitBreakdown() {
+  const { data } = useUnitSummary();
+  const units = data?.units ?? [];
+  // Single-customer portals have nothing to break down.
+  if (units.length <= 1) return null;
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Rede"
+        title="Por unidade"
+        description="Situação de calibração de cada unidade do grupo, da mais crítica para a menos."
+      />
+      <div className="mt-4 overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+        {units.map((unit, index) => (
+          <UnitRow key={unit.id} unit={unit} divider={index > 0} />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function UnitRow({
+  unit,
+  divider,
+}: {
+  unit: UnitSummaryItem;
+  divider: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-3 px-4 py-3",
+        divider && "border-border/60 border-t",
+      )}
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{unit.name}</p>
+        <p className="text-muted-foreground text-xs tabular-nums">
+          {pluralize(unit.total, "instrumento", "instrumentos")}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {unit.overdue > 0 ? (
+          <StatusPill tone="critical" size="sm">
+            {unit.overdue} vencidas
+          </StatusPill>
+        ) : null}
+        {unit.dueSoon > 0 ? (
+          <StatusPill tone="warning" size="sm">
+            {unit.dueSoon} a vencer
+          </StatusPill>
+        ) : null}
+        {unit.overdue === 0 && unit.dueSoon === 0 ? (
+          <StatusPill tone="ok" size="sm">
+            Em dia
+          </StatusPill>
+        ) : null}
+      </div>
     </div>
   );
 }
