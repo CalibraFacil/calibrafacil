@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
 import {
@@ -7,6 +8,7 @@ import {
   asset,
   service,
   organization,
+  issuedCertificateSnapshot,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -37,6 +39,8 @@ const liveVerdictCache = new Map<
   string,
   { verdict: VerifyPdfResult; expiresAt: number }
 >();
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 /**
  * Public Verification Router - NO AUTH REQUIRED
@@ -339,6 +343,80 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       };
       return c.json({ signed: true, source: null, computedAt: null, verdict });
     }
+  })
+
+  // =========================================================================
+  // POST /:token/match - Upload-to-verify (public, Phase 2)
+  //
+  // Hash an uploaded PDF and compare it to the SHA-256 recorded for this
+  // certificate (tamper detection), and report whether the uploaded file is
+  // itself a valid ICP-Brasil signature. Token-scoped — no enumeration.
+  // =========================================================================
+  .post("/:token/match", async (c) => {
+    const token = c.req.param("token");
+    if (!UUID_REGEX.test(token)) {
+      return c.json({ error: "Token invalido" }, 400);
+    }
+
+    const [job] = await db
+      .select({
+        pdfSha256: issuedCertificateSnapshot.pdfSha256,
+        signatureMetadata: calibrationJob.signatureMetadata,
+      })
+      .from(calibrationJob)
+      .leftJoin(
+        issuedCertificateSnapshot,
+        eq(issuedCertificateSnapshot.jobId, calibrationJob.id),
+      )
+      .where(
+        and(
+          eq(calibrationJob.verificationToken, token),
+          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        ),
+      )
+      .limit(1);
+
+    if (!job) {
+      return c.json({ error: "Certificado nao encontrado" }, 404);
+    }
+
+    const expectedSha256 =
+      job.pdfSha256 ?? job.signatureMetadata?.pdfHash ?? null;
+    if (!expectedSha256) {
+      return c.json({ error: "Certificado sem registro de integridade" }, 409);
+    }
+
+    let file: FormDataEntryValue | null;
+    try {
+      file = (await c.req.formData()).get("file");
+    } catch {
+      return c.json({ error: "Envio invalido" }, 400);
+    }
+    if (!(file instanceof File)) {
+      return c.json({ error: "Arquivo nao enviado" }, 400);
+    }
+    if (file.size === 0 || file.size > MAX_UPLOAD_BYTES) {
+      return c.json(
+        {
+          error: `Arquivo invalido ou maior que ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB.`,
+        },
+        400,
+      );
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const uploadedSha256 = createHash("sha256").update(bytes).digest("hex");
+    const match = uploadedSha256.toLowerCase() === expectedSha256.toLowerCase();
+
+    // Also report whether the uploaded file is itself a valid ICP-Brasil
+    // signature (catches "different but doctored" copies). verifyPdf never throws.
+    const uploadedVerdict = await verifyPdf(bytes, {
+      expectedSha256,
+      trustAnchors: getIcpBrasilTrustAnchors(),
+      checkDate: new Date(),
+    });
+
+    return c.json({ match, expectedSha256, uploadedSha256, uploadedVerdict });
   })
 
   // =========================================================================
