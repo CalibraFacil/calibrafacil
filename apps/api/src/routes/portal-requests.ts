@@ -439,4 +439,223 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         201,
       );
     },
+  )
+  // =========================================================================
+  // POST /batch - Consolidated (cross-unit) recall
+  // =========================================================================
+  // Accepts a selection that may span several branch customers and/or lab
+  // units (the group cockpit) and atomically splits it into one calibration
+  // request per (branch customer, lab unit) — the existing single-request
+  // invariant. Each request carries the BRANCH's authOrganizationId, so the
+  // lab side handles them exactly like a per-unit request. All-or-nothing.
+  // =========================================================================
+  .post(
+    "/batch",
+    ...requirePortalProtected,
+    requirePermission({ request: ["create"] }),
+    zValidator("json", CreateCalibrationRequestSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
+      const input = c.req.valid("json");
+      const ipAddress =
+        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
+
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope,
+      });
+      if (!scope || scope.customerIds.length === 0) {
+        return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
+      }
+
+      const assets = await db
+        .select({
+          id: asset.id,
+          unitId: asset.unitId,
+          customerId: asset.customerId,
+          authOrganizationId: customer.authOrganizationId,
+          labOrganizationId: customer.labOrganizationId,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            inArray(asset.id, input.assetIds),
+            inArray(asset.customerId, scope.customerIds),
+            eq(asset.status, "ACTIVE"),
+            isNull(asset.deletedAt),
+          ),
+        );
+
+      if (assets.length !== input.assetIds.length) {
+        return c.json(
+          {
+            error: "Um ou mais ativos selecionados nao pertencem a este acesso",
+          },
+          400,
+        );
+      }
+
+      // Group by (branch customer, lab unit).
+      type RequestGroup = {
+        customerId: number;
+        unitId: number;
+        authOrganizationId: string;
+        labOrganizationId: string;
+        assetIds: number[];
+      };
+      const groups = new Map<string, RequestGroup>();
+      for (const item of assets) {
+        const key = `${item.customerId}:${item.unitId}`;
+        const existing = groups.get(key);
+        if (existing) {
+          existing.assetIds.push(item.id);
+        } else {
+          groups.set(key, {
+            customerId: item.customerId,
+            unitId: item.unitId,
+            authOrganizationId: item.authOrganizationId,
+            labOrganizationId: item.labOrganizationId,
+            assetIds: [item.id],
+          });
+        }
+      }
+
+      const requestedDueDate = input.requestedDueDate
+        ? new Date(input.requestedDueDate)
+        : null;
+      const isCarrier = input.deliveryMethod === "carrier";
+      const invoiceRemittanceIssuedAt =
+        isCarrier && input.invoiceRemittanceIssuedAt
+          ? new Date(input.invoiceRemittanceIssuedAt)
+          : null;
+
+      const created = await db.transaction(async (tx) => {
+        // Lock every (customer, asset) pair, globally ordered for deadlock safety.
+        const lockPairs = assets
+          .map((item) => ({ customerId: item.customerId, assetId: item.id }))
+          .sort(
+            (left, right) =>
+              left.customerId - right.customerId || left.assetId - right.assetId,
+          );
+        for (const pair of lockPairs) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(${pair.customerId}, ${pair.assetId})`,
+          );
+        }
+
+        // All-or-nothing dedup across the whole batch.
+        const existingItems = await tx
+          .select({ assetId: calibrationRequestItem.assetId })
+          .from(calibrationRequestItem)
+          .innerJoin(
+            calibrationRequest,
+            eq(calibrationRequestItem.requestId, calibrationRequest.id),
+          )
+          .where(
+            and(
+              inArray(calibrationRequestItem.assetId, input.assetIds),
+              inArray(calibrationRequest.customerId, scope.customerIds),
+              inArray(calibrationRequest.status, [
+                "PENDING",
+                "UNDER_REVIEW",
+                "APPROVED",
+              ]),
+            ),
+          );
+
+        if (existingItems.length > 0) {
+          return null;
+        }
+
+        const results: Array<{
+          id: number;
+          status: string;
+          customerId: number;
+          unitId: number;
+          itemCount: number;
+        }> = [];
+
+        for (const group of groups.values()) {
+          const [createdRequest] = await tx
+            .insert(calibrationRequest)
+            .values({
+              organizationId: group.labOrganizationId,
+              unitId: group.unitId,
+              customerId: group.customerId,
+              authOrganizationId: group.authOrganizationId,
+              observations: input.observations || null,
+              requestedDueDate,
+              deliveryMethod: input.deliveryMethod,
+              invoiceRemittanceNumber: isCarrier
+                ? input.invoiceRemittanceNumber || null
+                : null,
+              invoiceRemittanceKey: isCarrier
+                ? input.invoiceRemittanceKey || null
+                : null,
+              invoiceRemittanceIssuedAt,
+              carrierName: isCarrier ? input.carrierName || null : null,
+              submittedBy: session.user.id,
+            })
+            .returning();
+
+          if (!createdRequest) {
+            throw new Error("Erro ao criar solicitacao");
+          }
+
+          await tx.insert(calibrationRequestItem).values(
+            group.assetIds.map((assetId) => ({
+              requestId: createdRequest.id,
+              assetId,
+            })),
+          );
+
+          await tx.insert(calibrationRequestAuditLog).values({
+            requestId: createdRequest.id,
+            action: "create",
+            changes: {
+              initial: {
+                assetIds: group.assetIds,
+                observations: input.observations || null,
+                requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              },
+            },
+            performedBy: session.user.id,
+            ipAddress,
+          });
+
+          results.push({
+            id: createdRequest.id,
+            status: createdRequest.status,
+            customerId: group.customerId,
+            unitId: group.unitId,
+            itemCount: group.assetIds.length,
+          });
+        }
+
+        return results;
+      });
+
+      if (!created) {
+        return c.json(
+          { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
+          400,
+        );
+      }
+
+      for (const result of created) {
+        try {
+          await notifyCalibrationRequestSubmitted(result.id);
+        } catch (error) {
+          console.error(
+            "[Portal Requests] Failed to send batch submission notification:",
+            error,
+          );
+        }
+      }
+
+      return c.json({ created }, 201);
+    },
   );

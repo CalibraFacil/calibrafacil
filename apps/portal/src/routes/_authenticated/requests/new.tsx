@@ -79,15 +79,27 @@ function getResponseErrorMessage(result: unknown) {
   return typeof error === "string" ? error : null;
 }
 
-function getCreatedRequestId(result: unknown) {
+// The batch endpoint splits a (possibly cross-unit) selection into one request
+// per unit and returns `{ created: [{ id, ... }] }`.
+function getCreatedRequestIds(result: unknown): Array<number> {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new Error("Resposta inválida ao criar solicitação");
   }
-  const id = Object.fromEntries(Object.entries(result)).id;
-  if (typeof id !== "number") {
+  const created = Object.fromEntries(Object.entries(result)).created;
+  if (!Array.isArray(created) || created.length === 0) {
     throw new Error("Resposta inválida ao criar solicitação");
   }
-  return id;
+  const ids = created.map((item) => {
+    const id =
+      item && typeof item === "object" && !Array.isArray(item)
+        ? Object.fromEntries(Object.entries(item)).id
+        : undefined;
+    return typeof id === "number" ? id : null;
+  });
+  if (ids.some((id) => id === null)) {
+    throw new Error("Resposta inválida ao criar solicitação");
+  }
+  return ids.filter((id): id is number => id !== null);
 }
 
 function NewRequestPage() {
@@ -173,30 +185,33 @@ function NewRequestPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(`${getApiBaseUrl()}/api/portal/requests`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          assetIds: selectedAssets.map((asset) => asset.id),
-          observations: observations || undefined,
-          requestedDueDate: requestedDueDate
-            ? new Date(`${requestedDueDate}T12:00:00`).toISOString()
-            : undefined,
-          deliveryMethod,
-          invoiceRemittanceNumber: isCarrier
-            ? nfNumber || undefined
-            : undefined,
-          invoiceRemittanceKey: isCarrier
-            ? nfKeyDigits || undefined
-            : undefined,
-          carrierName: isCarrier ? carrier || undefined : undefined,
-          invoiceRemittanceIssuedAt:
-            isCarrier && nfIssuedAt
-              ? new Date(`${nfIssuedAt}T12:00:00`).toISOString()
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/requests/batch`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assetIds: selectedAssets.map((asset) => asset.id),
+            observations: observations || undefined,
+            requestedDueDate: requestedDueDate
+              ? new Date(`${requestedDueDate}T12:00:00`).toISOString()
               : undefined,
-        }),
-      });
+            deliveryMethod,
+            invoiceRemittanceNumber: isCarrier
+              ? nfNumber || undefined
+              : undefined,
+            invoiceRemittanceKey: isCarrier
+              ? nfKeyDigits || undefined
+              : undefined,
+            carrierName: isCarrier ? carrier || undefined : undefined,
+            invoiceRemittanceIssuedAt:
+              isCarrier && nfIssuedAt
+                ? new Date(`${nfIssuedAt}T12:00:00`).toISOString()
+                : undefined,
+          }),
+        },
+      );
 
       const result: unknown = await response.json();
       if (!response.ok) {
@@ -204,13 +219,23 @@ function NewRequestPage() {
           getResponseErrorMessage(result) || "Erro ao criar solicitação",
         );
       }
-      return { id: getCreatedRequestId(result) };
+      return { ids: getCreatedRequestIds(result) };
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["portal-requests"] });
       await queryClient.invalidateQueries({ queryKey: ["portal-overview"] });
-      toast.success("Solicitação enviada com sucesso");
-      navigate({ to: "/requests/$id", params: { id: String(result.id) } });
+      // A cross-unit selection becomes one request per unit. Land on the detail
+      // page for a single request; otherwise go to the list.
+      if (result.ids.length === 1) {
+        toast.success("Solicitação enviada com sucesso");
+        navigate({
+          to: "/requests/$id",
+          params: { id: String(result.ids[0]) },
+        });
+      } else {
+        toast.success(`${result.ids.length} solicitações enviadas`);
+        navigate({ to: "/requests" });
+      }
     },
     onError: (mutationError) => {
       toast.error(mutationError.message);
