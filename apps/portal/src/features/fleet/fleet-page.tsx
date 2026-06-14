@@ -42,7 +42,7 @@ import { formatDateTime } from "@/lib/format";
 import { useOverview } from "@/features/dashboard/queries";
 import { type CalibrationFilter } from "@/lib/calibration-status";
 import { fleetColumns } from "./columns";
-import { useFleetAssets } from "./queries";
+import { useFleetAssets, usePortalUnits } from "./queries";
 import { isFleetSortBy } from "./types";
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
@@ -118,7 +118,13 @@ export function FleetPage({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORT);
+  const [unitId, setUnitId] = useState<number | null>(null);
   const limit = 20;
+
+  const unitsQuery = usePortalUnits();
+  const units = unitsQuery.data?.units ?? [];
+  // The unit filter only makes sense for a consolidated (group) view.
+  const showUnitFilter = units.length > 1;
 
   const overviewQuery = useOverview();
   const equipment = overviewQuery.data?.equipment;
@@ -141,9 +147,10 @@ export function FleetPage({
     dueStatus,
     sortBy,
     sortDir,
+    unitId: unitId ?? undefined,
   });
 
-  const hasFilters = Boolean(search || dueStatus);
+  const hasFilters = Boolean(search || dueStatus || unitId);
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
     setPage(1);
@@ -163,7 +170,13 @@ export function FleetPage({
   function clearFilters() {
     setSearch("");
     setPage(1);
+    setUnitId(null);
     onDueStatusChange(undefined);
+  }
+
+  function selectUnit(value: number | null) {
+    setPage(1);
+    setUnitId(value);
   }
 
   return (
@@ -258,6 +271,25 @@ export function FleetPage({
               className="pl-9"
             />
           </div>
+          {showUnitFilter ? (
+            <select
+              aria-label="Filtrar por unidade"
+              value={unitId ?? ""}
+              onChange={(event) =>
+                selectUnit(
+                  event.target.value ? Number(event.target.value) : null,
+                )
+              }
+              className="border-border bg-background h-9 rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <option value="">Todas as unidades</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {hasFilters ? (
             <Button
               variant="ghost"

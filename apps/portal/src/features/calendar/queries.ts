@@ -18,8 +18,10 @@ type CalendarResponse = {
 async function fetchCalendar(
   from: string,
   to: string,
+  unitId?: number,
 ): Promise<CalendarResponse> {
   const params = new URLSearchParams({ from, to });
+  if (unitId) params.set("unitId", String(unitId));
   const response = await fetch(
     `${getApiBaseUrl()}/api/portal/calendar?${params.toString()}`,
     { credentials: "include" },
@@ -31,10 +33,10 @@ async function fetchCalendar(
 }
 
 /** Instruments coming due inside [from, to] (inclusive, YYYY-MM-DD). */
-export function useCalendarDues(from: string, to: string) {
+export function useCalendarDues(from: string, to: string, unitId?: number) {
   return useQuery({
-    queryKey: ["portal-calendar", from, to],
-    queryFn: () => fetchCalendar(from, to),
+    queryKey: ["portal-calendar", from, to, unitId ?? null],
+    queryFn: () => fetchCalendar(from, to, unitId),
     staleTime: 60_000,
   });
 }

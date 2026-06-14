@@ -38,6 +38,7 @@ import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatDateLong } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useCalendarDues, type CalendarDueAsset } from "./queries";
+import { usePortalUnits } from "@/features/fleet/queries";
 import { dayKey, groupDuesByDay, parseMonthParam, toMonthParam } from "./lib";
 
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -73,6 +74,11 @@ export function CalendarPage({
   onMonthChange: (value?: string) => void;
 }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [unitId, setUnitId] = useState<number | null>(null);
+
+  const unitsQuery = usePortalUnits();
+  const units = unitsQuery.data?.units ?? [];
+  const showUnitFilter = units.length > 1;
 
   const monthStart = parseMonthParam(month) ?? startOfMonth(new Date());
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 });
@@ -83,7 +89,11 @@ export function CalendarPage({
   // between the stored timestamp and the local bucket never drop an entry.
   const from = format(addDays(gridStart, -1), "yyyy-MM-dd");
   const to = format(addDays(gridEnd, 1), "yyyy-MM-dd");
-  const { data, isLoading, error } = useCalendarDues(from, to);
+  const { data, isLoading, error } = useCalendarDues(
+    from,
+    to,
+    unitId ?? undefined,
+  );
 
   const duesByDay = groupDuesByDay(data?.data ?? []);
   const monthDues = (data?.data ?? []).filter((due) =>
@@ -157,6 +167,29 @@ export function CalendarPage({
           />
         </StaggerItem>
       </StaggerGroup>
+
+      {showUnitFilter ? (
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-sm">Unidade:</span>
+          <select
+            aria-label="Filtrar por unidade"
+            value={unitId ?? ""}
+            onChange={(event) =>
+              setUnitId(
+                event.target.value ? Number(event.target.value) : null,
+              )
+            }
+            className="border-border bg-background h-9 rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <option value="">Todas as unidades</option>
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Panel className="p-5">
