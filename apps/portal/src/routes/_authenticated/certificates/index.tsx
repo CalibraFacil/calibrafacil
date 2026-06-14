@@ -284,7 +284,7 @@ function CertificatesPage() {
   const handleRowClick = (certificate: Certificate) => {
     navigate({
       to: "/certificates/$id",
-      params: { id: String(certificate.id) },
+      params: { id: certificate.jobId },
     });
   };
 

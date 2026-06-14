@@ -372,7 +372,7 @@ function AssetDetailPage() {
                     title: (
                       <Link
                         to="/certificates/$id"
-                        params={{ id: String(certificate.id) }}
+                        params={{ id: certificate.jobId }}
                         className="font-mono tabular-nums hover:underline"
                       >
                         {certificate.jobId}

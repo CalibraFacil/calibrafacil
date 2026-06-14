@@ -205,7 +205,7 @@ export function CommandMenu({
                       run(() =>
                         navigate({
                           to: "/certificates/$id",
-                          params: { id: String(certificate.id) },
+                          params: { id: certificate.jobId },
                         }),
                       )
                     }

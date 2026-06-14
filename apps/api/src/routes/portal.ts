@@ -198,11 +198,26 @@ import {
   applyPortalCertificateReleaseGate,
   loadPortalReleaseStatuses,
 } from "../lib/portal-certificate-release-gate";
+import { buildPortalCertificateVerdict } from "../lib/portal-certificate-verdict";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
   resolvePortalCustomerScope,
 } from "../lib/portal-customer-scope";
+
+/**
+ * Resolve a `/certificates/:id` URL param to a Drizzle predicate. Customers see
+ * the human-readable certificate number (`jobId`, e.g. `CAL-2026-9001`) in the
+ * URL rather than the sequential database id, but older links carrying the
+ * numeric id keep resolving. `jobId` is unique within a lab and every portal
+ * query is already scoped to the customer's lab, so there is no cross-lab clash.
+ */
+function matchPortalCertificateParam(rawParam: string) {
+  const numericId = Number(rawParam);
+  return Number.isInteger(numericId) && numericId > 0
+    ? eq(calibrationJob.id, numericId)
+    : eq(calibrationJob.jobId, rawParam);
+}
 
 type PortalReferenceStandardDocument = {
   documentId: number;
@@ -1458,11 +1473,7 @@ export const portalRouter = new Hono<{
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
-    const id = parseInt(c.req.param("id"));
-
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+    const certificateParam = c.req.param("id");
 
     try {
       const customerIds = await resolvePortalAccessibleCustomerIds({
@@ -1482,6 +1493,7 @@ export const portalRouter = new Hono<{
           status: calibrationJob.status,
           performedAt: calibrationJob.performedAt,
           approvedAt: calibrationJob.approvedAt,
+          dueDate: calibrationJob.dueDate,
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
           methodSnapshot: calibrationJob.methodSnapshot,
@@ -1511,7 +1523,7 @@ export const portalRouter = new Hono<{
         .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
         .where(
           and(
-            eq(calibrationJob.id, id),
+            matchPortalCertificateParam(certificateParam),
             inArray(calibrationJob.customerId, customerIds),
             eq(calibrationJob.status, "APPROVED"),
           ),
@@ -1544,6 +1556,11 @@ export const portalRouter = new Hono<{
           false,
       });
 
+      const verdict = buildPortalCertificateVerdict({
+        results: certificate.results,
+        formulas: certificate.methodSnapshot?.formulas,
+      });
+
       return c.json({
         ...certificate,
         certificateUrl:
@@ -1551,6 +1568,7 @@ export const portalRouter = new Hono<{
             ? null
             : certificate.certificateUrl,
         releaseStatus,
+        verdict,
         standardsSnapshot: undefined,
         referenceStandards,
         accreditation: {
@@ -1580,11 +1598,7 @@ export const portalRouter = new Hono<{
     if (portalLabScope.blocked) {
       return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
     }
-    const id = parseInt(c.req.param("id"));
-
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+    const certificateParam = c.req.param("id");
 
     try {
       const customerIds = await resolvePortalAccessibleCustomerIds({
@@ -1599,6 +1613,7 @@ export const portalRouter = new Hono<{
       // Get certificate
       const [certificate] = await db
         .select({
+          id: calibrationJob.id,
           certificateUrl: calibrationJob.certificateUrl,
           jobId: calibrationJob.jobId,
           certificateName: calibrationJob.certificateName,
@@ -1606,7 +1621,7 @@ export const portalRouter = new Hono<{
         .from(calibrationJob)
         .where(
           and(
-            eq(calibrationJob.id, id),
+            matchPortalCertificateParam(certificateParam),
             inArray(calibrationJob.customerId, customerIds),
             eq(calibrationJob.status, "APPROVED"),
           ),
@@ -1621,9 +1636,10 @@ export const portalRouter = new Hono<{
       // or for payment. Customer-facing copy is provider-neutral.
       const releaseStatuses = await loadPortalReleaseStatuses({
         organizationId: portalLabScope.labOrganizationId,
-        calibrationJobIds: [id],
+        calibrationJobIds: [certificate.id],
       });
-      const portalReleaseStatus = releaseStatuses.get(id) ?? "RELEASED";
+      const portalReleaseStatus =
+        releaseStatuses.get(certificate.id) ?? "RELEASED";
       if (portalReleaseStatus === "PAYMENT_PENDING") {
         return c.json(
           { error: "Certificado aguardando confirmação financeira" },
@@ -1662,10 +1678,10 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = parseInt(c.req.param("id"));
+      const certificateParam = c.req.param("id");
       const standardId = parseInt(c.req.param("standardId"));
 
-      if (isNaN(id) || isNaN(standardId)) {
+      if (isNaN(standardId)) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -1686,7 +1702,7 @@ export const portalRouter = new Hono<{
           .from(calibrationJob)
           .where(
             and(
-              eq(calibrationJob.id, id),
+              matchPortalCertificateParam(certificateParam),
               inArray(calibrationJob.customerId, customerIds),
               eq(calibrationJob.status, "APPROVED"),
             ),
