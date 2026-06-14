@@ -1,21 +1,44 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { CheckmarkCircle02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import {
+  CheckmarkCircle02Icon,
+  PencilEdit02Icon,
+  PlusSignIcon,
+} from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
+import { getPortalBaseUrl } from '@/app/config/runtime'
 import {
   useNewServiceOrderAssetsData,
   useNewServiceOrderCustomersData,
 } from '@/features/service-orders/queries'
+import type { NewServiceOrderCustomer } from '@/features/service-orders/types'
 import {
   parseServiceOrderForm,
   type ServiceOrderCreatePayload,
   type ServiceOrderFormData,
   type ServiceOrderFormField,
 } from '@/features/service-orders/forms'
+import {
+  CustomerCreateForm,
+  getCustomerInvitationId,
+  type CreatedCustomer,
+} from '@/features/customers/components/customer-create-form'
+import type { UpdatedCustomer } from '@/features/customers/components/customer-edit-form'
+import {
+  AssetCreateForm,
+  type CreatedAsset,
+} from '@/features/assets/components/asset-create-form'
+import type { UpdatedAsset } from '@/features/assets/components/asset-edit-form'
+import { EntityFormSheet } from '@/features/service-orders/components/entity-form-sheet'
+import {
+  AssetEditSheetBody,
+  CustomerEditSheetBody,
+} from '@/features/service-orders/components/entity-edit-sheet-bodies'
+import { assetRouteId, clientRouteId } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -36,6 +59,12 @@ import {
   FieldError,
   FieldLabel,
 } from '@/components/ui/field'
+
+type EntitySheetKind =
+  | 'customer-create'
+  | 'customer-edit'
+  | 'asset-create'
+  | 'asset-edit'
 
 const initialFormData: ServiceOrderFormData = {
   customerId: null,
@@ -104,6 +133,13 @@ export function NewServiceOrderPage() {
   const [errors, setErrors] = useState<
     Partial<Record<ServiceOrderFormField, string>>
   >({})
+  const [sheetKind, setSheetKind] = useState<EntitySheetKind | null>(null)
+  // Records created/edited inline are merged into the selectors so they are
+  // immediately selectable, even before the underlying list query refetches.
+  const [pendingCustomerOption, setPendingCustomerOption] =
+    useState<NewServiceOrderCustomer | null>(null)
+  const [pendingAssetOption, setPendingAssetOption] =
+    useState<CreatedAsset | null>(null)
 
   const { data: customersData, isLoading: customersLoading } =
     useNewServiceOrderCustomersData(customerSearch)
@@ -113,18 +149,40 @@ export function NewServiceOrderPage() {
       search: assetSearch,
     })
 
+  const customerOptions = useMemo(() => {
+    const base = customersData?.data ?? []
+    if (
+      pendingCustomerOption &&
+      !base.some((item) => item.id === pendingCustomerOption.id)
+    ) {
+      return [pendingCustomerOption, ...base]
+    }
+    return base
+  }, [customersData?.data, pendingCustomerOption])
+
+  const assetOptions = useMemo(() => {
+    const base = assetsData?.data ?? []
+    if (
+      pendingAssetOption &&
+      pendingAssetOption.customerId === formData.customerId &&
+      !base.some((item) => item.id === pendingAssetOption.id)
+    ) {
+      return [pendingAssetOption, ...base]
+    }
+    return base
+  }, [assetsData?.data, pendingAssetOption, formData.customerId])
+
   const selectedCustomer = useMemo(() => {
     if (!formData.customerId) return null
     return (
-      customersData?.data.find((item) => item.id === formData.customerId) ??
-      null
+      customerOptions.find((item) => item.id === formData.customerId) ?? null
     )
-  }, [customersData?.data, formData.customerId])
+  }, [customerOptions, formData.customerId])
 
   const selectedAsset = useMemo(() => {
     if (!formData.assetId) return null
-    return assetsData?.data.find((item) => item.id === formData.assetId) ?? null
-  }, [assetsData?.data, formData.assetId])
+    return assetOptions.find((item) => item.id === formData.assetId) ?? null
+  }, [assetOptions, formData.assetId])
 
   const selectedCustomerName = selectedCustomer?.name ?? ''
   const selectedAssetLabel = selectedAsset
@@ -175,6 +233,70 @@ export function NewServiceOrderPage() {
     if (errors[field]) {
       setErrors((current) => ({ ...current, [field]: undefined }))
     }
+  }
+
+  const closeSheet = () => setSheetKind(null)
+
+  const handleCustomerSaved = (customer: CreatedCustomer) => {
+    setPendingCustomerOption({
+      id: customer.id,
+      name: customer.name,
+      taxId: customer.taxId,
+      email: customer.email,
+      phone: customer.phone ?? null,
+      compliance: customer.compliance,
+    })
+    // A different customer means any pending asset belongs to the old owner.
+    setPendingAssetOption(null)
+    updateField('customerId', customer.id)
+    setCustomerSearch('')
+    closeSheet()
+    queryClient.invalidateQueries({ queryKey: ['customers'] })
+    toast.success(`Cliente "${customer.name}" criado e selecionado`)
+
+    const invitationId = getCustomerInvitationId(customer)
+    if (invitationId) {
+      toast('Convite do portal gerado', {
+        description: 'Copie o link e envie ao cliente para acessar o portal.',
+        action: {
+          label: 'Copiar convite',
+          onClick: () => {
+            void navigator.clipboard.writeText(
+              `${getPortalBaseUrl()}/accept-invite?token=${invitationId}`,
+            )
+            toast.success('Link copiado!')
+          },
+        },
+      })
+    }
+  }
+
+  const handleCustomerUpdated = (customer: UpdatedCustomer) => {
+    setPendingCustomerOption({
+      id: customer.id,
+      name: customer.name ?? '',
+      taxId: customer.taxId ?? null,
+      email: customer.email ?? null,
+      phone: customer.phone ?? null,
+      compliance: customer.compliance,
+    })
+    closeSheet()
+    queryClient.invalidateQueries({ queryKey: ['customers'] })
+  }
+
+  const handleAssetSaved = (asset: CreatedAsset) => {
+    setPendingAssetOption(asset)
+    updateField('assetId', asset.id)
+    setAssetSearch('')
+    closeSheet()
+    queryClient.invalidateQueries({ queryKey: ['assets'] })
+    toast.success(`Instrumento "${asset.name}" criado e selecionado`)
+  }
+
+  const handleAssetUpdated = (asset: UpdatedAsset) => {
+    setPendingAssetOption(asset)
+    closeSheet()
+    queryClient.invalidateQueries({ queryKey: ['assets'] })
   }
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -230,18 +352,34 @@ export function NewServiceOrderPage() {
                 <Field>
                   <div className="flex items-center justify-between gap-3">
                     <FieldLabel>Cliente *</FieldLabel>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      render={<Link to="/dashboard/clients/new" />}
-                    >
-                      <HugeiconsIcon
-                        icon={PlusSignIcon}
-                        className="mr-1 size-3"
-                      />
-                      Novo cliente
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {formData.customerId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSheetKind('customer-edit')}
+                        >
+                          <HugeiconsIcon
+                            icon={PencilEdit02Icon}
+                            className="mr-1 size-3"
+                          />
+                          Editar
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSheetKind('customer-create')}
+                      >
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-1 size-3"
+                        />
+                        Novo cliente
+                      </Button>
+                    </div>
                   </div>
                   <Combobox
                     value={
@@ -271,7 +409,7 @@ export function NewServiceOrderPage() {
                             ? 'Carregando clientes...'
                             : 'Nenhum cliente encontrado'}
                         </ComboboxEmpty>
-                        {customersData?.data.map((customer) => (
+                        {customerOptions.map((customer) => (
                           <ComboboxItem
                             key={customer.id}
                             value={String(customer.id)}
@@ -303,19 +441,35 @@ export function NewServiceOrderPage() {
                 <Field>
                   <div className="flex items-center justify-between gap-3">
                     <FieldLabel>Instrumento *</FieldLabel>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={!formData.customerId}
-                      render={<Link to="/dashboard/assets/new" />}
-                    >
-                      <HugeiconsIcon
-                        icon={PlusSignIcon}
-                        className="mr-1 size-3"
-                      />
-                      Novo ativo
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {formData.assetId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSheetKind('asset-edit')}
+                        >
+                          <HugeiconsIcon
+                            icon={PencilEdit02Icon}
+                            className="mr-1 size-3"
+                          />
+                          Editar
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={!formData.customerId}
+                        onClick={() => setSheetKind('asset-create')}
+                      >
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-1 size-3"
+                        />
+                        Novo ativo
+                      </Button>
+                    </div>
                   </div>
                   <Combobox
                     value={formData.assetId ? String(formData.assetId) : ''}
@@ -347,7 +501,7 @@ export function NewServiceOrderPage() {
                             ? 'Carregando instrumentos...'
                             : 'Nenhum instrumento encontrado para este cliente'}
                         </ComboboxEmpty>
-                        {assetsData?.data.map((asset) => (
+                        {assetOptions.map((asset) => (
                           <ComboboxItem key={asset.id} value={String(asset.id)}>
                             <div className="flex flex-col">
                               <span>
@@ -760,6 +914,78 @@ export function NewServiceOrderPage() {
           </Panel>
         </aside>
       </div>
+
+      <EntityFormSheet
+        open={sheetKind === 'customer-create'}
+        onOpenChange={(open) => {
+          if (!open) closeSheet()
+        }}
+        title="Novo cliente"
+        description="Cadastre o cliente sem sair da ordem de serviço; ele já fica selecionado ao salvar."
+      >
+        <CustomerCreateForm
+          variant="sheet"
+          onSaved={handleCustomerSaved}
+          onCancel={closeSheet}
+        />
+      </EntityFormSheet>
+
+      <EntityFormSheet
+        open={sheetKind === 'customer-edit'}
+        onOpenChange={(open) => {
+          if (!open) closeSheet()
+        }}
+        title="Editar cliente"
+        description="Atualize os dados do cliente sem perder o preenchimento da OS."
+      >
+        {selectedCustomer ? (
+          <CustomerEditSheetBody
+            customerSlug={clientRouteId({
+              name: selectedCustomer.name,
+              taxId: selectedCustomer.taxId,
+            })}
+            onSaved={handleCustomerUpdated}
+            onCancel={closeSheet}
+          />
+        ) : null}
+      </EntityFormSheet>
+
+      <EntityFormSheet
+        open={sheetKind === 'asset-create'}
+        onOpenChange={(open) => {
+          if (!open) closeSheet()
+        }}
+        title="Novo instrumento"
+        description="Cadastre o instrumento para o cliente da OS; ele já fica selecionado ao salvar."
+      >
+        {formData.customerId ? (
+          <AssetCreateForm
+            variant="sheet"
+            defaultCustomerId={formData.customerId}
+            lockCustomer
+            lockedCustomerName={selectedCustomer?.name}
+            onSaved={handleAssetSaved}
+            onCancel={closeSheet}
+          />
+        ) : null}
+      </EntityFormSheet>
+
+      <EntityFormSheet
+        open={sheetKind === 'asset-edit'}
+        onOpenChange={(open) => {
+          if (!open) closeSheet()
+        }}
+        title="Editar instrumento"
+        description="Atualize os dados do instrumento sem perder o preenchimento da OS."
+      >
+        {selectedAsset ? (
+          <AssetEditSheetBody
+            assetSlug={assetRouteId({ tag: selectedAsset.tag })}
+            onSaved={handleAssetUpdated}
+            onCancel={closeSheet}
+          />
+        ) : null}
+      </EntityFormSheet>
     </div>
   )
 }
