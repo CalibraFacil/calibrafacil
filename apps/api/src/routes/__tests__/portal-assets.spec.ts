@@ -115,6 +115,45 @@ beforeEach(() => {
   vi.mocked(resolveLabOrganizationIdByPortalHostname).mockResolvedValue(null);
 });
 
+describe("GET /units", () => {
+  it("blocks requests from an unrecognized host", async () => {
+    const res = await portalRouter.request("/units");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns the single customer as one unit in single mode", async () => {
+    dbQueue.push([{ id: 1, name: "Cliente", labOrganizationId: "lab-1" }]); // resolver: direct customer
+
+    const res = await portalRouter.request("/units", { headers: LOCAL_ORIGIN });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.mode).toBe("single");
+    expect(body.units).toEqual([{ id: 1, name: "Cliente" }]);
+  });
+
+  it("returns all branches sorted by name in group mode", async () => {
+    dbQueue.push(
+      [], // resolver: not a direct customer
+      [{ id: 3, labOrganizationId: "lab-1" }], // resolver: group org
+      [
+        { id: 11, name: "Unidade Sul", labOrganizationId: "lab-1" },
+        { id: 10, name: "Unidade Norte", labOrganizationId: "lab-1" },
+      ], // resolver: branches (unsorted)
+    );
+
+    const res = await portalRouter.request("/units", { headers: LOCAL_ORIGIN });
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.mode).toBe("group");
+    expect(body.units.map((unit: { name: string }) => unit.name)).toEqual([
+      "Unidade Norte",
+      "Unidade Sul",
+    ]);
+  });
+});
+
 describe("GET /assets", () => {
   it("blocks requests from an unrecognized host", async () => {
     const res = await portalRouter.request("/assets");

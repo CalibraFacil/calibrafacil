@@ -1149,6 +1149,41 @@ export const portalRouter = new Hono<{
   )
 
   // =========================================================================
+  // GET /units - Units (branch customers) in the active scope
+  // =========================================================================
+  // Powers the group cockpit's unit filter. Single mode returns the one
+  // customer; group mode returns every branch. The portal shows the filter
+  // only when more than one unit is present.
+  // =========================================================================
+  .get("/units", ...requirePortalProtected, async (c) => {
+    const member = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
+
+      if (!scope) {
+        return c.json({ units: [] });
+      }
+
+      const units = [...scope.customerById.values()]
+        .map((unit) => ({ id: unit.id, name: unit.name }))
+        .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+
+      return c.json({ mode: scope.mode, units });
+    } catch (error) {
+      console.error("Error listing portal units:", error);
+      return c.json({ error: "Erro ao listar unidades" }, 500);
+    }
+  })
+
+  // =========================================================================
   // GET /notification-preferences - Digest opt-in for the portal user
   // =========================================================================
   .get("/notification-preferences", ...requirePortalProtected, async (c) => {
