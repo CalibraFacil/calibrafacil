@@ -1979,6 +1979,11 @@ export const customer = pgTable(
     labOrganizationId: text("lab_organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    // Optional parent group (network/rede). A branch belongs to at most one
+    // group; deleting the group detaches branches rather than removing them.
+    groupId: integer("group_id").references(() => customerGroup.id, {
+      onDelete: "set null",
+    }),
     // ISO 17025:2017 compliance tracking
     compliance: jsonb("compliance").$type<CustomerCompliance>(),
     internalNotes: text("internal_notes"), // Internal notes for lab staff
@@ -1991,6 +1996,40 @@ export const customer = pgTable(
   (table) => [
     index("customer_auth_org_id_idx").on(table.authOrganizationId),
     index("customer_lab_org_id_idx").on(table.labOrganizationId),
+    index("customer_group_id_idx").on(table.groupId),
+  ],
+);
+
+// =============================================================================
+// CUSTOMER GROUP - Multi-unit client (network/rede) grouping branch customers
+// =============================================================================
+// A customer group is itself a CLIENT organization (its own authOrganizationId)
+// so it rides the existing portal switcher/active-org machinery: a unified
+// quality manager is invited once to the group org and the portal fans the
+// group's active session out to every branch customer (customer.groupId) at
+// read time. The group has no customer row of its own.
+export const customerGroup = pgTable(
+  "customer_group",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    // The CLIENT organization that represents the group for portal access.
+    authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // The LAB organization that owns this group. Branches must share it.
+    labOrganizationId: text("lab_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("customer_group_auth_org_id_idx").on(table.authOrganizationId),
+    index("customer_group_lab_org_id_idx").on(table.labOrganizationId),
   ],
 );
 
@@ -2586,8 +2625,20 @@ export const customerRelations = relations(customer, ({ one, many }) => ({
     fields: [customer.authOrganizationId],
     references: [organization.id],
   }),
+  group: one(customerGroup, {
+    fields: [customer.groupId],
+    references: [customerGroup.id],
+  }),
   auditLogs: many(customerAuditLog),
   assets: many(asset),
+}));
+
+export const customerGroupRelations = relations(customerGroup, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [customerGroup.authOrganizationId],
+    references: [organization.id],
+  }),
+  branches: many(customer),
 }));
 
 export const customerAuditLogRelations = relations(

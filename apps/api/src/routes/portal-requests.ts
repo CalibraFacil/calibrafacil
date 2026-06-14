@@ -23,6 +23,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
+import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
 
 function getPortalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };
@@ -111,21 +112,22 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const { page, limit, status, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
-      const linkedCustomer = await getPortalCustomer(
-        member.organizationId,
-        portalLabScope,
-      );
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope,
+      });
 
-      if (!linkedCustomer) {
+      if (!scope || scope.customerIds.length === 0) {
         return c.json({
           data: [],
           pagination: { page, limit, total: 0, totalPages: 0 },
         });
       }
 
+      // Scope by customerId alone: in group mode requests carry the branch
+      // authOrg, not the active (group) org.
       const conditions = [
-        eq(calibrationRequest.authOrganizationId, member.organizationId),
-        eq(calibrationRequest.customerId, linkedCustomer.id),
+        inArray(calibrationRequest.customerId, scope.customerIds),
       ];
 
       if (status) {
@@ -206,12 +208,12 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const linkedCustomer = await getPortalCustomer(
-        member.organizationId,
-        portalLabScope,
-      );
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: member.organizationId,
+        labScope: portalLabScope,
+      });
 
-      if (!linkedCustomer) {
+      if (!scope || scope.customerIds.length === 0) {
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
@@ -241,8 +243,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(calibrationRequest.id, id),
-            eq(calibrationRequest.authOrganizationId, member.organizationId),
-            eq(calibrationRequest.customerId, linkedCustomer.id),
+            inArray(calibrationRequest.customerId, scope.customerIds),
           ),
         )
         .limit(1);

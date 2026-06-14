@@ -126,17 +126,19 @@ describe("GET /calendar", () => {
     expect(await res.json()).toEqual({ data: [] });
   });
 
-  it("rejects a customer linked to a different lab than the portal host", async () => {
+  it("returns empty for a customer linked to a different lab than the portal host", async () => {
     vi.mocked(resolveLabOrganizationIdByPortalHostname).mockResolvedValue(
       "lab-A",
     );
-    dbQueue.push([{ id: 1, labOrganizationId: "lab-B" }]); // linkedCustomer
+    // Lab mismatch → resolver returns null → empty data (no disclosure).
+    dbQueue.push([{ id: 1, labOrganizationId: "lab-B" }]); // direct customer
 
     const res = await portalRouter.request(
       "/calendar?from=2026-06-01&to=2026-06-30",
       { headers: LOCAL_ORIGIN },
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: [] });
   });
 
   it("returns the dues inside the window", async () => {
@@ -176,8 +178,9 @@ describe("GET /certificates assetId filter", () => {
 
   it("scopes the list when assetId is provided", async () => {
     dbQueue.push(
-      [{ orgId: "client-org-1" }], // userOrgs
-      [{ id: 1 }], // customers
+      [{ orgId: "client-org-1" }], // accessible: member CLIENT orgs
+      [{ id: 1 }], // accessible: direct branch customers
+      [], // accessible: group orgs (none)
       [{ count: 1 }], // total
       [
         {

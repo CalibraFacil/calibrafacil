@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   customer,
+  customerGroup,
   organization,
   member,
   invitation,
@@ -84,6 +85,24 @@ function getStringProperty(value: unknown, key: string) {
   return typeof property === "string" ? property : undefined;
 }
 
+/** A branch may only join a group owned by the same lab (cross-tenant guard). */
+async function groupBelongsToLab(
+  groupId: number,
+  labOrganizationId: string,
+): Promise<boolean> {
+  const [group] = await db
+    .select({ id: customerGroup.id })
+    .from(customerGroup)
+    .where(
+      and(
+        eq(customerGroup.id, groupId),
+        eq(customerGroup.labOrganizationId, labOrganizationId),
+      ),
+    )
+    .limit(1);
+  return Boolean(group);
+}
+
 function portalErrorStatus(
   error: PortalServiceAccountError,
 ): 400 | 401 | 403 | 404 | 409 | 500 {
@@ -111,6 +130,16 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
 
       try {
+        const memberData = c.get("member");
+
+        // Fail fast on an invalid group before provisioning the CLIENT org.
+        if (
+          input.groupId != null &&
+          !(await groupBelongsToLab(input.groupId, memberData.organizationId))
+        ) {
+          return c.json({ error: "Grupo invalido" }, 400);
+        }
+
         // Step 1: Create CLIENT organization via service account (3B model)
         const slug = generateUniqueSlug(input.name);
 
@@ -129,7 +158,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         // Step 2: Insert customer record
         // - authOrganizationId: The CLIENT org (for portal access)
         // - labOrganizationId: The LAB org that manages this customer (current user's org)
-        const memberData = c.get("member");
         const [newCustomer] = await db
           .insert(customer)
           .values({
@@ -140,6 +168,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             address: input.address || null,
             authOrganizationId: orgResult.id,
             labOrganizationId: memberData.organizationId,
+            groupId: input.groupId ?? null,
           })
           .returning();
 
@@ -367,6 +396,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         if (!existingCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // A group reassignment must target a group owned by the same lab.
+        if (
+          input.groupId != null &&
+          !(await groupBelongsToLab(input.groupId, memberData.organizationId))
+        ) {
+          return c.json({ error: "Grupo invalido" }, 400);
         }
 
         // Build changes object for audit log
