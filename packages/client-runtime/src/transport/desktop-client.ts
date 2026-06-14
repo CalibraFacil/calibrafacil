@@ -160,6 +160,25 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Governança de unidades");
       },
     },
+    customerGroups: {
+      // Customer groups are a cloud-only lab feature; desktop/offline can't
+      // provision CLIENT orgs. Reads degrade to empty, writes are unsupported.
+      async list() {
+        return { data: [] };
+      },
+      async get() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async create() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async addBranch() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async removeBranch() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+    },
     access: {
       async getPlanAccess() {
         return desktopPlanAccess();

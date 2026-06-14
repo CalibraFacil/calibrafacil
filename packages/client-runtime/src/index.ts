@@ -57,6 +57,7 @@ import { createCertificateTemplatesApi } from "./modules/certificate-templates";
 import { createCompetencesApi } from "./modules/competences";
 import { createCustomerSuccessApi } from "./modules/customer-success";
 import { createCustomersApi } from "./modules/customers";
+import { createCustomerGroupsApi } from "./modules/customer-groups";
 import { createDashboardApi } from "./modules/dashboard";
 import { createEntityLabelsApi } from "./modules/entity-labels";
 import { createEnvironmentalLimitsApi } from "./modules/environmental-limits";
@@ -748,6 +749,7 @@ export function createCloudApiClient(
     organizationMedia: createOrganizationMediaApi(options),
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
     customers: createCustomersApi(rawCloudClient),
+    customerGroups: createCustomerGroupsApi(rawCloudClient),
     assets: createAssetsApi(rawCloudClient),
     assetTypes: createAssetTypesApi(rawCloudClient),
     environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient),

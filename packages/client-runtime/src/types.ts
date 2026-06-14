@@ -648,6 +648,8 @@ export type CreateCustomerInput = {
     city?: string;
     state?: string;
   };
+  /** Parent customer group (rede). null detaches; omitted leaves unchanged. */
+  groupId?: number | null;
 };
 
 export type UpdateCustomerInput = Partial<CreateCustomerInput>;
@@ -714,6 +716,55 @@ export interface CustomersApi {
   resendInvitation(id: string | number, invitationId: string): Promise<unknown>;
   cancelInvitation(id: string | number, invitationId: string): Promise<unknown>;
   removeMember(id: string | number, memberId: string): Promise<unknown>;
+}
+
+// =============================================================================
+// CUSTOMER GROUPS (multi-unit client networks)
+// =============================================================================
+
+export type CustomerGroupListItem = {
+  id: number;
+  name: string;
+  authOrganizationId: string;
+  createdAt: string | Date;
+  branchCount: number;
+};
+
+export type CustomerGroupsListData = { data: Array<CustomerGroupListItem> };
+
+export type CustomerGroupBranch = {
+  id: number;
+  name: string;
+  taxId: string | null;
+};
+
+export type CustomerGroupDetailData = {
+  id: number;
+  name: string;
+  authOrganizationId: string;
+  createdAt: string | Date;
+  branches: Array<CustomerGroupBranch>;
+};
+
+export type CreateCustomerGroupInput = {
+  name: string;
+  email?: string;
+};
+
+export interface CustomerGroupsApi {
+  list(): Promise<CustomerGroupsListData>;
+  get(id: string | number): Promise<CustomerGroupDetailData>;
+  create(
+    input: CreateCustomerGroupInput,
+  ): Promise<CustomerGroupDetailData & { invitationId: string | null }>;
+  addBranch(
+    groupId: string | number,
+    customerId: number,
+  ): Promise<{ success: boolean }>;
+  removeBranch(
+    groupId: string | number,
+    customerId: string | number,
+  ): Promise<{ success: boolean }>;
 }
 
 export type AssetsListInput = {
@@ -2352,6 +2403,7 @@ export interface CalibraApi {
   organizationMedia: OrganizationMediaApi;
   signingCertificates: SigningCertificatesApi;
   customers: CustomersApi;
+  customerGroups: CustomerGroupsApi;
   assets: AssetsApi;
   assetTypes: AssetTypesApi;
   services: ServicesApi;

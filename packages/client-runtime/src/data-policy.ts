@@ -221,6 +221,13 @@ export const calibraApiPolicyRegistry = {
     cancelInvitation: "cloud-only",
     removeMember: "cloud-only",
   },
+  customerGroups: {
+    list: "cloud-only",
+    get: "cloud-only",
+    create: "cloud-only",
+    addBranch: "cloud-only",
+    removeBranch: "cloud-only",
+  },
   assets: {
     list: "local-first-read-through-sync",
     create: "local-command-sync",
