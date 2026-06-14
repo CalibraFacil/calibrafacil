@@ -1,21 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
+  ArrowRight01Icon,
   Building03Icon,
-  Delete02Icon,
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Badge } from '@/components/ui/badge'
-import {
-  ACTION_BUTTON_CLASS,
-  Panel,
-  PanelHeader,
-} from '@/components/instrument-panel'
+import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import {
   Dialog,
@@ -26,12 +23,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select'
-import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -39,20 +30,14 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { useCustomersListData } from '@/features/customers/queries'
-import { cn } from '@/lib/utils'
 import {
-  useAssignBranchMutation,
   useCreateCustomerGroupMutation,
-  useCustomerGroupDetail,
   useCustomerGroupsList,
-  useRemoveBranchMutation,
 } from './queries'
 
 export function CustomerGroupsPage() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
   const groupsQuery = useCustomerGroupsList(
@@ -60,10 +45,6 @@ export function CustomerGroupsPage() {
     !isContextSwitching,
   )
   const groups = groupsQuery.data?.data ?? []
-
-  // Default the selection to the first group once loaded (render-time, no effect).
-  const effectiveGroupId =
-    selectedGroupId ?? (groups.length > 0 ? groups[0].id : null)
 
   return (
     <div className="space-y-6">
@@ -84,7 +65,11 @@ export function CustomerGroupsPage() {
           className={`${ACTION_BUTTON_CLASS} shrink-0`}
           onClick={() => setCreateOpen(true)}
         >
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="mr-2 size-4" />
+          <HugeiconsIcon
+            icon={Add01Icon}
+            strokeWidth={2}
+            className="mr-2 size-4"
+          />
           Novo grupo
         </Button>
       </div>
@@ -107,184 +92,49 @@ export function CustomerGroupsPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[20rem_1fr] lg:items-start">
-          <Panel className="p-3">
-            <div className="space-y-1">
-              {groups.map((group) => {
-                const active = group.id === effectiveGroupId
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className={cn(
-                      'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
-                      active ? 'bg-muted' : 'hover:bg-muted/60',
-                    )}
-                  >
+        <Panel className="p-2">
+          <ul className="divide-y divide-border/70">
+            {groups.map((group) => (
+              <li key={group.id}>
+                <Link
+                  to="/dashboard/clients/groups/$groupId/overview"
+                  params={{ groupId: String(group.id) }}
+                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-foreground/10"
+                    >
+                      <HugeiconsIcon icon={Building03Icon} className="size-4" />
+                    </span>
                     <span className="min-w-0 truncate text-sm font-medium">
                       {group.name}
                     </span>
-                    <Badge variant="secondary" className="font-mono tabular-nums">
-                      {group.branchCount}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <Badge
+                      variant="secondary"
+                      className="font-mono tabular-nums"
+                    >
+                      {group.branchCount}{' '}
+                      {group.branchCount === 1 ? 'unidade' : 'unidades'}
                     </Badge>
-                  </button>
-                )
-              })}
-            </div>
-          </Panel>
-
-          {effectiveGroupId !== null ? (
-            <GroupDetail
-              key={effectiveGroupId}
-              groupId={effectiveGroupId}
-              activeOrganizationId={activeOrganizationId}
-            />
-          ) : null}
-        </div>
+                    <HugeiconsIcon
+                      icon={ArrowRight01Icon}
+                      className="size-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
       )}
 
       <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
-  )
-}
-
-function GroupDetail({
-  groupId,
-  activeOrganizationId,
-}: {
-  groupId: number
-  activeOrganizationId: string | null
-}) {
-  const detailQuery = useCustomerGroupDetail(activeOrganizationId, groupId)
-  const assignMutation = useAssignBranchMutation(groupId)
-  const removeMutation = useRemoveBranchMutation(groupId)
-  const [branchToAdd, setBranchToAdd] = useState('')
-
-  const customersQuery = useCustomersListData({
-    activeOrganizationId,
-    enabled: true,
-    page: 1,
-    limit: 100,
-    search: '',
-  })
-
-  const group = detailQuery.data
-  const branchIds = useMemo(
-    () => new Set((group?.branches ?? []).map((branch) => branch.id)),
-    [group],
-  )
-  // Candidate branches = the lab's customers not already in this group.
-  const candidates = (customersQuery.data?.data ?? []).filter(
-    (customer) => !branchIds.has(customer.id),
-  )
-
-  function assign() {
-    const id = Number(branchToAdd)
-    if (!Number.isInteger(id) || id <= 0) return
-    assignMutation.mutate(id, {
-      onSuccess: () => {
-        setBranchToAdd('')
-        toast.success('Unidade vinculada ao grupo')
-      },
-      onError: (error) => toast.error(error.message),
-    })
-  }
-
-  function remove(customerId: number) {
-    removeMutation.mutate(customerId, {
-      onSuccess: () => toast.success('Unidade desvinculada'),
-      onError: (error) => toast.error(error.message),
-    })
-  }
-
-  if (detailQuery.isLoading || !group) {
-    return (
-      <Panel className="flex justify-center p-16">
-        <Spinner className="size-7" />
-      </Panel>
-    )
-  }
-
-  const selectedCandidate = candidates.find(
-    (candidate) => String(candidate.id) === branchToAdd,
-  )
-
-  return (
-    <Panel className="space-y-5 p-5">
-      <PanelHeader
-        eyebrow="Grupo"
-        title={group.name}
-        description="Unidades (clientes) que compõem este grupo."
-      />
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <Field className="flex-1">
-          <FieldLabel htmlFor="branch">Adicionar unidade</FieldLabel>
-          <Select
-            value={branchToAdd}
-            onValueChange={(value) => setBranchToAdd(value ?? '')}
-          >
-            <SelectTrigger id="branch">
-              <span className={selectedCandidate ? '' : 'text-muted-foreground'}>
-                {selectedCandidate?.name ?? 'Selecione um cliente...'}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {candidates.map((candidate) => (
-                <SelectItem key={candidate.id} value={String(candidate.id)}>
-                  {candidate.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Apenas clientes deste laboratório podem ser vinculados.
-          </FieldDescription>
-        </Field>
-        <Button
-          onClick={assign}
-          disabled={!branchToAdd || assignMutation.isPending}
-          className={ACTION_BUTTON_CLASS}
-        >
-          {assignMutation.isPending ? <Spinner className="mr-2" /> : null}
-          Vincular
-        </Button>
-      </div>
-
-      <div className="space-y-1">
-        {group.branches.length === 0 ? (
-          <p className="text-muted-foreground rounded-lg bg-muted/40 p-4 text-sm">
-            Nenhuma unidade neste grupo ainda.
-          </p>
-        ) : (
-          group.branches.map((branch) => (
-            <div
-              key={branch.id}
-              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-muted/50"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{branch.name}</p>
-                {branch.taxId ? (
-                  <p className="text-muted-foreground font-mono text-xs tabular-nums">
-                    {branch.taxId}
-                  </p>
-                ) : null}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Desvincular ${branch.name}`}
-                onClick={() => remove(branch.id)}
-                disabled={removeMutation.isPending}
-              >
-                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-              </Button>
-            </div>
-          ))
-        )}
-      </div>
-    </Panel>
   )
 }
 
@@ -295,6 +145,7 @@ function CreateGroupDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const createMutation = useCreateCustomerGroupMutation()
@@ -308,11 +159,15 @@ function CreateGroupDialog({
     createMutation.mutate(
       { name: trimmed, email: email.trim() || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (group) => {
           toast.success('Grupo criado')
           setName('')
           setEmail('')
           onOpenChange(false)
+          navigate({
+            to: '/dashboard/clients/groups/$groupId/unidades',
+            params: { groupId: String(group.id) },
+          })
         },
         onError: (error) => toast.error(error.message),
       },

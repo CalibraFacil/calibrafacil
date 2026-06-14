@@ -72,6 +72,8 @@ export type CustomerDetail = {
   financialSummary?: CustomerFinancialSummary
   compliance?: CustomerCompliance
   activeCommercialAgreement?: ActiveCommercialAgreement | null
+  groupId?: number | null
+  group?: { id: number; name: string } | null
 }
 
 export type CustomerAssetStatus =

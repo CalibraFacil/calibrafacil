@@ -91,7 +91,6 @@ import { Route as DashboardFinanceBillingReadinessRouteImport } from './routes/d
 import { Route as DashboardFinanceAutomationRouteImport } from './routes/dashboard/finance/automation'
 import { Route as DashboardFinanceAnalyticsRouteImport } from './routes/dashboard/finance/analytics'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
-import { Route as DashboardClientsGroupsRouteImport } from './routes/dashboard/clients/groups'
 import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/new'
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
 import { Route as DashboardPersonnelIdRouteRouteImport } from './routes/dashboard/personnel/$id/route'
@@ -109,6 +108,7 @@ import { Route as DashboardJobsIdIndexRouteImport } from './routes/dashboard/job
 import { Route as DashboardFinanceReceivablesIndexRouteImport } from './routes/dashboard/finance/receivables/index'
 import { Route as DashboardFinanceDocumentsIndexRouteImport } from './routes/dashboard/finance/documents/index'
 import { Route as DashboardFinanceContractsIndexRouteImport } from './routes/dashboard/finance/contracts/index'
+import { Route as DashboardClientsGroupsIndexRouteImport } from './routes/dashboard/clients/groups/index'
 import { Route as DashboardClientsIdIndexRouteImport } from './routes/dashboard/clients/$id/index'
 import { Route as DashboardCapaIdIndexRouteImport } from './routes/dashboard/capa/$id/index'
 import { Route as DashboardAssetsIdIndexRouteImport } from './routes/dashboard/assets/$id/index'
@@ -130,6 +130,11 @@ import { Route as DashboardClientsIdComplianceRouteImport } from './routes/dashb
 import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/dashboard/clients/$id/calibrations'
 import { Route as DashboardClientsIdAssetsRouteImport } from './routes/dashboard/clients/$id/assets'
 import { Route as DashboardAssetsIdEditRouteImport } from './routes/dashboard/assets/$id/edit'
+import { Route as DashboardClientsGroupsGroupIdRouteRouteImport } from './routes/dashboard/clients/groups/$groupId/route'
+import { Route as DashboardClientsGroupsGroupIdIndexRouteImport } from './routes/dashboard/clients/groups/$groupId/index'
+import { Route as DashboardClientsGroupsGroupIdUnidadesRouteImport } from './routes/dashboard/clients/groups/$groupId/unidades'
+import { Route as DashboardClientsGroupsGroupIdOverviewRouteImport } from './routes/dashboard/clients/groups/$groupId/overview'
+import { Route as DashboardClientsGroupsGroupIdGestorRouteImport } from './routes/dashboard/clients/groups/$groupId/gestor'
 
 const TermosDeUsoRoute = TermosDeUsoRouteImport.update({
   id: '/termos-de-uso',
@@ -575,11 +580,6 @@ const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardClientsRouteRoute,
 } as any)
-const DashboardClientsGroupsRoute = DashboardClientsGroupsRouteImport.update({
-  id: '/groups',
-  path: '/groups',
-  getParentRoute: () => DashboardClientsRouteRoute,
-} as any)
 const DashboardCapaNewRoute = DashboardCapaNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -674,6 +674,12 @@ const DashboardFinanceContractsIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => DashboardFinanceContractsRouteRoute,
+  } as any)
+const DashboardClientsGroupsIndexRoute =
+  DashboardClientsGroupsIndexRouteImport.update({
+    id: '/groups/',
+    path: '/groups/',
+    getParentRoute: () => DashboardClientsRouteRoute,
   } as any)
 const DashboardClientsIdIndexRoute = DashboardClientsIdIndexRouteImport.update({
   id: '/',
@@ -792,6 +798,36 @@ const DashboardAssetsIdEditRoute = DashboardAssetsIdEditRouteImport.update({
   path: '/edit',
   getParentRoute: () => DashboardAssetsIdRouteRoute,
 } as any)
+const DashboardClientsGroupsGroupIdRouteRoute =
+  DashboardClientsGroupsGroupIdRouteRouteImport.update({
+    id: '/groups/$groupId',
+    path: '/groups/$groupId',
+    getParentRoute: () => DashboardClientsRouteRoute,
+  } as any)
+const DashboardClientsGroupsGroupIdIndexRoute =
+  DashboardClientsGroupsGroupIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardClientsGroupsGroupIdRouteRoute,
+  } as any)
+const DashboardClientsGroupsGroupIdUnidadesRoute =
+  DashboardClientsGroupsGroupIdUnidadesRouteImport.update({
+    id: '/unidades',
+    path: '/unidades',
+    getParentRoute: () => DashboardClientsGroupsGroupIdRouteRoute,
+  } as any)
+const DashboardClientsGroupsGroupIdOverviewRoute =
+  DashboardClientsGroupsGroupIdOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => DashboardClientsGroupsGroupIdRouteRoute,
+  } as any)
+const DashboardClientsGroupsGroupIdGestorRoute =
+  DashboardClientsGroupsGroupIdGestorRouteImport.update({
+    id: '/gestor',
+    path: '/gestor',
+    getParentRoute: () => DashboardClientsGroupsGroupIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -830,7 +866,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
-  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -884,6 +919,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
+  '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -905,6 +941,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
+  '/dashboard/clients/groups/': typeof DashboardClientsGroupsIndexRoute
   '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/finance/receivables/': typeof DashboardFinanceReceivablesIndexRoute
@@ -915,6 +952,10 @@ export interface FileRoutesByFullPath {
   '/dashboard/requests/$id/': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
+  '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
+  '/dashboard/clients/groups/$groupId/overview': typeof DashboardClientsGroupsGroupIdOverviewRoute
+  '/dashboard/clients/groups/$groupId/unidades': typeof DashboardClientsGroupsGroupIdUnidadesRoute
+  '/dashboard/clients/groups/$groupId/': typeof DashboardClientsGroupsGroupIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -935,7 +976,6 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInIndexRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
-  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -1010,6 +1050,7 @@ export interface FileRoutesByTo {
   '/dashboard/assets/$id': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id': typeof DashboardClientsIdIndexRoute
+  '/dashboard/clients/groups': typeof DashboardClientsGroupsIndexRoute
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/finance/receivables': typeof DashboardFinanceReceivablesIndexRoute
@@ -1020,6 +1061,10 @@ export interface FileRoutesByTo {
   '/dashboard/requests/$id': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id': typeof DashboardStandardsIdIndexRoute
+  '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
+  '/dashboard/clients/groups/$groupId/overview': typeof DashboardClientsGroupsGroupIdOverviewRoute
+  '/dashboard/clients/groups/$groupId/unidades': typeof DashboardClientsGroupsGroupIdUnidadesRoute
+  '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1059,7 +1104,6 @@ export interface FileRoutesById {
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
-  '/dashboard/clients/groups': typeof DashboardClientsGroupsRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/finance/analytics': typeof DashboardFinanceAnalyticsRoute
   '/dashboard/finance/automation': typeof DashboardFinanceAutomationRoute
@@ -1113,6 +1157,7 @@ export interface FileRoutesById {
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
+  '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -1134,6 +1179,7 @@ export interface FileRoutesById {
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
+  '/dashboard/clients/groups/': typeof DashboardClientsGroupsIndexRoute
   '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
   '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/finance/receivables/': typeof DashboardFinanceReceivablesIndexRoute
@@ -1144,6 +1190,10 @@ export interface FileRoutesById {
   '/dashboard/requests/$id/': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
+  '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
+  '/dashboard/clients/groups/$groupId/overview': typeof DashboardClientsGroupsGroupIdOverviewRoute
+  '/dashboard/clients/groups/$groupId/unidades': typeof DashboardClientsGroupsGroupIdUnidadesRoute
+  '/dashboard/clients/groups/$groupId/': typeof DashboardClientsGroupsGroupIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1184,7 +1234,6 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
-    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -1238,6 +1287,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
+    | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -1259,6 +1309,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
+    | '/dashboard/clients/groups/'
     | '/dashboard/finance/contracts/'
     | '/dashboard/finance/documents/'
     | '/dashboard/finance/receivables/'
@@ -1269,6 +1320,10 @@ export interface FileRouteTypes {
     | '/dashboard/requests/$id/'
     | '/dashboard/services/$id/'
     | '/dashboard/standards/$id/'
+    | '/dashboard/clients/groups/$groupId/gestor'
+    | '/dashboard/clients/groups/$groupId/overview'
+    | '/dashboard/clients/groups/$groupId/unidades'
+    | '/dashboard/clients/groups/$groupId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1289,7 +1344,6 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
-    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -1364,6 +1418,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id'
     | '/dashboard/capa/$id'
     | '/dashboard/clients/$id'
+    | '/dashboard/clients/groups'
     | '/dashboard/finance/contracts'
     | '/dashboard/finance/documents'
     | '/dashboard/finance/receivables'
@@ -1374,6 +1429,10 @@ export interface FileRouteTypes {
     | '/dashboard/requests/$id'
     | '/dashboard/services/$id'
     | '/dashboard/standards/$id'
+    | '/dashboard/clients/groups/$groupId/gestor'
+    | '/dashboard/clients/groups/$groupId/overview'
+    | '/dashboard/clients/groups/$groupId/unidades'
+    | '/dashboard/clients/groups/$groupId'
   id:
     | '__root__'
     | '/'
@@ -1412,7 +1471,6 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
-    | '/dashboard/clients/groups'
     | '/dashboard/clients/new'
     | '/dashboard/finance/analytics'
     | '/dashboard/finance/automation'
@@ -1466,6 +1524,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
+    | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -1487,6 +1546,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
+    | '/dashboard/clients/groups/'
     | '/dashboard/finance/contracts/'
     | '/dashboard/finance/documents/'
     | '/dashboard/finance/receivables/'
@@ -1497,6 +1557,10 @@ export interface FileRouteTypes {
     | '/dashboard/requests/$id/'
     | '/dashboard/services/$id/'
     | '/dashboard/standards/$id/'
+    | '/dashboard/clients/groups/$groupId/gestor'
+    | '/dashboard/clients/groups/$groupId/overview'
+    | '/dashboard/clients/groups/$groupId/unidades'
+    | '/dashboard/clients/groups/$groupId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2089,13 +2153,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClientsNewRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
     }
-    '/dashboard/clients/groups': {
-      id: '/dashboard/clients/groups'
-      path: '/groups'
-      fullPath: '/dashboard/clients/groups'
-      preLoaderRoute: typeof DashboardClientsGroupsRouteImport
-      parentRoute: typeof DashboardClientsRouteRoute
-    }
     '/dashboard/capa/new': {
       id: '/dashboard/capa/new'
       path: '/new'
@@ -2214,6 +2271,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/finance/contracts/'
       preLoaderRoute: typeof DashboardFinanceContractsIndexRouteImport
       parentRoute: typeof DashboardFinanceContractsRouteRoute
+    }
+    '/dashboard/clients/groups/': {
+      id: '/dashboard/clients/groups/'
+      path: '/groups'
+      fullPath: '/dashboard/clients/groups/'
+      preLoaderRoute: typeof DashboardClientsGroupsIndexRouteImport
+      parentRoute: typeof DashboardClientsRouteRoute
     }
     '/dashboard/clients/$id/': {
       id: '/dashboard/clients/$id/'
@@ -2362,6 +2426,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAssetsIdEditRouteImport
       parentRoute: typeof DashboardAssetsIdRouteRoute
     }
+    '/dashboard/clients/groups/$groupId': {
+      id: '/dashboard/clients/groups/$groupId'
+      path: '/groups/$groupId'
+      fullPath: '/dashboard/clients/groups/$groupId'
+      preLoaderRoute: typeof DashboardClientsGroupsGroupIdRouteRouteImport
+      parentRoute: typeof DashboardClientsRouteRoute
+    }
+    '/dashboard/clients/groups/$groupId/': {
+      id: '/dashboard/clients/groups/$groupId/'
+      path: '/'
+      fullPath: '/dashboard/clients/groups/$groupId/'
+      preLoaderRoute: typeof DashboardClientsGroupsGroupIdIndexRouteImport
+      parentRoute: typeof DashboardClientsGroupsGroupIdRouteRoute
+    }
+    '/dashboard/clients/groups/$groupId/unidades': {
+      id: '/dashboard/clients/groups/$groupId/unidades'
+      path: '/unidades'
+      fullPath: '/dashboard/clients/groups/$groupId/unidades'
+      preLoaderRoute: typeof DashboardClientsGroupsGroupIdUnidadesRouteImport
+      parentRoute: typeof DashboardClientsGroupsGroupIdRouteRoute
+    }
+    '/dashboard/clients/groups/$groupId/overview': {
+      id: '/dashboard/clients/groups/$groupId/overview'
+      path: '/overview'
+      fullPath: '/dashboard/clients/groups/$groupId/overview'
+      preLoaderRoute: typeof DashboardClientsGroupsGroupIdOverviewRouteImport
+      parentRoute: typeof DashboardClientsGroupsGroupIdRouteRoute
+    }
+    '/dashboard/clients/groups/$groupId/gestor': {
+      id: '/dashboard/clients/groups/$groupId/gestor'
+      path: '/gestor'
+      fullPath: '/dashboard/clients/groups/$groupId/gestor'
+      preLoaderRoute: typeof DashboardClientsGroupsGroupIdGestorRouteImport
+      parentRoute: typeof DashboardClientsGroupsGroupIdRouteRoute
+    }
   }
 }
 
@@ -2437,18 +2536,45 @@ const DashboardClientsIdRouteRouteWithChildren =
     DashboardClientsIdRouteRouteChildren,
   )
 
+interface DashboardClientsGroupsGroupIdRouteRouteChildren {
+  DashboardClientsGroupsGroupIdGestorRoute: typeof DashboardClientsGroupsGroupIdGestorRoute
+  DashboardClientsGroupsGroupIdOverviewRoute: typeof DashboardClientsGroupsGroupIdOverviewRoute
+  DashboardClientsGroupsGroupIdUnidadesRoute: typeof DashboardClientsGroupsGroupIdUnidadesRoute
+  DashboardClientsGroupsGroupIdIndexRoute: typeof DashboardClientsGroupsGroupIdIndexRoute
+}
+
+const DashboardClientsGroupsGroupIdRouteRouteChildren: DashboardClientsGroupsGroupIdRouteRouteChildren =
+  {
+    DashboardClientsGroupsGroupIdGestorRoute:
+      DashboardClientsGroupsGroupIdGestorRoute,
+    DashboardClientsGroupsGroupIdOverviewRoute:
+      DashboardClientsGroupsGroupIdOverviewRoute,
+    DashboardClientsGroupsGroupIdUnidadesRoute:
+      DashboardClientsGroupsGroupIdUnidadesRoute,
+    DashboardClientsGroupsGroupIdIndexRoute:
+      DashboardClientsGroupsGroupIdIndexRoute,
+  }
+
+const DashboardClientsGroupsGroupIdRouteRouteWithChildren =
+  DashboardClientsGroupsGroupIdRouteRoute._addFileChildren(
+    DashboardClientsGroupsGroupIdRouteRouteChildren,
+  )
+
 interface DashboardClientsRouteRouteChildren {
   DashboardClientsIdRouteRoute: typeof DashboardClientsIdRouteRouteWithChildren
-  DashboardClientsGroupsRoute: typeof DashboardClientsGroupsRoute
   DashboardClientsNewRoute: typeof DashboardClientsNewRoute
   DashboardClientsIndexRoute: typeof DashboardClientsIndexRoute
+  DashboardClientsGroupsGroupIdRouteRoute: typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
+  DashboardClientsGroupsIndexRoute: typeof DashboardClientsGroupsIndexRoute
 }
 
 const DashboardClientsRouteRouteChildren: DashboardClientsRouteRouteChildren = {
   DashboardClientsIdRouteRoute: DashboardClientsIdRouteRouteWithChildren,
-  DashboardClientsGroupsRoute: DashboardClientsGroupsRoute,
   DashboardClientsNewRoute: DashboardClientsNewRoute,
   DashboardClientsIndexRoute: DashboardClientsIndexRoute,
+  DashboardClientsGroupsGroupIdRouteRoute:
+    DashboardClientsGroupsGroupIdRouteRouteWithChildren,
+  DashboardClientsGroupsIndexRoute: DashboardClientsGroupsIndexRoute,
 }
 
 const DashboardClientsRouteRouteWithChildren =

@@ -41,6 +41,12 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
@@ -69,6 +75,10 @@ import {
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
 import { usePlanAccess } from '@/hooks/use-plan-access'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
+import { useCustomerGroupsList } from '@/features/customer-groups/queries'
+
+const NO_GROUP_VALUE = 'none'
 
 export function ClientInfoTab({
   id,
@@ -281,12 +291,20 @@ function ClientInfoForm({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
+  const { activeOrganizationId } = useDashboardContextState()
   const hasFinancial =
     accessQuery.data?.entitlements.includes('financial') ?? false
+  const hasCustomerGroups =
+    accessQuery.data?.entitlements.includes('customer_group') ?? false
   const financialTimelineQuery = useCustomerFinancialTimelineData({
     enabled: hasFinancial,
     id: customerId,
   })
+  const groupsQuery = useCustomerGroupsList(
+    activeOrganizationId,
+    hasCustomerGroups,
+  )
+  const groups = groupsQuery.data?.data ?? []
   const [addressOpen, setAddressOpen] = useState(false)
 
   const [name, setName] = useState(customer.name || '')
@@ -295,6 +313,9 @@ function ClientInfoForm({
   const [phone, setPhone] = useState(customer.phone || '')
   const [address, setAddress] = useState<CustomerAddress>(
     customer.address || {},
+  )
+  const [groupId, setGroupId] = useState<number | null>(
+    customer.group?.id ?? customer.groupId ?? null,
   )
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -305,12 +326,16 @@ function ClientInfoForm({
       email?: string
       phone?: string
       address?: CustomerAddress
+      groupId?: number | null
     }) => {
       return calibraApi.customers.update(customerId, data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
       queryClient.invalidateQueries({ queryKey: ['customers'] })
+      // The customer's group membership changed — refresh group rollups too.
+      queryClient.invalidateQueries({ queryKey: ['customer-group'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-groups'] })
       toast.success('Cliente atualizado com sucesso!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
         navigate({ to: '/dashboard/sync/conflicts' })
@@ -350,6 +375,9 @@ function ClientInfoForm({
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       address: hasAddressData ? address : undefined,
+      // Only labs with the customer_group entitlement edit this field; when the
+      // section is hidden, omit it so we never clobber an existing assignment.
+      ...(hasCustomerGroups ? { groupId } : {}),
     })
   }
 
@@ -515,6 +543,50 @@ function ClientInfoForm({
                 </Field>
               </div>
             </ClientSection>
+
+            {hasCustomerGroups ? (
+              <ClientSection
+                icon={
+                  <HugeiconsIcon icon={Building02Icon} className="size-4" />
+                }
+                title="Grupo / Rede"
+                description="Vincule este cliente a um grupo para dar ao gestor da rede uma visão consolidada de todas as unidades no portal."
+              >
+                <Field>
+                  <FieldLabel htmlFor="customer-group">Grupo</FieldLabel>
+                  <Select
+                    value={groupId === null ? NO_GROUP_VALUE : String(groupId)}
+                    onValueChange={(value) =>
+                      setGroupId(
+                        !value || value === NO_GROUP_VALUE
+                          ? null
+                          : Number(value),
+                      )
+                    }
+                  >
+                    <SelectTrigger id="customer-group">
+                      <span
+                        className={groupId === null ? 'text-muted-foreground' : ''}
+                      >
+                        {groups.find((group) => group.id === groupId)?.name ??
+                          'Sem grupo'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_GROUP_VALUE}>Sem grupo</SelectItem>
+                      {groups.map((group) => (
+                        <SelectItem key={group.id} value={String(group.id)}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Apenas grupos deste laboratório podem ser selecionados.
+                  </FieldDescription>
+                </Field>
+              </ClientSection>
+            ) : null}
 
             <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
               <div className="border-t border-border/70 pt-6">

@@ -27,6 +27,16 @@ export const clientsColumns: ColumnDef<Client>[] = [
     cell: ({ row }) => row.original.email || '-',
   },
   {
+    accessorKey: 'groupName',
+    header: 'Grupo',
+    cell: ({ row }) =>
+      row.original.groupName ? (
+        <Badge variant="outline">{row.original.groupName}</Badge>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
+  },
+  {
     accessorKey: 'authOrganizationId',
     header: 'Portal',
     cell: ({ row }) =>

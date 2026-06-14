@@ -227,6 +227,12 @@ export const calibraApiPolicyRegistry = {
     create: "cloud-only",
     addBranch: "cloud-only",
     removeBranch: "cloud-only",
+    listMembers: "cloud-only",
+    listInvitations: "cloud-only",
+    createInvitation: "cloud-only",
+    resendInvitation: "cloud-only",
+    cancelInvitation: "cloud-only",
+    removeMember: "cloud-only",
   },
   assets: {
     list: "local-first-read-through-sync",

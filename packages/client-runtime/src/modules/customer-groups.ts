@@ -47,5 +47,53 @@ export function createCustomerGroupsApi(
         "Erro ao desvincular cliente do grupo",
       );
     },
+    async listMembers<TMember = unknown>(id: string | number) {
+      return readJsonResponse<TMember[]>(
+        await groups[":id"].members.$get({ param: { id: String(id) } }),
+        "Falha ao carregar gestores",
+      );
+    },
+    async listInvitations<TInvitation = unknown>(id: string | number) {
+      return readJsonResponse<TInvitation[]>(
+        await groups[":id"].invitations.$get({ param: { id: String(id) } }),
+        "Falha ao carregar convites",
+      );
+    },
+    async createInvitation<TInvitation = unknown>(
+      id: string | number,
+      input: { email: string; role: string },
+    ) {
+      return readJsonResponse<TInvitation>(
+        await groups[":id"].invitations.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Falha ao enviar convite",
+      );
+    },
+    async resendInvitation(id: string | number, invitationId: string) {
+      return readJsonResponse<unknown>(
+        await groups[":id"].invitations[":invId"].resend.$post({
+          param: { id: String(id), invId: invitationId },
+        }),
+        "Falha ao reenviar convite",
+      );
+    },
+    async cancelInvitation(id: string | number, invitationId: string) {
+      return readJsonResponse<unknown>(
+        await groups[":id"].invitations[":invId"].$delete({
+          param: { id: String(id), invId: invitationId },
+        }),
+        "Falha ao cancelar convite",
+      );
+    },
+    async removeMember(id: string | number, memberId: string) {
+      return readJsonResponse<unknown>(
+        await groups[":id"].members[":memberId"].$delete({
+          param: { id: String(id), memberId },
+        }),
+        "Falha ao remover gestor",
+      );
+    },
   };
 }

@@ -178,6 +178,24 @@ export function createDesktopApiClient(
       async removeBranch() {
         throw desktopUnsupportedAuthAction("Grupos de clientes");
       },
+      async listMembers() {
+        return [];
+      },
+      async listInvitations() {
+        return [];
+      },
+      async createInvitation() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async resendInvitation() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async cancelInvitation() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
+      async removeMember() {
+        throw desktopUnsupportedAuthAction("Grupos de clientes");
+      },
     },
     access: {
       async getPlanAccess() {
