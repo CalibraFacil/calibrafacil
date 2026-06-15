@@ -28,6 +28,7 @@ import { nonConformancesRouter } from "../routes/non-conformances";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { portalDomainsRouter } from "../routes/portal-domains";
 import { portalRequestsRouter } from "../routes/portal-requests";
+import { portalVisitsRouter } from "../routes/portal-visits";
 import { portalRouter } from "../routes/portal";
 import { profileMediaRouter } from "../routes/profile-media";
 import { publicApiRouter } from "../routes/public-api";
@@ -77,6 +78,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/lab-setup", labSetupRouter)
     .route("/api/portal", portalRouter)
     .route("/api/portal/requests", portalRequestsRouter)
+    .route("/api/portal/visits", portalVisitsRouter)
     .route("/api/portal/service-orders", portalServiceOrdersRouter)
     .route("/api/assets", assetsRouter)
     .route("/api/asset-types", assetTypesRouter)
