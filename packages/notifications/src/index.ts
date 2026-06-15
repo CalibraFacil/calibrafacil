@@ -25,6 +25,8 @@ export {
   notifyCalibrationRequestApproved,
   notifyCalibrationRequestRejected,
   notifyCalibrationRequestConverted,
+  notifyVisitScheduled,
+  notifyVisitConfirmed,
   sendPortalDueDigests,
   type PortalDigestRunResult,
   type SendNotificationOptions,

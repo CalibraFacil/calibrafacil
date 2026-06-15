@@ -22,6 +22,10 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  notifyVisitConfirmed,
+  notifyVisitScheduled,
+} from "@calibra-facil/notifications";
 
 const technicianUser = alias(user, "calibrationVisitTechnician");
 
@@ -211,6 +215,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", AssignVisitTechnicianSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = parseInt(c.req.param("id"), 10);
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { technicianId } = c.req.valid("json");
@@ -226,6 +231,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         .set({ technicianId })
         .where(eq(calibrationVisit.id, id))
         .returning();
+
+      if (technicianId !== visit.technicianId) {
+        try {
+          await notifyVisitScheduled(id, session.user.id);
+        } catch (error) {
+          console.error("[Visits] Failed to notify technician:", error);
+        }
+      }
+
       return c.json(updated);
     },
   )
@@ -271,6 +285,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationVisit.id, id))
         .returning();
+
+      try {
+        await notifyVisitConfirmed(id, session.user.id);
+        if (technicianId !== visit.technicianId) {
+          await notifyVisitScheduled(id, session.user.id);
+        }
+      } catch (error) {
+        console.error("[Visits] Failed to send confirm notifications:", error);
+      }
+
       return c.json(updated);
     },
   )

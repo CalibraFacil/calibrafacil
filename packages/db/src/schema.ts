@@ -6766,7 +6766,9 @@ export type NotificationType =
   | "CALIBRATION_REQUEST_UNDER_REVIEW"
   | "CALIBRATION_REQUEST_APPROVED"
   | "CALIBRATION_REQUEST_REJECTED"
-  | "CALIBRATION_REQUEST_CONVERTED";
+  | "CALIBRATION_REQUEST_CONVERTED"
+  | "VISIT_SCHEDULED" // On-site visit proposed/assigned to a technician
+  | "VISIT_CONFIRMED"; // On-site visit confirmed (date + technician) for the customer
 
 /**
  * Notification priority levels
@@ -6794,6 +6796,7 @@ export type NotificationRelatedEntity = {
     | "payment"
     | "customer"
     | "request"
+    | "visit"
     | "nc"
     | "capa"
     | "competence";

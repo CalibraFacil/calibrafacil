@@ -37,4 +37,6 @@ export const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
   CALIBRATION_REQUEST_REJECTED: { inApp: true, email: true },
   CALIBRATION_REQUEST_CONVERTED: { inApp: true, email: true },
+  VISIT_SCHEDULED: { inApp: true, email: false },
+  VISIT_CONFIRMED: { inApp: true, email: true },
 };

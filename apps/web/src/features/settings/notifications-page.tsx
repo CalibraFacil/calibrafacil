@@ -37,6 +37,8 @@ type NotificationType =
   | 'CALIBRATION_REQUEST_APPROVED'
   | 'CALIBRATION_REQUEST_REJECTED'
   | 'CALIBRATION_REQUEST_CONVERTED'
+  | 'VISIT_SCHEDULED'
+  | 'VISIT_CONFIRMED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -120,6 +122,19 @@ const notificationSettings: NotificationSetting[] = [
     id: 'CALIBRATION_REQUEST_CONVERTED',
     title: 'Solicitação convertida em OS',
     description: 'Quando uma solicitação vira ordem de serviço',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_SCHEDULED',
+    title: 'Visita no local agendada',
+    description: 'Quando uma visita de calibração in loco é atribuída a você',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_CONFIRMED',
+    title: 'Visita no local confirmada',
+    description:
+      'Quando o laboratório confirma uma visita de calibração in loco',
     category: 'operational',
   },
   {

@@ -54,6 +54,8 @@ import {
   notifyCalibrationRequestRejected,
   notifyCalibrationRequestUnderReview,
   notifyJobAssigned,
+  notifyVisitScheduled,
+  notifyVisitConfirmed,
 } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../lib/units";
 
@@ -121,6 +123,8 @@ type RejectRequestResult =
 type ConvertRequestResult =
   | {
       createdJobs: ConvertedRequestJob[];
+      visitId: number | null;
+      visitConfirmed: boolean;
     }
   | {
       error: {
@@ -915,6 +919,7 @@ export const calibrationRequestsRouter = new Hono<{
           // lab can schedule it now (date + technician → CONFIRMED) or leave it
           // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
           let visitId: number | null = null;
+          let visitConfirmed = false;
           if (request.deliveryMethod === "onsite") {
             const scheduledAt = input.visit?.scheduledAt
               ? new Date(input.visit.scheduledAt)
@@ -938,6 +943,7 @@ export const calibrationRequestsRouter = new Hono<{
               })
               .returning();
             visitId = visit?.id ?? null;
+            visitConfirmed = scheduled;
           }
 
           for (const item of input.items) {
@@ -1014,7 +1020,7 @@ export const calibrationRequestsRouter = new Hono<{
             ipAddress,
           });
 
-          return { createdJobs };
+          return { createdJobs, visitId, visitConfirmed };
         });
       } catch (error) {
         if (error instanceof RequestTransitionError) {
@@ -1056,6 +1062,20 @@ export const calibrationRequestsRouter = new Hono<{
           "[Calibration Requests] Failed to send conversion notification:",
           error,
         );
+      }
+
+      if (result.visitId !== null) {
+        try {
+          await notifyVisitScheduled(result.visitId, session.user.id);
+          if (result.visitConfirmed) {
+            await notifyVisitConfirmed(result.visitId, session.user.id);
+          }
+        } catch (error) {
+          console.error(
+            "[Calibration Requests] Failed to send visit notification:",
+            error,
+          );
+        }
       }
 
       return c.json({

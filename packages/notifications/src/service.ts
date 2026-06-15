@@ -12,6 +12,7 @@ import {
   personnelCompetence,
   calibrationRequest,
   calibrationRequestItem,
+  calibrationVisit,
   organization,
   organizationCustomDomain,
   customerGroup,
@@ -1135,6 +1136,137 @@ export async function notifyCalibrationRequestConverted(
         jobCodes,
       }),
     },
+    emailBrand,
+  });
+}
+
+// =============================================================================
+// NOTIFICATION TRIGGERS - Called from visit routes (calibração in loco)
+// =============================================================================
+
+function formatVisitDate(date: Date | null): string {
+  if (!date) return "data a confirmar";
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
+async function getVisitDetails(visitId: number): Promise<{
+  id: number;
+  organizationId: string;
+  technicianId: string | null;
+  scheduledAt: Date | null;
+  sourceRequestId: number | null;
+  customerName: string;
+  labName: string;
+  technicianName: string | null;
+  requestSubmittedBy: string | null;
+  requestAuthOrganizationId: string | null;
+} | null> {
+  const [visit] = await db
+    .select({
+      id: calibrationVisit.id,
+      organizationId: calibrationVisit.organizationId,
+      technicianId: calibrationVisit.technicianId,
+      scheduledAt: calibrationVisit.scheduledAt,
+      sourceRequestId: calibrationVisit.sourceRequestId,
+      customerName: customer.name,
+      labName: organization.name,
+      technicianName: user.name,
+      requestSubmittedBy: calibrationRequest.submittedBy,
+      requestAuthOrganizationId: calibrationRequest.authOrganizationId,
+    })
+    .from(calibrationVisit)
+    .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+    .innerJoin(
+      organization,
+      eq(calibrationVisit.organizationId, organization.id),
+    )
+    .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+    .leftJoin(
+      calibrationRequest,
+      eq(calibrationVisit.sourceRequestId, calibrationRequest.id),
+    )
+    .where(eq(calibrationVisit.id, visitId))
+    .limit(1);
+
+  return visit ?? null;
+}
+
+/**
+ * Notify the assigned technician when an on-site visit is scheduled/assigned.
+ * Fired on convert (and on assign). No-op when the visit has no technician.
+ */
+export async function notifyVisitScheduled(
+  visitId: number,
+  actorUserId: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit || !visit.technicianId) return;
+
+  const isSelfAssignment = visit.technicianId === actorUserId;
+  if (isSelfAssignment) {
+    const { notifySelfActions } = await getUserPreferences(visit.technicianId);
+    if (!notifySelfActions) return;
+  }
+
+  const actorName = isSelfAssignment ? "Você" : await getActorName(actorUserId);
+  const visitDate = formatVisitDate(visit.scheduledAt);
+
+  await sendNotification({
+    recipientUserId: visit.technicianId,
+    organizationId: visit.organizationId,
+    type: "VISIT_SCHEDULED",
+    priority: "MEDIUM",
+    title: "Nova visita no local",
+    message: isSelfAssignment
+      ? `Você assumiu a visita ao cliente ${visit.customerName} (${visitDate}).`
+      : `${actorName} agendou uma visita ao cliente ${visit.customerName} (${visitDate}) para você.`,
+    relatedEntity: {
+      entityType: "visit",
+      entityId: visitId,
+    },
+    actionUrl: "/dashboard/visits",
+  });
+}
+
+/**
+ * Notify the customer (request submitter) when their on-site visit is confirmed.
+ * Fired on confirm. No-op when the visit has no linked portal request.
+ */
+export async function notifyVisitConfirmed(
+  visitId: number,
+  actorUserId: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit || !visit.requestSubmittedBy || !visit.requestAuthOrganizationId) {
+    return;
+  }
+  if (visit.requestSubmittedBy === actorUserId) return;
+
+  const emailBrand = await getLabEmailBrand(visit.organizationId);
+  const visitDate = formatVisitDate(visit.scheduledAt);
+  const technicianSuffix = visit.technicianName
+    ? ` com o técnico ${visit.technicianName}`
+    : "";
+
+  await sendNotification({
+    recipientUserId: visit.requestSubmittedBy,
+    organizationId: visit.requestAuthOrganizationId,
+    type: "VISIT_CONFIRMED",
+    priority: "HIGH",
+    title: "Visita no local confirmada",
+    message: `${visit.labName} confirmou a visita de calibração no local para ${visitDate}${technicianSuffix}.`,
+    relatedEntity: {
+      entityType: "visit",
+      entityId: visitId,
+    },
+    actionUrl: visit.sourceRequestId
+      ? `/portal/requests/${visit.sourceRequestId}`
+      : "/portal/requests",
     emailBrand,
   });
 }
@@ -2578,10 +2710,7 @@ export async function sendPortalDueDigests(
           {
             tag: item.tag,
             name: item.name,
-            statusLabel: describePortalDigestDue(
-              item.nextCalibrationDate,
-              now,
-            ),
+            statusLabel: describePortalDigestDue(item.nextCalibrationDate, now),
             overdue: item.nextCalibrationDate.getTime() < now.getTime(),
           },
         ];
