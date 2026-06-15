@@ -8,6 +8,7 @@ import {
   Building02Icon,
   Cancel01Icon,
   DeliveryTruck01Icon,
+  Location01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
@@ -69,7 +70,27 @@ type AssetsResponse = {
   };
 };
 
-type DeliveryMethod = "dropoff" | "carrier";
+type DeliveryMethod = "dropoff" | "carrier" | "onsite";
+
+type OnsiteAddress = {
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighbourhood: string;
+  city: string;
+  state: string;
+};
+
+const EMPTY_ONSITE_ADDRESS: OnsiteAddress = {
+  cep: "",
+  street: "",
+  number: "",
+  complement: "",
+  neighbourhood: "",
+  city: "",
+  state: "",
+};
 
 function getResponseErrorMessage(result: unknown) {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
@@ -154,7 +175,35 @@ function NewRequestPage() {
   const [nfKey, setNfKey] = useState("");
   const [carrier, setCarrier] = useState("");
   const [nfIssuedAt, setNfIssuedAt] = useState("");
+  const [preferredVisitDate, setPreferredVisitDate] = useState("");
+  const [onsiteAddress, setOnsiteAddress] =
+    useState<OnsiteAddress>(EMPTY_ONSITE_ADDRESS);
   const limit = 20;
+
+  function setAddressField(field: keyof OnsiteAddress, value: string) {
+    setOnsiteAddress((current) => ({ ...current, [field]: value }));
+  }
+
+  // ViaCEP autofill — best-effort; manual entry still works if it's offline.
+  async function lookupCep(rawCep: string) {
+    const cep = rawCep.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data || data.erro) return;
+      setOnsiteAddress((current) => ({
+        ...current,
+        street: data.logradouro || current.street,
+        neighbourhood: data.bairro || current.neighbourhood,
+        city: data.localidade || current.city,
+        state: data.uf || current.state,
+      }));
+    } catch {
+      // ignore — the customer can fill the address by hand
+    }
+  }
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["portal-request-assets", page, limit, deferredSearch],
@@ -180,8 +229,17 @@ function NewRequestPage() {
   );
   const nfKeyDigits = nfKey.replace(/\D/g, "");
   const isCarrier = deliveryMethod === "carrier";
+  const isOnsite = deliveryMethod === "onsite";
   const nfKeyInvalid =
     isCarrier && nfKeyDigits.length > 0 && nfKeyDigits.length !== 44;
+  // Trimmed, non-empty address fields only; blank → server uses the customer's
+  // registered address.
+  const onsiteAddressPayload = Object.fromEntries(
+    Object.entries(onsiteAddress)
+      .map(([key, value]) => [key, value.trim()] as const)
+      .filter(([, value]) => value.length > 0),
+  );
+  const hasOnsiteAddress = Object.keys(onsiteAddressPayload).length > 0;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -208,6 +266,12 @@ function NewRequestPage() {
             invoiceRemittanceIssuedAt:
               isCarrier && nfIssuedAt
                 ? new Date(`${nfIssuedAt}T12:00:00`).toISOString()
+                : undefined,
+            onsiteAddress:
+              isOnsite && hasOnsiteAddress ? onsiteAddressPayload : undefined,
+            preferredVisitDate:
+              isOnsite && preferredVisitDate
+                ? new Date(`${preferredVisitDate}T12:00:00`).toISOString()
                 : undefined,
           }),
         },
@@ -475,7 +539,7 @@ function NewRequestPage() {
           <Panel className="p-5">
             <PanelHeader eyebrow="Etapa 2 · Envio" title="Como vai enviar?" />
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
               <DeliveryOption
                 active={deliveryMethod === "dropoff"}
                 icon={Building02Icon}
@@ -489,6 +553,13 @@ function NewRequestPage() {
                 title="Transportadora"
                 description="Envio com nota fiscal"
                 onClick={() => setDeliveryMethod("carrier")}
+              />
+              <DeliveryOption
+                active={isOnsite}
+                icon={Location01Icon}
+                title="No local (em loco)"
+                description="O técnico vai até você"
+                onClick={() => setDeliveryMethod("onsite")}
               />
             </div>
 
@@ -558,6 +629,93 @@ function NewRequestPage() {
                     />
                   </Field>
                 </div>
+              </div>
+            ) : null}
+
+            {isOnsite ? (
+              <div className="mt-3 space-y-3 rounded-xl bg-muted/40 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+                <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Visita técnica no local
+                </p>
+
+                <Field label="Data preferida" hint="opcional — o lab confirma">
+                  <Input
+                    type="date"
+                    value={preferredVisitDate}
+                    onChange={(event) =>
+                      setPreferredVisitDate(event.target.value)
+                    }
+                  />
+                </Field>
+
+                <Field
+                  label="Endereço da visita"
+                  hint="em branco = endereço cadastrado"
+                >
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        inputMode="numeric"
+                        placeholder="CEP"
+                        value={onsiteAddress.cep}
+                        onChange={(event) =>
+                          setAddressField("cep", event.target.value)
+                        }
+                        onBlur={(event) => void lookupCep(event.target.value)}
+                        className="font-mono tabular-nums"
+                      />
+                      <Input
+                        placeholder="Número"
+                        value={onsiteAddress.number}
+                        onChange={(event) =>
+                          setAddressField("number", event.target.value)
+                        }
+                      />
+                    </div>
+                    <Input
+                      placeholder="Logradouro (rua, avenida…)"
+                      value={onsiteAddress.street}
+                      onChange={(event) =>
+                        setAddressField("street", event.target.value)
+                      }
+                    />
+                    <Input
+                      placeholder="Complemento (opcional)"
+                      value={onsiteAddress.complement}
+                      onChange={(event) =>
+                        setAddressField("complement", event.target.value)
+                      }
+                    />
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
+                      <Input
+                        placeholder="Bairro"
+                        value={onsiteAddress.neighbourhood}
+                        onChange={(event) =>
+                          setAddressField("neighbourhood", event.target.value)
+                        }
+                      />
+                      <Input
+                        placeholder="Cidade"
+                        value={onsiteAddress.city}
+                        onChange={(event) =>
+                          setAddressField("city", event.target.value)
+                        }
+                      />
+                      <Input
+                        placeholder="UF"
+                        maxLength={2}
+                        value={onsiteAddress.state}
+                        onChange={(event) =>
+                          setAddressField(
+                            "state",
+                            event.target.value.toUpperCase(),
+                          )
+                        }
+                        className="w-16 uppercase"
+                      />
+                    </div>
+                  </div>
+                </Field>
               </div>
             ) : null}
 

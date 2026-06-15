@@ -14,6 +14,7 @@ import {
   service,
   subscription,
   user,
+  type CustomerAddress,
 } from "@calibra-facil/db/schema";
 import {
   ApproveCalibrationRequestSchema,
@@ -60,6 +61,19 @@ const reviewerUser = alias(user, "calibrationRequestReviewer");
 const approverUser = alias(user, "calibrationRequestApprover");
 const rejecterUser = alias(user, "calibrationRequestRejecter");
 const converterUser = alias(user, "calibrationRequestConverter");
+
+/** Single-line address text for the frozen on-site calibration location. */
+function formatOnsiteAddressText(address: CustomerAddress | null): string {
+  if (!address) return "";
+  const street = [address.street, address.number].filter(Boolean).join(", ");
+  const region = [address.neighbourhood, address.city, address.state]
+    .filter(Boolean)
+    .join(" - ");
+  return [street, address.complement, region, address.cep]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
 
 type ConvertedRequestJob = {
   requestItemId: number;
@@ -167,6 +181,9 @@ async function getRequestDetail(
       observations: calibrationRequest.observations,
       internalNotes: calibrationRequest.internalNotes,
       requestedDueDate: calibrationRequest.requestedDueDate,
+      deliveryMethod: calibrationRequest.deliveryMethod,
+      onsiteAddress: calibrationRequest.onsiteAddress,
+      preferredVisitDate: calibrationRequest.preferredVisitDate,
       submittedAt: calibrationRequest.submittedAt,
       reviewedAt: calibrationRequest.reviewedAt,
       approvedAt: calibrationRequest.approvedAt,
@@ -745,6 +762,8 @@ export const calibrationRequestsRouter = new Hono<{
               status: calibrationRequest.status,
               customerId: calibrationRequest.customerId,
               unitId: calibrationRequest.unitId,
+              deliveryMethod: calibrationRequest.deliveryMethod,
+              onsiteAddress: calibrationRequest.onsiteAddress,
             })
             .from(calibrationRequest)
             .where(
@@ -884,6 +903,13 @@ export const calibrationRequestsRouter = new Hono<{
           );
           const createdJobs: ConvertedRequestJob[] = [];
 
+          // On-site requests pre-freeze each job's calibration location to the
+          // customer's site so the technician doesn't re-enter it on execution.
+          const onsiteLocation =
+            request.deliveryMethod === "onsite"
+              ? { addressText: formatOnsiteAddressText(request.onsiteAddress) }
+              : null;
+
           for (const item of input.items) {
             const requestItem = requestItemById.get(item.itemId);
 
@@ -909,6 +935,7 @@ export const calibrationRequestsRouter = new Hono<{
                 sourceRequestItemId: requestItem.id,
                 executor: tx,
                 notifyOnAssignment: false,
+                onsiteLocation,
               });
             } catch (error) {
               if (

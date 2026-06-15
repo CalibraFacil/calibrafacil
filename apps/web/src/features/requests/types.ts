@@ -65,6 +65,17 @@ export type CalibrationRequestDetail = {
   observations: string | null
   internalNotes: string | null
   requestedDueDate: string | null
+  deliveryMethod: 'dropoff' | 'carrier' | 'onsite'
+  onsiteAddress: {
+    cep?: string
+    number?: string
+    street?: string
+    complement?: string
+    neighbourhood?: string
+    city?: string
+    state?: string
+  } | null
+  preferredVisitDate: string | null
   submittedAt: string
   reviewedAt: string | null
   approvedAt: string | null

@@ -105,9 +105,16 @@ function buildInitialConversionDrafts(
               ? String(compatibleServices[0].id)
               : '',
           technicianId: '',
-          dueDate: request.requestedDueDate
-            ? new Date(request.requestedDueDate).toISOString().slice(0, 10)
-            : '',
+          // On-site requests carry a preferred visit date — seed the per-item
+          // due date from it so the technician/trip date defaults sensibly.
+          dueDate:
+            (request.preferredVisitDate ?? request.requestedDueDate)
+              ? new Date(
+                  (request.preferredVisitDate ?? request.requestedDueDate)!,
+                )
+                  .toISOString()
+                  .slice(0, 10)
+              : '',
         },
       ]
     }),
@@ -555,6 +562,27 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
     )
   }
 
+  const deliveryLabel =
+    request.deliveryMethod === 'carrier'
+      ? 'Transportadora'
+      : request.deliveryMethod === 'onsite'
+        ? 'No local (em loco)'
+        : 'Levar ao laboratório'
+  const onsiteAddress = request.onsiteAddress
+  const onsiteAddressText = onsiteAddress
+    ? [
+        [onsiteAddress.street, onsiteAddress.number].filter(Boolean).join(', '),
+        onsiteAddress.complement,
+        [onsiteAddress.neighbourhood, onsiteAddress.city, onsiteAddress.state]
+          .filter(Boolean)
+          .join(' - '),
+        onsiteAddress.cep,
+      ]
+        .map((part) => (part ?? '').trim())
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+
   const triagePanelKey = [
     organizationQueryKey,
     id,
@@ -639,6 +667,22 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
           <BlueprintField label="Prazo solicitado" mono>
             {formatDate(request.requestedDueDate)}
           </BlueprintField>
+          <BlueprintField label="Forma de envio">
+            {deliveryLabel}
+          </BlueprintField>
+          {request.deliveryMethod === 'onsite' ? (
+            <>
+              <BlueprintField label="Data preferida da visita" mono>
+                {formatDate(request.preferredVisitDate)}
+              </BlueprintField>
+              <BlueprintField
+                label="Endereço da visita"
+                className="sm:col-span-2"
+              >
+                {onsiteAddressText || 'Endereço cadastrado do cliente'}
+              </BlueprintField>
+            </>
+          ) : null}
           <BlueprintField label="Solicitado por">
             {request.submittedByName || '—'}
           </BlueprintField>

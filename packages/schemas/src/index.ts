@@ -438,9 +438,10 @@ export const CreateCalibrationRequestSchema = z.object({
     })
     .optional()
     .nullable(),
-  // How the customer gets the assets to the lab. When shipping via a carrier,
-  // they may attach the "nota fiscal de remessa para conserto".
-  deliveryMethod: z.enum(["dropoff", "carrier"]).default("dropoff"),
+  // How the customer gets the assets to the lab. "onsite" = calibração in loco
+  // (a technician travels to the customer). Carrier-only and onsite-only fields
+  // below are gated server-side by deliveryMethod (see portal-requests.ts).
+  deliveryMethod: z.enum(["dropoff", "carrier", "onsite"]).default("dropoff"),
   invoiceRemittanceNumber: z.string().trim().max(60).optional().nullable(),
   invoiceRemittanceKey: z
     .string()
@@ -456,6 +457,17 @@ export const CreateCalibrationRequestSchema = z.object({
     .string()
     .refine((value) => !Number.isNaN(new Date(value).getTime()), {
       message: "Data de emissão inválida",
+    })
+    .optional()
+    .nullable(),
+  // On-site only — where the technician visits (defaults to the customer's
+  // registered address server-side when omitted) and the customer's preferred
+  // visit date (the lab confirms/schedules the actual visit).
+  onsiteAddress: AddressSchema.optional().nullable(),
+  preferredVisitDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data preferida inválida",
     })
     .optional()
     .nullable(),

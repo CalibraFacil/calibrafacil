@@ -5488,9 +5488,12 @@ export const calibrationRequest = pgTable(
     }),
     // How the customer will get the assets to the lab. When shipping via a
     // carrier, they provide the "nota fiscal de remessa para conserto" so the
-    // lab can receive the goods and later issue the return invoice.
+    // lab can receive the goods and later issue the return invoice. When
+    // "onsite", a lab technician travels to the customer (calibração in loco) —
+    // no goods move, so the customer instead provides a visit address + a
+    // preferred date (the lab confirms and schedules the actual visit).
     deliveryMethod: text("delivery_method")
-      .$type<"dropoff" | "carrier">()
+      .$type<"dropoff" | "carrier" | "onsite">()
       .default("dropoff")
       .notNull(),
     invoiceRemittanceNumber: text("invoice_remittance_number"),
@@ -5499,6 +5502,13 @@ export const calibrationRequest = pgTable(
       withTimezone: true,
     }),
     carrierName: text("carrier_name"),
+    // On-site (deliveryMethod = "onsite") — where the technician visits and the
+    // customer's preferred date. Address defaults to the customer's registered
+    // address but can be overridden (e.g. a branch/temporary location).
+    onsiteAddress: jsonb("onsite_address").$type<CustomerAddress>(),
+    preferredVisitDate: timestamp("preferred_visit_date", {
+      withTimezone: true,
+    }),
     submittedBy: text("submitted_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
