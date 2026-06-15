@@ -372,6 +372,20 @@
       "when": 1782345600000,
       "tag": "0052_certificate_verification_verdict",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1782432000000,
+      "tag": "0053_calibration_request_onsite",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1782518400000,
+      "tag": "0054_calibration_visit",
+      "breakpoints": true
     }
   ]
 }

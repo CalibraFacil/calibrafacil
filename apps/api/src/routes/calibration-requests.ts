@@ -9,11 +9,13 @@ import {
   calibrationRequest,
   calibrationRequestAuditLog,
   calibrationRequestItem,
+  calibrationVisit,
   customer,
   organization,
   service,
   subscription,
   user,
+  type CustomerAddress,
 } from "@calibra-facil/db/schema";
 import {
   ApproveCalibrationRequestSchema,
@@ -52,6 +54,8 @@ import {
   notifyCalibrationRequestRejected,
   notifyCalibrationRequestUnderReview,
   notifyJobAssigned,
+  notifyVisitScheduled,
+  notifyVisitConfirmed,
 } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../lib/units";
 
@@ -60,6 +64,19 @@ const reviewerUser = alias(user, "calibrationRequestReviewer");
 const approverUser = alias(user, "calibrationRequestApprover");
 const rejecterUser = alias(user, "calibrationRequestRejecter");
 const converterUser = alias(user, "calibrationRequestConverter");
+
+/** Single-line address text for the frozen on-site calibration location. */
+function formatOnsiteAddressText(address: CustomerAddress | null): string {
+  if (!address) return "";
+  const street = [address.street, address.number].filter(Boolean).join(", ");
+  const region = [address.neighbourhood, address.city, address.state]
+    .filter(Boolean)
+    .join(" - ");
+  return [street, address.complement, region, address.cep]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
 
 type ConvertedRequestJob = {
   requestItemId: number;
@@ -106,6 +123,8 @@ type RejectRequestResult =
 type ConvertRequestResult =
   | {
       createdJobs: ConvertedRequestJob[];
+      visitId: number | null;
+      visitConfirmed: boolean;
     }
   | {
       error: {
@@ -167,6 +186,9 @@ async function getRequestDetail(
       observations: calibrationRequest.observations,
       internalNotes: calibrationRequest.internalNotes,
       requestedDueDate: calibrationRequest.requestedDueDate,
+      deliveryMethod: calibrationRequest.deliveryMethod,
+      onsiteAddress: calibrationRequest.onsiteAddress,
+      preferredVisitDate: calibrationRequest.preferredVisitDate,
       submittedAt: calibrationRequest.submittedAt,
       reviewedAt: calibrationRequest.reviewedAt,
       approvedAt: calibrationRequest.approvedAt,
@@ -745,6 +767,8 @@ export const calibrationRequestsRouter = new Hono<{
               status: calibrationRequest.status,
               customerId: calibrationRequest.customerId,
               unitId: calibrationRequest.unitId,
+              deliveryMethod: calibrationRequest.deliveryMethod,
+              onsiteAddress: calibrationRequest.onsiteAddress,
             })
             .from(calibrationRequest)
             .where(
@@ -884,6 +908,44 @@ export const calibrationRequestsRouter = new Hono<{
           );
           const createdJobs: ConvertedRequestJob[] = [];
 
+          // On-site requests pre-freeze each job's calibration location to the
+          // customer's site so the technician doesn't re-enter it on execution.
+          const onsiteLocation =
+            request.deliveryMethod === "onsite"
+              ? { addressText: formatOnsiteAddressText(request.onsiteAddress) }
+              : null;
+
+          // On-site: create one visit for the whole conversion (the trip). The
+          // lab can schedule it now (date + technician → CONFIRMED) or leave it
+          // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
+          let visitId: number | null = null;
+          let visitConfirmed = false;
+          if (request.deliveryMethod === "onsite") {
+            const scheduledAt = input.visit?.scheduledAt
+              ? new Date(input.visit.scheduledAt)
+              : null;
+            const visitTechnicianId = input.visit?.technicianId ?? null;
+            const scheduled = Boolean(scheduledAt && visitTechnicianId);
+            const [visit] = await tx
+              .insert(calibrationVisit)
+              .values({
+                organizationId: member.organizationId,
+                unitId: request.unitId,
+                customerId: request.customerId,
+                sourceRequestId: request.id,
+                technicianId: visitTechnicianId,
+                status: scheduled ? "CONFIRMED" : "PROPOSED",
+                scheduledAt,
+                address: request.onsiteAddress ?? null,
+                createdBy: session.user.id,
+                confirmedBy: scheduled ? session.user.id : null,
+                confirmedAt: scheduled ? new Date() : null,
+              })
+              .returning();
+            visitId = visit?.id ?? null;
+            visitConfirmed = scheduled;
+          }
+
           for (const item of input.items) {
             const requestItem = requestItemById.get(item.itemId);
 
@@ -909,6 +971,8 @@ export const calibrationRequestsRouter = new Hono<{
                 sourceRequestItemId: requestItem.id,
                 executor: tx,
                 notifyOnAssignment: false,
+                onsiteLocation,
+                visitId,
               });
             } catch (error) {
               if (
@@ -956,7 +1020,7 @@ export const calibrationRequestsRouter = new Hono<{
             ipAddress,
           });
 
-          return { createdJobs };
+          return { createdJobs, visitId, visitConfirmed };
         });
       } catch (error) {
         if (error instanceof RequestTransitionError) {
@@ -998,6 +1062,20 @@ export const calibrationRequestsRouter = new Hono<{
           "[Calibration Requests] Failed to send conversion notification:",
           error,
         );
+      }
+
+      if (result.visitId !== null) {
+        try {
+          await notifyVisitScheduled(result.visitId, session.user.id);
+          if (result.visitConfirmed) {
+            await notifyVisitConfirmed(result.visitId, session.user.id);
+          }
+        } catch (error) {
+          console.error(
+            "[Calibration Requests] Failed to send visit notification:",
+            error,
+          );
+        }
       }
 
       return c.json({

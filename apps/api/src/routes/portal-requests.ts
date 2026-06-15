@@ -8,8 +8,10 @@ import {
   calibrationRequest,
   calibrationRequestAuditLog,
   calibrationRequestItem,
+  calibrationVisit,
   customer,
   service,
+  user,
 } from "@calibra-facil/db/schema";
 import {
   CreateCalibrationRequestSchema,
@@ -54,6 +56,7 @@ async function getPortalCustomer(
       id: customer.id,
       name: customer.name,
       labOrganizationId: customer.labOrganizationId,
+      address: customer.address,
     })
     .from(customer)
     .where(
@@ -229,6 +232,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           invoiceRemittanceIssuedAt:
             calibrationRequest.invoiceRemittanceIssuedAt,
           carrierName: calibrationRequest.carrierName,
+          onsiteAddress: calibrationRequest.onsiteAddress,
+          preferredVisitDate: calibrationRequest.preferredVisitDate,
           submittedAt: calibrationRequest.submittedAt,
           reviewedAt: calibrationRequest.reviewedAt,
           approvedAt: calibrationRequest.approvedAt,
@@ -254,8 +259,22 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const items = await getRequestItems([request.id]);
 
+      // On-site: the visit scheduled when the lab converted this request (if any).
+      const [visit] = await db
+        .select({
+          status: calibrationVisit.status,
+          scheduledAt: calibrationVisit.scheduledAt,
+          technicianName: user.name,
+        })
+        .from(calibrationVisit)
+        .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+        .where(eq(calibrationVisit.sourceRequestId, request.id))
+        .orderBy(desc(calibrationVisit.id))
+        .limit(1);
+
       return c.json({
         ...request,
+        visit: visit ?? null,
         items: items.map(({ requestId: _requestId, ...item }) => item),
       });
     },
@@ -329,6 +348,17 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.invoiceRemittanceIssuedAt)
           : null;
 
+      // On-site visit fields only apply to "onsite"; default the address to the
+      // customer's registered address when the form didn't override it.
+      const isOnsite = input.deliveryMethod === "onsite";
+      const onsiteAddress = isOnsite
+        ? (input.onsiteAddress ?? linkedCustomer.address ?? null)
+        : null;
+      const preferredVisitDate =
+        isOnsite && input.preferredVisitDate
+          ? new Date(input.preferredVisitDate)
+          : null;
+
       const request = await db.transaction(async (tx) => {
         const lockAssetIds = [...input.assetIds].sort(
           (left, right) => left - right,
@@ -383,6 +413,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
               : null,
             invoiceRemittanceIssuedAt,
             carrierName: isCarrier ? input.carrierName || null : null,
+            onsiteAddress,
+            preferredVisitDate,
             submittedBy: session.user.id,
           })
           .returning();
@@ -531,6 +563,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         isCarrier && input.invoiceRemittanceIssuedAt
           ? new Date(input.invoiceRemittanceIssuedAt)
           : null;
+      // On-site visit fields only apply to "onsite". A batch carries a single
+      // visit address from the form (one trip), applied to each group's request.
+      const isOnsite = input.deliveryMethod === "onsite";
+      const onsiteAddress = isOnsite ? (input.onsiteAddress ?? null) : null;
+      const preferredVisitDate =
+        isOnsite && input.preferredVisitDate
+          ? new Date(input.preferredVisitDate)
+          : null;
 
       const created = await db.transaction(async (tx) => {
         // Lock every (customer, asset) pair, globally ordered for deadlock safety.
@@ -538,7 +578,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           .map((item) => ({ customerId: item.customerId, assetId: item.id }))
           .sort(
             (left, right) =>
-              left.customerId - right.customerId || left.assetId - right.assetId,
+              left.customerId - right.customerId ||
+              left.assetId - right.assetId,
           );
         for (const pair of lockPairs) {
           await tx.execute(
@@ -597,6 +638,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
                 : null,
               invoiceRemittanceIssuedAt,
               carrierName: isCarrier ? input.carrierName || null : null,
+              onsiteAddress,
+              preferredVisitDate,
               submittedBy: session.user.id,
             })
             .returning();

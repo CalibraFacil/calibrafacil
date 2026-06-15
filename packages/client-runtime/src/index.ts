@@ -51,6 +51,7 @@ import { createCloudSyncApi } from "./modules/sync";
 import { createBackofficeApi } from "./modules/backoffice";
 import { createBillingApi } from "./modules/billing";
 import { createCalibrationRequestsApi } from "./modules/calibration-requests";
+import { createVisitsApi } from "./modules/visits";
 import { createCapasApi } from "./modules/capa";
 import { createCertificateNumberingApi } from "./modules/certificate-numbering";
 import { createCertificateTemplatesApi } from "./modules/certificate-templates";
@@ -775,6 +776,7 @@ export function createCloudApiClient(
     trainingRecords: createTrainingRecordsApi(rawCloudClient),
     customerSuccess: createCustomerSuccessApi(rawCloudClient),
     calibrationRequests: createCalibrationRequestsApi(rawCloudClient),
+    visits: createVisitsApi(rawCloudClient),
   };
 }
 

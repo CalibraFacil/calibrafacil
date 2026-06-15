@@ -3915,6 +3915,11 @@ export const calibrationJob = pgTable(
     assetSnapshot: jsonb("asset_snapshot").$type<AssetSnapshot>(),
     // Workflow status
     status: text("status").$type<JobStatus>().default("DRAFT").notNull(),
+    // On-site (calibração in loco): the scheduled visit this job belongs to, when
+    // it came from an on-site request. Null for in-lab jobs.
+    visitId: integer("visit_id").references(() => calibrationVisit.id, {
+      onDelete: "set null",
+    }),
     // Dates
     dueDate: timestamp("due_date"),
     performedAt: timestamp("performed_at"),
@@ -5488,9 +5493,12 @@ export const calibrationRequest = pgTable(
     }),
     // How the customer will get the assets to the lab. When shipping via a
     // carrier, they provide the "nota fiscal de remessa para conserto" so the
-    // lab can receive the goods and later issue the return invoice.
+    // lab can receive the goods and later issue the return invoice. When
+    // "onsite", a lab technician travels to the customer (calibração in loco) —
+    // no goods move, so the customer instead provides a visit address + a
+    // preferred date (the lab confirms and schedules the actual visit).
     deliveryMethod: text("delivery_method")
-      .$type<"dropoff" | "carrier">()
+      .$type<"dropoff" | "carrier" | "onsite">()
       .default("dropoff")
       .notNull(),
     invoiceRemittanceNumber: text("invoice_remittance_number"),
@@ -5499,6 +5507,13 @@ export const calibrationRequest = pgTable(
       withTimezone: true,
     }),
     carrierName: text("carrier_name"),
+    // On-site (deliveryMethod = "onsite") — where the technician visits and the
+    // customer's preferred date. Address defaults to the customer's registered
+    // address but can be overridden (e.g. a branch/temporary location).
+    onsiteAddress: jsonb("onsite_address").$type<CustomerAddress>(),
+    preferredVisitDate: timestamp("preferred_visit_date", {
+      withTimezone: true,
+    }),
     submittedBy: text("submitted_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -5590,6 +5605,77 @@ export const calibrationRequestAuditLog = pgTable(
   (table) => [
     index("cal_request_audit_log_request_id_idx").on(table.requestId),
     index("cal_request_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// CALIBRATION VISIT (on-site / calibração in loco)
+// =============================================================================
+
+// A scheduled on-site visit: one technician trip that can cover many
+// instruments (each becomes a calibration_job linked via calibration_job.visit_id).
+// The customer proposes a date on the request; the lab confirms + assigns the
+// technician here. Lifecycle: PROPOSED → CONFIRMED → IN_PROGRESS → COMPLETED
+// (or CANCELLED at any point).
+export type VisitStatus =
+  | "PROPOSED"
+  | "CONFIRMED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export const calibrationVisit = pgTable(
+  "calibration_visit",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    sourceRequestId: integer("source_request_id").references(
+      () => calibrationRequest.id,
+      { onDelete: "set null" },
+    ),
+    technicianId: text("technician_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").$type<VisitStatus>().default("PROPOSED").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    scheduledEndAt: timestamp("scheduled_end_at", { withTimezone: true }),
+    address: jsonb("address").$type<CustomerAddress>(),
+    notes: text("notes"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    confirmedBy: text("confirmed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    cancelledBy: text("cancelled_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelReason: text("cancel_reason"),
+  },
+  (table) => [
+    index("calibration_visit_org_idx").on(table.organizationId),
+    index("calibration_visit_unit_idx").on(table.unitId),
+    index("calibration_visit_customer_idx").on(table.customerId),
+    index("calibration_visit_technician_idx").on(table.technicianId),
+    index("calibration_visit_status_idx").on(table.status),
+    index("calibration_visit_scheduled_idx").on(table.scheduledAt),
   ],
 );
 
@@ -6680,7 +6766,12 @@ export type NotificationType =
   | "CALIBRATION_REQUEST_UNDER_REVIEW"
   | "CALIBRATION_REQUEST_APPROVED"
   | "CALIBRATION_REQUEST_REJECTED"
-  | "CALIBRATION_REQUEST_CONVERTED";
+  | "CALIBRATION_REQUEST_CONVERTED"
+  | "VISIT_SCHEDULED" // On-site visit proposed/assigned to a technician
+  | "VISIT_CONFIRMED" // On-site visit confirmed (date + technician) for the customer
+  | "VISIT_RESCHEDULED" // On-site visit date changed
+  | "VISIT_CANCELLED" // On-site visit cancelled
+  | "VISIT_REMINDER"; // On-site visit coming up soon (scheduled reminder)
 
 /**
  * Notification priority levels
@@ -6708,6 +6799,7 @@ export type NotificationRelatedEntity = {
     | "payment"
     | "customer"
     | "request"
+    | "visit"
     | "nc"
     | "capa"
     | "competence";
@@ -6813,7 +6905,8 @@ export type ScheduledNotificationEntityType =
   | "asset"
   | "standard"
   | "job"
-  | "competence";
+  | "competence"
+  | "visit";
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.

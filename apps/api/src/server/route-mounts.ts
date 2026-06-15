@@ -5,6 +5,7 @@ import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
+import { visitsRouter } from "../routes/visits";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
@@ -27,6 +28,7 @@ import { nonConformancesRouter } from "../routes/non-conformances";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { portalDomainsRouter } from "../routes/portal-domains";
 import { portalRequestsRouter } from "../routes/portal-requests";
+import { portalVisitsRouter } from "../routes/portal-visits";
 import { portalRouter } from "../routes/portal";
 import { profileMediaRouter } from "../routes/profile-media";
 import { publicApiRouter } from "../routes/public-api";
@@ -76,6 +78,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/lab-setup", labSetupRouter)
     .route("/api/portal", portalRouter)
     .route("/api/portal/requests", portalRequestsRouter)
+    .route("/api/portal/visits", portalVisitsRouter)
     .route("/api/portal/service-orders", portalServiceOrdersRouter)
     .route("/api/assets", assetsRouter)
     .route("/api/asset-types", assetTypesRouter)
@@ -85,6 +88,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/jobs", jobsRouter)
     .route("/api/service-orders", serviceOrdersRouter)
     .route("/api/calibration-requests", calibrationRequestsRouter)
+    .route("/api/visits", visitsRouter)
     .route("/api/verify", verifyRouter)
     .route("/api/magic-link", magicLinkRouter)
     .route("/api/dashboard", dashboardRouter)

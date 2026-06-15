@@ -3753,7 +3753,8 @@ export default {
         `[Scheduled] Completed in ${duration}ms: ` +
           `${result.assetsProcessed} assets, ` +
           `${result.standardsProcessed} standards, ` +
-          `${result.jobsProcessed} jobs`,
+          `${result.jobsProcessed} jobs, ` +
+          `${result.visitsProcessed} visits`,
       );
     } catch (error) {
       console.error("[Scheduled] Error processing notifications:", error);

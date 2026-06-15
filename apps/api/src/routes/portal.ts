@@ -535,7 +535,9 @@ export const portalRouter = new Hono<{
           type: organization.type,
           createdAt: organization.createdAt,
           memberRole: member.role,
-          kind: sql<"unit" | "group">`case when ${customerGroup.id} is not null then 'group' else 'unit' end`,
+          kind: sql<
+            "unit" | "group"
+          >`case when ${customerGroup.id} is not null then 'group' else 'unit' end`,
         })
         .from(member)
         .innerJoin(organization, eq(member.organizationId, organization.id))
@@ -934,8 +936,7 @@ export const portalRouter = new Hono<{
                 definition: assetItem.assetTypeDefinition,
                 baseMeasurementUnit: assetItem.baseMeasurementUnit,
               }) ?? null,
-            lastCertificate:
-              lastCertificateByAssetId.get(assetItem.id) ?? null,
+            lastCertificate: lastCertificateByAssetId.get(assetItem.id) ?? null,
           })),
           pagination: {
             page,
@@ -1498,6 +1499,8 @@ export const portalRouter = new Hono<{
           verificationToken: calibrationJob.verificationToken,
           methodSnapshot: calibrationJob.methodSnapshot,
           standardsSnapshot: calibrationJob.standardsSnapshot,
+          calibrationLocationSnapshot:
+            calibrationJob.calibrationLocationSnapshot,
           results: calibrationJob.results,
           assetId: calibrationJob.assetId,
           assetName: asset.name,
@@ -1563,6 +1566,13 @@ export const portalRouter = new Hono<{
         formulas: certificate.methodSnapshot?.formulas,
       });
 
+      // Surface where the calibration was performed (frozen at execution).
+      const locationSnapshot = certificate.calibrationLocationSnapshot;
+      const onSite = {
+        executedOnSite: locationSnapshot?.type === "customer_site",
+        addressText: locationSnapshot?.addressText?.trim() || null,
+      };
+
       return c.json({
         ...certificate,
         certificateUrl:
@@ -1571,7 +1581,9 @@ export const portalRouter = new Hono<{
             : certificate.certificateUrl,
         releaseStatus,
         verdict,
+        onSite,
         standardsSnapshot: undefined,
+        calibrationLocationSnapshot: undefined,
         referenceStandards,
         accreditation: {
           accredited,

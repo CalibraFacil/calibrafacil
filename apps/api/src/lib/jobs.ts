@@ -38,6 +38,12 @@ type CreateCalibrationJobParams = {
   sourceRequestItemId?: number;
   executor?: JobDbExecutor;
   notifyOnAssignment?: boolean;
+  // On-site (calibração in loco): pre-freeze the calibration location to the
+  // customer's site so the technician doesn't re-enter it during execution.
+  onsiteLocation?: { addressText: string; notes?: string | null } | null;
+  // The scheduled on-site visit this job belongs to, when converted from an
+  // on-site request.
+  visitId?: number | null;
 };
 
 export const jobCreationClientErrors = new Set([
@@ -440,6 +446,16 @@ async function persistCalibrationJob(
       assetSnapshot,
       status: "DRAFT",
       dueDate,
+      visitId: params.visitId ?? null,
+      calibrationLocationSnapshot: params.onsiteLocation
+        ? {
+            type: "customer_site",
+            addressText: params.onsiteLocation.addressText,
+            notes: params.onsiteLocation.notes ?? null,
+            recordedAt: new Date().toISOString(),
+            recordedBy: params.createdBy,
+          }
+        : null,
       createdBy: params.createdBy,
     })
     .returning();

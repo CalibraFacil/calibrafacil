@@ -5,6 +5,7 @@ import {
   Building02Icon,
   ClipboardIcon,
   CreditCardIcon,
+  Location01Icon,
   FileEditIcon,
   File02Icon,
   RepairIcon,
@@ -74,6 +75,7 @@ const dashboardIconMap = {
   services: TaskAdd02Icon,
   serviceOrders: Files01Icon,
   settings: Settings05Icon,
+  visits: Location01Icon,
   wallet: Wallet03Icon,
 } satisfies Record<DashboardIconId, typeof Home01Icon>
 

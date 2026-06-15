@@ -39,6 +39,7 @@ import { formatDateLong } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useCalendarDues, type CalendarDueAsset } from "./queries";
 import { usePortalUnits } from "@/features/fleet/queries";
+import { PortalVisitsPanel } from "@/features/visits/visits-panel";
 import { dayKey, groupDuesByDay, parseMonthParam, toMonthParam } from "./lib";
 
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -175,9 +176,7 @@ export function CalendarPage({
             aria-label="Filtrar por unidade"
             value={unitId ?? ""}
             onChange={(event) =>
-              setUnitId(
-                event.target.value ? Number(event.target.value) : null,
-              )
+              setUnitId(event.target.value ? Number(event.target.value) : null)
             }
             className="border-border bg-background h-9 rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
@@ -358,6 +357,8 @@ export function CalendarPage({
           ) : null}
         </Panel>
       </div>
+
+      <PortalVisitsPanel />
     </div>
   );
 }

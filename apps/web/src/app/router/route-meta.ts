@@ -20,6 +20,7 @@ export type DashboardIconId =
   | 'services'
   | 'serviceOrders'
   | 'settings'
+  | 'visits'
   | 'wallet'
 
 export type DashboardNavItem = {
@@ -44,6 +45,7 @@ export type DashboardRedirectRouteMeta = {
 export const dashboardRouteMeta = [
   { path: '/dashboard/reports', cloudOnly: true },
   { path: '/dashboard/requests', cloudOnly: 'prefix' },
+  { path: '/dashboard/visits', cloudOnly: 'prefix' },
   { path: '/dashboard/nc', cloudOnly: 'prefix' },
   { path: '/dashboard/capa', cloudOnly: 'prefix' },
   { path: '/dashboard/certificate-templates', cloudOnly: true },
@@ -144,6 +146,11 @@ export const dashboardPrimaryNavItems = [
     title: 'Solicitações',
     url: '/dashboard/requests',
     icon: 'requests',
+  },
+  {
+    title: 'Visitas',
+    url: '/dashboard/visits',
+    icon: 'visits',
   },
   {
     title: 'Qualidade',

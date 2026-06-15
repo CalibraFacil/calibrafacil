@@ -41,11 +41,31 @@ type RequestDetail = {
   status: RequestStatus;
   observations: string | null;
   requestedDueDate: string | null;
-  deliveryMethod: "dropoff" | "carrier";
+  deliveryMethod: "dropoff" | "carrier" | "onsite";
   invoiceRemittanceNumber: string | null;
   invoiceRemittanceKey: string | null;
   invoiceRemittanceIssuedAt: string | null;
   carrierName: string | null;
+  onsiteAddress: {
+    cep?: string;
+    number?: string;
+    street?: string;
+    complement?: string;
+    neighbourhood?: string;
+    city?: string;
+    state?: string;
+  } | null;
+  preferredVisitDate: string | null;
+  visit: {
+    status:
+      | "PROPOSED"
+      | "CONFIRMED"
+      | "IN_PROGRESS"
+      | "COMPLETED"
+      | "CANCELLED";
+    scheduledAt: string | null;
+    technicianName: string | null;
+  } | null;
   submittedAt: string;
   reviewedAt: string | null;
   approvedAt: string | null;
@@ -55,6 +75,30 @@ type RequestDetail = {
   customerName: string;
   items: Array<RequestItem>;
 };
+
+const VISIT_STATUS_LABELS: Record<
+  NonNullable<RequestDetail["visit"]>["status"],
+  string
+> = {
+  PROPOSED: "Proposta",
+  CONFIRMED: "Confirmada",
+  IN_PROGRESS: "Em andamento",
+  COMPLETED: "Concluída",
+  CANCELLED: "Cancelada",
+};
+
+/** Single-line address for the on-site visit, or "" when none was provided. */
+function formatOnsiteAddress(address: RequestDetail["onsiteAddress"]): string {
+  if (!address) return "";
+  const street = [address.street, address.number].filter(Boolean).join(", ");
+  const region = [address.neighbourhood, address.city, address.state]
+    .filter(Boolean)
+    .join(" - ");
+  return [street, address.complement, region, address.cep]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
 
 function RequestDetailPage() {
   const { id } = Route.useParams();
@@ -93,6 +137,7 @@ function RequestDetailPage() {
 
   const status = getRequestStatus(data.status);
   const isCarrier = data.deliveryMethod === "carrier";
+  const isOnsite = data.deliveryMethod === "onsite";
   const hasRemittance =
     isCarrier &&
     Boolean(
@@ -101,6 +146,12 @@ function RequestDetailPage() {
       data.carrierName ||
       data.invoiceRemittanceIssuedAt,
     );
+  const deliveryMethodLabel = isCarrier
+    ? "Envio por transportadora"
+    : isOnsite
+      ? "Calibração no local (em loco)"
+      : "Entrega no laboratório";
+  const onsiteAddressText = formatOnsiteAddress(data.onsiteAddress);
 
   return (
     <div className="portal-shell-sm space-y-6">
@@ -136,7 +187,7 @@ function RequestDetailPage() {
         <BlueprintGrid className="mt-4 sm:grid-cols-2">
           <BlueprintField label="Cliente">{data.customerName}</BlueprintField>
           <BlueprintField label="Forma de envio">
-            {isCarrier ? "Envio por transportadora" : "Entrega no laboratório"}
+            {deliveryMethodLabel}
           </BlueprintField>
           <BlueprintField label="Prazo solicitado" mono>
             {formatDate(data.requestedDueDate)}
@@ -196,6 +247,42 @@ function RequestDetailPage() {
             </BlueprintField>
             <BlueprintField label="Transportadora">
               {data.carrierName || "—"}
+            </BlueprintField>
+          </BlueprintGrid>
+        </Panel>
+      ) : null}
+
+      {isOnsite ? (
+        <Panel className="p-5">
+          <PanelHeader
+            eyebrow="Logística"
+            title="Visita técnica no local"
+            description="O laboratório confirma a data e designa o técnico."
+          />
+          <BlueprintGrid className="mt-4 sm:grid-cols-2">
+            <BlueprintField label="Data preferida" mono>
+              {formatDate(data.preferredVisitDate)}
+            </BlueprintField>
+            {data.visit ? (
+              <BlueprintField label="Situação da visita">
+                {VISIT_STATUS_LABELS[data.visit.status]}
+              </BlueprintField>
+            ) : null}
+            {data.visit?.scheduledAt ? (
+              <BlueprintField label="Data confirmada" mono>
+                {formatDate(data.visit.scheduledAt)}
+              </BlueprintField>
+            ) : null}
+            {data.visit?.technicianName ? (
+              <BlueprintField label="Técnico">
+                {data.visit.technicianName}
+              </BlueprintField>
+            ) : null}
+            <BlueprintField
+              label="Endereço da visita"
+              className="sm:col-span-2"
+            >
+              {onsiteAddressText || "Endereço cadastrado do cliente"}
             </BlueprintField>
           </BlueprintGrid>
         </Panel>
