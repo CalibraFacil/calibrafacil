@@ -146,6 +146,14 @@ function CalibrationRequestTriagePanel({
   const [conversionDrafts, setConversionDrafts] = useState<
     Record<number, ConversionDraft>
   >(() => buildInitialConversionDrafts(request, services))
+  // On-site: schedule one visit (date + technician) for the whole trip.
+  const isOnsiteRequest = request.deliveryMethod === 'onsite'
+  const [visitScheduledAt, setVisitScheduledAt] = useState(
+    request.preferredVisitDate
+      ? new Date(request.preferredVisitDate).toISOString().slice(0, 10)
+      : '',
+  )
+  const [visitTechnicianId, setVisitTechnicianId] = useState('')
 
   const pendingConversionItems = useMemo(
     () => request.items.filter((item) => item.convertedJobId === null),
@@ -209,6 +217,14 @@ function CalibrationRequestTriagePanel({
 
       await calibraApi.calibrationRequests.convert(requestId, {
         items: payload,
+        visit: isOnsiteRequest
+          ? {
+              scheduledAt: visitScheduledAt
+                ? new Date(`${visitScheduledAt}T12:00:00`).toISOString()
+                : null,
+              technicianId: visitTechnicianId || null,
+            }
+          : undefined,
       })
     },
     onSuccess: async () => {
@@ -271,6 +287,56 @@ function CalibrationRequestTriagePanel({
           title="Ativos solicitados"
           description="Selecione o serviço, técnico e prazo para converter cada ativo em ordem de serviço."
         />
+        {isOnsiteRequest ? (
+          <div className="mt-4 rounded-xl bg-background p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
+            <p className="text-sm font-medium">
+              Agendamento da visita (em loco)
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Confirme a data e o técnico da visita. Os ativos abaixo viram jobs
+              da mesma visita.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Data da visita</label>
+                <Input
+                  type="date"
+                  value={visitScheduledAt}
+                  onChange={(event) => setVisitScheduledAt(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Técnico da visita</label>
+                <Select
+                  value={visitTechnicianId || 'unassigned'}
+                  onValueChange={(value) =>
+                    setVisitTechnicianId(
+                      !value || value === 'unassigned' ? '' : value,
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <span>
+                      {visitTechnicianId
+                        ? technicians.find(
+                            (technician) => technician.id === visitTechnicianId,
+                          )?.name || 'Selecione'
+                        : 'A definir'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">A definir</SelectItem>
+                    {technicians.map((technician) => (
+                      <SelectItem key={technician.id} value={technician.id}>
+                        {technician.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 space-y-3">
           {request.items.map((item) => {
             const draft = conversionDrafts[item.id] ?? {

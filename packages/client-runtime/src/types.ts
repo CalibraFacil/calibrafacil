@@ -1315,6 +1315,11 @@ export type CalibrationRequestConvertInput = {
     technicianId?: string;
     dueDate?: string;
   }>;
+  // On-site only: schedule one visit for the whole conversion (the trip).
+  visit?: {
+    scheduledAt?: string | null;
+    technicianId?: string | null;
+  } | null;
 };
 
 export interface CalibrationRequestsApi {

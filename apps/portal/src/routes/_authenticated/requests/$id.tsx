@@ -56,6 +56,16 @@ type RequestDetail = {
     state?: string;
   } | null;
   preferredVisitDate: string | null;
+  visit: {
+    status:
+      | "PROPOSED"
+      | "CONFIRMED"
+      | "IN_PROGRESS"
+      | "COMPLETED"
+      | "CANCELLED";
+    scheduledAt: string | null;
+    technicianName: string | null;
+  } | null;
   submittedAt: string;
   reviewedAt: string | null;
   approvedAt: string | null;
@@ -64,6 +74,17 @@ type RequestDetail = {
   convertedAt: string | null;
   customerName: string;
   items: Array<RequestItem>;
+};
+
+const VISIT_STATUS_LABELS: Record<
+  NonNullable<RequestDetail["visit"]>["status"],
+  string
+> = {
+  PROPOSED: "Proposta",
+  CONFIRMED: "Confirmada",
+  IN_PROGRESS: "Em andamento",
+  COMPLETED: "Concluída",
+  CANCELLED: "Cancelada",
 };
 
 /** Single-line address for the on-site visit, or "" when none was provided. */
@@ -242,6 +263,21 @@ function RequestDetailPage() {
             <BlueprintField label="Data preferida" mono>
               {formatDate(data.preferredVisitDate)}
             </BlueprintField>
+            {data.visit ? (
+              <BlueprintField label="Situação da visita">
+                {VISIT_STATUS_LABELS[data.visit.status]}
+              </BlueprintField>
+            ) : null}
+            {data.visit?.scheduledAt ? (
+              <BlueprintField label="Data confirmada" mono>
+                {formatDate(data.visit.scheduledAt)}
+              </BlueprintField>
+            ) : null}
+            {data.visit?.technicianName ? (
+              <BlueprintField label="Técnico">
+                {data.visit.technicianName}
+              </BlueprintField>
+            ) : null}
             <BlueprintField
               label="Endereço da visita"
               className="sm:col-span-2"

@@ -8,8 +8,10 @@ import {
   calibrationRequest,
   calibrationRequestAuditLog,
   calibrationRequestItem,
+  calibrationVisit,
   customer,
   service,
+  user,
 } from "@calibra-facil/db/schema";
 import {
   CreateCalibrationRequestSchema,
@@ -257,8 +259,22 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const items = await getRequestItems([request.id]);
 
+      // On-site: the visit scheduled when the lab converted this request (if any).
+      const [visit] = await db
+        .select({
+          status: calibrationVisit.status,
+          scheduledAt: calibrationVisit.scheduledAt,
+          technicianName: user.name,
+        })
+        .from(calibrationVisit)
+        .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+        .where(eq(calibrationVisit.sourceRequestId, request.id))
+        .orderBy(desc(calibrationVisit.id))
+        .limit(1);
+
       return c.json({
         ...request,
+        visit: visit ?? null,
         items: items.map(({ requestId: _requestId, ...item }) => item),
       });
     },
