@@ -13,6 +13,7 @@ import {
   CheckmarkCircle02Icon,
   Download04Icon,
   Link01Icon,
+  Location01Icon,
   Mail01Icon,
   RulerIcon,
   SecurityCheckIcon,
@@ -88,6 +89,10 @@ export type Certificate = {
   accreditation?: {
     accredited: boolean;
     number: string | null;
+  };
+  onSite?: {
+    executedOnSite: boolean;
+    addressText: string | null;
   };
   referenceStandards: Array<{
     id: number;
@@ -511,6 +516,17 @@ export function CertificateDetailView({
                 tone="neutral"
               />
             </StaggerItem>
+            {certificate.onSite?.executedOnSite ? (
+              <StaggerItem>
+                <SignalTile
+                  icon={Location01Icon}
+                  label="Local da calibração"
+                  value="No local (em loco)"
+                  hint={certificate.onSite.addressText ?? "no cliente"}
+                  tone="info"
+                />
+              </StaggerItem>
+            ) : null}
           </StaggerGroup>
         </div>
       </Panel>
