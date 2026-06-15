@@ -38,6 +38,7 @@ import { Route as DashboardFinanceRouteRouteImport } from './routes/dashboard/fi
 import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
 import { Route as DashboardCapaRouteRouteImport } from './routes/dashboard/capa/route'
 import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
+import { Route as DashboardVisitsIndexRouteImport } from './routes/dashboard/visits/index'
 import { Route as DashboardStandardsIndexRouteImport } from './routes/dashboard/standards/index'
 import { Route as DashboardServicesIndexRouteImport } from './routes/dashboard/services/index'
 import { Route as DashboardServiceOrdersIndexRouteImport } from './routes/dashboard/service-orders/index'
@@ -282,6 +283,11 @@ const DashboardCapaRouteRoute = DashboardCapaRouteRouteImport.update({
 const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
   id: '/assets',
   path: '/assets',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardVisitsIndexRoute = DashboardVisitsIndexRouteImport.update({
+  id: '/visits/',
+  path: '/visits/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardStandardsIndexRoute = DashboardStandardsIndexRouteImport.update({
@@ -919,6 +925,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
+  '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
@@ -1029,6 +1036,7 @@ export interface FileRoutesByTo {
   '/dashboard/service-orders': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services': typeof DashboardServicesIndexRoute
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
+  '/dashboard/visits': typeof DashboardVisitsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -1157,6 +1165,7 @@ export interface FileRoutesById {
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
+  '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
@@ -1287,6 +1296,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
+    | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
@@ -1397,6 +1407,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/standards'
+    | '/dashboard/visits'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -1524,6 +1535,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
+    | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
@@ -1780,6 +1792,13 @@ declare module '@tanstack/react-router' {
       path: '/assets'
       fullPath: '/dashboard/assets'
       preLoaderRoute: typeof DashboardAssetsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/visits/': {
+      id: '/dashboard/visits/'
+      path: '/visits'
+      fullPath: '/dashboard/visits/'
+      preLoaderRoute: typeof DashboardVisitsIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/standards/': {
@@ -2926,6 +2945,7 @@ interface DashboardRouteRouteChildren {
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
+  DashboardVisitsIndexRoute: typeof DashboardVisitsIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
@@ -2949,6 +2969,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardSyncConflictsRoute: DashboardSyncConflictsRoute,
+  DashboardVisitsIndexRoute: DashboardVisitsIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(

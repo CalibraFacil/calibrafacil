@@ -1,0 +1,74 @@
+export const VISIT_STATUSES = [
+  'PROPOSED',
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+] as const
+
+export type VisitStatus = (typeof VISIT_STATUSES)[number]
+
+export type VisitAddress = {
+  cep?: string
+  number?: string
+  street?: string
+  complement?: string
+  neighbourhood?: string
+  city?: string
+  state?: string
+} | null
+
+export type VisitListItem = {
+  id: number
+  status: VisitStatus
+  scheduledAt: string | null
+  address: VisitAddress
+  customerId: number
+  customerName: string
+  technicianId: string | null
+  technicianName: string | null
+  sourceRequestId: number | null
+  createdAt: string
+  assetCount: number
+}
+
+export type VisitsListData = {
+  data: Array<VisitListItem>
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
+export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {
+  PROPOSED: 'Proposta',
+  CONFIRMED: 'Confirmada',
+  IN_PROGRESS: 'Em andamento',
+  COMPLETED: 'Concluída',
+  CANCELLED: 'Cancelada',
+}
+
+export const VISIT_STATUS_VARIANTS: Record<
+  VisitStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  PROPOSED: 'secondary',
+  CONFIRMED: 'default',
+  IN_PROGRESS: 'default',
+  COMPLETED: 'outline',
+  CANCELLED: 'destructive',
+}
+
+export function formatVisitAddress(address: VisitAddress): string {
+  if (!address) return ''
+  const street = [address.street, address.number].filter(Boolean).join(', ')
+  const region = [address.neighbourhood, address.city, address.state]
+    .filter(Boolean)
+    .join(' - ')
+  return [street, address.complement, region, address.cep]
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .join(' · ')
+}
