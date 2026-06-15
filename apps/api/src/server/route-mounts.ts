@@ -5,6 +5,7 @@ import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
+import { visitsRouter } from "../routes/visits";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
@@ -85,6 +86,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .route("/api/jobs", jobsRouter)
     .route("/api/service-orders", serviceOrdersRouter)
     .route("/api/calibration-requests", calibrationRequestsRouter)
+    .route("/api/visits", visitsRouter)
     .route("/api/verify", verifyRouter)
     .route("/api/magic-link", magicLinkRouter)
     .route("/api/dashboard", dashboardRouter)

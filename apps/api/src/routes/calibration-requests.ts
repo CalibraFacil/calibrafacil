@@ -9,6 +9,7 @@ import {
   calibrationRequest,
   calibrationRequestAuditLog,
   calibrationRequestItem,
+  calibrationVisit,
   customer,
   organization,
   service,
@@ -910,6 +911,35 @@ export const calibrationRequestsRouter = new Hono<{
               ? { addressText: formatOnsiteAddressText(request.onsiteAddress) }
               : null;
 
+          // On-site: create one visit for the whole conversion (the trip). The
+          // lab can schedule it now (date + technician → CONFIRMED) or leave it
+          // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
+          let visitId: number | null = null;
+          if (request.deliveryMethod === "onsite") {
+            const scheduledAt = input.visit?.scheduledAt
+              ? new Date(input.visit.scheduledAt)
+              : null;
+            const visitTechnicianId = input.visit?.technicianId ?? null;
+            const scheduled = Boolean(scheduledAt && visitTechnicianId);
+            const [visit] = await tx
+              .insert(calibrationVisit)
+              .values({
+                organizationId: member.organizationId,
+                unitId: request.unitId,
+                customerId: request.customerId,
+                sourceRequestId: request.id,
+                technicianId: visitTechnicianId,
+                status: scheduled ? "CONFIRMED" : "PROPOSED",
+                scheduledAt,
+                address: request.onsiteAddress ?? null,
+                createdBy: session.user.id,
+                confirmedBy: scheduled ? session.user.id : null,
+                confirmedAt: scheduled ? new Date() : null,
+              })
+              .returning();
+            visitId = visit?.id ?? null;
+          }
+
           for (const item of input.items) {
             const requestItem = requestItemById.get(item.itemId);
 
@@ -936,6 +966,7 @@ export const calibrationRequestsRouter = new Hono<{
                 executor: tx,
                 notifyOnAssignment: false,
                 onsiteLocation,
+                visitId,
               });
             } catch (error) {
               if (

@@ -551,11 +551,85 @@ export const ConvertCalibrationRequestSchema = z.object({
         message: "Nao repita itens na conversao",
       },
     ),
+  // On-site only: schedule one visit for the whole conversion (date + technician).
+  // The created jobs link to it via visit_id.
+  visit: z
+    .object({
+      scheduledAt: z
+        .string()
+        .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+          message: "Data da visita invalida",
+        })
+        .optional()
+        .nullable(),
+      technicianId: z.string().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
 });
 
 export type ConvertCalibrationRequestInput = z.infer<
   typeof ConvertCalibrationRequestSchema
 >;
+
+// =============================================================================
+// CALIBRATION VISIT SCHEMAS (on-site / calibração in loco)
+// =============================================================================
+
+export const VisitStatusSchema = z.enum([
+  "PROPOSED",
+  "CONFIRMED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+]);
+export type VisitStatusValue = z.infer<typeof VisitStatusSchema>;
+
+const isValidDateString = (value: string) =>
+  !Number.isNaN(new Date(value).getTime());
+
+export const RescheduleVisitSchema = z.object({
+  scheduledAt: z
+    .string()
+    .refine(isValidDateString, { message: "Data da visita invalida" })
+    .optional()
+    .nullable(),
+  scheduledEndAt: z
+    .string()
+    .refine(isValidDateString, { message: "Data da visita invalida" })
+    .optional()
+    .nullable(),
+  address: AddressSchema.optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+export type RescheduleVisitInput = z.infer<typeof RescheduleVisitSchema>;
+
+export const ConfirmVisitSchema = z.object({
+  scheduledAt: z
+    .string()
+    .refine(isValidDateString, { message: "Data da visita invalida" })
+    .optional()
+    .nullable(),
+  technicianId: z.string().optional().nullable(),
+});
+
+export const AssignVisitTechnicianSchema = z.object({
+  technicianId: z.string().min(1, "Tecnico e obrigatorio"),
+});
+
+export const CancelVisitSchema = z.object({
+  reason: z.string().trim().max(1000).optional().nullable(),
+});
+
+export const ListVisitsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: VisitStatusSchema.optional(),
+  technicianId: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  mine: z.coerce.boolean().optional(),
+});
 
 // =============================================================================
 // CALIBRATION METHOD SCHEMAS - ISO 17025 Validated Templates

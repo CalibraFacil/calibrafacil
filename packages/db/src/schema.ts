@@ -3915,6 +3915,11 @@ export const calibrationJob = pgTable(
     assetSnapshot: jsonb("asset_snapshot").$type<AssetSnapshot>(),
     // Workflow status
     status: text("status").$type<JobStatus>().default("DRAFT").notNull(),
+    // On-site (calibração in loco): the scheduled visit this job belongs to, when
+    // it came from an on-site request. Null for in-lab jobs.
+    visitId: integer("visit_id").references(() => calibrationVisit.id, {
+      onDelete: "set null",
+    }),
     // Dates
     dueDate: timestamp("due_date"),
     performedAt: timestamp("performed_at"),
@@ -5600,6 +5605,77 @@ export const calibrationRequestAuditLog = pgTable(
   (table) => [
     index("cal_request_audit_log_request_id_idx").on(table.requestId),
     index("cal_request_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// CALIBRATION VISIT (on-site / calibração in loco)
+// =============================================================================
+
+// A scheduled on-site visit: one technician trip that can cover many
+// instruments (each becomes a calibration_job linked via calibration_job.visit_id).
+// The customer proposes a date on the request; the lab confirms + assigns the
+// technician here. Lifecycle: PROPOSED → CONFIRMED → IN_PROGRESS → COMPLETED
+// (or CANCELLED at any point).
+export type VisitStatus =
+  | "PROPOSED"
+  | "CONFIRMED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export const calibrationVisit = pgTable(
+  "calibration_visit",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    sourceRequestId: integer("source_request_id").references(
+      () => calibrationRequest.id,
+      { onDelete: "set null" },
+    ),
+    technicianId: text("technician_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").$type<VisitStatus>().default("PROPOSED").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    scheduledEndAt: timestamp("scheduled_end_at", { withTimezone: true }),
+    address: jsonb("address").$type<CustomerAddress>(),
+    notes: text("notes"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    confirmedBy: text("confirmed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    cancelledBy: text("cancelled_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelReason: text("cancel_reason"),
+  },
+  (table) => [
+    index("calibration_visit_org_idx").on(table.organizationId),
+    index("calibration_visit_unit_idx").on(table.unitId),
+    index("calibration_visit_customer_idx").on(table.customerId),
+    index("calibration_visit_technician_idx").on(table.technicianId),
+    index("calibration_visit_status_idx").on(table.status),
+    index("calibration_visit_scheduled_idx").on(table.scheduledAt),
   ],
 );
 
