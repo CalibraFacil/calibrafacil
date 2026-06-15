@@ -426,6 +426,7 @@ export const calibraApiPolicyRegistry = {
     confirm: "cloud-only",
     reschedule: "cloud-only",
     cancel: "cloud-only",
+    complete: "cloud-only",
   },
   integrations: {
     list: "cloud-only",

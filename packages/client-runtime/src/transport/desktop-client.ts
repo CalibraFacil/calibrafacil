@@ -1308,6 +1308,9 @@ export function createDesktopApiClient(
       async cancel() {
         throw desktopUnsupportedAuthAction("Visitas");
       },
+      async complete() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
     },
     integrations: {
       async list<TResponse = unknown>() {

@@ -292,7 +292,13 @@ type ApiRoutePath =
   | "/api/units/admin/members/:memberId/assignments"
   | "/api/units/admin/members/:memberId/role"
   | "/api/units/admin/units"
-  | "/api/units/admin/units/:id";
+  | "/api/units/admin/units/:id"
+  | "/api/visits"
+  | "/api/visits/:id"
+  | "/api/visits/:id/assign"
+  | "/api/visits/:id/cancel"
+  | "/api/visits/:id/complete"
+  | "/api/visits/:id/confirm";
 
 type ApiRouteSchema = {
   [Path in ApiRoutePath]: RpcRoute<Path>;

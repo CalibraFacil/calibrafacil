@@ -1392,6 +1392,7 @@ export interface VisitsApi {
     id: string | number,
     input?: VisitCancelInput,
   ): Promise<TResponse>;
+  complete<TResponse = unknown>(id: string | number): Promise<TResponse>;
 }
 
 export interface IntegrationsApi {

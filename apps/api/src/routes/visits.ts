@@ -389,4 +389,33 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json(updated);
     },
+  )
+  // ===========================================================================
+  // POST /:id/complete — mark the trip done (operator closes it out)
+  // ===========================================================================
+  .post(
+    "/:id/complete",
+    ...withLabPermission({ request: ["update"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+
+      const visit = await getScopedVisit(id, member);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      if (visit.status === "PROPOSED") {
+        return c.json({ error: "Confirme a visita antes de concluí-la" }, 409);
+      }
+      if (VISIT_TERMINAL.has(visit.status)) {
+        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
+      }
+
+      const [updated] = await db
+        .update(calibrationVisit)
+        .set({ status: "COMPLETED" })
+        .where(eq(calibrationVisit.id, id))
+        .returning();
+
+      return c.json(updated);
+    },
   );

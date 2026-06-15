@@ -95,6 +95,7 @@ import { loadJobFinancialContexts } from "../lib/finance";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
+import { syncVisitStatusFromJobs } from "../lib/visits";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 import {
   getEffectiveCertificateTemplateSnapshot,
@@ -2265,6 +2266,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
+
+      // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.
+      if (existing.status === "DRAFT" && updated?.visitId) {
+        try {
+          await syncVisitStatusFromJobs(updated.visitId);
+        } catch (error) {
+          console.error("[Jobs] Failed to sync visit status:", error);
+        }
+      }
 
       return c.json({
         message: "Dados salvos com sucesso",

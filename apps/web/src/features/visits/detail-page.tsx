@@ -191,11 +191,24 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     onError: (mutationError: Error) => toast.error(mutationError.message),
   })
 
+  const completeMutation = useMutation({
+    mutationFn: async () => calibraApi.visits.complete(visit.id),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Visita concluída')
+    },
+    onError: (mutationError: Error) => toast.error(mutationError.message),
+  })
+
   const busy =
     assignMutation.isPending ||
     rescheduleMutation.isPending ||
     confirmMutation.isPending ||
-    cancelMutation.isPending
+    cancelMutation.isPending ||
+    completeMutation.isPending
+
+  const canComplete =
+    visit.status === 'CONFIRMED' || visit.status === 'IN_PROGRESS'
 
   const addressText = formatVisitAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
@@ -301,6 +314,16 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
             >
               Reagendar
             </Button>
+            {canComplete ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => completeMutation.mutate()}
+              >
+                Concluir visita
+              </Button>
+            ) : null}
             <AlertDialog>
               <AlertDialogTrigger
                 render={

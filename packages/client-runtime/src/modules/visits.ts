@@ -82,5 +82,13 @@ export function createVisitsApi(rawCloudClient: any): VisitsApi {
         "Erro ao cancelar visita",
       );
     },
+    async complete<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.visits[":id"].complete.$post({
+          param: { id: String(id) },
+        }),
+        "Erro ao concluir visita",
+      );
+    },
   };
 }
