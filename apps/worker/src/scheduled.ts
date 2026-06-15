@@ -16,6 +16,7 @@ import {
   notifyJobOverdue,
   notifyStandardExpired,
   notifyStandardExpiring,
+  notifyVisitReminder,
   sendPortalDueDigests,
   type PortalDigestRunResult,
 } from "@calibra-facil/notifications";
@@ -88,6 +89,13 @@ interface CompetenceExpiredRow {
   organization_id: string;
   expires_at: Date;
   days_expired: number;
+}
+
+interface VisitDueRow {
+  id: number;
+  organization_id: string;
+  scheduled_at: Date;
+  days_until_visit: number;
 }
 
 // Helper to run a database operation with a fresh connection
@@ -406,6 +414,46 @@ async function checkCompetencesExpired(
   return result.rows;
 }
 
+/**
+ * Check for confirmed on-site visits happening within the next 3 days.
+ *
+ * Duplicate prevention: each visit is reminded once per 3-day window, so a
+ * visit confirmed far ahead still gets exactly one heads-up as it approaches.
+ */
+async function checkVisitsDueSoon(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<VisitDueRow[]> {
+  const result = await client.query<VisitDueRow>(
+    `
+    SELECT
+      v.id,
+      v.organization_id,
+      v.scheduled_at,
+      EXTRACT(DAY FROM v.scheduled_at::date - CURRENT_DATE)::int as days_until_visit
+    FROM calibration_visit v
+    WHERE v.status = 'CONFIRMED'
+      AND v.scheduled_at IS NOT NULL
+      AND v.scheduled_at::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'visit'
+          AND sn.entity_id = v.id
+          AND sn.type = 'VISIT_REMINDER'
+          AND sn.lead_time_days = 3
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '3 days'
+      )
+    ORDER BY v.scheduled_at ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
 const BATCH_SIZE = 100;
 
 /**
@@ -420,6 +468,7 @@ export async function processScheduledNotifications(
   jobsProcessed: number;
   competencesExpiringProcessed: number;
   competencesExpiredProcessed: number;
+  visitsProcessed: number;
 }> {
   let assetsProcessed = 0;
   let standardsProcessed = 0;
@@ -427,6 +476,7 @@ export async function processScheduledNotifications(
   let jobsProcessed = 0;
   let competencesExpiringProcessed = 0;
   let competencesExpiredProcessed = 0;
+  let visitsProcessed = 0;
 
   await withDbClient(env, async (client) => {
     // 1. Process assets due for recalibration (with pagination)
@@ -686,6 +736,43 @@ export async function processScheduledNotifications(
 
       compExpiredOffset += BATCH_SIZE;
     } while (compExpiredBatch.length === BATCH_SIZE);
+
+    // 7. Remind técnico + customer of upcoming on-site visits (with pagination)
+    let visitOffset = 0;
+    let visitBatch: VisitDueRow[];
+
+    do {
+      visitBatch = await checkVisitsDueSoon(client, visitOffset, BATCH_SIZE);
+      if (visitBatch.length > 0) {
+        console.log(
+          `[Scheduled] Processing ${visitBatch.length} upcoming visits (offset ${visitOffset})`,
+        );
+      }
+
+      for (const visit of visitBatch) {
+        try {
+          await notifyVisitReminder(visit.id);
+
+          await recordScheduledNotification(client, {
+            organizationId: visit.organization_id,
+            type: "VISIT_REMINDER",
+            entityType: "visit",
+            entityId: visit.id,
+            scheduledFor: visit.scheduled_at,
+            leadTimeDays: 3,
+          });
+
+          visitsProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing visit ${visit.id}:`,
+            error,
+          );
+        }
+      }
+
+      visitOffset += BATCH_SIZE;
+    } while (visitBatch.length === BATCH_SIZE);
   });
 
   return {
@@ -695,6 +782,7 @@ export async function processScheduledNotifications(
     jobsProcessed,
     competencesExpiringProcessed,
     competencesExpiredProcessed,
+    visitsProcessed,
   };
 }
 

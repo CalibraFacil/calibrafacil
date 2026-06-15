@@ -1366,6 +1366,46 @@ export async function notifyVisitCancelled(
   }
 }
 
+/**
+ * Remind the technician + customer that an on-site visit is coming up.
+ * Driven by the scheduled-notifications cron (no actor — system reminder).
+ */
+export async function notifyVisitReminder(visitId: number): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const visitDate = formatVisitDate(visit.scheduledAt);
+
+  if (visit.technicianId) {
+    await sendNotification({
+      recipientUserId: visit.technicianId,
+      organizationId: visit.organizationId,
+      type: "VISIT_REMINDER",
+      priority: "MEDIUM",
+      title: "Lembrete de visita no local",
+      message: `Lembrete: visita ao cliente ${visit.customerName} em ${visitDate}.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: "/dashboard/visits",
+    });
+  }
+
+  if (visit.requestSubmittedBy && visit.requestAuthOrganizationId) {
+    await sendNotification({
+      recipientUserId: visit.requestSubmittedBy,
+      organizationId: visit.requestAuthOrganizationId,
+      type: "VISIT_REMINDER",
+      priority: "MEDIUM",
+      title: "Lembrete de visita no local",
+      message: `Lembrete: ${visit.labName} fará a visita de calibração no local em ${visitDate}.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: visit.sourceRequestId
+        ? `/portal/requests/${visit.sourceRequestId}`
+        : "/portal/requests",
+      emailBrand: await getLabEmailBrand(visit.organizationId),
+    });
+  }
+}
+
 // =============================================================================
 // NOTIFICATION TRIGGERS - Called from job routes
 // =============================================================================

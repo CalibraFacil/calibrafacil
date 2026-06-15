@@ -29,6 +29,7 @@ export {
   notifyVisitConfirmed,
   notifyVisitRescheduled,
   notifyVisitCancelled,
+  notifyVisitReminder,
   sendPortalDueDigests,
   type PortalDigestRunResult,
   type SendNotificationOptions,

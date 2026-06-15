@@ -41,6 +41,7 @@ type NotificationType =
   | 'VISIT_CONFIRMED'
   | 'VISIT_RESCHEDULED'
   | 'VISIT_CANCELLED'
+  | 'VISIT_REMINDER'
 
 type NotificationPreference = {
   inApp: boolean
@@ -149,6 +150,12 @@ const notificationSettings: NotificationSetting[] = [
     id: 'VISIT_CANCELLED',
     title: 'Visita no local cancelada',
     description: 'Quando uma visita de calibração in loco é cancelada',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_REMINDER',
+    title: 'Lembrete de visita no local',
+    description: 'Lembrete antes de uma visita de calibração in loco agendada',
     category: 'operational',
   },
   {

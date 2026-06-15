@@ -6770,7 +6770,8 @@ export type NotificationType =
   | "VISIT_SCHEDULED" // On-site visit proposed/assigned to a technician
   | "VISIT_CONFIRMED" // On-site visit confirmed (date + technician) for the customer
   | "VISIT_RESCHEDULED" // On-site visit date changed
-  | "VISIT_CANCELLED"; // On-site visit cancelled
+  | "VISIT_CANCELLED" // On-site visit cancelled
+  | "VISIT_REMINDER"; // On-site visit coming up soon (scheduled reminder)
 
 /**
  * Notification priority levels
@@ -6904,7 +6905,8 @@ export type ScheduledNotificationEntityType =
   | "asset"
   | "standard"
   | "job"
-  | "competence";
+  | "competence"
+  | "visit";
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.
