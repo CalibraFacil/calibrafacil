@@ -419,6 +419,14 @@ export const calibraApiPolicyRegistry = {
     reject: "cloud-only",
     convert: "cloud-only",
   },
+  visits: {
+    list: "cloud-only",
+    get: "cloud-only",
+    assign: "cloud-only",
+    confirm: "cloud-only",
+    reschedule: "cloud-only",
+    cancel: "cloud-only",
+  },
   integrations: {
     list: "cloud-only",
     create: "cloud-only",

@@ -1289,6 +1289,26 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Solicitações de calibração");
       },
     },
+    visits: {
+      async list() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async get() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async assign() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async confirm() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async reschedule() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async cancel() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+    },
     integrations: {
       async list<TResponse = unknown>() {
         return assumeDesktopPayload<TResponse>({

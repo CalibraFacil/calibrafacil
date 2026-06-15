@@ -1345,6 +1345,55 @@ export interface CalibrationRequestsApi {
   ): Promise<TResponse>;
 }
 
+// — On-site visits (calibração in loco) —————————————————————————————————————
+
+export type VisitsListInput = {
+  page?: number;
+  limit?: number;
+  status?: string;
+  technicianId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  mine?: boolean;
+};
+
+export type VisitAssignInput = { technicianId: string };
+
+export type VisitConfirmInput = {
+  scheduledAt?: string | null;
+  technicianId?: string | null;
+};
+
+export type VisitRescheduleInput = {
+  scheduledAt?: string | null;
+  scheduledEndAt?: string | null;
+  address?: unknown;
+  notes?: string | null;
+};
+
+export type VisitCancelInput = { reason?: string | null };
+
+export interface VisitsApi {
+  list<TResponse = unknown>(input?: VisitsListInput): Promise<TResponse>;
+  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  assign<TResponse = unknown>(
+    id: string | number,
+    input: VisitAssignInput,
+  ): Promise<TResponse>;
+  confirm<TResponse = unknown>(
+    id: string | number,
+    input?: VisitConfirmInput,
+  ): Promise<TResponse>;
+  reschedule<TResponse = unknown>(
+    id: string | number,
+    input: VisitRescheduleInput,
+  ): Promise<TResponse>;
+  cancel<TResponse = unknown>(
+    id: string | number,
+    input?: VisitCancelInput,
+  ): Promise<TResponse>;
+}
+
 export interface IntegrationsApi {
   list<TResponse = unknown>(): Promise<TResponse>;
   create<TResponse = unknown>(input: unknown): Promise<TResponse>;
@@ -2449,5 +2498,6 @@ export interface CalibraApi {
   trainingRecords: TrainingRecordsApi;
   customerSuccess: CustomerSuccessApi;
   calibrationRequests: CalibrationRequestsApi;
+  visits: VisitsApi;
   integrations: IntegrationsApi;
 }
