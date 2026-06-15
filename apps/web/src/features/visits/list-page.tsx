@@ -182,25 +182,20 @@ export function VisitsPage() {
                         {addressText ? ` · ${addressText}` : ''}
                       </p>
                     </div>
-                    {visit.sourceRequestId ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        render={
-                          <Link
-                            to="/dashboard/requests/$id"
-                            params={{ id: String(visit.sourceRequestId) }}
-                          />
-                        }
-                      >
-                        Ver solicitação
-                        <HugeiconsIcon
-                          icon={ArrowRight01Icon}
-                          strokeWidth={2}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0"
+                      render={
+                        <Link
+                          to="/dashboard/visits/$id"
+                          params={{ id: String(visit.id) }}
                         />
-                      </Button>
-                    ) : null}
+                      }
+                    >
+                      Gerenciar
+                      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+                    </Button>
                   </div>
                 )
               })}

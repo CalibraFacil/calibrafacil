@@ -23,7 +23,9 @@ import {
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
+  notifyVisitCancelled,
   notifyVisitConfirmed,
+  notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
 
@@ -307,6 +309,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", RescheduleVisitSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = parseInt(c.req.param("id"), 10);
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
@@ -317,12 +320,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
       }
 
+      const nextScheduledAt = input.scheduledAt
+        ? new Date(input.scheduledAt)
+        : visit.scheduledAt;
+      const dateChanged =
+        nextScheduledAt?.getTime() !== visit.scheduledAt?.getTime();
+
       const [updated] = await db
         .update(calibrationVisit)
         .set({
-          scheduledAt: input.scheduledAt
-            ? new Date(input.scheduledAt)
-            : visit.scheduledAt,
+          scheduledAt: nextScheduledAt,
           scheduledEndAt: input.scheduledEndAt
             ? new Date(input.scheduledEndAt)
             : visit.scheduledEndAt,
@@ -331,6 +338,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationVisit.id, id))
         .returning();
+
+      if (dateChanged) {
+        try {
+          await notifyVisitRescheduled(id, session.user.id);
+        } catch (error) {
+          console.error("[Visits] Failed to notify reschedule:", error);
+        }
+      }
+
       return c.json(updated);
     },
   )
@@ -364,6 +380,13 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationVisit.id, id))
         .returning();
+
+      try {
+        await notifyVisitCancelled(id, session.user.id, reason ?? undefined);
+      } catch (error) {
+        console.error("[Visits] Failed to notify cancellation:", error);
+      }
+
       return c.json(updated);
     },
   );

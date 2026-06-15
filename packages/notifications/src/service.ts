@@ -1271,6 +1271,101 @@ export async function notifyVisitConfirmed(
   });
 }
 
+/**
+ * Notify the technician + customer when an on-site visit is rescheduled.
+ * No-op for the recipient that triggered the change.
+ */
+export async function notifyVisitRescheduled(
+  visitId: number,
+  actorUserId: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const visitDate = formatVisitDate(visit.scheduledAt);
+
+  if (visit.technicianId && visit.technicianId !== actorUserId) {
+    await sendNotification({
+      recipientUserId: visit.technicianId,
+      organizationId: visit.organizationId,
+      type: "VISIT_RESCHEDULED",
+      priority: "MEDIUM",
+      title: "Visita no local reagendada",
+      message: `A visita ao cliente ${visit.customerName} foi reagendada para ${visitDate}.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: "/dashboard/visits",
+    });
+  }
+
+  if (
+    visit.requestSubmittedBy &&
+    visit.requestAuthOrganizationId &&
+    visit.requestSubmittedBy !== actorUserId
+  ) {
+    await sendNotification({
+      recipientUserId: visit.requestSubmittedBy,
+      organizationId: visit.requestAuthOrganizationId,
+      type: "VISIT_RESCHEDULED",
+      priority: "HIGH",
+      title: "Visita no local reagendada",
+      message: `${visit.labName} reagendou sua visita de calibração no local para ${visitDate}.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: visit.sourceRequestId
+        ? `/portal/requests/${visit.sourceRequestId}`
+        : "/portal/requests",
+      emailBrand: await getLabEmailBrand(visit.organizationId),
+    });
+  }
+}
+
+/**
+ * Notify the technician + customer when an on-site visit is cancelled.
+ * No-op for the recipient that triggered the cancellation.
+ */
+export async function notifyVisitCancelled(
+  visitId: number,
+  actorUserId: string,
+  reason?: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const reasonSuffix = reason?.trim() ? ` Motivo: ${reason.trim()}.` : "";
+
+  if (visit.technicianId && visit.technicianId !== actorUserId) {
+    await sendNotification({
+      recipientUserId: visit.technicianId,
+      organizationId: visit.organizationId,
+      type: "VISIT_CANCELLED",
+      priority: "MEDIUM",
+      title: "Visita no local cancelada",
+      message: `A visita ao cliente ${visit.customerName} foi cancelada.${reasonSuffix}`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: "/dashboard/visits",
+    });
+  }
+
+  if (
+    visit.requestSubmittedBy &&
+    visit.requestAuthOrganizationId &&
+    visit.requestSubmittedBy !== actorUserId
+  ) {
+    await sendNotification({
+      recipientUserId: visit.requestSubmittedBy,
+      organizationId: visit.requestAuthOrganizationId,
+      type: "VISIT_CANCELLED",
+      priority: "HIGH",
+      title: "Visita no local cancelada",
+      message: `${visit.labName} cancelou sua visita de calibração no local.${reasonSuffix}`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: visit.sourceRequestId
+        ? `/portal/requests/${visit.sourceRequestId}`
+        : "/portal/requests",
+      emailBrand: await getLabEmailBrand(visit.organizationId),
+    });
+  }
+}
+
 // =============================================================================
 // NOTIFICATION TRIGGERS - Called from job routes
 // =============================================================================

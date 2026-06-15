@@ -1879,6 +1879,8 @@ export const NotificationTypeSchema = z.enum([
   "CALIBRATION_REQUEST_CONVERTED",
   "VISIT_SCHEDULED", // On-site visit proposed/assigned to a technician
   "VISIT_CONFIRMED", // On-site visit confirmed (date + technician) for the customer
+  "VISIT_RESCHEDULED", // On-site visit date changed
+  "VISIT_CANCELLED", // On-site visit cancelled
 ]);
 
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

@@ -6768,7 +6768,9 @@ export type NotificationType =
   | "CALIBRATION_REQUEST_REJECTED"
   | "CALIBRATION_REQUEST_CONVERTED"
   | "VISIT_SCHEDULED" // On-site visit proposed/assigned to a technician
-  | "VISIT_CONFIRMED"; // On-site visit confirmed (date + technician) for the customer
+  | "VISIT_CONFIRMED" // On-site visit confirmed (date + technician) for the customer
+  | "VISIT_RESCHEDULED" // On-site visit date changed
+  | "VISIT_CANCELLED"; // On-site visit cancelled
 
 /**
  * Notification priority levels

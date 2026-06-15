@@ -42,6 +42,33 @@ export type VisitsListData = {
   }
 }
 
+export type VisitDetailJob = {
+  jobId: number
+  jobCode: string
+  status: string
+  assetName: string
+  assetTag: string
+}
+
+export type VisitDetail = {
+  id: number
+  status: VisitStatus
+  scheduledAt: string | null
+  scheduledEndAt: string | null
+  address: VisitAddress
+  notes: string | null
+  customerId: number
+  customerName: string
+  technicianId: string | null
+  technicianName: string | null
+  sourceRequestId: number | null
+  createdAt: string
+  confirmedAt: string | null
+  cancelledAt: string | null
+  cancelReason: string | null
+  jobs: Array<VisitDetailJob>
+}
+
 export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {
   PROPOSED: 'Proposta',
   CONFIRMED: 'Confirmada',

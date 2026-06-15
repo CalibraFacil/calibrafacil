@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
-import type { VisitsListData, VisitStatus } from './types'
+import type { VisitDetail, VisitsListData, VisitStatus } from './types'
 
 export const VISITS_LIST_LIMIT = 20
 
@@ -26,6 +26,26 @@ export function visitsListQueryOptions(input: {
         status: input.status || undefined,
         mine: input.mine || undefined,
       }),
+  })
+}
+
+export function visitDetailQueryOptions(visitId: number) {
+  return queryOptions({
+    queryKey: ['visit', visitId],
+    queryFn: () => calibraApi.visits.get<VisitDetail>(visitId),
+  })
+}
+
+export function useVisitDetailData({
+  visitId,
+  enabled,
+}: {
+  visitId: number
+  enabled: boolean
+}) {
+  return useQuery({
+    ...visitDetailQueryOptions(visitId),
+    enabled,
   })
 }
 

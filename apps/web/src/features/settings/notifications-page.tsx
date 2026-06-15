@@ -39,6 +39,8 @@ type NotificationType =
   | 'CALIBRATION_REQUEST_CONVERTED'
   | 'VISIT_SCHEDULED'
   | 'VISIT_CONFIRMED'
+  | 'VISIT_RESCHEDULED'
+  | 'VISIT_CANCELLED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -135,6 +137,18 @@ const notificationSettings: NotificationSetting[] = [
     title: 'Visita no local confirmada',
     description:
       'Quando o laboratório confirma uma visita de calibração in loco',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_RESCHEDULED',
+    title: 'Visita no local reagendada',
+    description: 'Quando a data de uma visita de calibração in loco muda',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_CANCELLED',
+    title: 'Visita no local cancelada',
+    description: 'Quando uma visita de calibração in loco é cancelada',
     category: 'operational',
   },
   {
