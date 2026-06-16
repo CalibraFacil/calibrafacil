@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ACTION_BUTTON_CLASS } from '@/components/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {
   mergeViaCepAddress,
   type ViaCepAddress,
@@ -162,6 +163,10 @@ export function CustomerEditForm({
 
   const isSaving = updateMutation.isPending
 
+  // Non-blocking: warn on a malformed 14-char CNPJ (CPFs are 11 chars and never trigger this).
+  const invalidCnpjHint =
+    normalizeCnpj(taxId).length === 14 && !isValidCnpj(taxId)
+
   return (
     <form id="client-info-form" onSubmit={handleSubmit}>
       <ClientPanelBody className="space-y-8">
@@ -195,7 +200,6 @@ export function CustomerEditForm({
                 id="taxId"
                 name="tax-id"
                 autoComplete="off"
-                inputMode="numeric"
                 maskOptions={cpfCnpjMask}
                 value={taxId}
                 onInput={(e) => setTaxId(e.currentTarget.value)}
@@ -203,9 +207,15 @@ export function CustomerEditForm({
                 placeholder="Ex.: 00.000.000/0000-00…"
                 spellCheck={false}
               />
-              <FieldDescription>
-                Documento de identificação fiscal.
-              </FieldDescription>
+              {invalidCnpjHint ? (
+                <FieldDescription className="text-amber-700 dark:text-amber-400">
+                  CNPJ inválido — verifique os dígitos. Você ainda pode salvar.
+                </FieldDescription>
+              ) : (
+                <FieldDescription>
+                  Documento de identificação fiscal.
+                </FieldDescription>
+              )}
             </Field>
           </FieldGroup>
         </ClientSection>

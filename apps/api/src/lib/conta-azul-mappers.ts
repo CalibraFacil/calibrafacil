@@ -14,6 +14,7 @@ import type {
   IntegrationSalePayload,
   ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
+import { normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import type {
   ContaAzulInstallment,
   ContaAzulCommercialItemPayload,
@@ -499,10 +500,11 @@ export function mapPessoaToContaAzulPessoa(
     );
   }
 
-  const taxId = onlyDigits(payload.taxId);
+  // normalizeCnpj preserves alphanumeric CNPJ chars (length stays 14); CPFs stay numeric (11).
+  const taxId = normalizeCnpj(payload.taxId);
   if (taxId.length !== 11 && taxId.length !== 14) {
     throw new Error(
-      `CPF/CNPJ do ${roleConfig.label} deve ter 11 ou 14 dígitos`,
+      `CPF/CNPJ do ${roleConfig.label} deve ter 11 ou 14 caracteres`,
     );
   }
 
@@ -819,7 +821,7 @@ export function mapContaAzulServiceInvoiceToFiscalMetadata(
       optionalTrimmed(invoice.informacao_transmissao?.data_inicio_emissao) ??
       optionalTrimmed(invoice.data_competencia),
     customerName: optionalTrimmed(invoice.nome_cliente),
-    customerDocument: onlyDigits(invoice.documento_cliente) || null,
+    customerDocument: normalizeCnpj(invoice.documento_cliente) || null,
     saleRemoteId: optionalTrimmed(invoice.id_venda),
     contractRemoteId: optionalTrimmed(invoice.id_contrato),
     saleNumber: numberOrTextToString(invoice.numero_venda),
@@ -841,7 +843,7 @@ export function mapContaAzulServiceInvoiceToFiscalMetadata(
       data_inicio_cancelamento: optionalTrimmed(
         invoice.informacao_transmissao?.data_inicio_cancelamento,
       ),
-      documento_cliente: onlyDigits(invoice.documento_cliente) || null,
+      documento_cliente: normalizeCnpj(invoice.documento_cliente) || null,
       nome_cliente: optionalTrimmed(invoice.nome_cliente),
       valor_total_nfse: invoice.valor_total_nfse ?? null,
       cidade_emissao: invoice.cidade_emissao

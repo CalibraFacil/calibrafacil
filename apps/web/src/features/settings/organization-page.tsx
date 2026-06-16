@@ -122,6 +122,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { brazilPhoneMask, cepMask, cnpjMask } from '@/lib/input-masks'
+import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 
 type ActiveOrganization = NonNullable<
   ReturnType<typeof useActiveOrganization>['data']
@@ -1006,6 +1007,13 @@ function OrganizationSettingsPage({
                           disabled={isUpdatingIso}
                           placeholder="00.000.000/0000-00"
                         />
+                        {normalizeCnpj(cnpj).length === 14 &&
+                          !isValidCnpj(cnpj) && (
+                            <FieldDescription className="text-amber-700 dark:text-amber-400">
+                              CNPJ inválido — verifique os dígitos. Você ainda
+                              pode salvar.
+                            </FieldDescription>
+                          )}
                       </Field>
 
                       {/* Accreditation */}

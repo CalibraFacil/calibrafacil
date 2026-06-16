@@ -252,7 +252,7 @@ describe("Conta Azul mappers", () => {
         ...customerPayload,
         taxId: "123",
       }),
-    ).toThrow("CPF/CNPJ do cliente deve ter 11 ou 14 dígitos");
+    ).toThrow("CPF/CNPJ do cliente deve ter 11 ou 14 caracteres");
 
     expect(() =>
       mapPessoaToContaAzulPessoa({
@@ -260,7 +260,19 @@ describe("Conta Azul mappers", () => {
         pessoaRole: "supplier",
         taxId: "123",
       }),
-    ).toThrow("CPF/CNPJ do fornecedor deve ter 11 ou 14 dígitos");
+    ).toThrow("CPF/CNPJ do fornecedor deve ter 11 ou 14 caracteres");
+  });
+
+  it("preserves an alphanumeric CNPJ (CNPJ alfanumérico) as Jurídica", () => {
+    expect(
+      mapCustomerToContaAzulPessoa({
+        ...customerPayload,
+        taxId: "12.ABC.345/01DE-35",
+      }),
+    ).toMatchObject({
+      tipo_pessoa: "Jurídica",
+      cnpj: "12ABC34501DE35",
+    });
   });
 
   it("maps product catalog items to documented Conta Azul product payloads", () => {

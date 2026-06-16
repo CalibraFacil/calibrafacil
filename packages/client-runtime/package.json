@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
-    "hono": "^4.12.23"
+    "hono": "^4.12.25"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",

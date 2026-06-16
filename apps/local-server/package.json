@@ -26,7 +26,7 @@
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@hono/node-server": "^2.0.4",
-    "hono": "^4.12.23",
+    "hono": "^4.12.25",
     "serialport": "^13.0.0",
     "usb": "^2.16.0"
   },

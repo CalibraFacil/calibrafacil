@@ -27,6 +27,7 @@ import {
   PanelHeader,
 } from '@/components/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {
   mergeViaCepAddress,
   type ViaCepAddress,
@@ -155,6 +156,10 @@ export function CustomerCreateForm({
     onResolved: handleViaCepResolved,
   })
 
+  // Non-blocking: warn on a malformed 14-char CNPJ (CPFs are 11 chars and never trigger this).
+  const invalidCnpjHint =
+    normalizeCnpj(formData.taxId).length === 14 && !isValidCnpj(formData.taxId)
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -201,6 +206,11 @@ export function CustomerCreateForm({
                   autoComplete="off"
                   spellCheck={false}
                 />
+                {invalidCnpjHint && (
+                  <FieldDescription className="text-amber-700 dark:text-amber-400">
+                    CNPJ inválido — verifique os dígitos. Você ainda pode salvar.
+                  </FieldDescription>
+                )}
               </Field>
             </div>
           </section>

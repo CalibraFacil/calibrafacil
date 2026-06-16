@@ -4,6 +4,7 @@ import {
   normalizeGenericFinancialErpConfig,
   validateIntegrationMappings,
 } from "@calibra-facil/shared";
+import { normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import type {
   ContaAzulConnectionConfig,
   ContaAzulReferenceDomain,
@@ -613,10 +614,6 @@ function getAcquittanceId(acquittance: unknown) {
   return null;
 }
 
-function onlyDigits(value: string | null | undefined) {
-  return value?.replace(/\D/g, "") ?? "";
-}
-
 function extractPessoaItems(response: ContaAzulPessoaSearchResponse) {
   return response.items ?? response.itens ?? [];
 }
@@ -625,12 +622,14 @@ function getPessoaItemId(item: ContaAzulPessoaSearchItem) {
   return typeof item.id === "string" && item.id.trim() ? item.id.trim() : null;
 }
 
+// normalizeCnpj preserves alphanumeric CNPJ chars; both sides of the equality match below must
+// use it so person dedup keeps working for alphanumeric CNPJs (CPFs are unaffected — numeric).
 function getPessoaDocument(item: ContaAzulPessoaSearchItem) {
-  return onlyDigits(item.documento ?? item.cpf ?? item.cnpj);
+  return normalizeCnpj(item.documento ?? item.cpf ?? item.cnpj);
 }
 
 function getPayloadDocument(payload: ContaAzulPessoaPayload) {
-  return onlyDigits(payload.cpf ?? payload.cnpj);
+  return normalizeCnpj(payload.cpf ?? payload.cnpj);
 }
 
 function getProductSku(payload: ContaAzulProductPayload) {
