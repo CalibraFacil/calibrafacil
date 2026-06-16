@@ -17,6 +17,7 @@ export type ServiceOrderDocumentData = {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    logoUrl?: string | null;
   };
   unit?: { name: string | null };
   customer: {
@@ -55,6 +56,10 @@ export type ServiceOrderDocumentData = {
     terms?: string | null;
   };
   requestedServices?: string[];
+  /** Source/previous service order this one was derived from (e.g. recalibration). */
+  previousServiceOrderNumber?: string | null;
+  /** Responsible technician of the source/previous service order. */
+  previousTechnicianName?: string | null;
   qrCodeDataUrl?: string | null;
   publicUrl?: string | null;
   receiverName?: string | null;
@@ -140,22 +145,27 @@ const pageStyles = `
   .meta-line { margin: 0; font-size: 6.9pt; }
   .header-info { margin-top: 0.35mm; font-size: 6.8pt; line-height: 1.08; }
   .header-info-line { margin: 0.05mm 0; }
+  .header-brand { display: flex; align-items: center; gap: 2mm; }
+  .lab-logo { max-height: 13mm; max-width: 42mm; object-fit: contain; flex: 0 0 auto; }
+  .lab-copy .lab-logo { max-height: 10mm; max-width: 34mm; }
   .section-title { margin: 0.7mm 0 0.35mm; padding: 0.35mm 0.7mm; border: 1px solid #000; font-size: 7.1pt; font-weight: 700; text-transform: uppercase; background: #f2f2f2; }
   table.form-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.7mm; }
   .form-table td, .form-table th { border: 1px solid #000; padding: 0.55mm 0.85mm; vertical-align: top; }
   .form-table th { text-align: left; font-size: 6.8pt; font-weight: 700; text-transform: uppercase; background: #f2f2f2; }
   .cell-label { display: block; font-size: 6.1pt; font-weight: 700; text-transform: uppercase; margin-bottom: 0.15mm; }
   .cell-value { display: block; min-height: 1.8mm; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cell-value-tall { min-height: 6.5mm; }
   .notes-box { border: 1px solid #000; min-height: 6mm; padding: 0.65mm 0.85mm; white-space: pre-wrap; margin-bottom: 0.55mm; }
-  .writing-box { border: 1px solid #000; height: 12mm; padding: 0; margin-bottom: 0.6mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 4mm, #000 4mm, #000 4.12mm); }
+  .writing-box { border: 1px solid #000; height: 12mm; padding: 0; margin-bottom: 0.6mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 4.6mm, #000 4.6mm, #000 4.72mm); }
   .writing-box.compact { height: 7mm; }
+  .writing-box.observations { height: 9mm; }
   .parts-table td { height: 4.2mm; }
   .signature-table td { height: 5.5mm; }
   .fine-print { font-size: 7.5pt; }
   .compact-list { margin: 0; padding-left: 3.5mm; }
   .compact-list li { margin: 0.65mm 0; }
   .checkbox-line { display: inline-block; margin-right: 1.8mm; white-space: nowrap; }
-  .checkbox { display: inline-flex; width: 2.35mm; height: 2.35mm; border: 1px solid #000; margin-right: 0.55mm; vertical-align: -0.3mm; align-items: center; justify-content: center; font-size: 5pt; font-weight: 700; line-height: 1; }
+  .checkbox { display: inline-block; width: 2.35mm; height: 2.35mm; border: 1px solid #000; margin-right: 0.55mm; vertical-align: -0.45mm; text-align: center; font-size: 5pt; font-weight: 700; line-height: 2.2mm; overflow: hidden; }
   .lab-copy { font-size: 7.45pt; }
   .lab-copy .header td { padding: 0.55mm 0.8mm; }
   .lab-copy .title { font-size: 10.2pt; }
@@ -165,10 +175,13 @@ const pageStyles = `
   .lab-copy .form-table td, .lab-copy .form-table th { padding: 0.45mm 0.7mm; }
   .lab-copy .cell-label { font-size: 5.8pt; }
   .lab-copy .cell-value { min-height: 1.45mm; }
+  .lab-copy .cell-value-tall { min-height: 6.5mm; }
   .lab-copy .notes-box { min-height: 5mm; }
-  .lab-copy .writing-box { height: 20mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 5mm, #000 5mm, #000 5.12mm); }
-  .lab-copy .writing-box.compact { height: 30mm; }
-  .lab-copy .parts-table td { height: 3.2mm; }
+  /* Lab-copy handwriting areas: 6mm rule spacing × 4 lines = 24mm. */
+  .lab-copy .writing-box { height: 24mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 6mm, #000 6mm, #000 6.12mm); }
+  .lab-copy .writing-box.compact { height: 24mm; }
+  .lab-copy .writing-box.observations { height: 24mm; }
+  .lab-copy .parts-table td { height: 7mm; }
   .lab-copy .signature-table td { height: 4mm; }
   .qr { width: 82px; height: 82px; object-fit: contain; }
   .qr-cell { text-align: right; }
@@ -228,15 +241,19 @@ function Cell({
   label,
   value,
   fallback,
+  tall,
 }: {
   label: string;
   value?: unknown;
   fallback?: string;
+  tall?: boolean;
 }) {
   return (
     <td>
       <span className="cell-label">{label}</span>
-      <span className="cell-value">{text(value, fallback)}</span>
+      <span className={tall ? "cell-value cell-value-tall" : "cell-value"}>
+        {text(value, fallback)}
+      </span>
     </td>
   );
 }
@@ -262,17 +279,31 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
       <tbody>
         <tr>
           <td style={{ width: "64%" }}>
-            <h1 className="title">ORDEM DE SERVIÇO</h1>
-            <div className="header-info">
-              <div className="header-info-line">{data.lab.name}</div>
-              <div className="header-info-line">
-                {[data.lab.phone, data.lab.email].filter(Boolean).join(" | ") ||
-                  "-"}
+            <div className="header-brand">
+              {data.lab.logoUrl ? (
+                <img
+                  className="lab-logo"
+                  src={data.lab.logoUrl}
+                  alt={data.lab.name}
+                />
+              ) : null}
+              <div>
+                <h1 className="title">ORDEM DE SERVIÇO</h1>
+                <div className="header-info">
+                  <div className="header-info-line">{data.lab.name}</div>
+                  <div className="header-info-line">
+                    {[data.lab.phone, data.lab.email]
+                      .filter(Boolean)
+                      .join(" | ") || "-"}
+                  </div>
+                  <div className="header-info-line">
+                    CNPJ: {text(data.lab.cnpj)}
+                  </div>
+                  <div className="header-info-line">
+                    {text(data.lab.address)}
+                  </div>
+                </div>
               </div>
-              <div className="header-info-line">
-                CNPJ: {text(data.lab.cnpj)}
-              </div>
-              <div className="header-info-line">{text(data.lab.address)}</div>
             </div>
           </td>
           <td style={{ width: "36%" }}>
@@ -563,12 +594,24 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
               label="Nº Etiqueta de Reparo"
               value={data.intake.inmetroRepairSealNumber}
               fallback=""
+              tall
             />
             <Cell
               label="Lacre novo"
               value={data.intake.newSealNumber}
               fallback=""
+              tall
             />
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="section-title">Histórico</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell label="OS anterior" value={data.previousServiceOrderNumber} />
+            <Cell label="Técnico anterior" value={data.previousTechnicianName} />
           </tr>
         </tbody>
       </table>
@@ -621,6 +664,9 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
 
       <div className="section-title">Serviço executado</div>
       <div className="writing-box compact" />
+
+      <div className="section-title">Observações</div>
+      <div className="writing-box observations" />
 
       <div className="section-title">Peças utilizadas</div>
       <table className="form-table parts-table">

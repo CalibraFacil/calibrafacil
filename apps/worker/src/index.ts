@@ -1638,6 +1638,7 @@ function formatAddress(parts: Record<string, unknown> | null | undefined) {
 }
 
 async function fetchServiceOrderDocumentData(
+  env: Env,
   client: Client,
   serviceOrderId: number,
 ): Promise<ServiceOrderDocumentData | null> {
@@ -1662,10 +1663,13 @@ async function fetchServiceOrderDocumentData(
       so.inmetro_repair_seal_number,
       so.client_visible_notes,
       so.internal_notes,
+      src.service_order_number as previous_so_number,
+      tech.name as previous_technician_name,
       o.name as lab_name,
       o.cnpj as lab_cnpj,
       o.phone as lab_phone,
       o.email as lab_email,
+      o.logo as lab_logo,
       ou.name as unit_name,
       c.name as customer_name,
       c.tax_id as customer_tax_id,
@@ -1688,6 +1692,8 @@ async function fetchServiceOrderDocumentData(
     LEFT JOIN customer c ON so.customer_id = c.id
     LEFT JOIN service_order_asset_snapshot snap ON snap.service_order_id = so.id
     LEFT JOIN service_order_settings settings ON settings.organization_id = so.organization_id
+    LEFT JOIN service_order src ON src.id = so.source_service_order_id
+    LEFT JOIN "user" tech ON tech.id = src.responsible_technician_id
     WHERE so.id = $1
     `,
     [serviceOrderId],
@@ -1706,6 +1712,12 @@ async function fetchServiceOrderDocumentData(
     },
   );
 
+  const labLogoUrl = await resolveOrganizationLogoDataUrl(
+    env,
+    row.lab_logo,
+    serviceOrderId,
+  );
+
   return {
     serviceOrderNumber: row.service_order_number,
     openedAt: row.opened_at,
@@ -1713,12 +1725,15 @@ async function fetchServiceOrderDocumentData(
       row.priority === "warranty"
         ? ["Garantia"]
         : ["Orçamento", "Manutenção corretiva"],
+    previousServiceOrderNumber: row.previous_so_number,
+    previousTechnicianName: row.previous_technician_name,
     lab: {
       name: row.lab_name ?? "Laboratório",
       cnpj: row.lab_cnpj,
       phone: row.lab_phone,
       email: row.lab_email,
       address: null,
+      logoUrl: labLogoUrl,
     },
     unit: { name: row.unit_name },
     customer: {
@@ -1767,7 +1782,7 @@ async function processServiceOrderIntakeDocument(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const data = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(client, serviceOrderId),
+      fetchServiceOrderDocumentData(env, client, serviceOrderId),
     );
     if (!data) return { success: false, error: "Service order not found" };
     const html = renderToString(
@@ -1922,7 +1937,7 @@ async function processServiceOrderQuote(
   try {
     if (!quoteId) return { success: false, error: "Missing quoteId" };
     const base = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(client, serviceOrderId),
+      fetchServiceOrderDocumentData(env, client, serviceOrderId),
     );
     if (!base) return { success: false, error: "Service order not found" };
     const quote = await withDbClient(env, async (client) => {
@@ -2006,7 +2021,7 @@ async function processServiceOrderDeliveryReceipt(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const base = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(client, serviceOrderId),
+      fetchServiceOrderDocumentData(env, client, serviceOrderId),
     );
     if (!base) return { success: false, error: "Service order not found" };
 
