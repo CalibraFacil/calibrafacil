@@ -30,7 +30,9 @@ function SegmentedControl<TValue extends string>({
       role="radiogroup"
       data-slot="segmented-control"
       className={cn(
-        'inline-flex w-full max-w-md rounded-lg bg-muted p-0.5 text-sm',
+        // p-1 + inner rounded-lg (8px) → outer rounded-xl (12px) stays concentric.
+        // w-fit so it hugs its segments even inside a stretching flex column.
+        'inline-flex w-fit items-center gap-1 rounded-xl border border-border/60 bg-muted/50 p-1',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
@@ -41,10 +43,12 @@ function SegmentedControl<TValue extends string>({
           <label
             key={option.value}
             className={cn(
-              'group relative flex flex-1 cursor-pointer items-center justify-center rounded-md px-3 py-1.5 font-medium transition-colors',
-              'text-muted-foreground hover:text-foreground',
-              'has-checked:bg-background has-checked:text-foreground has-checked:shadow-sm',
-              'has-focus-visible:ring-ring/50 has-focus-visible:ring-2',
+              'relative flex min-w-[6rem] cursor-pointer select-none items-center justify-center rounded-lg px-4 py-1.5 text-sm font-medium',
+              'transition-[color,background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.97]',
+              'has-focus-visible:ring-2 has-focus-visible:ring-ring/60',
+              checked
+                ? 'bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4)]'
+                : 'text-muted-foreground hover:text-foreground',
               disabled && 'pointer-events-none',
             )}
           >

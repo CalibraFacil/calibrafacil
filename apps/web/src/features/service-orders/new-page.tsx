@@ -103,6 +103,13 @@ function parseIntakeType(value: string): ServiceOrderFormData['intakeType'] {
   }
 }
 
+const PRIORITY_LABELS: Record<ServiceOrderFormData['priority'], string> = {
+  normal: 'Normal',
+  urgent: 'Urgente',
+  contract: 'Contrato',
+  warranty: 'Garantia',
+}
+
 function parsePriority(value: string): ServiceOrderFormData['priority'] {
   switch (value) {
     case 'urgent':
@@ -349,7 +356,7 @@ export function NewServiceOrderPage() {
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
         <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Atendimento
+          Ordem de serviço
         </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Nova ordem de serviço
@@ -487,7 +494,7 @@ export function NewServiceOrderPage() {
                           icon={PlusSignIcon}
                           className="mr-1 size-3"
                         />
-                        Novo ativo
+                        Novo instrumento
                       </Button>
                     </div>
                   </div>
@@ -562,191 +569,202 @@ export function NewServiceOrderPage() {
               title="Atendimento"
               description="Onde e como o serviço começa."
             >
-              <Field>
-                <FieldLabel>Local do serviço</FieldLabel>
-                <SegmentedControl
-                  name="service-location"
-                  value={formData.isExternalService ? 'field' : 'lab'}
-                  onValueChange={(value) =>
-                    updateField('isExternalService', value === 'field')
-                  }
-                  options={[
-                    { value: 'lab', label: 'No laboratório' },
-                    { value: 'field', label: 'No cliente' },
-                  ]}
-                />
-              </Field>
-
-              {formData.isExternalService ? (
-                <div className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/30 p-3.5 text-sm text-muted-foreground">
-                  <HugeiconsIcon
-                    icon={Location01Icon}
-                    className="mt-0.5 size-4 shrink-0"
-                  />
-                  <p>
-                    O técnico atende no endereço cadastrado do cliente.
-                    {formData.customerId ? (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="ml-1 h-auto p-0 align-baseline"
-                        onClick={() => setSheetKind('customer-edit')}
-                      >
-                        Editar cliente
-                      </Button>
-                    ) : null}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field>
-                      <FieldLabel>Tipo de entrada</FieldLabel>
-                      <NativeSelect
-                        value={formData.intakeType}
-                        onChange={(event) =>
-                          updateField(
-                            'intakeType',
-                            parseIntakeType(event.target.value),
-                          )
-                        }
-                        className="w-full"
-                      >
-                        <NativeSelectOption value="counter">
-                          Balcão
-                        </NativeSelectOption>
-                        <NativeSelectOption value="carrier">
-                          Transportadora
-                        </NativeSelectOption>
-                        <NativeSelectOption value="third_party">
-                          Portador terceiro
-                        </NativeSelectOption>
-                        <NativeSelectOption value="internal">
-                          Interna
-                        </NativeSelectOption>
-                        <NativeSelectOption value="warranty_return">
-                          Retorno em garantia
-                        </NativeSelectOption>
-                      </NativeSelect>
-                    </Field>
-
-                    <Field>
-                      <FieldLabel>Devolução</FieldLabel>
-                      <NativeSelect
-                        value={formData.deliveryMethod}
-                        onChange={(event) =>
-                          updateField(
-                            'deliveryMethod',
-                            parseDeliveryMethod(event.target.value),
-                          )
-                        }
-                        className="w-full"
-                      >
-                        <NativeSelectOption value="pickup_at_lab">
-                          Retirada no laboratório
-                        </NativeSelectOption>
-                        <NativeSelectOption value="ship_to_client">
-                          Envio ao cliente
-                        </NativeSelectOption>
-                        <NativeSelectOption value="third_party_pickup">
-                          Retirada por terceiro
-                        </NativeSelectOption>
-                      </NativeSelect>
-                    </Field>
+              <div className="space-y-5">
+                <Field>
+                  <FieldLabel>Local do serviço</FieldLabel>
+                  <div>
+                    <SegmentedControl
+                      name="service-location"
+                      value={formData.isExternalService ? 'field' : 'lab'}
+                      onValueChange={(value) =>
+                        updateField('isExternalService', value === 'field')
+                      }
+                      options={[
+                        { value: 'lab', label: 'No laboratório' },
+                        { value: 'field', label: 'No cliente' },
+                      ]}
+                    />
                   </div>
+                </Field>
 
-                  {formData.intakeType === 'carrier' && (
+                {formData.isExternalService ? (
+                  <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/40 p-3.5 text-sm">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground shadow-sm">
+                      <HugeiconsIcon icon={Location01Icon} className="size-4" />
+                    </span>
+                    <div className="space-y-0.5">
+                      <p className="text-foreground">
+                        O técnico atende no endereço cadastrado do cliente.
+                      </p>
+                      {formData.customerId ? (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0"
+                          onClick={() => setSheetKind('customer-edit')}
+                        >
+                          Editar cliente
+                        </Button>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Selecione o cliente para confirmar o endereço.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field>
-                        <FieldLabel>Transportadora *</FieldLabel>
-                        <Input
-                          value={formData.carrierName}
-                          onChange={(event) =>
-                            updateField('carrierName', event.target.value)
-                          }
-                        />
-                        {errors.carrierName && (
-                          <FieldError>{errors.carrierName}</FieldError>
-                        )}
-                      </Field>
-                      <Field>
-                        <FieldLabel>Documento da transportadora</FieldLabel>
-                        <Input
-                          value={formData.carrierDocument}
-                          onChange={(event) =>
-                            updateField('carrierDocument', event.target.value)
-                          }
-                        />
-                      </Field>
-                    </div>
-                  )}
-
-                  {formData.intakeType === 'third_party' && (
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <Field>
-                        <FieldLabel>Portador *</FieldLabel>
-                        <Input
-                          value={formData.thirdPartyName}
-                          onChange={(event) =>
-                            updateField('thirdPartyName', event.target.value)
-                          }
-                        />
-                        {errors.thirdPartyName && (
-                          <FieldError>{errors.thirdPartyName}</FieldError>
-                        )}
-                      </Field>
-                      <Field>
-                        <FieldLabel>Documento</FieldLabel>
-                        <Input
-                          value={formData.thirdPartyDocument}
+                        <FieldLabel>Tipo de entrada</FieldLabel>
+                        <NativeSelect
+                          value={formData.intakeType}
                           onChange={(event) =>
                             updateField(
-                              'thirdPartyDocument',
-                              event.target.value,
+                              'intakeType',
+                              parseIntakeType(event.target.value),
                             )
                           }
-                        />
+                          className="w-full"
+                        >
+                          <NativeSelectOption value="counter">
+                            Balcão
+                          </NativeSelectOption>
+                          <NativeSelectOption value="carrier">
+                            Transportadora
+                          </NativeSelectOption>
+                          <NativeSelectOption value="third_party">
+                            Portador terceiro
+                          </NativeSelectOption>
+                          <NativeSelectOption value="internal">
+                            Interna
+                          </NativeSelectOption>
+                          <NativeSelectOption value="warranty_return">
+                            Retorno em garantia
+                          </NativeSelectOption>
+                        </NativeSelect>
                       </Field>
+
                       <Field>
-                        <FieldLabel>Telefone</FieldLabel>
-                        <Input
-                          value={formData.thirdPartyPhone}
+                        <FieldLabel>Devolução</FieldLabel>
+                        <NativeSelect
+                          value={formData.deliveryMethod}
                           onChange={(event) =>
-                            updateField('thirdPartyPhone', event.target.value)
+                            updateField(
+                              'deliveryMethod',
+                              parseDeliveryMethod(event.target.value),
+                            )
                           }
-                        />
+                          className="w-full"
+                        >
+                          <NativeSelectOption value="pickup_at_lab">
+                            Retirada no laboratório
+                          </NativeSelectOption>
+                          <NativeSelectOption value="ship_to_client">
+                            Envio ao cliente
+                          </NativeSelectOption>
+                          <NativeSelectOption value="third_party_pickup">
+                            Retirada por terceiro
+                          </NativeSelectOption>
+                        </NativeSelect>
                       </Field>
                     </div>
-                  )}
-                </>
-              )}
 
-              <Field>
-                <FieldLabel>Prioridade</FieldLabel>
-                <NativeSelect
-                  value={formData.priority}
-                  onChange={(event) =>
-                    updateField('priority', parsePriority(event.target.value))
-                  }
-                  className="w-full sm:max-w-xs"
-                >
-                  <NativeSelectOption value="normal">Normal</NativeSelectOption>
-                  <NativeSelectOption value="urgent">
-                    Urgente
-                  </NativeSelectOption>
-                  <NativeSelectOption value="contract">
-                    Contrato
-                  </NativeSelectOption>
-                  <NativeSelectOption value="warranty">
-                    Garantia
-                  </NativeSelectOption>
-                </NativeSelect>
-                <FieldDescription>
-                  Em garantia, o comprovante destaca o serviço como atendimento
-                  em garantia.
-                </FieldDescription>
-              </Field>
+                    {formData.intakeType === 'carrier' && (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel>Transportadora *</FieldLabel>
+                          <Input
+                            value={formData.carrierName}
+                            onChange={(event) =>
+                              updateField('carrierName', event.target.value)
+                            }
+                          />
+                          {errors.carrierName && (
+                            <FieldError>{errors.carrierName}</FieldError>
+                          )}
+                        </Field>
+                        <Field>
+                          <FieldLabel>Documento da transportadora</FieldLabel>
+                          <Input
+                            value={formData.carrierDocument}
+                            onChange={(event) =>
+                              updateField('carrierDocument', event.target.value)
+                            }
+                          />
+                        </Field>
+                      </div>
+                    )}
+
+                    {formData.intakeType === 'third_party' && (
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <Field>
+                          <FieldLabel>Portador *</FieldLabel>
+                          <Input
+                            value={formData.thirdPartyName}
+                            onChange={(event) =>
+                              updateField('thirdPartyName', event.target.value)
+                            }
+                          />
+                          {errors.thirdPartyName && (
+                            <FieldError>{errors.thirdPartyName}</FieldError>
+                          )}
+                        </Field>
+                        <Field>
+                          <FieldLabel>Documento</FieldLabel>
+                          <Input
+                            value={formData.thirdPartyDocument}
+                            onChange={(event) =>
+                              updateField(
+                                'thirdPartyDocument',
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Telefone</FieldLabel>
+                          <Input
+                            value={formData.thirdPartyPhone}
+                            onChange={(event) =>
+                              updateField('thirdPartyPhone', event.target.value)
+                            }
+                          />
+                        </Field>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <Field>
+                  <FieldLabel>Prioridade</FieldLabel>
+                  <NativeSelect
+                    value={formData.priority}
+                    onChange={(event) =>
+                      updateField('priority', parsePriority(event.target.value))
+                    }
+                    className="w-full sm:max-w-xs"
+                  >
+                    <NativeSelectOption value="normal">
+                      Normal
+                    </NativeSelectOption>
+                    <NativeSelectOption value="urgent">
+                      Urgente
+                    </NativeSelectOption>
+                    <NativeSelectOption value="contract">
+                      Contrato
+                    </NativeSelectOption>
+                    <NativeSelectOption value="warranty">
+                      Garantia
+                    </NativeSelectOption>
+                  </NativeSelect>
+                  <FieldDescription>
+                    Em garantia, o comprovante destaca o serviço como
+                    atendimento em garantia.
+                  </FieldDescription>
+                </Field>
+              </div>
             </FormSection>
 
             <FormSection
@@ -879,9 +897,7 @@ export function NewServiceOrderPage() {
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Comprovante de recebimento
             </p>
-            <h2 className="mt-0.5 text-base font-semibold">
-              Resumo da entrada
-            </h2>
+            <h2 className="mt-1 text-base font-semibold">Resumo da entrada</h2>
 
             <div className="mt-4 space-y-5">
               <SummaryItem
@@ -905,8 +921,8 @@ export function NewServiceOrderPage() {
                   .join(' | ')}
               />
               <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">
-                  Atendimento
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Local e prioridade
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {formData.isExternalService ? (
@@ -924,12 +940,32 @@ export function NewServiceOrderPage() {
                               : 'Interna'}
                     </Badge>
                   )}
-                  <Badge variant="outline">{formData.priority}</Badge>
+                  <Badge variant="outline">
+                    {PRIORITY_LABELS[formData.priority]}
+                  </Badge>
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 space-y-2 border-t pt-4">
+            <div className="mt-5 border-t pt-4">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Será gerado
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                {[
+                  'Número único de OS',
+                  'Snapshot do instrumento',
+                  'Comprovante de recebimento e etiqueta',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5">
+                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="-mx-5 -mb-5 mt-5 space-y-2.5 rounded-b-2xl border-t bg-muted/30 px-5 py-5">
               <Button
                 form="service-order-form"
                 type="submit"
@@ -954,27 +990,6 @@ export function NewServiceOrderPage() {
               >
                 Cancelar
               </Button>
-            </div>
-
-            <div className="mt-4 border-t pt-4">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                Será gerado
-              </p>
-              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                {[
-                  'Número único de OS',
-                  'Snapshot do instrumento',
-                  'Comprovante de recebimento e etiqueta',
-                ].map((item) => (
-                  <li key={item} className="flex gap-2">
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle02Icon}
-                      className="mt-0.5 size-4 shrink-0 text-primary"
-                    />
-                    {item}
-                  </li>
-                ))}
-              </ul>
             </div>
           </Panel>
         </aside>
@@ -1067,13 +1082,15 @@ function FormSection({
   children: ReactNode
 }) {
   return (
-    <section className="border-t border-border/60 pt-6 first:border-t-0 first:pt-0">
+    <section className="border-t border-border/60 pt-8 first:border-t-0 first:pt-0">
       <div className="flex items-start gap-3">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs font-medium tabular-nums text-muted-foreground">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-[13px] font-medium tabular-nums text-foreground ring-1 ring-border/70">
           {step}
         </span>
-        <div className="min-w-0">
-          <h2 className="text-balance text-sm font-semibold">{title}</h2>
+        <div className="min-w-0 pt-0.5">
+          <h2 className="text-balance text-base font-semibold tracking-tight">
+            {title}
+          </h2>
           {description && (
             <p className="text-pretty text-xs leading-5 text-muted-foreground">
               {description}
@@ -1081,7 +1098,7 @@ function FormSection({
           )}
         </div>
       </div>
-      <div className="mt-4 min-w-0 sm:pl-9">{children}</div>
+      <div className="mt-5 min-w-0 sm:pl-10">{children}</div>
     </section>
   )
 }
@@ -1097,24 +1114,26 @@ function SummaryItem({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
       {value ? (
-        <div className="mt-1">
+        <div className="mt-1.5">
           <div className="flex items-center gap-2">
             <HugeiconsIcon
               icon={CheckmarkCircle02Icon}
-              className="size-4 text-primary"
+              className="size-4 shrink-0 text-primary"
             />
             <p className="font-medium">{value}</p>
           </div>
           {detail && (
-            <p className="ml-6 text-xs text-muted-foreground">{detail}</p>
+            <p className="ml-6 font-mono text-xs tabular-nums text-muted-foreground">
+              {detail}
+            </p>
           )}
         </div>
       ) : (
-        <p className="mt-1 text-sm text-muted-foreground">Não selecionado</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">Não selecionado</p>
       )}
     </div>
   )
