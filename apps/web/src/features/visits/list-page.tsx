@@ -73,16 +73,20 @@ export function VisitsPage() {
   const visits = data?.data ?? []
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-col gap-1">
-        <p className="font-mono text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-          Calibração in loco
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight">Visitas</h1>
-        <p className="text-sm text-muted-foreground text-pretty">
-          Visitas técnicas agendadas no local do cliente, com os instrumentos de
-          cada viagem.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
+            Calibração in loco
+          </p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Visitas
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Visitas técnicas agendadas no local do cliente, com os instrumentos
+            de cada viagem.
+          </p>
+        </div>
       </div>
 
       <Panel className="p-4 sm:p-5">
@@ -136,7 +140,7 @@ export function VisitsPage() {
               Erro ao carregar as visitas.
             </div>
           ) : visits.length === 0 ? (
-            <Empty className="border-0">
+            <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={Location01Icon} />
