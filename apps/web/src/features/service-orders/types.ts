@@ -190,7 +190,9 @@ export type ServiceOrderDetail = {
   deliveryNotes?: string | null
   clientVisibleNotes?: string | null
   internalNotes?: string | null
+  isExternalService?: boolean
   openedAt: string
+  serviceStartedAt?: string | null
   evaluations: ServiceOrderEvaluation[]
   quotes: ServiceOrderQuote[]
   execution?: ServiceOrderExecution | null

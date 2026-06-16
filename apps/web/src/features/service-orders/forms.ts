@@ -22,6 +22,7 @@ export type ServiceOrderFormData = {
   customerId: number | null
   assetId: number | null
   intakeType: ServiceOrderIntakeType
+  isExternalService: boolean
   priority: ServiceOrderPriority
   deliveryMethod: ServiceOrderDeliveryMethod
   claimedDefect: string
@@ -95,6 +96,7 @@ export function parseServiceOrderForm(
     customerId: data.customerId ?? 0,
     assetId: data.assetId ?? 0,
     intakeType: data.intakeType,
+    isExternalService: data.isExternalService,
     priority: data.priority,
     deliveryMethod: data.deliveryMethod,
     claimedDefect: data.claimedDefect.trim(),

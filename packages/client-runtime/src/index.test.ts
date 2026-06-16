@@ -1124,6 +1124,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-command-sync",
         },
         {
+          "method": "update",
+          "namespace": "serviceOrders",
+          "policy": "cloud-only",
+        },
+        {
           "method": "createQuote",
           "namespace": "serviceOrders",
           "policy": "local-command-sync",

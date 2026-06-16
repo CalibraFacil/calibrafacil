@@ -137,6 +137,8 @@ const ServiceOrderInputBaseSchema = z.object({
   clientContactSnapshot: z.record(z.string(), z.unknown()).optional(),
   assetId: z.coerce.number().int().positive(),
   intakeType: ServiceOrderIntakeTypeSchema.default("counter"),
+  // External / in-loco order: the technician travels to the client.
+  isExternalService: z.boolean().optional().default(false),
   sourceServiceOrderId: z.coerce
     .number()
     .int()
@@ -166,6 +168,8 @@ const ServiceOrderInputBaseSchema = z.object({
   evaluationFeeCents: moneyCents.default(0),
   warrantyUntil: z.string().datetime().optional().nullable(),
   warrantyTerms: nullableText,
+  // When the technician actually started the service/budget work (not auto-set).
+  serviceStartedAt: z.string().datetime().optional().nullable(),
   assetSnapshot: ServiceOrderAssetSnapshotInputSchema.optional(),
   signatureData: ServiceOrderSignatureDataSchema.optional().nullable(),
 });

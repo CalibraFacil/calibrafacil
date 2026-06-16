@@ -2207,6 +2207,9 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CreateServiceOrderResult>(response);
       },
+      async update() {
+        throw desktopUnsupportedServiceOrderAction("Atualização da OS");
+      },
       async createQuote(id, input) {
         const response = await fetchImpl(
           new URL(

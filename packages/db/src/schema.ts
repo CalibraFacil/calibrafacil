@@ -4848,6 +4848,10 @@ export const serviceOrder = pgTable(
       .default("counter")
       .notNull(),
     sourceServiceOrderId: integer("source_service_order_id"),
+    // External / in-loco service order: the technician travels to the client
+    // to perform the work. Drives rendering the client service address on the
+    // lab print copy.
+    isExternalService: boolean("is_external_service").default(false).notNull(),
     status: text("status")
       .$type<ServiceOrderStatus>()
       .default("opened")
@@ -4857,6 +4861,9 @@ export const serviceOrder = pgTable(
       .default("normal")
       .notNull(),
     openedAt: timestamp("opened_at").defaultNow().notNull(),
+    // When the technician actually started the budget/service work. Distinct
+    // from openedAt (OS creation); nullable and editable, not auto-set.
+    serviceStartedAt: timestamp("service_started_at"),
     openedByUserId: text("opened_by_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),

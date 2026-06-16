@@ -7,6 +7,7 @@ describe('service order feature forms', () => {
     const result = parseServiceOrderForm({
       ...validServiceOrderForm(),
       intakeType: 'carrier',
+      isExternalService: true,
       carrierName: '  Transportes ACME  ',
       evaluationFeeCents: '12,34',
     })
@@ -17,6 +18,7 @@ describe('service order feature forms', () => {
         customerId: 10,
         assetId: 20,
         intakeType: 'carrier',
+        isExternalService: true,
         priority: 'normal',
         deliveryMethod: 'pickup_at_lab',
         claimedDefect: 'Nao liga',
@@ -74,6 +76,7 @@ function validServiceOrderForm(): ServiceOrderFormData {
     customerId: 10,
     assetId: 20,
     intakeType: 'counter',
+    isExternalService: false,
     priority: 'normal',
     deliveryMethod: 'pickup_at_lab',
     claimedDefect: 'Nao liga',

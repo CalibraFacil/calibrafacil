@@ -1650,7 +1650,10 @@ async function fetchServiceOrderDocumentData(
       so.unit_id,
       so.service_order_number,
       so.priority,
+      so.intake_type,
+      so.is_external_service,
       so.opened_at,
+      so.service_started_at,
       so.claimed_defect,
       so.intake_condition,
       so.accessories,
@@ -1721,6 +1724,9 @@ async function fetchServiceOrderDocumentData(
   return {
     serviceOrderNumber: row.service_order_number,
     openedAt: row.opened_at,
+    intakeType: row.intake_type,
+    isExternalService: row.is_external_service ?? false,
+    serviceStartedAt: row.service_started_at,
     requestedServices:
       row.priority === "warranty"
         ? ["Garantia"]

@@ -83,6 +83,7 @@ export async function createServiceOrder(input: {
       clientContactId: input.values.clientContactId ?? null,
       clientContactSnapshot: input.values.clientContactSnapshot ?? null,
       intakeType: input.values.intakeType,
+      isExternalService: input.values.isExternalService ?? false,
       sourceServiceOrderId: input.values.sourceServiceOrderId ?? null,
       priority: input.values.priority,
       responsibleTechnicianId: input.values.responsibleTechnicianId ?? null,
@@ -109,6 +110,7 @@ export async function createServiceOrder(input: {
       evaluationFeeCents: input.values.evaluationFeeCents,
       warrantyUntil: parseDate(input.values.warrantyUntil),
       warrantyTerms: input.values.warrantyTerms ?? null,
+      serviceStartedAt: parseDate(input.values.serviceStartedAt),
     },
   });
 
@@ -184,10 +186,20 @@ export async function updateServiceOrder(input: {
     .update(serviceOrder)
     .set({
       ...input.values,
-      invoiceRemittanceIssuedAt: parseDate(
-        input.values.invoiceRemittanceIssuedAt,
-      ),
-      warrantyUntil: parseDate(input.values.warrantyUntil),
+      // Date fields arrive as ISO strings; convert. Presence-guard so a partial
+      // PATCH (e.g. only serviceStartedAt) doesn't null the others.
+      invoiceRemittanceIssuedAt:
+        "invoiceRemittanceIssuedAt" in input.values
+          ? parseDate(input.values.invoiceRemittanceIssuedAt)
+          : existing.invoiceRemittanceIssuedAt,
+      warrantyUntil:
+        "warrantyUntil" in input.values
+          ? parseDate(input.values.warrantyUntil)
+          : existing.warrantyUntil,
+      serviceStartedAt:
+        "serviceStartedAt" in input.values
+          ? parseDate(input.values.serviceStartedAt)
+          : existing.serviceStartedAt,
       updatedAt: new Date(),
     })
     .where(eq(serviceOrder.id, input.serviceOrderId))

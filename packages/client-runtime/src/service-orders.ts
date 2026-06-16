@@ -149,6 +149,7 @@ export type CreateServiceOrderInput = {
   customerId: number;
   assetId: number;
   intakeType: string;
+  isExternalService: boolean;
   priority: string;
   deliveryMethod: string;
   claimedDefect: string;
@@ -165,6 +166,12 @@ export type CreateServiceOrderInput = {
   clientVisibleNotes: string | null;
   internalNotes: string | null;
   evaluationFeeCents: number;
+};
+
+/** Partial update of an existing OS (detail-page edits). */
+export type UpdateServiceOrderInput = {
+  serviceStartedAt?: string | null;
+  isExternalService?: boolean;
 };
 
 export type CreateServiceOrderResult = {

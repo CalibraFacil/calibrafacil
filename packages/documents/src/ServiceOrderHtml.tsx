@@ -56,6 +56,12 @@ export type ServiceOrderDocumentData = {
     terms?: string | null;
   };
   requestedServices?: string[];
+  /** How the instrument was received (Balcão / Transportadora / …). */
+  intakeType?: string | null;
+  /** External / in-loco order: the technician travels to the client. */
+  isExternalService?: boolean;
+  /** When the technician actually started the service/budget work. */
+  serviceStartedAt?: Date | string | null;
   /** Source/previous service order this one was derived from (e.g. recalibration). */
   previousServiceOrderNumber?: string | null;
   /** Responsible technician of the source/previous service order. */
@@ -226,6 +232,19 @@ function money(cents: number) {
 function text(value: unknown, fallback = "-") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
+}
+
+const INTAKE_TYPE_LABELS: Record<string, string> = {
+  counter: "Balcão (cliente trouxe)",
+  carrier: "Transportadora",
+  third_party: "Terceiro",
+  internal: "Interno",
+  warranty_return: "Retorno de garantia",
+};
+
+function intakeTypeLabel(value?: string | null) {
+  if (!value) return "-";
+  return INTAKE_TYPE_LABELS[value] ?? value;
 }
 
 function Field({ label, value }: { label: string; value?: unknown }) {
@@ -488,12 +507,12 @@ function DeliveryReceiptCopy({
             />
             <td rowSpan={2}>
               {copy === "lab" ? (
-                <div className="seal-box">
-                  Colar Etiqueta de Reparo aqui
-                </div>
+                <div className="seal-box">Colar Etiqueta de Reparo aqui</div>
               ) : (
                 <>
-                  <span className="cell-label">Etiqueta entregue ao cliente</span>
+                  <span className="cell-label">
+                    Etiqueta entregue ao cliente
+                  </span>
                   <span className="cell-value">{text(sealNumber)}</span>
                 </>
               )}
@@ -544,10 +563,25 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell label="Entrada / Protocolo" value={data.serviceOrderNumber} />
           </tr>
           <tr>
-            <Cell label="Contato" value={data.customer.email} />
+            <Cell
+              label="Forma de entrada"
+              value={intakeTypeLabel(data.intakeType)}
+            />
             <Cell label="Telefone" value={data.customer.phone} />
             <Cell label="E-mail" value={data.customer.email} />
           </tr>
+          {data.isExternalService ? (
+            <tr>
+              <td colSpan={3}>
+                <span className="cell-label">
+                  Endereço de atendimento (in loco)
+                </span>
+                <span className="cell-value">
+                  {text(data.customer.address)}
+                </span>
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
 
@@ -611,7 +645,18 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
         <tbody>
           <tr>
             <Cell label="OS anterior" value={data.previousServiceOrderNumber} />
-            <Cell label="Técnico anterior" value={data.previousTechnicianName} />
+            <Cell
+              label="Técnico anterior"
+              value={data.previousTechnicianName}
+            />
+            <Cell
+              label="Início do serviço"
+              value={
+                data.serviceStartedAt
+                  ? formatDate(data.serviceStartedAt)
+                  : "___/___/_____  ___:___"
+              }
+            />
           </tr>
         </tbody>
       </table>
@@ -679,12 +724,6 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td />
-            <td />
-            <td />
-            <td />
-          </tr>
           <tr>
             <td />
             <td />

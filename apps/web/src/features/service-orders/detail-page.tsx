@@ -179,6 +179,17 @@ function toDeliveryMethod(value: string): DeliveryMethod {
   }
 }
 
+// ISO string -> value for <input type="datetime-local"> (local time, minutes).
+function toDateTimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 export function ServiceOrderFinancialStatusBlock({
   status,
   loading,
@@ -441,14 +452,17 @@ function ServiceOrderDetailContent({
   const [repairSealApplied, setRepairSealApplied] = useState(
     Boolean(order.inmetroRepairSealAppliedAt),
   )
+  const [serviceStartedAt, setServiceStartedAt] = useState(
+    toDateTimeLocalValue(order.serviceStartedAt),
+  )
   // The repair seal (Etiqueta de Reparo) + lacre only apply to instruments
   // subject to legal metrology. Show the editor only for those; for others,
   // surface any already-recorded value read-only so history never disappears.
   const isSubjectToLegalMetrology = Boolean(order.assetSubjectToLegalMetrology)
   const hasRepairSealRecord = Boolean(
     order.inmetroRepairSealNumber ||
-      order.inmetroRepairSealNotes ||
-      order.inmetroRepairSealAppliedAt,
+    order.inmetroRepairSealNotes ||
+    order.inmetroRepairSealAppliedAt,
   )
   const [activeTab, setActiveTab] =
     useState<(typeof WORKFLOW_TABS)[number]['value']>('evaluation')
@@ -646,6 +660,28 @@ function ServiceOrderDetailContent({
     },
   })
 
+  const updateServiceStart = useMutation({
+    mutationFn: async () => {
+      await calibraApi.serviceOrders.update(id, {
+        serviceStartedAt: serviceStartedAt
+          ? new Date(serviceStartedAt).toISOString()
+          : null,
+      })
+    },
+    onSuccess: () => {
+      toast.success('Início do serviço atualizado')
+      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao salvar o início do serviço',
+      )
+    },
+  })
+
   const deliverOrder = useMutation({
     mutationFn: async () => {
       if (!order?.customerName) throw new Error('Cliente da OS não encontrado.')
@@ -838,6 +874,38 @@ function ServiceOrderDetailContent({
                 </p>
               )}
             </div>
+          </div>
+
+          <div className="mt-3 rounded-xl bg-muted/40 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Início do serviço
+              </p>
+              {order.isExternalService ? (
+                <Badge variant="secondary">Atendimento externo (in loco)</Badge>
+              ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <Input
+                type="datetime-local"
+                value={serviceStartedAt}
+                onChange={(event) => setServiceStartedAt(event.target.value)}
+                className="w-auto"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateServiceStart.mutate()}
+                disabled={updateServiceStart.isPending}
+              >
+                Salvar
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Marca quando o serviço/orçamento foi efetivamente iniciado
+              (diferente da abertura da OS
+              {order.openedAt ? ` em ${formatDateTime(order.openedAt)}` : ''}).
+            </p>
           </div>
         </div>
       </Panel>

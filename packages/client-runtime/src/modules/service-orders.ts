@@ -15,6 +15,7 @@ import type {
   ServiceOrderRepairSealInput,
   ServiceOrdersListInput,
   ServiceOrdersApi,
+  UpdateServiceOrderInput,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
 
@@ -47,6 +48,15 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
       return readJsonResponse<CreateServiceOrderResult>(
         await rawCloudClient.api["service-orders"].$post({ json: input }),
         "Erro ao criar OS",
+      );
+    },
+    async update(id: string | number, input: UpdateServiceOrderInput) {
+      return readJsonResponse<{ data: ServiceOrderDetail }>(
+        await rawCloudClient.api["service-orders"][":id"].$patch({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao atualizar OS",
       );
     },
     async createQuote(

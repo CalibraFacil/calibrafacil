@@ -27,6 +27,7 @@ import type {
   ServiceOrderRepairSealInput,
   ServiceOrdersListData,
   ServiceOrdersListInput,
+  UpdateServiceOrderInput,
 } from "./service-orders";
 export type {
   JobsListData,
@@ -52,6 +53,7 @@ export type {
   ServiceOrdersListData,
   ServiceOrdersListInput,
   ServiceOrderStatus,
+  UpdateServiceOrderInput,
 } from "./service-orders";
 export type {
   LocalAttachment,
@@ -1479,6 +1481,10 @@ export interface ServiceOrdersApi {
   list(input: ServiceOrdersListInput): Promise<ServiceOrdersListData>;
   get(id: string | number): Promise<ServiceOrderDetail>;
   create(input: CreateServiceOrderInput): Promise<CreateServiceOrderResult>;
+  update(
+    id: string | number,
+    input: UpdateServiceOrderInput,
+  ): Promise<{ data: ServiceOrderDetail }>;
   createQuote(
     id: string | number,
     input: CreateServiceOrderQuoteInput,

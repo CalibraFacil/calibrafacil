@@ -386,6 +386,13 @@
       "when": 1782518400000,
       "tag": "0054_calibration_visit",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1782604800000,
+      "tag": "0055_service_order_external_fields",
+      "breakpoints": true
     }
   ]
 }

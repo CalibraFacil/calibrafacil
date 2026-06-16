@@ -22,6 +22,7 @@ import type {
   SaveServiceOrderExecutionInput,
   SendServiceOrderQuoteInput,
   ServiceOrderRepairSealInput,
+  UpdateServiceOrderInput,
   StandardWriteInput,
   StartSsoInput,
   UpdateAssetInput,
@@ -659,6 +660,10 @@ export function createCloudApiClient(
         $post(input: { json: CreateServiceOrderInput }): Promise<Response>;
         ":id": {
           $get(input: { param: { id: string } }): Promise<Response>;
+          $patch(input: {
+            param: { id: string };
+            json: UpdateServiceOrderInput;
+          }): Promise<Response>;
           evaluations: {
             $post(input: {
               param: { id: string };

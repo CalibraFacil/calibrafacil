@@ -41,6 +41,7 @@ import {
 import { assetRouteId, clientRouteId } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
@@ -70,6 +71,7 @@ const initialFormData: ServiceOrderFormData = {
   customerId: null,
   assetId: null,
   intakeType: 'counter',
+  isExternalService: false,
   priority: 'normal',
   deliveryMethod: 'pickup_at_lab',
   claimedDefect: '',
@@ -625,6 +627,25 @@ export function NewServiceOrderPage() {
                   </NativeSelect>
                 </Field>
               </div>
+
+              <label className="flex items-start gap-3 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={formData.isExternalService}
+                  onCheckedChange={(checked) =>
+                    updateField('isExternalService', Boolean(checked))
+                  }
+                />
+                <span>
+                  <span className="font-medium">
+                    Atendimento externo (in loco)
+                  </span>
+                  <span className="block text-muted-foreground">
+                    O técnico se desloca até o cliente. Inclui o endereço de
+                    atendimento na via do laboratório.
+                  </span>
+                </span>
+              </label>
 
               {formData.intakeType === 'carrier' && (
                 <div className="grid gap-4 md:grid-cols-2">
