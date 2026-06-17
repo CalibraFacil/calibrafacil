@@ -52,6 +52,7 @@ import {
 } from "./integrations.js";
 import {
   formatAccreditationNumber,
+  formatSpecificationsForDisplay,
   shouldRenderAccreditationSeal,
   type BackgroundJobMessage,
   type CertificateXlsxPreviewBackgroundJobMessage,
@@ -1685,15 +1686,19 @@ async function fetchServiceOrderDocumentData(
       snap.model,
       snap.serial_number,
       snap.patrimony_number,
-      snap.capacity,
-      snap.resolution,
       snap.observed_identification,
+      snap.display_specs,
+      snap.specifications,
+      atype.definition as asset_type_definition,
+      a.subject_to_legal_metrology,
       settings.default_intake_terms
     FROM service_order so
     LEFT JOIN organization o ON so.organization_id = o.id
     LEFT JOIN organization_unit ou ON so.unit_id = ou.id
     LEFT JOIN customer c ON so.customer_id = c.id
     LEFT JOIN service_order_asset_snapshot snap ON snap.service_order_id = so.id
+    LEFT JOIN asset a ON a.id = snap.asset_id
+    LEFT JOIN asset_type atype ON atype.id = a.asset_type_id
     LEFT JOIN service_order_settings settings ON settings.organization_id = so.organization_id
     LEFT JOIN service_order src ON src.id = so.source_service_order_id
     LEFT JOIN "user" tech ON tech.id = src.responsible_technician_id
@@ -1720,6 +1725,17 @@ async function fetchServiceOrderDocumentData(
     row.lab_logo,
     serviceOrderId,
   );
+
+  // Blueprint-driven instrument specs: use the list frozen at intake; for snapshots
+  // created before migration 0056 (display_specs NULL), fall back to formatting from
+  // the live asset-type blueprint + the frozen specifications values.
+  const assetSpecs =
+    Array.isArray(row.display_specs) && row.display_specs.length > 0
+      ? row.display_specs
+      : formatSpecificationsForDisplay(
+          row.asset_type_definition,
+          row.specifications,
+        );
 
   return {
     serviceOrderNumber: row.service_order_number,
@@ -1756,9 +1772,9 @@ async function fetchServiceOrderDocumentData(
       model: row.model,
       serialNumber: row.serial_number,
       patrimonyNumber: row.patrimony_number,
-      capacity: row.capacity,
-      resolution: row.resolution,
       observedIdentification: row.observed_identification,
+      specs: assetSpecs,
+      subjectToLegalMetrology: row.subject_to_legal_metrology ?? false,
     },
     intake: {
       claimedDefect: row.claimed_defect,

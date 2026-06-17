@@ -366,9 +366,11 @@ export function buildServiceOrderIntakeHtml(
             snapshot?.serialNumber ?? order.assetSerialNumber ?? null,
           patrimonyNumber: snapshot?.patrimonyNumber ?? order.assetTag ?? null,
           tag: order.assetTag ?? null,
-          capacity: snapshot?.capacity ?? null,
-          resolution: snapshot?.resolution ?? null,
           observedIdentification: snapshot?.observedIdentification ?? null,
+          // Blueprint-driven specs frozen at intake (null for pre-0056 orders, where
+          // the web preview simply omits the spec grid; the worker PDF still falls back).
+          specs: snapshot?.displaySpecs ?? undefined,
+          subjectToLegalMetrology: order.assetSubjectToLegalMetrology ?? false,
         },
         intake: {
           claimedDefect: order.claimedDefect,

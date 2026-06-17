@@ -393,6 +393,13 @@
       "when": 1782604800000,
       "tag": "0055_service_order_external_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1782691200000,
+      "tag": "0056_service_order_snapshot_display_specs",
+      "breakpoints": true
     }
   ]
 }

@@ -169,6 +169,7 @@ export type ServiceOrderDetail = {
     capacity?: string | null
     resolution?: string | null
     observedIdentification?: string | null
+    displaySpecs?: Array<{ label: string; value: string }> | null
   } | null
   claimedDefect: string
   intakeCondition: string

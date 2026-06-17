@@ -22,6 +22,7 @@ import type {
   ServiceOrderItemType,
 } from "@calibra-facil/shared";
 import { DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS } from "@calibra-facil/shared";
+import { formatSpecificationsForDisplay } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import {
   DEFAULT_SERVICE_ORDER_NUMBERING_SETTINGS,
@@ -185,6 +186,7 @@ export async function buildServiceOrderAssetSnapshot(
       tag: asset.tag,
       specifications: asset.specifications,
       assetTypeName: assetType.name,
+      assetTypeDefinition: assetType.definition,
       customerLabOrganizationId: customer.labOrganizationId,
     })
     .from(asset)
@@ -228,6 +230,12 @@ export async function buildServiceOrderAssetSnapshot(
     observedIdentification: params.observedIdentification ?? null,
     photos: params.photos ?? [],
     specifications,
+    // Freeze the blueprint-driven, printable spec list at intake (ISO: the snapshot
+    // captures how the instrument was presented). The printed OS renders this verbatim.
+    displaySpecs: formatSpecificationsForDisplay(
+      row.assetTypeDefinition,
+      specifications,
+    ),
   };
 }
 

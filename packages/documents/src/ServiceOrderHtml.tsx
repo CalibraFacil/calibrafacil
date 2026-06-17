@@ -35,10 +35,15 @@ export type ServiceOrderDocumentData = {
     serialNumber?: string | null;
     patrimonyNumber?: string | null;
     tag?: string | null;
-    capacity?: string | null;
-    resolution?: string | null;
-    accuracyClass?: string | null;
     observedIdentification?: string | null;
+    /**
+     * Blueprint-driven instrument specs, ordered for print (capacity/resolution for a
+     * balança, pressure range for a manômetro, etc.). Frozen at intake; falls back to
+     * the live asset-type blueprint for snapshots created before migration 0056.
+     */
+    specs?: Array<{ label: string; value: string }>;
+    /** Legal-metrology instrument: gates the lacre / Etiqueta de Reparo blocks. */
+    subjectToLegalMetrology?: boolean;
   };
   intake: {
     claimedDefect: string;
@@ -172,7 +177,10 @@ const pageStyles = `
   .compact-list li { margin: 0.65mm 0; }
   .checkbox-line { display: inline-block; margin-right: 1.8mm; white-space: nowrap; }
   .checkbox { display: inline-block; width: 2.35mm; height: 2.35mm; border: 1px solid #000; margin-right: 0.55mm; vertical-align: -0.45mm; text-align: center; font-size: 5pt; font-weight: 700; line-height: 2.2mm; overflow: hidden; }
-  .lab-copy { font-size: 7.45pt; }
+  /* The lab via carries every working field plus roomy ruled handwriting areas. With the
+     intake-method/address/service-start fields it runs slightly past one A4, so scale the via
+     down uniformly to fit while filling the page (matches the approved preview proportions). */
+  .lab-copy { font-size: 7.45pt; zoom: 0.9; }
   .lab-copy .header td { padding: 0.55mm 0.8mm; }
   .lab-copy .title { font-size: 10.2pt; }
   .lab-copy .os-number { font-size: 9.6pt; }
@@ -184,9 +192,9 @@ const pageStyles = `
   .lab-copy .cell-value-tall { min-height: 6.5mm; }
   .lab-copy .notes-box { min-height: 5mm; }
   /* Lab-copy handwriting areas: 6mm rule spacing × 4 lines = 24mm. */
-  .lab-copy .writing-box { height: 24mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 6mm, #000 6mm, #000 6.12mm); }
+  .lab-copy .writing-box { height: 18mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 6mm, #000 6mm, #000 6.12mm); }
   .lab-copy .writing-box.compact { height: 24mm; }
-  .lab-copy .writing-box.observations { height: 24mm; }
+  .lab-copy .writing-box.observations { height: 18mm; }
   .lab-copy .parts-table td { height: 7mm; }
   .lab-copy .signature-table td { height: 4mm; }
   .qr { width: 82px; height: 82px; object-fit: contain; }
@@ -274,6 +282,32 @@ function Cell({
         {text(value, fallback)}
       </span>
     </td>
+  );
+}
+
+/**
+ * Renders the instrument's blueprint-driven specs as rows of three labeled cells
+ * (only fields that have a value). Replaces the old hardcoded weighing rows so the
+ * Equipamento section adapts to any asset type. Renders nothing when there are no specs.
+ */
+function AssetSpecRows({
+  specs,
+}: {
+  specs?: Array<{ label: string; value: string }>;
+}) {
+  if (!specs || specs.length === 0) return null;
+  const rows: Array<Array<{ label: string; value: string }>> = [];
+  for (let i = 0; i < specs.length; i += 3) rows.push(specs.slice(i, i + 3));
+  return (
+    <>
+      {rows.map((cells) => (
+        <tr key={cells.map((c) => c.label).join("|")}>
+          {cells.map((spec) => (
+            <Cell key={spec.label} label={spec.label} value={spec.value} />
+          ))}
+        </tr>
+      ))}
+    </>
   );
 }
 
@@ -496,37 +530,56 @@ function DeliveryReceiptCopy({
         </tbody>
       </table>
 
-      <div className="section-title">Etiqueta de Reparo (Inmetro)</div>
-      <table className="form-table">
-        <tbody>
-          <tr>
-            <Cell label="Número digitado" value={sealNumber} />
-            <Cell
-              label="Data de emissão"
-              value={formatDate(data.delivery.inmetroRepairSealIssuedAt)}
-            />
-            <td rowSpan={2}>
-              {copy === "lab" ? (
-                <div className="seal-box">Colar Etiqueta de Reparo aqui</div>
-              ) : (
-                <>
-                  <span className="cell-label">
-                    Etiqueta entregue ao cliente
-                  </span>
-                  <span className="cell-value">{text(sealNumber)}</span>
-                </>
-              )}
-            </td>
-          </tr>
-          <tr>
-            <Cell
-              label="Observações de entrega"
-              value={data.delivery.deliveryNotes}
-            />
-            <Cell label="Resultado" value={data.execution.result} />
-          </tr>
-        </tbody>
-      </table>
+      {data.asset.subjectToLegalMetrology ? (
+        <>
+          <div className="section-title">Etiqueta de Reparo (Inmetro)</div>
+          <table className="form-table">
+            <tbody>
+              <tr>
+                <Cell label="Número digitado" value={sealNumber} />
+                <Cell
+                  label="Data de emissão"
+                  value={formatDate(data.delivery.inmetroRepairSealIssuedAt)}
+                />
+                <td rowSpan={2}>
+                  {copy === "lab" ? (
+                    <div className="seal-box">Colar Etiqueta de Reparo aqui</div>
+                  ) : (
+                    <>
+                      <span className="cell-label">
+                        Etiqueta entregue ao cliente
+                      </span>
+                      <span className="cell-value">{text(sealNumber)}</span>
+                    </>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <Cell
+                  label="Observações de entrega"
+                  value={data.delivery.deliveryNotes}
+                />
+                <Cell label="Resultado" value={data.execution.result} />
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <>
+          <div className="section-title">Conclusão</div>
+          <table className="form-table">
+            <tbody>
+              <tr>
+                <Cell
+                  label="Observações de entrega"
+                  value={data.delivery.deliveryNotes}
+                />
+                <Cell label="Resultado" value={data.execution.result} />
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
 
       <table className="form-table signature-table">
         <tbody>
@@ -573,9 +626,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           {data.isExternalService ? (
             <tr>
               <td colSpan={3}>
-                <span className="cell-label">
-                  Endereço de atendimento (in loco)
-                </span>
+                <span className="cell-label">Endereço de atendimento</span>
                 <span className="cell-value">
                   {text(data.customer.address)}
                 </span>
@@ -598,11 +649,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell label="Modelo" value={data.asset.model} />
             <Cell label="Tipo" value={data.asset.type} />
           </tr>
-          <tr>
-            <Cell label="Capacidade / Faixa" value={data.asset.capacity} />
-            <Cell label="Divisão / Resolução" value={data.asset.resolution} />
-            <Cell label="Classe" value={data.asset.accuracyClass} />
-          </tr>
+          <AssetSpecRows specs={data.asset.specs} />
         </tbody>
       </table>
 
@@ -614,7 +661,9 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell label="Acessórios" value={data.intake.accessories} />
           </tr>
           <tr>
-            <Cell label="Lacre antigo" value={data.intake.oldSealNumber} />
+            {data.asset.subjectToLegalMetrology ? (
+              <Cell label="Lacre antigo" value={data.intake.oldSealNumber} />
+            ) : null}
             <Cell
               label="Documento / NF"
               value={
@@ -623,20 +672,22 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
               }
             />
           </tr>
-          <tr>
-            <Cell
-              label="Nº Etiqueta de Reparo"
-              value={data.intake.inmetroRepairSealNumber}
-              fallback=""
-              tall
-            />
-            <Cell
-              label="Lacre novo"
-              value={data.intake.newSealNumber}
-              fallback=""
-              tall
-            />
-          </tr>
+          {data.asset.subjectToLegalMetrology ? (
+            <tr>
+              <Cell
+                label="Nº Etiqueta de Reparo"
+                value={data.intake.inmetroRepairSealNumber}
+                fallback=""
+                tall
+              />
+              <Cell
+                label="Lacre novo"
+                value={data.intake.newSealNumber}
+                fallback=""
+                tall
+              />
+            </tr>
+          ) : null}
         </tbody>
       </table>
 
@@ -724,6 +775,18 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
           <tr>
             <td />
             <td />
@@ -890,7 +953,7 @@ export function ServiceOrderIntakeDocumentHtml({
   data: ServiceOrderDocumentData;
 }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-pdf-layout="full-page">
       <head>
         <meta charSet="UTF-8" />
         <title>Comprovante de recebimento - {data.serviceOrderNumber}</title>

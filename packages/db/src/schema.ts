@@ -4980,6 +4980,12 @@ export const serviceOrderAssetSnapshot = pgTable(
     observedIdentification: text("observed_identification"),
     photos: jsonb("photos").$type<string[]>().default([]).notNull(),
     specifications: jsonb("specifications").$type<Record<string, unknown>>(),
+    // Blueprint-driven instrument specs, frozen at intake as an ordered, printable
+    // [{label, value}] list so the printed OS renders any asset type's specs
+    // (not just weighing). Null for snapshots created before migration 0056 —
+    // the doc renderer falls back to the live asset-type blueprint for those.
+    displaySpecs:
+      jsonb("display_specs").$type<{ label: string; value: string }[]>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
