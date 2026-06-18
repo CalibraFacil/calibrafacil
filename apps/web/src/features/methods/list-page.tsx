@@ -45,6 +45,11 @@ import {
   methodsColumns,
 } from '@/features/methods/components/columns'
 import { methodRouteId } from '@/lib/route-identifiers'
+import { isDesktopRuntime } from '@/runtime/desktop'
+
+// The from-template catalog is cloud-only (the route is cloud-gated); hide the
+// affordance entirely in the desktop/offline runtime.
+const isCloudRuntime = !isDesktopRuntime()
 
 const statusLabels: Record<MethodStatus, string> = {
   DRAFT: 'Rascunho',
@@ -159,13 +164,24 @@ export function MethodsListPage() {
             Gerencie os métodos validados para calibração de instrumentos.
           </p>
         </div>
-        <Button
-          render={<Link to="/dashboard/methods/new" />}
-          className={`${ACTION_BUTTON_CLASS} shrink-0`}
-        >
-          <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-          Novo Método
-        </Button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {isCloudRuntime ? (
+            <Button
+              render={<Link to="/dashboard/methods/from-template" />}
+              className={ACTION_BUTTON_CLASS}
+            >
+              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A partir de
+              modelo
+            </Button>
+          ) : null}
+          <Button
+            render={<Link to="/dashboard/methods/new" />}
+            variant={isCloudRuntime ? 'outline' : 'default'}
+            className={isCloudRuntime ? undefined : ACTION_BUTTON_CLASS}
+          >
+            Método em branco
+          </Button>
+        </div>
       </div>
 
       <Panel className="p-4 sm:p-5">
@@ -224,13 +240,27 @@ export function MethodsListPage() {
               </EmptyHeader>
               <EmptyContent>
                 {!search && !statusFilter && (
-                  <Button render={<Link to="/dashboard/methods/new" />}>
-                    <HugeiconsIcon
-                      icon={PlusSignIcon}
-                      className="mr-2 size-4"
-                    />
-                    Novo Método
-                  </Button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {isCloudRuntime ? (
+                      <Button
+                        render={
+                          <Link to="/dashboard/methods/from-template" />
+                        }
+                      >
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-2 size-4"
+                        />
+                        A partir de modelo
+                      </Button>
+                    ) : null}
+                    <Button
+                      render={<Link to="/dashboard/methods/new" />}
+                      variant={isCloudRuntime ? 'outline' : 'default'}
+                    >
+                      Método em branco
+                    </Button>
+                  </div>
                 )}
                 {(search || statusFilter) && (
                   <Button

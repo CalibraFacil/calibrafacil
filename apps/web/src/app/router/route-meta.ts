@@ -43,6 +43,7 @@ export type DashboardRedirectRouteMeta = {
 }
 
 export const dashboardRouteMeta = [
+  { path: '/dashboard/methods/from-template', cloudOnly: true },
   { path: '/dashboard/reports', cloudOnly: true },
   { path: '/dashboard/requests', cloudOnly: 'prefix' },
   { path: '/dashboard/visits', cloudOnly: 'prefix' },

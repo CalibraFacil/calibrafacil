@@ -371,6 +371,48 @@ export interface AuditLogRecord {
 }
 
 /**
+ * Surfaces the `changes` recorded on a from-template `create` entry — the frozen
+ * adoption evidence (template + version, acknowledgements, cited-source count) —
+ * so the acks are demonstrable to an auditor. Defensive (the jsonb is untyped);
+ * returns undefined for entries that aren't from-template adoptions.
+ */
+function describeAuditChanges(log: AuditLogRecord): string | undefined {
+  const changes = log.changes
+  if (log.action !== 'create' || !changes || typeof changes !== 'object') {
+    return undefined
+  }
+  const fromTemplate = changes.fromTemplate
+  if (typeof fromTemplate !== 'string') return undefined
+
+  const parts: string[] = [`Criado a partir do modelo “${fromTemplate}”`]
+  if (typeof changes.templateVersion === 'number') {
+    parts.push(`v${changes.templateVersion}`)
+  }
+  const acks = changes.acknowledgements
+  if (acks && typeof acks === 'object') {
+    const accepted =
+      'acceptedVerificarRefs' in acks && Array.isArray(acks.acceptedVerificarRefs)
+        ? acks.acceptedVerificarRefs.length
+        : 0
+    parts.push(
+      accepted > 0
+        ? `reconhecimentos registrados (${accepted} ref. [VERIFICAR])`
+        : 'reconhecimentos registrados',
+    )
+  }
+  const snapshot = changes.governanceSnapshot
+  if (
+    snapshot &&
+    typeof snapshot === 'object' &&
+    'sources' in snapshot &&
+    Array.isArray(snapshot.sources)
+  ) {
+    parts.push(`${snapshot.sources.length} fonte(s) congelada(s)`)
+  }
+  return parts.join(' · ')
+}
+
+/**
  * Build timeline events from generic audit log records
  * Works with any entity's audit log (standards, methods, assets, services, etc.)
  */
@@ -383,6 +425,6 @@ export function buildAuditTimelineEvents(
     label: actionLabels[log.action] || log.action,
     timestamp: log.performedAt,
     actor: log.performerName ?? log.performedByName ?? log.performedBy,
-    details: log.reason || undefined,
+    details: describeAuditChanges(log) ?? (log.reason || undefined),
   }))
 }

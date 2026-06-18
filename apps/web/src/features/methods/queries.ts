@@ -1,4 +1,5 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import type { MethodTemplateCatalogEntry } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -174,4 +175,24 @@ export function useMethodEditData(id: string) {
 
 export function useMethodAuditLogData(id: string) {
   return useQuery(methodAuditLogQueryOptions(id))
+}
+
+// --- From-template catalog (PR4) ----------------------------------------------
+// The curated method-template catalog is a cloud-only read; it returns only
+// governance-complete templates so the picker never renders a bare "trust-me"
+// card.
+export function methodTemplatesQueryOptions() {
+  return queryOptions({
+    queryKey: ['methods', 'templates'],
+    queryFn: (): Promise<MethodTemplateCatalogEntry[]> =>
+      calibraApi.methods.listMethodTemplates(),
+  })
+}
+
+export async function loadMethodTemplatesData(queryClient: QueryClient) {
+  await ensureRouteQueries(queryClient, [methodTemplatesQueryOptions()])
+}
+
+export function useMethodTemplatesData() {
+  return useQuery(methodTemplatesQueryOptions())
 }

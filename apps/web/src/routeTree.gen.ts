@@ -80,6 +80,7 @@ import { Route as DashboardServiceOrdersIdRouteImport } from './routes/dashboard
 import { Route as DashboardPersonnelNewRouteImport } from './routes/dashboard/personnel/new'
 import { Route as DashboardNcNewRouteImport } from './routes/dashboard/nc/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
+import { Route as DashboardMethodsFromTemplateRouteImport } from './routes/dashboard/methods/from-template'
 import { Route as DashboardJobsNewRouteImport } from './routes/dashboard/jobs/new'
 import { Route as DashboardInternalCustomerSuccessRouteImport } from './routes/dashboard/internal/customer-success'
 import { Route as DashboardFinanceRevenueLeakageRouteImport } from './routes/dashboard/finance/revenue-leakage'
@@ -518,6 +519,12 @@ const DashboardMethodsNewRoute = DashboardMethodsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardMethodsRouteRoute,
 } as any)
+const DashboardMethodsFromTemplateRoute =
+  DashboardMethodsFromTemplateRouteImport.update({
+    id: '/from-template',
+    path: '/from-template',
+    getParentRoute: () => DashboardMethodsRouteRoute,
+  } as any)
 const DashboardJobsNewRoute = DashboardJobsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -890,6 +897,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
+  '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
@@ -1002,6 +1010,7 @@ export interface FileRoutesByTo {
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
+  '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
@@ -1132,6 +1141,7 @@ export interface FileRoutesById {
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
+  '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
@@ -1264,6 +1274,7 @@ export interface FileRouteTypes {
     | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
+    | '/dashboard/methods/from-template'
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
@@ -1376,6 +1387,7 @@ export interface FileRouteTypes {
     | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
+    | '/dashboard/methods/from-template'
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
@@ -1505,6 +1517,7 @@ export interface FileRouteTypes {
     | '/dashboard/finance/revenue-leakage'
     | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
+    | '/dashboard/methods/from-template'
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
@@ -2098,6 +2111,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/dashboard/methods/new'
       preLoaderRoute: typeof DashboardMethodsNewRouteImport
+      parentRoute: typeof DashboardMethodsRouteRoute
+    }
+    '/dashboard/methods/from-template': {
+      id: '/dashboard/methods/from-template'
+      path: '/from-template'
+      fullPath: '/dashboard/methods/from-template'
+      preLoaderRoute: typeof DashboardMethodsFromTemplateRouteImport
       parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/new': {
@@ -2728,6 +2748,7 @@ const DashboardJobsRouteRouteWithChildren =
   DashboardJobsRouteRoute._addFileChildren(DashboardJobsRouteRouteChildren)
 
 interface DashboardMethodsRouteRouteChildren {
+  DashboardMethodsFromTemplateRoute: typeof DashboardMethodsFromTemplateRoute
   DashboardMethodsNewRoute: typeof DashboardMethodsNewRoute
   DashboardMethodsIndexRoute: typeof DashboardMethodsIndexRoute
   DashboardMethodsIdEditRoute: typeof DashboardMethodsIdEditRoute
@@ -2735,6 +2756,7 @@ interface DashboardMethodsRouteRouteChildren {
 }
 
 const DashboardMethodsRouteRouteChildren: DashboardMethodsRouteRouteChildren = {
+  DashboardMethodsFromTemplateRoute: DashboardMethodsFromTemplateRoute,
   DashboardMethodsNewRoute: DashboardMethodsNewRoute,
   DashboardMethodsIndexRoute: DashboardMethodsIndexRoute,
   DashboardMethodsIdEditRoute: DashboardMethodsIdEditRoute,
