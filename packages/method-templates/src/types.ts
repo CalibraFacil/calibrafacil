@@ -14,7 +14,10 @@ import type {
 } from "@calibra-facil/schemas";
 
 /** Stable key for a curated method template (repo source of truth). */
-export type TemplateKey = "mass-balance" | "force-indication";
+export type TemplateKey =
+  | "mass-balance"
+  | "force-indication"
+  | "frequency-indication";
 
 /**
  * Product-format method definition (the shape persisted on a
