@@ -2,6 +2,8 @@
   "title": "Métodos",
   "pages": [
     "visao-geral",
+    "a-partir-de-modelo",
+    "modelos",
     "campos-de-entrada",
     "formulas",
     "criterios-de-aceitacao",

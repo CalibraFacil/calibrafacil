@@ -1,0 +1,45 @@
+---
+title: Modelos de método — procedência, conformidade e validação
+description: O que os modelos curados contêm, de onde vêm, o que NÃO garantem e o dever do laboratório de verificar e validar antes do uso (ISO/IEC 17025 §7.2.1.5 e §7.2.2).
+---
+
+Os **modelos de método** do CalibraFácil são métodos de referência curados, fundamentados em guias publicados. Eles existem para dar **contexto**, não para serem adotados "no escuro": tudo o que sustenta o modelo é mostrado antes da adoção. Esta página explica a procedência, os limites e a responsabilidade do laboratório.
+
+## Procedência
+
+Cada modelo expõe, de forma estruturada:
+
+- **Fontes** — cada guia citado com **título, edição, seção e link** para o documento (lido na íntegra, não apenas citado).
+- **Modelo de medição** — o mensurando e como a incerteza-padrão combinada é obtida (combinação por soma quadrática; fator de abrangência).
+- **Exemplo verificado** — um ponto de exemplo com a **proveniência** explícita:
+  - **tabela de guia citada** — o resultado reproduz um valor publicado no próprio guia (e só então afirma "reproduz o guia");
+  - **caracterização do motor** — um valor recalculado pelo motor de cálculo, sem qualquer reivindicação de conformidade externa.
+
+## Itens [VERIFICAR] e componentes omitidos
+
+- **Itens [VERIFICAR]** são decisões metrológicas que o seu laboratório precisa **revisar e confirmar** antes do uso (por exemplo: ler o fator de abrangência real do certificado do padrão; fornecer uma incerteza de entrada específica). Itens marcados como **risco de plataforma** são limitações de código sob revisão da plataforma — fora do controle do laboratório, e **não** algo que se "resolve" com uma caixa de seleção.
+- **Componentes omitidos** são contribuições de incerteza que o modelo deliberadamente **não** inclui. Por isso, o **orçamento de incerteza de um modelo não é declarado completo** — o laboratório deve avaliá-los conforme aplicável.
+
+## O dever do laboratório: verificar e validar
+
+Adotar um modelo **não** dispensa as obrigações da ISO/IEC 17025:2017:
+
+- **Verificação antes do uso (§7.2.1.5)** — o laboratório deve verificar que consegue executar o método com o desempenho exigido antes de utilizá-lo.
+- **Validação (§7.2.2)** — métodos não normalizados, desenvolvidos pelo laboratório ou modificados exigem validação.
+
+Marcar os reconhecimentos na adoção **não constitui** essa verificação — é apenas o registro de que o laboratório está ciente das pendências e assume o dever de verificar e validar. Veja [Validação](/incerteza/validacao) e [Separação de responsabilidades](/conceitos/separacao-de-responsabilidades).
+
+## Trilha de auditoria na adoção
+
+No momento da adoção, o sistema **congela** na trilha de auditoria do método:
+
+- a **procedência** — a chave (`templateKey`) e a versão do modelo;
+- a **identidade** de quem adotou e o instante da adoção;
+- os **reconhecimentos** marcados (incluindo os itens [VERIFICAR] de ação aceitos);
+- uma **lista imutável das fontes** (com edição) que fundamentaram o modelo naquele momento.
+
+Assim, mesmo que o modelo evolua depois, fica registrado exatamente o que sustentou aquela adoção. Veja [Snapshots e imutabilidade](/conceitos/snapshots-e-imutabilidade).
+
+<Aside type="note">
+  **Não acreditado.** Um modelo adotado entra como rascunho **não acreditado** e não implica nenhuma capacidade de medição e calibração (CMC). A acreditação é uma decisão do laboratório, fora do escopo do modelo. Veja [ISO/IEC 17025](/conceitos/iso-17025).
+</Aside>
