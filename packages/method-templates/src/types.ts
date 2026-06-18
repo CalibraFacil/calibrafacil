@@ -19,7 +19,8 @@ export type TemplateKey =
   | "force-indication"
   | "frequency-indication"
   | "electrical-indication"
-  | "volume-glassware";
+  | "volume-glassware"
+  | "humidity-magnus";
 
 /**
  * Product-format method definition (the shape persisted on a
