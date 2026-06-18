@@ -23,7 +23,7 @@ export interface MassCompositionConfig {
   targetUnit?: MassUnit
   optionSource?: 'certified_values' | 'composition_profiles'
   targetColumns?: MassCompositionTargetColumns
-  uncertaintyMode?: 'expanded_rss'
+  uncertaintyMode?: 'expanded_rss' | 'expanded_arithmetic'
   quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
 }
 
@@ -103,16 +103,31 @@ export function formatMassCompositionLabel(
     .join(' + ')
 }
 
+/**
+ * Combine the calibrated reference weights of one composed mass standard into a
+ * single conventional value + uncertainty.
+ *
+ * `uncertaintyMode` controls how the per-weight expanded uncertainties combine:
+ *   - 'expanded_arithmetic' — arithmetic sum Σ(qᵢ·Uᵢ). Correct when the weights
+ *     share traceability / systematic effects (the usual case for a weight set):
+ *     they are positively correlated, so EURAMET cg-18 §7.1.2.1 and UKAS LAB 14
+ *     §4.2.2 require the linear sum. Conservative (≥ RSS); never under-states.
+ *   - 'expanded_rss' (default) — root-sum-square √(Σ(qᵢ·Uᵢ)²). Only valid when
+ *     the weights' uncertainties are genuinely independent. Default preserves the
+ *     historical behavior; see issue #506.
+ */
 export function buildMassCompositionValue(
   items: MassCompositionItem[],
   targetUnit: MassUnit = 'g',
-  config: Pick<MassCompositionConfig, 'quantityMode'> = {},
+  config: Pick<MassCompositionConfig, 'quantityMode' | 'uncertaintyMode'> = {},
 ): MassCompositionValue {
   const warnings: string[] = []
   let certifiedValue = 0
   let uncertaintySquares = 0
+  let uncertaintySum = 0
   let hasConversionWarning = false
   const quantityMode = config.quantityMode ?? 'linear_per_item_then_rss'
+  const uncertaintyMode = config.uncertaintyMode ?? 'expanded_rss'
 
   const unsupportedUnits = new Set<string>()
 
@@ -133,6 +148,7 @@ export function buildMassCompositionValue(
     certifiedValue += item.quantity * convertedValue
     const itemExpandedUncertainty = item.quantity * convertedUncertainty
     uncertaintySquares += itemExpandedUncertainty ** 2
+    uncertaintySum += itemExpandedUncertainty
 
     if (
       quantityMode === 'profile_linear' &&
@@ -191,7 +207,9 @@ export function buildMassCompositionValue(
       certifiedValue,
       expandedUncertainty: hasConversionWarning
         ? null
-        : Math.sqrt(uncertaintySquares),
+        : uncertaintyMode === 'expanded_arithmetic'
+          ? uncertaintySum
+          : Math.sqrt(uncertaintySquares),
       maxError: totalOptional('maxError', 'Erro máximo'),
       drift: totalOptional('drift', 'Deriva'),
       buoyancy: totalOptional('buoyancy', 'Empuxo'),

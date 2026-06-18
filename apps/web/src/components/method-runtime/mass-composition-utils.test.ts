@@ -66,7 +66,7 @@ describe('mass composition utils', () => {
     expect(convertMassValue(1000, 'g', 'kg')).toBe(1)
   })
 
-  it('calculates expanded uncertainty as RSS', () => {
+  it('calculates expanded uncertainty as RSS by default (expanded_rss)', () => {
     const result = buildMassCompositionValue(
       [
         item({ quantity: 2, uncertainty: 0.002 }),
@@ -78,6 +78,29 @@ describe('mass composition utils', () => {
     expect(result.totals.expandedUncertainty).toBeCloseTo(
       Math.sqrt(0.004 ** 2 + 0.001 ** 2),
     )
+  })
+
+  it('sums expanded uncertainty arithmetically with expanded_arithmetic (cg-18 §7.1.2.1)', () => {
+    const items = [
+      item({ quantity: 2, uncertainty: 0.002 }),
+      item({ standardId: 2, uncertainty: 0.001 }),
+    ]
+
+    const arithmetic = buildMassCompositionValue(items, 'kg', {
+      uncertaintyMode: 'expanded_arithmetic',
+    })
+    const rss = buildMassCompositionValue(items, 'kg', {
+      uncertaintyMode: 'expanded_rss',
+    })
+
+    // 2 × 0.002 + 1 × 0.001 = 0.005, the correlated (linear) combination.
+    expect(arithmetic.totals.expandedUncertainty).toBeCloseTo(0.005)
+
+    // The arithmetic sum is the conservative bound: always ≥ RSS, so it can
+    // only over-state, never under-state (this is the fix for issue #506).
+    const arithmeticU = arithmetic.totals.expandedUncertainty ?? 0
+    const rssU = rss.totals.expandedUncertainty ?? 0
+    expect(arithmeticU).toBeGreaterThan(rssU)
   })
 
   it('scales composition profile uncertainty linearly by quantity before RSS', () => {

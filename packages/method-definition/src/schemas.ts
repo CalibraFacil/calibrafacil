@@ -108,7 +108,9 @@ export const TableColumnSchema = z
           })
           .strict()
           .optional(),
-        uncertaintyMode: z.literal("expanded_rss").optional(),
+        uncertaintyMode: z
+          .enum(["expanded_rss", "expanded_arithmetic"])
+          .optional(),
         quantityMode: z
           .enum(["linear_per_item_then_rss", "profile_linear"])
           .optional(),

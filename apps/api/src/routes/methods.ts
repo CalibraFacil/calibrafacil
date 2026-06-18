@@ -545,7 +545,8 @@ function methodTableColumnMassCompositionToDefinition(
       ? { optionSource: record.optionSource }
       : {}),
     ...(targetColumns ? { targetColumns } : {}),
-    ...(record.uncertaintyMode === "expanded_rss"
+    ...(record.uncertaintyMode === "expanded_rss" ||
+    record.uncertaintyMode === "expanded_arithmetic"
       ? { uncertaintyMode: record.uncertaintyMode }
       : {}),
     ...(isMassCompositionQuantityMode(record.quantityMode)

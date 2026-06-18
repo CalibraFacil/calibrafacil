@@ -73,12 +73,19 @@ const massCompositionQuantityModes = [
   'profile_linear',
 ] as const
 
+const massCompositionUncertaintyModes = [
+  'expanded_rss',
+  'expanded_arithmetic',
+] as const
+
 const massUnits = ['mg', 'g', 'kg'] as const
 
 type MassUnit = (typeof massUnits)[number]
 type TableColumnRole = (typeof tableColumnRoles)[number]
 type MassCompositionOptionSource = (typeof massCompositionOptionSources)[number]
 type MassCompositionQuantityMode = (typeof massCompositionQuantityModes)[number]
+type MassCompositionUncertaintyMode =
+  (typeof massCompositionUncertaintyModes)[number]
 
 const massCompositionTargetFields = [
   ['certifiedValue', 'Valor certificado'],
@@ -752,7 +759,9 @@ function MassCompositionColumnEditor({
             massComposition: {
               ...column.massComposition,
               uncertaintyMode:
-                uncertaintyMode === 'none' ? undefined : 'expanded_rss',
+                uncertaintyMode === 'none'
+                  ? undefined
+                  : toMassCompositionUncertaintyMode(uncertaintyMode),
             },
           })
         }
@@ -762,7 +771,11 @@ function MassCompositionColumnEditor({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">sem modo</SelectItem>
-          <SelectItem value="expanded_rss">expanded_rss</SelectItem>
+          {massCompositionUncertaintyModes.map((mode) => (
+            <SelectItem key={mode} value={mode}>
+              {mode}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Select
@@ -913,5 +926,17 @@ function toMassCompositionQuantityMode(
       return value
     default:
       return 'linear_per_item_then_rss'
+  }
+}
+
+function toMassCompositionUncertaintyMode(
+  value: unknown,
+): MassCompositionUncertaintyMode {
+  switch (value) {
+    case 'expanded_rss':
+    case 'expanded_arithmetic':
+      return value
+    default:
+      return 'expanded_rss'
   }
 }

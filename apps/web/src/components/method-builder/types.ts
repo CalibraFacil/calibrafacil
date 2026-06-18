@@ -44,7 +44,7 @@ export interface MethodDraftTableColumn {
       drift?: string
       buoyancy?: string
     }
-    uncertaintyMode?: 'expanded_rss'
+    uncertaintyMode?: 'expanded_rss' | 'expanded_arithmetic'
     quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
   }
 }
