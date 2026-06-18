@@ -219,6 +219,7 @@ type ApiRoutePath =
   | "/api/jobs/:id/submit"
   | "/api/jobs/technicians/list"
   | "/api/methods"
+  | "/api/methods/from-template"
   | "/api/methods/:id"
   | "/api/methods/:id/archive"
   | "/api/methods/:id/audit"

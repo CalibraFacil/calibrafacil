@@ -25,7 +25,16 @@ export type QuantityKind =
   | "volume"
   | "time"
   | "torque"
-  | "humidity";
+  | "humidity"
+  | "force"
+  // Electrical is modelled as three separate kinds on purpose: volt, ampere and
+  // ohm are different dimensions and must never inter-convert. The single
+  // `electrical` reference-standard kind maps to all three (see
+  // reference-standard-kind-map.ts).
+  | "voltage"
+  | "current"
+  | "resistance"
+  | "frequency";
 
 export type MeasurementUnit =
   // mass
@@ -63,7 +72,30 @@ export type MeasurementUnit =
   | "N·m"
   | "kgf·m"
   // humidity
-  | "%RH";
+  | "%RH"
+  // force
+  | "N"
+  | "kN"
+  | "kgf"
+  // voltage
+  | "µV"
+  | "mV"
+  | "V"
+  | "kV"
+  // current
+  | "µA"
+  | "mA"
+  | "A"
+  // resistance (Ω = U+03A9; milliohm omitted to avoid the milli/mega
+  // lowercase-alias collision with MΩ)
+  | "Ω"
+  | "kΩ"
+  | "MΩ"
+  // frequency (rpm folded in: 1 rpm = 1/60 Hz)
+  | "Hz"
+  | "kHz"
+  | "MHz"
+  | "rpm";
 
 /**
  * Conversion definition to the kind's canonical unit. Affine (offset-bearing)
@@ -89,6 +121,11 @@ export const CANONICAL_BY_KIND = {
   time: "s",
   torque: "N·m",
   humidity: "%RH",
+  force: "N",
+  voltage: "V",
+  current: "A",
+  resistance: "Ω",
+  frequency: "Hz",
 } as const satisfies Record<QuantityKind, MeasurementUnit>;
 
 export const UNIT_REGISTRY = {
@@ -128,6 +165,28 @@ export const UNIT_REGISTRY = {
   "kgf·m": { kind: "torque", toCanonical: { factor: 9.80665 } },
   // humidity — canonical %RH (single-unit kind, identity conversion)
   "%RH": { kind: "humidity", toCanonical: { factor: 1 } },
+  // force — canonical N
+  N: { kind: "force", toCanonical: { factor: 1 } },
+  kN: { kind: "force", toCanonical: { factor: 1000 } },
+  kgf: { kind: "force", toCanonical: { factor: 9.80665 } },
+  // voltage — canonical V
+  "µV": { kind: "voltage", toCanonical: { factor: 0.000001 } },
+  mV: { kind: "voltage", toCanonical: { factor: 0.001 } },
+  V: { kind: "voltage", toCanonical: { factor: 1 } },
+  kV: { kind: "voltage", toCanonical: { factor: 1000 } },
+  // current — canonical A
+  "µA": { kind: "current", toCanonical: { factor: 0.000001 } },
+  mA: { kind: "current", toCanonical: { factor: 0.001 } },
+  A: { kind: "current", toCanonical: { factor: 1 } },
+  // resistance — canonical Ω
+  "Ω": { kind: "resistance", toCanonical: { factor: 1 } },
+  "kΩ": { kind: "resistance", toCanonical: { factor: 1000 } },
+  "MΩ": { kind: "resistance", toCanonical: { factor: 1000000 } },
+  // frequency — canonical Hz
+  Hz: { kind: "frequency", toCanonical: { factor: 1 } },
+  kHz: { kind: "frequency", toCanonical: { factor: 1000 } },
+  MHz: { kind: "frequency", toCanonical: { factor: 1000000 } },
+  rpm: { kind: "frequency", toCanonical: { factor: 1 / 60 } },
 } as const satisfies Record<MeasurementUnit, UnitDef>;
 
 const ALL_UNITS: MeasurementUnit[] = Object.keys(UNIT_REGISTRY).filter(
@@ -238,6 +297,47 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   "%rh": "%RH",
   "% rh": "%RH",
   "%ur": "%RH",
+  // force
+  n: "N",
+  newton: "N",
+  newtons: "N",
+  kn: "kN",
+  kgf: "kgf",
+  kgforca: "kgf",
+  // voltage
+  "µv": "µV",
+  "μv": "µV",
+  uv: "µV",
+  mv: "mV",
+  v: "V",
+  volt: "V",
+  volts: "V",
+  kv: "kV",
+  // current
+  "µa": "µA",
+  "μa": "µA",
+  ua: "µA",
+  ma: "mA",
+  a: "A",
+  amp: "A",
+  amps: "A",
+  ampere: "A",
+  amperes: "A",
+  // resistance (bare `mω` is deliberately absent — it is ambiguous between
+  // milliohm and megaohm under lowercasing; type the `MΩ` symbol or `megohm`)
+  "ω": "Ω",
+  ohm: "Ω",
+  ohms: "Ω",
+  "kω": "kΩ",
+  kohm: "kΩ",
+  megohm: "MΩ",
+  megaohm: "MΩ",
+  // frequency
+  hz: "Hz",
+  hertz: "Hz",
+  khz: "kHz",
+  mhz: "MHz",
+  rpm: "rpm",
 };
 
 /**

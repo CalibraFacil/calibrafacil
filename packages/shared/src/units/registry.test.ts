@@ -37,6 +37,11 @@ describe("registry membership", () => {
       "time",
       "torque",
       "humidity",
+      "force",
+      "voltage",
+      "current",
+      "resistance",
+      "frequency",
     ];
     for (const kind of kinds) {
       const canonical = canonicalUnitFor(kind);
@@ -50,9 +55,25 @@ describe("registry membership", () => {
     expect(unitsForKind("mass")).toEqual(["mg", "g", "kg"]);
     expect(unitsForKind("humidity")).toEqual(["%RH"]);
     expect(unitsForKind("length")).toEqual(["µm", "mm", "cm", "m"]);
+    expect(unitsForKind("force")).toEqual(["N", "kN", "kgf"]);
+    expect(unitsForKind("voltage")).toEqual(["µV", "mV", "V", "kV"]);
+    expect(unitsForKind("current")).toEqual(["µA", "mA", "A"]);
+    expect(unitsForKind("resistance")).toEqual(["Ω", "kΩ", "MΩ"]);
+    expect(unitsForKind("frequency")).toEqual(["Hz", "kHz", "MHz", "rpm"]);
     for (const unit of unitsForKind("pressure")) {
       expect(isUnitOfKind(unit, "pressure")).toBe(true);
     }
+  });
+
+  it("keeps electrical dimensions separate (volt/ampere/ohm never convert)", () => {
+    expect(unitKind("V")).toBe("voltage");
+    expect(unitKind("A")).toBe("current");
+    expect(unitKind("Ω")).toBe("resistance");
+    // Cross-dimension conversions must fail — a single "electrical" kind would
+    // have let these silently succeed by factor ratio.
+    expect(convertUnitValue(1, "V", "A")).toBeNull();
+    expect(convertUnitValue(1, "A", "Ω")).toBeNull();
+    expect(convertUnitValue(1, "Ω", "V")).toBeNull();
   });
 });
 
@@ -64,6 +85,11 @@ describe("convertUnitValue / Delta round-trips", () => {
     ["mL", "L", 250],
     ["min", "h", 90],
     ["kgf·m", "N·m", 4.4],
+    ["kgf", "N", 5],
+    ["mV", "kV", 1234.5],
+    ["mA", "A", 250],
+    ["kΩ", "MΩ", 47],
+    ["rpm", "Hz", 3000],
   ];
 
   it("is reversible within a kind", () => {
@@ -128,6 +154,21 @@ describe("normalizeUnitToken pitfalls", () => {
     ["Nm", "N·m"],
     ["%UR", "%RH"],
     ["%RH", "%RH"],
+    ["N", "N"],
+    ["kgf", "kgf"],
+    ["newton", "N"],
+    ["KN", "kN"],
+    ["mV", "mV"],
+    ["volt", "V"],
+    ["a", "A"],
+    ["amp", "A"],
+    ["ohm", "Ω"],
+    ["Ω", "Ω"],
+    ["kΩ", "kΩ"],
+    ["MΩ", "MΩ"],
+    ["megohm", "MΩ"],
+    ["hz", "Hz"],
+    ["RPM", "rpm"],
     ["%", null], // bare percent must stay kind-less
     ["µm/(m·K)", null], // composite bloco-padrão token
     ["", null],
@@ -157,6 +198,11 @@ describe("normalizeUnitToken pitfalls", () => {
       ["%RH", "%RH"],
       ["kgf/cm²", "kgf/cm²"],
       ["µm/(m·K)", null],
+      ["N", "N"], // dinamômetro (U+0020 plain N)
+      ["V", "V"], // multímetro tensão
+      ["A", "A"], // multímetro corrente
+      ["MΩ", "MΩ"], // multímetro resistência (M = U+004D, Ω = U+03A9)
+      ["rpm", "rpm"], // tacômetro
     ];
     for (const [token, expected] of seedTokens) {
       expect(normalizeUnitToken(token)).toBe(expected);

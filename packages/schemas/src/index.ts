@@ -3,6 +3,7 @@ export * from "./commercial";
 export * from "./imports";
 export * from "./printing";
 export * from "./quality";
+export * from "./reference-standard-kind-map";
 export * from "./service-orders";
 
 export const TaskSchema = z.object({
@@ -353,6 +354,28 @@ export const MeasurementUnitSchema = z.enum([
   "kgf·m",
   // humidity
   "%RH",
+  // force
+  "N",
+  "kN",
+  "kgf",
+  // voltage
+  "µV",
+  "mV",
+  "V",
+  "kV",
+  // current
+  "µA",
+  "mA",
+  "A",
+  // resistance
+  "Ω",
+  "kΩ",
+  "MΩ",
+  // frequency
+  "Hz",
+  "kHz",
+  "MHz",
+  "rpm",
 ]);
 export type MeasurementUnit = z.infer<typeof MeasurementUnitSchema>;
 
@@ -1164,6 +1187,19 @@ export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
  * Schema for updating a method (only DRAFT status)
  */
 export const UpdateMethodSchema = CreateMethodSchema.partial();
+
+/**
+ * Body for creating a DRAFT method from a curated template
+ * (`@calibra-facil/method-templates`). The route resolves the template's
+ * payload; the caller may override the asset type and name.
+ */
+export const FromTemplateSchema = z.object({
+  templateKey: z.string().min(1, "templateKey é obrigatório"),
+  assetTypeId: z.coerce.number().nullable().optional(),
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
+});
+
+export type FromTemplateInput = z.infer<typeof FromTemplateSchema>;
 
 export type UpdateMethodInput = z.infer<typeof UpdateMethodSchema>;
 

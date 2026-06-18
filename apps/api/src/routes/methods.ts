@@ -10,10 +10,12 @@ import {
 import {
   CreateMethodSchema,
   UpdateMethodSchema,
+  FromTemplateSchema,
   ListMethodsQuerySchema,
   ReturnMethodToDraftSchema,
   normalizeMethodValidationsInput,
 } from "@calibra-facil/schemas";
+import { listTemplates } from "@calibra-facil/method-templates";
 import {
   compileMethodDraft,
   fingerprintJson,
@@ -1468,6 +1470,106 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error creating method:", error);
         return c.json({ error: "Erro ao criar método" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /from-template - Create a DRAFT method from a curated template
+  // (@calibra-facil/method-templates). The DRAFT then follows the normal
+  // review -> publish workflow; the metrologist signs off before publish.
+  // =========================================================================
+  .post(
+    "/from-template",
+    ...withLabPermission({ template: ["create"] }),
+    zValidator("json", FromTemplateSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
+
+      try {
+        const template = listTemplates().find(
+          (candidate) => candidate.key === input.templateKey,
+        );
+        if (!template) {
+          return c.json({ error: "Template não encontrado" }, 404);
+        }
+
+        const def = template.productDefinition;
+        const name = input.name ?? def.name;
+
+        // Resolve the asset type: explicit override wins, else the template's
+        // slug -> asset_type.id, else null.
+        let assetTypeId: number | null = input.assetTypeId ?? null;
+        if (assetTypeId === null && def.assetTypeSlug) {
+          const [matchedAssetType] = await db
+            .select({ id: assetType.id })
+            .from(assetType)
+            .where(eq(assetType.slug, def.assetTypeSlug))
+            .limit(1);
+          assetTypeId = matchedAssetType?.id ?? null;
+        }
+
+        // Same uniqueness guard as POST /.
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.organizationId, member.organizationId),
+              eq(calibrationMethod.name, name),
+              eq(calibrationMethod.version, 1),
+            ),
+          )
+          .limit(1);
+
+        if (existing) {
+          return c.json({ error: "Ja existe um método com este nome" }, 400);
+        }
+
+        const [newMethod] = await db
+          .insert(calibrationMethod)
+          .values({
+            organizationId: member.organizationId,
+            assetTypeId,
+            name,
+            description: def.description ?? null,
+            version: 1,
+            status: "DRAFT",
+            dataFields: def.dataFields,
+            variableBindings: def.variableBindings,
+            formulas: def.formulas,
+            measurementModels: def.measurementModels,
+            validations: def.validations,
+            uncertaintyParams: def.uncertaintyParams,
+            certificateContent: def.certificateContent,
+            accreditedScope: def.accreditedScope,
+            templateKey: template.key,
+            templateVersion: template.templateVersion,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (!newMethod) {
+          return c.json({ error: "Erro ao criar método" }, 500);
+        }
+
+        await db.insert(methodAuditLog).values({
+          methodId: newMethod.id,
+          action: "create",
+          changes: {
+            fromTemplate: template.key,
+            templateVersion: template.templateVersion,
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(newMethod, 201);
+      } catch (error) {
+        console.error("Error creating method from template:", error);
+        return c.json({ error: "Erro ao criar método a partir do modelo" }, 500);
       }
     },
   )

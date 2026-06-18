@@ -94,6 +94,9 @@ importers:
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
+      '@calibra-facil/method-templates':
+        specifier: workspace:^
+        version: link:../../packages/method-templates
       '@calibra-facil/notifications':
         specifier: workspace:^
         version: link:../../packages/notifications
@@ -1253,6 +1256,28 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:^
+        version: link:../typescript-config
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@6.0.3))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(tsx@4.22.4))
+
+  packages/method-templates:
+    dependencies:
+      '@calibra-facil/math-engine':
+        specifier: workspace:^
+        version: link:../math-engine
+      '@calibra-facil/method-definition':
+        specifier: workspace:^
+        version: link:../method-definition
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:^

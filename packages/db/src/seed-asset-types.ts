@@ -492,6 +492,126 @@ const assetTypes: Array<{
       },
     ],
   },
+  {
+    name: "Dinamômetro",
+    slug: "dinamometro",
+    description:
+      "Dinamômetros e células de carga para medição de força (tração/compressão)",
+    definition: [
+      {
+        key: "capacity",
+        label: "Capacidade Máxima",
+        type: "number",
+        unit: "N",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução",
+        type: "number",
+        unit: "N",
+        required: true,
+      },
+      {
+        key: "forceUnit",
+        label: "Unidade de Força",
+        type: "select",
+        options: ["N", "kN", "kgf"],
+        required: false,
+      },
+      {
+        key: "loadMode",
+        label: "Modo de Carga",
+        type: "select",
+        options: ["Tração", "Compressão", "Tração/Compressão"],
+        required: true,
+      },
+      {
+        key: "accuracyClass",
+        label: "Classe de Exatidão",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Multímetro Digital",
+    slug: "multimetro-digital",
+    description:
+      "Multímetros digitais para medição de tensão, corrente e resistência (DC)",
+    definition: [
+      {
+        key: "displayDigits",
+        label: "Dígitos",
+        type: "select",
+        options: ["3½", "4½", "5½", "6½", "7½"],
+        required: true,
+      },
+      {
+        key: "voltageRangeMax",
+        label: "Faixa de Tensão Máx.",
+        type: "number",
+        unit: "V",
+        required: false,
+      },
+      {
+        key: "currentRangeMax",
+        label: "Faixa de Corrente Máx.",
+        type: "number",
+        unit: "A",
+        required: false,
+      },
+      {
+        key: "resistanceRangeMax",
+        label: "Faixa de Resistência Máx.",
+        type: "number",
+        unit: "MΩ",
+        required: false,
+      },
+      {
+        key: "accuracyClass",
+        label: "Exatidão (% leitura + dígitos)",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Tacômetro",
+    slug: "tacometro",
+    description:
+      "Tacômetros de contato e ópticos para medição de rotação/frequência",
+    definition: [
+      {
+        key: "rangeMin",
+        label: "Faixa Mín.",
+        type: "number",
+        unit: "rpm",
+        required: true,
+      },
+      {
+        key: "rangeMax",
+        label: "Faixa Máx.",
+        type: "number",
+        unit: "rpm",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução",
+        type: "number",
+        unit: "rpm",
+        required: true,
+      },
+      {
+        key: "instrumentType",
+        label: "Tipo",
+        type: "select",
+        options: ["Contato", "Óptico", "Contato/Óptico"],
+        required: true,
+      },
+    ],
+  },
 ];
 
 async function seed() {

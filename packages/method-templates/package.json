@@ -1,0 +1,27 @@
+{
+  "name": "@calibra-facil/method-templates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo -p tsconfig.json",
+    "check-types": "tsgo -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@calibra-facil/math-engine": "workspace:^",
+    "@calibra-facil/method-definition": "workspace:^",
+    "@calibra-facil/schemas": "workspace:^"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.17"
+  }
+}

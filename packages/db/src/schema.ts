@@ -3079,6 +3079,11 @@ export const calibrationMethod = pgTable(
     publicationEvidence: jsonb("publication_evidence").$type<unknown>(),
     // Version chain - links to the parent version
     parentId: integer("parent_id"),
+    // Provenance when created from a curated template (packages/method-templates).
+    // Informational only — never part of methodFingerprint (so adopting or
+    // upgrading a template never changes a method's reproducible fingerprint).
+    templateKey: text("template_key"),
+    templateVersion: integer("template_version"),
     // Timestamps and actors
     createdAt: timestamp("created_at").defaultNow().notNull(),
     createdBy: text("created_by")

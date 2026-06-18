@@ -832,7 +832,29 @@ export type MeasurementUnit =
   | "h"
   | "N·m"
   | "kgf·m"
-  | "%RH";
+  | "%RH"
+  // force
+  | "N"
+  | "kN"
+  | "kgf"
+  // voltage
+  | "µV"
+  | "mV"
+  | "V"
+  | "kV"
+  // current
+  | "µA"
+  | "mA"
+  | "A"
+  // resistance
+  | "Ω"
+  | "kΩ"
+  | "MΩ"
+  // frequency
+  | "Hz"
+  | "kHz"
+  | "MHz"
+  | "rpm";
 
 export type CreateAssetInput = {
   customerId: number;
