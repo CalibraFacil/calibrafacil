@@ -267,6 +267,8 @@ export const calibraApiPolicyRegistry = {
     previewDraft: "cloud-only",
     publishDraft: "cloud-only",
     requestApproval: "cloud-only",
+    listMethodTemplates: "cloud-only",
+    fromTemplate: "cloud-only",
   },
   standards: {
     list: "local-first-read-through-sync",

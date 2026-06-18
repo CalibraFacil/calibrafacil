@@ -954,6 +954,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listMethodTemplates",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "fromTemplate",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "standards",
           "policy": "local-first-read-through-sync",

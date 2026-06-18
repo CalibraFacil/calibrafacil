@@ -13,6 +13,7 @@ import type {
   JobExecutionPayload,
   JobsListStatus,
   MethodCompileDraftInput,
+  MethodFromTemplateInput,
   MethodPreviewDraftInput,
   MethodPublishDraftInput,
   MethodRequestApprovalInput,
@@ -476,6 +477,12 @@ export function createCloudApiClient(
           };
         }): Promise<Response>;
         $post(input: { json: MethodWriteInput }): Promise<Response>;
+        templates: {
+          $get(): Promise<Response>;
+        };
+        "from-template": {
+          $post(input: { json: MethodFromTemplateInput }): Promise<Response>;
+        };
         compile: {
           $post(input: { json: MethodCompileDraftInput }): Promise<Response>;
         };

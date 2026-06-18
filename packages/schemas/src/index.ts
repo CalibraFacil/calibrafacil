@@ -1197,6 +1197,20 @@ export const FromTemplateSchema = z.object({
   templateKey: z.string().min(1, "templateKey é obrigatório"),
   assetTypeId: z.coerce.number().nullable().optional(),
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
+  // Mandatory informed-adoption acknowledgements (ISO/IEC 17025 §7.2.1.5). The
+  // three consent booleans are `z.literal(true)`, so a missing or `false` value
+  // is a 400 at validation — adoption is cloud-only, there is no legacy caller.
+  // `acceptedVerificarRefs` is checked against the chosen template's
+  // action-severity [VERIFICAR] refs in the route handler (which has the
+  // template + its governance).
+  acknowledgements: z.object({
+    readVerificarAndOmitted: z.literal(true),
+    acceptsVerificationDuty: z.literal(true),
+    understandsDraftGate: z.literal(true),
+    acknowledgedAt: z.string(),
+    templateVersion: z.number(),
+    acceptedVerificarRefs: z.array(z.string()),
+  }),
 });
 
 export type FromTemplateInput = z.infer<typeof FromTemplateSchema>;

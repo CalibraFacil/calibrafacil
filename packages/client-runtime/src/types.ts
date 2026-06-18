@@ -334,6 +334,93 @@ export type MethodAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
+export type MethodGovernanceSource = {
+  title: string;
+  edition: string;
+  section?: string;
+  url?: string;
+};
+
+export type MethodGovernanceVerificarItem = {
+  ref?: string;
+  item: string;
+  severity: "info" | "action" | "platform";
+  fieldKeys?: string[];
+};
+
+export type MethodGovernance = {
+  summary: string;
+  measurand: string;
+  model: "formulas" | "gum_measurement_model";
+  sources: MethodGovernanceSource[];
+  conformanceNotes: Array<{ ref: string; note: string }>;
+  verificarItems: MethodGovernanceVerificarItem[];
+  omittedComponents: Array<{
+    ref: string;
+    component: string;
+    appliesWhen?: string;
+  }>;
+  workedExample?: {
+    scenarioKey: string;
+    provenance: "cited_guide_table" | "engine_characterization";
+    source: string;
+    expected: Record<string, number>;
+  };
+  reviewStatus: "draft_pending_revalidation";
+};
+
+/**
+ * One entry of the curated method-template catalog (`GET /api/methods/templates`).
+ * `governance` is the picker's informed-adoption surface; `spec` feeds the
+ * read-only spec preview. Spec arrays are opaque here (the web layer narrows
+ * them) to keep client-runtime free of server-side method types.
+ */
+export type MethodTemplateCatalogEntry = {
+  templateKey: string;
+  templateVersion: number;
+  discipline: string;
+  defaultName: string;
+  defaultAccreditedScope: boolean;
+  assetTypeSlug?: string;
+  description: string;
+  model: "formulas" | "gum_measurement_model";
+  counts: {
+    dataFields: number;
+    formulas: number;
+    validations: number;
+    uncertaintyParams: number;
+    verificar: number;
+    omitted: number;
+  };
+  governance: MethodGovernance;
+  spec: {
+    dataFields: unknown[];
+    formulas: unknown[];
+    measurementModels: unknown[];
+    validations: unknown[];
+    uncertaintyParams: unknown[];
+    certificateContent: unknown;
+  };
+  previewScenarios: unknown[];
+};
+
+/** Mandatory acknowledgements for adopting a template (all three must be true). */
+export type MethodTemplateAcknowledgements = {
+  readVerificarAndOmitted: true;
+  acceptsVerificationDuty: true;
+  understandsDraftGate: true;
+  acknowledgedAt: string;
+  templateVersion: number;
+  acceptedVerificarRefs: string[];
+};
+
+export type MethodFromTemplateInput = {
+  templateKey: string;
+  assetTypeId?: number | null;
+  name?: string;
+  acknowledgements: MethodTemplateAcknowledgements;
+};
+
 export interface MethodsApi {
   list(input?: MethodsListInput): Promise<MethodsListData>;
   get(id: string | number): Promise<MethodDetailData>;
@@ -367,6 +454,10 @@ export interface MethodsApi {
     id: string | number,
     input: MethodRequestApprovalInput,
   ): Promise<TResponse>;
+  /** Curated method-template catalog (cloud-only). */
+  listMethodTemplates(): Promise<MethodTemplateCatalogEntry[]>;
+  /** Adopt a template → creates a DRAFT method in the caller's org (cloud-only). */
+  fromTemplate(input: MethodFromTemplateInput): Promise<MethodDetailData>;
 }
 
 export type StandardStatus =

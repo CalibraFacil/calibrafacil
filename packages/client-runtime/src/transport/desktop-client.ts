@@ -1700,6 +1700,12 @@ export function createDesktopApiClient(
       async requestApproval() {
         throw desktopUnsupportedAuthAction("Solicitação de aprovação");
       },
+      async listMethodTemplates() {
+        throw desktopUnsupportedAuthAction("Catálogo de modelos de método");
+      },
+      async fromTemplate() {
+        throw desktopUnsupportedAuthAction("Adoção de método a partir de modelo");
+      },
     },
     standards: {
       async list(input = {}) {

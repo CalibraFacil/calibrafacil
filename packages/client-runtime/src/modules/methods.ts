@@ -2,12 +2,14 @@ import type {
   MethodAuditLogData,
   MethodCompileDraftInput,
   MethodDetailData,
+  MethodFromTemplateInput,
   MethodsApi,
   MethodsListData,
   MethodsListInput,
   MethodPreviewDraftInput,
   MethodPublishDraftInput,
   MethodRequestApprovalInput,
+  MethodTemplateCatalogEntry,
   MethodWriteInput,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
@@ -140,6 +142,20 @@ export function createMethodsApi(rawCloudClient: any): MethodsApi {
           json: input,
         }),
         "Erro ao solicitar aprovação",
+      );
+    },
+    async listMethodTemplates() {
+      return readJsonResponse<MethodTemplateCatalogEntry[]>(
+        await rawCloudClient.api.methods.templates.$get(),
+        "Falha ao carregar o catálogo de modelos",
+      );
+    },
+    async fromTemplate(input: MethodFromTemplateInput) {
+      return readJsonResponse<MethodDetailData>(
+        await rawCloudClient.api.methods["from-template"].$post({
+          json: input,
+        }),
+        "Erro ao criar método a partir do modelo",
       );
     },
   };

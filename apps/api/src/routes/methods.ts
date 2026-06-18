@@ -1286,6 +1286,87 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   })
 
   // =========================================================================
+  // GET /templates - Curated method-template catalog. Serves ONLY templates
+  // whose governance is complete (sources/measurand/verificar/reviewStatus), so
+  // the picker never renders a bare, context-less "trust-me" card. Registered
+  // before "/:id" so the literal segment isn't captured as an id.
+  // =========================================================================
+  .get("/templates", ...withLabPermission({ template: ["read"] }), (c) => {
+    const entries = listTemplates().flatMap(
+      (
+        template,
+      ): ReadonlyArray<{
+        templateKey: string;
+        templateVersion: number;
+        discipline: string;
+        defaultName: string;
+        defaultAccreditedScope: boolean;
+        assetTypeSlug: string | undefined;
+        description: string;
+        model: "formulas" | "gum_measurement_model";
+        counts: {
+          dataFields: number;
+          formulas: number;
+          validations: number;
+          uncertaintyParams: number;
+          verificar: number;
+          omitted: number;
+        };
+        // Served verbatim, but typed opaque here so the Hono app's inferred RPC
+        // type stays under the tsgo serialization limit; the client consumes its
+        // own MethodTemplateCatalogEntry DTO, not this inferred type.
+        governance: unknown;
+        spec: unknown;
+        previewScenarios: unknown;
+      }> => {
+      const governance = template.governance;
+      if (
+        governance === undefined ||
+        governance.sources.length === 0 ||
+        governance.measurand.trim().length === 0 ||
+        governance.verificarItems.length === 0 ||
+        governance.reviewStatus !== "draft_pending_revalidation"
+      ) {
+        return [];
+      }
+      const def = template.productDefinition;
+      return [
+        {
+          templateKey: template.key,
+          templateVersion: template.templateVersion,
+          discipline: template.discipline,
+          defaultName: template.defaultName,
+          defaultAccreditedScope: template.defaultAccreditedScope,
+          assetTypeSlug: def.assetTypeSlug,
+          description: def.description ?? "",
+          model: governance.model,
+          counts: {
+            dataFields: def.dataFields.length,
+            formulas: def.formulas.length,
+            validations: def.validations.length,
+            uncertaintyParams: def.uncertaintyParams.length,
+            verificar: governance.verificarItems.length,
+            omitted: governance.omittedComponents.length,
+          },
+          // Served verbatim: the picker's "informed, not trust-me" surface.
+          governance,
+          spec: {
+            dataFields: def.dataFields,
+            formulas: def.formulas,
+            measurementModels: def.measurementModels,
+            validations: def.validations,
+            uncertaintyParams: def.uncertaintyParams,
+            certificateContent: def.certificateContent,
+          },
+          previewScenarios: template.previewScenarios,
+        },
+      ];
+    });
+
+    return c.json(entries);
+  })
+
+  // =========================================================================
   // GET /:id/label - Get method label by ID
   // =========================================================================
   .get(
@@ -1497,6 +1578,29 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Template não encontrado" }, 404);
         }
 
+        // Informed-adoption gate (ISO/IEC 17025 §7.2.1.5): every action-severity
+        // [VERIFICAR] item that carries a ref must be explicitly acknowledged.
+        // (The three consent booleans are already enforced by FromTemplateSchema.)
+        const governance = template.governance;
+        const acknowledgements = input.acknowledgements;
+        const requiredActionRefs = (governance?.verificarItems ?? [])
+          .filter((item) => item.severity === "action")
+          .map((item) => item.ref)
+          .filter((ref): ref is string => typeof ref === "string");
+        const missingRefs = requiredActionRefs.filter(
+          (ref) => !acknowledgements.acceptedVerificarRefs.includes(ref),
+        );
+        if (missingRefs.length > 0) {
+          return c.json(
+            {
+              error:
+                "Reconhecimentos pendentes para itens [VERIFICAR] de ação do modelo",
+              missing: missingRefs,
+            },
+            400,
+          );
+        }
+
         const def = template.productDefinition;
         const name = input.name ?? def.name;
 
@@ -1559,9 +1663,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(methodAuditLog).values({
           methodId: newMethod.id,
           action: "create",
+          // Freeze the adoption evidence (ISO/IEC 17025 §7.2.1.5): the
+          // acknowledgements + an immutable snapshot of the cited sources (with
+          // editions) and the verbatim [VERIFICAR]/omitted items at adoption
+          // time — demonstrable to an auditor and immune to later template edits.
           changes: {
             fromTemplate: template.key,
             templateVersion: template.templateVersion,
+            acknowledgements,
+            governanceSnapshot: governance
+              ? {
+                  sources: governance.sources,
+                  verificarItems: governance.verificarItems,
+                  omittedComponents: governance.omittedComponents,
+                }
+              : null,
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
