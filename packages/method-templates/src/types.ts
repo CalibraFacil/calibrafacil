@@ -18,7 +18,8 @@ export type TemplateKey =
   | "mass-balance"
   | "force-indication"
   | "frequency-indication"
-  | "electrical-indication";
+  | "electrical-indication"
+  | "volume-glassware";
 
 /**
  * Product-format method definition (the shape persisted on a

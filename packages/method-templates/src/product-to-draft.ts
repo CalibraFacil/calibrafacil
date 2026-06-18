@@ -512,6 +512,10 @@ export type ProductDraftSource = {
   assetTypeId?: string;
   dataFields: readonly Record<string, unknown>[];
   formulas: readonly Record<string, unknown>[];
+  // GUM measurement models, already in method-definition shape — passed through,
+  // not converted. Defaults to [] for templates using formula-based uncertainty
+  // (mass-balance, force, …), so their drafts (and fingerprints) are unchanged.
+  measurementModels?: readonly Record<string, unknown>[];
   validations?: readonly unknown[];
   metadata: Record<string, unknown>;
 };
@@ -555,7 +559,7 @@ export function buildDraftFromProduct(
       assetTypeId: source.assetTypeId,
       inputs: definitionInputs,
       formulas: source.formulas.map(methodFormulaToDefinitionFormula),
-      measurementModels: [],
+      measurementModels: source.measurementModels ?? [],
       acceptanceCriteria: (source.validations ?? []).map(
         methodValidationToAcceptanceCriterion,
       ),
