@@ -1,16 +1,7 @@
 import type { MethodDraft } from "@calibra-facil/method-definition";
-import {
-  MethodCertificateContentSchema,
-  MethodFormulaSchema,
-  MethodInputFieldSchema,
-} from "@calibra-facil/schemas";
 
 import { buildDraftFromProduct } from "../product-to-draft";
-import type {
-  BuildDraftArgs,
-  TemplateModule,
-  TemplateProductDefinition,
-} from "../types";
+import type { BuildDraftArgs } from "../types";
 
 /**
  * Exemplo "Calibração Rastreável de Balanças - FOR 50/51" — mass indication-error
@@ -794,7 +785,7 @@ export const certificateContent = {
     },
   ],
 };
-function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
+export function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
   return buildDraftFromProduct(
     {
       name: METHOD_NAME,
@@ -812,36 +803,3 @@ function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
     args,
   );
 }
-
-/**
- * Product-format payload for the `from-template` route. Built by validating the
- * raw template data through the canonical product schemas — lossless (the
- * schemas cover every field, incl. weighingRangeResolver/eccentricityIndicator
- * and permissive formula metadata), so this is route-ready and type-safe. The
- * seed writes the RAW consts (not this) to keep its row byte-identical.
- */
-export const massBalanceProductDefinition: TemplateProductDefinition = {
-  assetTypeSlug: BALANCE_ASSET_TYPE_SLUG,
-  name: METHOD_NAME,
-  description: methodDescription,
-  dataFields: MethodInputFieldSchema.array().parse(dataFields),
-  variableBindings: [],
-  formulas: MethodFormulaSchema.array().parse(formulas),
-  measurementModels: [],
-  validations: [],
-  uncertaintyParams: [],
-  certificateContent: MethodCertificateContentSchema.parse(certificateContent),
-  accreditedScope: false,
-};
-
-export const massBalanceTemplate: TemplateModule = {
-  key: "mass-balance",
-  templateVersion: 1,
-  discipline: "mass",
-  defaultName: METHOD_NAME,
-  defaultAccreditedScope: false,
-  citations: ["EURAMET cg-18", "EA-4/02", "UKAS LAB 14"],
-  buildDraft,
-  productDefinition: massBalanceProductDefinition,
-  previewScenarios: [],
-};

@@ -29,7 +29,7 @@ import type {
  *     (verbatim per the UCAR/EOL compilation:
  *     https://www.eol.ucar.edu/data-software/conventions-and-standards/water-vapor-pressure-formulations).
  *   - EA-4/02 M:2022 (GUM propagation):
- *     https://european-accreditation.org/publications/ea-4-02/
+ *     https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e
  *
  * Model: RH_ref = 100·e_w(t_d)/e_w(t) (actual vapour pressure at the reference
  * dew point t_d over saturation at air temperature t); E = RH_ind − RH_ref.

@@ -2,22 +2,25 @@ import { electricalIndicationTemplate } from "./templates/electrical-indication"
 import { forceIndicationTemplate } from "./templates/force-indication";
 import { frequencyIndicationTemplate } from "./templates/frequency-indication";
 import { humidityMagnusTemplate } from "./templates/humidity-magnus";
-import { massBalanceTemplate } from "./templates/mass-balance";
 import { volumeGlasswareTemplate } from "./templates/volume-glassware";
+import { weighingInstrumentTemplate } from "./templates/weighing-instrument";
 import type { TemplateKey, TemplateModule } from "./types";
 
 /**
- * The curated method-template catalog. The
+ * The curated PLATFORM method-template catalog. The
  * `satisfies Record<TemplateKey, TemplateModule>` guard makes this total: add a
  * key to {@link TemplateKey} and this map fails to compile until it is filled.
+ *
+ * Lab-specific methods (Exemplo `mass-balance`) are intentionally absent — they are
+ * controlled by their seed script, not offered as platform templates.
  */
 export const TEMPLATE_REGISTRY = {
-  "mass-balance": massBalanceTemplate,
   "force-indication": forceIndicationTemplate,
   "frequency-indication": frequencyIndicationTemplate,
   "electrical-indication": electricalIndicationTemplate,
   "volume-glassware": volumeGlasswareTemplate,
   "humidity-magnus": humidityMagnusTemplate,
+  "weighing-instrument": weighingInstrumentTemplate,
 } as const satisfies Record<TemplateKey, TemplateModule>;
 
 export function getTemplate(key: TemplateKey): TemplateModule {

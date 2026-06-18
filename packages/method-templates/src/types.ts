@@ -13,14 +13,18 @@ import type {
   MethodVariableBinding,
 } from "@calibra-facil/schemas";
 
-/** Stable key for a curated method template (repo source of truth). */
+/**
+ * Stable key for a curated PLATFORM method template (repo source of truth).
+ * Lab-specific methods (e.g. Exemplo's seeded `mass-balance`) are NOT catalog
+ * templates — they live in their seed script, not the registry.
+ */
 export type TemplateKey =
-  | "mass-balance"
   | "force-indication"
   | "frequency-indication"
   | "electrical-indication"
   | "volume-glassware"
-  | "humidity-magnus";
+  | "humidity-magnus"
+  | "weighing-instrument";
 
 /**
  * Product-format method definition (the shape persisted on a

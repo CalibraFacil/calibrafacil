@@ -25,7 +25,7 @@ import type {
  *     (formerly EA-10/15):
  *     https://www.euramet.org/Media/docs/Publications/calguides/EURAMET_cg-15__v_2.0_Guidelines_Calibration_Digital_Multimeters.pdf
  *   - EA-4/02 M:2022 "Evaluation of the Uncertainty of Measurement in
- *     Calibration": https://european-accreditation.org/publications/ea-4-02/
+ *     Calibration": https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e
  *
  * Conformance to cg-15 (read from the v2.0 text):
  *   - §5.1.4.1 — reported quantity is "Error of Indication" = Instrument Reading

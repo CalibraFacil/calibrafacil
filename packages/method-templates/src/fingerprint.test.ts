@@ -1,31 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { compileMethodDraft } from "@calibra-facil/method-definition";
+import {
+  compileMethodDraft,
+  type MethodDraft,
+} from "@calibra-facil/method-definition";
 
 import { createTemplateEngine, templateEngineMetadata } from "./engine";
-import { getTemplate } from "./registry";
-import type { TemplateKey } from "./types";
+import { buildDraft as buildMassBalanceDraft } from "./templates/mass-balance";
+import type { BuildDraftArgs } from "./types";
 
 /**
  * Fingerprint-stability gate (vs production).
  *
- * Each fixture pins a template's compiled `methodFingerprint` to the value
- * stored on the production `calibration_method` row the seed maintains. The
- * template MUST reproduce it byte-for-byte — compiled exactly as the seed
- * compiles it (the seed passes NO preview scenarios), with the same
- * `methodId`/`version` the seed used. A drift here means a published method
- * would silently change; update a fixture only with a deliberate, reviewed
- * metrology change plus a coordinated re-seed.
+ * Each fixture pins a SEEDED, lab-specific method's compiled `methodFingerprint`
+ * to the value stored on its production `calibration_method` row. The seed-content
+ * module (e.g. `mass-balance.ts` for Exemplo, imported directly — it is NOT a
+ * platform catalog template) MUST reproduce it byte-for-byte: compiled exactly as
+ * the seed compiles it (no preview scenarios), with the same `methodId`/`version`.
+ * A drift here means a published method would silently change; update a fixture
+ * only with a deliberate, reviewed metrology change plus a coordinated re-seed.
  *
  * Source of truth: Neon project neon-project-id, calibration_method.
  */
 const FINGERPRINT_FIXTURES: ReadonlyArray<{
-  key: TemplateKey;
+  label: string;
+  buildDraft: (args?: BuildDraftArgs) => MethodDraft;
   methodId: number;
   version: number;
   fingerprint: string;
 }> = [
   {
-    key: "mass-balance",
+    label: "mass-balance (Exemplo, seeded method id=6)",
+    buildDraft: buildMassBalanceDraft,
     methodId: 6,
     version: 1,
     fingerprint:
@@ -33,15 +38,14 @@ const FINGERPRINT_FIXTURES: ReadonlyArray<{
   },
 ];
 
-describe("method-templates fingerprint stability (vs production)", () => {
+describe("seeded-method fingerprint stability (vs production)", () => {
   const engine = createTemplateEngine();
   const engineMetadata = templateEngineMetadata();
 
   for (const fixture of FINGERPRINT_FIXTURES) {
-    it(`${fixture.key} reproduces the production fingerprint`, () => {
-      const template = getTemplate(fixture.key);
+    it(`${fixture.label} reproduces the production fingerprint`, () => {
       const result = compileMethodDraft(
-        template.buildDraft({
+        fixture.buildDraft({
           methodId: fixture.methodId,
           version: fixture.version,
         }),

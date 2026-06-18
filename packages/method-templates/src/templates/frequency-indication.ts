@@ -24,7 +24,7 @@ import type {
  * invented. Source for the uncertainty framework (Type A, rectangular
  * resolution, RSS combination, k for ~95%):
  *   - EA-4/02 M:2022 "Evaluation of the Uncertainty of Measurement in
- *     Calibration": https://european-accreditation.org/publications/ea-4-02/
+ *     Calibration": https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e
  *
  * [VERIFICAR] DISCIPLINE PROCEDURE: there is no discipline-specific EURAMET cg
  * cited here for rotation/frequency — the calibration procedure, the contact vs.
