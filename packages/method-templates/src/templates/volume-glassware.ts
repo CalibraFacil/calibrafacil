@@ -292,6 +292,134 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
   },
 ];
 
+// Structured transcription of the header docblock's metrology context. Faithful
+// to the docblock only — see the [VERIFICAR] markers throughout this file.
+type VerificarSeverity = "info" | "action" | "platform";
+type MetrologyGovernance = {
+  summary: string;
+  measurand: string;
+  model: "formulas" | "gum_measurement_model";
+  sources: Array<{ title: string; edition: string; section?: string; url?: string }>;
+  conformanceNotes: Array<{ ref: string; note: string }>;
+  verificarItems: Array<{
+    ref?: string;
+    item: string;
+    severity: VerificarSeverity;
+    fieldKeys?: string[];
+  }>;
+  omittedComponents: Array<{ ref: string; component: string; appliesWhen?: string }>;
+  workedExample?: {
+    scenarioKey: string;
+    provenance: "cited_guide_table" | "engine_characterization";
+    source: string;
+    expected: Record<string, number>;
+  };
+  reviewStatus: "draft_pending_revalidation";
+};
+
+const governance: MetrologyGovernance = {
+  summary:
+    "Gravimetric volume calibration of laboratory glassware (volumetric flask / pipette) at the reference temperature t0 = 20 °C. DRAFT — pending metrologist review. The measurement equation was read from and matches the cited guide; uncertainty is propagated by the GUM engine (NOT hand-derived sensitivity coefficients).",
+  measurand:
+    "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)] (ISO 4787 Eq.1 / cg-19 §3)",
+  model: "gum_measurement_model",
+  sources: [
+    {
+      title:
+        'EURAMET cg-19 "Guidelines on the Determination of Uncertainty in Gravimetric Volume Calibration"',
+      edition: "v4.1",
+      url: "https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-019_Calibration_Guide_No._19_web.pdf",
+    },
+    {
+      title: "ISO 4787",
+      edition: "(edição a confirmar)",
+      section: "source of Eq. 1, referenced by cg-19 §3",
+    },
+    {
+      title: "EA-4/02",
+      edition: "M:2022",
+      url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
+    },
+  ],
+  conformanceNotes: [
+    {
+      ref: "cg-19 §3 Eq. (1)",
+      note: "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)].",
+    },
+    {
+      ref: "cg-19 §3 Eq. (2)",
+      note: "Water density ρ_W via the Tanaka formula with coefficients a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL (verbatim from p.6). Inlined into the V0 expression so the temperature uncertainty propagates through both ρ_W and the γ term (correctly correlated).",
+    },
+    {
+      ref: "cg-19 defaults",
+      note: "ρ_B = 8.0 g/mL (cg-19 default for reference weights); t0 = 20 °C.",
+    },
+    {
+      ref: "cg-19 §6.7 / §6.8",
+      note: "Expanded uncertainty U = k·u_c, k = 2.",
+    },
+  ],
+  verificarItems: [
+    {
+      ref: "cg-19 §6.3.4 / CIPM",
+      item: "The input STANDARD UNCERTAINTIES are representative placeholders — the metrologist must set them from the actual balance / sensor / air-density certificates.",
+      severity: "action",
+      fieldKeys: ["I_L", "I_E", "t_w", "rho_a", "gamma"],
+    },
+    {
+      ref: "cg-19 §6.3.4",
+      item: "ρ_A is taken as an input; cg-19 §6.3.4 derives it from ambient T/P/RH (CIPM). Entered directly here for v1.",
+      severity: "action",
+      fieldKeys: ["rho_a"],
+    },
+    {
+      item: "Asset type slug is 'pipeta' — also balão volumétrico / bureta.",
+      severity: "info",
+    },
+    {
+      ref: "cg-19 §3 note",
+      item: "Cubic expansion coefficient = 3 × linear (cg-19 §3 note).",
+      severity: "action",
+      fieldKeys: ["gamma"],
+    },
+    {
+      ref: "cg-19 §6.6",
+      item: "No correlations modelled between the input quantities (e.g. water-density/temperature handled via the inlined ρ_W(t_w)).",
+      severity: "info",
+    },
+    {
+      item: "procedureCode is a placeholder.",
+      severity: "action",
+    },
+  ],
+  omittedComponents: [
+    {
+      ref: "cg-19 §6.3.7",
+      component: "operator / reproducibility",
+    },
+    {
+      ref: "cg-19 §6.3.8",
+      component: "evaporation",
+    },
+    {
+      ref: "cg-19 §6.3",
+      component:
+        "density-of-reference-weights and γ uncertainties (treated here only via their input-uncertainty terms)",
+    },
+  ],
+  workedExample: {
+    scenarioKey: "balao_100mL_20C",
+    provenance: "engine_characterization",
+    source: "Motor (modo decimal)",
+    expected: {
+      estimate: 100.104665735215,
+      standardUncertainty: 0.002273531566076648,
+      expandedUncertainty: 0.004547063132153296,
+    },
+  },
+  reviewStatus: "draft_pending_revalidation",
+};
+
 export const volumeGlasswareTemplate: TemplateModule = {
   key: "volume-glassware",
   templateVersion: 1,
@@ -302,4 +430,5 @@ export const volumeGlasswareTemplate: TemplateModule = {
   buildDraft,
   productDefinition: volumeProductDefinition,
   previewScenarios,
+  governance,
 };

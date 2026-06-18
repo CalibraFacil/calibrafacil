@@ -11,6 +11,7 @@ import {
 import { buildDraftFromProduct } from "../product-to-draft";
 import type {
   BuildDraftArgs,
+  MetrologyGovernance,
   TemplateModule,
   TemplateProductDefinition,
 } from "../types";
@@ -314,6 +315,95 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
   },
 ];
 
+// --- Metrology governance ------------------------------------------------------
+// Structured transcription of the header docblock — FAITHFUL ONLY, no invented
+// metrology. See the docblock at the top of this file for the prose source.
+const governance: MetrologyGovernance = {
+  summary:
+    "Calibração de força por erro de indicação (dinamômetro / célula de carga) por comparação direta contra uma força de referência. RASCUNHO pendente de revisão metrológica: este primeiro rascunho modela apenas repetibilidade, resolução e a contribuição do padrão de referência.",
+  measurand: "E = leitura média − força de referência",
+  model: "formulas",
+  sources: [
+    {
+      // Docblock cites cg-04 by title only, without a URL.
+      title: "EURAMET cg-04 \"Uncertainty of Force Measurements\"",
+      edition: "cg-04",
+    },
+    {
+      // Docblock cites EA-4/02 by title without a URL.
+      title:
+        "EA-4/02 \"Evaluation of the Uncertainty of Measurement in Calibration\" (GUM framework: combination by RSS, k for ~95%)",
+      edition: "M:2022",
+    },
+  ],
+  conformanceNotes: [
+    {
+      ref: "EA-4/02",
+      note: "Incerteza-padrão combinada por soma quadrática (RSS) das contribuições de repetibilidade, resolução e padrão de referência; incerteza expandida U = k·u_c com k = 2 (~95%).",
+    },
+    {
+      ref: "EURAMET cg-04",
+      note: "Convenção de sinal do erro de indicação E = indicação − valor de referência segue a EURAMET cg-04.",
+    },
+  ],
+  verificarItems: [
+    {
+      item: "Aterramento desta grandeza na EURAMET cg-04 antecede a regra 'read-the-guide'; deve ser reverificado contra o texto efetivo da cg-04 antes do uso real.",
+      severity: "info",
+    },
+    {
+      ref: "EURAMET cg-04 / EA-4/02",
+      item: "SCOPE: este primeiro rascunho modela apenas repetibilidade, resolução e a contribuição do padrão de referência. Os demais componentes da cg-04 estão OMITIDOS e DEVEM ser revisados/adicionados antes de calibrações reais.",
+      severity: "info",
+      fieldKeys: ["u_repetibilidade", "u_resolucao", "u_referencia"],
+    },
+    {
+      ref: "EURAMET cg-04 / EA-4/02",
+      item: "Incerteza de repetibilidade (Tipo A) usa a incerteza-padrão da MÉDIA = s/√n (n=3). Se o resultado se aplica a uma leitura única em vez da média, a cg-04 usaria s diretamente — PONTO DE DECISÃO para revisão.",
+      severity: "action",
+      fieldKeys: ["u_repetibilidade", "desvio_padrao"],
+    },
+    {
+      ref: "EURAMET cg-04 / EA-4/02",
+      item: "Reduz a incerteza expandida do certificado do padrão para incerteza-padrão dividindo por k. k_ref=2 ASSUMIDO — ler o k real do certificado do padrão de referência.",
+      severity: "action",
+      fieldKeys: ["u_referencia", "incerteza_referencia"],
+    },
+  ],
+  omittedComponents: [
+    {
+      ref: "EURAMET cg-04",
+      component: "Reversibilidade / histerese",
+    },
+    {
+      ref: "EURAMET cg-04",
+      component: "Deriva de zero / fluência (creep)",
+    },
+    {
+      ref: "EURAMET cg-04",
+      component: "Reprodutibilidade (rotação / reposicionamento)",
+      appliesWhen:
+        "instrumento medido em diferentes orientações/posições de montagem",
+    },
+    {
+      ref: "EURAMET cg-04",
+      component: "Temperatura",
+      appliesWhen: "condições de calibração fora da temperatura de referência",
+    },
+  ],
+  workedExample: {
+    scenarioKey: "ponto_1kN",
+    provenance: "engine_characterization",
+    source: "Motor (modo decimal)",
+    expected: {
+      erro: 0.2,
+      u_combinada: 0.2581988897471611,
+      u_expandida: 0.5163977794943222,
+    },
+  },
+  reviewStatus: "draft_pending_revalidation",
+};
+
 export const forceIndicationTemplate: TemplateModule = {
   key: "force-indication",
   templateVersion: 1,
@@ -324,4 +414,5 @@ export const forceIndicationTemplate: TemplateModule = {
   buildDraft,
   productDefinition: forceProductDefinition,
   previewScenarios,
+  governance,
 };

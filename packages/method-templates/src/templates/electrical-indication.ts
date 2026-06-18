@@ -11,6 +11,7 @@ import {
 import { buildDraftFromProduct } from "../product-to-draft";
 import type {
   BuildDraftArgs,
+  MetrologyGovernance,
   TemplateModule,
   TemplateProductDefinition,
 } from "../types";
@@ -320,6 +321,125 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
   },
 ];
 
+// Metrology context faithfully transcribed from the header docblock + inline
+// [VERIFICAR] markers above (sources, conformance, open decisions, omissions).
+// Never invented — the registry oracle cross-checks this against the compiled
+// definition (verificarItems count, fieldKeys, worked-example scenario).
+const governance: MetrologyGovernance = {
+  summary:
+    "Calibração de multímetro digital em tensão DC por erro de indicação (cg-15), combinando repetibilidade/instabilidade (Tipo A), resolução (retangular) e a incerteza do padrão por RSS (EA-4/02), k=2. RASCUNHO pendente de revisão metrológica.",
+  measurand: "E = leitura média − valor aplicado (cg-15 §5.1.4.1)",
+  model: "formulas",
+  sources: [
+    {
+      title:
+        "EURAMET cg-15 \"Guidelines on the Calibration of Digital Multimeters\" (formerly EA-10/15)",
+      edition: "v2.0",
+      section: "§5.1.4.1, §5.1.5.1, §5.1.5.3, §5.1.5.4",
+      url: "https://www.euramet.org/Media/docs/Publications/calguides/EURAMET_cg-15__v_2.0_Guidelines_Calibration_Digital_Multimeters.pdf",
+    },
+    {
+      title:
+        "EA-4/02 \"Evaluation of the Uncertainty of Measurement in Calibration\"",
+      edition: "M:2022",
+      url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
+    },
+  ],
+  conformanceNotes: [
+    {
+      ref: "cg-15 §5.1.4.1",
+      note: "Grandeza reportada é o \"Error of Indication\" = Instrument Reading − Applied Value ⇒ E = indicação − referência.",
+    },
+    {
+      ref: "cg-15 §5.1.5.1",
+      note: "A incerteza reportada considera a resolução e a instabilidade de curto prazo do instrumento, combinadas com a incerteza do padrão (calibração). São exatamente as três componentes modeladas aqui.",
+    },
+    {
+      ref: "cg-15 §5.1.5.4",
+      note: "Resolução é uma componente RETANGULAR de largura = N dígitos de resolução (N=1 para leitura estável) ⇒ u = (resolução/2)/√3; as demais contribuições são normais; combinação por EA-4/02.",
+    },
+    {
+      ref: "cg-15 §5.1.5.3",
+      note: "Incerteza expandida U = k·u_c com k = 2 (~95%).",
+    },
+  ],
+  verificarItems: [
+    {
+      ref: "cg-15 Tables 1–2",
+      item: "SCOPE: DC voltage only (cg-15 also covers DC current, resistance, AC voltage/current — Tables 1–2). AC is DEFERRED for v1. DC current and resistance use the identical indication-error + RSS model with their own units (separate templates, to be added after review).",
+      severity: "info",
+    },
+    {
+      item: "Enter the EXPANDED uncertainty U from the source's certificate; reduced to a standard uncertainty below by the certificate's k.",
+      severity: "action",
+      fieldKeys: ["incerteza_referencia"],
+    },
+    {
+      ref: "cg-15 §5.1.5.1",
+      item: "3 repeated readings assumed; arithmetic mean. cg-15 §5.1.5.1 treats short-term instability of the reading as a contribution.",
+      severity: "info",
+      fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "media"],
+    },
+    {
+      item: "n=3 hardcoded to match the 3 reading columns.",
+      severity: "info",
+      fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "desvio_padrao"],
+    },
+    {
+      item: "standard uncertainty of the MEAN = s/√n (n=3). If the reported result applies to a single reading, EA-4/02 would use s directly.",
+      severity: "action",
+      fieldKeys: ["u_repetibilidade", "desvio_padrao"],
+    },
+    {
+      ref: "cg-15 §4.1",
+      item: "k_ref=2 ASSUMED to reduce the cert's EXPANDED U to standard u — read the actual k from the reference standard's certificate.",
+      severity: "action",
+      fieldKeys: ["u_referencia", "incerteza_referencia"],
+    },
+    {
+      ref: "cg-15 §3.4.6.1",
+      item: "add any lab-specific contribution (e.g. thermal EMF if zero is not nulled per cg-15 §3.4.6.1, input-loading) when the setup requires it.",
+      severity: "action",
+      fieldKeys: ["u_combinada"],
+    },
+    {
+      ref: "cg-15 §5.1.5.4",
+      item: "§5.1.5.4 notes k may fall toward 1.65 when the rectangular (resolution) component dominates; the guide recommends k=2 overall, which is used here.",
+      severity: "action",
+      fieldKeys: ["u_expandida", "u_combinada"],
+    },
+  ],
+  omittedComponents: [
+    {
+      ref: "cg-15 Tables 1–2",
+      component:
+        "AC voltage/current, reactance and phase — DC-only template; AC DEFERRED for v1.",
+      appliesWhen: "Calibração em corrente/tensão alternada (AC).",
+    },
+    {
+      ref: "cg-15 §3.4.6.1",
+      component: "Thermal EMF contribution (zero not nulled).",
+      appliesWhen: "Quando o zero não é anulado conforme cg-15 §3.4.6.1.",
+    },
+    {
+      ref: "cg-15 §5.1.5.1",
+      component: "Input-loading / lab-specific contributions.",
+      appliesWhen: "Quando o arranjo de medição exigir.",
+    },
+  ],
+  workedExample: {
+    scenarioKey: "ponto_10V",
+    provenance: "engine_characterization",
+    source: "Motor (modo decimal)",
+    expected: {
+      erro: 0.002,
+      u_combinada: 0.0025819888974716113,
+      u_expandida: 0.0051639777949432225,
+    },
+  },
+  reviewStatus: "draft_pending_revalidation",
+};
+
 export const electricalIndicationTemplate: TemplateModule = {
   key: "electrical-indication",
   templateVersion: 1,
@@ -330,4 +450,5 @@ export const electricalIndicationTemplate: TemplateModule = {
   buildDraft,
   productDefinition: electricalProductDefinition,
   previewScenarios,
+  governance,
 };

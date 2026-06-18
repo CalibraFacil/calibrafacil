@@ -11,6 +11,7 @@ import {
 import { buildDraftFromProduct } from "../product-to-draft";
 import type {
   BuildDraftArgs,
+  MetrologyGovernance,
   TemplateModule,
   TemplateProductDefinition,
 } from "../types";
@@ -297,6 +298,128 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
   },
 ];
 
+const governance = {
+  summary:
+    "Calibração de tacômetro por erro de indicação (rpm) por comparação direta contra uma rotação de referência. Incerteza combinada por soma quadrática de repetibilidade (Tipo A), resolução (retangular) e o padrão de referência, com expansão k=2 (~95%), conforme EA-4/02. Rascunho pendente de revisão metrológica.",
+  measurand: "E = leitura média − valor de referência (rpm)",
+  model: "formulas",
+  sources: [
+    {
+      title:
+        "EA-4/02 — Evaluation of the Uncertainty of Measurement in Calibration",
+      edition: "M:2022",
+      url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
+    },
+  ],
+  conformanceNotes: [
+    {
+      ref: "EA-4/02",
+      note: "Incerteza-padrão combinada por soma quadrática (RSS) das contribuições de repetibilidade, resolução e padrão de referência; incerteza expandida U = k·u_c com k = 2 (~95%).",
+    },
+    {
+      ref: "certificateContent",
+      note: "Os resultados referem-se exclusivamente ao instrumento calibrado, no momento da calibração. Este certificado não tem valor para fins de metrologia legal.",
+    },
+  ],
+  verificarItems: [
+    {
+      item: "Nenhum guia específico de disciplina citado (apenas EA-4/02); procedimento e fontes a confirmar.",
+      severity: "info",
+    },
+    {
+      item: "DISCIPLINE PROCEDURE: não há EURAMET cg específico citado para rotação/frequência — o procedimento de calibração, o método contato vs. óptico e qualquer contribuição de quantização de estroboscópio/gate-time devem ser fornecidos/confirmados pelo metrologista.",
+      severity: "action",
+    },
+    {
+      item: "Apenas repetibilidade, resolução e o padrão de referência são modelados; reprodutibilidade (entre montagem/ângulo) e qualquer contribuição de base de tempo estão OMITIDAS pendente de revisão.",
+      severity: "action",
+      fieldKeys: ["u_repetibilidade", "u_resolucao", "u_referencia"],
+    },
+    {
+      ref: "incerteza_referencia",
+      item: "EXPANDED uncertainty U do padrão obtida do seu certificado, reduzida abaixo a incerteza-padrão pelo k do certificado.",
+      severity: "action",
+      fieldKeys: ["incerteza_referencia", "u_referencia"],
+    },
+    {
+      ref: "media",
+      item: "3 leituras repetidas assumidas; média aritmética.",
+      severity: "info",
+      fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "media"],
+    },
+    {
+      ref: "erro",
+      item: "convenção de sinal E = indicação − referência.",
+      severity: "info",
+      fieldKeys: ["media", "valor_referencia", "erro"],
+    },
+    {
+      ref: "desvio_padrao",
+      item: "desvio-padrão experimental amostral, divisor (n−1)=2 para n=3 leituras (EA-4/02 Tipo A). n=3 fixado para corresponder às 3 colunas de leitura.",
+      severity: "info",
+      fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "media", "desvio_padrao"],
+    },
+    {
+      ref: "u_repetibilidade",
+      item: "incerteza-padrão da MÉDIA = s/√n (n=3). Se o resultado se aplicar a uma única leitura em vez da média, usar s diretamente.",
+      severity: "action",
+      fieldKeys: ["desvio_padrao", "u_repetibilidade"],
+    },
+    {
+      ref: "u_resolucao",
+      item: "distribuição retangular, semi-largura = resolução/2, divisor √3 (EA-4/02). Equivale a resolução/√12.",
+      severity: "info",
+      fieldKeys: ["resolucao", "u_resolucao"],
+    },
+    {
+      ref: "u_referencia",
+      item: "reduzir a incerteza EXPANDIDA do certificado a incerteza-padrão dividindo por k. k_ref=2 ASSUMIDO — ler do certificado.",
+      severity: "action",
+      fieldKeys: ["incerteza_referencia", "u_referencia"],
+    },
+    {
+      ref: "u_combinada",
+      item: "combinação por RSS (EA-4/02). OMITE reprodutibilidade e qualquer contribuição de base de tempo/quantização — adicionar antes do uso real.",
+      severity: "action",
+      fieldKeys: ["u_repetibilidade", "u_resolucao", "u_referencia", "u_combinada"],
+    },
+    {
+      ref: "u_expandida",
+      item: "k=2 para ~95% assumindo distribuição normal e graus de liberdade efetivos altos. Se veff for baixo, usar veff de Welch–Satterthwaite + t.",
+      severity: "action",
+      fieldKeys: ["u_combinada", "u_expandida"],
+    },
+  ],
+  omittedComponents: [
+    {
+      ref: "EA-4/02",
+      component: "Reprodutibilidade (entre montagem/ângulo).",
+      appliesWhen: "Pendente de revisão metrológica.",
+    },
+    {
+      ref: "EA-4/02",
+      component: "Contribuição de base de tempo (time-base).",
+      appliesWhen: "Pendente de revisão metrológica.",
+    },
+    {
+      ref: "EA-4/02",
+      component: "Quantização de estroboscópio/gate-time.",
+      appliesWhen: "Método contato vs. óptico a confirmar pelo metrologista.",
+    },
+  ],
+  workedExample: {
+    scenarioKey: "ponto_1500rpm",
+    provenance: "engine_characterization",
+    source: "Motor (modo decimal)",
+    expected: {
+      erro: 2,
+      u_combinada: 0.816496580927726,
+      u_expandida: 1.632993161855452,
+    },
+  },
+  reviewStatus: "draft_pending_revalidation",
+} satisfies MetrologyGovernance;
+
 export const frequencyIndicationTemplate: TemplateModule = {
   key: "frequency-indication",
   templateVersion: 1,
@@ -307,4 +430,5 @@ export const frequencyIndicationTemplate: TemplateModule = {
   buildDraft,
   productDefinition: frequencyProductDefinition,
   previewScenarios,
+  governance,
 };
