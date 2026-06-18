@@ -25,7 +25,11 @@ overrides:
   node-forge: ^1.4.0
   "picomatch@<2.3.2": ^2.3.2
   "picomatch@>=4.0.0 <4.0.4": ^4.0.4
-  undici: ^7.24.0
+  # GHSA-vmh5-mc38-953g: undici >=7.23.0 <7.28.0 TLS certificate-validation bypass
+  # via dropped requestTls in SOCKS5 ProxyAgent. Pulled transitively via Payload
+  # (apps/cms). Patch-bump the 7.x line to the patched 7.28.0 (supersedes the
+  # earlier ^7.24.0, which resolved inside the vulnerable range).
+  undici: ^7.28.0
   # GHSA-96hv-2xvq-fx4p: ws >=8.0.0 <8.21.0 memory-exhaustion DoS from many tiny
   # fragments. Pulled transitively via Payload (apps/cms). Patch-bump the 8.x
   # line to 8.21.0 (already resolved elsewhere in the tree).
