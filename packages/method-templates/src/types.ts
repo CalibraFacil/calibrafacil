@@ -17,7 +17,8 @@ import type {
 export type TemplateKey =
   | "mass-balance"
   | "force-indication"
-  | "frequency-indication";
+  | "frequency-indication"
+  | "electrical-indication";
 
 /**
  * Product-format method definition (the shape persisted on a

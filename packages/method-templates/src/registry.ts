@@ -1,3 +1,4 @@
+import { electricalIndicationTemplate } from "./templates/electrical-indication";
 import { forceIndicationTemplate } from "./templates/force-indication";
 import { frequencyIndicationTemplate } from "./templates/frequency-indication";
 import { massBalanceTemplate } from "./templates/mass-balance";
@@ -12,6 +13,7 @@ export const TEMPLATE_REGISTRY = {
   "mass-balance": massBalanceTemplate,
   "force-indication": forceIndicationTemplate,
   "frequency-indication": frequencyIndicationTemplate,
+  "electrical-indication": electricalIndicationTemplate,
 } as const satisfies Record<TemplateKey, TemplateModule>;
 
 export function getTemplate(key: TemplateKey): TemplateModule {
