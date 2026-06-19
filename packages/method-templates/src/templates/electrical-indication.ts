@@ -90,17 +90,31 @@ const ROW_SCOPE = { kind: "table_row", tableKey: "pontos_tensao" } as const;
 
 const voltageColumns = [
   {
+    // role:"standard_value": ao selecionar o calibrador/padrão de referência
+    // registrado, o ponto é casado por nominal a um certifiedValue do padrão e
+    // preenche automaticamente o valor convencional, a incerteza expandida (U) e o
+    // k do certificado nas colunas-alvo abaixo (editável; confira contra o
+    // certificado). EA-4/02 §S9.6.
     key: "valor_referencia",
     label: "Tensão aplicada de referência (valor convencional)",
     type: "number",
     unit: "V",
     quantityKind: "reference",
+    role: "standard_value",
+    standardValue: {
+      matchBy: "nominal",
+      targetColumns: {
+        value: "valor_referencia",
+        expandedUncertainty: "incerteza_referencia",
+        coverageFactor: "k_referencia",
+      },
+    },
   },
   {
-    // EA-4/02 §S9.6: the reference (calibrator) calibration uncertainty.
-    // [VERIFICAR] VALOR: enter the EXPANDED uncertainty U from the calibrator's
-    // certificate; reduced to a standard uncertainty below by the cert's own k
-    // (column k_referencia).
+    // EA-4/02 §S9.6: a incerteza de calibração do padrão/calibrador de referência.
+    // A incerteza EXPANDIDA U é preenchida automaticamente a partir do padrão de
+    // referência selecionado (editável) e reduzida a incerteza-padrão abaixo pelo
+    // k do próprio certificado (coluna k_referencia).
     key: "incerteza_referencia",
     label: "Incerteza expandida do padrão (U)",
     type: "number",
@@ -108,8 +122,9 @@ const voltageColumns = [
     quantityKind: "uncertainty",
   },
   {
-    // EA-4/02 §S9.6: the calibrator certificate states its OWN coverage factor
-    // (k=2 in the §S9 example). Enter the k from your calibrator's certificate.
+    // EA-4/02 §S9.6: o certificado do calibrador declara seu PRÓPRIO fator de
+    // abrangência (k=2 no exemplo §S9). Preenchido automaticamente a partir do
+    // padrão de referência selecionado (editável); confira contra o certificado.
     key: "k_referencia",
     label: "Fator k do certificado do padrão",
     type: "number",
@@ -432,7 +447,7 @@ const governance: MetrologyGovernance = {
     },
     {
       ref: "EA-4/02 M:2022 §S9.6",
-      item: "VALOR a informar: a incerteza EXPANDIDA U do certificado do calibrador (incerteza_referencia); reduzida abaixo à incerteza-padrão pelo k do próprio certificado.",
+      item: "A incerteza EXPANDIDA U do certificado do calibrador (incerteza_referencia) é preenchida automaticamente a partir do padrão de referência selecionado (editável) e reduzida abaixo à incerteza-padrão pelo k do próprio certificado; confira contra o certificado.",
       severity: "action",
       fieldKeys: ["incerteza_referencia"],
     },
@@ -454,7 +469,7 @@ const governance: MetrologyGovernance = {
     },
     {
       ref: "EA-4/02 M:2022 §S9.6",
-      item: "VALOR a informar: o fator k do certificado do calibrador (k_referencia). Na maioria dos certificados k=2 — leia-o no seu certificado em vez de presumir.",
+      item: "O valor convencional, a incerteza expandida U e o fator k do calibrador/padrão de referência são preenchidos automaticamente a partir do padrão de referência selecionado (editável); confira-os contra o certificado do calibrador antes de emitir.",
       severity: "action",
       fieldKeys: ["k_referencia", "incerteza_referencia"],
     },
@@ -534,7 +549,7 @@ const governance: MetrologyGovernance = {
 
 export const electricalIndicationTemplate: TemplateModule = {
   key: "electrical-indication",
-  templateVersion: 2,
+  templateVersion: 3,
   discipline: "voltage",
   defaultName: METHOD_NAME,
   defaultAccreditedScope: false,

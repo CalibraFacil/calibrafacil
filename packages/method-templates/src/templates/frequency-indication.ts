@@ -76,16 +76,32 @@ const ROW_SCOPE = { kind: "table_row", tableKey: "pontos_rotacao" } as const;
 // --- Product-format inputs -----------------------------------------------------
 const tachometerColumns = [
   {
+    // role:"standard_value": ao selecionar o padrão de referência registrado, o
+    // ponto é casado por nominal a um certifiedValue do padrão e preenche
+    // automaticamente o valor convencional, a incerteza expandida (U), o k do
+    // certificado e a deriva/envelhecimento do padrão nas colunas-alvo abaixo
+    // (editável; confira contra o certificado). EA-4/02 §3.3.2(a)/(c).
     key: "valor_referencia",
     label: "Rotação de referência (valor convencional)",
     type: "number",
     unit: "rpm",
     quantityKind: "reference",
+    role: "standard_value",
+    standardValue: {
+      matchBy: "nominal",
+      targetColumns: {
+        value: "valor_referencia",
+        expandedUncertainty: "incerteza_referencia",
+        coverageFactor: "k_referencia",
+        drift: "u_deriva_padrao",
+      },
+    },
   },
   {
-    // [VERIFICAR] VALOR: a incerteza EXPANDIDA U da rotação de referência, lida do
-    // certificado do padrão; reduzida a incerteza-padrão abaixo dividindo pelo k
-    // do próprio certificado (coluna k_referencia). EA-4/02 §3.3.2(a).
+    // A incerteza EXPANDIDA U da rotação de referência: preenchida automaticamente
+    // a partir do padrão de referência selecionado (editável) e reduzida a
+    // incerteza-padrão abaixo dividindo pelo k do próprio certificado (coluna
+    // k_referencia). EA-4/02 §3.3.2(a).
     key: "incerteza_referencia",
     label: "Incerteza expandida do padrão (U)",
     type: "number",
@@ -93,8 +109,9 @@ const tachometerColumns = [
     quantityKind: "uncertainty",
   },
   {
-    // EA-4/02 §3.3.2(a): o fator de abrangência do CERTIFICADO do padrão. Informe
-    // o k do seu certificado (na maioria k=2) — não presuma.
+    // EA-4/02 §3.3.2(a): o fator de abrangência do CERTIFICADO do padrão.
+    // Preenchido automaticamente a partir do padrão de referência selecionado
+    // (editável); confira contra o certificado.
     key: "k_referencia",
     label: "Fator k do certificado do padrão",
     type: "number",
@@ -108,10 +125,11 @@ const tachometerColumns = [
     quantityKind: "resolution",
   },
   {
-    // [VERIFICAR] VALOR: incerteza-padrão da deriva/envelhecimento do padrão de
-    // referência desde a sua calibração (EA-4/02 §3.3.2(c), retangular: ± a
-    // variação máxima dividida por √3). Padrão 0 quando não houver histórico —
-    // informe o valor do seu padrão.
+    // Incerteza-padrão da deriva/envelhecimento do padrão de referência desde a
+    // sua calibração (EA-4/02 §3.3.2(c), retangular: ± a variação máxima dividida
+    // por √3). Preenchida automaticamente a partir do padrão de referência
+    // selecionado quando o certificado declara deriva (editável); 0 na falta de
+    // histórico — confira contra o certificado.
     key: "u_deriva_padrao",
     label: "Incerteza de deriva/envelhecimento do padrão",
     type: "number",
@@ -504,13 +522,13 @@ const governance = {
   verificarItems: [
     {
       ref: "EA-4/02 M:2022 §3.3.2(a)",
-      item: "VALOR a informar: o fator k do certificado do padrão de referência (k_referencia). Na maioria dos certificados k=2 — leia-o no seu certificado em vez de presumir.",
+      item: "O valor convencional, a incerteza expandida U e o fator k do padrão de referência são preenchidos automaticamente a partir do padrão de referência selecionado (editável); confira-os contra o certificado do padrão antes de emitir.",
       severity: "action",
       fieldKeys: ["k_referencia", "incerteza_referencia"],
     },
     {
       ref: "EA-4/02 M:2022 §3.3.2(c)",
-      item: "VALOR a informar: incerteza-padrão da deriva/envelhecimento do padrão de referência desde a sua calibração (u_deriva_padrao). Retangular, ± a variação máxima dividida por √3. Use 0 só na falta de histórico; do contrário informe o valor do seu padrão.",
+      item: "A incerteza-padrão da deriva/envelhecimento do padrão de referência (u_deriva_padrao), retangular ± a variação máxima dividida por √3, é preenchida automaticamente a partir do padrão de referência selecionado quando o certificado declara deriva (editável); 0 na falta de histórico — confira contra o certificado.",
       severity: "action",
       fieldKeys: ["u_deriva_padrao"],
     },
@@ -578,7 +596,7 @@ const governance = {
 
 export const frequencyIndicationTemplate: TemplateModule = {
   key: "frequency-indication",
-  templateVersion: 2,
+  templateVersion: 3,
   discipline: "frequency",
   defaultName: METHOD_NAME,
   defaultAccreditedScope: false,

@@ -102,11 +102,33 @@ const ROW_SCOPE = { kind: "table_row", tableKey: "pontos_pesagem" } as const;
 
 const weighingColumns = [
   {
+    // role:"standard_value": ao selecionar o padrão de referência registrado, o
+    // ponto é casado por nominal a um certifiedValue do padrão e preenche
+    // automaticamente o valor convencional, a incerteza expandida (U), o k do
+    // certificado e a deriva do peso-padrão nas colunas-alvo abaixo (editável;
+    // confira contra o certificado). A deriva É mapeada aqui porque u_deriva é a
+    // deriva do PRÓPRIO padrão de referência (cg-18 §7.1.2.3, δm_D) — diferente de
+    // força/elétrico, onde a deriva é do instrumento sob calibração.
+    //
+    // A pesagem usa o vínculo genérico `standard_value` (um único valor de
+    // referência por ponto, casando com o modelo deste template). O vínculo mais
+    // rico `mass_standard_composition` (composição de pesos empilhados + empuxo,
+    // como a Exemplo usa no seu seed) é uma possível evolução futura.
     key: "m_ref",
     label: "Massa convencional dos padrões (m_ref)",
     type: "number",
     unit: "g",
     quantityKind: "reference",
+    role: "standard_value",
+    standardValue: {
+      matchBy: "nominal",
+      targetColumns: {
+        value: "m_ref",
+        expandedUncertainty: "incerteza_padrao",
+        coverageFactor: "k_referencia",
+        drift: "u_deriva",
+      },
+    },
   },
   {
     // cg-18 §4.4.1: net (load − no-load) indication from the ERROR test (one
@@ -118,8 +140,10 @@ const weighingColumns = [
     quantityKind: "indication",
   },
   {
-    // cg-18 §7.1.2.1: U/k from the weight certificate. [VERIFICAR] for a load of
-    // several weights, sum the per-weight δm_c ARITHMETICALLY (§7.1.2.1).
+    // cg-18 §7.1.2.1: U/k from the weight certificate. Preenchida automaticamente
+    // a partir do padrão de referência selecionado (editável); confira contra o
+    // certificado. Para uma carga de vários pesos, some os δm_c por peso
+    // ARITMETICAMENTE (§7.1.2.1).
     key: "incerteza_padrao",
     label: "Incerteza expandida dos padrões (U)",
     type: "number",
@@ -128,8 +152,9 @@ const weighingColumns = [
   },
   {
     // cg-18 §7.1.2-2 (u(δm_c) = U/k): k is the coverage factor of the standard
-    // weight's OWN calibration certificate, not a fixed 2. The lab informs the k
-    // read from its certificate (usually 2).
+    // weight's OWN calibration certificate, not a fixed 2. Preenchido
+    // automaticamente a partir do padrão de referência selecionado (editável);
+    // confira contra o certificado.
     key: "k_referencia",
     label: "Fator k do certificado do padrão",
     type: "number",
@@ -179,6 +204,8 @@ const weighingColumns = [
   },
   {
     // cg-18 §7.1.2.3: drift standard uncertainty u(δm_D) = D/√3, D = k_D·U.
+    // Preenchida automaticamente a partir do padrão de referência selecionado
+    // quando o certificado declara deriva (editável); confira contra o certificado.
     key: "u_deriva",
     label: "Incerteza de deriva dos padrões (u(δm_D))",
     type: "number",
@@ -465,7 +492,7 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
 
 export const weighingInstrumentTemplate: TemplateModule = {
   key: "weighing-instrument",
-  templateVersion: 2,
+  templateVersion: 3,
   discipline: "mass",
   defaultName: METHOD_NAME,
   defaultAccreditedScope: false,
@@ -516,7 +543,7 @@ export const weighingInstrumentTemplate: TemplateModule = {
     verificarItems: [
       {
         item:
-          "Empuxo u(δm_B) e deriva u(δm_D) entram como incertezas-padrão (u_empuxo, u_deriva); calcule-as por §7.1.2.2 (eq. 7.1.2-5a..5e, pela densidade do ar ou pelo emp da classe do peso) e §7.1.2.3 (D = k_D·U, k_D∈[1,3]). Para pesos E2/E1 o empuxo normalmente DOMINA o orçamento — não use 0.",
+          "Empuxo u(δm_B) entra como incerteza-padrão (u_empuxo); calcule-o por §7.1.2.2 (eq. 7.1.2-5a..5e, pela densidade do ar ou pelo emp da classe do peso). Para pesos E2/E1 o empuxo normalmente DOMINA o orçamento — não use 0. A deriva u(δm_D) (u_deriva, §7.1.2.3: D = k_D·U, k_D∈[1,3]) é preenchida automaticamente a partir do padrão de referência selecionado quando o certificado declara deriva (editável); confira contra o certificado.",
         severity: "action",
         fieldKeys: ["u_empuxo", "u_deriva"],
       },
@@ -533,9 +560,9 @@ export const weighingInstrumentTemplate: TemplateModule = {
       },
       {
         item:
-          "VALOR a informar: o fator k do certificado do seu peso-padrão (coluna k_referencia). Na maioria dos certificados k=2 — leia-o no seu certificado em vez de presumir (cg-18 §7.1.2-2: u(δm_c) = U/k). Para carga de vários pesos some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2). A soma aritmética ≥ RSS, logo é o tratamento CONSERVADOR.",
+          "A massa convencional m_ref, a incerteza expandida U e o fator k do peso-padrão são preenchidos automaticamente a partir do padrão de referência selecionado (editável); confira-os contra o certificado do padrão antes de emitir (cg-18 §7.1.2-2: u(δm_c) = U/k; na maioria dos certificados k=2). Para uma carga de vários pesos, some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2) — a soma aritmética ≥ soma quadrática, logo é o tratamento CONSERVADOR.",
         severity: "action",
-        fieldKeys: ["incerteza_padrao", "k_referencia"],
+        fieldKeys: ["incerteza_padrao", "k_referencia", "m_ref"],
       },
       {
         item:
