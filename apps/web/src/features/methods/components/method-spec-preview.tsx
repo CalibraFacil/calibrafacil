@@ -6,7 +6,6 @@ import {
   TextFontIcon,
 } from '@hugeicons/core-free-icons'
 
-import type { MethodDetail } from '@/features/methods/types'
 import { Badge } from '@/components/ui/badge'
 import {
   BlueprintField,
@@ -25,13 +24,54 @@ import {
  * (e.g. in the from-template adoption flow) — the spec a user reviews before
  * adopting must be byte-identical to what the published detail page shows.
  *
- * Prop is a structural subset of MethodDetail so non-detail callers can pass any
- * compatible spec shape.
+ * Prop is a hand-written STRUCTURAL read-shape (only the fields this component
+ * renders, with widened field types) so any compatible spec satisfies it: the
+ * detail page passes a `MethodDetail`, and the from-template wizard passes a
+ * zod-narrowed catalog `spec` (see `../template-spec.ts`) — both assignable here
+ * without an `as` cast.
  */
-export type MethodSpec = Pick<
-  MethodDetail,
-  'dataFields' | 'formulas' | 'validations' | 'uncertaintyParams' | 'certificateContent'
->
+export type MethodSpec = {
+  dataFields: ReadonlyArray<{
+    key: string
+    label: string
+    type: string
+    unit?: string | null
+    required?: boolean | null
+  }>
+  formulas: ReadonlyArray<{
+    outputKey: string
+    label?: string | null
+    expression: string
+    unit?: string | null
+    reporting?: { role?: string | null } | null
+  }>
+  /** GUM measurement models (volume/humidity); absent on formula-based methods. */
+  measurementModels?: ReadonlyArray<{
+    key?: string | null
+    label?: string | null
+    measurand?: string | null
+    expression?: string | null
+    outputUnit?: string | null
+  }> | null
+  validations: ReadonlyArray<{
+    leftExpression: string
+    operator: string
+    rightExpression: string
+    severity: string
+    message?: string | null
+  }>
+  uncertaintyParams: ReadonlyArray<{
+    name: string
+    value: string | number
+    distribution: string
+    degreesOfFreedom?: number | null
+  }>
+  certificateContent?: {
+    procedureCode?: string | null
+    referenceStandards?: ReadonlyArray<string> | null
+    sections?: ReadonlyArray<unknown> | null
+  } | null
+}
 
 export function hasCertificateContent(method: MethodSpec): boolean {
   const content = method.certificateContent
@@ -92,6 +132,7 @@ export function MethodSpecCounts({ method }: { method: MethodSpec }) {
 }
 
 export function MethodSpecPreview({ method }: { method: MethodSpec }) {
+  const modelCount = method.measurementModels?.length ?? 0
   return (
     <>
       {/* Specification — fields / formulas / criteria / uncertainty */}
@@ -135,7 +176,11 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
 
         <SpecBlock eyebrow="Fórmulas" count={method.formulas.length}>
           {method.formulas.length === 0 ? (
-            <EmptyNote>Nenhuma fórmula definida.</EmptyNote>
+            <EmptyNote>
+              {modelCount > 0
+                ? 'Sem fórmulas explícitas — resultado via modelo de medição (GUM) abaixo.'
+                : 'Nenhuma fórmula definida.'}
+            </EmptyNote>
           ) : (
             <div className="space-y-2.5">
               {method.formulas.map((formula) => (
@@ -165,6 +210,38 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
             </div>
           )}
         </SpecBlock>
+
+        {modelCount > 0 ? (
+          <SpecBlock eyebrow="Modelo de medição (GUM)" count={modelCount}>
+            <div className="space-y-2.5">
+              {method.measurementModels?.map((model, index) => (
+                <div
+                  key={model.key ?? model.measurand ?? `gum-${index}`}
+                  className="rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {model.label || model.measurand || model.key || 'Modelo'}
+                    </span>
+                    {model.measurand && (model.label || model.key) ? (
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {model.measurand}
+                      </span>
+                    ) : null}
+                    {model.outputUnit ? (
+                      <Badge variant="secondary">{model.outputUnit}</Badge>
+                    ) : null}
+                  </div>
+                  {model.expression ? (
+                    <code className="mt-2 block max-w-full overflow-x-auto rounded-md bg-muted/50 px-2.5 py-2 font-mono text-xs leading-relaxed">
+                      {model.expression}
+                    </code>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </SpecBlock>
+        ) : null}
 
         <SpecBlock
           eyebrow="Critérios de aceitação"

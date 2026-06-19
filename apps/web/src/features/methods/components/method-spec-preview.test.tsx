@@ -55,12 +55,29 @@ const formulaSpec: MethodSpec = {
   },
 }
 
-// A method whose result comes from a GUM measurementModel (e.g. volume) has NO
-// `formulas`; this component does not render measurementModels, so it must degrade
-// gracefully (empty notes, no crash) rather than imply the spec is empty/broken.
-const measurementModelOnlySpec: MethodSpec = {
+// A truly empty spec — every block degrades to its empty note, no certificate panel.
+const emptySpec: MethodSpec = {
   dataFields: [],
   formulas: [],
+  validations: [],
+  uncertaintyParams: [],
+  certificateContent: null,
+}
+
+// A GUM measurementModel method (e.g. volume): NO explicit `formulas` — the result
+// comes from a measurement model, which must render as its own block.
+const measurementModelSpec: MethodSpec = {
+  dataFields: [{ key: 'I_L', label: 'Pesagem cheia', type: 'number', unit: 'g' }],
+  formulas: [],
+  measurementModels: [
+    {
+      key: 'volume_v0',
+      label: 'Volume a 20 °C (V₀)',
+      measurand: 'V0',
+      expression: '(I_L - I_E) / (rho_w - rho_a)',
+      outputUnit: 'mL',
+    },
+  ],
   validations: [],
   uncertaintyParams: [],
   certificateContent: null,
@@ -79,18 +96,34 @@ describe('MethodSpecPreview', () => {
     expect(screen.getByText('Componentes de incerteza (tipo B)')).toBeTruthy()
     expect(screen.getByText('Conteúdo do certificado')).toBeTruthy()
     expect(screen.getByText('POP-001')).toBeTruthy()
+    // A formula-based method has no GUM block.
+    expect(screen.queryByText('Modelo de medição (GUM)')).toBeNull()
   })
 
-  it('renders a measurementModel-only / empty spec gracefully (empty notes, no certificate panel)', () => {
-    render(<MethodSpecPreview method={measurementModelOnlySpec} />)
+  it('renders a truly empty spec gracefully (empty notes, no GUM block, no certificate panel)', () => {
+    render(<MethodSpecPreview method={emptySpec} />)
 
     expect(screen.getByText('Nenhum campo de entrada definido.')).toBeTruthy()
     expect(screen.getByText('Nenhuma fórmula definida.')).toBeTruthy()
     expect(screen.getByText('Nenhum critério definido.')).toBeTruthy()
-    // The type-B block is omitted entirely when there are no components.
     expect(screen.queryByText('Componentes de incerteza (tipo B)')).toBeNull()
-    // The certificate panel is hidden when there is no certificate content.
+    expect(screen.queryByText('Modelo de medição (GUM)')).toBeNull()
     expect(screen.queryByText('Conteúdo do certificado')).toBeNull()
+  })
+
+  it('renders a GUM measurementModel as its own block (not "Nenhuma fórmula definida")', () => {
+    render(<MethodSpecPreview method={measurementModelSpec} />)
+
+    expect(screen.getByText('Modelo de medição (GUM)')).toBeTruthy()
+    expect(screen.getByText('Volume a 20 °C (V₀)')).toBeTruthy()
+    expect(screen.getByText('(I_L - I_E) / (rho_w - rho_a)')).toBeTruthy()
+    // formulas empty + a model present → the misleading "Nenhuma fórmula" note is gone.
+    expect(screen.queryByText('Nenhuma fórmula definida.')).toBeNull()
+    expect(
+      screen.getByText(
+        'Sem fórmulas explícitas — resultado via modelo de medição (GUM) abaixo.',
+      ),
+    ).toBeTruthy()
   })
 })
 

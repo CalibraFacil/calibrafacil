@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type {
   MethodFromTemplateInput,
@@ -13,16 +13,25 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-  SignalTile,
   StaggerGroup,
   StaggerItem,
 } from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
+import { assetTypesQueryOptions } from '@/features/assets/queries'
 
 import { useMethodTemplatesData } from './queries'
+import { parseTemplateSpec } from './template-spec'
+import { MethodSpecPreview } from './components/method-spec-preview'
 import { TemplateGovernancePanel } from './components/template-governance-panel'
 import {
   WizardStepper,
@@ -48,9 +57,18 @@ export function FromTemplatePage() {
   const [ackRead, setAckRead] = useState(false)
   const [ackDuty, setAckDuty] = useState(false)
   const [ackDraft, setAckDraft] = useState(false)
+  // null = use the template's default asset type (resolved from its slug).
+  const [assetTypeChoice, setAssetTypeChoice] = useState<number | null>(null)
 
   const selected =
     templates?.find((entry) => entry.templateKey === selectedKey) ?? null
+
+  const { data: assetTypesData } = useQuery(assetTypesQueryOptions())
+  const assetTypes = assetTypesData?.data ?? []
+  // Derived (NO useEffect): the slug default + the user's optional override.
+  const slugResolvedAssetTypeId =
+    assetTypes.find((type) => type.slug === selected?.assetTypeSlug)?.id ?? null
+  const effectiveAssetTypeId = assetTypeChoice ?? slugResolvedAssetTypeId
 
   const adopt = useMutation({
     mutationFn: (input: MethodFromTemplateInput) =>
@@ -80,6 +98,7 @@ export function FromTemplatePage() {
     setAckRead(false)
     setAckDuty(false)
     setAckDraft(false)
+    setAssetTypeChoice(null)
     setStep('context')
   }
 
@@ -92,6 +111,7 @@ export function FromTemplatePage() {
     adopt.mutate({
       templateKey: selected.templateKey,
       name: name.trim(),
+      assetTypeId: effectiveAssetTypeId,
       acknowledgements: {
         readVerificarAndOmitted: true,
         acceptsVerificationDuty: true,
@@ -148,6 +168,34 @@ export function FromTemplatePage() {
                 className="mt-1"
                 aria-label="Nome do método"
               />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium">Tipo de equipamento</span>
+              <Select
+                value={
+                  effectiveAssetTypeId != null
+                    ? String(effectiveAssetTypeId)
+                    : undefined
+                }
+                onValueChange={(value) => setAssetTypeChoice(Number(value))}
+              >
+                <SelectTrigger className="mt-1" aria-label="Tipo de equipamento">
+                  <SelectValue placeholder="Selecione o tipo de equipamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assetTypes.map((type) => (
+                    <SelectItem key={type.id} value={String(type.id)}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Padrão do modelo:{' '}
+                <span className="font-mono">{selected.assetTypeSlug ?? '—'}</span>.
+                Ajuste se este método se aplica a outro tipo.
+              </span>
             </label>
 
             <fieldset className="space-y-3">
@@ -296,54 +344,11 @@ function ContextStep({
 }) {
   return (
     <div className="space-y-4">
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-2">
         <TemplateGovernancePanel governance={entry.governance} />
-        <Panel className="p-4 sm:p-5">
-          <PanelHeader eyebrow="Especificação" title="Resumo do método" />
-          <StaggerGroup className="mt-4 grid grid-cols-2 gap-3">
-            <StaggerItem>
-              <SignalTile
-                label="Campos"
-                value={String(entry.counts.dataFields)}
-                hint="entradas"
-                tone="neutral"
-              />
-            </StaggerItem>
-            <StaggerItem>
-              <SignalTile
-                label={
-                  entry.model === 'gum_measurement_model' ? 'Modelos GUM' : 'Fórmulas'
-                }
-                value={String(
-                  entry.model === 'gum_measurement_model'
-                    ? entry.counts.uncertaintyParams + entry.counts.formulas
-                    : entry.counts.formulas,
-                )}
-                hint="cálculos"
-                tone="neutral"
-              />
-            </StaggerItem>
-            <StaggerItem>
-              <SignalTile
-                label="Critérios"
-                value={String(entry.counts.validations)}
-                hint="aceitação"
-                tone="neutral"
-              />
-            </StaggerItem>
-            <StaggerItem>
-              <SignalTile
-                label="Incerteza B"
-                value={String(entry.counts.uncertaintyParams)}
-                hint="componentes"
-                tone="neutral"
-              />
-            </StaggerItem>
-          </StaggerGroup>
-          <p className="mt-3 text-xs text-muted-foreground">
-            A especificação completa fica visível no rascunho após a criação.
-          </p>
-        </Panel>
+        <div className="min-w-0 space-y-6">
+          <MethodSpecPreview method={parseTemplateSpec(entry.spec)} />
+        </div>
       </div>
       <div className="flex items-center justify-between gap-3">
         <Button variant="outline" onClick={onBack}>
