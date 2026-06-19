@@ -47,6 +47,22 @@ export interface MassCompositionConfig {
   quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
 }
 
+/**
+ * Discipline-agnostic per-row certified-value binding for `standard_value`
+ * columns (parallel to MassCompositionConfig, not a replacement). Matches each
+ * row to a reference standard's certifiedValue by nominal and fills the named
+ * target columns. No composition profiles / buoyancy / mass-unit model.
+ */
+export interface StandardValueConfig {
+  matchBy?: 'nominal'
+  targetColumns?: {
+    value?: string
+    expandedUncertainty?: string
+    coverageFactor?: string
+    drift?: string
+  }
+}
+
 export interface MethodTableColumn {
   key: string
   label: string
@@ -57,6 +73,7 @@ export interface MethodTableColumn {
   quantityKind?: string
   phase?: 'before' | 'after' | 'always'
   massComposition?: MassCompositionConfig
+  standardValue?: StandardValueConfig
 }
 
 export interface MethodInputField {

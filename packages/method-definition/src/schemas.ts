@@ -117,6 +117,21 @@ export const TableColumnSchema = z
       })
       .strict()
       .optional(),
+    standardValue: z
+      .object({
+        matchBy: z.enum(["nominal"]).optional(),
+        targetColumns: z
+          .object({
+            value: SafeKeySchema.optional(),
+            expandedUncertainty: SafeKeySchema.optional(),
+            coverageFactor: SafeKeySchema.optional(),
+            drift: SafeKeySchema.optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     required: z.boolean().optional(),
     metadata: SafeMetadataSchema.optional(),
   })

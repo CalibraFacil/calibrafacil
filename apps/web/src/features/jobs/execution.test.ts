@@ -21,8 +21,12 @@ vi.mock('@calibra-facil/math-engine', () => ({
   isCalculationEngineError: () => false,
 }))
 
-import type { MethodInputField } from '@/components/method-runtime/types'
+import type {
+  MethodInputField,
+  MethodTableColumn,
+} from '@/components/method-runtime/types'
 import { createMethodCalculationEngine } from '@/components/method-runtime/math-runtime'
+import { applyStandardValueOption } from '@/components/method-runtime/standard-value-utils'
 
 import {
   buildCertifiedValueOptions,
@@ -33,6 +37,7 @@ import {
   buildExecutionMutationPayload,
   buildExecutionFormulaContext,
   buildMassCompositionOptions,
+  buildStandardCertifiedValueOptions,
   buildSelectedStandardPayload,
   canSubmitExecution,
   collectPhaseBlocks,
@@ -648,6 +653,215 @@ describe('job execution feature model', () => {
         optionLabel: 'F1 - perfil de composição',
       },
     ])
+  })
+
+  it('keeps buildMassCompositionOptions output byte-identical (mass regression)', () => {
+    const standards = [
+      referenceStandard({
+        id: 1,
+        name: 'Peso 1',
+        certificateNumber: 'CERT-1',
+        coverageFactor: 2,
+        drift: 0.001,
+        certifiedValues: [
+          {
+            nominal: '1 g',
+            value: 1.00015,
+            uncertainty: 0.0001,
+            unit: 'g',
+            maxError: 0.0005,
+            drift: 0.0002,
+            buoyancy: 0.00001,
+            coverageFactor: 2,
+            compositionProfile: false,
+          },
+        ],
+      }),
+    ]
+    const identity = (value: number) => value
+    const unit = (value?: string | null) => value ?? undefined
+
+    // Full-object assertion (not just the 4 summary fields) so any change to the
+    // mass path's per-option shape/values would fail this regression test.
+    expect(
+      buildMassCompositionOptions({
+        standardsData: standards,
+        convertValueToDisplayUnit: identity,
+        displayUnitFor: unit,
+      }),
+    ).toEqual([
+      {
+        standardId: 1,
+        standardName: 'Peso 1',
+        certificateNumber: 'CERT-1',
+        certifiedValueIndex: 0,
+        nominal: '1 g',
+        authentication: undefined,
+        value: 1.00015,
+        uncertainty: 0.0001,
+        unit: 'g',
+        coverageFactor: 2,
+        maxError: 0.0005,
+        drift: 0.0002,
+        buoyancy: 0.00001,
+        optionLabel: '1 g - Peso 1 (CERT-1)',
+      },
+    ])
+  })
+
+  it('builds generic standard certified-value options for a non-mass unit (force N)', () => {
+    const standards = [
+      referenceStandard({
+        id: 7,
+        name: 'Célula de carga',
+        certificateNumber: 'CERT-FORCE-1',
+        coverageFactor: 2,
+        drift: null,
+        certifiedValues: [
+          {
+            nominal: '100 N',
+            value: 100.02,
+            uncertainty: 0.05,
+            unit: 'N',
+            coverageFactor: 2.1,
+            drift: 0.01,
+          },
+          // A composition profile must be skipped by the generic builder.
+          {
+            nominal: 'Perfil',
+            value: 5,
+            uncertainty: 0.1,
+            unit: 'N',
+            compositionProfile: true,
+            profileKey: 'P1',
+          },
+        ],
+      }),
+    ]
+    const identity = (value: number) => value
+    const unit = (value?: string | null) => value ?? undefined
+
+    expect(
+      buildStandardCertifiedValueOptions({
+        standardsData: standards,
+        convertValueToDisplayUnit: identity,
+        displayUnitFor: unit,
+      }),
+    ).toEqual([
+      {
+        standardId: 7,
+        standardName: 'Célula de carga',
+        certificateNumber: 'CERT-FORCE-1',
+        certifiedValueIndex: 0,
+        nominal: '100 N',
+        value: 100.02,
+        uncertainty: 0.05,
+        coverageFactor: 2.1,
+        drift: 0.01,
+        unit: 'N',
+        optionLabel: '100 N - Célula de carga (CERT-FORCE-1)',
+      },
+    ])
+  })
+
+  it('falls back to the standard coverageFactor when the cert value omits k (voltage V)', () => {
+    const standards = [
+      referenceStandard({
+        id: 8,
+        name: 'Multímetro de referência',
+        certificateNumber: 'CERT-V-1',
+        coverageFactor: 2,
+        drift: null,
+        certifiedValues: [
+          {
+            nominal: '10 V',
+            value: 10.0001,
+            uncertainty: 0.0002,
+            unit: 'V',
+            coverageFactor: null,
+            drift: null,
+          },
+        ],
+      }),
+    ]
+    const identity = (value: number) => value
+    const unit = (value?: string | null) => value ?? undefined
+
+    const options = buildStandardCertifiedValueOptions({
+      standardsData: standards,
+      convertValueToDisplayUnit: identity,
+      displayUnitFor: unit,
+    })
+
+    expect(options[0]?.coverageFactor).toBe(2)
+    expect(options[0]?.drift).toBeNull()
+  })
+
+  it('fills value / U / k for a standard_value column matched by nominal (force N)', () => {
+    const columns: MethodTableColumn[] = [
+      {
+        key: 'ponto',
+        label: 'Ponto',
+        type: 'text',
+      },
+      {
+        key: 'valor_padrao',
+        label: 'Valor do padrão',
+        type: 'number',
+        unit: 'N',
+        role: 'standard_value',
+        standardValue: {
+          matchBy: 'nominal',
+          targetColumns: {
+            value: 'valor_padrao',
+            expandedUncertainty: 'incerteza_padrao',
+            coverageFactor: 'k_referencia',
+            drift: 'deriva',
+          },
+        },
+      },
+      { key: 'incerteza_padrao', label: 'U', type: 'number', unit: 'N' },
+      { key: 'k_referencia', label: 'k', type: 'number' },
+      { key: 'deriva', label: 'Deriva', type: 'number', unit: 'N' },
+    ]
+    const option = buildStandardCertifiedValueOptions({
+      standardsData: [
+        referenceStandard({
+          id: 7,
+          name: 'Célula de carga',
+          certificateNumber: 'CERT-FORCE-1',
+          coverageFactor: 2,
+          certifiedValues: [
+            {
+              nominal: '100 N',
+              value: 100.02,
+              uncertainty: 0.05,
+              unit: 'N',
+              coverageFactor: 2.1,
+              drift: 0.01,
+            },
+          ],
+        }),
+      ],
+      convertValueToDisplayUnit: (value: number) => value,
+      displayUnitFor: (value?: string | null) => value ?? undefined,
+    })[0]
+    expect(option).toBeDefined()
+
+    const nextRow = applyStandardValueOption({
+      row: { ponto: '100 N', valor_padrao: null },
+      columnKey: 'valor_padrao',
+      columns,
+      option: option!,
+    })
+
+    expect(nextRow).toEqual({
+      ponto: '100 N',
+      valor_padrao: 100.02,
+      incerteza_padrao: 0.05,
+      k_referencia: 2.1,
+      deriva: 0.01,
+    })
   })
 })
 

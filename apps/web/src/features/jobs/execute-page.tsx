@@ -46,6 +46,7 @@ import {
   type CertifiedValueOption,
 } from '@/components/method-runtime/table-input-renderer'
 import type { MassCompositionOption } from '@/components/method-runtime/mass-composition-utils'
+import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
 import {
   formatCalibrationValue,
   type AssetSpecificationFieldLike,
@@ -89,6 +90,7 @@ import {
   buildExecutionFormulaContext,
   attachCompositionProfiles,
   buildMassCompositionOptions,
+  buildStandardCertifiedValueOptions,
   canSubmitExecution,
   defaultCalibrationPhases,
   evaluateExecutionFormulaResults,
@@ -682,6 +684,16 @@ function ExecuteJobForm({
     [convertValueToDisplayUnit, displayUnitFor, standardsData],
   )
 
+  const standardCertifiedValueOptions = useMemo(
+    (): StandardCertifiedValueOption[] =>
+      buildStandardCertifiedValueOptions({
+        standardsData,
+        convertValueToDisplayUnit,
+        displayUnitFor,
+      }),
+    [convertValueToDisplayUnit, displayUnitFor, standardsData],
+  )
+
   // Update field
   const updateField = useCallback((key: string, value: unknown) => {
     setFormData((prev) => ({ ...prev, [key]: value }))
@@ -891,6 +903,7 @@ function ExecuteJobForm({
             disabled={!isEditable}
             certifiedValueOptions={certifiedValueOptions}
             massCompositionOptions={massCompositionOptions}
+            standardCertifiedValueOptions={standardCertifiedValueOptions}
             assetSpecifications={displayAssetSpecifications}
             assetBaseMeasurementUnit={assetBaseMeasurementUnit}
             phaseMode={blockMode}

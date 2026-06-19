@@ -207,6 +207,21 @@ export type TableColumn = {
     uncertaintyMode?: "expanded_rss" | "expanded_arithmetic";
     quantityMode?: "linear_per_item_then_rss" | "profile_linear";
   };
+  // Discipline-agnostic per-row certified-value binding (parallel to, NOT a
+  // replacement for, massComposition). A `role:"standard_value"` column matches
+  // each row to a reference standard's certifiedValue (by nominal) and fills the
+  // named target columns from it. No composition profiles, buoyancy, or mass-unit
+  // model — works for force/voltage/frequency/etc. The columns stay editable
+  // (manual fallback).
+  standardValue?: {
+    matchBy?: "nominal";
+    targetColumns?: {
+      value?: string;
+      expandedUncertainty?: string;
+      coverageFactor?: string;
+      drift?: string;
+    };
+  };
   required?: boolean;
   metadata?: SafeMetadata;
 };

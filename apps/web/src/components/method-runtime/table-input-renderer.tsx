@@ -12,6 +12,11 @@ import {
   type MassCompositionTargetColumns,
   type MassCompositionValue,
 } from './mass-composition-utils'
+import { StandardValueCell } from './standard-value-cell'
+import {
+  applyStandardValueOption,
+  type StandardCertifiedValueOption,
+} from './standard-value-utils'
 import {
   decimalsForResolution,
   parseNumericValue,
@@ -51,6 +56,7 @@ interface TableInputRendererProps {
   disabled?: boolean
   certifiedValueOptions?: CertifiedValueOption[]
   massCompositionOptions?: MassCompositionOption[]
+  standardCertifiedValueOptions?: StandardCertifiedValueOption[]
   assetSpecifications?: Record<string, unknown> | null
   /** Asset's base measurement unit; drives display/entry conversion of cells. */
   assetBaseMeasurementUnit?: string | null
@@ -538,6 +544,8 @@ export function applyTableWeighingRangeResolvers(
 
 const EMPTY_CERTIFIED_VALUE_OPTIONS: CertifiedValueOption[] = []
 const EMPTY_MASS_COMPOSITION_OPTIONS: MassCompositionOption[] = []
+const EMPTY_STANDARD_CERTIFIED_VALUE_OPTIONS: StandardCertifiedValueOption[] =
+  []
 
 export function TableInputRenderer({
   field,
@@ -546,6 +554,7 @@ export function TableInputRenderer({
   disabled = false,
   certifiedValueOptions = EMPTY_CERTIFIED_VALUE_OPTIONS,
   massCompositionOptions = EMPTY_MASS_COMPOSITION_OPTIONS,
+  standardCertifiedValueOptions = EMPTY_STANDARD_CERTIFIED_VALUE_OPTIONS,
   assetSpecifications,
   assetBaseMeasurementUnit = null,
   phaseMode = 'before_and_after',
@@ -701,6 +710,31 @@ export function TableInputRenderer({
     onChange(newRows)
   }
 
+  // Fill the `standard_value` column's configured target columns (value / U / k
+  // / drift) from a chosen certified-value option. The cells stay editable so
+  // the operator can override (manual fallback).
+  const fillStandardValue = (
+    rowIndex: number,
+    colKey: string,
+    option: StandardCertifiedValueOption,
+  ) => {
+    const nextRow = applyStandardValueOption({
+      row: rows[rowIndex] ?? {},
+      columnKey: colKey,
+      columns,
+      option,
+    })
+
+    const newRows = [...rows]
+    newRows[rowIndex] =
+      applyTableWeighingRangeResolvers(
+        field,
+        [nextRow],
+        assetSpecifications,
+      )[0] ?? nextRow
+    onChange(newRows)
+  }
+
   const getCalculatedTargets = (row: Record<string, unknown>) => {
     const targets = new Set<string>()
 
@@ -778,6 +812,26 @@ export function TableInputRenderer({
       col.type === 'number' &&
       hasCertifiedValues &&
       isStandardRefColumn(col.key, col.label)
+
+    if (col.role === 'standard_value') {
+      const displayUnit = resolveDisplayUnit(assetBaseUnit, col.unit)
+      return (
+        <StandardValueCell
+          value={row[col.key]}
+          onCommit={(val) => updateCell(rowIndex, col.key, val)}
+          onPick={(option) => fillStandardValue(rowIndex, col.key, option)}
+          options={
+            disabled || isInactivePhaseColumn
+              ? EMPTY_STANDARD_CERTIFIED_VALUE_OPTIONS
+              : standardCertifiedValueOptions
+          }
+          columnUnit={col.unit}
+          displayUnit={displayUnit}
+          disabled={disabled || isInactivePhaseColumn}
+          className="h-8 w-full"
+        />
+      )
+    }
 
     if (col.role === 'mass_standard_composition') {
       const prevValue = rowIndex > 0 ? rows[rowIndex - 1]?.[col.key] : undefined

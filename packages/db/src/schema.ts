@@ -2877,6 +2877,13 @@ export type MethodInputField = {
     quantityKind?: string;
     phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
+    // NOTE: the `standard_value` per-row binding config (`standardValue`) is
+    // deliberately NOT enumerated here. `data_fields` is a jsonb column, so it
+    // round-trips the config either way; the authoritative validator is
+    // @calibra-facil/schemas' MethodTableColumnSchema (which DOES carry it).
+    // Adding the optional field to this view-only type pushes the API's inferred
+    // Hono AppType past the TS7056 serialization limit. See
+    // .goals/standard-certified-value-binding.md (PR1).
   }>;
 };
 

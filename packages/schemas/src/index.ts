@@ -699,6 +699,25 @@ export const MassCompositionConfigSchema = z.object({
 });
 export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
 
+/**
+ * Discipline-agnostic per-row certified-value binding for `standard_value`
+ * columns. Parallel to (not a replacement for) MassCompositionConfig: matches
+ * each row to a reference standard's certifiedValue by nominal and fills the
+ * named target columns. No composition profiles / buoyancy / mass-unit model.
+ */
+export const StandardValueConfigSchema = z.object({
+  matchBy: z.enum(["nominal"]).optional(),
+  targetColumns: z
+    .object({
+      value: z.string().optional(),
+      expandedUncertainty: z.string().optional(),
+      coverageFactor: z.string().optional(),
+      drift: z.string().optional(),
+    })
+    .optional(),
+});
+export type StandardValueConfig = z.infer<typeof StandardValueConfigSchema>;
+
 export const MethodTableColumnSchema = z.object({
   key: z
     .string()
@@ -717,6 +736,7 @@ export const MethodTableColumnSchema = z.object({
   quantityKind: z.string().optional(),
   phase: z.enum(["before", "after", "always"]).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
+  standardValue: StandardValueConfigSchema.optional(),
 });
 
 export type MethodTableColumn = z.infer<typeof MethodTableColumnSchema>;

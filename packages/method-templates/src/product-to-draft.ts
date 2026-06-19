@@ -186,6 +186,39 @@ function methodTableColumnMassCompositionToDefinition(
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function methodStandardValueTargetColumnsToDefinition(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const record = objectRecord(value);
+  if (!record) return undefined;
+  const normalized: Record<string, unknown> = {
+    ...(typeof record.value === "string" ? { value: record.value } : {}),
+    ...(typeof record.expandedUncertainty === "string"
+      ? { expandedUncertainty: record.expandedUncertainty }
+      : {}),
+    ...(typeof record.coverageFactor === "string"
+      ? { coverageFactor: record.coverageFactor }
+      : {}),
+    ...(typeof record.drift === "string" ? { drift: record.drift } : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function methodTableColumnStandardValueToDefinition(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const record = objectRecord(value);
+  if (!record) return undefined;
+  const targetColumns = objectRecord(record.targetColumns)
+    ? methodStandardValueTargetColumnsToDefinition(record.targetColumns)
+    : undefined;
+  const normalized: Record<string, unknown> = {
+    ...(record.matchBy === "nominal" ? { matchBy: record.matchBy } : {}),
+    ...(targetColumns ? { targetColumns } : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 function methodInputToDefinitionInput(
   input: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -243,6 +276,9 @@ function methodInputToDefinitionInput(
                     : undefined,
                 massComposition: methodTableColumnMassCompositionToDefinition(
                   column.massComposition,
+                ),
+                standardValue: methodTableColumnStandardValueToDefinition(
+                  column.standardValue,
                 ),
               };
             })

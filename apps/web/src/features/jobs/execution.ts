@@ -30,6 +30,7 @@ import {
   collectMassCompositionStandardIds,
   type MassCompositionOption,
 } from '@/components/method-runtime/mass-composition-utils'
+import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   isEccentricityIndicatorPosition,
@@ -1097,6 +1098,84 @@ export function buildCertifiedValueOptions({
         standardName: standard.name,
       })
     }
+  }
+
+  return options
+}
+
+/**
+ * Discipline-agnostic per-row certified-value options. This is the core of
+ * buildMassCompositionOptions WITHOUT the mass-only bits: no composition
+ * profiles, no buoyancy, no `isMassMeasurementUnit`/mass-unit gating. Each
+ * non-profile certifiedValue of each standard becomes one option carrying
+ * { value, uncertainty, coverageFactor (falling back to standard.coverageFactor),
+ * drift, unit }, converted to the asset display unit via the same generic
+ * helpers. Used to fill `role:"standard_value"` columns for any quantity
+ * (force/voltage/frequency/etc.).
+ *
+ * Kept fully separate from the mass path: buildMassCompositionOptions is left
+ * byte-identical.
+ */
+export function buildStandardCertifiedValueOptions({
+  standardsData,
+  convertValueToDisplayUnit,
+  displayUnitFor,
+}: {
+  standardsData: ReferenceStandard[]
+  convertValueToDisplayUnit: (
+    value: number,
+    unit?: string | null,
+  ) => number | unknown
+  displayUnitFor: (unit?: string | null) => string | undefined
+}): StandardCertifiedValueOption[] {
+  const options: StandardCertifiedValueOption[] = []
+
+  for (const standard of standardsData) {
+    if (!standard.certifiedValues?.length) continue
+
+    standard.certifiedValues.forEach((certifiedValue, certifiedValueIndex) => {
+      // Composition profiles are a mass-only concept; skip them in the generic
+      // path (one option fills one row).
+      if (certifiedValue.compositionProfile === true) return
+
+      const coverageFactor =
+        certifiedValue.coverageFactor ?? standard.coverageFactor
+      const drift = certifiedValue.drift ?? standard.drift
+      const displayUnit =
+        displayUnitFor(certifiedValue.unit) ?? certifiedValue.unit
+      const displayValue = convertValueToDisplayUnit(
+        certifiedValue.value,
+        certifiedValue.unit,
+      )
+      const displayUncertainty = convertValueToDisplayUnit(
+        certifiedValue.uncertainty,
+        certifiedValue.unit,
+      )
+      const displayDrift =
+        drift == null
+          ? null
+          : convertValueToDisplayUnit(drift, certifiedValue.unit)
+
+      options.push({
+        standardId: standard.id,
+        standardName: standard.name,
+        certificateNumber: standard.certificateNumber,
+        certifiedValueIndex,
+        nominal: certifiedValue.nominal,
+        value:
+          typeof displayValue === 'number'
+            ? displayValue
+            : certifiedValue.value,
+        uncertainty:
+          typeof displayUncertainty === 'number'
+            ? displayUncertainty
+            : certifiedValue.uncertainty,
+        coverageFactor,
+        drift: typeof displayDrift === 'number' ? displayDrift : null,
+        unit: displayUnit,
+        optionLabel: `${certifiedValue.nominal} - ${standard.name} (${standard.certificateNumber})`,
+      })
+    })
   }
 
   return options
