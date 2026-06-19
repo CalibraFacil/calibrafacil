@@ -96,3 +96,38 @@ export function parseTemplateSpec(spec: unknown): MethodSpec {
   const parsed = templateSpecSchema.safeParse(spec)
   return parsed.success ? parsed.data : EMPTY_SPEC
 }
+
+/** pt-BR labels for the catalog's discipline grouping headers. */
+const DISCIPLINE_LABELS: Record<string, string> = {
+  mass: 'Massa',
+  force: 'Força',
+  torque: 'Torque',
+  voltage: 'Tensão (DC)',
+  current: 'Corrente',
+  resistance: 'Resistência',
+  frequency: 'Frequência / RPM',
+  volume: 'Volume',
+  humidity: 'Umidade',
+  temperature: 'Temperatura',
+  pressure: 'Pressão',
+}
+
+export function disciplineLabel(discipline: string): string {
+  return (
+    DISCIPLINE_LABELS[discipline] ??
+    discipline.charAt(0).toUpperCase() + discipline.slice(1)
+  )
+}
+
+/**
+ * Compact source sigla for chips/lines — e.g. "EURAMET cg-18" + "v4.0" → "cg-18
+ * v4.0"; "UKAS LAB 14" → "LAB 14"; "EA-4/02" + "M:2022" → "EA-4/02". Derived from
+ * the (already canonical, post-PR-A) `title`, so no `as`.
+ */
+export function shortSourceSigla(source: {
+  title: string
+  edition: string
+}): string {
+  const base = source.title.replace(/^(EURAMET|UKAS)\s+/i, '')
+  return /^v\d/i.test(source.edition) ? `${base} ${source.edition}` : base
+}

@@ -59,9 +59,9 @@ const ENTRY = {
         severity: 'action' as const,
       },
       {
-        ref: 'issue #506',
-        item: 'Risco de plataforma sob revisão.',
-        severity: 'platform' as const,
+        ref: '§5.1',
+        item: 'Item informativo do método.',
+        severity: 'info' as const,
       },
     ],
     omittedComponents: [{ ref: '§7.1.2.4', component: 'Convecção' }],
@@ -116,13 +116,11 @@ describe('FromTemplatePage', () => {
     // Step 1 → 2: the only path forward is reviewing the context.
     fireEvent.click(screen.getByRole('button', { name: /revisar contexto/i }))
 
-    // Step 2 surfaces the governance: a [VERIFICAR] item + the completeness denial.
-    expect(
-      screen.getByText(/Empuxo entra como entrada/i),
-    ).toBeTruthy()
-    expect(
-      screen.getByText(/NÃO é declarado completo/i),
-    ).toBeTruthy()
+    // Step 2 surfaces the governance: a [VERIFICAR] item + the situational
+    // components section — and NOT the old alarming "NÃO é declarado completo".
+    expect(screen.getByText(/Empuxo entra como entrada/i)).toBeTruthy()
+    expect(screen.getByText(/Componentes situacionais/i)).toBeTruthy()
+    expect(screen.queryByText(/NÃO é declarado completo/i)).toBeNull()
 
     // Step 2 → 3.
     fireEvent.click(screen.getByRole('button', { name: /confirmar adoção/i }))

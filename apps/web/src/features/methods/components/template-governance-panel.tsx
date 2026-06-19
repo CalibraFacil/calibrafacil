@@ -3,23 +3,36 @@ import type { MethodGovernance } from '@calibra-facil/client-runtime'
 
 import { Badge } from '@/components/ui/badge'
 import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { cn } from '@/lib/utils'
 
 /**
  * Renders a template's metrology governance — the "informed, not trust-me"
- * surface a lab reviews before adopting: the measurand/model, the cited sources,
- * conformance notes, every open [VERIFICAR] item (verbatim, with severity), the
- * explicitly omitted uncertainty components, and a provenance-aware worked
- * example. All content is served verbatim from the catalog; nothing is invented
- * here.
+ * surface a lab reviews before adopting: the measurand/model, the open
+ * [VERIFICAR] items (promoted to the top, action-first), the situational
+ * components, the cited sources, conformance notes, and a provenance-aware worked
+ * example. Content is served verbatim from the catalog; nothing is invented here.
  */
 
-const SEVERITY: Record<
-  MethodGovernance['verificarItems'][number]['severity'],
-  { label: string; variant: 'secondary' | 'destructive' | 'outline' }
-> = {
-  info: { label: 'Informativo', variant: 'outline' },
-  action: { label: 'Ação necessária', variant: 'secondary' },
-  platform: { label: 'Risco de plataforma', variant: 'destructive' },
+type VerificarSeverity = MethodGovernance['verificarItems'][number]['severity']
+
+/**
+ * Visible treatment per severity. No "platform"/destructive branch — that item is
+ * gone from the data (it never applied to the single-scalar platform templates),
+ * so nothing here screams "do not use". `action` reads as a warning to act on;
+ * everything else reads neutral.
+ */
+function severityMeta(severity: VerificarSeverity): {
+  label: string
+  className: string
+} {
+  if (severity === 'action') {
+    return {
+      label: 'Verificar antes do uso',
+      className:
+        'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+    }
+  }
+  return { label: 'Informativo', className: '' }
 }
 
 export function TemplateGovernancePanel({
@@ -31,6 +44,14 @@ export function TemplateGovernancePanel({
     governance.model === 'gum_measurement_model'
       ? 'Modelo GUM (motor)'
       : 'Fórmulas explícitas'
+
+  // Promote action items to the top — they are the most actionable content.
+  // Spread first so the original array is not mutated (no toSorted: the web
+  // tsconfig lib target predates ES2023).
+  const verificarItems = [...governance.verificarItems].sort(
+    (a, b) =>
+      (a.severity === 'action' ? 0 : 1) - (b.severity === 'action' ? 0 : 1),
+  )
 
   return (
     <Panel className="divide-y divide-foreground/10">
@@ -44,26 +65,86 @@ export function TemplateGovernancePanel({
         </Badge>
       </section>
 
-      <Eyebrowed eyebrow="Fontes (lidas na íntegra)">
+      <Eyebrowed eyebrow="A verificar antes do uso">
+        <ul className="space-y-2.5">
+          {verificarItems.map((item, index) => {
+            const sev = severityMeta(item.severity)
+            return (
+              <li
+                key={`${item.ref ?? 'item'}-${index}`}
+                className="rounded-xl bg-muted/40 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className={cn(sev.className)}>
+                    {sev.label}
+                  </Badge>
+                  {item.ref ? (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {item.ref}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-pretty text-sm">{item.item}</p>
+              </li>
+            )
+          })}
+        </ul>
+      </Eyebrowed>
+
+      {governance.omittedComponents.length > 0 ? (
+        <Eyebrowed eyebrow="Componentes situacionais">
+          <ul className="space-y-1.5">
+            {governance.omittedComponents.map((omitted) => (
+              <li key={omitted.ref} className="text-sm">
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {omitted.ref}
+                </span>{' '}
+                <span className="text-pretty">{omitted.component}</span>
+                {omitted.appliesWhen ? (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    — aplica-se quando: {omitted.appliesWhen}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-pretty text-sm text-muted-foreground">
+            Avalie se algum destes componentes se aplica ao seu processo antes
+            de declarar o orçamento de incerteza.
+          </p>
+        </Eyebrowed>
+      ) : null}
+
+      <Eyebrowed eyebrow="Fontes">
         <ul className="space-y-1.5">
           {governance.sources.map((source) => (
-            <li key={`${source.title}-${source.edition}`} className="text-sm">
+            <li
+              key={`${source.title}-${source.edition}`}
+              className="flex items-baseline justify-between gap-3 text-sm"
+            >
+              <span className="min-w-0">
+                <span className="font-medium">{source.title}</span>{' '}
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {source.edition}
+                </span>
+                {source.section ? (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {source.section}
+                  </span>
+                ) : null}
+              </span>
               {source.url ? (
                 <a
                   href={source.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  aria-label={`Abrir ${source.title} em PDF`}
+                  className="shrink-0 font-mono text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                 >
-                  {source.title} {source.edition}
+                  PDF ↗
                 </a>
-              ) : (
-                <span className="font-medium">
-                  {source.title} {source.edition}
-                </span>
-              )}
-              {source.section ? (
-                <span className="text-muted-foreground"> · {source.section}</span>
               ) : null}
             </li>
           ))}
@@ -87,76 +168,22 @@ export function TemplateGovernancePanel({
         </Eyebrowed>
       ) : null}
 
-      <Eyebrowed eyebrow="Itens [VERIFICAR] — revisar antes do uso">
-        <ul className="space-y-2.5">
-          {governance.verificarItems.map((item, index) => {
-            const sev = SEVERITY[item.severity]
-            return (
-              <li
-                key={`${item.ref ?? 'item'}-${index}`}
-                className="rounded-xl bg-muted/40 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]"
-              >
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <Badge variant={sev.variant}>{sev.label}</Badge>
-                  {item.ref ? (
-                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                      {item.ref}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-pretty text-sm">{item.item}</p>
-              </li>
-            )
-          })}
-        </ul>
-      </Eyebrowed>
-
-      <Eyebrowed eyebrow="Componentes omitidos (responsabilidade do laboratório)">
-        {governance.omittedComponents.length > 0 ? (
-          <ul className="space-y-1.5">
-            {governance.omittedComponents.map((omitted) => (
-              <li key={omitted.ref} className="text-sm">
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {omitted.ref}
-                </span>{' '}
-                <span className="text-pretty">{omitted.component}</span>
-                {omitted.appliesWhen ? (
-                  <span className="text-muted-foreground">
-                    {' '}
-                    — aplica-se quando: {omitted.appliesWhen}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Nenhum componente adicional sinalizado.
-          </p>
-        )}
-        <p className="mt-2 text-sm font-medium text-destructive">
-          Este orçamento de incerteza NÃO é declarado completo.
-        </p>
-      </Eyebrowed>
-
       {governance.workedExample ? (
         <Eyebrowed eyebrow="Exemplo verificado">
-          <p className="text-sm">
+          <div className="flex flex-wrap items-center gap-2">
             {governance.workedExample.provenance === 'cited_guide_table' ? (
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                ✓ reproduz o guia
-              </span>
+              <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                Reproduz o guia
+              </Badge>
             ) : (
-              <span className="font-medium text-muted-foreground">
-                Verificação interna do motor
-              </span>
-            )}{' '}
-            <span className="text-muted-foreground">
-              ({governance.workedExample.source})
+              <Badge variant="outline">Verificação interna do motor</Badge>
+            )}
+            <span className="text-sm text-muted-foreground">
+              {governance.workedExample.source}
             </span>
-          </p>
+          </div>
           {governance.workedExample.provenance !== 'cited_guide_table' ? (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-pretty text-xs text-muted-foreground">
               Confere o cálculo do motor — não o processo de medição do seu
               laboratório.
             </p>
