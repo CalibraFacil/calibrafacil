@@ -23,27 +23,38 @@ import type {
  * ⚠️ DRAFT — pending metrologist review. The measurement equation was read from
  * and matches the cited guide; uncertainty is propagated by the GUM engine (NOT
  * hand-derived sensitivity coefficients). Sources:
- *   - EURAMET cg-19 v4.1 "Guidelines on the Determination of Uncertainty in
- *     Gravimetric Volume Calibration":
+ *   - EURAMET cg-19 v4.1 (12/2025) "Guidelines on the Determination of
+ *     Uncertainty in Gravimetric Volume Calibration":
  *     https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-019_Calibration_Guide_No._19_web.pdf
- *   - ISO 4787 (the source of Eq. 1, referenced by cg-19 §3).
+ *   - ISO 4787:2010 (the source of the volume equation, referenced by cg-19 §3).
+ *   - EA-4/02 M:2022, Appendix E (Welch–Satterthwaite + Table E.1 coverage k).
  *
- * Conformance to cg-19 (read from the v4.1 text):
- *   - §3 Eq. (1): V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)].
- *   - §3 Eq. (2): water density ρ_W via the Tanaka formula with coefficients
+ * Conformance to cg-19 v4.1 (read from the text):
+ *   - §6.1 Eq. (5) / §6.4 Eq. (16): the full model is
+ *       V0 = Δm·A·B·C + ΔVop + ΔVevap + ΔVrep, where the ΔV terms are auxiliary
+ *     quantities of expected value 0 carrying their own uncertainty + DoF. Here
+ *     Δm = I_L − I_E, A = 1/(ρ_W − ρ_A), B = 1 − ρ_A/ρ_B, C = 1 − γ(t − t0).
+ *     This template models Δm·A·B·C + ΔV_men (meniscus, §6.3.7.1) + ΔV_rep
+ *     (repeatability, §6.3.9); evaporation (§6.3.8) stays in omittedComponents.
+ *   - §3 / Eq. (2): water density ρ_W via the Tanaka formula with coefficients
  *     a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL
  *     (verbatim from p.6). Inlined into the V0 expression so the temperature
  *     uncertainty propagates through both ρ_W and the γ term (correctly
  *     correlated).
- *   - ρ_B = 8.0 g/mL (cg-19 default for reference weights); t0 = 20 °C.
- *   - §6.7 / §6.8: expanded uncertainty U = k·u_c, k = 2.
+ *   - §6.3.5: ρ_B (density of reference weights) promoted to an input quantity
+ *     (from the weight-set certificate or OIML R 111-1 class); t0 = 20 °C.
+ *   - §6.7 Eq. (28) / §6.8 / §7.1.5 + EA-4/02 App. E: the coverage factor k is
+ *     NOT fixed at 2 — the engine derives effective degrees of freedom ν_eff by
+ *     Welch–Satterthwaite and the Student-t k for 95 %. The finite ν of the
+ *     repeatability term (ν = n−1) makes ν_eff finite, so k > 2 (the worked
+ *     example §7.1.5 yields ν_eff = 19 → k ≈ 2,15).
  *
- * [VERIFICAR] The input STANDARD UNCERTAINTIES below are representative
- * placeholders — the metrologist must set them from the actual balance / sensor
- * / air-density (cg-19 §6.3.4 / CIPM) certificates. cg-19 §6.3 also lists
- * contributions OMITTED here pending review: operator/reproducibility (§6.3.7),
- * evaporation (§6.3.8), and the density-of-reference-weights and γ uncertainties
- * (treated here only via their input-uncertainty terms). ρ_A is taken as an
+ * [VERIFICAR] The input STANDARD UNCERTAINTIES below (including u(ΔV_men),
+ * u(ΔV_rep) = s(V0)/√n and u(ρ_B)) are representative placeholders — the
+ * metrologist must set them from the actual balance / sensor / weight-set /
+ * air-density (cg-19 §6.3.4 / CIPM) certificates and from the laboratory's own
+ * repeatability series. Only the STRUCTURE (terms, distributions, ν = n−1) is
+ * taken from the guide; the magnitudes stay lab inputs. ρ_A is taken as an
  * input; cg-19 §6.3.4 derives it from ambient T/P/RH (CIPM) — [VERIFICAR].
  *
  * The template authors a SINGLE product-format definition; the compilable draft
@@ -89,6 +100,15 @@ const determinationColumns = [
     quantityKind: "environment",
   },
   {
+    // cg-19 §6.3.5: density of the reference weights, from the weight-set / balance
+    // certificate or the OIML R 111-1 class (cg-19 default 8,0 g/mL). [VERIFICAR].
+    key: "rho_b",
+    label: "Densidade dos pesos de referência (ρ_B)",
+    type: "number",
+    unit: "g/mL",
+    quantityKind: "reference",
+  },
+  {
     // [VERIFICAR] cubic expansion coefficient = 3 × linear (cg-19 §3 note).
     key: "gamma",
     label: "Coef. de expansão cúbica do material (γ)",
@@ -110,8 +130,11 @@ const dataFields = [
 // Water density ρ_W(t_w) — Tanaka, cg-19 Eq. (2) (coefficients verbatim p.6).
 const RHO_W =
   "0.999974950 * (1 - ((t_w - 3.983035) ^ 2 * (t_w + 301.797)) / (522528.9 * (t_w + 69.34881)))";
-// V0 — cg-19 Eq. (1); ρ_B = 8.0 g/mL, t0 = 20 °C inlined as literals.
-const V0_EXPRESSION = `(I_L - I_E) / (${RHO_W} - rho_a) * (1 - rho_a / 8.0) * (1 - gamma * (t_w - 20))`;
+// V0 — cg-19 §6.1 Eq. (5) / §6.4 Eq. (16): Δm·A·B·C + ΔV_men + ΔV_rep, with
+// t0 = 20 °C inlined and ρ_B taken as an input quantity (cg-19 §6.3.5). The two
+// ΔV auxiliary terms have expected value 0 (so they do not shift V0) and carry
+// the meniscus (Type B, §6.3.7.1) and repeatability (Type A, §6.3.9) components.
+const V0_EXPRESSION = `(I_L - I_E) / (${RHO_W} - rho_a) * (1 - rho_a / rho_b) * (1 - gamma * (t_w - 20)) + dv_men + dv_rep`;
 
 const measurementModels = [
   {
@@ -121,8 +144,12 @@ const measurementModels = [
     measurand: "V0",
     expression: V0_EXPRESSION,
     outputUnit: "mL",
-    // k = 2 per cg-19 §6.7/§6.8.
-    coverageFactor: 2,
+    // Coverage k is DERIVED by the engine, not fixed: with coverageFactor omitted
+    // and coverageProbability = 0,95 the engine computes ν_eff (Welch–Satterthwaite,
+    // cg-19 §6.7 Eq. 28 / EA-4/02 App. E.1) and the Student-t k for 95 %. The
+    // finite ν of the repeatability term (dv_rep, ν = n−1) makes ν_eff finite, so
+    // k > 1,96 (cf. cg-19 §7.1.5: ν_eff = 19 → k ≈ 2,15).
+    coverageProbability: 0.95,
     // No correlations modelled between the input quantities ([VERIFICAR] cg-19
     // §6.6 — e.g. water-density/temperature handled via the inlined ρ_W(t_w)).
     correlations: [],
@@ -130,47 +157,94 @@ const measurementModels = [
     // V0 is smooth (no abs/min/max/floor) → numeric/symbolic sensitivities apply.
     options: { allowNonSmoothWithExplicitSensitivities: false },
     quantities: [
+      // [VERIFICAR] As incertezas-padrão de entrada abaixo são valores
+      // REPRESENTATIVOS retirados do exemplo trabalhado da cg-19 v4.1 §7.1
+      // (Tabela 2). NÃO são do laboratório — o metrologista deve substituí-las
+      // pelas dos seus próprios certificados / série de medições.
       {
         symbol: "I_L",
         source: { kind: "table_column", tableKey: "determinacoes", columnKey: "I_L" },
         unit: "g",
-        // [VERIFICAR] balance combined standard uncertainty (cg-19 §6.3.1).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0005 },
+        // [VERIFICAR] balance standard uncertainty (cg-19 §6.3.1). Tabela 2: u(Δm)=0,00127 g
+        // → repartida entre I_L e I_E (0,0009 g cada → ~0,00127 g combinada). ν=∞ (Type B).
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0009 },
+        degreesOfFreedom: "Infinity",
       },
       {
         symbol: "I_E",
         source: { kind: "table_column", tableKey: "determinacoes", columnKey: "I_E" },
         unit: "g",
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0005 },
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0009 },
+        degreesOfFreedom: "Infinity",
       },
       {
         symbol: "t_w",
         source: { kind: "table_column", tableKey: "determinacoes", columnKey: "t_w" },
         unit: "°C",
-        // [VERIFICAR] thermometer standard uncertainty (cg-19 §6.3.2).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.1 },
+        // [VERIFICAR] thermometer standard uncertainty (cg-19 §6.3.2). Tabela 2: u(t)=0,0152 °C. ν=∞.
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0152 },
+        degreesOfFreedom: "Infinity",
       },
       {
         symbol: "rho_a",
         source: { kind: "table_column", tableKey: "determinacoes", columnKey: "rho_a" },
         unit: "g/mL",
-        // [VERIFICAR] air-density uncertainty (cg-19 §6.3.4 / CIPM).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.00001 },
+        // [VERIFICAR] air-density uncertainty (cg-19 §6.3.4 / CIPM). Tabela 2: u(ρ_A)=1,76e-6 g/mL. ν=∞.
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.00000176 },
+        degreesOfFreedom: "Infinity",
+      },
+      {
+        symbol: "rho_b",
+        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "rho_b" },
+        unit: "g/mL",
+        // [VERIFICAR] reference-weight density uncertainty (cg-19 §6.3.5: weight-set
+        // certificate or OIML R 111-1 class). Tabela 2: u(ρ_B)=0,0346 g/mL. ν=∞ (Type B).
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0346 },
+        degreesOfFreedom: "Infinity",
       },
       {
         symbol: "gamma",
         source: { kind: "table_column", tableKey: "determinacoes", columnKey: "gamma" },
         unit: "1/°C",
-        // [VERIFICAR] cubic expansion coefficient uncertainty (cg-19 §6.3.6).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.000001 },
+        // [VERIFICAR] cubic expansion coefficient uncertainty (cg-19 §6.3.6). Tabela 2: u(γ)=2,89e-7 1/°C. ν=∞.
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.000000289 },
+        degreesOfFreedom: "Infinity",
+      },
+      {
+        // Meniscus / operator-reading term ΔV_men (cg-19 §6.3.7.1): auxiliary
+        // quantity of expected value 0, sensitivity 1, contribuição Tipo B com
+        // ν = ∞. O guia (Fig. 1) deriva a incerteza-padrão da resolução do menisco
+        // por uma distribuição retangular (u = a/√3) ou triangular (u = a/√6); o
+        // laboratório informa a incerteza-padrão já reduzida. Tabela 2: u(ΔV_men)=0,00866 mL.
+        // [VERIFICAR] magnitude.
+        symbol: "dv_men",
+        source: { kind: "constant", value: 0 },
+        unit: "mL",
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.00866 },
+        degreesOfFreedom: "Infinity",
+      },
+      {
+        // Repeatability term ΔV_rep (cg-19 §6.3.9 Eq. 15 / ISO 4787): auxiliary
+        // quantity of expected value 0, Type A, sensitivity 1. The standard
+        // uncertainty is s(V0)/√n; the DEGREES OF FREEDOM are ν = n − 1, which is
+        // what makes ν_eff finite (so the engine derives k > 1,96). cg-19 §7.1.5 /
+        // ISO 4787 use n = 10 fillings → ν = 9. Tabela 2: u(ΔV_rep)=0,014 mL, ν=9.
+        // [VERIFICAR] the magnitude (laboratory series).
+        symbol: "dv_rep",
+        source: { kind: "constant", value: 0 },
+        unit: "mL",
+        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.014 },
+        degreesOfFreedom: 9,
       },
     ],
   },
 ];
 
 const certificateContent = {
-  procedureCode: "[VERIFICAR]",
-  referenceStandards: ["EURAMET cg-19 v4.1", "ISO 4787", "EA-4/02"],
+  // Method-level procedure reference (not lab-specific); the laboratory may
+  // override with its own internal procedure code at publish time.
+  procedureCode: "EURAMET cg-19 v4.1 / ISO 4787",
+  referenceStandards: ["EURAMET cg-19 v4.1", "ISO 4787:2010", "EA-4/02 M:2022"],
   certifiedValuesDisplay: "hidden",
   uncertaintyBudgetDisplay: "full",
   sections: [
@@ -178,7 +252,7 @@ const certificateContent = {
       kind: "paragraphs",
       title: "MÉTODO",
       paragraphs: [
-        "Método gravimétrico (EURAMET cg-19 §3 / ISO 4787): a massa de água contida/escoada é convertida em volume a 20 °C pela Eq. (1), com a densidade da água pela fórmula de Tanaka (Eq. 2).",
+        "Método gravimétrico (EURAMET cg-19 §6.1 Eq. 5 / §6.4 Eq. 16 / ISO 4787): a massa de água contida/escoada é convertida em volume a 20 °C, com a densidade da água pela fórmula de Tanaka (Eq. 2) e a densidade dos pesos de referência (ρ_B) como grandeza de entrada. O modelo soma parcelas auxiliares de valor esperado nulo para a leitura do menisco (ΔV_men) e para a repetibilidade (ΔV_rep).",
       ],
     },
     {
@@ -187,15 +261,20 @@ const certificateContent = {
       items: [
         { term: "V₀", definition: "Volume à temperatura de referência de 20 °C." },
         { term: "ρ_W", definition: "Densidade da água (Tanaka, cg-19 Eq. 2)." },
-        { term: "U", definition: "Incerteza expandida (k = 2)." },
+        { term: "ρ_B", definition: "Densidade dos pesos de referência (cg-19 §6.3.5)." },
+        {
+          term: "U",
+          definition:
+            "Incerteza expandida U = k·u_c, com k derivado dos graus de liberdade efetivos por Welch–Satterthwaite (Student-t, 95 %).",
+        },
       ],
     },
     {
       kind: "paragraphs",
       title: "INCERTEZA DE MEDIÇÃO",
       paragraphs: [
-        "A incerteza-padrão combinada é propagada conforme a EA-4/02 a partir das incertezas das grandezas de entrada (massa, temperatura, densidade do ar, coeficiente de expansão). A incerteza expandida é U = k·u_c com k = 2 (cg-19 §6.7/§6.8).",
-        "[VERIFICAR] As incertezas de entrada são placeholders representativos; contribuições de operador/reprodutibilidade (cg-19 §6.3.7) e evaporação (§6.3.8) ainda não estão incluídas.",
+        "A incerteza-padrão combinada é propagada conforme a EA-4/02 a partir das incertezas das grandezas de entrada (massa, temperatura, densidade do ar, densidade dos pesos de referência, coeficiente de expansão), além das parcelas auxiliares de leitura do menisco (cg-19 §6.3.7.1) e de repetibilidade (cg-19 §6.3.9).",
+        "O fator de abrangência k não é fixado em 2: os graus de liberdade efetivos são estimados pela fórmula de Welch–Satterthwaite (cg-19 §6.7 Eq. 28 / EA-4/02 Apêndice E) e o k de Student-t para 95 % é derivado a partir deles; a parcela de repetibilidade, de graus de liberdade finitos (ν = n − 1), torna ν_eff finito (cf. cg-19 §7.1.5).",
       ],
     },
     {
@@ -257,19 +336,25 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
           I_E: 50.0,
           t_w: 20,
           rho_a: 0.0012,
+          rho_b: 8.0,
           gamma: 0.00001,
         },
       ],
     },
     expected: {
-      // Row-scoped model → one value per row. V0 = 100.1047 mL (cg-19 Eq. 1 +
-      // Tanaka Eq. 2); u_c and U = 2·u_c propagated by the engine from the input
-      // uncertainties. Pinned from the engine (decimal mode), within 1e-9.
+      // Row-scoped model → one value per row. V0 = 100.1047 mL (cg-19 Eq. 5 +
+      // Tanaka Eq. 2; ΔV_men + ΔV_rep = 0, não deslocam V0). u_c e U = k·u_c
+      // propagados pelo motor; k = 2.1059 é DERIVADO (Student-t, 95 %) de
+      // ν_eff = 17.43 pela fórmula de Welch–Satterthwaite (cg-19 §6.7 Eq. 28 /
+      // EA-4/02 App. E) — o termo de repetibilidade (ν = 9) torna ν_eff finito,
+      // por isso k > 1,96 (cf. cg-19 §7.1.5: ν_eff = 19 → k ≈ 2,15; aqui u_c ≈
+      // 0,0165 mL e U ≈ 0,0348 mL conferem com a Tabela 2: u = 0,017, U = 0,036).
+      // Pinned from the engine (decimal mode), within 1e-9.
       measurementModels: {
         volume_v0: {
           estimate: [100.104665735215],
-          standardUncertainty: [0.002273531566076648],
-          expandedUncertainty: [0.004547063132153296],
+          standardUncertainty: [0.01651493136661448],
+          expandedUncertainty: [0.03477844990678303],
         },
       },
     },
@@ -284,6 +369,7 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
           I_E: 50.0,
           t_w: 5,
           rho_a: 0.0013,
+          rho_b: 8.0,
           gamma: 0.00001,
         },
       ],
@@ -299,55 +385,78 @@ const governance: MetrologyGovernance = {
   summary:
     "Calibração gravimétrica de vidraria volumétrica (balão volumétrico / pipeta) à temperatura de referência t0 = 20 °C. A equação de medição foi lida do guia citado e confere; a incerteza é propagada pelo motor GUM (sem coeficientes de sensibilidade derivados à mão). RASCUNHO pendente de revisão metrológica.",
   measurand:
-    "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)] (ISO 4787 Eq.1 / cg-19 §3)",
+    "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)] + ΔV_men + ΔV_rep (ISO 4787 / cg-19 §6.1 Eq. 5, §6.4 Eq. 16)",
   model: "gum_measurement_model",
   sources: [
     {
       title: "EURAMET cg-19",
-      edition: "v4.1",
+      edition: "v4.1 (12/2025)",
       url: "https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-019_Calibration_Guide_No._19_web.pdf",
     },
     {
       title: "ISO 4787",
-      edition: "(edição a confirmar)",
-      section: "fonte da Eq. 1, referenciada por cg-19 §3",
+      edition: "2010",
+      section: "fonte da equação de volume, referenciada por cg-19 §3",
     },
     {
       title: "EA-4/02",
       edition: "M:2022",
+      section: "Apêndice E (E.1 Welch–Satterthwaite + Tabela E.1)",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },
   ],
   conformanceNotes: [
     {
-      ref: "cg-19 §3 Eq. (1)",
-      note: "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)].",
+      ref: "cg-19 §6.1 Eq. (5) / §6.4 Eq. (16)",
+      note: "V0 = Δm·A·B·C + ΔV_men + ΔV_rep, sendo Δm = I_L − I_E, A = 1/(ρ_W − ρ_A), B = 1 − ρ_A/ρ_B, C = 1 − γ(t − t0). As parcelas ΔV têm valor esperado nulo: carregam apenas incerteza-padrão e graus de liberdade próprios.",
     },
     {
-      ref: "cg-19 §3 Eq. (2)",
-      note: "Densidade da água ρ_W pela fórmula de Tanaka com coeficientes a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL (verbatim da p.6). Embutida na expressão de V0 para que a incerteza da temperatura se propague por ρ_W e pelo termo γ (correlacionados corretamente).",
+      ref: "cg-19 §3 / Eq. (2)",
+      note: "Densidade da água ρ_W pela fórmula de Tanaka com coeficientes a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL (transcrição literal da p.6). Embutida na expressão de V0 para que a incerteza da temperatura se propague por ρ_W e pelo termo γ (correlacionados corretamente).",
     },
     {
-      ref: "cg-19 (padrões)",
-      note: "ρ_B = 8,0 g/mL (padrão cg-19 para pesos de referência); t0 = 20 °C.",
+      ref: "cg-19 §6.3.5",
+      note: "ρ_B (densidade dos pesos de referência) promovida a grandeza de entrada, vinda do certificado do jogo de pesos ou da classe OIML R 111-1 (padrão cg-19 = 8,0 g/mL); t0 = 20 °C.",
     },
     {
-      ref: "cg-19 §6.7 / §6.8",
-      note: "Incerteza expandida U = k·u_c, k = 2.",
+      ref: "cg-19 §6.3.9 / §6.3.7.1",
+      note: "ΔV_rep (repetibilidade, Tipo A, u = s(V0)/√n, ν = n − 1) e ΔV_men (leitura do menisco, Tipo B, ν = ∞). cg-19 §7.1.5 / ISO 4787 usam n = 10 enchimentos → ν = 9.",
+    },
+    {
+      ref: "cg-19 §6.7 Eq. (28) / §6.8 / EA-4/02 Apêndice E",
+      note: "Fator de abrangência k NÃO fixado em 2: ν_eff estimado por Welch–Satterthwaite e k de Student-t para 95 % derivado pelo motor. A parcela ΔV_rep, de ν finito, torna ν_eff finito → k > 1,96 (cf. cg-19 §7.1.5: ν_eff = 19 → k ≈ 2,15).",
     },
   ],
   verificarItems: [
     {
       ref: "cg-19 §6.3.4 / CIPM",
-      item: "As INCERTEZAS-PADRÃO de entrada são valores representativos provisórios — o metrologista deve defini-las a partir dos certificados reais da balança / sensor / densidade do ar.",
+      item: "As INCERTEZAS-PADRÃO de entrada são valores REPRESENTATIVOS, retirados do exemplo trabalhado da cg-19 v4.1 §7.1 (Tabela 2). O metrologista deve substituí-las pelas dos seus próprios certificados (balança, termômetro, jogo de pesos, densidade do ar) e pela série de repetibilidade do laboratório.",
       severity: "action",
-      fieldKeys: ["I_L", "I_E", "t_w", "rho_a", "gamma"],
+      fieldKeys: ["I_L", "I_E", "t_w", "rho_a", "rho_b", "gamma", "dv_men", "dv_rep"],
     },
     {
       ref: "cg-19 §6.3.4",
-      item: "ρ_A é tomada como entrada; cg-19 §6.3.4 a deriva de T/P/UR ambientes (CIPM). Inserida diretamente nesta v1.",
+      item: "ρ_A é tomada como entrada; cg-19 §6.3.4 a deriva de T/P/UR ambientes (CIPM). Inserida diretamente nesta versão.",
       severity: "action",
       fieldKeys: ["rho_a"],
+    },
+    {
+      ref: "cg-19 §6.3.5",
+      item: "ρ_B (densidade dos pesos de referência) vem do certificado do jogo de pesos ou da classe OIML R 111-1; o padrão 8,0 g/mL é apenas representativo.",
+      severity: "action",
+      fieldKeys: ["rho_b"],
+    },
+    {
+      ref: "cg-19 §6.3.9 / ISO 4787",
+      item: "ΔV_rep (repetibilidade): magnitude provisória; o laboratório define u = s(V0)/√n da sua própria série. Os graus de liberdade ν = n − 1 (n = 10 enchimentos → ν = 9) é o que torna ν_eff finito e faz o motor derivar k > 1,96.",
+      severity: "action",
+      fieldKeys: ["dv_rep"],
+    },
+    {
+      ref: "cg-19 §6.3.7.1",
+      item: "ΔV_men (leitura do menisco): magnitude provisória, distribuição retangular (divisor √3) ou triangular (divisor √6) conforme o arranjo óptico; o laboratório informa a incerteza-padrão já reduzida.",
+      severity: "action",
+      fieldKeys: ["dv_men"],
     },
     {
       item: "O slug do tipo de equipamento é 'pipeta' — vale também para balão volumétrico / bureta.",
@@ -364,16 +473,12 @@ const governance: MetrologyGovernance = {
       item: "Sem correlações modeladas entre as grandezas de entrada (p.ex. densidade-da-água/temperatura tratadas pela ρ_W(t_w) embutida).",
       severity: "info",
     },
-    {
-      item: "O campo procedureCode é um placeholder a definir.",
-      severity: "action",
-    },
   ],
   omittedComponents: [
     {
-      ref: "cg-19 §6.3.7",
-      component: "operador / reprodutibilidade",
-      appliesWhen: "exigido pelo arranjo ou pelas condições de medição",
+      ref: "cg-19 §6.3.7.2",
+      component: "manuseio do instrumento (pipetas de pistão)",
+      appliesWhen: "instrumentos de pistão ou variabilidade de manuseio relevante",
     },
     {
       ref: "cg-19 §6.3.8",
@@ -384,11 +489,11 @@ const governance: MetrologyGovernance = {
   workedExample: {
     scenarioKey: "balao_100mL_20C",
     provenance: "engine_characterization",
-    source: "Motor (modo decimal)",
+    source: "Motor (modo decimal); k = 2.1059 derivado de ν_eff = 17.43 (Welch–Satterthwaite, Student-t 95 %)",
     expected: {
       estimate: 100.104665735215,
-      standardUncertainty: 0.002273531566076648,
-      expandedUncertainty: 0.004547063132153296,
+      standardUncertainty: 0.01651493136661448,
+      expandedUncertainty: 0.03477844990678303,
     },
   },
   reviewStatus: "draft_pending_revalidation",
@@ -396,11 +501,11 @@ const governance: MetrologyGovernance = {
 
 export const volumeGlasswareTemplate: TemplateModule = {
   key: "volume-glassware",
-  templateVersion: 1,
+  templateVersion: 2,
   discipline: "volume",
   defaultName: METHOD_NAME,
   defaultAccreditedScope: false,
-  citations: ["EURAMET cg-19 v4.1", "ISO 4787", "EA-4/02"],
+  citations: ["EURAMET cg-19 v4.1", "ISO 4787:2010", "EA-4/02 M:2022"],
   buildDraft,
   productDefinition: volumeProductDefinition,
   previewScenarios,
