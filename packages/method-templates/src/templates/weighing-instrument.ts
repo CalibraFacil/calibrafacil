@@ -64,15 +64,16 @@ import type {
  *   - Repeatability divisor is s (single error-test indication, §7.1.1-5); use
  *     s/√N only if the reported indication is the mean of N error-test readings
  *     (§7.1.1-6). Here `indicacao` is a single reading, so s is used.
- *   - Reference weights: U/k with k_ref=2 ASSUMED — read the actual k from the
- *     certificate; for a load of several weights SUM the per-weight δm_c
+ *   - Reference weights: U/k with k now read from the standard weight's OWN
+ *     certificate (the `k_referencia` column, default 2), per §7.1.2-2 — NOT a
+ *     hardcoded /2. For a load of several weights SUM the per-weight δm_c
  *     ARITHMETICALLY (correlated), not in quadrature (cg-18 §7.1.2.1; UKAS LAB 14
  *     §4.2.2 applies the same arithmetic sum to combined weights). Arithmetic
  *     sum ≥ RSS, so the cg-18/LAB-14 treatment is the CONSERVATIVE one. The open
- *     question in issue #506 (item 3) is the inverse code risk: whether the
- *     composition layer (`uncertaintyMode: "expanded_rss"`) actually sums
- *     ARITHMETICALLY here or in QUADRATURE — RSS would UNDER-state for stacked
- *     loads, so it still needs a code check.
+ *     question in issue #506 (item 3) is the inverse code risk OUTSIDE this
+ *     template: whether the composition layer (`uncertaintyMode: "expanded_rss"`)
+ *     actually sums ARITHMETICALLY or in QUADRATURE — RSS would UNDER-state for
+ *     stacked loads, so it still needs a code check in the composition layer.
  *   - Coverage factor k is COMPUTED, not assumed: Welch–Satterthwaite ν_eff
  *     (cg-18 Appendix B3-1; EA-4/02 Appendix E) + the two-tailed Student-t at
  *     95.45%. This is required because the Type A term rests on <10 observations,
@@ -82,7 +83,10 @@ import type {
  *     (see also §5.4 and cg-18 Appendix B2). UKAS LAB 14 §5.2 + Table 2 corroborate
  *     numerically: t for ν_eff = n−1 gives k₉₅ ≈ 2.87 at ν=4. k → 2 where the
  *     Type B terms dominate and rises (≈2.87 at zero load) where repeatability
- *     dominates. [VERIFICAR] ν_rep = n−1 = 4 (5 readings); Type B terms taken ν=∞.
+ *     dominates. CONFIRMADO (auditoria contra cg-18 App. B3 + EA-4/02 Tabela E.1):
+ *     a cobertura (ν_eff/k/t-inversa) reproduz a tabela H1 do guia (ν_eff≈15538,
+ *     k=2,00, U≈0,00180 g no ponto 100 g) — fórmulas mantidas inalteradas. ν_rep =
+ *     n−1 = 4 vale para exatamente 5 leituras; termos Tipo B com ν=∞.
  *
  * The template authors a SINGLE product-format definition; the compilable draft
  * is derived via the shared buildDraftFromProduct.
@@ -121,6 +125,15 @@ const weighingColumns = [
     type: "number",
     unit: "g",
     quantityKind: "uncertainty",
+  },
+  {
+    // cg-18 §7.1.2-2 (u(δm_c) = U/k): k is the coverage factor of the standard
+    // weight's OWN calibration certificate, not a fixed 2. The lab informs the k
+    // read from its certificate (usually 2).
+    key: "k_referencia",
+    label: "Fator k do certificado do padrão",
+    type: "number",
+    quantityKind: "other",
   },
   {
     key: "resolucao",
@@ -260,8 +273,9 @@ const formulas = [
   {
     outputKey: "u_referencia",
     label: "Incerteza dos padrões de referência",
-    // [VERIFICAR] cg-18 §7.1.2-2: u(δm_c) = U/k. k_ref=2 ASSUMED — read from cert.
-    expression: "incerteza_padrao / 2",
+    // cg-18 §7.1.2-2 (lido): u(δm_c) = U/k, com U e k do PRÓPRIO certificado do
+    // padrão. k_referencia é informado pelo laboratório (em geral 2), não fixo.
+    expression: "incerteza_padrao / k_referencia",
     scope: ROW_SCOPE,
     unit: "g",
     reporting: { role: "uncertainty_component", group: "uncertainty_budget" },
@@ -284,7 +298,8 @@ const formulas = [
     // cg-18 Appendix B3-1: ν_eff = u_c⁴ / Σ(uᵢ⁴/νᵢ). Only the Type A repeatability
     // has finite DoF (ν = n−1 = 4 for the 5 readings); the Type B (rectangular/
     // normal) terms are taken as ν=∞ (cg-18 App. H Note 3) and drop out of the sum.
-    // [VERIFICAR] ν_rep = 4 assumes exactly 5 repeatability readings.
+    // CONFIRMADO (cg-18 App. B3 + EA-4/02 Tabela E.1; reproduz H1: ν_eff≈15538 no
+    // ponto 100 g). ν_rep = n−1 = 4 vale para exatamente 5 leituras de repetibilidade.
     expression:
       "if_zero(u_repetibilidade, 1000000000, (u_combinada ^ 4) / ((u_repetibilidade ^ 4) / 4))",
     scope: ROW_SCOPE,
@@ -296,7 +311,8 @@ const formulas = [
     // cg-18 §7.3 / Appendix B1+B3: k from the two-tailed Student-t at 95.45%
     // (P=0.9545 → α=0.0455) with ν_eff — required because the Type A term rests on
     // <10 observations, so a flat k=2 is NOT permitted (Appendix B2). Guards the
-    // ν=∞ case → k=2. [VERIFICAR] the coverage probability + the t-inverse.
+    // ν=∞ case → k=2. CONFIRMADO (cg-18 App. B3 + EA-4/02 Tabela E.1; reproduz H1:
+    // k=2,00 em 100 g e k≈2,87 em carga nula, como na tabela H1 do guia).
     expression: "if_zero(u_repetibilidade, 2, student_t_inverse_2t(0.0455, veff))",
     scope: ROW_SCOPE,
     reporting: {
@@ -400,7 +416,9 @@ function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
 // worked example (100 g, class E2, Situation A Option 1, buoyancy form 7.1.2-5d):
 // this REPRODUCES the guide's published E = 0.0007 g, u(E) ≈ 0.000900 g and
 // U(E) ≈ 0.00180 g (k=2 at this load). The buoyancy term dominates, exactly as in
-// the guide. The metrology MODEL keeps [VERIFICAR] for k at low load + convection.
+// the guide. The coverage treatment (ν_eff/k/Student-t) is CONFIRMADO against this
+// H1 table; the residual [VERIFICAR] markers cover only lab-specific INPUT
+// magnitudes (buoyancy, drift, reference value) + the omitted convection term.
 const previewScenarios: readonly MethodPreviewScenario[] = [
   {
     key: "ponto_100g_h1",
@@ -411,6 +429,7 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
           m_ref: 99.9999,
           indicacao: 100.0006,
           incerteza_padrao: 0.00005,
+          k_referencia: 2,
           resolucao: 0.0001,
           rep_1: 100.0006,
           rep_2: 100.0003,
@@ -446,7 +465,7 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
 
 export const weighingInstrumentTemplate: TemplateModule = {
   key: "weighing-instrument",
-  templateVersion: 1,
+  templateVersion: 2,
   discipline: "mass",
   defaultName: METHOD_NAME,
   defaultAccreditedScope: false,
@@ -514,13 +533,13 @@ export const weighingInstrumentTemplate: TemplateModule = {
       },
       {
         item:
-          "Padrões: U/k com k_ref=2 ASSUMIDO — leia o k real do certificado; para carga de vários pesos some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2). A soma aritmética ≥ RSS, logo é o tratamento CONSERVADOR.",
+          "VALOR a informar: o fator k do certificado do seu peso-padrão (coluna k_referencia). Na maioria dos certificados k=2 — leia-o no seu certificado em vez de presumir (cg-18 §7.1.2-2: u(δm_c) = U/k). Para carga de vários pesos some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2). A soma aritmética ≥ RSS, logo é o tratamento CONSERVADOR.",
         severity: "action",
-        fieldKeys: ["incerteza_padrao"],
+        fieldKeys: ["incerteza_padrao", "k_referencia"],
       },
       {
         item:
-          "O fator de abrangência k é CALCULADO, não assumido: ν_eff por Welch–Satterthwaite (cg-18 Apêndice B3-1; EA-4/02 Apêndice E) + t-Student bicaudal a 95,45%. ν_rep = n−1 = 4 (5 leituras); termos Tipo B com ν=∞.",
+          "CONFIRMADO (auditoria contra cg-18 Apêndice B3 + EA-4/02 Tabela E.1): o fator de abrangência k é CALCULADO (ν_eff por Welch–Satterthwaite + t-Student bicaudal a 95,45%) e reproduz a tabela H1 do guia (ν_eff≈15538, k=2,00 no ponto 100 g). As fórmulas de cobertura foram mantidas inalteradas. ν_rep = n−1 = 4 vale para exatamente 5 leituras de repetibilidade; termos Tipo B com ν=∞.",
         severity: "info",
         fieldKeys: ["rep_1", "rep_2", "rep_3", "rep_4", "rep_5"],
       },
@@ -530,6 +549,12 @@ export const weighingInstrumentTemplate: TemplateModule = {
         ref: "§7.1.2.4",
         component: "Convecção u(δm_conv) = Δm_conv/√3",
         appliesWhen: "classe F1 ou melhor; dependente de aclimatização",
+      },
+      {
+        ref: "§7.1.1-3a (Nota)",
+        component:
+          "Intervalo de escala único: o template usa um só d (coluna resolucao) tanto no zero (d₀) quanto na carga (d_L), ou seja, presume d₀ = d_L. Para instrumento multi-intervalo o d_I varia com a carga (Nota da §7.1.1-3a) — informe o d do intervalo de cada ponto.",
+        appliesWhen: "instrumento multi-intervalo / multi-faixa (d varia com a carga)",
       },
     ],
     workedExample: {
