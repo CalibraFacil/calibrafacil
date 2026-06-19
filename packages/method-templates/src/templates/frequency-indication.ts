@@ -305,8 +305,7 @@ const governance = {
   model: "formulas",
   sources: [
     {
-      title:
-        "EA-4/02 — Evaluation of the Uncertainty of Measurement in Calibration",
+      title: "EA-4/02",
       edition: "M:2022",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },

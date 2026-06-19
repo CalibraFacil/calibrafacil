@@ -340,14 +340,13 @@ const governance: MetrologyGovernance = {
   model: "formulas",
   sources: [
     {
-      title: "EURAMET cg-04 \"Guidelines on the Uncertainty of Force Measurements\"",
+      title: "EURAMET cg-04",
       edition: "v3.0 (02/2022)",
       section: "§6 (transdutores / ISO 376) + §7.1 (eq. 26)",
       url: "https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-004_Calibration_Guideline_No._4_web.pdf",
     },
     {
-      title:
-        "EA-4/02 \"Evaluation of the Uncertainty of Measurement in Calibration\" (estrutura GUM: combinação por RSS, k para ~95%)",
+      title: "EA-4/02",
       edition: "M:2022",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },

@@ -322,30 +322,18 @@ function CatalogStep({
     )
   }
 
-  const byDiscipline = new Map<string, MethodTemplateCatalogEntry[]>()
-  for (const entry of templates) {
-    const list = byDiscipline.get(entry.discipline) ?? []
-    list.push(entry)
-    byDiscipline.set(entry.discipline, list)
-  }
-
   return (
-    <div className="space-y-6">
-      {Array.from(byDiscipline.entries()).map(([discipline, entries]) => (
-        <section key={discipline}>
-          <p className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {disciplineLabel(discipline)} ·{' '}
-            {entries.length === 1 ? '1 modelo' : `${entries.length} modelos`}
-          </p>
-          <StaggerGroup className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {entries.map((entry) => (
-              <StaggerItem key={entry.templateKey}>
-                <TemplateCard entry={entry} onReview={onReview} />
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
-        </section>
-      ))}
+    <div className="space-y-4">
+      {/* One responsive grid across all templates: each discipline currently has
+          a single template, so a per-discipline grid would strand a lone card in
+          a 3-column row. Cards carry their own discipline eyebrow instead. */}
+      <StaggerGroup className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {templates.map((entry) => (
+          <StaggerItem key={entry.templateKey}>
+            <TemplateCard entry={entry} onReview={onReview} />
+          </StaggerItem>
+        ))}
+      </StaggerGroup>
       <p className="text-center text-xs text-muted-foreground">
         Todos os modelos entram como{' '}
         <span className="font-medium">Rascunho · Não acreditado</span> e exigem
@@ -365,6 +353,9 @@ function TemplateCard({
   const sources = entry.governance.sources
   return (
     <Panel className="flex h-full flex-col p-4">
+      <p className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {disciplineLabel(entry.discipline)}
+      </p>
       <h3 className="text-sm font-medium">{entry.defaultName}</h3>
 
       <div className="mt-2 overflow-x-auto rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-foreground/80">
