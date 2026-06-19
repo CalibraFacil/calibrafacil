@@ -332,15 +332,13 @@ const governance: MetrologyGovernance = {
   model: "formulas",
   sources: [
     {
-      title:
-        "EURAMET cg-15 \"Guidelines on the Calibration of Digital Multimeters\" (formerly EA-10/15)",
+      title: "EURAMET cg-15",
       edition: "v2.0",
       section: "§5.1.4.1, §5.1.5.1, §5.1.5.3, §5.1.5.4",
       url: "https://www.euramet.org/Media/docs/Publications/calguides/EURAMET_cg-15__v_2.0_Guidelines_Calibration_Digital_Multimeters.pdf",
     },
     {
-      title:
-        "EA-4/02 \"Evaluation of the Uncertainty of Measurement in Calibration\"",
+      title: "EA-4/02",
       edition: "M:2022",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },
@@ -348,7 +346,7 @@ const governance: MetrologyGovernance = {
   conformanceNotes: [
     {
       ref: "cg-15 §5.1.4.1",
-      note: "Grandeza reportada é o \"Error of Indication\" = Instrument Reading − Applied Value ⇒ E = indicação − referência.",
+      note: "Grandeza reportada é o erro de indicação = leitura do instrumento − valor aplicado ⇒ E = indicação − referência.",
     },
     {
       ref: "cg-15 §5.1.5.1",
@@ -365,46 +363,46 @@ const governance: MetrologyGovernance = {
   ],
   verificarItems: [
     {
-      ref: "cg-15 Tables 1–2",
-      item: "SCOPE: DC voltage only (cg-15 also covers DC current, resistance, AC voltage/current — Tables 1–2). AC is DEFERRED for v1. DC current and resistance use the identical indication-error + RSS model with their own units (separate templates, to be added after review).",
+      ref: "cg-15 Tabelas 1–2",
+      item: "ESCOPO: apenas tensão DC (cg-15 também cobre corrente DC, resistência e tensão/corrente AC — Tabelas 1–2). AC ADIADO para a v1. Corrente DC e resistência usam o mesmo modelo de erro de indicação + RSS com suas próprias unidades (templates separados, a adicionar após revisão).",
       severity: "info",
     },
     {
-      item: "Enter the EXPANDED uncertainty U from the source's certificate; reduced to a standard uncertainty below by the certificate's k.",
+      item: "Insira a incerteza EXPANDIDA U do certificado do padrão; reduzida abaixo a incerteza-padrão pelo k do certificado.",
       severity: "action",
       fieldKeys: ["incerteza_referencia"],
     },
     {
       ref: "cg-15 §5.1.5.1",
-      item: "3 repeated readings assumed; arithmetic mean. cg-15 §5.1.5.1 treats short-term instability of the reading as a contribution.",
+      item: "3 leituras repetidas assumidas; média aritmética. cg-15 §5.1.5.1 trata a instabilidade de curto prazo da leitura como contribuição.",
       severity: "info",
       fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "media"],
     },
     {
-      item: "n=3 hardcoded to match the 3 reading columns.",
+      item: "n=3 fixo para corresponder às 3 colunas de leitura.",
       severity: "info",
       fieldKeys: ["leitura_1", "leitura_2", "leitura_3", "desvio_padrao"],
     },
     {
-      item: "standard uncertainty of the MEAN = s/√n (n=3). If the reported result applies to a single reading, EA-4/02 would use s directly.",
+      item: "Incerteza-padrão da MÉDIA = s/√n (n=3). Se o resultado reportado se referir a uma leitura única, a EA-4/02 usaria s diretamente.",
       severity: "action",
       fieldKeys: ["u_repetibilidade", "desvio_padrao"],
     },
     {
       ref: "cg-15 §4.1",
-      item: "k_ref=2 ASSUMED to reduce the cert's EXPANDED U to standard u — read the actual k from the reference standard's certificate.",
+      item: "k_ref=2 ASSUMIDO para reduzir o U EXPANDIDO do certificado a u padrão — leia o k real do certificado do padrão de referência.",
       severity: "action",
       fieldKeys: ["u_referencia", "incerteza_referencia"],
     },
     {
       ref: "cg-15 §3.4.6.1",
-      item: "add any lab-specific contribution (e.g. thermal EMF if zero is not nulled per cg-15 §3.4.6.1, input-loading) when the setup requires it.",
+      item: "Acrescente qualquer contribuição específica do laboratório (p.ex. EMF térmica se o zero não for anulado conforme cg-15 §3.4.6.1, carregamento de entrada) quando o arranjo exigir.",
       severity: "action",
       fieldKeys: ["u_combinada"],
     },
     {
       ref: "cg-15 §5.1.5.4",
-      item: "§5.1.5.4 notes k may fall toward 1.65 when the rectangular (resolution) component dominates; the guide recommends k=2 overall, which is used here.",
+      item: "§5.1.5.4 observa que k pode tender a 1,65 quando a componente retangular (resolução) domina; o guia recomenda k=2 no geral, adotado aqui.",
       severity: "action",
       fieldKeys: ["u_expandida", "u_combinada"],
     },
@@ -413,17 +411,17 @@ const governance: MetrologyGovernance = {
     {
       ref: "cg-15 Tables 1–2",
       component:
-        "AC voltage/current, reactance and phase — DC-only template; AC DEFERRED for v1.",
+        "Tensão/corrente AC, reatância e fase — template apenas DC; AC adiado para a v1.",
       appliesWhen: "Calibração em corrente/tensão alternada (AC).",
     },
     {
       ref: "cg-15 §3.4.6.1",
-      component: "Thermal EMF contribution (zero not nulled).",
+      component: "Contribuição de EMF térmica (zero não anulado).",
       appliesWhen: "Quando o zero não é anulado conforme cg-15 §3.4.6.1.",
     },
     {
       ref: "cg-15 §5.1.5.1",
-      component: "Input-loading / lab-specific contributions.",
+      component: "Carregamento de entrada / contribuições específicas do laboratório.",
       appliesWhen: "Quando o arranjo de medição exigir.",
     },
   ],

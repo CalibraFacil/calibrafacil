@@ -453,7 +453,7 @@ export const weighingInstrumentTemplate: TemplateModule = {
   citations: ["EURAMET cg-18 v4.0", "EA-4/02 M:2022", "UKAS LAB 14 ed.8"],
   governance: {
     summary:
-      "Template de massa genérico, fundamentado em guia (EURAMET cg-18): calibração de balança/NAWI por erro de indicação, com budget de incerteza completo validado contra o exemplo H1 do guia. Rascunho pendente de revisão metrológica.",
+      "Template de massa genérico, fundamentado em guia (EURAMET cg-18): calibração de balança/NAWI por erro de indicação, com o orçamento de incerteza validado contra o exemplo H1 do guia. Rascunho pendente de revisão metrológica.",
     measurand: "E = indicação − m_ref (cg-18 §7.1-1)",
     model: "formulas",
     sources: [
@@ -464,14 +464,14 @@ export const weighingInstrumentTemplate: TemplateModule = {
         url: "https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-018_Calibration_Guide_No._18_web.pdf",
       },
       {
-        title: "EA-4/02 (Evaluation of the Uncertainty of Measurement in Calibration, GUM framework)",
+        title: "EA-4/02",
         edition: "M:2022",
         section: "§5.3",
         url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
       },
       {
-        title: "UKAS LAB 14 (Guidance on the calibration of weighing machines used in testing and calibration laboratories)",
-        edition: "ed.8 (Dec 2025)",
+        title: "UKAS LAB 14",
+        edition: "ed.8 (dez/2025)",
         section: "§5.2 + Table 2 / §4.2.2",
         url: "https://www.ukas.com/wp-content/uploads/schedule_uploads/759162/LAB-14-Guidance-on-the-calibration-of-weighing-machines.pdf",
       },
@@ -479,55 +479,48 @@ export const weighingInstrumentTemplate: TemplateModule = {
     conformanceNotes: [
       {
         ref: "§4.2.4 / §7.1-1",
-        note: "E = I − m_ref, where I is the ERROR-TEST indication (a net load−noload reading, §4.4.1) and m_ref is the conventional mass of the standards. The repeatability standard deviation s comes from a SEPARATE ≥5-loading repeatability test (§5.1) — the two are kept distinct here.",
+        note: "E = I − m_ref, onde I é a indicação do ENSAIO DE ERRO (leitura líquida carga−sem carga, §4.4.1) e m_ref é a massa convencional dos padrões. O desvio-padrão de repetibilidade s vem de um ensaio SEPARADO com ≥5 carregamentos (§5.1) — mantidos distintos aqui.",
       },
       {
         ref: "§7.1.1",
-        note: "u²(I) = d₀²/12 + d_L²/12 + u²(δI_rep) + u²(δI_ecc): rounding at the zero AND load readings (each rectangular d/(2√3), §7.1.1-2a/3a), repeatability (Type A, s, §7.1.1-5), eccentricity (§7.1.1-10).",
+        note: "u²(I) = d₀²/12 + d_L²/12 + u²(δI_rep) + u²(δI_ecc): arredondamento nas leituras de zero E de carga (cada uma retangular d/(2√3), §7.1.1-2a/3a), repetibilidade (Tipo A, s, §7.1.1-5) e excentricidade (§7.1.1-10).",
       },
       {
         ref: "§7.1.2",
-        note: "u²(m_ref) = u²(δm_c) + u²(δm_B) + u²(δm_D) [+ u²(δm_conv)]: certified value U/k (§7.1.2-2), air buoyancy (§7.1.2.2), drift (§7.1.2.3).",
+        note: "u²(m_ref) = u²(δm_c) + u²(δm_B) + u²(δm_D) [+ u²(δm_conv)]: valor certificado U/k (§7.1.2-2), empuxo do ar (§7.1.2.2) e deriva (§7.1.2.3).",
       },
       {
         ref: "§7.1.3-1a",
-        note: "combine all by RSS (inputs uncorrelated).",
+        note: "Combinação por soma quadrática (RSS), entradas não correlacionadas.",
       },
     ],
     verificarItems: [
       {
         item:
-          "Buoyancy u(δm_B) and drift u(δm_D) are entered as standard uncertainties (`u_empuxo`, `u_deriva`); compute them per §7.1.2.2 (eq. 7.1.2-5a..5e, by air density or weight-class mpe) and §7.1.2.3 (D = k_D·U, k_D∈[1,3]). For E2/E1 weights buoyancy typically DOMINATES the budget — do not set it to 0.",
+          "Empuxo u(δm_B) e deriva u(δm_D) entram como incertezas-padrão (u_empuxo, u_deriva); calcule-as por §7.1.2.2 (eq. 7.1.2-5a..5e, pela densidade do ar ou pelo emp da classe do peso) e §7.1.2.3 (D = k_D·U, k_D∈[1,3]). Para pesos E2/E1 o empuxo normalmente DOMINA o orçamento — não use 0.",
         severity: "action",
         fieldKeys: ["u_empuxo", "u_deriva"],
       },
       {
         item:
-          "Convection (§7.1.2.4) is OMITTED — relevant for class F1 or better and acclimatization-dependent; add u(δm_conv)=Δm_conv/√3 if applicable.",
+          "Convecção (§7.1.2.4) é situacional — relevante para classe F1 ou melhor e dependente de aclimatização; some u(δm_conv)=Δm_conv/√3 quando se aplicar.",
         severity: "info",
       },
       {
         item:
-          "Repeatability divisor is s (single error-test indication, §7.1.1-5); use s/√N only if the reported indication is the mean of N error-test readings (§7.1.1-6). Here `indicacao` is a single reading, so s is used.",
+          "O divisor de repetibilidade é s (indicação única do ensaio de erro, §7.1.1-5); use s/√N só se a indicação reportada for a média de N leituras (§7.1.1-6). Aqui indicacao é uma leitura única, então usa-se s.",
         severity: "info",
         fieldKeys: ["indicacao", "rep_1", "rep_2", "rep_3", "rep_4", "rep_5"],
       },
       {
         item:
-          "Reference weights: U/k with k_ref=2 ASSUMED — read the actual k from the certificate; for a load of several weights SUM the per-weight δm_c ARITHMETICALLY (correlated), not in quadrature (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2 applies the same arithmetic sum to combined weights). Arithmetic sum ≥ RSS, so the cg-18/LAB-14 treatment is the CONSERVATIVE one.",
+          "Padrões: U/k com k_ref=2 ASSUMIDO — leia o k real do certificado; para carga de vários pesos some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2). A soma aritmética ≥ RSS, logo é o tratamento CONSERVADOR.",
         severity: "action",
         fieldKeys: ["incerteza_padrao"],
       },
       {
-        ref: "issue #506 (item 3)",
         item:
-          "The open question in issue #506 (item 3) is the inverse code risk: whether the composition layer (`uncertaintyMode: \"expanded_rss\"`) actually sums ARITHMETICALLY here or in QUADRATURE — RSS would UNDER-state for stacked loads, so it still needs a code check.",
-        severity: "platform",
-        fieldKeys: ["incerteza_padrao"],
-      },
-      {
-        item:
-          "Coverage factor k is COMPUTED, not assumed: Welch–Satterthwaite ν_eff (cg-18 Appendix B3-1; EA-4/02 Appendix E) + the two-tailed Student-t at 95.45%. ν_rep = n−1 = 4 (5 readings); Type B terms taken ν=∞.",
+          "O fator de abrangência k é CALCULADO, não assumido: ν_eff por Welch–Satterthwaite (cg-18 Apêndice B3-1; EA-4/02 Apêndice E) + t-Student bicaudal a 95,45%. ν_rep = n−1 = 4 (5 leituras); termos Tipo B com ν=∞.",
         severity: "info",
         fieldKeys: ["rep_1", "rep_2", "rep_3", "rep_4", "rep_5"],
       },
@@ -535,8 +528,8 @@ export const weighingInstrumentTemplate: TemplateModule = {
     omittedComponents: [
       {
         ref: "§7.1.2.4",
-        component: "Convection u(δm_conv) = Δm_conv/√3",
-        appliesWhen: "class F1 or better; acclimatization-dependent",
+        component: "Convecção u(δm_conv) = Δm_conv/√3",
+        appliesWhen: "classe F1 ou melhor; dependente de aclimatização",
       },
     ],
     workedExample: {

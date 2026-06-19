@@ -337,7 +337,7 @@ const governance = {
     },
     {
       ref: "incerteza_referencia",
-      item: "EXPANDED uncertainty U do padrão obtida do seu certificado, reduzida abaixo a incerteza-padrão pelo k do certificado.",
+      item: "Incerteza EXPANDIDA U do padrão obtida do seu certificado, reduzida abaixo a incerteza-padrão pelo k do certificado.",
       severity: "action",
       fieldKeys: ["incerteza_referencia", "u_referencia"],
     },

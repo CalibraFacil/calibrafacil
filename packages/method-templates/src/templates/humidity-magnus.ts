@@ -12,6 +12,7 @@ import {
 import { buildDraftFromProduct } from "../product-to-draft";
 import type {
   BuildDraftArgs,
+  MetrologyGovernance,
   TemplateModule,
   TemplateProductDefinition,
 } from "../types";
@@ -276,107 +277,85 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
   },
 ];
 
-type VerificarSeverity = "info" | "action" | "platform";
-type MetrologyGovernance = {
-  summary: string;
-  measurand: string;
-  model: "formulas" | "gum_measurement_model";
-  sources: Array<{ title: string; edition: string; section?: string; url?: string }>;
-  conformanceNotes: Array<{ ref: string; note: string }>;
-  verificarItems: Array<{
-    ref?: string;
-    item: string;
-    severity: VerificarSeverity;
-    fieldKeys?: string[];
-  }>;
-  omittedComponents: Array<{ ref: string; component: string; appliesWhen?: string }>;
-  workedExample?: {
-    scenarioKey: string;
-    provenance: "cited_guide_table" | "engine_characterization";
-    source: string;
-    expected: Record<string, number>;
-  };
-  reviewStatus: "draft_pending_revalidation";
-};
-
-// Metrology context transcribed faithfully from the header docblock.
+// Contexto metrológico transcrito fielmente do docblock do cabeçalho.
 const governance: MetrologyGovernance = {
   summary:
-    "Relative-humidity indication-error calibration of a thermohygrometer against a dew-point reference, using the Magnus saturation-vapour-pressure formula. Uncertainty is propagated through the exp() terms by the GUM engine (no hand-derived sensitivity coefficients). DRAFT — pending metrologist review.",
-  measurand: "E = UR indicada − UR de referência; UR_ref = 100·e_w(t_d)/e_w(t) via Magnus (WMO CIMO Annex 4.B, over water)",
+    "Calibração de termohigrômetro (umidade relativa) por erro de indicação contra referência de ponto de orvalho, usando a fórmula de Magnus de pressão de vapor de saturação. A incerteza é propagada pelos termos exp() pelo motor GUM (sem coeficientes de sensibilidade derivados à mão). RASCUNHO pendente de revisão metrológica.",
+  measurand: "E = UR indicada − UR de referência; UR_ref = 100·e_w(t_d)/e_w(t) via Magnus (WMO CIMO Anexo 4.B, sobre água)",
   model: "gum_measurement_model",
   sources: [
     {
-      title: "WMO No. 8, Guide to Meteorological Instruments and Methods of Observation (CIMO Guide)",
+      title: "WMO No. 8 (Guia CIMO)",
       edition: "2008",
-      section: "Annex 4.B — Magnus formula over water: e_w = 6.112·exp(17.62·t/(243.12 + t)), t in °C, e_w in hPa",
+      section: "Anexo 4.B — fórmula de Magnus sobre água: e_w = 6.112·exp(17.62·t/(243.12 + t)), t em °C, e_w em hPa",
       url: "https://www.eol.ucar.edu/data-software/conventions-and-standards/water-vapor-pressure-formulations",
     },
     {
-      title: "EA-4/02 (GUM propagation)",
+      title: "EA-4/02",
       edition: "M:2022",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },
   ],
   conformanceNotes: [
     {
-      ref: "WMO No. 8 Annex 4.B",
-      note: "Model: RH_ref = 100·e_w(t_d)/e_w(t) (actual vapour pressure at the reference dew point t_d over saturation at air temperature t); E = RH_ind − RH_ref. The 6.112 hPa multiplier cancels.",
+      ref: "WMO No. 8 Anexo 4.B",
+      note: "Modelo: UR_ref = 100·e_w(t_d)/e_w(t) (pressão de vapor real no ponto de orvalho de referência t_d sobre a saturação à temperatura do ar t); E = UR_ind − UR_ref. O multiplicador 6.112 hPa se cancela.",
     },
     {
       ref: "EA-4/02 M:2022",
-      note: "Combined standard uncertainty is propagated from the input uncertainties (UR indicada, temperatura, ponto de orvalho) through the exp() terms of the Magnus formula; expanded uncertainty U = k·u_c with k = 2 (symbolic sensitivities, no hand-derived coefficients).",
+      note: "A incerteza-padrão combinada é propagada das incertezas de entrada (UR indicada, temperatura, ponto de orvalho) pelos termos exp() da fórmula de Magnus; incerteza expandida U = k·u_c com k = 2 (sensibilidades simbólicas, sem coeficientes derivados à mão).",
     },
   ],
   verificarItems: [
     {
-      ref: "WMO No. 8 Annex 4.B",
-      item: "Magnus coefficients (6.112 hPa, 17.62, 243.12 °C) are the WMO over-water set; the WMO note states ~±0.6 % (k=2) on e_w — confirm this is folded in.",
+      ref: "WMO No. 8 Anexo 4.B",
+      item: "Os coeficientes de Magnus (6,112 hPa, 17,62, 243,12 °C) são o conjunto WMO sobre água; a nota da WMO indica ~±0,6 % (k=2) em e_w — confirme que isso está incorporado.",
       severity: "action",
     },
     {
-      ref: "WMO No. 8 Annex 4.B",
-      item: "Over-water vs over-ice (below 0 °C uses different coefficients) — this template is over-water only.",
+      ref: "WMO No. 8 Anexo 4.B",
+      item: "Sobre água vs sobre gelo (abaixo de 0 °C usa coeficientes diferentes) — este template é apenas sobre água.",
       severity: "info",
     },
     {
-      item: "Input standard uncertainties below are representative placeholders (set from the dew-point mirror / thermometer / DUT resolution certificates).",
+      item: "As incertezas-padrão de entrada abaixo são valores representativos provisórios (defina-as a partir dos certificados do espelho de ponto de orvalho / termômetro / resolução do equipamento).",
       severity: "action",
       fieldKeys: ["leitura_ur", "temperatura", "ponto_orvalho"],
     },
     {
-      item: "k = 2 assumed; t_d ≈ t_water assumption; no temperature-gradient term.",
+      item: "k = 2 assumido; suposição t_d ≈ t_água; sem termo de gradiente de temperatura.",
       severity: "info",
     },
     {
-      item: "Resolution + short-term instability of the DUT reading.",
+      item: "Resolução + instabilidade de curto prazo da leitura do equipamento.",
       severity: "action",
       fieldKeys: ["leitura_ur"],
     },
     {
-      item: "Reference thermometer standard uncertainty.",
+      item: "Incerteza-padrão do termômetro de referência.",
       severity: "action",
       fieldKeys: ["temperatura"],
     },
     {
-      item: "Dew-point mirror reference standard uncertainty.",
+      item: "Incerteza-padrão do espelho de ponto de orvalho de referência.",
       severity: "action",
       fieldKeys: ["ponto_orvalho"],
     },
     {
-      item: "procedureCode is a [VERIFICAR] placeholder on the certificate content.",
+      item: "O campo procedureCode é um placeholder a definir no conteúdo do certificado.",
       severity: "action",
     },
   ],
   omittedComponents: [
     {
-      ref: "WMO No. 8 Annex 4.B",
-      component: "Magnus over-ice coefficients (different coefficient set)",
-      appliesWhen: "temperature below 0 °C",
+      ref: "WMO No. 8 Anexo 4.B",
+      component: "Coeficientes de Magnus sobre gelo (conjunto de coeficientes diferente)",
+      appliesWhen: "temperatura abaixo de 0 °C",
     },
     {
-      ref: "WMO No. 8 Annex 4.B",
-      component: "Temperature-gradient term (t_d ≈ t_water assumption)",
+      ref: "WMO No. 8 Anexo 4.B",
+      component: "Termo de gradiente de temperatura (suposição t_d ≈ t_água)",
+      appliesWhen: "gradiente térmico relevante entre o sensor e a referência",
     },
   ],
   workedExample: {

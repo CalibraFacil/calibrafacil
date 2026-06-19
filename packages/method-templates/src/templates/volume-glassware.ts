@@ -11,6 +11,7 @@ import {
 import { buildDraftFromProduct } from "../product-to-draft";
 import type {
   BuildDraftArgs,
+  MetrologyGovernance,
   TemplateModule,
   TemplateProductDefinition,
 } from "../types";
@@ -294,46 +295,22 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
 
 // Structured transcription of the header docblock's metrology context. Faithful
 // to the docblock only — see the [VERIFICAR] markers throughout this file.
-type VerificarSeverity = "info" | "action" | "platform";
-type MetrologyGovernance = {
-  summary: string;
-  measurand: string;
-  model: "formulas" | "gum_measurement_model";
-  sources: Array<{ title: string; edition: string; section?: string; url?: string }>;
-  conformanceNotes: Array<{ ref: string; note: string }>;
-  verificarItems: Array<{
-    ref?: string;
-    item: string;
-    severity: VerificarSeverity;
-    fieldKeys?: string[];
-  }>;
-  omittedComponents: Array<{ ref: string; component: string; appliesWhen?: string }>;
-  workedExample?: {
-    scenarioKey: string;
-    provenance: "cited_guide_table" | "engine_characterization";
-    source: string;
-    expected: Record<string, number>;
-  };
-  reviewStatus: "draft_pending_revalidation";
-};
-
 const governance: MetrologyGovernance = {
   summary:
-    "Gravimetric volume calibration of laboratory glassware (volumetric flask / pipette) at the reference temperature t0 = 20 °C. DRAFT — pending metrologist review. The measurement equation was read from and matches the cited guide; uncertainty is propagated by the GUM engine (NOT hand-derived sensitivity coefficients).",
+    "Calibração gravimétrica de vidraria volumétrica (balão volumétrico / pipeta) à temperatura de referência t0 = 20 °C. A equação de medição foi lida do guia citado e confere; a incerteza é propagada pelo motor GUM (sem coeficientes de sensibilidade derivados à mão). RASCUNHO pendente de revisão metrológica.",
   measurand:
     "V0 = (I_L − I_E)·[1/(ρ_W − ρ_A)]·(1 − ρ_A/ρ_B)·[1 − γ(t − t0)] (ISO 4787 Eq.1 / cg-19 §3)",
   model: "gum_measurement_model",
   sources: [
     {
-      title:
-        'EURAMET cg-19 "Guidelines on the Determination of Uncertainty in Gravimetric Volume Calibration"',
+      title: "EURAMET cg-19",
       edition: "v4.1",
       url: "https://www.euramet.org/Media/docs/Publications/calguides/I-CAL-GUI-019_Calibration_Guide_No._19_web.pdf",
     },
     {
       title: "ISO 4787",
       edition: "(edição a confirmar)",
-      section: "source of Eq. 1, referenced by cg-19 §3",
+      section: "fonte da Eq. 1, referenciada por cg-19 §3",
     },
     {
       title: "EA-4/02",
@@ -348,63 +325,60 @@ const governance: MetrologyGovernance = {
     },
     {
       ref: "cg-19 §3 Eq. (2)",
-      note: "Water density ρ_W via the Tanaka formula with coefficients a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL (verbatim from p.6). Inlined into the V0 expression so the temperature uncertainty propagates through both ρ_W and the γ term (correctly correlated).",
+      note: "Densidade da água ρ_W pela fórmula de Tanaka com coeficientes a1=−3.983035, a2=301.797, a3=522528.9, a4=69.34881, a5=0.999974950 g/mL (verbatim da p.6). Embutida na expressão de V0 para que a incerteza da temperatura se propague por ρ_W e pelo termo γ (correlacionados corretamente).",
     },
     {
-      ref: "cg-19 defaults",
-      note: "ρ_B = 8.0 g/mL (cg-19 default for reference weights); t0 = 20 °C.",
+      ref: "cg-19 (padrões)",
+      note: "ρ_B = 8,0 g/mL (padrão cg-19 para pesos de referência); t0 = 20 °C.",
     },
     {
       ref: "cg-19 §6.7 / §6.8",
-      note: "Expanded uncertainty U = k·u_c, k = 2.",
+      note: "Incerteza expandida U = k·u_c, k = 2.",
     },
   ],
   verificarItems: [
     {
       ref: "cg-19 §6.3.4 / CIPM",
-      item: "The input STANDARD UNCERTAINTIES are representative placeholders — the metrologist must set them from the actual balance / sensor / air-density certificates.",
+      item: "As INCERTEZAS-PADRÃO de entrada são valores representativos provisórios — o metrologista deve defini-las a partir dos certificados reais da balança / sensor / densidade do ar.",
       severity: "action",
       fieldKeys: ["I_L", "I_E", "t_w", "rho_a", "gamma"],
     },
     {
       ref: "cg-19 §6.3.4",
-      item: "ρ_A is taken as an input; cg-19 §6.3.4 derives it from ambient T/P/RH (CIPM). Entered directly here for v1.",
+      item: "ρ_A é tomada como entrada; cg-19 §6.3.4 a deriva de T/P/UR ambientes (CIPM). Inserida diretamente nesta v1.",
       severity: "action",
       fieldKeys: ["rho_a"],
     },
     {
-      item: "Asset type slug is 'pipeta' — also balão volumétrico / bureta.",
+      item: "O slug do tipo de equipamento é 'pipeta' — vale também para balão volumétrico / bureta.",
       severity: "info",
     },
     {
-      ref: "cg-19 §3 note",
-      item: "Cubic expansion coefficient = 3 × linear (cg-19 §3 note).",
+      ref: "cg-19 §3 (nota)",
+      item: "Coeficiente de expansão cúbica = 3 × linear (cg-19 §3, nota).",
       severity: "action",
       fieldKeys: ["gamma"],
     },
     {
       ref: "cg-19 §6.6",
-      item: "No correlations modelled between the input quantities (e.g. water-density/temperature handled via the inlined ρ_W(t_w)).",
+      item: "Sem correlações modeladas entre as grandezas de entrada (p.ex. densidade-da-água/temperatura tratadas pela ρ_W(t_w) embutida).",
       severity: "info",
     },
     {
-      item: "procedureCode is a placeholder.",
+      item: "O campo procedureCode é um placeholder a definir.",
       severity: "action",
     },
   ],
   omittedComponents: [
     {
       ref: "cg-19 §6.3.7",
-      component: "operator / reproducibility",
+      component: "operador / reprodutibilidade",
+      appliesWhen: "exigido pelo arranjo ou pelas condições de medição",
     },
     {
       ref: "cg-19 §6.3.8",
-      component: "evaporation",
-    },
-    {
-      ref: "cg-19 §6.3",
-      component:
-        "density-of-reference-weights and γ uncertainties (treated here only via their input-uncertainty terms)",
+      component: "evaporação",
+      appliesWhen: "exposição prolongada ou balança sem proteção",
     },
   ],
   workedExample: {

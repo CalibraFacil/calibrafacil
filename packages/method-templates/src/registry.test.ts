@@ -153,6 +153,31 @@ describe("method-templates governance — picker contract", () => {
           });
         }
       }
+
+      it("governance prose is pt-BR (no English stopwords)", () => {
+        // High-signal English words with clear pt-BR equivalents that must never
+        // appear in user-facing governance prose. Source TITLES (proper guide
+        // names) are intentionally excluded; formula expressions/refs are pt-BR-safe.
+        const EN_STOPWORDS =
+          /\b(the|and|with|assumed|uncertainty|readings?|weights?|combined?|applies|OMITTED)\b/i;
+        const prose = [
+          governance.summary,
+          governance.measurand,
+          ...governance.conformanceNotes.map((note) => note.note),
+          ...governance.verificarItems.map((entry) => entry.item),
+          ...governance.omittedComponents.map((component) => component.component),
+          ...governance.omittedComponents.map(
+            (component) => component.appliesWhen ?? "",
+          ),
+        ];
+        for (const text of prose) {
+          const match = EN_STOPWORDS.exec(text);
+          expect(
+            match,
+            `English stopword "${match?.[0] ?? ""}" in: ${text.slice(0, 70)}`,
+          ).toBeNull();
+        }
+      });
     });
   }
 });
