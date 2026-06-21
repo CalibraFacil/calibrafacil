@@ -155,16 +155,16 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 vi.mock("@calibra-facil/email", () => ({
-  ServicoIniciadoEmail: mockServicoIniciado,
-  ServicoAndamentoEmail: mockServicoAndamento,
-  AguardandoAvaliacaoTecnicaEmail: mockAguardandoAvaliacaoTecnica,
-  EmAvaliacaoTecnicaEmail: mockEmAvaliacaoTecnica,
-  ProntoParaRetiradaEmail: mockProntoParaRetirada,
-  OsEntregueEmail: mockOsEntregue,
-  OsEncerradaEmail: mockOsEncerrada,
-  RevisaoFinalEmail: mockRevisaoFinal,
-  OsCanceladaEmail: mockOsCancelada,
-  GarantiaRetornoEmail: mockGarantiaRetorno,
+  ServiceStartedEmail: mockServicoIniciado,
+  ServiceInProgressEmail: mockServicoAndamento,
+  AwaitingEvaluationEmail: mockAguardandoAvaliacaoTecnica,
+  UnderEvaluationEmail: mockEmAvaliacaoTecnica,
+  ReadyForPickupEmail: mockProntoParaRetirada,
+  ServiceOrderDeliveredEmail: mockOsEntregue,
+  ServiceOrderClosedEmail: mockOsEncerrada,
+  FinalReviewEmail: mockRevisaoFinal,
+  ServiceOrderCanceledEmail: mockOsCancelada,
+  WarrantyReturnEmail: mockGarantiaRetorno,
 }));
 
 // =============================================================================
@@ -383,7 +383,7 @@ describe("drainServiceOrderEmailOutbox", () => {
   // ---------------------------------------------------------------------------
 
   it(
-    "REQ-SOEMAIL-042: awaiting_calibration passes stage='awaiting_calibration' to ServicoAndamentoEmail",
+    "REQ-SOEMAIL-042: awaiting_calibration passes stage='awaiting_calibration' to ServiceInProgressEmail",
     async () => {
       const row = makeOutboxRow("awaiting_calibration");
       enqueueSelects([row], [SAMPLE_CUSTOMER]);
@@ -400,7 +400,7 @@ describe("drainServiceOrderEmailOutbox", () => {
   );
 
   it(
-    "REQ-SOEMAIL-042: calibration_in_progress passes stage='calibration_in_progress' to ServicoAndamentoEmail",
+    "REQ-SOEMAIL-042: calibration_in_progress passes stage='calibration_in_progress' to ServiceInProgressEmail",
     async () => {
       const row = makeOutboxRow("calibration_in_progress");
       enqueueSelects([row], [SAMPLE_CUSTOMER]);

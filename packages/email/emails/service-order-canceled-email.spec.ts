@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-061 (template rendering) — "OS Cancelada".
  *
- * Renders the REAL OsCanceladaEmail template to HTML and asserts the
+ * Renders the REAL ServiceOrderCanceledEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { OsCanceladaEmail } from "./os-cancelada-email";
+import { ServiceOrderCanceledEmail } from "./service-order-canceled-email";
 
 describe(
-  "REQ-SOEMAIL-061: OsCanceladaEmail template renders required fields",
+  "REQ-SOEMAIL-061: ServiceOrderCanceledEmail template renders required fields",
   () => {
     async function renderOsCancelada(): Promise<string> {
       return render(
-        OsCanceladaEmail({
+        ServiceOrderCanceledEmail({
           brand: { name: "Lab Omega", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-800",
           customerName: "Empresa Cancelada SA",

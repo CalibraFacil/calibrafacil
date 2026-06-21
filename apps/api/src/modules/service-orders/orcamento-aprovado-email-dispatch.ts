@@ -8,7 +8,7 @@
  * Uses:
  *  - sendServiceOrderCustomerEmail (mini-spec A dispatcher, already non-throwing)
  *  - getLabEmailBrand (from packages/notifications/src/service.ts)
- *  - OrcamentoAprovadoEmail template from packages/email
+ *  - QuoteApprovedEmail template from packages/email
  *
  * Mini-spec H note: dedup is applied by the CALLER via sendServiceOrderEmailOnce
  * with eventKey `orcamento_approved:<quoteId>`, not here — this keeps the helper
@@ -20,7 +20,7 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
-import { OrcamentoAprovadoEmail } from "@calibra-facil/email";
+import { QuoteApprovedEmail } from "@calibra-facil/email";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,7 +106,7 @@ export async function dispatchOrcamentoAprovadoEmail(
       brand,
       subject: `Orçamento ${input.serviceOrderNumber} aprovado`,
       renderEmail: (ctx) =>
-        OrcamentoAprovadoEmail({
+        QuoteApprovedEmail({
           brand: ctx.brand,
           serviceOrderNumber: input.serviceOrderNumber,
           customerName: input.customerName,
@@ -117,7 +117,7 @@ export async function dispatchOrcamentoAprovadoEmail(
   } catch (error) {
     // Best-effort: swallow all errors so the approve command is never affected.
     console.error(
-      `[OrcamentoAprovadoEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
+      `[QuoteApprovedEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
       error,
     );
     return { sent: false, error: String(error) };

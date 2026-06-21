@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-054 (template rendering) — "Em Revisão Final".
  *
- * Renders the REAL RevisaoFinalEmail template to HTML and asserts the
+ * Renders the REAL FinalReviewEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { RevisaoFinalEmail } from "./revisao-final-email";
+import { FinalReviewEmail } from "./final-review-email";
 
 describe(
-  "REQ-SOEMAIL-054: RevisaoFinalEmail template renders required fields",
+  "REQ-SOEMAIL-054: FinalReviewEmail template renders required fields",
   () => {
     async function renderRevisaoFinal(): Promise<string> {
       return render(
-        RevisaoFinalEmail({
+        FinalReviewEmail({
           brand: { name: "Lab Omega", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-703",
           customerName: "Empresa Revisao SA",

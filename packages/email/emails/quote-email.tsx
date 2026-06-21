@@ -28,7 +28,7 @@ import { formatMoney } from "@calibra-facil/shared";
  *   Peças:    "part"
  *   Opcionais: "freight" | "discount"
  */
-export interface NovoOrcamentoEmailItem {
+export interface QuoteEmailItem {
   id: number;
   type: string;
   description: string;
@@ -38,7 +38,7 @@ export interface NovoOrcamentoEmailItem {
   totalPriceCents: number;
 }
 
-export interface NovoOrcamentoEmailProps {
+export interface QuoteEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
 
@@ -78,7 +78,7 @@ export interface NovoOrcamentoEmailProps {
    * The template MUST NOT recompute totals from items — totals come from
    * the persisted *Cents fields below (REQ-SOEMAIL-022).
    */
-  items: NovoOrcamentoEmailItem[];
+  items: QuoteEmailItem[];
 
   /**
    * Persisted subtotal for services — from serviceOrderQuote.subtotalServicesCents.
@@ -143,14 +143,14 @@ const PART_TYPES = new Set(["part"]);
 /** Items that count as "Opcionais" (frete + desconto). */
 const OPTIONAL_TYPES = new Set(["freight", "discount"]);
 
-function groupItems(items: NovoOrcamentoEmailItem[]): {
-  services: NovoOrcamentoEmailItem[];
-  parts: NovoOrcamentoEmailItem[];
-  optionals: NovoOrcamentoEmailItem[];
+function groupItems(items: QuoteEmailItem[]): {
+  services: QuoteEmailItem[];
+  parts: QuoteEmailItem[];
+  optionals: QuoteEmailItem[];
 } {
-  const services: NovoOrcamentoEmailItem[] = [];
-  const parts: NovoOrcamentoEmailItem[] = [];
-  const optionals: NovoOrcamentoEmailItem[] = [];
+  const services: QuoteEmailItem[] = [];
+  const parts: QuoteEmailItem[] = [];
+  const optionals: QuoteEmailItem[] = [];
 
   for (const item of items) {
     if (SERVICE_TYPES.has(item.type)) {
@@ -178,7 +178,7 @@ function brl(cents: number): string {
 }
 
 interface ItemRowProps {
-  item: NovoOrcamentoEmailItem;
+  item: QuoteEmailItem;
 }
 
 function ItemRow({ item }: ItemRowProps) {
@@ -197,7 +197,7 @@ function ItemRow({ item }: ItemRowProps) {
 
 interface ItemGroupProps {
   label: string;
-  items: NovoOrcamentoEmailItem[];
+  items: QuoteEmailItem[];
   subtotal: number;
 }
 
@@ -234,7 +234,7 @@ function ItemGroup({ label, items, subtotal }: ItemGroupProps) {
  * no internalNotes (no such prop on this component).
  * REQ-SOEMAIL-024: BRL from integer cents via formatMoney — no float drift.
  */
-export function NovoOrcamentoEmail({
+export function QuoteEmail({
   brand,
   serviceOrderNumber,
   customerName,
@@ -253,7 +253,7 @@ export function NovoOrcamentoEmail({
   discountCents,
   totalCents,
   approvalUrl,
-}: NovoOrcamentoEmailProps) {
+}: QuoteEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
 
   const { services, parts, optionals } = groupItems(items);
@@ -371,3 +371,47 @@ export function NovoOrcamentoEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+QuoteEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+  customerTaxId: "12.345.678/0001-90",
+  assetManufacturer: "Mettler Toledo",
+  assetModel: "XS204",
+  assetInventoryCode: "BAL-014",
+  intakeDate: "19/06/2026",
+  assetSerialNumber: "B812345678",
+  displaySpecs: [
+    { label: "Capacidade", value: "220 g" },
+    { label: "Divisão", value: "0,1 mg" },
+  ],
+  claimedDefect: "Balança apresenta leitura instável e não zera.",
+  items: [
+    {
+      id: 1,
+      type: "service",
+      description: "Calibração de balança analítica",
+      quantity: 1,
+      unit: "serviço",
+      unitPriceCents: 25000,
+      totalPriceCents: 25000,
+    },
+    {
+      id: 2,
+      type: "part",
+      description: "Célula de carga",
+      quantity: 1,
+      unit: "un",
+      unitPriceCents: 18000,
+      totalPriceCents: 18000,
+    },
+  ],
+  subtotalServicesCents: 25000,
+  subtotalPartsCents: 18000,
+  freightCents: 4000,
+  discountCents: 1000,
+  totalCents: 46000,
+  approvalUrl: "https://portal.calibrafacil.com/orcamento/OS-2026-042?token=preview",
+} satisfies QuoteEmailProps;
+
+export default QuoteEmail;

@@ -173,16 +173,16 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 vi.mock("@calibra-facil/email", () => ({
-  ServicoIniciadoEmail: mockServicoIniciado,
-  ServicoAndamentoEmail: vi.fn().mockReturnValue("andamento"),
-  AguardandoAvaliacaoTecnicaEmail: vi.fn().mockReturnValue("aat"),
-  EmAvaliacaoTecnicaEmail: vi.fn().mockReturnValue("eat"),
-  ProntoParaRetiradaEmail: vi.fn().mockReturnValue("ppr"),
-  OsEntregueEmail: vi.fn().mockReturnValue("ent"),
-  OsEncerradaEmail: vi.fn().mockReturnValue("enc"),
-  RevisaoFinalEmail: vi.fn().mockReturnValue("rev"),
-  OsCanceladaEmail: vi.fn().mockReturnValue("can"),
-  GarantiaRetornoEmail: vi.fn().mockReturnValue("gar"),
+  ServiceStartedEmail: mockServicoIniciado,
+  ServiceInProgressEmail: vi.fn().mockReturnValue("andamento"),
+  AwaitingEvaluationEmail: vi.fn().mockReturnValue("aat"),
+  UnderEvaluationEmail: vi.fn().mockReturnValue("eat"),
+  ReadyForPickupEmail: vi.fn().mockReturnValue("ppr"),
+  ServiceOrderDeliveredEmail: vi.fn().mockReturnValue("ent"),
+  ServiceOrderClosedEmail: vi.fn().mockReturnValue("enc"),
+  FinalReviewEmail: vi.fn().mockReturnValue("rev"),
+  ServiceOrderCanceledEmail: vi.fn().mockReturnValue("can"),
+  WarrantyReturnEmail: vi.fn().mockReturnValue("gar"),
 }));
 
 // Mock the B/C/D dispatch helpers

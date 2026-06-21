@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-053 (template rendering) — "OS Encerrada".
  *
- * Renders the REAL OsEncerradaEmail template to HTML and asserts the
+ * Renders the REAL ServiceOrderClosedEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { OsEncerradaEmail } from "./os-encerrada-email";
+import { ServiceOrderClosedEmail } from "./service-order-closed-email";
 
 describe(
-  "REQ-SOEMAIL-053: OsEncerradaEmail template renders required fields",
+  "REQ-SOEMAIL-053: ServiceOrderClosedEmail template renders required fields",
   () => {
     async function renderOsEncerrada(): Promise<string> {
       return render(
-        OsEncerradaEmail({
+        ServiceOrderClosedEmail({
           brand: { name: "Lab Sigma", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-702",
           customerName: "Industria Encerrada Ltda",

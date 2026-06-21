@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-042 (template rendering) — "Serviço em Andamento".
  *
- * Renders the REAL ServicoAndamentoEmail template to HTML and asserts the
+ * Renders the REAL ServiceInProgressEmail template to HTML and asserts the
  * required fields actually appear in the output for BOTH stages:
  *  - awaiting_calibration
  *  - calibration_in_progress
@@ -12,16 +12,16 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { ServicoAndamentoEmail } from "./servico-andamento-email";
+import { ServiceInProgressEmail } from "./service-in-progress-email";
 
 describe(
-  "REQ-SOEMAIL-042: ServicoAndamentoEmail template renders required fields",
+  "REQ-SOEMAIL-042: ServiceInProgressEmail template renders required fields",
   () => {
     it(
       "REQ-SOEMAIL-042: awaiting_calibration — includes OS number and stage label",
       async () => {
         const html = await render(
-          ServicoAndamentoEmail({
+          ServiceInProgressEmail({
             brand: { name: "Lab Delta", isWhiteLabel: true },
             serviceOrderNumber: "OS-2026-601",
             customerName: "Cliente Calibracao Ltda",
@@ -38,7 +38,7 @@ describe(
       "REQ-SOEMAIL-042: calibration_in_progress — includes OS number and stage label",
       async () => {
         const html = await render(
-          ServicoAndamentoEmail({
+          ServiceInProgressEmail({
             brand: { name: "Lab Delta", isWhiteLabel: true },
             serviceOrderNumber: "OS-2026-602",
             customerName: "Cliente Calibracao Ltda",
@@ -55,7 +55,7 @@ describe(
       "REQ-SOEMAIL-042: awaiting_calibration — includes stage-specific message phrase",
       async () => {
         const html = await render(
-          ServicoAndamentoEmail({
+          ServiceInProgressEmail({
             brand: { name: "Lab Delta", isWhiteLabel: true },
             serviceOrderNumber: "OS-2026-603",
             customerName: "Cliente",
@@ -71,7 +71,7 @@ describe(
       "REQ-SOEMAIL-042: calibration_in_progress — includes stage-specific message phrase",
       async () => {
         const html = await render(
-          ServicoAndamentoEmail({
+          ServiceInProgressEmail({
             brand: { name: "Lab Delta", isWhiteLabel: true },
             serviceOrderNumber: "OS-2026-604",
             customerName: "Cliente",

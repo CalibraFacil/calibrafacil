@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-031 (template rendering) — mini-spec D "Orçamento Aprovado".
  *
- * Renders the REAL OrcamentoAprovadoEmail template to HTML and asserts the
+ * Renders the REAL QuoteApprovedEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Tautology guard: mocking the template and asserting props passed to it cannot
@@ -14,14 +14,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { OrcamentoAprovadoEmail } from "./orcamento-aprovado-email";
+import { QuoteApprovedEmail } from "./quote-approved-email";
 
 describe(
-  "REQ-SOEMAIL-031: OrcamentoAprovadoEmail template renders the required fields",
+  "REQ-SOEMAIL-031: QuoteApprovedEmail template renders the required fields",
   () => {
     async function renderApproved(): Promise<string> {
       return render(
-        OrcamentoAprovadoEmail({
+        QuoteApprovedEmail({
           brand: { name: "Lab Acme", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-042",
           customerName: "Empresa Teste SA",
@@ -50,7 +50,7 @@ describe(
       "REQ-SOEMAIL-031: totalApprovedCents=0 renders R$ 0,00 (zero case)",
       async () => {
         const html = await render(
-          OrcamentoAprovadoEmail({
+          QuoteApprovedEmail({
             brand: { name: "Lab Acme", isWhiteLabel: true },
             serviceOrderNumber: "OS-2026-001",
             customerName: "Cliente",

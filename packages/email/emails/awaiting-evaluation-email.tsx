@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface AguardandoAvaliacaoTecnicaEmailProps {
+export interface AwaitingEvaluationEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface AguardandoAvaliacaoTecnicaEmailProps {
  * Sent when the service order enters `awaiting_tech_evaluation` status.
  * Informs the customer that the equipment is queued for technical evaluation.
  */
-export function AguardandoAvaliacaoTecnicaEmail({
+export function AwaitingEvaluationEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: AguardandoAvaliacaoTecnicaEmailProps) {
+}: AwaitingEvaluationEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — aguardando avaliação técnica.`;
 
@@ -58,3 +58,10 @@ export function AguardandoAvaliacaoTecnicaEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+AwaitingEvaluationEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies AwaitingEvaluationEmailProps;
+
+export default AwaitingEvaluationEmail;

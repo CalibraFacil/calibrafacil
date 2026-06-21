@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-062 (template rendering) — "Garantia Retorno".
  *
- * Renders the REAL GarantiaRetornoEmail template to HTML and asserts the
+ * Renders the REAL WarrantyReturnEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { GarantiaRetornoEmail } from "./garantia-retorno-email";
+import { WarrantyReturnEmail } from "./warranty-return-email";
 
 describe(
-  "REQ-SOEMAIL-062: GarantiaRetornoEmail template renders required fields",
+  "REQ-SOEMAIL-062: WarrantyReturnEmail template renders required fields",
   () => {
     async function renderGarantiaRetorno(): Promise<string> {
       return render(
-        GarantiaRetornoEmail({
+        WarrantyReturnEmail({
           brand: { name: "Lab Zeta", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-801",
           customerName: "Industria Garantia Ltda",

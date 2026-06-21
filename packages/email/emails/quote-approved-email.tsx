@@ -12,7 +12,7 @@ import {
 import { Section, Text } from "@react-email/components";
 import { formatMoney } from "@calibra-facil/shared";
 
-export interface OrcamentoAprovadoEmailProps {
+export interface QuoteApprovedEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -33,12 +33,12 @@ export interface OrcamentoAprovadoEmailProps {
  * or via the portal (approveServiceOrderQuoteByPortalUser).
  * Displays the approved total (totalApprovedCents) formatted as BRL.
  */
-export function OrcamentoAprovadoEmail({
+export function QuoteApprovedEmail({
   brand,
   serviceOrderNumber,
   customerName,
   totalApprovedCents,
-}: OrcamentoAprovadoEmailProps) {
+}: QuoteApprovedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const totalBrl = formatMoney(totalApprovedCents);
   const previewText = `Orçamento ${serviceOrderNumber} aprovado — Total: ${totalBrl}`;
@@ -75,3 +75,11 @@ export function OrcamentoAprovadoEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+QuoteApprovedEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+  totalApprovedCents: 45000,
+} satisfies QuoteApprovedEmailProps;
+
+export default QuoteApprovedEmail;

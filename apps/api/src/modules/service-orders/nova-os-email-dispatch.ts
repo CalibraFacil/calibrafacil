@@ -7,14 +7,14 @@
  * Uses:
  *  - sendServiceOrderCustomerEmail (mini-spec A dispatcher, already non-throwing)
  *  - getLabEmailBrand (additively exported from packages/notifications/src/service.ts)
- *  - NovaOsEmail template from packages/email
+ *  - ServiceOrderCreatedEmail template from packages/email
  */
 
 import {
   sendServiceOrderCustomerEmail,
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
-import { NovaOsEmail } from "@calibra-facil/email";
+import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,7 +123,7 @@ export async function dispatchNovaOsEmail(
       brand,
       subject: `Ordem de Serviço ${input.serviceOrderNumber} recebida`,
       renderEmail: (ctx) =>
-        NovaOsEmail({
+        ServiceOrderCreatedEmail({
           brand: ctx.brand,
           serviceOrderNumber: input.serviceOrderNumber,
           customerName: input.customerName,
@@ -137,7 +137,7 @@ export async function dispatchNovaOsEmail(
   } catch (error) {
     // REQ-SOEMAIL-012: email failure must never propagate to the caller.
     console.error(
-      `[NovaOsEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
+      `[ServiceOrderCreatedEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
       error,
     );
     return { sent: false, error: String(error) };

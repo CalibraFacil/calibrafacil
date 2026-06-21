@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-052 (template rendering) — "OS Entregue".
  *
- * Renders the REAL OsEntregueEmail template to HTML and asserts the
+ * Renders the REAL ServiceOrderDeliveredEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { OsEntregueEmail } from "./os-entregue-email";
+import { ServiceOrderDeliveredEmail } from "./service-order-delivered-email";
 
 describe(
-  "REQ-SOEMAIL-052: OsEntregueEmail template renders required fields",
+  "REQ-SOEMAIL-052: ServiceOrderDeliveredEmail template renders required fields",
   () => {
     async function renderOsEntregue(): Promise<string> {
       return render(
-        OsEntregueEmail({
+        ServiceOrderDeliveredEmail({
           brand: { name: "Lab Epsilon", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-701",
           customerName: "Empresa Entregue SA",

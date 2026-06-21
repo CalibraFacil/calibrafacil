@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface OsEntregueEmailProps {
+export interface ServiceOrderDeliveredEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface OsEntregueEmailProps {
  * Sent when the service order is `delivered`.
  * Acts as a delivery receipt confirming the OS was delivered to the customer.
  */
-export function OsEntregueEmail({
+export function ServiceOrderDeliveredEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: OsEntregueEmailProps) {
+}: ServiceOrderDeliveredEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — equipamento entregue.`;
 
@@ -58,3 +58,10 @@ export function OsEntregueEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceOrderDeliveredEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies ServiceOrderDeliveredEmailProps;
+
+export default ServiceOrderDeliveredEmail;

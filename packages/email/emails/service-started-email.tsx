@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface ServicoIniciadoEmailProps {
+export interface ServiceStartedEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface ServicoIniciadoEmailProps {
  * Sent when the service order enters `repair_in_progress` status.
  * Informs the customer that the lab has started working on the equipment.
  */
-export function ServicoIniciadoEmail({
+export function ServiceStartedEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: ServicoIniciadoEmailProps) {
+}: ServiceStartedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — serviço iniciado pelo laboratório.`;
 
@@ -58,3 +58,10 @@ export function ServicoIniciadoEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceStartedEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies ServiceStartedEmailProps;
+
+export default ServiceStartedEmail;

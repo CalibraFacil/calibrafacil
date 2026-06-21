@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface GarantiaRetornoEmailProps {
+export interface ServiceOrderCanceledEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -21,40 +21,46 @@ export interface GarantiaRetornoEmailProps {
 }
 
 /**
- * "Garantia Retorno" customer-facing email (REQ-SOEMAIL-062).
+ * "OS Cancelada" customer-facing email (REQ-SOEMAIL-061).
  *
- * Sent when the service order enters `warranty_return` status.
- * Informs the customer that the OS entered the warranty return process.
+ * Sent when the service order enters `canceled` status.
+ * Informs the customer that the service order has been canceled.
  */
-export function GarantiaRetornoEmail({
+export function ServiceOrderCanceledEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: GarantiaRetornoEmailProps) {
+}: ServiceOrderCanceledEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
-  const previewText = `OS ${serviceOrderNumber} — retorno em garantia.`;
+  const previewText = `OS ${serviceOrderNumber} — ordem de serviço cancelada.`;
 
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
       <EmailCard brand={brand}>
-        <Badge variant="warning">Retorno em garantia</Badge>
-        <Title>Ordem de serviço em retorno de garantia</Title>
+        <Badge variant="error">OS cancelada</Badge>
+        <Title>Ordem de serviço cancelada</Title>
         <Paragraph>
           Olá, {customerName}! Informamos que a ordem de serviço{" "}
-          {serviceOrderNumber} entrou no processo de retorno em garantia em{" "}
-          {labName}.
+          {serviceOrderNumber} foi cancelada por {labName}.
         </Paragraph>
 
         <DetailBox>
           <DetailRow label="Número da OS" value={serviceOrderNumber} />
-          <DetailRow label="Status" value="Retorno em garantia" />
+          <DetailRow label="Status" value="Cancelada" />
         </DetailBox>
 
         <Paragraph>
-          Nossa equipe irá avaliar o equipamento e entrar em contato com você
-          em breve. Se tiver dúvidas, entre em contato com {labName}.
+          Se você tiver dúvidas sobre o cancelamento, entre em contato com{" "}
+          {labName}. Agradecemos a sua compreensão.
         </Paragraph>
       </EmailCard>
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceOrderCanceledEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies ServiceOrderCanceledEmailProps;
+
+export default ServiceOrderCanceledEmail;

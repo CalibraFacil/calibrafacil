@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface EmAvaliacaoTecnicaEmailProps {
+export interface UnderEvaluationEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface EmAvaliacaoTecnicaEmailProps {
  * Sent when the service order enters `under_evaluation` status.
  * Informs the customer that the technical evaluation is now in progress.
  */
-export function EmAvaliacaoTecnicaEmail({
+export function UnderEvaluationEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: EmAvaliacaoTecnicaEmailProps) {
+}: UnderEvaluationEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — em avaliação técnica.`;
 
@@ -57,3 +57,10 @@ export function EmAvaliacaoTecnicaEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+UnderEvaluationEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies UnderEvaluationEmailProps;
+
+export default UnderEvaluationEmail;

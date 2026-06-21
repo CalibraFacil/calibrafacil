@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { ProntoParaRetiradaEmail } from "./pronto-para-retirada-email";
+import { ReadyForPickupEmail } from "./ready-for-pickup-email";
 
 describe(
-  "REQ-SOEMAIL-051: ProntoParaRetiradaEmail template renders required fields",
+  "REQ-SOEMAIL-051: ReadyForPickupEmail template renders required fields",
   () => {
     async function renderProntoParaRetirada(): Promise<string> {
       return render(
-        ProntoParaRetiradaEmail({
+        ReadyForPickupEmail({
           brand: { name: "Lab Delta", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-700",
           customerName: "Cliente Retirada Ltda",

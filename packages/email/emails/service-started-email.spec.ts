@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-041 (template rendering) — "Serviço Iniciado".
  *
- * Renders the REAL ServicoIniciadoEmail template to HTML and asserts the
+ * Renders the REAL ServiceStartedEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: these tests go RED if the OS number or status phrase
@@ -11,14 +11,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { ServicoIniciadoEmail } from "./servico-iniciado-email";
+import { ServiceStartedEmail } from "./service-started-email";
 
 describe(
-  "REQ-SOEMAIL-041: ServicoIniciadoEmail template renders required fields",
+  "REQ-SOEMAIL-041: ServiceStartedEmail template renders required fields",
   () => {
     async function renderIniciado(): Promise<string> {
       return render(
-        ServicoIniciadoEmail({
+        ServiceStartedEmail({
           brand: { name: "Lab Omega", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-555",
           customerName: "Cliente Iniciado SA",

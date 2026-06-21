@@ -42,7 +42,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 vi.mock("@calibra-facil/email", () => ({
-  OrcamentoRecusadoEmail: mockOrcamentoRecusadoEmail,
+  QuoteRejectedEmail: mockOrcamentoRecusadoEmail,
 }));
 
 // ---------------------------------------------------------------------------

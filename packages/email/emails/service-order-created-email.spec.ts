@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-011 (template rendering) — mini-spec B "Nova OS".
  *
- * Renders the real NovaOsEmail template to HTML and asserts the required fields
+ * Renders the real ServiceOrderCreatedEmail template to HTML and asserts the required fields
  * actually appear in the output. This is the tautology guard: asserting props
  * passed to a mocked template (as the apps/api dispatch spec does) cannot prove
  * the fields reach the customer. Mirrors mini-spec A's REQ-006 fix.
@@ -9,12 +9,12 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { NovaOsEmail } from "./nova-os-email";
+import { ServiceOrderCreatedEmail } from "./service-order-created-email";
 
-describe("REQ-SOEMAIL-011: NovaOsEmail template renders the required fields", () => {
+describe("REQ-SOEMAIL-011: ServiceOrderCreatedEmail template renders the required fields", () => {
   async function renderNovaOs(): Promise<string> {
     return render(
-      NovaOsEmail({
+      ServiceOrderCreatedEmail({
         brand: { name: "Lab Acme", isWhiteLabel: true },
         serviceOrderNumber: "OS-2024-001",
         customerName: "Cliente Teste",

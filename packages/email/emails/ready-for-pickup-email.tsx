@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface ProntoParaRetiradaEmailProps {
+export interface ReadyForPickupEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface ProntoParaRetiradaEmailProps {
  * Sent when the service order enters `ready_for_pickup` status.
  * Informs the customer that the equipment is ready to be picked up.
  */
-export function ProntoParaRetiradaEmail({
+export function ReadyForPickupEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: ProntoParaRetiradaEmailProps) {
+}: ReadyForPickupEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — pronto para retirada.`;
 
@@ -58,3 +58,10 @@ export function ProntoParaRetiradaEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ReadyForPickupEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies ReadyForPickupEmailProps;
+
+export default ReadyForPickupEmail;

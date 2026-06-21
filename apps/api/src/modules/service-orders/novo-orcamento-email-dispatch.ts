@@ -23,14 +23,14 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
-import { NovoOrcamentoEmail } from "@calibra-facil/email";
-import type { NovoOrcamentoEmailItem } from "@calibra-facil/email";
+import { QuoteEmail } from "@calibra-facil/email";
+import type { QuoteEmailItem } from "@calibra-facil/email";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type { NovoOrcamentoEmailItem };
+export type { QuoteEmailItem };
 
 /**
  * All fields needed to dispatch the "Novo Orçamento" customer email.
@@ -98,7 +98,7 @@ export interface NovoOrcamentoEmailDispatchInput {
    * All quote items. Passed straight through to the template for grouping.
    * REQ-022: totals are NOT recomputed from items — use the persisted *Cents fields.
    */
-  items: NovoOrcamentoEmailItem[];
+  items: QuoteEmailItem[];
 
   // ---- Persisted totals (REQ-SOEMAIL-022) [HIGH RISK] ----
   /** From serviceOrderQuote.subtotalServicesCents — passed as-is. */
@@ -192,7 +192,7 @@ export async function dispatchNovoOrcamentoEmail(
       brand,
       subject: `Orçamento ${input.serviceOrderNumber} aguardando sua aprovação`,
       renderEmail: (ctx) =>
-        NovoOrcamentoEmail({
+        QuoteEmail({
           brand: ctx.brand,
           serviceOrderNumber: input.serviceOrderNumber,
           customerName: input.customerName,
@@ -220,7 +220,7 @@ export async function dispatchNovoOrcamentoEmail(
   } catch (error) {
     // Best-effort: swallow all errors so sendServiceOrderQuote is never affected.
     console.error(
-      `[NovoOrcamentoEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
+      `[QuoteEmail] Failed to dispatch email for OS ${input.serviceOrderNumber} (id=${input.serviceOrderId}):`,
       error,
     );
     return { sent: false, error: String(error) };

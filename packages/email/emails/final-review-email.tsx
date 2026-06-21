@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface RevisaoFinalEmailProps {
+export interface FinalReviewEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface RevisaoFinalEmailProps {
  * Sent when the service order enters `awaiting_final_review` status.
  * Informs the customer that the service is in its final review phase.
  */
-export function RevisaoFinalEmail({
+export function FinalReviewEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: RevisaoFinalEmailProps) {
+}: FinalReviewEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — em revisão final.`;
 
@@ -58,3 +58,10 @@ export function RevisaoFinalEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+FinalReviewEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies FinalReviewEmailProps;
+
+export default FinalReviewEmail;

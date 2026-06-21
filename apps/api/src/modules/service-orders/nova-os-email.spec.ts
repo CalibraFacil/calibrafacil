@@ -38,10 +38,10 @@ vi.mock("@calibra-facil/notifications", () => ({
   getLabEmailBrand: mockGetLabEmailBrand,
 }));
 
-// Mock @calibra-facil/email — we only care that NovaOsEmail is a function
+// Mock @calibra-facil/email — we only care that ServiceOrderCreatedEmail is a function
 // that gets called with the right props; we don't need real rendering.
 vi.mock("@calibra-facil/email", () => ({
-  NovaOsEmail: mockNovaOsEmail,
+  ServiceOrderCreatedEmail: mockNovaOsEmail,
 }));
 
 // ---------------------------------------------------------------------------
@@ -109,12 +109,12 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
     expect(emailInput.subject).toContain("OS-2026-099");
   });
 
-  it("REQ-SOEMAIL-011: renderEmail callback passes serviceOrderNumber to NovaOsEmail", async () => {
+  it("REQ-SOEMAIL-011: renderEmail callback passes serviceOrderNumber to ServiceOrderCreatedEmail", async () => {
     const input = makeInput({ serviceOrderNumber: "OS-2024-042" });
     await dispatchNovaOsEmail(input);
 
     // The renderEmail callback is passed to sendServiceOrderCustomerEmail.
-    // Invoke it to see what props NovaOsEmail receives.
+    // Invoke it to see what props ServiceOrderCreatedEmail receives.
     const call = mockSendSOEmail.mock.calls[0];
     expect(call).toBeDefined();
     const emailInput = call[0];
@@ -140,7 +140,7 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
     );
   });
 
-  it("REQ-SOEMAIL-011: renderEmail passes asset brand/manufacturer to NovaOsEmail", async () => {
+  it("REQ-SOEMAIL-011: renderEmail passes asset brand/manufacturer to ServiceOrderCreatedEmail", async () => {
     const input = makeInput({
       assetManufacturer: "Shimadzu",
       assetModel: "BX-520",
@@ -177,7 +177,7 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
     );
   });
 
-  it("REQ-SOEMAIL-011: renderEmail passes intake date (pt-BR formatted) to NovaOsEmail", async () => {
+  it("REQ-SOEMAIL-011: renderEmail passes intake date (pt-BR formatted) to ServiceOrderCreatedEmail", async () => {
     // 2026-06-19 → "19/06/2026"
     const input = makeInput({
       openedAt: new Date("2026-06-19T00:00:00.000Z"),
@@ -211,7 +211,7 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
     expect(callArgs.intakeDate).toMatch(/19|06/); // day or month present
   });
 
-  it("REQ-SOEMAIL-011: renderEmail passes claimedDefect to NovaOsEmail", async () => {
+  it("REQ-SOEMAIL-011: renderEmail passes claimedDefect to ServiceOrderCreatedEmail", async () => {
     const input = makeInput({ claimedDefect: "Balança descalibrada" });
     await dispatchNovaOsEmail(input);
 

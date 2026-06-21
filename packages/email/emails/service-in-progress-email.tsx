@@ -11,23 +11,23 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export type ServicoAndamentoStage =
+export type ServiceInProgressStage =
   | "awaiting_calibration"
   | "calibration_in_progress";
 
-const STAGE_LABELS: Record<ServicoAndamentoStage, string> = {
+const STAGE_LABELS: Record<ServiceInProgressStage, string> = {
   awaiting_calibration: "Aguardando calibração",
   calibration_in_progress: "Calibração em andamento",
 };
 
-const STAGE_MESSAGES: Record<ServicoAndamentoStage, string> = {
+const STAGE_MESSAGES: Record<ServiceInProgressStage, string> = {
   awaiting_calibration:
     "O serviço técnico foi concluído e o equipamento aguarda o processo de calibração.",
   calibration_in_progress:
     "O equipamento está sendo submetido ao processo de calibração pela equipe especializada.",
 };
 
-export interface ServicoAndamentoEmailProps {
+export interface ServiceInProgressEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -38,7 +38,7 @@ export interface ServicoAndamentoEmailProps {
    * The current stage (awaiting_calibration or calibration_in_progress).
    * Determines the status label and body message.
    */
-  stage: ServicoAndamentoStage;
+  stage: ServiceInProgressStage;
 }
 
 /**
@@ -48,12 +48,12 @@ export interface ServicoAndamentoEmailProps {
  * `calibration_in_progress` status. A single template handles both stages;
  * the `stage` prop determines the status-specific phrase shown.
  */
-export function ServicoAndamentoEmail({
+export function ServiceInProgressEmail({
   brand,
   serviceOrderNumber,
   customerName,
   stage,
-}: ServicoAndamentoEmailProps) {
+}: ServiceInProgressEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const stageLabel = STAGE_LABELS[stage];
   const stageMessage = STAGE_MESSAGES[stage];
@@ -84,3 +84,11 @@ export function ServicoAndamentoEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceInProgressEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+  stage: "calibration_in_progress",
+} satisfies ServiceInProgressEmailProps;
+
+export default ServiceInProgressEmail;

@@ -11,7 +11,7 @@ import {
   Badge,
 } from "./components/email-layout";
 
-export interface OsEncerradaEmailProps {
+export interface ServiceOrderClosedEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -26,11 +26,11 @@ export interface OsEncerradaEmailProps {
  * Sent when the service order is `closed`.
  * Informs the customer that the service order has been formally closed/encerrada.
  */
-export function OsEncerradaEmail({
+export function ServiceOrderClosedEmail({
   brand,
   serviceOrderNumber,
   customerName,
-}: OsEncerradaEmailProps) {
+}: ServiceOrderClosedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `OS ${serviceOrderNumber} — ordem de serviço encerrada.`;
 
@@ -57,3 +57,10 @@ export function OsEncerradaEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceOrderClosedEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+} satisfies ServiceOrderClosedEmailProps;
+
+export default ServiceOrderClosedEmail;

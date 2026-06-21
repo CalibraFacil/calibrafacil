@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-032 (template rendering) — mini-spec D "Orçamento Recusado".
  *
- * Renders the REAL OrcamentoRecusadoEmail template to HTML and asserts the
+ * Renders the REAL QuoteRejectedEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Tautology guard: mocking the template cannot prove a field reaches the
@@ -13,10 +13,10 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { OrcamentoRecusadoEmail } from "./orcamento-recusado-email";
+import { QuoteRejectedEmail } from "./quote-rejected-email";
 
 describe(
-  "REQ-SOEMAIL-032: OrcamentoRecusadoEmail template renders the required fields",
+  "REQ-SOEMAIL-032: QuoteRejectedEmail template renders the required fields",
   () => {
     async function renderRejected(
       overrides: Partial<{
@@ -26,7 +26,7 @@ describe(
       }> = {},
     ): Promise<string> {
       return render(
-        OrcamentoRecusadoEmail({
+        QuoteRejectedEmail({
           brand: { name: "Lab Acme", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-042",
           customerName: "Empresa Teste SA",

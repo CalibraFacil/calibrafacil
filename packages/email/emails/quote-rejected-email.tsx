@@ -10,7 +10,7 @@ import {
   DetailRow,
 } from "./components/email-layout";
 
-export interface OrcamentoRecusadoEmailProps {
+export interface QuoteRejectedEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2026-042". */
@@ -31,12 +31,12 @@ export interface OrcamentoRecusadoEmailProps {
  * or via the portal (rejectServiceOrderQuoteByPortalUser).
  * References the OS number and the rejectionReason when present.
  */
-export function OrcamentoRecusadoEmail({
+export function QuoteRejectedEmail({
   brand,
   serviceOrderNumber,
   customerName,
   rejectionReason,
-}: OrcamentoRecusadoEmailProps) {
+}: QuoteRejectedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
   const previewText = `Orçamento ${serviceOrderNumber} não aprovado — ${labName}`;
 
@@ -64,3 +64,11 @@ export function OrcamentoRecusadoEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+QuoteRejectedEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+  rejectionReason: "Custo de reparo acima do valor de um equipamento novo.",
+} satisfies QuoteRejectedEmailProps;
+
+export default QuoteRejectedEmail;

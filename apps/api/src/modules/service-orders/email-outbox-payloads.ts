@@ -91,7 +91,7 @@ export type NovaOsOutboxPayload = z.infer<typeof NovaOsOutboxPayloadSchema>;
 
 /**
  * A single quote item stored in the orcamento_sent payload.
- * Mirrors NovoOrcamentoEmailItem from @calibra-facil/email.
+ * Mirrors QuoteEmailItem from @calibra-facil/email.
  */
 const orcamentoItemSchema = z.object({
   id: z.number().int(),
@@ -124,7 +124,7 @@ const orcamentoItemSchema = z.object({
  *  assetSerialNumber        string | null | undefined
  *  displaySpecs             {label:string;value:string}[] | null | undefined
  *  claimedDefect            string
- *  items                    NovoOrcamentoEmailItem[]
+ *  items                    QuoteEmailItem[]
  *  subtotalServicesCents    number
  *  subtotalPartsCents       number
  *  freightCents             number

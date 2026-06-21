@@ -48,18 +48,18 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import {
-  ServicoIniciadoEmail,
-  ServicoAndamentoEmail,
-  AguardandoAvaliacaoTecnicaEmail,
-  EmAvaliacaoTecnicaEmail,
-  ProntoParaRetiradaEmail,
-  OsEntregueEmail,
-  OsEncerradaEmail,
-  RevisaoFinalEmail,
-  OsCanceladaEmail,
-  GarantiaRetornoEmail,
+  ServiceStartedEmail,
+  ServiceInProgressEmail,
+  AwaitingEvaluationEmail,
+  UnderEvaluationEmail,
+  ReadyForPickupEmail,
+  ServiceOrderDeliveredEmail,
+  ServiceOrderClosedEmail,
+  FinalReviewEmail,
+  ServiceOrderCanceledEmail,
+  WarrantyReturnEmail,
 } from "@calibra-facil/email";
-import type { ServicoAndamentoStage } from "@calibra-facil/email";
+import type { ServiceInProgressStage } from "@calibra-facil/email";
 import { getStatusEmailDescriptor } from "../modules/service-orders/status-email-map";
 import { parseOutboxPayloadByNamespace } from "../modules/service-orders/email-outbox-payloads";
 import { sendServiceOrderEmailOnce } from "../modules/service-orders/service-order-email-once";
@@ -413,20 +413,20 @@ function renderTemplate(
   brand: Awaited<ReturnType<typeof getLabEmailBrand>>,
 ) {
   if (emailType === "service_started") {
-    return ServicoIniciadoEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceStartedEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "progress_update") {
     // Both awaiting_calibration and calibration_in_progress use ServicoAndamento
     // with a stage prop that corresponds to the targetStatus.
-    const isValidStage = (s: string): s is ServicoAndamentoStage =>
+    const isValidStage = (s: string): s is ServiceInProgressStage =>
       s === "awaiting_calibration" || s === "calibration_in_progress";
     const stage = isValidStage(targetStatus) ? targetStatus : "awaiting_calibration";
-    return ServicoAndamentoEmail({ brand, serviceOrderNumber, customerName, stage });
+    return ServiceInProgressEmail({ brand, serviceOrderNumber, customerName, stage });
   }
 
   if (emailType === "awaiting_tech_evaluation") {
-    return AguardandoAvaliacaoTecnicaEmail({
+    return AwaitingEvaluationEmail({
       brand,
       serviceOrderNumber,
       customerName,
@@ -434,31 +434,31 @@ function renderTemplate(
   }
 
   if (emailType === "under_evaluation") {
-    return EmAvaliacaoTecnicaEmail({ brand, serviceOrderNumber, customerName });
+    return UnderEvaluationEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "ready_for_pickup") {
-    return ProntoParaRetiradaEmail({ brand, serviceOrderNumber, customerName });
+    return ReadyForPickupEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "delivered") {
-    return OsEntregueEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderDeliveredEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "closed") {
-    return OsEncerradaEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderClosedEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "final_review") {
-    return RevisaoFinalEmail({ brand, serviceOrderNumber, customerName });
+    return FinalReviewEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "canceled") {
-    return OsCanceladaEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderCanceledEmail({ brand, serviceOrderNumber, customerName });
   }
 
   if (emailType === "warranty_return") {
-    return GarantiaRetornoEmail({ brand, serviceOrderNumber, customerName });
+    return WarrantyReturnEmail({ brand, serviceOrderNumber, customerName });
   }
 
   return null;

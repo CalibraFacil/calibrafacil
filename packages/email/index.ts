@@ -39,66 +39,66 @@ export {
 
 // Service-order lifecycle email templates
 export {
-  NovaOsEmail,
-  type NovaOsEmailProps,
-} from "./emails/nova-os-email";
+  ServiceOrderCreatedEmail,
+  type ServiceOrderCreatedEmailProps,
+} from "./emails/service-order-created-email";
 export {
-  NovoOrcamentoEmail,
-  type NovoOrcamentoEmailProps,
-  type NovoOrcamentoEmailItem,
-} from "./emails/novo-orcamento-email";
+  QuoteEmail,
+  type QuoteEmailProps,
+  type QuoteEmailItem,
+} from "./emails/quote-email";
 export {
-  OrcamentoAprovadoEmail,
-  type OrcamentoAprovadoEmailProps,
-} from "./emails/orcamento-aprovado-email";
+  QuoteApprovedEmail,
+  type QuoteApprovedEmailProps,
+} from "./emails/quote-approved-email";
 export {
-  OrcamentoRecusadoEmail,
-  type OrcamentoRecusadoEmailProps,
-} from "./emails/orcamento-recusado-email";
+  QuoteRejectedEmail,
+  type QuoteRejectedEmailProps,
+} from "./emails/quote-rejected-email";
 
 // Service-order status-transition email templates (mini-spec E2)
 export {
-  ServicoIniciadoEmail,
-  type ServicoIniciadoEmailProps,
-} from "./emails/servico-iniciado-email";
+  ServiceStartedEmail,
+  type ServiceStartedEmailProps,
+} from "./emails/service-started-email";
 export {
-  ServicoAndamentoEmail,
-  type ServicoAndamentoEmailProps,
-  type ServicoAndamentoStage,
-} from "./emails/servico-andamento-email";
+  ServiceInProgressEmail,
+  type ServiceInProgressEmailProps,
+  type ServiceInProgressStage,
+} from "./emails/service-in-progress-email";
 export {
-  AguardandoAvaliacaoTecnicaEmail,
-  type AguardandoAvaliacaoTecnicaEmailProps,
-} from "./emails/aguardando-avaliacao-tecnica-email";
+  AwaitingEvaluationEmail,
+  type AwaitingEvaluationEmailProps,
+} from "./emails/awaiting-evaluation-email";
 export {
-  EmAvaliacaoTecnicaEmail,
-  type EmAvaliacaoTecnicaEmailProps,
-} from "./emails/em-avaliacao-tecnica-email";
+  UnderEvaluationEmail,
+  type UnderEvaluationEmailProps,
+} from "./emails/under-evaluation-email";
 
 // Service-order conclusão/entrega email templates (mini-spec F)
 export {
-  ProntoParaRetiradaEmail,
-  type ProntoParaRetiradaEmailProps,
-} from "./emails/pronto-para-retirada-email";
+  ReadyForPickupEmail,
+  type ReadyForPickupEmailProps,
+} from "./emails/ready-for-pickup-email";
 export {
-  OsEntregueEmail,
-  type OsEntregueEmailProps,
-} from "./emails/os-entregue-email";
+  ServiceOrderDeliveredEmail,
+  type ServiceOrderDeliveredEmailProps,
+} from "./emails/service-order-delivered-email";
 export {
-  OsEncerradaEmail,
-  type OsEncerradaEmailProps,
-} from "./emails/os-encerrada-email";
+  ServiceOrderClosedEmail,
+  type ServiceOrderClosedEmailProps,
+} from "./emails/service-order-closed-email";
 export {
-  RevisaoFinalEmail,
-  type RevisaoFinalEmailProps,
-} from "./emails/revisao-final-email";
+  FinalReviewEmail,
+  type FinalReviewEmailProps,
+} from "./emails/final-review-email";
 
 // Service-order cancelamento/garantia email templates (mini-spec G)
 export {
-  OsCanceladaEmail,
-  type OsCanceladaEmailProps,
-} from "./emails/os-cancelada-email";
+  ServiceOrderCanceledEmail,
+  type ServiceOrderCanceledEmailProps,
+} from "./emails/service-order-canceled-email";
 export {
-  GarantiaRetornoEmail,
-  type GarantiaRetornoEmailProps,
-} from "./emails/garantia-retorno-email";
+  WarrantyReturnEmail,
+  type WarrantyReturnEmailProps,
+} from "./emails/warranty-return-email";

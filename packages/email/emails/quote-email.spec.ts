@@ -2,7 +2,7 @@
  * REQ-SOEMAIL-021, REQ-SOEMAIL-022, REQ-SOEMAIL-023, REQ-SOEMAIL-024
  * (template rendering) — mini-spec C "Novo Orçamento".
  *
- * Renders the REAL NovoOrcamentoEmail template to HTML and asserts the required
+ * Renders the REAL QuoteEmail template to HTML and asserts the required
  * fields actually appear in the output.
  *
  * Tautology guard: asserting props passed to a mocked template cannot prove the
@@ -15,14 +15,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { NovoOrcamentoEmail } from "./novo-orcamento-email";
-import type { NovoOrcamentoEmailProps } from "./novo-orcamento-email";
+import { QuoteEmail } from "./quote-email";
+import type { QuoteEmailProps } from "./quote-email";
 
 // ---------------------------------------------------------------------------
 // Test fixtures
 // ---------------------------------------------------------------------------
 
-const SAMPLE_ITEMS: NovoOrcamentoEmailProps["items"] = [
+const SAMPLE_ITEMS: QuoteEmailProps["items"] = [
   {
     id: 1,
     type: "service",
@@ -70,7 +70,7 @@ const SAMPLE_ITEMS: NovoOrcamentoEmailProps["items"] = [
   },
 ];
 
-const SAMPLE_PROPS: NovoOrcamentoEmailProps = {
+const SAMPLE_PROPS: QuoteEmailProps = {
   brand: { name: "Lab Acme Ltda", isWhiteLabel: true },
   serviceOrderNumber: "OS-2026-001",
   customerName: "Empresa Teste SA",
@@ -99,9 +99,9 @@ const SAMPLE_PROPS: NovoOrcamentoEmailProps = {
 };
 
 async function renderEmail(
-  props: NovoOrcamentoEmailProps = SAMPLE_PROPS,
+  props: QuoteEmailProps = SAMPLE_PROPS,
 ): Promise<string> {
-  return render(NovoOrcamentoEmail(props));
+  return render(QuoteEmail(props));
 }
 
 // ---------------------------------------------------------------------------

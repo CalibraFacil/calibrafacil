@@ -10,7 +10,7 @@ import {
   DetailRow,
 } from "./components/email-layout";
 
-export interface NovaOsEmailProps {
+export interface ServiceOrderCreatedEmailProps {
   /** White-label brand for the sending lab. */
   brand?: EmailBrand;
   /** OS number, e.g. "OS-2024-001". */
@@ -35,7 +35,7 @@ export interface NovaOsEmailProps {
  * Sent immediately after a service order is created. Shows the OS number,
  * asset brand/model/serial, intake date, and claimed defect.
  */
-export function NovaOsEmail({
+export function ServiceOrderCreatedEmail({
   brand,
   serviceOrderNumber,
   customerName,
@@ -44,7 +44,7 @@ export function NovaOsEmail({
   assetSerialNumber,
   intakeDate,
   claimedDefect,
-}: NovaOsEmailProps) {
+}: ServiceOrderCreatedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
 
   // Build a concise asset description for the preview text
@@ -82,3 +82,15 @@ export function NovaOsEmail({
     </ServiceOrderEmailLayout>
   );
 }
+
+ServiceOrderCreatedEmail.PreviewProps = {
+  serviceOrderNumber: "OS-2026-042",
+  customerName: "Maria Silva",
+  assetManufacturer: "Mettler Toledo",
+  assetModel: "XS204",
+  assetSerialNumber: "B812345678",
+  intakeDate: "19/06/2026",
+  claimedDefect: "Balança apresenta leitura instável e não zera.",
+} satisfies ServiceOrderCreatedEmailProps;
+
+export default ServiceOrderCreatedEmail;

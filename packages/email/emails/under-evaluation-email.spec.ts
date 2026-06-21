@@ -1,7 +1,7 @@
 /**
  * REQ-SOEMAIL-044 (template rendering) — "Em Avaliação Técnica".
  *
- * Renders the REAL EmAvaliacaoTecnicaEmail template to HTML and asserts the
+ * Renders the REAL UnderEvaluationEmail template to HTML and asserts the
  * required fields actually appear in the output.
  *
  * Non-tautology guard: remove the OS number from the template body →
@@ -10,14 +10,14 @@
 
 import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
-import { EmAvaliacaoTecnicaEmail } from "./em-avaliacao-tecnica-email";
+import { UnderEvaluationEmail } from "./under-evaluation-email";
 
 describe(
-  "REQ-SOEMAIL-044: EmAvaliacaoTecnicaEmail template renders required fields",
+  "REQ-SOEMAIL-044: UnderEvaluationEmail template renders required fields",
   () => {
     async function renderEmAvaliacao(): Promise<string> {
       return render(
-        EmAvaliacaoTecnicaEmail({
+        UnderEvaluationEmail({
           brand: { name: "Lab Zeta", isWhiteLabel: true },
           serviceOrderNumber: "OS-2026-801",
           customerName: "Empresa Tecnica Ltda",
