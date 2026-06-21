@@ -300,7 +300,9 @@ type ApiRoutePath =
   | "/api/visits/:id/assign"
   | "/api/visits/:id/cancel"
   | "/api/visits/:id/complete"
-  | "/api/visits/:id/confirm";
+  | "/api/visits/:id/confirm"
+  | "/api/visits/:id/jobs"
+  | "/api/visits/:id/jobs/:jobId";
 
 type ApiRouteSchema = {
   [Path in ApiRoutePath]: RpcRoute<Path>;

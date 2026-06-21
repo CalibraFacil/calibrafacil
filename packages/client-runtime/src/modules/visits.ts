@@ -1,4 +1,5 @@
 import type {
+  VisitAddJobInput,
   VisitAssignInput,
   VisitCancelInput,
   VisitConfirmInput,
@@ -88,6 +89,29 @@ export function createVisitsApi(rawCloudClient: any): VisitsApi {
           param: { id: String(id) },
         }),
         "Erro ao concluir visita",
+      );
+    },
+    async addJob<TResponse = unknown>(
+      id: string | number,
+      input: VisitAddJobInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.visits[":id"].jobs.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao adicionar instrumento a visita",
+      );
+    },
+    async removeJob<TResponse = unknown>(
+      id: string | number,
+      jobId: string | number,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.visits[":id"].jobs[":jobId"].$delete({
+          param: { id: String(id), jobId: String(jobId) },
+        }),
+        "Erro ao remover instrumento da visita",
       );
     },
   };

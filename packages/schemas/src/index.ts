@@ -654,6 +654,12 @@ export const ListVisitsQuerySchema = z.object({
   mine: z.coerce.boolean().optional(),
 });
 
+/** REQ-VISITJOB-011: Add a calibration job (instrument) to an on-site visit. */
+export const AddVisitJobSchema = z.object({
+  assetId: z.number().int().positive("assetId deve ser inteiro positivo"),
+  serviceId: z.number().int().positive("serviceId deve ser inteiro positivo"),
+});
+
 // =============================================================================
 // CALIBRATION METHOD SCHEMAS - ISO 17025 Validated Templates
 // =============================================================================

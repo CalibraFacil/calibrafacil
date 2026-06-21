@@ -1488,6 +1488,11 @@ export type VisitRescheduleInput = {
 
 export type VisitCancelInput = { reason?: string | null };
 
+export type VisitAddJobInput = {
+  assetId: number;
+  serviceId: number;
+};
+
 export interface VisitsApi {
   list<TResponse = unknown>(input?: VisitsListInput): Promise<TResponse>;
   get<TResponse = unknown>(id: string | number): Promise<TResponse>;
@@ -1508,6 +1513,14 @@ export interface VisitsApi {
     input?: VisitCancelInput,
   ): Promise<TResponse>;
   complete<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  addJob<TResponse = unknown>(
+    id: string | number,
+    input: VisitAddJobInput,
+  ): Promise<TResponse>;
+  removeJob<TResponse = unknown>(
+    id: string | number,
+    jobId: string | number,
+  ): Promise<TResponse>;
 }
 
 export interface IntegrationsApi {

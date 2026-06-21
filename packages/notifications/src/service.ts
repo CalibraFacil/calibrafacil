@@ -47,6 +47,7 @@ import {
   CompetenceNotificationEmail,
   CustomerSuccessEmail,
   CalibrationRequestEmail,
+  VisitNotificationEmail,
   PortalDueDigestEmail,
   type PortalDueDigestItem,
   type EmailBrand,
@@ -120,6 +121,16 @@ export interface CalibrationRequestEmailContext {
   jobCodes?: string[];
 }
 
+/** Context for on-site visit (calibração in loco) email templates */
+export interface VisitEmailContext {
+  customerName: string;
+  scheduledDate: string;
+  technicianName?: string;
+  addressText?: string;
+  labName?: string;
+  reason?: string;
+}
+
 /** Union type for all email contexts */
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
@@ -129,6 +140,7 @@ export type EmailContext =
   | { type: "nc"; data: NCEmailContext }
   | { type: "competence"; data: CompetenceEmailContext }
   | { type: "calibrationRequest"; data: CalibrationRequestEmailContext }
+  | { type: "visit"; data: VisitEmailContext }
   | { type: "customerSuccess"; data: Record<string, never> };
 
 export interface SendNotificationOptions {
@@ -355,6 +367,25 @@ function getCalibrationRequestEmailType(
       return "converted";
     default:
       return "submitted";
+  }
+}
+
+function getVisitEmailType(
+  type: NotificationType,
+): "scheduled" | "confirmed" | "rescheduled" | "cancelled" | "reminder" {
+  switch (type) {
+    case "VISIT_SCHEDULED":
+      return "scheduled";
+    case "VISIT_CONFIRMED":
+      return "confirmed";
+    case "VISIT_RESCHEDULED":
+      return "rescheduled";
+    case "VISIT_CANCELLED":
+      return "cancelled";
+    case "VISIT_REMINDER":
+      return "reminder";
+    default:
+      return "confirmed";
   }
 }
 
@@ -719,6 +750,33 @@ function renderEmailTemplate(
       actorName,
       reason,
       jobCodes,
+      actionUrl: actionUrl ?? "#",
+      logoSrc,
+      brand: emailBrand,
+    });
+  }
+
+  if (
+    emailContext?.type === "visit" &&
+    [
+      "VISIT_SCHEDULED",
+      "VISIT_CONFIRMED",
+      "VISIT_RESCHEDULED",
+      "VISIT_CANCELLED",
+      "VISIT_REMINDER",
+    ].includes(type)
+  ) {
+    const { customerName, scheduledDate, technicianName, addressText, labName, reason } =
+      emailContext.data;
+    return VisitNotificationEmail({
+      recipientName,
+      variant: getVisitEmailType(type),
+      customerName,
+      scheduledDate,
+      technicianName,
+      addressText,
+      labName,
+      reason,
       actionUrl: actionUrl ?? "#",
       logoSrc,
       brand: emailBrand,
@@ -1268,6 +1326,15 @@ export async function notifyVisitConfirmed(
       ? `/portal/requests/${visit.sourceRequestId}`
       : "/portal/requests",
     emailBrand,
+    emailContext: {
+      type: "visit",
+      data: {
+        customerName: visit.customerName,
+        scheduledDate: visitDate,
+        technicianName: visit.technicianName ?? undefined,
+        labName: visit.labName,
+      },
+    },
   });
 }
 
@@ -1314,6 +1381,15 @@ export async function notifyVisitRescheduled(
         ? `/portal/requests/${visit.sourceRequestId}`
         : "/portal/requests",
       emailBrand: await getLabEmailBrand(visit.organizationId),
+      emailContext: {
+        type: "visit",
+        data: {
+          customerName: visit.customerName,
+          scheduledDate: visitDate,
+          technicianName: visit.technicianName ?? undefined,
+          labName: visit.labName,
+        },
+      },
     });
   }
 }
@@ -1362,6 +1438,16 @@ export async function notifyVisitCancelled(
         ? `/portal/requests/${visit.sourceRequestId}`
         : "/portal/requests",
       emailBrand: await getLabEmailBrand(visit.organizationId),
+      emailContext: {
+        type: "visit",
+        data: {
+          customerName: visit.customerName,
+          scheduledDate: formatVisitDate(visit.scheduledAt),
+          technicianName: visit.technicianName ?? undefined,
+          labName: visit.labName,
+          reason: reason?.trim() || undefined,
+        },
+      },
     });
   }
 }
@@ -1402,6 +1488,15 @@ export async function notifyVisitReminder(visitId: number): Promise<void> {
         ? `/portal/requests/${visit.sourceRequestId}`
         : "/portal/requests",
       emailBrand: await getLabEmailBrand(visit.organizationId),
+      emailContext: {
+        type: "visit",
+        data: {
+          customerName: visit.customerName,
+          scheduledDate: visitDate,
+          technicianName: visit.technicianName ?? undefined,
+          labName: visit.labName,
+        },
+      },
     });
   }
 }

@@ -1311,6 +1311,12 @@ export function createDesktopApiClient(
       async complete() {
         throw desktopUnsupportedAuthAction("Visitas");
       },
+      async addJob() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
+      async removeJob() {
+        throw desktopUnsupportedAuthAction("Visitas");
+      },
     },
     integrations: {
       async list<TResponse = unknown>() {

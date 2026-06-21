@@ -6,7 +6,9 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  Cancel01Icon,
   Location01Icon,
+  PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
@@ -39,12 +41,17 @@ import {
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 import { useRequestTechniciansData } from '@/features/requests/queries'
+import {
+  useNewJobCustomerAssetsData,
+  useNewJobServicesData,
+} from '@/features/jobs/queries'
 import { useVisitDetailData } from '@/features/visits/queries'
 import {
   formatVisitAddress,
   VISIT_STATUS_LABELS,
   VISIT_STATUS_VARIANTS,
   type VisitDetail,
+  type VisitDetailJob,
 } from '@/features/visits/types'
 
 function formatDateTime(value: string | null | undefined) {
@@ -134,8 +141,33 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const [technicianId, setTechnicianId] = useState(visit.technicianId ?? '')
   const [cancelReason, setCancelReason] = useState('')
 
+  // Add-instrument state — only used when visit is PROPOSED
+  const [addAssetId, setAddAssetId] = useState<string>('')
+  const [addServiceId, setAddServiceId] = useState<string>('')
+
+  const isProposed = visit.status === 'PROPOSED'
   const isTerminal =
     visit.status === 'COMPLETED' || visit.status === 'CANCELLED'
+
+  // Fetch customer assets when the visit is PROPOSED
+  const { data: customerAssetsData } = useNewJobCustomerAssetsData({
+    customerId: isProposed ? visit.customerId : null,
+    enabled: isProposed,
+  })
+  const customerAssets = customerAssetsData?.data ?? []
+
+  // Find the selected asset's typeId for filtering services
+  const selectedAsset = customerAssets.find(
+    (a) => String(a.id) === addAssetId,
+  )
+  const selectedAssetTypeId = selectedAsset?.assetTypeId ?? null
+
+  // Fetch compatible services filtered by asset type
+  const { data: servicesData } = useNewJobServicesData({
+    assetTypeId: selectedAssetTypeId,
+    enabled: isProposed && Boolean(addAssetId),
+  })
+  const compatibleServices = servicesData?.data ?? []
 
   async function invalidate() {
     await Promise.all([
@@ -200,12 +232,39 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     onError: (mutationError: Error) => toast.error(mutationError.message),
   })
 
+  const addJobMutation = useMutation({
+    mutationFn: async () => {
+      const assetId = parseInt(addAssetId, 10)
+      const serviceId = parseInt(addServiceId, 10)
+      return calibraApi.visits.addJob(visit.id, { assetId, serviceId })
+    },
+    onSuccess: async () => {
+      setAddAssetId('')
+      setAddServiceId('')
+      await invalidate()
+      toast.success('Instrumento adicionado à visita')
+    },
+    onError: (mutationError: Error) => toast.error(mutationError.message),
+  })
+
+  const removeJobMutation = useMutation({
+    mutationFn: async (jobId: number) =>
+      calibraApi.visits.removeJob(visit.id, jobId),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Instrumento removido da visita')
+    },
+    onError: (mutationError: Error) => toast.error(mutationError.message),
+  })
+
   const busy =
     assignMutation.isPending ||
     rescheduleMutation.isPending ||
     confirmMutation.isPending ||
     cancelMutation.isPending ||
-    completeMutation.isPending
+    completeMutation.isPending ||
+    addJobMutation.isPending ||
+    removeJobMutation.isPending
 
   const canComplete =
     visit.status === 'CONFIRMED' || visit.status === 'IN_PROGRESS'
@@ -213,6 +272,13 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const addressText = formatVisitAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
   const dateChanged = toDateInputValue(visit.scheduledAt) !== scheduledAt
+
+  const canAddJob =
+    isProposed &&
+    Boolean(addAssetId) &&
+    Boolean(addServiceId) &&
+    !Number.isNaN(parseInt(addAssetId, 10)) &&
+    !Number.isNaN(parseInt(addServiceId, 10))
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -400,33 +466,144 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
             </p>
           ) : (
             visit.jobs.map((job) => (
-              <Link
+              <VisitJobRow
                 key={job.jobId}
-                to="/dashboard/jobs/$id"
-                params={{ id: String(job.jobId) }}
-                className="flex items-center justify-between rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-colors hover:bg-muted/50 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
-              >
-                <div className="min-w-0">
-                  <span className="truncate text-sm font-medium">
-                    {job.assetName} ({job.assetTag})
-                  </span>
-                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                    {job.jobCode}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{job.status}</Badge>
-                  <HugeiconsIcon
-                    icon={Location01Icon}
-                    strokeWidth={2}
-                    className="size-4 text-muted-foreground"
-                  />
-                </div>
-              </Link>
+                job={job}
+                isProposed={isProposed}
+                busy={busy}
+                onRemove={() => removeJobMutation.mutate(job.jobId)}
+              />
             ))
           )}
         </div>
+
+        {isProposed ? (
+          <div className="mt-4 space-y-3 border-t pt-4">
+            <p className="text-sm font-medium">Adicionar instrumento</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">
+                  Instrumento
+                </label>
+                <Select
+                  value={addAssetId || 'none'}
+                  onValueChange={(value) => {
+                    setAddAssetId(!value || value === 'none' ? '' : value)
+                    setAddServiceId('')
+                  }}
+                >
+                  <SelectTrigger>
+                    <span>
+                      {addAssetId
+                        ? customerAssets.find(
+                            (a) => String(a.id) === addAssetId,
+                          )?.name || 'Selecione'
+                        : 'Selecione'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Selecione</SelectItem>
+                    {customerAssets.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name} ({a.tag})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">Serviço</label>
+                <Select
+                  value={addServiceId || 'none'}
+                  onValueChange={(value) =>
+                    setAddServiceId(!value || value === 'none' ? '' : value)
+                  }
+                  disabled={!addAssetId}
+                >
+                  <SelectTrigger>
+                    <span>
+                      {addServiceId
+                        ? compatibleServices.find(
+                            (s) => String(s.id) === addServiceId,
+                          )?.name || 'Selecione'
+                        : 'Selecione'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Selecione</SelectItem>
+                    {compatibleServices.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              disabled={busy || !canAddJob}
+              onClick={() => addJobMutation.mutate()}
+            >
+              <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
+              Adicionar instrumento
+            </Button>
+          </div>
+        ) : null}
       </Panel>
+    </div>
+  )
+}
+
+function VisitJobRow({
+  job,
+  isProposed,
+  busy,
+  onRemove,
+}: {
+  job: VisitDetailJob
+  isProposed: boolean
+  busy: boolean
+  onRemove: () => void
+}) {
+  const isDraft = job.status === 'DRAFT'
+
+  return (
+    <div className="flex items-center gap-2">
+      <Link
+        to="/dashboard/jobs/$id"
+        params={{ id: String(job.jobId) }}
+        className="flex flex-1 items-center justify-between rounded-xl bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-colors hover:bg-muted/50 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+      >
+        <div className="min-w-0">
+          <span className="truncate text-sm font-medium">
+            {job.assetName} ({job.assetTag})
+          </span>
+          <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+            {job.jobCode}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{job.status}</Badge>
+          <HugeiconsIcon
+            icon={Location01Icon}
+            strokeWidth={2}
+            className="size-4 text-muted-foreground"
+          />
+        </div>
+      </Link>
+      {isProposed && isDraft ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-destructive"
+          disabled={busy}
+          onClick={onRemove}
+          aria-label="Remover instrumento da visita"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
+        </Button>
+      ) : null}
     </div>
   )
 }

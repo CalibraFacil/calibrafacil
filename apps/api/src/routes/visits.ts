@@ -11,6 +11,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import {
+  AddVisitJobSchema,
   AssignVisitTechnicianSchema,
   CancelVisitSchema,
   ConfirmVisitSchema,
@@ -28,6 +29,13 @@ import {
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
+import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { formatOnsiteAddressText } from "../lib/onsite-address";
+import {
+  assertAssetBelongsToVisitCustomer,
+  canAddJobToVisit,
+  resolveVisitJobRemoval,
+} from "../lib/visit-jobs";
 
 const technicianUser = alias(user, "calibrationVisitTechnician");
 
@@ -417,5 +425,139 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       return c.json(updated);
+    },
+  );
+
+/**
+ * Visit-jobs sub-router — mounted separately to avoid Hono type chain length
+ * limits (TS7056) on the main visitsRouter.
+ *
+ * REQ-VISITJOB-001,002,003,004,005,006,007,008,009,010
+ */
+export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
+  // ===========================================================================
+  // POST /:id/jobs — add an instrument (calibration job) to a PROPOSED visit
+  // ===========================================================================
+  .post(
+    "/:id/jobs",
+    ...withLabPermission({ request: ["update"] }),
+    zValidator("json", AddVisitJobSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
+      const { assetId, serviceId } = c.req.valid("json");
+
+      // REQ-VISITJOB-005: scope via getScopedVisit (org+unit scoped)
+      const visit = await getScopedVisit(id, member);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+
+      // REQ-VISITJOB-003: visit must be PROPOSED
+      const statusGuard = canAddJobToVisit(visit);
+      if (!statusGuard.ok) {
+        return c.json({ error: statusGuard.body }, statusGuard.status);
+      }
+
+      // REQ-VISITJOB-004: asset must belong to visit's customer (scope via customer.labOrganizationId)
+      const [foundAsset] = await db
+        .select({ id: asset.id, customerId: asset.customerId })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            eq(asset.id, assetId),
+            eq(customer.labOrganizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!foundAsset) {
+        return c.json({ error: "Ativo nao encontrado" }, 400);
+      }
+
+      const customerGuard = assertAssetBelongsToVisitCustomer(foundAsset, visit);
+      if (!customerGuard.ok) {
+        return c.json({ error: customerGuard.body }, customerGuard.status);
+      }
+
+      // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
+      try {
+        const newJob = await createCalibrationJob({
+          organizationId: member.organizationId,
+          unitId: visit.unitId,
+          createdBy: session.user.id,
+          assetId,
+          serviceId,
+          notifyOnAssignment: false,
+          onsiteLocation: {
+            addressText: formatOnsiteAddressText(visit.address),
+          },
+          visitId: id,
+        });
+        return c.json(newJob, 201);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          jobCreationClientErrors.has(error.message)
+        ) {
+          return c.json({ error: error.message }, 400);
+        }
+        throw error;
+      }
+    },
+  )
+  // ===========================================================================
+  // DELETE /:id/jobs/:jobId — remove (soft-cancel) a DRAFT job from a PROPOSED visit
+  // ===========================================================================
+  .delete(
+    "/:id/jobs/:jobId",
+    ...withLabPermission({ request: ["update"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+      const jobId = parseInt(c.req.param("jobId"), 10);
+      if (isNaN(id) || isNaN(jobId))
+        return c.json({ error: "ID invalido" }, 400);
+
+      // REQ-VISITJOB-005: scope via getScopedVisit
+      const visit = await getScopedVisit(id, member);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+
+      // Load the job scoped to org
+      const [foundJob] = await db
+        .select({
+          id: calibrationJob.id,
+          status: calibrationJob.status,
+          visitId: calibrationJob.visitId,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, jobId),
+            eq(calibrationJob.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      // REQ-VISITJOB-006,007,008,009: run all guards
+      const removalGuard = resolveVisitJobRemoval({
+        visitStatus: visit.status,
+        job: foundJob ?? null,
+        visitId: id,
+      });
+
+      if (!removalGuard.ok) {
+        return c.json({ error: removalGuard.body }, removalGuard.status);
+      }
+
+      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum)
+      const [updatedJob] = await db
+        .update(calibrationJob)
+        .set({ status: "CANCELED" })
+        .where(eq(calibrationJob.id, jobId))
+        .returning();
+
+      return c.json(updatedJob);
     },
   );

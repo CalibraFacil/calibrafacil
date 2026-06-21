@@ -15,7 +15,6 @@ import {
   service,
   subscription,
   user,
-  type CustomerAddress,
 } from "@calibra-facil/db/schema";
 import {
   ApproveCalibrationRequestSchema,
@@ -58,25 +57,13 @@ import {
   notifyVisitConfirmed,
 } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../lib/units";
+import { formatOnsiteAddressText } from "../lib/onsite-address";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
 const approverUser = alias(user, "calibrationRequestApprover");
 const rejecterUser = alias(user, "calibrationRequestRejecter");
 const converterUser = alias(user, "calibrationRequestConverter");
-
-/** Single-line address text for the frozen on-site calibration location. */
-function formatOnsiteAddressText(address: CustomerAddress | null): string {
-  if (!address) return "";
-  const street = [address.street, address.number].filter(Boolean).join(", ");
-  const region = [address.neighbourhood, address.city, address.state]
-    .filter(Boolean)
-    .join(" - ");
-  return [street, address.complement, region, address.cep]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
-}
 
 type ConvertedRequestJob = {
   requestItemId: number;

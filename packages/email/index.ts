@@ -102,3 +102,6 @@ export {
   WarrantyReturnEmail,
   type WarrantyReturnEmailProps,
 } from "./emails/warranty-return-email";
+
+// On-site visit (calibração in loco) email templates (mini-spec 2)
+export { VisitNotificationEmail } from "./emails/visit-notification-email";
