@@ -85,6 +85,9 @@ importers:
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
+      '@calibra-facil/email':
+        specifier: workspace:^
+        version: link:../../packages/email
       '@calibra-facil/label-rendering':
         specifier: workspace:^
         version: link:../../packages/label-rendering
@@ -1165,6 +1168,9 @@ importers:
 
   packages/email:
     dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@react-email/components':
         specifier: 1.0.12
         version: 1.0.12(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -1184,9 +1190,15 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.1
         version: 19.2.3(@types/react@19.2.16)
+      '@vitejs/plugin-react':
+        specifier: 6.0.2
+        version: 6.0.2(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(tsx@4.22.4))
       react-email:
         specifier: 6.5.0
         version: 6.5.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@6.0.3))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.77.4)(tsx@4.22.4))
 
   packages/label-rendering:
     dependencies:
@@ -1316,12 +1328,24 @@ importers:
       '@types/node':
         specifier: ^24.13.0
         version: 24.13.0
+      '@types/react':
+        specifier: ^19.2.16
+        version: 19.2.16
+      '@vitejs/plugin-react':
+        specifier: 6.0.2
+        version: 6.0.2(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(tsx@4.22.4))
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@6.0.3))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.77.4)(tsx@4.22.4))
 
   packages/schemas:
     dependencies:
@@ -9160,6 +9184,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0

@@ -484,7 +484,7 @@ function createLabEmailBrand(
   };
 }
 
-async function getLabEmailBrand(
+export async function getLabEmailBrand(
   organizationId: string,
 ): Promise<EmailBrand | undefined> {
   const [lab] = await db

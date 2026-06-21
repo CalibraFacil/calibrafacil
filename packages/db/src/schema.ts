@@ -5488,6 +5488,109 @@ export const serviceOrderPublicAccessToken = pgTable(
 );
 
 // =============================================================================
+// SERVICE ORDER EMAIL LOG - Idempotency / dedup (mini-spec H, REQ-SOEMAIL-007)
+// =============================================================================
+
+/**
+ * Records each sent transition email keyed by (serviceOrderId, eventKey).
+ * A UNIQUE constraint on (service_order_id, event_key) enforces at-most-once
+ * dispatch per service-order lifecycle event (REQ-SOEMAIL-008).
+ *
+ * The send-once helper in apps/api claims a row before dispatch and deletes it
+ * on failure so a retry can resend (REQ-SOEMAIL-009). Only apps/api has DB
+ * access; packages/notifications remains DB-free (preserves REQ-004 boundary).
+ */
+export const serviceOrderEmailLog = pgTable(
+  "service_order_email_log",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    /** Stable event key, e.g. "nova_os", "orcamento_sent:42". */
+    eventKey: text("event_key").notNull(),
+    /** Resolved recipient address at send time (informational). */
+    recipientEmail: text("recipient_email"),
+    sentAt: timestamp("sent_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("service_order_email_log_so_event_uidx").on(
+      table.serviceOrderId,
+      table.eventKey,
+    ),
+    index("service_order_email_log_so_idx").on(table.serviceOrderId),
+  ],
+);
+
+export const serviceOrderEmailLogRelations = relations(
+  serviceOrderEmailLog,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderEmailLog.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// SERVICE ORDER EMAIL OUTBOX - Transactional outbox for customer status emails
+// =============================================================================
+// Rows are written in the SAME database transaction as the triggering status
+// change so that a rollback never produces an orphaned email dispatch.
+// A separate worker (mini-spec E2) drains this table and sends the actual email.
+
+export const serviceOrderEmailOutbox = pgTable(
+  "service_order_email_outbox",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Nullable to match how events store unitId — some paths may not have it.
+    unitId: integer("unit_id"),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    // Stable per-transition dedup key, e.g. "status_email:repair_in_progress".
+    eventKey: text("event_key").notNull(),
+    // The service-order status that triggered this outbox entry.
+    targetStatus: text("target_status").notNull(),
+    // Minimal snapshot needed to send later; worker may re-load the order.
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    processedAt: timestamp("processed_at"),
+  },
+  (table) => [
+    // At most one outbox row per (service order, transition event). INSERT with
+    // onConflictDoNothing prevents duplicates on re-entry / retries.
+    unique("service_order_email_outbox_order_event_uidx").on(
+      table.serviceOrderId,
+      table.eventKey,
+    ),
+    index("service_order_email_outbox_pending_idx").on(
+      table.createdAt,
+      table.processedAt,
+    ),
+  ],
+);
+
+export const serviceOrderEmailOutboxRelations = relations(
+  serviceOrderEmailOutbox,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderEmailOutbox.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    organization: one(organization, {
+      fields: [serviceOrderEmailOutbox.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+// =============================================================================
 // CALIBRATION REQUEST - Client Portal Intake Queue
 // =============================================================================
 

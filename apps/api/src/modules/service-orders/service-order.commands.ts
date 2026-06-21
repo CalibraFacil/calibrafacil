@@ -3,6 +3,7 @@ import {
   asset,
   customer,
   serviceOrder,
+  serviceOrderAssetSnapshot,
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
 import { canTransitionServiceOrderStatus } from "@calibra-facil/shared";
@@ -22,6 +23,8 @@ import {
 } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
+import { enqueueServiceOrderEmail } from "./email-outbox-payloads";
+import type { NovaOsOutboxPayload } from "./email-outbox-payloads";
 
 type ServiceOrderMember = AuthVariables["member"];
 type ServiceOrderRow = typeof serviceOrder.$inferSelect;
@@ -126,6 +129,60 @@ export async function createServiceOrder(input: {
       userId: input.actorUserId,
     }),
   ]);
+
+  // REQ-SOEMAIL-071: enqueue a durable outbox row for the "nova OS" email.
+  // Load customer + asset snapshot data first (both belong to the same org —
+  // tenant scope is preserved). Enqueue is awaited so the row is persisted
+  // before the handler returns; no fire-and-forget.
+  // Email delivery happens in the worker drain (not in this request path).
+  const [customerRow, snapshotRow] = await Promise.all([
+    db
+      .select({ name: customer.name, email: customer.email })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.id, created.customerId),
+          eq(customer.labOrganizationId, created.organizationId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({
+        manufacturer: serviceOrderAssetSnapshot.manufacturer,
+        model: serviceOrderAssetSnapshot.model,
+        serialNumber: serviceOrderAssetSnapshot.serialNumber,
+      })
+      .from(serviceOrderAssetSnapshot)
+      .where(eq(serviceOrderAssetSnapshot.serviceOrderId, created.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+  ]);
+
+  const novaOsPayload = {
+    serviceOrderId: created.id,
+    serviceOrderNumber: created.serviceOrderNumber,
+    organizationId: created.organizationId,
+    publicId: created.publicId,
+    customerId: created.customerId,
+    clientContactSnapshot: created.clientContactSnapshot,
+    customerName: customerRow?.name ?? "",
+    customerEmail: customerRow?.email ?? null,
+    assetManufacturer: snapshotRow?.manufacturer ?? null,
+    assetModel: snapshotRow?.model ?? null,
+    assetSerialNumber: snapshotRow?.serialNumber ?? null,
+    openedAt: created.openedAt.toISOString(),
+    claimedDefect: created.claimedDefect,
+  } satisfies NovaOsOutboxPayload;
+
+  await enqueueServiceOrderEmail({
+    organizationId: created.organizationId,
+    unitId: created.unitId,
+    serviceOrderId: created.id,
+    eventKey: "nova_os",
+    targetStatus: created.status ?? "",
+    payload: novaOsPayload,
+  });
 
   return { status: "ok" as const, data: created };
 }

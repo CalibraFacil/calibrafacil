@@ -7,6 +7,7 @@ import {
 import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrations";
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
+import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 
 // One function serves all Vercel cron jobs so Vercel packages a single bundle
@@ -162,12 +163,22 @@ async function handleAuthMaintenance(request: Request) {
   return Response.json(result);
 }
 
+async function handleServiceOrderEmails(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  const result = await drainServiceOrderEmailOutbox();
+  return Response.json(result);
+}
+
 const JOB_HANDLERS: Record<string, (request: Request) => Promise<Response>> = {
   integrations: handleIntegrations,
   notifications: handleNotifications,
   "portal-digest": handlePortalDigest,
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
+  "service-order-emails": handleServiceOrderEmails,
 };
 
 function resolveJob(request: Request) {

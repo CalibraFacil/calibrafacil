@@ -1,5 +1,11 @@
 import { db } from "@calibra-facil/db";
-import { serviceOrder, serviceOrderQuote } from "@calibra-facil/db/schema";
+import {
+  serviceOrder,
+  serviceOrderQuote,
+  serviceOrderQuoteItem,
+  serviceOrderAssetSnapshot,
+  customer,
+} from "@calibra-facil/db/schema";
 import {
   canApproveServiceOrderQuote,
   canEditServiceOrderQuote,
@@ -25,6 +31,14 @@ import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
 import { getQuoteForAction } from "./service-order.queries";
 import { getServiceOrderDetail } from "./service-order.read-model";
 import { getPortalCustomerForAuthOrganization } from "./service-order.list-queries";
+import {
+  enqueueServiceOrderEmail,
+} from "./email-outbox-payloads";
+import type {
+  OrcamentoSentOutboxPayload,
+  QuoteApprovedOutboxPayload,
+  QuoteRejectedOutboxPayload,
+} from "./email-outbox-payloads";
 
 type ServiceOrderMember = AuthVariables["member"];
 
@@ -248,6 +262,125 @@ export async function sendServiceOrderQuote(input: {
     userId: input.actorUserId,
   });
 
+  // REQ-SOEMAIL-071: enqueue a durable outbox row for the "novo orçamento" email.
+  // Load all template data now (all queries scoped to the service order's org).
+  // Enqueue is awaited so the row is persisted before the handler returns.
+  // Email delivery happens in the worker drain (not in this request path).
+  // The raw token is captured here (not reminted later) — REQ-SOEMAIL-023.
+  const [orderRow, quoteItemRows, snapshotRow, customerRow] =
+    await Promise.all([
+      db
+        .select({
+          publicId: serviceOrder.publicId,
+          clientContactSnapshot: serviceOrder.clientContactSnapshot,
+        })
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, input.member.organizationId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+      db
+        .select()
+        .from(serviceOrderQuoteItem)
+        .where(eq(serviceOrderQuoteItem.quoteId, input.quoteId))
+        .orderBy(
+          serviceOrderQuoteItem.sortOrder,
+          serviceOrderQuoteItem.id,
+        ),
+      db
+        .select({
+          manufacturer: serviceOrderAssetSnapshot.manufacturer,
+          model: serviceOrderAssetSnapshot.model,
+          serialNumber: serviceOrderAssetSnapshot.serialNumber,
+          inventoryCode: serviceOrderAssetSnapshot.inventoryCode,
+          displaySpecs: serviceOrderAssetSnapshot.displaySpecs,
+        })
+        .from(serviceOrderAssetSnapshot)
+        .where(
+          eq(serviceOrderAssetSnapshot.serviceOrderId, input.serviceOrderId),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+      db
+        .select({
+          name: customer.name,
+          email: customer.email,
+          taxId: customer.taxId,
+        })
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, detail.customerId),
+            eq(customer.labOrganizationId, input.member.organizationId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+    ]);
+
+  const portalAppUrl =
+    process.env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com";
+
+  if (orderRow) {
+    const openedAtIso =
+      detail.openedAt instanceof Date
+        ? detail.openedAt.toISOString()
+        : String(detail.openedAt);
+
+    const orcamentoPayload = {
+      serviceOrderId: input.serviceOrderId,
+      quoteId: input.quoteId,
+      serviceOrderNumber: detail.serviceOrderNumber,
+      organizationId: input.member.organizationId,
+      publicId: orderRow.publicId,
+      customerId: detail.customerId,
+      clientContactSnapshot:
+        orderRow.clientContactSnapshot ?? null,
+      customerName: customerRow?.name ?? detail.customerName ?? "",
+      customerEmail: customerRow?.email ?? detail.customerEmail ?? null,
+      customerTaxId: customerRow?.taxId ?? detail.customerTaxId ?? null,
+      assetManufacturer: snapshotRow?.manufacturer ?? null,
+      assetModel: snapshotRow?.model ?? null,
+      assetInventoryCode: snapshotRow?.inventoryCode ?? null,
+      openedAt: openedAtIso,
+      assetSerialNumber: snapshotRow?.serialNumber ?? null,
+      // REQ-SOEMAIL-025: instrument-agnostic spec rows, no hardcoded fields
+      displaySpecs: snapshotRow?.displaySpecs ?? null,
+      claimedDefect: detail.claimedDefect,
+      items: quoteItemRows.map((item) => ({
+        id: item.id,
+        type: item.type,
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPriceCents: item.unitPriceCents,
+        totalPriceCents: item.totalPriceCents,
+      })),
+      // REQ-SOEMAIL-022 [HIGH RISK]: persisted totals, not recomputed
+      subtotalServicesCents: quote.subtotalServicesCents,
+      subtotalPartsCents: quote.subtotalPartsCents,
+      freightCents: quote.freightCents,
+      discountCents: quote.discountCents,
+      totalCents: quote.totalCents,
+      // REQ-SOEMAIL-023 [HIGH RISK]: token captured above, not reminted
+      publicAccessToken: token.token,
+      portalAppUrl,
+    } satisfies OrcamentoSentOutboxPayload;
+
+    await enqueueServiceOrderEmail({
+      organizationId: input.member.organizationId,
+      unitId: detail.unitId,
+      serviceOrderId: input.serviceOrderId,
+      eventKey: `orcamento_sent:${input.quoteId}`,
+      targetStatus: "awaiting_quote_approval",
+      payload: orcamentoPayload,
+    });
+  }
+
   return { status: "ok" as const, data: updated, publicToken: token.token };
 }
 
@@ -268,6 +401,18 @@ export async function approveServiceOrderQuoteManually(input: {
     .where(eq(serviceOrder.id, input.serviceOrderId))
     .limit(1);
   if (!order) return { status: "order_not_found" as const };
+
+  // Look up customer for the email payload before the transaction
+  const [customerRow] = await db
+    .select({ name: customer.name, email: customer.email })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, order.customerId),
+        eq(customer.labOrganizationId, order.organizationId),
+      ),
+    )
+    .limit(1);
 
   await db.transaction(async (tx) => {
     await tx
@@ -305,6 +450,30 @@ export async function approveServiceOrderQuoteManually(input: {
       },
       tx,
     );
+    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+    const approvedPayload = {
+      serviceOrderId: input.serviceOrderId,
+      quoteId: input.quoteId,
+      serviceOrderNumber: order.serviceOrderNumber,
+      organizationId: order.organizationId,
+      publicId: order.publicId,
+      customerId: order.customerId,
+      clientContactSnapshot: order.clientContactSnapshot,
+      customerName: customerRow?.name ?? "",
+      customerEmail: customerRow?.email ?? null,
+      totalApprovedCents: quote.totalCents,
+    } satisfies QuoteApprovedOutboxPayload;
+    await enqueueServiceOrderEmail(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: input.serviceOrderId,
+        eventKey: `quote_approved:${input.quoteId}`,
+        targetStatus: "quote_approved",
+        payload: approvedPayload,
+      },
+      tx,
+    );
   });
 
   return { status: "ok" as const };
@@ -327,6 +496,18 @@ export async function rejectServiceOrderQuoteManually(input: {
     .where(eq(serviceOrder.id, input.serviceOrderId))
     .limit(1);
   if (!order) return { status: "order_not_found" as const };
+
+  // Look up customer for the email payload before the transaction
+  const [customerRowReject] = await db
+    .select({ name: customer.name, email: customer.email })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, order.customerId),
+        eq(customer.labOrganizationId, order.organizationId),
+      ),
+    )
+    .limit(1);
 
   await db.transaction(async (tx) => {
     await tx
@@ -353,6 +534,30 @@ export async function rejectServiceOrderQuoteManually(input: {
           quoteId: input.quoteId,
           reason: input.values.rejectionReason,
         },
+      },
+      tx,
+    );
+    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+    const rejectedPayload = {
+      serviceOrderId: input.serviceOrderId,
+      quoteId: input.quoteId,
+      serviceOrderNumber: order.serviceOrderNumber,
+      organizationId: order.organizationId,
+      publicId: order.publicId,
+      customerId: order.customerId,
+      clientContactSnapshot: order.clientContactSnapshot,
+      customerName: customerRowReject?.name ?? "",
+      customerEmail: customerRowReject?.email ?? null,
+      rejectionReason: input.values.rejectionReason ?? null,
+    } satisfies QuoteRejectedOutboxPayload;
+    await enqueueServiceOrderEmail(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: input.serviceOrderId,
+        eventKey: `quote_rejected:${input.quoteId}`,
+        targetStatus: "quote_rejected",
+        payload: rejectedPayload,
       },
       tx,
     );
@@ -421,6 +626,31 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
       },
       tx,
     );
+    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+    // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
+    const portalApprovedPayload = {
+      serviceOrderId: input.serviceOrderId,
+      quoteId: input.quoteId,
+      serviceOrderNumber: order.serviceOrderNumber,
+      organizationId: order.organizationId,
+      publicId: order.publicId,
+      customerId: order.customerId,
+      clientContactSnapshot: order.clientContactSnapshot,
+      customerName: linkedCustomer.name,
+      customerEmail: linkedCustomer.email,
+      totalApprovedCents: quote.totalCents,
+    } satisfies QuoteApprovedOutboxPayload;
+    await enqueueServiceOrderEmail(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: input.serviceOrderId,
+        eventKey: `quote_approved:${input.quoteId}`,
+        targetStatus: "quote_approved",
+        payload: portalApprovedPayload,
+      },
+      tx,
+    );
   });
 
   return { status: "ok" as const };
@@ -480,6 +710,31 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
         },
         ipAddress: input.metadata.ipAddress ?? null,
         userAgent: input.metadata.userAgent ?? null,
+      },
+      tx,
+    );
+    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+    // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
+    const portalRejectedPayload = {
+      serviceOrderId: input.serviceOrderId,
+      quoteId: input.quoteId,
+      serviceOrderNumber: order.serviceOrderNumber,
+      organizationId: order.organizationId,
+      publicId: order.publicId,
+      customerId: order.customerId,
+      clientContactSnapshot: order.clientContactSnapshot,
+      customerName: linkedCustomer.name,
+      customerEmail: linkedCustomer.email,
+      rejectionReason: input.values.rejectionReason ?? null,
+    } satisfies QuoteRejectedOutboxPayload;
+    await enqueueServiceOrderEmail(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: input.serviceOrderId,
+        eventKey: `quote_rejected:${input.quoteId}`,
+        targetStatus: "quote_rejected",
+        payload: portalRejectedPayload,
       },
       tx,
     );

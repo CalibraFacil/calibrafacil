@@ -31,7 +31,19 @@ export {
   notifyVisitCancelled,
   notifyVisitReminder,
   sendPortalDueDigests,
+  getLabEmailBrand,
   type PortalDigestRunResult,
   type SendNotificationOptions,
   type NotificationResult,
 } from "./service";
+
+// Service-order customer-facing email dispatcher (mini-spec A)
+export {
+  sendServiceOrderCustomerEmail,
+  resolveServiceOrderRecipient,
+  type ServiceOrderEmailInput,
+  type ServiceOrderEmailRenderContext,
+  type ServiceOrderDispatchTarget,
+  type CustomerDispatchTarget,
+  type ServiceOrderCustomerEmailResult,
+} from "./service-order-customer-email";

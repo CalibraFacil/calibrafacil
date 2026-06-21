@@ -42,6 +42,10 @@
     {
       "path": "/api/cron/auth-maintenance",
       "schedule": "30 4 * * 1"
+    },
+    {
+      "path": "/api/cron/service-order-emails",
+      "schedule": "*/5 * * * *"
     }
   ],
   "rewrites": [
@@ -68,6 +72,10 @@
     {
       "source": "/api/cron/auth-maintenance",
       "destination": "/api/cron/auth-maintenance"
+    },
+    {
+      "source": "/api/cron/service-order-emails",
+      "destination": "/api/cron/service-order-emails"
     },
     {
       "source": "/api/(.*)",

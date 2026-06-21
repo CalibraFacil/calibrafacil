@@ -30,3 +30,75 @@ export {
   type PortalDueDigestEmailProps,
   type PortalDueDigestItem,
 } from "./emails/portal-due-digest-email";
+
+// Service-order customer-facing email layout (mini-spec A foundation)
+export {
+  ServiceOrderEmailLayout,
+  type ServiceOrderEmailLayoutProps,
+} from "./emails/service-order-email-layout";
+
+// Service-order lifecycle email templates
+export {
+  NovaOsEmail,
+  type NovaOsEmailProps,
+} from "./emails/nova-os-email";
+export {
+  NovoOrcamentoEmail,
+  type NovoOrcamentoEmailProps,
+  type NovoOrcamentoEmailItem,
+} from "./emails/novo-orcamento-email";
+export {
+  OrcamentoAprovadoEmail,
+  type OrcamentoAprovadoEmailProps,
+} from "./emails/orcamento-aprovado-email";
+export {
+  OrcamentoRecusadoEmail,
+  type OrcamentoRecusadoEmailProps,
+} from "./emails/orcamento-recusado-email";
+
+// Service-order status-transition email templates (mini-spec E2)
+export {
+  ServicoIniciadoEmail,
+  type ServicoIniciadoEmailProps,
+} from "./emails/servico-iniciado-email";
+export {
+  ServicoAndamentoEmail,
+  type ServicoAndamentoEmailProps,
+  type ServicoAndamentoStage,
+} from "./emails/servico-andamento-email";
+export {
+  AguardandoAvaliacaoTecnicaEmail,
+  type AguardandoAvaliacaoTecnicaEmailProps,
+} from "./emails/aguardando-avaliacao-tecnica-email";
+export {
+  EmAvaliacaoTecnicaEmail,
+  type EmAvaliacaoTecnicaEmailProps,
+} from "./emails/em-avaliacao-tecnica-email";
+
+// Service-order conclusão/entrega email templates (mini-spec F)
+export {
+  ProntoParaRetiradaEmail,
+  type ProntoParaRetiradaEmailProps,
+} from "./emails/pronto-para-retirada-email";
+export {
+  OsEntregueEmail,
+  type OsEntregueEmailProps,
+} from "./emails/os-entregue-email";
+export {
+  OsEncerradaEmail,
+  type OsEncerradaEmailProps,
+} from "./emails/os-encerrada-email";
+export {
+  RevisaoFinalEmail,
+  type RevisaoFinalEmailProps,
+} from "./emails/revisao-final-email";
+
+// Service-order cancelamento/garantia email templates (mini-spec G)
+export {
+  OsCanceladaEmail,
+  type OsCanceladaEmailProps,
+} from "./emails/os-cancelada-email";
+export {
+  GarantiaRetornoEmail,
+  type GarantiaRetornoEmailProps,
+} from "./emails/garantia-retorno-email";

@@ -9,6 +9,7 @@ import {
   receivableInstallment,
   serviceOrder,
   serviceOrderAssetSnapshot,
+  serviceOrderEmailOutbox,
   serviceOrderEventLog,
   serviceOrderExecutionItem,
   serviceOrderPublicAccessToken,
@@ -16,6 +17,7 @@ import {
   serviceOrderQuoteItem,
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
+import { getStatusEmailDescriptor } from "../modules/service-orders/status-email-map";
 import type {
   ServiceOrderActorType,
   ServiceOrderEventType,
@@ -132,6 +134,56 @@ export async function recordServiceOrderEvent(
     ipAddress: event.ipAddress ?? null,
     userAgent: event.userAgent ?? null,
   });
+
+  // Transactional outbox: if this event represents a status change to a status
+  // that triggers a customer email, insert an outbox row using the SAME executor
+  // (so a transaction rollback also rolls back the outbox insert — no orphaned
+  // emails). The actual email is sent by the worker (mini-spec E2).
+  const newStatus =
+    event.newValue !== undefined &&
+    event.newValue !== null &&
+    typeof event.newValue === "object" &&
+    "status" in event.newValue &&
+    typeof event.newValue.status === "string"
+      ? event.newValue.status
+      : null;
+
+  const oldStatus =
+    event.oldValue !== undefined &&
+    event.oldValue !== null &&
+    typeof event.oldValue === "object" &&
+    "status" in event.oldValue &&
+    typeof event.oldValue.status === "string"
+      ? event.oldValue.status
+      : null;
+
+  // Only enqueue when the status is actually changing and lands on a trigger status.
+  if (newStatus !== null && newStatus !== oldStatus) {
+    const descriptor = getStatusEmailDescriptor(newStatus);
+    if (descriptor !== undefined) {
+      await executor
+        .insert(serviceOrderEmailOutbox)
+        .values({
+          organizationId: event.organizationId,
+          unitId: event.unitId ?? null,
+          serviceOrderId: event.serviceOrderId,
+          eventKey: descriptor.eventKey,
+          targetStatus: newStatus,
+          payload: {
+            status: newStatus,
+            serviceOrderId: event.serviceOrderId,
+            organizationId: event.organizationId,
+          } satisfies Record<string, unknown>,
+          attempts: 0,
+        })
+        .onConflictDoNothing({
+          target: [
+            serviceOrderEmailOutbox.serviceOrderId,
+            serviceOrderEmailOutbox.eventKey,
+          ],
+        });
+    }
+  }
 }
 
 export async function getOrCreateServiceOrderSettings(

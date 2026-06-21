@@ -49,6 +49,8 @@ export async function startServiceOrderExecution(input: {
     actorType: "lab_user",
     actorId: input.actorUserId,
     eventType: "service_order.repair_started",
+    oldValue: { status: order.status },
+    newValue: { status: "repair_in_progress" },
   });
 
   return { status: "ok" as const, data: execution };

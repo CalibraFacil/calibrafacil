@@ -10,7 +10,9 @@
   "scripts": {
     "build": "tsgo",
     "typecheck": "tsgo",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "keywords": [
     "notifications",
@@ -32,9 +34,14 @@
   },
   "devDependencies": {
     "@calibra-facil/db": "workspace:*",
+    "@calibra-facil/email": "workspace:*",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
+    "@types/react": "^19.2.16",
+    "@vitejs/plugin-react": "6.0.2",
     "drizzle-orm": "^0.45.2",
-    "typescript": "^6.0.3"
+    "react": "^19.2.7",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.17"
   }
 }

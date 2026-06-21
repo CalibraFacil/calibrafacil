@@ -42,6 +42,9 @@ yarn-error.log*
 .DS_Store
 *.pem
 
+# Claude Code agent worktrees (transient, auto-cleaned)
+.claude/worktrees/
+
 # LaTeX build artifacts (math-engine validation)
 packages/math-engine/docs/validation/latex/*.pdf
 packages/math-engine/docs/validation/latex/*.aux

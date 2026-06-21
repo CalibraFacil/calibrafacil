@@ -12,5 +12,5 @@
     "isolatedModules": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", ".react-email"]
+  "exclude": ["node_modules", ".react-email", "vitest.config.ts"]
 }

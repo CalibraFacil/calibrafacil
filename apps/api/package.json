@@ -23,6 +23,7 @@
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/certificate-xlsx-template": "workspace:^",
     "@calibra-facil/contracts": "workspace:^",
+    "@calibra-facil/email": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/label-rendering": "workspace:^",
     "@calibra-facil/math-engine": "workspace:^",
