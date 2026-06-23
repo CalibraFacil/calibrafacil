@@ -12,7 +12,9 @@
   "description": "",
   "scripts": {
     "build": "tsgo",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@better-auth/passkey": "1.6.14",
@@ -36,6 +38,7 @@
     "@calibra-facil/db": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "vitest": "^4.0.17"
   }
 }
