@@ -15,6 +15,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "check-types": "tsgo --project tsconfig.build.json --noEmit"
   },
   "dependencies": {

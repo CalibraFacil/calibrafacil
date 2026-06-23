@@ -13,13 +13,12 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.spec.ts"],
+    // The real-DB integration tier (*.int.spec.ts) runs under
+    // vitest.integration.config.ts (Docker required) — keep it out of the fast suite.
+    exclude: ["**/node_modules/**", "**/*.int.spec.ts"],
     coverage: {
       provider: "v8",
-      include: [
-        "src/routes/billing/**/*.ts",
-        "src/routes/webhooks.ts",
-        "src/services/asaas/**/*.ts",
-      ],
+      include: ["src/routes/**/*.ts", "src/services/**/*.ts", "src/lib/**/*.ts"],
       exclude: ["**/*.spec.ts", "**/types.ts"],
     },
     setupFiles: ["./test/setup.ts"],

@@ -1,0 +1,94 @@
+import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
+import type { GlobalSetupContext } from "vitest/node";
+
+// Vitest globalSetup for the real-DB integration tier. Boots ONE ephemeral
+// Postgres via raw `docker run` (the repo's pnpm build-script allowlist rejects
+// testcontainers' native deps, so we avoid the dependency), builds the schema
+// once via `drizzle-kit push` (the corrected schema cold-builds — see migration
+// 0060), and hands the connection URL to workers via `provide`. The per-worker
+// `setup.ts` sets process.env.DATABASE_URL before any db access, so the real `db`
+// Proxy (postgres-js off-Cloudflare) connects to it — no change to packages/db.
+//
+// CI can skip Docker by setting TEST_DATABASE_URL to a service-container Postgres.
+
+// Unique per run so parallel worktrees (Phase 2 makers, CI matrix) don't collide.
+const CONTAINER = `cf-api-int-pg-${process.pid}`;
+const dbDir = fileURLToPath(new URL("../../../../packages/db", import.meta.url));
+
+let startedContainer: string | null = null;
+
+function tryExec(cmd: string) {
+  try {
+    execSync(cmd, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function setup({ provide }: GlobalSetupContext) {
+  let url = process.env.TEST_DATABASE_URL;
+
+  if (!url) {
+    // Let Docker assign a free host port (-p 0:5432) so concurrent runs don't clash.
+    execSync(
+      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=calibra -p 0:5432 postgres:16`,
+      { stdio: "ignore" },
+    );
+    startedContainer = CONTAINER;
+
+    const mapped = execSync(`docker port ${CONTAINER} 5432`).toString().trim();
+    const port = mapped.split(":").pop();
+    if (!port) throw new Error(`could not resolve mapped port from "${mapped}"`);
+
+    // Wait for pg_isready to first succeed (initdb phase).
+    let ready = false;
+    for (let i = 0; i < 60; i += 1) {
+      if (tryExec(`docker exec ${CONTAINER} pg_isready -U postgres`)) {
+        ready = true;
+        break;
+      }
+      await sleep(1000);
+    }
+    if (!ready) throw new Error("integration Postgres did not become ready");
+
+    // The postgres:16 image does a fast-shutdown + restart after initdb: pg_isready
+    // passes during the init phase, the server bounces, then comes up in main mode.
+    // Without waiting out that cycle, the first real query hits ECONNREFUSED. Wait
+    // for the restart, then re-verify.
+    await sleep(3000);
+    ready = false;
+    for (let i = 0; i < 30; i += 1) {
+      if (tryExec(`docker exec ${CONTAINER} pg_isready -U postgres`)) {
+        ready = true;
+        break;
+      }
+      await sleep(1000);
+    }
+    if (!ready) throw new Error("integration Postgres restart did not complete");
+
+    // 127.0.0.1 (not localhost) so postgres-js doesn't try the IPv6 ::1 route first
+    // when Docker only maps IPv4.
+    url = `postgres://postgres:test@127.0.0.1:${port}/calibra`;
+  }
+
+  execSync("pnpm exec drizzle-kit push --force", {
+    cwd: dbDir,
+    env: { ...process.env, DATABASE_URL: url },
+    stdio: "inherit",
+  });
+
+  provide("testDatabaseUrl", url);
+}
+
+export async function teardown() {
+  if (startedContainer) tryExec(`docker rm -f ${startedContainer}`);
+}
+
+declare module "vitest" {
+  interface ProvidedContext {
+    testDatabaseUrl: string;
+  }
+}
