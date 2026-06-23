@@ -1581,7 +1581,12 @@ export const organizationIntegration = pgTable(
   (table) => [
     index("organization_integration_org_id_idx").on(table.organizationId),
     index("organization_integration_status_idx").on(table.status),
-    uniqueIndex("organization_integration_id_org_uidx").on(
+    // Composite-unique TARGET of the integration_* composite foreign keys.
+    // Declared as a table UNIQUE CONSTRAINT (not uniqueIndex) so drizzle emits it
+    // before the ADD FOREIGN KEY statements. A uniqueIndex is emitted AFTER the
+    // FKs, so the referencing FK can't find its target on a cold build (fresh DB
+    // via drizzle-kit push/migrate) — see migration 0060.
+    unique("organization_integration_id_org_uidx").on(
       table.id,
       table.organizationId,
     ),

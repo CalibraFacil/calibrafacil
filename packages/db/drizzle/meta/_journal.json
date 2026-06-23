@@ -421,6 +421,13 @@
       "when": 1781949372661,
       "tag": "0059_youthful_unicorn",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1782062297941,
+      "tag": "0060_integration_composite_unique",
+      "breakpoints": true
     }
   ]
 }
