@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { GlobalSetupContext } from "vitest/node";
+import { assertEphemeralTestDb } from "./guard";
 
 // Vitest globalSetup for the real-DB integration tier. Boots ONE ephemeral
 // Postgres via raw `docker run` (the repo's pnpm build-script allowlist rejects
@@ -73,6 +74,10 @@ export async function setup({ provide }: GlobalSetupContext) {
     // when Docker only maps IPv4.
     url = `postgres://postgres:test@127.0.0.1:${port}/calibra`;
   }
+
+  // Refuse to push the schema at (and later TRUNCATE) anything but a local/
+  // ephemeral DB — a remote/Neon TEST_DATABASE_URL aborts here, before any DDL.
+  assertEphemeralTestDb(url);
 
   execSync("pnpm exec drizzle-kit push --force", {
     cwd: dbDir,

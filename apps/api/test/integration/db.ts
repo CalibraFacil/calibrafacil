@@ -1,5 +1,6 @@
 import { db } from "@calibra-facil/db";
 import { sql } from "drizzle-orm";
+import { assertEphemeralTestDb } from "./guard";
 
 // Reuse the REAL db singleton (pointed at the test Postgres by setup.ts) — never
 // open a second pool.
@@ -18,6 +19,8 @@ function rowsOf(result: unknown): Array<Record<string, unknown>> {
  * IDENTITY CASCADE resets serial ids too. Excludes the drizzle bookkeeping table.
  */
 export async function truncateAll(): Promise<void> {
+  // Last line of defense: never TRUNCATE a non-local/Neon database.
+  assertEphemeralTestDb(process.env.DATABASE_URL);
   const result = await db.execute(
     sql`select tablename from pg_tables where schemaname = 'public' and tablename <> '__drizzle_migrations'`,
   );
