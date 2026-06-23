@@ -2561,6 +2561,7 @@ export interface SigningCertificatesApi {
 }
 
 export interface PublicInvitationsApi {
+  get<TResponse = unknown>(id: string): Promise<TResponse>;
   requestSetupLink<TResponse = unknown>(id: string): Promise<TResponse>;
 }
 

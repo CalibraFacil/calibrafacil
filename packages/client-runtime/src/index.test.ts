@@ -1269,6 +1269,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "get",
+          "namespace": "publicInvitations",
+          "policy": "cloud-only",
+        },
+        {
           "method": "requestSetupLink",
           "namespace": "publicInvitations",
           "policy": "cloud-only",

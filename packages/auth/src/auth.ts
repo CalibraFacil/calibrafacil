@@ -4,7 +4,7 @@ import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
@@ -1019,6 +1019,64 @@ export async function sendLabAccountSetupEmail(input: {
   });
 }
 
+function labDisplayNameFromEmail(email: string) {
+  return (
+    email
+      .split("@")[0]
+      ?.replace(/[._-]+/g, " ")
+      .trim() || email
+  );
+}
+
+/**
+ * Pre-create a user account for an invited LAB email so passwordless sign-in
+ * works the moment the invitation is sent.
+ *
+ * Lab sign-up is disabled on every credential type (emailAndPassword, magicLink
+ * and emailOTP all set `disableSignUp: true`), and `acceptInvitation` requires
+ * an authenticated session whose email matches the invite. So an invitee who
+ * has never signed up would otherwise be unable to authenticate at all — there
+ * is no public sign-up route (the product is sales-led). Creating the account
+ * up front means magic-link / OTP sign-in just logs them in (the passwordless
+ * senders already allow any email with a pending lab invitation), after which
+ * they can accept the invitation.
+ *
+ * Uses the admin `createUser` API, which is a trusted server-side call when
+ * invoked without request headers (better-auth only enforces the admin-session
+ * check when a request/headers context is present). Idempotent: no-ops when a
+ * user with the email already exists, and tolerates a concurrent create.
+ */
+async function ensureLabInvitationUser(email: string): Promise<void> {
+  const normalizedEmail = normalizeLabAccessEmail(email);
+
+  const [existing] = await getDb()
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .where(eq(sql<string>`lower(${schema.user.email})`, normalizedEmail))
+    .limit(1);
+  if (existing) return;
+
+  try {
+    await getLabAuth().api.createUser({
+      body: {
+        name: labDisplayNameFromEmail(normalizedEmail),
+        email: normalizedEmail,
+        password: randomBytes(24).toString("base64url"),
+        role: "user",
+      },
+    });
+  } catch (error) {
+    // A concurrent invite may have created the user between the check above and
+    // this insert; tolerate that, but surface anything else to the caller.
+    const [reloaded] = await getDb()
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(sql<string>`lower(${schema.user.email})`, normalizedEmail))
+      .limit(1);
+    if (!reloaded) throw error;
+  }
+}
+
 // Organization plugin configuration factory
 function createOrganizationPlugin() {
   return organization({
@@ -1085,6 +1143,26 @@ function createOrganizationPlugin() {
       },
     },
     async sendInvitationEmail(data) {
+      // Pre-create the invited account for LAB organizations so the invitee can
+      // authenticate via magic-link / OTP (see ensureLabInvitationUser).
+      // Best-effort: a failure here must never block delivery of the invitation
+      // email, which still drives the manual access-setup fallback.
+      try {
+        const [org] = await getDb()
+          .select({ type: schema.organization.type })
+          .from(schema.organization)
+          .where(eq(schema.organization.id, data.organization.id))
+          .limit(1);
+        if (org?.type === "LAB") {
+          await ensureLabInvitationUser(data.email);
+        }
+      } catch (error) {
+        console.error(
+          "[Lab Auth] Failed to pre-create invited user; sending invitation email anyway",
+          error,
+        );
+      }
+
       const appUrl = process.env.APP_URL || "http://localhost:5173";
       const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
       const apiKey = process.env.RESEND_API_KEY;

@@ -1101,6 +1101,9 @@ export function createDesktopApiClient(
       },
     },
     publicInvitations: {
+      async get() {
+        throw desktopUnsupportedAuthAction("Convites");
+      },
       async requestSetupLink() {
         throw desktopUnsupportedAuthAction("Convites");
       },
@@ -1710,7 +1713,9 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Catálogo de modelos de método");
       },
       async fromTemplate() {
-        throw desktopUnsupportedAuthAction("Adoção de método a partir de modelo");
+        throw desktopUnsupportedAuthAction(
+          "Adoção de método a partir de modelo",
+        );
       },
     },
     standards: {

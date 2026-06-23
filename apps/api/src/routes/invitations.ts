@@ -13,7 +13,11 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
+
+// Aliased user table for joining the inviter onto an invitation row.
+const inviter = alias(user, "inviter");
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -150,7 +154,9 @@ export const invitationsRouter = new Hono()
     }
 
     try {
-      // Fetch invitation with organization details
+      // Fetch invitation with organization + inviter details. This endpoint is
+      // public so a not-yet-signed-up invitee can render the accept page; keep
+      // the projection limited to what that page needs.
       const result = await db
         .select({
           id: invitation.id,
@@ -158,11 +164,14 @@ export const invitationsRouter = new Hono()
           role: invitation.role,
           status: invitation.status,
           expiresAt: invitation.expiresAt,
+          organizationId: invitation.organizationId,
           organizationName: organization.name,
           organizationSlug: organization.slug,
+          inviterEmail: inviter.email,
         })
         .from(invitation)
         .innerJoin(organization, eq(invitation.organizationId, organization.id))
+        .leftJoin(inviter, eq(invitation.inviterId, inviter.id))
         .where(
           and(
             eq(invitation.id, id),
@@ -183,8 +192,10 @@ export const invitationsRouter = new Hono()
         role: inv.role,
         status: inv.status,
         expiresAt: inv.expiresAt,
+        organizationId: inv.organizationId,
         organizationName: inv.organizationName,
         organizationSlug: inv.organizationSlug,
+        inviterEmail: inv.inviterEmail ?? "",
       });
     } catch (error) {
       console.error("Error fetching invitation:", error);
