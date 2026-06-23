@@ -15,7 +15,18 @@ export const FROM_TEMPLATE_STEPS = [
 
 export type FromTemplateStepKey = (typeof FROM_TEMPLATE_STEPS)[number]['key']
 
-export function WizardStepper({ current }: { current: FromTemplateStepKey }) {
+export function WizardStepper({
+  current,
+  onStepSelect,
+}: {
+  current: FromTemplateStepKey
+  /**
+   * When provided, already-completed steps become clickable so the user can step
+   * back (e.g. from Contexto/Confirmação back to Modelo to pick another template)
+   * without leaving the wizard. Forward steps stay locked behind their gates.
+   */
+  onStepSelect?: (step: FromTemplateStepKey) => void
+}) {
   const currentIndex = FROM_TEMPLATE_STEPS.findIndex(
     (step) => step.key === current,
   )
@@ -26,9 +37,21 @@ export function WizardStepper({ current }: { current: FromTemplateStepKey }) {
         const done = index < currentIndex
         const active = index === currentIndex
         const isLast = index === FROM_TEMPLATE_STEPS.length - 1
+        const canGoBack = done && onStepSelect != null
         return (
           <Fragment key={step.key}>
-            <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={!canGoBack}
+              onClick={canGoBack ? () => onStepSelect(step.key) : undefined}
+              aria-label={canGoBack ? `Voltar para ${step.label}` : undefined}
+              className={cn(
+                'flex shrink-0 items-center gap-2 text-left',
+                canGoBack
+                  ? 'cursor-pointer rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                  : 'cursor-default',
+              )}
+            >
               <span
                 className={cn(
                   'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums',
@@ -52,7 +75,7 @@ export function WizardStepper({ current }: { current: FromTemplateStepKey }) {
               >
                 {step.label}
               </span>
-            </div>
+            </button>
             {!isLast && (
               <span
                 aria-hidden

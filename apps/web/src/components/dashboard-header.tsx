@@ -89,6 +89,7 @@ const routeLabels: Record<string, string> = {
   // Methods
   '/dashboard/methods': 'Métodos de Calibração',
   '/dashboard/methods/new': 'Novo Método',
+  '/dashboard/methods/from-template': 'A partir de modelo',
   '/dashboard/methods/$id': 'Método',
   '/dashboard/methods/$id/edit': 'Editar Método',
 

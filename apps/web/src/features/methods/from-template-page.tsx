@@ -47,6 +47,7 @@ import {
   WizardStepper,
   type FromTemplateStepKey,
 } from './components/wizard-stepper'
+import type { FromTemplateSearch } from './from-template-search'
 
 /**
  * "Criar método a partir de modelo" — the 3-step adoption wizard.
@@ -56,29 +57,76 @@ import {
  * adoption creates a DRAFT (never published, never accredited); the three
  * acknowledgements are required and recorded; acknowledging is explicitly NOT the
  * lab's §7.2.1.5 verification.
+ *
+ * The active step and the selected template are derived from the `search` prop
+ * (URL search params), NOT from local state. Transitions call `navigate` so
+ * browser-back walks the wizard steps (REQ-FTPL-004).
  */
-export function FromTemplatePage() {
+export function FromTemplatePage({ search }: { search: FromTemplateSearch }) {
   const navigate = useNavigate()
   const { data: templates, isLoading, error } = useMethodTemplatesData()
 
-  const [step, setStep] = useState<FromTemplateStepKey>('catalog')
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [ackRead, setAckRead] = useState(false)
-  const [ackDuty, setAckDuty] = useState(false)
-  const [ackDraft, setAckDraft] = useState(false)
-  // null = use the template's default asset type (resolved from its slug).
-  const [assetTypeChoice, setAssetTypeChoice] = useState<number | null>(null)
+  // Derive the active step from search param. Default to 'catalog'.
+  // REQ-FTPL-001 / REQ-FTPL-002: absent or unknown → 'catalog'.
+  const rawStep = search.step
+  const templateParam = search.template ?? null
 
+  // REQ-FTPL-005: if step is context/confirm but template is missing or
+  // doesn't match a loaded template, fall back to catalog.
   const selected =
-    templates?.find((entry) => entry.templateKey === selectedKey) ?? null
+    templates?.find((entry) => entry.templateKey === templateParam) ?? null
+
+  const step: FromTemplateStepKey =
+    rawStep === 'context' || rawStep === 'confirm'
+      ? selected !== null
+        ? rawStep
+        : 'catalog'
+      : 'catalog'
 
   const { data: assetTypesData } = useQuery(assetTypesQueryOptions())
   const assetTypes = assetTypesData?.data ?? []
+
   // Derived (NO useEffect): the slug default + the user's optional override.
   const slugResolvedAssetTypeId =
     assetTypes.find((type) => type.slug === selected?.assetTypeSlug)?.id ?? null
-  const effectiveAssetTypeId = assetTypeChoice ?? slugResolvedAssetTypeId
+
+  // Navigate forward — push a new history entry (REQ-FTPL-004 requires push,
+  // not replace, so that browser-back returns to the previous step).
+  const goToStep = (
+    newStep: FromTemplateStepKey,
+    templateKey?: string | null,
+  ) => {
+    navigate({
+      to: '/dashboard/methods/from-template',
+      search:
+        newStep === 'catalog'
+          ? {}
+          : { step: newStep, template: templateKey ?? templateParam ?? '' },
+    })
+  }
+
+  // REQ-FTPL-003: clicking "Revisar contexto" navigates to context step.
+  const openContext = (entry: MethodTemplateCatalogEntry) => {
+    navigate({
+      to: '/dashboard/methods/from-template',
+      search: { step: 'context', template: entry.templateKey },
+    })
+  }
+
+  // REQ-FTPL-006: stepper step-select navigates to that step's search params.
+  const handleStepSelect = (clickedStep: FromTemplateStepKey) => {
+    if (clickedStep === 'catalog') {
+      navigate({
+        to: '/dashboard/methods/from-template',
+        search: {},
+      })
+    } else {
+      navigate({
+        to: '/dashboard/methods/from-template',
+        search: { step: clickedStep, template: templateParam ?? '' },
+      })
+    }
+  }
 
   const adopt = useMutation({
     mutationFn: (input: MethodFromTemplateInput) =>
@@ -98,45 +146,6 @@ export function FromTemplatePage() {
       ),
   })
 
-  // Derived gate — NO useEffect.
-  const canSubmit =
-    ackRead &&
-    ackDuty &&
-    ackDraft &&
-    name.trim().length >= 2 &&
-    !adopt.isPending
-
-  const openContext = (entry: MethodTemplateCatalogEntry) => {
-    setSelectedKey(entry.templateKey)
-    setName(entry.defaultName)
-    setAckRead(false)
-    setAckDuty(false)
-    setAckDraft(false)
-    setAssetTypeChoice(null)
-    setStep('context')
-  }
-
-  const submit = () => {
-    if (!selected || !canSubmit) return
-    const acceptedVerificarRefs = selected.governance.verificarItems
-      .filter((item) => item.severity === 'action')
-      .map((item) => item.ref)
-      .filter((ref): ref is string => typeof ref === 'string')
-    adopt.mutate({
-      templateKey: selected.templateKey,
-      name: name.trim(),
-      assetTypeId: effectiveAssetTypeId,
-      acknowledgements: {
-        readVerificarAndOmitted: true,
-        acceptsVerificationDuty: true,
-        understandsDraftGate: true,
-        acknowledgedAt: new Date().toISOString(),
-        templateVersion: selected.templateVersion,
-        acceptedVerificarRefs,
-      },
-    })
-  }
-
   return (
     <div className="space-y-6">
       <Panel className="p-5 sm:p-6">
@@ -146,7 +155,8 @@ export function FromTemplatePage() {
           description="Modelos curados, fundamentados em guias publicados. Cada modelo entra como RASCUNHO e exige a verificação do seu laboratório antes do uso (ISO/IEC 17025 §7.2.1.5)."
         />
         <div className="mt-4">
-          <WizardStepper current={step} />
+          {/* REQ-FTPL-006: completed steps are clickable via handleStepSelect */}
+          <WizardStepper current={step} onStepSelect={handleStepSelect} />
         </div>
       </Panel>
 
@@ -162,112 +172,172 @@ export function FromTemplatePage() {
       {step === 'context' && selected ? (
         <ContextStep
           entry={selected}
-          onBack={() => setStep('catalog')}
-          onConfirm={() => setStep('confirm')}
+          onBack={() => goToStep('catalog')}
+          onConfirm={() => goToStep('confirm')}
         />
       ) : null}
 
       {step === 'confirm' && selected ? (
-        <Panel className="p-5 sm:p-6">
-          <PanelHeader
-            eyebrow="Confirmação"
-            title={`Adotar: ${selected.defaultName}`}
-          />
-          <div className="mt-4 space-y-5">
-            <div className="space-y-4">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Configuração
-              </p>
-              <label className="block">
-                <span className="text-sm font-medium">Nome do método</span>
-                <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="mt-1"
-                  aria-label="Nome do método"
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium">Tipo de equipamento</span>
-                <Select
-                  value={
-                    effectiveAssetTypeId != null
-                      ? String(effectiveAssetTypeId)
-                      : undefined
-                  }
-                  onValueChange={(value) => setAssetTypeChoice(Number(value))}
-                >
-                  <SelectTrigger
-                    className="mt-1"
-                    aria-label="Tipo de equipamento"
-                  >
-                    <SelectValue placeholder="Selecione o tipo de equipamento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assetTypes.map((type) => (
-                      <SelectItem key={type.id} value={String(type.id)}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Padrão do modelo:{' '}
-                  <span className="font-medium">
-                    {assetTypes.find(
-                      (type) => type.id === slugResolvedAssetTypeId,
-                    )?.name ??
-                      selected.assetTypeSlug ??
-                      '—'}
-                  </span>
-                  . Ajuste se este método se aplica a outro tipo.
-                </span>
-              </label>
-            </div>
-
-            <fieldset className="space-y-3 rounded-xl bg-muted/40 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
-              <legend className="px-1 text-sm font-medium">
-                Reconhecimentos (registrados na trilha de auditoria)
-              </legend>
-              <AckRow checked={ackRead} onChange={setAckRead}>
-                Li os itens [VERIFICAR] e os componentes situacionais deste
-                modelo.
-              </AckRow>
-              <AckRow checked={ackDuty} onChange={setAckDuty}>
-                Assumo o dever do meu laboratório de VERIFICAR (ISO/IEC 17025
-                §7.2.1.5) e VALIDAR (§7.2.2) este método antes de usá-lo —{' '}
-                <span className="font-medium text-foreground">
-                  reconheço que marcar estas caixas NÃO constitui essa
-                  verificação.
-                </span>
-              </AckRow>
-              <AckRow checked={ackDraft} onChange={setAckDraft}>
-                Entendo que isto cria um RASCUNHO; o método não calibra até
-                passar por Revisão técnica e Aprovação da qualidade (Publicado).
-              </AckRow>
-            </fieldset>
-
-            <p className="text-xs text-muted-foreground">
-              Após criar, você irá para o rascunho para “Solicitar aprovação”.
-            </p>
-
-            <div className="flex items-center justify-between gap-3">
-              <Button variant="outline" onClick={() => setStep('context')}>
-                ← Voltar
-              </Button>
-              <Button
-                className={cn(ACTION_BUTTON_CLASS)}
-                disabled={!canSubmit}
-                onClick={submit}
-              >
-                {adopt.isPending ? 'Criando…' : 'Criar rascunho'}
-              </Button>
-            </div>
-          </div>
-        </Panel>
+        <ConfirmStep
+          key={selected.templateKey}
+          entry={selected}
+          assetTypes={assetTypes}
+          slugResolvedAssetTypeId={slugResolvedAssetTypeId}
+          isPending={adopt.isPending}
+          onBack={() => goToStep('context')}
+          onSubmit={(payload) => adopt.mutate(payload)}
+        />
       ) : null}
     </div>
+  )
+}
+
+/**
+ * REQ-FTPL-007: ConfirmStep is a separate component that receives `key` from
+ * the parent (keyed by templateKey). On re-mount the ack checkboxes are
+ * derived from fresh local state — no `useEffect` needed.
+ */
+function ConfirmStep({
+  entry,
+  assetTypes,
+  slugResolvedAssetTypeId,
+  isPending,
+  onBack,
+  onSubmit,
+}: {
+  entry: MethodTemplateCatalogEntry
+  assetTypes: { id: number; slug: string | null; name: string }[]
+  slugResolvedAssetTypeId: number | null
+  isPending: boolean
+  onBack: () => void
+  onSubmit: (payload: MethodFromTemplateInput) => void
+}) {
+  const [name, setName] = useState(entry.defaultName)
+  const [ackRead, setAckRead] = useState(false)
+  const [ackDuty, setAckDuty] = useState(false)
+  const [ackDraft, setAckDraft] = useState(false)
+  const [assetTypeChoice, setAssetTypeChoice] = useState<number | null>(null)
+
+  const effectiveAssetTypeId = assetTypeChoice ?? slugResolvedAssetTypeId
+
+  // Derived gate — NO useEffect.
+  const canSubmit =
+    ackRead && ackDuty && ackDraft && name.trim().length >= 2 && !isPending
+
+  const submit = () => {
+    if (!canSubmit) return
+    const acceptedVerificarRefs = entry.governance.verificarItems
+      .filter((item) => item.severity === 'action')
+      .map((item) => item.ref)
+      .filter((ref): ref is string => typeof ref === 'string')
+    onSubmit({
+      templateKey: entry.templateKey,
+      name: name.trim(),
+      assetTypeId: effectiveAssetTypeId,
+      acknowledgements: {
+        readVerificarAndOmitted: true,
+        acceptsVerificationDuty: true,
+        understandsDraftGate: true,
+        acknowledgedAt: new Date().toISOString(),
+        templateVersion: entry.templateVersion,
+        acceptedVerificarRefs,
+      },
+    })
+  }
+
+  return (
+    <Panel className="p-5 sm:p-6">
+      <PanelHeader
+        eyebrow="Confirmação"
+        title={`Adotar: ${entry.defaultName}`}
+      />
+      <div className="mt-4 space-y-5">
+        <div className="space-y-4">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Configuração
+          </p>
+          <label className="block">
+            <span className="text-sm font-medium">Nome do método</span>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1"
+              aria-label="Nome do método"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium">Tipo de equipamento</span>
+            <Select
+              value={
+                effectiveAssetTypeId != null
+                  ? String(effectiveAssetTypeId)
+                  : undefined
+              }
+              onValueChange={(value) => setAssetTypeChoice(Number(value))}
+            >
+              <SelectTrigger className="mt-1" aria-label="Tipo de equipamento">
+                <SelectValue placeholder="Selecione o tipo de equipamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {assetTypes.map((type) => (
+                  <SelectItem key={type.id} value={String(type.id)}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Padrão do modelo:{' '}
+              <span className="font-medium">
+                {assetTypes.find((type) => type.id === slugResolvedAssetTypeId)
+                  ?.name ??
+                  entry.assetTypeSlug ??
+                  '—'}
+              </span>
+              . Ajuste se este método se aplica a outro tipo.
+            </span>
+          </label>
+        </div>
+
+        <fieldset className="space-y-3 rounded-xl bg-muted/40 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+          <legend className="px-1 text-sm font-medium">
+            Reconhecimentos (registrados na trilha de auditoria)
+          </legend>
+          <AckRow checked={ackRead} onChange={setAckRead}>
+            Li os itens [VERIFICAR] e os componentes situacionais deste modelo.
+          </AckRow>
+          <AckRow checked={ackDuty} onChange={setAckDuty}>
+            Assumo o dever do meu laboratório de VERIFICAR (ISO/IEC 17025
+            §7.2.1.5) e VALIDAR (§7.2.2) este método antes de usá-lo —{' '}
+            <span className="font-medium text-foreground">
+              reconheço que marcar estas caixas NÃO constitui essa verificação.
+            </span>
+          </AckRow>
+          <AckRow checked={ackDraft} onChange={setAckDraft}>
+            Entendo que isto cria um RASCUNHO; o método não calibra até passar
+            por Revisão técnica e Aprovação da qualidade (Publicado).
+          </AckRow>
+        </fieldset>
+
+        <p className="text-xs text-muted-foreground">
+          Após criar, você irá para o rascunho para "Solicitar aprovação".
+        </p>
+
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="outline" onClick={onBack}>
+            ← Voltar
+          </Button>
+          <Button
+            className={cn(ACTION_BUTTON_CLASS)}
+            disabled={!canSubmit}
+            onClick={submit}
+          >
+            {isPending ? 'Criando…' : 'Criar rascunho'}
+          </Button>
+        </div>
+      </div>
+    </Panel>
   )
 }
 
