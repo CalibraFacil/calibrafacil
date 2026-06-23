@@ -15,6 +15,7 @@ import {
 import { and, eq, gt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
+import { withDbWakeRetry } from "../lib/db-retry";
 
 // Aliased user table for joining the inviter onto an invitation row.
 const inviter = alias(user, "inviter");
@@ -156,30 +157,36 @@ export const invitationsRouter = new Hono()
     try {
       // Fetch invitation with organization + inviter details. This endpoint is
       // public so a not-yet-signed-up invitee can render the accept page; keep
-      // the projection limited to what that page needs.
-      const result = await db
-        .select({
-          id: invitation.id,
-          email: invitation.email,
-          role: invitation.role,
-          status: invitation.status,
-          expiresAt: invitation.expiresAt,
-          organizationId: invitation.organizationId,
-          organizationName: organization.name,
-          organizationSlug: organization.slug,
-          inviterEmail: inviter.email,
-        })
-        .from(invitation)
-        .innerJoin(organization, eq(invitation.organizationId, organization.id))
-        .leftJoin(inviter, eq(invitation.inviterId, inviter.id))
-        .where(
-          and(
-            eq(invitation.id, id),
-            eq(invitation.status, "pending"),
-            gt(invitation.expiresAt, new Date()),
-          ),
-        )
-        .limit(1);
+      // the projection limited to what that page needs. Wrap the first DB touch
+      // in withDbWakeRetry so a Neon cold start is a brief delay, not a 500.
+      const result = await withDbWakeRetry(() =>
+        db
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            organizationId: invitation.organizationId,
+            organizationName: organization.name,
+            organizationSlug: organization.slug,
+            inviterEmail: inviter.email,
+          })
+          .from(invitation)
+          .innerJoin(
+            organization,
+            eq(invitation.organizationId, organization.id),
+          )
+          .leftJoin(inviter, eq(invitation.inviterId, inviter.id))
+          .where(
+            and(
+              eq(invitation.id, id),
+              eq(invitation.status, "pending"),
+              gt(invitation.expiresAt, new Date()),
+            ),
+          )
+          .limit(1),
+      );
 
       const inv = result[0];
       if (!inv) {
@@ -210,28 +217,35 @@ export const invitationsRouter = new Hono()
     }
 
     try {
-      const result = await db
-        .select({
-          id: invitation.id,
-          email: invitation.email,
-          role: invitation.role,
-          status: invitation.status,
-          expiresAt: invitation.expiresAt,
-          organizationId: invitation.organizationId,
-          organizationName: organization.name,
-          organizationType: organization.type,
-        })
-        .from(invitation)
-        .innerJoin(organization, eq(invitation.organizationId, organization.id))
-        .where(
-          and(
-            eq(invitation.id, id),
-            eq(invitation.status, "pending"),
-            gt(invitation.expiresAt, new Date()),
-            eq(organization.type, "LAB"),
-          ),
-        )
-        .limit(1);
+      // First DB touch — retry through a Neon cold start so the invitee's
+      // "Enviar link" click doesn't 500 on a freshly-woken compute.
+      const result = await withDbWakeRetry(() =>
+        db
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            organizationId: invitation.organizationId,
+            organizationName: organization.name,
+            organizationType: organization.type,
+          })
+          .from(invitation)
+          .innerJoin(
+            organization,
+            eq(invitation.organizationId, organization.id),
+          )
+          .where(
+            and(
+              eq(invitation.id, id),
+              eq(invitation.status, "pending"),
+              gt(invitation.expiresAt, new Date()),
+              eq(organization.type, "LAB"),
+            ),
+          )
+          .limit(1),
+      );
 
       const inv = result[0];
       if (!inv) {
