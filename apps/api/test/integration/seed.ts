@@ -73,6 +73,135 @@ export async function seedOrg(params?: {
   return { orgId, userId, memberId, unitId: unit.id };
 }
 
+export type SeededPortalContext = {
+  /** The LAB org that owns the customers (asset.unitId / job.organizationId scope). */
+  labOrgId: string;
+  /** The LAB org's default unit id (assets / requests are unit-scoped to the lab). */
+  labUnitId: number;
+  /** The portal user authenticated by loginAsPortal. */
+  portalUserId: string;
+  /** The CLIENT auth-org the portal session is active in (the customer's authOrg). */
+  clientOrgId: string;
+  /** The in-scope customer the portal session resolves to. */
+  customerId: number;
+};
+
+/**
+ * Seed the minimum for `requirePortalProtected` + portal customer-scope
+ * resolution to succeed for ONE customer:
+ *   - a LAB org + its default unit (owns the customers / unit-scopes assets),
+ *   - a CLIENT auth-org (the portal's active organization),
+ *   - the `customer` row linking that CLIENT auth-org to the LAB (so
+ *     resolvePortalCustomerScope maps activeOrgId -> exactly this customer id),
+ *   - a portal user + member (role `client_user`, organizationType resolves to
+ *     CLIENT) so requireOrganization -> requirePortalAccess pass for real.
+ *
+ * Mirrors how the fast portal specs construct a single-customer portal session,
+ * but against the REAL db. Pass a distinct `labOrgId` to reuse one lab across
+ * several customers (call seedPortalCustomer for the extra ones).
+ */
+export async function seedPortalContext(params?: {
+  labOrgId?: string;
+  clientOrgId?: string;
+  portalUserId?: string;
+  customerName?: string;
+}): Promise<SeededPortalContext> {
+  const labOrgId = params?.labOrgId ?? "portal-lab-1";
+  const clientOrgId = params?.clientOrgId ?? "portal-client-a";
+  const portalUserId = params?.portalUserId ?? `portal-user-${clientOrgId}`;
+  const customerName = params?.customerName ?? "Customer A";
+  const now = new Date("2026-01-01T00:00:00.000Z");
+
+  // The LAB org + default unit that owns the customers' assets/requests.
+  await db.insert(organization).values({
+    id: labOrgId,
+    name: `Lab ${labOrgId}`,
+    slug: labOrgId,
+    createdAt: now,
+    type: "LAB",
+    status: "ACTIVE",
+  });
+
+  const [unit] = await db
+    .insert(organizationUnit)
+    .values({
+      organizationId: labOrgId,
+      name: "Matriz",
+      slug: `matriz-${labOrgId}`,
+      status: "ACTIVE",
+      isDefault: true,
+    })
+    .returning({ id: organizationUnit.id });
+  if (!unit) throw new Error("seedPortalContext: failed to create lab unit");
+
+  const customerId = await seedPortalCustomer({
+    labOrgId,
+    clientOrgId,
+    portalUserId,
+    customerName,
+  });
+
+  return {
+    labOrgId,
+    labUnitId: unit.id,
+    portalUserId,
+    clientOrgId,
+    customerId,
+  };
+}
+
+/**
+ * Seed an additional portal customer for an EXISTING lab: a CLIENT auth-org, the
+ * `customer` row linking it to the lab, and a portal user + member for it. Used
+ * to seed "customer B" so its data would leak if the customerId scope regressed.
+ * Returns the created customer id.
+ */
+export async function seedPortalCustomer(params: {
+  labOrgId: string;
+  clientOrgId: string;
+  portalUserId: string;
+  customerName: string;
+}): Promise<number> {
+  const now = new Date("2026-01-01T00:00:00.000Z");
+
+  // The CLIENT auth-org = the portal's active organization for this customer.
+  await db.insert(organization).values({
+    id: params.clientOrgId,
+    name: `Client ${params.clientOrgId}`,
+    slug: params.clientOrgId,
+    createdAt: now,
+    type: "CLIENT",
+    status: "ACTIVE",
+  });
+
+  // The portal user + member (external portal role) for this CLIENT org.
+  await db.insert(user).values({
+    id: params.portalUserId,
+    name: `Portal ${params.portalUserId}`,
+    email: `${params.portalUserId}@client.test`,
+  });
+  await db.insert(member).values({
+    id: `member-${params.clientOrgId}-${params.portalUserId}`,
+    organizationId: params.clientOrgId,
+    userId: params.portalUserId,
+    role: "client_user",
+    createdAt: now,
+  });
+
+  // The customer row: authOrganizationId is what resolvePortalCustomerScope maps
+  // the active CLIENT org to; labOrganizationId ties it to the host lab.
+  const [row] = await db
+    .insert(customer)
+    .values({
+      name: params.customerName,
+      authOrganizationId: params.clientOrgId,
+      labOrganizationId: params.labOrgId,
+    })
+    .returning({ id: customer.id });
+  if (!row) throw new Error("seedPortalCustomer: insert failed");
+  return row.id;
+}
+
 /** Seed a service row scoped to an org + unit. Returns the created service id. */
 export async function seedService(params: {
   organizationId: string;

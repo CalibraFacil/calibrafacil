@@ -67,10 +67,12 @@ process.env.DATABASE_URL = workerUrl;
 // Step 5: mock better-auth sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { getSessionMock, backofficeGetSessionMock } = vi.hoisted(() => ({
-  getSessionMock: vi.fn(),
-  backofficeGetSessionMock: vi.fn(),
-}));
+const { getSessionMock, backofficeGetSessionMock, portalGetSessionMock } =
+  vi.hoisted(() => ({
+    getSessionMock: vi.fn(),
+    backofficeGetSessionMock: vi.fn(),
+    portalGetSessionMock: vi.fn(),
+  }));
 
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
@@ -82,6 +84,19 @@ vi.mock("@calibra-facil/auth", async (importOriginal) => {
     // / requirePlatformAdmin run against the mocked session's user.role.
     createBackofficeAuth: () => ({
       api: { getSession: backofficeGetSessionMock },
+    }),
+    // The client portal uses its OWN Better-Auth instance (portal_session cookie).
+    // Mock ONLY getSession (the single thing `requirePortalAuth` reads); the real
+    // requireOrganization -> requirePortalAccess and the resolvePortalCustomerScope
+    // customer-scope resolver all run against the seeded DB. `hasPermission` is a
+    // no-op success: portal routes that gate with requirePermission always have a
+    // `member` (set by requireOrganization), so requirePermission resolves locally
+    // and never calls the auth API — this is here only for parity / safety.
+    createPortalAuth: () => ({
+      api: {
+        getSession: portalGetSessionMock,
+        hasPermission: async () => ({ success: true }),
+      },
     }),
   };
 });
@@ -176,7 +191,28 @@ export function logoutBackoffice() {
   backofficeGetSessionMock.mockResolvedValue(null);
 }
 
+/**
+ * Authenticate subsequent PORTAL requests as the given portal user, with the
+ * given CLIENT organization active. `organizationId` is the customer's (or a
+ * customer group's) CLIENT auth-org — the same id `resolvePortalCustomerScope`
+ * maps back to the in-scope customer set via `customer.authOrganizationId`.
+ * Mirrors loginAs / loginAsBackoffice; only `portalGetSession` is mocked, so
+ * requireOrganization -> requirePortalAccess and the scope resolver run for real.
+ */
+export function loginAsPortal(params: {
+  userId: string;
+  organizationId: string;
+}) {
+  portalGetSessionMock.mockResolvedValue(sessionFor(params));
+}
+
+/** Make the next portal request unauthenticated (getSession -> null -> 401). */
+export function logoutPortal() {
+  portalGetSessionMock.mockResolvedValue(null);
+}
+
 beforeEach(() => {
   getSessionMock.mockReset();
   backofficeGetSessionMock.mockReset();
+  portalGetSessionMock.mockReset();
 });
