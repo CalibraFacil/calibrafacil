@@ -21,13 +21,29 @@ import {
   markOfferPaymentsDeleted,
 } from "./common";
 
-function isUniqueConstraintError(error: unknown): boolean {
+function hasUniqueViolationCode(value: unknown): boolean {
   return Boolean(
-    error &&
-    typeof error === "object" &&
-    "code" in error &&
-    Reflect.get(error, "code") === "23505",
+    value &&
+    typeof value === "object" &&
+    "code" in value &&
+    Reflect.get(value, "code") === "23505",
   );
+}
+
+export function isUniqueConstraintError(error: unknown): boolean {
+  // postgres-js (Neon prod + the integration harness) surfaces a duplicate
+  // insert as a Drizzle `DrizzleQueryError` wrapper whose own `code` is
+  // undefined — the real Postgres `23505` lives on `error.cause`. Recognize
+  // both the bare PostgresError and the wrapped error (unwrap one level).
+  if (hasUniqueViolationCode(error)) {
+    return true;
+  }
+
+  if (error && typeof error === "object" && "cause" in error) {
+    return hasUniqueViolationCode(Reflect.get(error, "cause"));
+  }
+
+  return false;
 }
 
 function mapPaymentStatus(status: PaymentStatus): PaymentStatus {
