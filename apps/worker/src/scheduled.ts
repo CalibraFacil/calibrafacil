@@ -134,11 +134,12 @@ async function checkAssetsDueForRecalibration(
       a.tag,
       a.customer_id,
       c.name as customer_name,
-      a.organization_id,
+      ou.organization_id,
       a.next_calibration_date,
       EXTRACT(DAY FROM a.next_calibration_date - CURRENT_DATE)::int as days_until_due
     FROM asset a
     JOIN customer c ON a.customer_id = c.id
+    JOIN organization_unit ou ON a.unit_id = ou.id
     WHERE a.status = 'ACTIVE'
       AND a.next_calibration_date IS NOT NULL
       AND a.next_calibration_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
@@ -431,7 +432,7 @@ async function checkVisitsDueSoon(
       v.id,
       v.organization_id,
       v.scheduled_at,
-      EXTRACT(DAY FROM v.scheduled_at::date - CURRENT_DATE)::int as days_until_visit
+      (v.scheduled_at::date - CURRENT_DATE)::int as days_until_visit
     FROM calibration_visit v
     WHERE v.status = 'CONFIRMED'
       AND v.scheduled_at IS NOT NULL
