@@ -21,6 +21,8 @@ vi.mock('@calibra-facil/math-engine', () => ({
   isCalculationEngineError: () => false,
 }))
 
+import { convertUnitDelta, convertUnitValue } from '@calibra-facil/shared/units'
+
 import type {
   MethodInputField,
   MethodTableColumn,
@@ -861,6 +863,120 @@ describe('job execution feature model', () => {
       incerteza_padrao: 0.05,
       k_referencia: 2.1,
       deriva: 0.01,
+    })
+  })
+
+  // REQ-CVAL-001 [HIGH RISK]: value + uncertainty + k must survive unit
+  // conversion intact and CONSISTENTLY. The display conversion is applied to
+  // BOTH value AND uncertainty (a delta) through the same closure; the coverage
+  // factor k must pass through untouched. A bug that converts value but not
+  // uncertainty (or scales them by different factors) produces a wrong
+  // certified value/uncertainty on a certificate — this round-trips through
+  // real registry conversions to catch exactly that.
+  describe('REQ-CVAL-001 value/uncertainty/k survive unit conversion', () => {
+    // Mirrors the production `convertValueToDisplayUnit` contract: absolute
+    // readings via convertUnitValue, deltas (uncertainty/drift) via
+    // convertUnitDelta — both into the same `toUnit`. For the factor-only kinds
+    // exercised here the two coincide, so a single per-unit factor governs both.
+    const displayConverter =
+      (toUnit: string) => (value: number, unit?: string | null) =>
+        convertUnitValue(value, unit, toUnit)
+    const displayUnitOf = (toUnit: string) => () => toUnit
+
+    // Each case: a source certified value in `fromUnit`, displayed in `toUnit`.
+    // `factor` = how many `toUnit` per one `fromUnit` (value AND uncertainty
+    // scale by the SAME factor; convertUnitDelta of a delta equals that factor).
+    const cases = [
+      { fromUnit: 'g', toUnit: 'kg', factor: convertUnitDelta(1, 'g', 'kg')! },
+      { fromUnit: 'kN', toUnit: 'N', factor: convertUnitDelta(1, 'kN', 'N')! },
+      { fromUnit: 'mV', toUnit: 'V', factor: convertUnitDelta(1, 'mV', 'V')! },
+    ]
+
+    it.each(cases)(
+      'buildStandardCertifiedValueOptions scales value+uncertainty by the same factor and keeps k ($fromUnit -> $toUnit)',
+      ({ fromUnit, toUnit, factor }) => {
+        const value = 100.5
+        const uncertainty = 0.04
+        const drift = 0.02
+        const coverageFactor = 2.1
+
+        const option = buildStandardCertifiedValueOptions({
+          standardsData: [
+            referenceStandard({
+              id: 42,
+              name: 'Padrão',
+              certificateNumber: 'CERT-RT',
+              coverageFactor: 2,
+              certifiedValues: [
+                {
+                  nominal: `${value} ${fromUnit}`,
+                  value,
+                  uncertainty,
+                  unit: fromUnit,
+                  coverageFactor,
+                  drift,
+                },
+              ],
+            }),
+          ],
+          convertValueToDisplayUnit: displayConverter(toUnit),
+          displayUnitFor: displayUnitOf(toUnit),
+        })[0]
+
+        expect(option).toBeDefined()
+        // Value and uncertainty are independently converted but MUST land on the
+        // same scale factor relative to the source numbers.
+        expect(option!.value).toBeCloseTo(value * factor, 12)
+        expect(option!.uncertainty).toBeCloseTo(uncertainty * factor, 12)
+        expect(option!.drift).toBeCloseTo(drift * factor, 12)
+
+        // The ratio uncertainty/value is dimensionless and must be invariant
+        // under unit conversion — this is the consistency invariant a
+        // "convert value but not uncertainty" bug breaks.
+        expect(option!.uncertainty / option!.value).toBeCloseTo(
+          uncertainty / value,
+          12,
+        )
+
+        // k is a pure ratio: it is NEVER scaled by a unit conversion.
+        expect(option!.coverageFactor).toBe(coverageFactor)
+        expect(option!.unit).toBe(toUnit)
+      },
+    )
+
+    it('buildCertifiedValueOptions keeps the uncertainty/value ratio under conversion (g -> kg)', () => {
+      const value = 2500
+      const uncertainty = 0.5
+
+      const option = buildCertifiedValueOptions({
+        standardsData: [
+          referenceStandard({
+            id: 9,
+            name: 'Peso',
+            certifiedValues: [
+              {
+                nominal: '2.5 kg',
+                value,
+                uncertainty,
+                unit: 'g',
+                compositionProfile: false,
+              },
+            ],
+          }),
+        ],
+        convertValueToDisplayUnit: displayConverter('kg'),
+        displayUnitFor: displayUnitOf('kg'),
+      })[0]
+
+      expect(option).toBeDefined()
+      const factor = convertUnitDelta(1, 'g', 'kg')!
+      expect(option!.value).toBeCloseTo(value * factor, 12)
+      expect(option!.uncertainty).toBeCloseTo(uncertainty * factor, 12)
+      expect(option!.uncertainty / option!.value).toBeCloseTo(
+        uncertainty / value,
+        12,
+      )
+      expect(option!.unit).toBe('kg')
     })
   })
 })
