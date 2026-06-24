@@ -53,11 +53,7 @@ import {
 } from "@calibra-facil/method-definition";
 import { createCalculationEngine } from "@calibra-facil/math-engine";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
-import {
-  desktopCertificatePdfKey,
-  safeR2Segment,
-  syncAttachmentKey,
-} from "@calibra-facil/shared/storage-keys";
+import { desktopCertificatePdfKey } from "@calibra-facil/shared/storage-keys";
 import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
@@ -89,6 +85,23 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  asRecord,
+  buildSyncAttachmentObjectKey,
+  encodeSyncAttachmentId,
+  formNumber,
+  formString,
+  getNullableString,
+  getNumber,
+  getRecordOrNull,
+  isIntegerNumber,
+  isPositiveInteger,
+  parseSnapshotDate,
+  parseSyncPullCursor,
+  parseSyncPullLimit,
+  toSyncTimestamp,
+  tryDecodeSyncAttachmentId,
+} from "../modules/sync/helpers";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import {
   normalizeAssetSpecificationsFromInput,
@@ -118,8 +131,6 @@ const METHOD_ENGINE_OPTIONS = {
 };
 const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
 const CERTIFICATE_PUBLIC_BASE_URL = "https://certificates.calibrafacil.com";
-const DEFAULT_SYNC_PULL_LIMIT = 100;
-const MAX_SYNC_PULL_LIMIT = 500;
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 
 function getMemberData(c: { get: (key: "member") => MemberData }) {
@@ -1076,21 +1087,6 @@ async function loadCloudSyncEventsSince(
   };
 }
 
-function parseSyncPullCursor(cursor: string | null) {
-  if (!cursor) return new Date(0);
-  const parsed = new Date(cursor);
-  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
-}
-
-function parseSyncPullLimit(rawLimit: string | undefined) {
-  if (!rawLimit) return DEFAULT_SYNC_PULL_LIMIT;
-  const parsed = Number.parseInt(rawLimit, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_SYNC_PULL_LIMIT;
-  }
-  return Math.min(parsed, MAX_SYNC_PULL_LIMIT);
-}
-
 function toCloudEvents(
   entityType:
     | "asset_type"
@@ -1185,12 +1181,6 @@ function standardCertificateDocumentSnapshot(
     calibrationDate: document.calibrationDate,
     nextCalibrationDate: document.nextCalibrationDate,
   };
-}
-
-function toSyncTimestamp(value: unknown) {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return new Date().toISOString();
 }
 
 async function applyDesktopCertificatePdfUpload(
@@ -3562,71 +3552,6 @@ function buildDesktopCertificatePdfKey(input: {
   }).key;
 }
 
-function buildSyncAttachmentObjectKey(
-  memberData: MemberData,
-  input: {
-    eventId: string;
-    entityType: string;
-    entityId: string;
-    fileName: string;
-    contentHash: string;
-  },
-) {
-  const fileIdentity = [
-    input.contentHash.slice(0, 16),
-    safeR2Segment(input.eventId),
-  ].join("-");
-
-  return syncAttachmentKey({
-    org: { id: memberData.organizationId, slug: "" },
-    entityType: input.entityType,
-    entityId: input.entityId,
-    fileIdentity,
-    extension: safeAttachmentExtension(input.fileName),
-  }).key;
-}
-
-function encodeSyncAttachmentId(objectKey: string) {
-  return Buffer.from(objectKey, "utf8").toString("base64url");
-}
-
-function tryDecodeSyncAttachmentId(attachmentId: string) {
-  const objectKey = Buffer.from(attachmentId, "base64url").toString("utf8");
-  if (!isValidSyncAttachmentObjectKey(objectKey)) {
-    return null;
-  }
-
-  return objectKey;
-}
-
-function isValidSyncAttachmentObjectKey(objectKey: string) {
-  return (
-    objectKey.startsWith("org/") &&
-    objectKey.includes("/sync-attachments/") &&
-    !objectKey.includes("..") &&
-    !objectKey.startsWith("/") &&
-    !objectKey.endsWith("/")
-  );
-}
-
-function safeAttachmentExtension(fileName: string) {
-  const dotIndex = fileName.lastIndexOf(".");
-  if (dotIndex < 0) return "";
-
-  const extension = fileName.slice(dotIndex, dotIndex + 16);
-  return /^\.[a-zA-Z0-9]+$/.test(extension) ? extension : "";
-}
-
-function formString(formData: FormData, key: string) {
-  const value = formData.get(key);
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function formNumber(formData: FormData, key: string) {
-  const value = formString(formData, key);
-  return value ? Number(value) : Number.NaN;
-}
-
 function methodDiagnostic(
   code: string,
   message: string,
@@ -3808,20 +3733,6 @@ async function validateSyncActorScope(
   return isMember;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {};
-}
-
-function isIntegerNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value);
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return isIntegerNumber(value) && value > 0;
-}
-
 function collectCompositionStandardIds(data: Record<string, unknown>) {
   const ids = new Set<number>();
 
@@ -3877,23 +3788,6 @@ function isCompiledMethodCandidate(value: unknown): value is CompiledMethod {
   );
 }
 
-function getNumber(row: Record<string, unknown>, key: string) {
-  const value = row[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function getNullableString(row: Record<string, unknown>, key: string) {
-  const value = row[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function getRecordOrNull(row: Record<string, unknown>, key: string) {
-  const value = row[key];
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null;
-}
-
 function getStandardSnapshotsResult(
   row: Record<string, unknown>,
   key: string,
@@ -3935,11 +3829,6 @@ function getStandardSnapshotsResult(
     });
   }
   return { ok: true, value: normalized };
-}
-
-function parseSnapshotDate(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 function getEnvironmentalSnapshotOrNull(
