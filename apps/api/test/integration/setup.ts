@@ -1,14 +1,71 @@
+import { execSync } from "node:child_process";
 import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
 
-// Per-worker setup for the integration tier. Runs before any test file, so:
-//  1) point the real `db` at the test Postgres (Proxy reads DATABASE_URL lazily),
-//  2) install ONE global mock of the better-auth lab session — the ONLY thing we
-//     fake. requireLabAuth -> requireOrganization -> requirePermission and the
-//     unit-scope resolver all run for real against the seeded DB.
-// The guard refuses any remote/Neon host so this TRUNCATE-based tier can never
-// wipe a real database (see the 2026-06-22 dev-DB incident).
-process.env.DATABASE_URL = assertEphemeralTestDb(inject("testDatabaseUrl"));
+// Per-worker setup for the integration tier. Runs before any test file in this
+// worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
+// cloned from the template built by global-setup.ts, so test files run in
+// PARALLEL without sharing or clobbering each other's data.
+//
+// Sequence inside each worker (forks pool):
+//   1) VITEST_POOL_ID is set by vitest before this file is imported.
+//   2) We derive a stable per-worker db name from VITEST_POOL_ID.
+//   3) We DROP + CREATE the per-worker db from the template (idempotent so a
+//      re-run of the same worker slot starts fresh).
+//   4) We point process.env.DATABASE_URL at the per-worker db — the real `db`
+//      Proxy reads it lazily on first access, so no change to packages/db.
+//   5) We install ONE global mock of the better-auth lab session — the ONLY
+//      thing we fake. requireLabAuth -> requireOrganization -> requirePermission
+//      and the unit-scope resolver all run for real against the seeded DB.
+//
+// Guard: assertEphemeralTestDb is called on the per-worker URL to ensure we
+// never accidentally point this suite at a non-local host.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 1-4: create per-worker database
+// ─────────────────────────────────────────────────────────────────────────────
+
+const baseUrl = inject("testDbBaseUrl");
+const template = inject("testDbTemplate");
+
+// VITEST_POOL_ID is set to a stable integer (1..maxForks) for the lifetime of
+// this worker process by vitest before setupFiles are imported. Falls back to
+// "0" in any environment where the variable is absent.
+const poolId = process.env.VITEST_POOL_ID ?? "0";
+const workerDbName = `calibra_w${poolId}`;
+const workerUrl = `${baseUrl}/${workerDbName}`;
+
+// Guard: refuse to operate against a remote/Neon host even if env is wrong.
+assertEphemeralTestDb(workerUrl);
+
+/** Build PG env vars for psql from a postgres:// URL (no db name in URL). */
+function pgEnvFromBaseUrl(rawBaseUrl: string): Record<string, string> {
+  const u = new URL(`${rawBaseUrl}/postgres`);
+  return {
+    PGHOST: u.hostname,
+    PGPORT: u.port || "5432",
+    PGUSER: decodeURIComponent(u.username || "postgres"),
+    PGPASSWORD: decodeURIComponent(u.password || ""),
+  };
+}
+
+const pgEnv = { ...process.env, ...pgEnvFromBaseUrl(baseUrl) };
+
+// DROP (idempotent: previous run may have left the db) then CREATE from template.
+// CREATE DATABASE cannot run inside a transaction; psql executes each -c command
+// as a separate statement outside any implicit transaction, satisfying PG's
+// requirement. We use PG env vars to avoid shell-quoting issues with passwords.
+execSync(
+  `psql -d postgres -c "DROP DATABASE IF EXISTS ${workerDbName}" -c "CREATE DATABASE ${workerDbName} TEMPLATE ${template}"`,
+  { env: pgEnv, stdio: "inherit" },
+);
+
+// Point the real db Proxy at this worker's database.
+process.env.DATABASE_URL = workerUrl;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 5: mock better-auth sessions
+// ─────────────────────────────────────────────────────────────────────────────
 
 const { getSessionMock, backofficeGetSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),

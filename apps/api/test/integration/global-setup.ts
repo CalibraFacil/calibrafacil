@@ -5,18 +5,20 @@ import type { GlobalSetupContext } from "vitest/node";
 import { assertEphemeralTestDb } from "./guard";
 
 // Vitest globalSetup for the real-DB integration tier. Boots ONE ephemeral
-// Postgres via raw `docker run` (the repo's pnpm build-script allowlist rejects
-// testcontainers' native deps, so we avoid the dependency), builds the schema
-// once via `drizzle-kit push` (the corrected schema cold-builds — see migration
-// 0060), and hands the connection URL to workers via `provide`. The per-worker
-// `setup.ts` sets process.env.DATABASE_URL before any db access, so the real `db`
-// Proxy (postgres-js off-Cloudflare) connects to it — no change to packages/db.
+// Postgres via raw `docker run`, builds the schema once via `drizzle-kit push`
+// into a TEMPLATE database, then hands base connection params + template name to
+// workers via `provide`. Each per-worker `setup.ts` creates its OWN database
+// (calibra_w<VITEST_POOL_ID>) via `CREATE DATABASE … TEMPLATE calibra_tmpl` so
+// files run in PARALLEL without sharing data.
 //
-// CI can skip Docker by setting TEST_DATABASE_URL to a service-container Postgres.
+// CI can skip Docker by setting TEST_DATABASE_URL to a service-container Postgres;
+// in that case we strip the db name and build the same template/per-worker pattern.
 
 // Unique per run so parallel worktrees (Phase 2 makers, CI matrix) don't collide.
 const CONTAINER = `cf-api-int-pg-${process.pid}`;
 const dbDir = fileURLToPath(new URL("../../../../packages/db", import.meta.url));
+
+const TEMPLATE_DB = "calibra_tmpl";
 
 let startedContainer: string | null = null;
 
@@ -29,13 +31,29 @@ function tryExec(cmd: string) {
   }
 }
 
-export async function setup({ provide }: GlobalSetupContext) {
-  let url = process.env.TEST_DATABASE_URL;
+/** Build PG env vars for psql/createdb from a postgres:// URL. */
+function pgEnvFromUrl(rawUrl: string): Record<string, string> {
+  const u = new URL(rawUrl);
+  return {
+    PGHOST: u.hostname,
+    PGPORT: u.port || "5432",
+    PGUSER: decodeURIComponent(u.username || "postgres"),
+    PGPASSWORD: decodeURIComponent(u.password || ""),
+  };
+}
 
-  if (!url) {
+export async function setup({ provide }: GlobalSetupContext) {
+  let baseUrl: string; // postgres://user:pass@host:port  (NO db name)
+
+  const externalUrl = process.env.TEST_DATABASE_URL;
+
+  if (!externalUrl) {
     // Let Docker assign a free host port (-p 0:5432) so concurrent runs don't clash.
+    // max_locks_per_transaction is raised from the default 64 to 256: with 6 parallel
+    // workers each TRUNCATEing tables that CASCADE into many FK-related tables, the
+    // default lock table fills up and causes "out of shared memory" errors.
     execSync(
-      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=calibra -p 0:5432 postgres:16`,
+      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres -p 0:5432 postgres:16 -c max_locks_per_transaction=256`,
       { stdio: "ignore" },
     );
     startedContainer = CONTAINER;
@@ -72,20 +90,42 @@ export async function setup({ provide }: GlobalSetupContext) {
 
     // 127.0.0.1 (not localhost) so postgres-js doesn't try the IPv6 ::1 route first
     // when Docker only maps IPv4.
-    url = `postgres://postgres:test@127.0.0.1:${port}/calibra`;
+    baseUrl = `postgres://postgres:test@127.0.0.1:${port}`;
+  } else {
+    // CI service-container path: strip the db name from the provided URL so we
+    // always build and connect via the template pattern.
+    const parsed = new URL(externalUrl);
+    parsed.pathname = "";
+    baseUrl = parsed.toString().replace(/\/$/, "");
   }
+
+  const templateUrl = `${baseUrl}/${TEMPLATE_DB}`;
 
   // Refuse to push the schema at (and later TRUNCATE) anything but a local/
   // ephemeral DB — a remote/Neon TEST_DATABASE_URL aborts here, before any DDL.
-  assertEphemeralTestDb(url);
+  assertEphemeralTestDb(templateUrl);
 
+  // Create the template database via psql env vars (avoids shell-quoting issues
+  // with special characters in passwords).
+  const pgEnv = { ...process.env, ...pgEnvFromUrl(baseUrl) };
+  execSync(`psql -d postgres -c "CREATE DATABASE ${TEMPLATE_DB}"`, {
+    env: pgEnv,
+    stdio: "ignore",
+  });
+
+  // Push the schema (all ~131 tables) into the template database exactly once.
+  // Every per-worker DB will be cloned from this template, so schema setup cost
+  // is paid once regardless of how many workers are running.
   execSync("pnpm exec drizzle-kit push --force", {
     cwd: dbDir,
-    env: { ...process.env, DATABASE_URL: url },
+    env: { ...process.env, DATABASE_URL: templateUrl },
     stdio: "inherit",
   });
 
-  provide("testDatabaseUrl", url);
+  // Provide base connection URL (no db name) and template name so per-worker
+  // setup can create calibra_w<id> = CREATE DATABASE … TEMPLATE calibra_tmpl.
+  provide("testDbBaseUrl", baseUrl);
+  provide("testDbTemplate", TEMPLATE_DB);
 }
 
 export async function teardown() {
@@ -94,6 +134,7 @@ export async function teardown() {
 
 declare module "vitest" {
   interface ProvidedContext {
-    testDatabaseUrl: string;
+    testDbBaseUrl: string;
+    testDbTemplate: string;
   }
 }
