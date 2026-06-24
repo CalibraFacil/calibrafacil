@@ -8,6 +8,7 @@
     "serve": "bun src/serve.ts",
     "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs",
     "test:xlsx-format": "bun src/xlsx-number-format.test.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "check-types": "tsgo --noEmit"
   },
   "main": "./src/index.ts",
@@ -39,6 +40,7 @@
     "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.16",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "vitest": "^4.0.17"
   }
 }
