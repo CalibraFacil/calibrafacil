@@ -18,7 +18,12 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/*.int.spec.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/routes/**/*.ts", "src/services/**/*.ts", "src/lib/**/*.ts"],
+      include: [
+        "src/routes/**/*.ts",
+        "src/services/**/*.ts",
+        "src/lib/**/*.ts",
+        "src/modules/**/*.ts",
+      ],
       exclude: ["**/*.spec.ts", "**/types.ts"],
     },
     setupFiles: ["./test/setup.ts"],
