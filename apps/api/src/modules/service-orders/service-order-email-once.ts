@@ -59,23 +59,37 @@ export interface SendServiceOrderEmailOnceInput {
 // ---------------------------------------------------------------------------
 
 /**
+ * Outcome of an at-most-once send attempt:
+ *  - "sent"    — the key was claimed and dispatch reported sent: true.
+ *  - "deduped" — the key was already recorded; dispatch was skipped (REQ-008).
+ *  - "failed"  — the key could not be claimed (DB error) OR dispatch failed and
+ *                the key was released for retry (REQ-009).
+ *
+ * Callers that drive an at-least-once retry loop (e.g. the outbox drain) use
+ * this to decide whether to mark the work done ("sent"/"deduped") or retry it
+ * ("failed"). Existing callers that ignore the return value are unaffected.
+ */
+export type SendServiceOrderEmailOnceOutcome = "sent" | "deduped" | "failed";
+
+/**
  * Attempt to send a service-order transition email at most once per key.
  *
  * Algorithm:
  *  1. Claim the key:
  *     INSERT INTO service_order_email_log (service_order_id, event_key)
  *     ON CONFLICT (service_order_id, event_key) DO NOTHING RETURNING id
- *  2. If no row returned (conflict) → skip dispatch (REQ-008).
+ *  2. If no row returned (conflict) → skip dispatch, return "deduped" (REQ-008).
  *  3. If row returned (claimed) → call dispatch().
  *  4. If dispatch() returns sent: false OR throws → DELETE the log row
- *     so a retry can resend (REQ-009).
- *  5. If dispatch() returns sent: true → keep the log row (REQ-007).
+ *     so a retry can resend, return "failed" (REQ-009).
+ *  5. If dispatch() returns sent: true → keep the log row, return "sent"
+ *     (REQ-007).
  *
  * Never throws — all errors are caught and logged.
  */
 export async function sendServiceOrderEmailOnce(
   input: SendServiceOrderEmailOnceInput,
-): Promise<void> {
+): Promise<SendServiceOrderEmailOnceOutcome> {
   const { serviceOrderId, eventKey, dispatch } = input;
 
   let claimedId: number | undefined;
@@ -90,7 +104,7 @@ export async function sendServiceOrderEmailOnce(
 
     // Step 2: conflict → skip (REQ-SOEMAIL-008).
     if (rows.length === 0) {
-      return;
+      return "deduped";
     }
 
     // Row was claimed — extract the id for potential rollback.
@@ -101,7 +115,7 @@ export async function sendServiceOrderEmailOnce(
       `[sendServiceOrderEmailOnce] DB insert failed for SO ${serviceOrderId} / key "${eventKey}":`,
       error,
     );
-    return;
+    return "failed";
   }
 
   // Step 3: dispatch the email.
@@ -130,6 +144,8 @@ export async function sendServiceOrderEmailOnce(
         deleteError,
       );
     }
+    return "failed";
   }
-  // Step 5: sent: true → keep the log row (REQ-SOEMAIL-007). Nothing to do.
+  // Step 5: sent: true → keep the log row (REQ-SOEMAIL-007).
+  return "sent";
 }

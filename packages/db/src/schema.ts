@@ -5565,7 +5565,14 @@ export const serviceOrderEmailOutbox = pgTable(
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Terminal "done" marker — set only when the row is successfully sent (or
+    // gracefully skipped). A NULL processedAt means the row is still owed.
     processedAt: timestamp("processed_at"),
+    // Lease marker — set when a drain claims the row for in-flight processing.
+    // The drain reclaims a row whose lease is older than the lease window, so a
+    // run killed mid-send (claimedAt set, processedAt still NULL) auto-recovers
+    // instead of stranding. Cleared on send failure (released for retry).
+    claimedAt: timestamp("claimed_at"),
   },
   (table) => [
     // At most one outbox row per (service order, transition event). INSERT with
