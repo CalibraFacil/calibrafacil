@@ -6,16 +6,17 @@ import { build } from "esbuild";
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const entries = [
-  // Only one HTTP entrypoint (index) is built: the vercel.json rewrite
-  // `/api/(.*)` -> `/api` routes every request to api/index.js, so a separate
-  // catch-all `[...route]` function was an unreachable, byte-identical
-  // duplicate. Removing it drops one bundle from Vercel's per-function
-  // packaging step.
+  // Only one HTTP entrypoint (index) is built: the vercel.json catch-all rewrite
+  // `/api/:path((?!cron/).*)` -> `/api` routes every non-cron request to
+  // api/index.js, so a separate catch-all `[...route]` function was an
+  // unreachable, byte-identical duplicate. Removing it drops one bundle from
+  // Vercel's per-function packaging step.
   ["vercel-src/index.ts", "vercel-functions/index.js"],
   ["vercel-src/queues/background.ts", "vercel-functions/queues/background.js"],
-  // One dispatcher bundle for all three cron jobs (integrations, notifications,
-  // operator-alerts). The dynamic shim api/cron/[job].js routes every
-  // /api/cron/* path to it, so Vercel packages one cron function instead of three.
+  // One dispatcher bundle for all six cron jobs (integrations, notifications,
+  // portal-digest, operator-alerts, auth-maintenance, service-order-emails).
+  // The dynamic shim api/cron/[job].js routes every /api/cron/* path to it, so
+  // Vercel packages one cron function instead of six.
   ["vercel-src/cron/dispatch.ts", "vercel-functions/cron/dispatch.js"],
 ];
 

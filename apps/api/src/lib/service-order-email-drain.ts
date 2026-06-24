@@ -37,10 +37,7 @@
  */
 
 import { db } from "@calibra-facil/db";
-import {
-  customer,
-  serviceOrderEmailOutbox,
-} from "@calibra-facil/db/schema";
+import { customer, serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 import { eq, and, isNull, lt, asc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import {
@@ -72,7 +69,17 @@ import { dispatchOrcamentoRecusadoEmail } from "../modules/service-orders/orcame
 // CONSTANTS
 // =============================================================================
 
-const DEFAULT_BATCH_SIZE = 50;
+// Each row reloads the service order + customer, renders a template, and sends
+// an email (network) sequentially, all inside the cron's 30s maxDuration. A
+// batch sized so the whole drain reliably finishes well under 30s avoids the
+// failure mode where the function is killed mid-send: the row is claimed
+// (processed_at = now()) but not yet completed, and — because a sent row and a
+// stranded row are indistinguishable by processed_at alone — it cannot be
+// safely auto-released without re-sending the already-sent ones. At the */5min
+// cadence, 20 rows/run keeps the backlog draining with margin to spare.
+// (A lease-based claimed_at/processed_at split that lets stranded rows
+// auto-recover is a regulated-path follow-up; see the cron hardening PR notes.)
+const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
 
 // =============================================================================
@@ -421,8 +428,15 @@ function renderTemplate(
     // with a stage prop that corresponds to the targetStatus.
     const isValidStage = (s: string): s is ServiceInProgressStage =>
       s === "awaiting_calibration" || s === "calibration_in_progress";
-    const stage = isValidStage(targetStatus) ? targetStatus : "awaiting_calibration";
-    return ServiceInProgressEmail({ brand, serviceOrderNumber, customerName, stage });
+    const stage = isValidStage(targetStatus)
+      ? targetStatus
+      : "awaiting_calibration";
+    return ServiceInProgressEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+      stage,
+    });
   }
 
   if (emailType === "awaiting_tech_evaluation") {
@@ -442,7 +456,11 @@ function renderTemplate(
   }
 
   if (emailType === "delivered") {
-    return ServiceOrderDeliveredEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderDeliveredEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+    });
   }
 
   if (emailType === "closed") {
@@ -454,7 +472,11 @@ function renderTemplate(
   }
 
   if (emailType === "canceled") {
-    return ServiceOrderCanceledEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderCanceledEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+    });
   }
 
   if (emailType === "warranty_return") {
@@ -534,12 +556,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
         if (
           typeof eventKey === "string" &&
           row.payload !== undefined &&
-          (
-            eventKey === "nova_os" ||
+          (eventKey === "nova_os" ||
             eventKey.startsWith("orcamento_sent:") ||
             eventKey.startsWith("quote_approved:") ||
-            eventKey.startsWith("quote_rejected:")
-          )
+            eventKey.startsWith("quote_rejected:"))
         ) {
           // Narrow the row to the subtype expected by dispatchBcdEmailForRow
           const bcdRow = { ...row, eventKey, payload: row.payload };
@@ -558,7 +578,8 @@ export async function drainServiceOrderEmailOutbox(options?: {
             result.sent++;
           } else {
             // Dispatch failed — release for retry.
-            const releaseMsg = "B/C/D dispatch did not complete — released for retry";
+            const releaseMsg =
+              "B/C/D dispatch did not complete — released for retry";
             try {
               await releaseOutboxRow(row.id, releaseMsg);
             } catch (releaseError) {
@@ -585,7 +606,9 @@ export async function drainServiceOrderEmailOutbox(options?: {
               LIMIT 1`,
         );
         const soResultRows: unknown = Reflect.get(soResult, "rows") ?? soResult;
-        const soRawRow: unknown = Array.isArray(soResultRows) ? soResultRows[0] : undefined;
+        const soRawRow: unknown = Array.isArray(soResultRows)
+          ? soResultRows[0]
+          : undefined;
 
         function parseSoRow(raw: unknown): ServiceOrderEmailData | undefined {
           if (typeof raw !== "object" || raw === null) return undefined;
@@ -658,8 +681,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
           result.sent++;
         } else {
           // 5. On failure: release back to pending for retry.
-          const releaseMsg =
-            "Send did not complete — released for retry";
+          const releaseMsg = "Send did not complete — released for retry";
           await releaseOutboxRow(row.id, releaseMsg);
           result.released++;
         }

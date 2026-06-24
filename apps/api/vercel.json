@@ -54,31 +54,7 @@
       "destination": "/api"
     },
     {
-      "source": "/api/cron/integrations",
-      "destination": "/api/cron/integrations"
-    },
-    {
-      "source": "/api/cron/notifications",
-      "destination": "/api/cron/notifications"
-    },
-    {
-      "source": "/api/cron/portal-digest",
-      "destination": "/api/cron/portal-digest"
-    },
-    {
-      "source": "/api/cron/operator-alerts",
-      "destination": "/api/cron/operator-alerts"
-    },
-    {
-      "source": "/api/cron/auth-maintenance",
-      "destination": "/api/cron/auth-maintenance"
-    },
-    {
-      "source": "/api/cron/service-order-emails",
-      "destination": "/api/cron/service-order-emails"
-    },
-    {
-      "source": "/api/(.*)",
+      "source": "/api/:path((?!cron/).*)",
       "destination": "/api"
     }
   ]

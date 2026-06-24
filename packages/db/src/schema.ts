@@ -8100,3 +8100,20 @@ export const trainingRecordAuditLogRelations = relations(
     }),
   }),
 );
+
+/**
+ * Heartbeat + lease-lock for the Vercel cron dispatcher (one row per
+ * /api/cron/* job). The dispatcher records each run's outcome here so a
+ * silently-failing or never-firing cron is detectable from the DB, and takes a
+ * short `lockedUntil` row-lease to prevent overlapping runs. Treated as
+ * best-effort / fail-open by the dispatcher (see vercel-src/cron/cron-run.ts).
+ */
+export const cronRun = pgTable("cron_run", {
+  job: text("job").primaryKey(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  lastStatus: text("last_status"),
+  lastError: text("last_error"),
+  consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+});
