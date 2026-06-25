@@ -61,6 +61,8 @@ export type OrganizationIsoInput = {
   accreditationNumber?: string | null
   accreditationBody?: string | null
   accreditationActive?: boolean | null
+  permissionariaAuthorizationNumber?: string | null
+  permissionariaAuthorizationState?: string | null
   street?: string | null
   number?: string | null
   complement?: string | null
@@ -85,6 +87,8 @@ export type OrganizationIsoDraft = {
   accreditationNumber: string
   accreditationBody: string
   accreditationActive: boolean
+  permissionariaAuthorizationNumber: string
+  permissionariaAuthorizationState: string
   street: string
   number: string
   complement: string
@@ -181,6 +185,10 @@ export function createOrganizationIsoDraft(
     ),
     accreditationBody: organization.accreditationBody ?? '',
     accreditationActive: organization.accreditationActive ?? false,
+    permissionariaAuthorizationNumber:
+      organization.permissionariaAuthorizationNumber ?? '',
+    permissionariaAuthorizationState:
+      organization.permissionariaAuthorizationState ?? '',
     street: organization.street ?? '',
     number: organization.number ?? '',
     complement: organization.complement ?? '',
@@ -203,6 +211,11 @@ export function buildOrganizationIsoPayload(draft: OrganizationIsoDraft) {
       normalizeAccreditationNumber(draft.accreditationNumber) || undefined,
     accreditationBody: optionalTrimmed(draft.accreditationBody),
     accreditationActive: draft.accreditationActive,
+    permissionariaAuthorizationNumber: optionalTrimmed(
+      draft.permissionariaAuthorizationNumber,
+    ),
+    permissionariaAuthorizationState:
+      optionalTrimmed(draft.permissionariaAuthorizationState.toUpperCase()),
     street: optionalTrimmed(draft.street),
     number: optionalTrimmed(draft.number),
     complement: optionalTrimmed(draft.complement),

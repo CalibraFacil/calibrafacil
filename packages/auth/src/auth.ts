@@ -1102,6 +1102,19 @@ function createOrganizationPlugin() {
             required: false,
             defaultValue: false,
           },
+          // Legal-metrology repair authorization (RBMLQ-I oficina permissionária).
+          // Optional: existing createOrganization/createUser call sites (backoffice,
+          // portal-service-account) must not be forced to pass these.
+          permissionariaAuthorizationNumber: {
+            type: "string",
+            input: true,
+            required: false,
+          },
+          permissionariaAuthorizationState: {
+            type: "string",
+            input: true,
+            required: false,
+          },
           street: { type: "string", input: true },
           number: { type: "string", input: true },
           complement: { type: "string", input: true },

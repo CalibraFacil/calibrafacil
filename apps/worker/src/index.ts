@@ -1638,6 +1638,20 @@ function formatAddress(parts: Record<string, unknown> | null | undefined) {
     .join(", ");
 }
 
+/**
+ * Composes the permissionária authorization for documents as "<number>/<UF>".
+ * Returns the number alone when the UF is absent, or null when no number is set.
+ */
+function composePermissionariaAuthorization(
+  authorizationNumber: string | null | undefined,
+  state: string | null | undefined,
+): string | null {
+  const number = authorizationNumber?.trim();
+  if (!number) return null;
+  const uf = state?.trim();
+  return uf ? `${number}/${uf}` : number;
+}
+
 async function fetchServiceOrderDocumentData(
   env: Env,
   client: Client,
@@ -1674,6 +1688,8 @@ async function fetchServiceOrderDocumentData(
       o.phone as lab_phone,
       o.email as lab_email,
       o.logo as lab_logo,
+      o.permissionaria_authorization_number as lab_permissionaria_number,
+      o.permissionaria_authorization_state as lab_permissionaria_state,
       ou.name as unit_name,
       c.name as customer_name,
       c.tax_id as customer_tax_id,
@@ -1756,6 +1772,10 @@ async function fetchServiceOrderDocumentData(
       email: row.lab_email,
       address: null,
       logoUrl: labLogoUrl,
+      authorizationNumber: composePermissionariaAuthorization(
+        row.lab_permissionaria_number,
+        row.lab_permissionaria_state,
+      ),
     },
     unit: { name: row.unit_name },
     customer: {

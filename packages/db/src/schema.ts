@@ -269,6 +269,17 @@ export const organization = pgTable(
     accreditationActive: boolean("accreditation_active")
       .default(false)
       .notNull(),
+    // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
+    // Distinct from the RBC/CGCRE accreditation above: required on repair OS
+    // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),
+    // and carried on the permissionária's own seals. Stored as number + UF (sigla
+    // do estado); the documents layer composes them as "<number>/<UF>".
+    permissionariaAuthorizationNumber: text(
+      "permissionaria_authorization_number",
+    ),
+    permissionariaAuthorizationState: text(
+      "permissionaria_authorization_state",
+    ),
     street: text("street"),
     number: text("number"),
     complement: text("complement"),
