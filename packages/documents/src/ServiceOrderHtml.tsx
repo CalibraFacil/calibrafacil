@@ -18,6 +18,12 @@ export type ServiceOrderDocumentData = {
     email?: string | null;
     address?: string | null;
     logoUrl?: string | null;
+    /**
+     * Permissionária authorization number + UF (e.g. "0123/RS") from the RBMLQ-I.
+     * Mandatory OS content for legal-metrology repairs (Port. Inmetro 65/2015); the
+     * repairer's own seal also carries it. Optional so non-regulated docs omit it.
+     */
+    authorizationNumber?: string | null;
   };
   unit?: { name: string | null };
   customer: {
@@ -216,6 +222,60 @@ const pageStyles = `
   .seal-box { border: 1px dashed #000; min-height: 26mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; font-weight: 700; text-transform: uppercase; }
   .signature-img { display: block; max-width: 60mm; max-height: 12mm; object-fit: contain; margin: 0 auto 1mm; }
   .signature-line { border-top: 1px solid #000; padding-top: 1mm; text-align: center; min-height: 8mm; }
+  /* Delivery receipt (revamped): flex header (kills the old equal-height-table
+     whitespace) + flex-column page so the open signature lines anchor to the sheet
+     foot and the body fills it; degrades gracefully when the items table grows. */
+  .receipt-page { font-size: 8.2pt; display: flex; flex-direction: column; min-height: 270mm; }
+  .receipt-page .section-title { margin-top: 0.7mm; }
+  .receipt-page .form-table td, .receipt-page .form-table th { padding: 0.42mm 0.72mm; }
+  .receipt-head { display: flex; align-items: stretch; gap: 2.6mm; border: 1px solid #000; padding: 1.2mm 2.2mm; margin-bottom: 1mm; }
+  .receipt-brand { display: flex; align-items: center; gap: 2.6mm; flex: 1 1 auto; }
+  .receipt-head .lab-logo { max-height: 12.5mm; max-width: 40mm; object-fit: contain; }
+  .receipt-brand-text { display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
+  .receipt-lab-name { font-size: 10pt; font-weight: 700; line-height: 1.05; }
+  .receipt-lab-line { font-size: 6.9pt; line-height: 1.18; }
+  .receipt-meta { flex: 0 0 49mm; border-left: 1px solid #000; padding-left: 2.4mm; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
+  .receipt-doc-title { font-size: 8.4pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .receipt-doc-sub { font-size: 5.6pt; line-height: 1.1; color: #333; margin: 0.2mm 0 0.3mm; }
+  .receipt-meta .os-number { font-size: 11pt; margin: 0; }
+  .receipt-meta-row { font-size: 6.7pt; line-height: 1.15; }
+  .receipt-qr-wrap { display: flex; align-items: center; gap: 1.8mm; margin-top: 0.7mm; }
+  .receipt-qr-wrap .qr { width: 46px; height: 46px; flex: 0 0 auto; }
+  .receipt-qr-cap { font-size: 5.9pt; line-height: 1.18; max-width: 29mm; }
+  .exec-notes { min-height: 12mm; }
+  .num, .receipt-total, .os-number { font-variant-numeric: tabular-nums; }
+  .total-strong { background: #f2f2f2; border: 1.4pt solid #000 !important; text-align: right; }
+  .total-strong .receipt-total { font-size: 12pt; }
+  /* Marca de Reparo paste target: crop-mark corners (not a full box) sized to the
+     ~40x7mm label + ~1mm tolerance, so it's an unmistakable placement target and
+     not an oversized field people write inside. */
+  .seal-cell { text-align: center; vertical-align: middle; width: 50mm; }
+  .seal-cap { font-size: 6.4pt; font-weight: 700; line-height: 1.1; }
+  .seal-target { position: relative; width: 42mm; height: 8mm; margin: 0.8mm auto; }
+  .seal-cm { position: absolute; width: 2.3mm; height: 2.3mm; }
+  .seal-cm-tl { top: 0; left: 0; border-top: 0.3mm solid #000; border-left: 0.3mm solid #000; }
+  .seal-cm-tr { top: 0; right: 0; border-top: 0.3mm solid #000; border-right: 0.3mm solid #000; }
+  .seal-cm-bl { bottom: 0; left: 0; border-bottom: 0.3mm solid #000; border-left: 0.3mm solid #000; }
+  .seal-cm-br { bottom: 0; right: 0; border-bottom: 0.3mm solid #000; border-right: 0.3mm solid #000; }
+  .seal-dim { font-size: 6pt; color: #555; }
+  .seal-note { display: block; font-size: 6.4pt; font-weight: 400; text-transform: none; margin-top: 0.9mm; }
+  .seal-section { break-inside: avoid; }
+  .ack-line { border: 1px solid #000; padding: 0.8mm 1.2mm; font-size: 7pt; line-height: 1.22; margin: 0.5mm 0; }
+  .sign-area { margin-top: auto; display: flex; gap: 18mm; padding-top: 3.5mm; break-inside: avoid; }
+  .sign-slot { flex: 1 1 0; min-width: 0; }
+  .sign-caption { font-size: 6.7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 1mm; text-align: center; }
+  .sign-space { height: 10mm; }
+  .sign-img { display: block; max-height: 10mm; max-width: 68mm; object-fit: contain; margin: 0 auto; }
+  .sign-rule { width: 100%; border-top: 1px solid #000; }
+  .sign-name { font-size: 8.6pt; font-weight: 700; margin-top: 1.2mm; text-align: center; }
+  .sign-role { font-size: 7.2pt; line-height: 1.22; text-align: center; }
+  .sign-sub { font-size: 6.8pt; text-align: center; }
+  .sign-id { margin-top: 3mm; }
+  .sign-field { display: flex; align-items: flex-end; gap: 1.6mm; margin-top: 3mm; }
+  .sign-field-label { font-size: 7pt; white-space: nowrap; }
+  .sign-blank { flex: 1 1 auto; border-bottom: 1px solid #000; height: 3.2mm; }
+  .sign-date { display: flex; align-items: flex-end; gap: 1.6mm; font-size: 8pt; margin-top: 3.2mm; letter-spacing: 0.3px; }
+  .sign-date-cells { white-space: nowrap; }
 `;
 
 function formatDate(value: Date | string | null | undefined) {
@@ -382,26 +442,113 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
   );
 }
 
-function SignatureCell({
-  label,
+/**
+ * Balanced delivery-receipt header. Uses flexbox (not a height-matched <table>) so the
+ * lab block no longer stretches to the QR column's height and leaves a big blank gap.
+ */
+const QR_CAPTION =
+  "Leia o QR Code para acompanhar a OS e validar a autenticidade no portal.";
+
+function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
+  const legalMetrology = data.asset.subjectToLegalMetrology;
+  const cnpjLine = [
+    `CNPJ ${text(data.lab.cnpj)}`,
+    data.lab.authorizationNumber
+      ? `Autorização RBMLQ-I nº ${data.lab.authorizationNumber}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+  return (
+    <div className="receipt-head">
+      <div className="receipt-brand">
+        {data.lab.logoUrl ? (
+          <img className="lab-logo" src={data.lab.logoUrl} alt={data.lab.name} />
+        ) : null}
+        <div className="receipt-brand-text">
+          <div className="receipt-lab-name">{data.lab.name}</div>
+          <div className="receipt-lab-line">
+            {[data.lab.phone, data.lab.email].filter(Boolean).join("  ·  ") ||
+              "-"}
+          </div>
+          <div className="receipt-lab-line">{cnpjLine}</div>
+          <div className="receipt-lab-line">{text(data.lab.address)}</div>
+        </div>
+      </div>
+      <div className="receipt-meta">
+        <div className="receipt-doc-title">Comprovante de Entrega</div>
+        {legalMetrology ? (
+          <div className="receipt-doc-sub">
+            Instrumento sujeito a controle metrológico legal — reparo por oficina
+            permissionária (Port. Inmetro 65/2015).
+          </div>
+        ) : null}
+        <div className="os-number">{data.serviceOrderNumber}</div>
+        <div className="receipt-meta-row">
+          Documento {data.delivery.documentNumber} · v{data.delivery.version}
+        </div>
+        <div className="receipt-meta-row">
+          Emissão: {formatDate(data.delivery.issuedAt)}
+        </div>
+        <div className="receipt-meta-row">
+          Entrega: {formatDate(data.delivery.deliveredAt)}
+        </div>
+        {data.qrCodeDataUrl ? (
+          <div className="receipt-qr-wrap">
+            <img className="qr" src={data.qrCodeDataUrl} alt="QR Code" />
+            <div className="receipt-qr-cap">{QR_CAPTION}</div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Open signature line (no enclosing box): an area to sign, the rule, the signer's
+ * printed name, the role, and a free handwritten date. Spans half the page width so
+ * the técnico / cliente pair fills the foot of the sheet.
+ */
+function SignatureSlot({
+  caption,
+  role,
+  sub,
+  idFields,
   signature,
 }: {
-  label: string;
+  caption: string;
+  role: string;
+  sub?: string | null;
+  idFields?: string[];
   signature?: ServiceOrderSignatureBlock | null;
 }) {
   return (
-    <td>
+    <div className="sign-slot">
+      <div className="sign-caption">{caption}</div>
       {signature?.dataUrl ? (
-        <img className="signature-img" src={signature.dataUrl} alt={label} />
+        <img className="sign-img" src={signature.dataUrl} alt={caption} />
+      ) : (
+        <div className="sign-space" />
+      )}
+      <div className="sign-rule" />
+      <div className="sign-name">{text(signature?.signerName, "")}</div>
+      <div className="sign-role">{role}</div>
+      {sub ? <div className="sign-sub">{sub}</div> : null}
+      {idFields && idFields.length > 0 ? (
+        <div className="sign-id">
+          {idFields.map((label) => (
+            <div className="sign-field" key={label}>
+              <span className="sign-field-label">{label}</span>
+              <span className="sign-blank" />
+            </div>
+          ))}
+        </div>
       ) : null}
-      <div className="signature-line">
-        <span className="cell-label">{label}</span>
-        <span className="cell-value">
-          {text(signature?.signerName)}
-          {signature?.signedAt ? ` - ${formatDate(signature.signedAt)}` : ""}
-        </span>
+      <div className="sign-date">
+        <span className="sign-field-label">Data</span>
+        <span className="sign-date-cells">____ / ____ / ________</span>
       </div>
-    </td>
+    </div>
   );
 }
 
@@ -412,70 +559,108 @@ function DeliveryReceiptCopy({
   data: ServiceOrderDeliveryReceiptData;
   copy: "client" | "lab";
 }) {
-  const assetTag = data.asset.patrimonyNumber ?? data.asset.tag;
   const sealNumber =
     data.delivery.inmetroRepairSealNumber ??
     data.intake.inmetroRepairSealNumber;
+  const receivedBy =
+    [data.delivery.deliveredToName, data.delivery.deliveredToDocument]
+      .filter(Boolean)
+      .join("  ·  ") || null;
+  const requestedService =
+    (data.requestedServices ?? []).join(", ") || null;
+  const serviceLocation = data.isExternalService
+    ? (data.customer.address ?? "No cliente (in loco)")
+    : "No laboratório";
   return (
     <section className="page receipt-page">
       <div className="copy-tag">
         {copy === "client" ? "Via do cliente" : "Via do laboratório"}
       </div>
-      <Header data={data} />
+      <ReceiptHeader data={data} />
 
-      <div className="section-title">Comprovante de entrega</div>
+      <div className="section-title">Cliente</div>
       <table className="form-table">
         <tbody>
           <tr>
-            <Cell
-              label="Documento"
-              value={`${data.delivery.documentNumber} v${data.delivery.version}`}
-            />
-            <Cell label="Emissão" value={formatDate(data.delivery.issuedAt)} />
-            <Cell
-              label="Entrega"
-              value={formatDate(data.delivery.deliveredAt)}
-            />
+            <Cell label="Razão social / Nome" value={data.customer.name} />
+            <Cell label="CNPJ / CPF" value={data.customer.taxId} />
           </tr>
           <tr>
-            <Cell label="Recebedor" value={data.delivery.deliveredToName} />
-            <Cell
-              label="Documento recebedor"
-              value={data.delivery.deliveredToDocument}
-            />
+            <Cell label="Telefone" value={data.customer.phone} />
+            <Cell label="E-mail" value={data.customer.email} />
+          </tr>
+          <tr>
+            <td colSpan={2}>
+              <span className="cell-label">Endereço</span>
+              <span className="cell-value">{text(data.customer.address)}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="section-title">Equipamento</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell label="Equipamento" value={data.asset.name} />
+            <Cell label="Fabricante" value={data.asset.manufacturer} />
+            <Cell label="Modelo" value={data.asset.model} />
+          </tr>
+          <tr>
+            <Cell label="Número de série" value={data.asset.serialNumber} />
+            <Cell label="Patrimônio" value={data.asset.patrimonyNumber} />
+            <Cell label="Tag" value={data.asset.tag} />
+          </tr>
+          <AssetSpecRows specs={data.asset.specs} />
+          {data.asset.observedIdentification ? (
+            <tr>
+              <td colSpan={3}>
+                <span className="cell-label">Identificação observada</span>
+                <span className="cell-value">
+                  {data.asset.observedIdentification}
+                </span>
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <div className="section-title">Serviço executado</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell label="Serviço solicitado" value={requestedService} />
+            <Cell label="Resultado" value={data.execution.result} />
             <Cell
               label="Forma de entrega"
               value={data.delivery.deliveryMethod}
             />
           </tr>
-        </tbody>
-      </table>
-
-      <div className="section-title">Equipamento entregue</div>
-      <table className="form-table">
-        <tbody>
           <tr>
-            <Cell label="Cliente" value={data.customer.name} />
-            <Cell label="Equipamento" value={data.asset.name} />
+            <Cell label="Local do serviço" value={serviceLocation} />
             <Cell
-              label="Série / Patrimônio"
-              value={data.asset.serialNumber ?? assetTag}
+              label="Concluído em"
+              value={formatDate(data.execution.finishedAt)}
+            />
+            <Cell
+              label="Entregue em"
+              value={formatDate(data.delivery.deliveredAt)}
             />
           </tr>
           <tr>
-            <Cell label="Fabricante" value={data.asset.manufacturer} />
-            <Cell label="Modelo" value={data.asset.model} />
-            <Cell
-              label="Identificação observada"
-              value={data.asset.observedIdentification}
-            />
+            <td colSpan={3}>
+              <span className="cell-label">Recebido por</span>
+              <span className="cell-value">{text(receivedBy)}</span>
+            </td>
           </tr>
         </tbody>
       </table>
-
-      <div className="section-title">Serviço executado</div>
-      <div className="notes-box">
-        {[data.execution.servicePerformed, data.execution.partsUsedSummary]
+      <div className="notes-box exec-notes">
+        {[
+          data.execution.servicePerformed,
+          data.execution.partsUsedSummary,
+          data.execution.technicalNotes,
+        ]
           .filter(Boolean)
           .join("\n")}
       </div>
@@ -520,7 +705,7 @@ function DeliveryReceiptCopy({
               label="Peças"
               value={money(data.execution.subtotalPartsCents)}
             />
-            <td>
+            <td className="total-strong">
               <span className="cell-label">Total do reparo</span>
               <span className="cell-value receipt-total">
                 {money(data.execution.totalCents)}
@@ -532,34 +717,60 @@ function DeliveryReceiptCopy({
 
       {data.asset.subjectToLegalMetrology ? (
         <>
-          <div className="section-title">Etiqueta de Reparo (Inmetro)</div>
-          <table className="form-table">
+          <div className="section-title">
+            Marca de Reparo e Lacres — Inmetro / RBMLQ-I
+          </div>
+          <table className="form-table seal-section">
             <tbody>
               <tr>
-                <Cell label="Número digitado" value={sealNumber} />
+                <Cell label="Marca de Reparo (nº)" value={sealNumber} />
                 <Cell
-                  label="Data de emissão"
+                  label="Emitida em"
                   value={formatDate(data.delivery.inmetroRepairSealIssuedAt)}
                 />
-                <td rowSpan={2}>
+                <td className="seal-cell" rowSpan={3}>
                   {copy === "lab" ? (
-                    <div className="seal-box">Colar Etiqueta de Reparo aqui</div>
+                    <>
+                      <div className="seal-cap">
+                        Cole aqui a Etiqueta de Reparo
+                      </div>
+                      <div className="seal-target">
+                        <span className="seal-cm seal-cm-tl" />
+                        <span className="seal-cm seal-cm-tr" />
+                        <span className="seal-cm seal-cm-bl" />
+                        <span className="seal-cm seal-cm-br" />
+                      </div>
+                    </>
                   ) : (
                     <>
                       <span className="cell-label">
-                        Etiqueta entregue ao cliente
+                        Marca de Reparo aplicada (nº)
                       </span>
                       <span className="cell-value">{text(sealNumber)}</span>
+                      <span className="seal-note">
+                        Sujeito a verificação após reparo pelo IPEM / RBMLQ-I.
+                      </span>
                     </>
                   )}
                 </td>
               </tr>
               <tr>
                 <Cell
-                  label="Observações de entrega"
-                  value={data.delivery.deliveryNotes}
+                  label="Lacre retirado (nº)"
+                  value={data.intake.oldSealNumber}
                 />
-                <Cell label="Resultado" value={data.execution.result} />
+                <Cell
+                  label="Lacre colocado (nº)"
+                  value={data.intake.newSealNumber}
+                />
+              </tr>
+              <tr>
+                <td colSpan={2}>
+                  <span className="cell-label">Observações de entrega</span>
+                  <span className="cell-value">
+                    {text(data.delivery.deliveryNotes)}
+                  </span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -581,20 +792,29 @@ function DeliveryReceiptCopy({
         </>
       )}
 
-      <table className="form-table signature-table">
-        <tbody>
-          <tr>
-            <SignatureCell
-              label="Assinatura do técnico"
-              signature={data.delivery.technicianSignature}
-            />
-            <SignatureCell
-              label="Assinatura do cliente / recebedor"
-              signature={data.delivery.clientSignature}
-            />
-          </tr>
-        </tbody>
-      </table>
+      {copy === "client" ? (
+        <div className="ack-line">
+          Declaro ter recebido o equipamento nas condições descritas neste
+          comprovante, conferido o serviço executado e os lacres aplicados, e
+          atesto sua conformidade no ato da entrega.
+        </div>
+      ) : null}
+
+      <div className="sign-area">
+        <SignatureSlot
+          caption="Assinatura do Técnico"
+          role="Responsável Técnico — executor cadastrado no IPEM"
+          idFields={["Documento"]}
+          signature={data.delivery.technicianSignature}
+        />
+        <SignatureSlot
+          caption="Assinatura do Cliente / Recebedor"
+          role="Cliente / Recebedor"
+          sub={data.customer.name}
+          idFields={["Nome legível", "CPF / Documento"]}
+          signature={data.delivery.clientSignature}
+        />
+      </div>
     </section>
   );
 }
