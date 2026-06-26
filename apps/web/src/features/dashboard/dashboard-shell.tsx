@@ -29,6 +29,7 @@ import {
   DashboardRestrictedState,
 } from './dashboard-access-states'
 import { getDashboardBootstrapState } from './dashboard-bootstrap-model'
+import { PasskeyNudgeBanner } from '@/features/passkeys/components/passkey-nudge-banner'
 
 export function DashboardLayout() {
   const location = useLocation()
@@ -109,7 +110,10 @@ export function DashboardLayout() {
               ) : shouldBlockCloudOnlyRoute ? (
                 <CloudOnlyOfflineState title="Tela indisponível offline" />
               ) : (
-                <Outlet />
+                <>
+                  <PasskeyNudgeBanner />
+                  <Outlet />
+                </>
               )}
             </main>
           </SidebarInset>

@@ -14,6 +14,7 @@ import {
   PenTool01Icon,
   Certificate01Icon,
   ThermometerIcon,
+  FingerPrintIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
@@ -73,6 +74,12 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         label: 'Autenticação',
         href: '/dashboard/settings/authentication',
         icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
+      },
+      {
+        value: 'passkeys',
+        label: 'Passkeys',
+        href: '/dashboard/settings/passkeys',
+        icon: <HugeiconsIcon icon={FingerPrintIcon} className="size-4" />,
       },
     ],
   },

@@ -269,6 +269,17 @@ export const organization = pgTable(
     accreditationActive: boolean("accreditation_active")
       .default(false)
       .notNull(),
+    // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
+    // Distinct from the RBC/CGCRE accreditation above: required on repair OS
+    // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),
+    // and carried on the permissionária's own seals. Stored as number + UF (sigla
+    // do estado); the documents layer composes them as "<number>/<UF>".
+    permissionariaAuthorizationNumber: text(
+      "permissionaria_authorization_number",
+    ),
+    permissionariaAuthorizationState: text(
+      "permissionaria_authorization_state",
+    ),
     street: text("street"),
     number: text("number"),
     complement: text("complement"),
@@ -5600,7 +5611,14 @@ export const serviceOrderEmailOutbox = pgTable(
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Terminal "done" marker — set only when the row is successfully sent (or
+    // gracefully skipped). A NULL processedAt means the row is still owed.
     processedAt: timestamp("processed_at"),
+    // Lease marker — set when a drain claims the row for in-flight processing.
+    // The drain reclaims a row whose lease is older than the lease window, so a
+    // run killed mid-send (claimedAt set, processedAt still NULL) auto-recovers
+    // instead of stranding. Cleared on send failure (released for retry).
+    claimedAt: timestamp("claimed_at"),
   },
   (table) => [
     // At most one outbox row per (service order, transition event). INSERT with
@@ -6898,6 +6916,65 @@ export const webhookEventLogRelations = relations(
 );
 
 // =============================================================================
+// EMAIL SUPPRESSION - unsubscribe / complaint / hard-bounce suppression list
+// =============================================================================
+
+/** Whether an address is suppressed for marketing-class email only, or all. */
+export type EmailSuppressionScope = "marketing" | "all";
+
+/** Why the address was suppressed. */
+export type EmailSuppressionReason =
+  | "unsubscribed"
+  | "complaint"
+  | "hard_bounce"
+  | "manual";
+
+/** What recorded the suppression. */
+export type EmailSuppressionSource = "resend_webhook" | "admin" | "api";
+
+/**
+ * Addresses that must not be emailed (at a given scope). Driven by Resend
+ * complaint/hard-bounce webhooks plus manual/API opt-outs. Email is stored
+ * lowercased/trimmed; UNIQUE (email, scope) makes the suppress upsert idempotent.
+ */
+export const emailSuppression = pgTable(
+  "email_suppression",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull(),
+    scope: text("scope")
+      .$type<EmailSuppressionScope>()
+      .default("all")
+      .notNull(),
+    reason: text("reason").$type<EmailSuppressionReason>().notNull(),
+    source: text("source").$type<EmailSuppressionSource>().notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("email_suppression_email_scope_uidx").on(
+      table.email,
+      table.scope,
+    ),
+    index("email_suppression_email_idx").on(table.email),
+  ],
+);
+
+/**
+ * Minimal dedup ledger for inbound Resend (Svix-signed) webhook deliveries.
+ * Delivery is at-least-once, so the unique `svix_id` lets a redelivery be
+ * recognized and skipped before the suppression side effect is applied again.
+ */
+export const emailWebhookEvent = pgTable("email_webhook_event", {
+  id: serial("id").primaryKey(),
+  svixId: text("svix_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+});
+
+// =============================================================================
 // NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications
 // =============================================================================
 
@@ -8135,3 +8212,20 @@ export const trainingRecordAuditLogRelations = relations(
     }),
   }),
 );
+
+/**
+ * Heartbeat + lease-lock for the Vercel cron dispatcher (one row per
+ * /api/cron/* job). The dispatcher records each run's outcome here so a
+ * silently-failing or never-firing cron is detectable from the DB, and takes a
+ * short `lockedUntil` row-lease to prevent overlapping runs. Treated as
+ * best-effort / fail-open by the dispatcher (see vercel-src/cron/cron-run.ts).
+ */
+export const cronRun = pgTable("cron_run", {
+  job: text("job").primaryKey(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  lastStatus: text("last_status"),
+  lastError: text("last_error"),
+  consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+});

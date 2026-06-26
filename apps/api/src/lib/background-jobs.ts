@@ -113,6 +113,7 @@ function resolveQueueJobType(message: BackgroundJobMessage): string {
     case "CERTIFICATE_XLSX_PREVIEW":
     case "SCHEDULED_NOTIFICATIONS":
     case "PORTAL_DIGEST":
+    case "MARKETING_CONTACT_SYNC":
       return message.type;
     default:
       return "CERTIFICATE";
@@ -122,11 +123,13 @@ function resolveQueueJobType(message: BackgroundJobMessage): string {
 function isDocumentWorkerJobType(
   message: BackgroundJobMessage,
 ): message is QueueMessage {
-  // SCHEDULED_NOTIFICATIONS and PORTAL_DIGEST are timer-only messages, not
-  // app_queue_job types, so they can never route to the container.
+  // SCHEDULED_NOTIFICATIONS, PORTAL_DIGEST and MARKETING_CONTACT_SYNC are
+  // timer-only messages, not app_queue_job types, so they can never route to
+  // the container.
   if (
     message.type === "SCHEDULED_NOTIFICATIONS" ||
-    message.type === "PORTAL_DIGEST"
+    message.type === "PORTAL_DIGEST" ||
+    message.type === "MARKETING_CONTACT_SYNC"
   ) {
     return false;
   }

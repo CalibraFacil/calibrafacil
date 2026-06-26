@@ -294,9 +294,8 @@ export async function reconcileCommercialWebhook(
     return { duplicate: false, organizationId: null };
   }
 
-  let paymentNotification: PaymentNotificationToSend | null = null;
-
-  await db.transaction(async (tx) => {
+  const paymentNotification = await db.transaction(async (tx) => {
+    let notification: PaymentNotificationToSend | null = null;
     const providerSubscriptionId = resolveProviderSubscriptionId(
       payload,
       offer.providerSubscriptionId,
@@ -359,7 +358,7 @@ export async function reconcileCommercialWebhook(
           !paymentSuccessStatuses.includes(previousStatus));
 
       if (enteredSuccessfulPaymentState) {
-        paymentNotification = {
+        notification = {
           type: "received",
           paymentId: payment.id,
           organizationId: offer.organizationId,
@@ -376,7 +375,7 @@ export async function reconcileCommercialWebhook(
           "DELETED",
         ].includes(payment.status)
       ) {
-        paymentNotification = {
+        notification = {
           type: "failed",
           paymentId: payment.id,
           organizationId: offer.organizationId,
@@ -470,10 +469,11 @@ export async function reconcileCommercialWebhook(
           eq(providerWebhookEvent.eventId, eventId),
         ),
       );
+
+    return notification;
   });
 
-  const notificationToSend =
-    paymentNotification as PaymentNotificationToSend | null;
+  const notificationToSend = paymentNotification;
 
   if (notificationToSend) {
     try {

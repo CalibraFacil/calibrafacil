@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { organization } from "@calibra-facil/db/schema";
 import type { Env } from "@calibra-facil/worker";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
@@ -334,6 +335,42 @@ describe("processDocumentMessage / SERVICE_ORDER_* handlers (worker real-DB inte
     expect(putKeys).toContain(key);
 
     expect(htmlBodies[0]).toContain("Cliente Delivery");
+  });
+
+  it("DELIVERY renders the lab's permissionária authorization (nº/UF) in the header", async () => {
+    const { env } = makeRecordingEnv();
+    const { htmlBodies } = installFetchRecorder();
+    const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
+    // Permissionária authorization (RBMLQ-I): number + UF, composed as "<nº>/<UF>".
+    await db
+      .update(organization)
+      .set({
+        permissionariaAuthorizationNumber: "0123",
+        permissionariaAuthorizationState: "RS",
+      })
+      .where(eq(organization.id, org.orgId));
+    const so = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.userId,
+      serviceOrderNumber: "OS-2026-0005",
+      customerName: "Cliente Permissionaria",
+      assetName: "Balança Permissionaria",
+    });
+    const delivery = await seedDeliveryDocument({
+      serviceOrderId: so.serviceOrderId,
+      serviceOrderNumber: so.serviceOrderNumber,
+      userId: org.userId,
+    });
+
+    await processBackgroundJob(env, {
+      type: "SERVICE_ORDER_DELIVERY_RECEIPT",
+      serviceOrderId: so.serviceOrderId,
+      documentId: delivery.documentId,
+      userId: org.userId,
+    });
+
+    expect(htmlBodies[0]).toContain("Autorização RBMLQ-I nº 0123/RS");
   });
 
   it("REQ-WSOD-002 INTAKE persists the EXACT R2 put key onto the intake row (write integrity)", async () => {

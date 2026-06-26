@@ -140,9 +140,10 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
     setIsPasskeyLoading(true)
 
     try {
+      // No authenticatorAttachment: let the OS offer every option so platform
+      // authenticators AND password managers (1Password, Bitwarden) can register.
       const registration = await labAuthClient.passkey.addPasskey({
         name: 'CalibraFácil',
-        authenticatorAttachment: 'platform',
         context: token,
       })
 

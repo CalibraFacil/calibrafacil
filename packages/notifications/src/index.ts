@@ -37,6 +37,18 @@ export {
   type NotificationResult,
 } from "./service";
 
+// Email suppression / unsubscribe list (issue #577)
+export {
+  suppressEmail,
+  isEmailSuppressed,
+  normalizeSuppressionEmail,
+  suppressionScopesToCheck,
+  type SuppressEmailInput,
+  type EmailSuppressionScope,
+  type EmailSuppressionReason,
+  type EmailSuppressionSource,
+} from "./suppression";
+
 // Service-order customer-facing email dispatcher (mini-spec A)
 export {
   sendServiceOrderCustomerEmail,
@@ -47,3 +59,33 @@ export {
   type CustomerDispatchTarget,
   type ServiceOrderCustomerEmailResult,
 } from "./service-order-customer-email";
+
+// Resend marketing-audience sync (lab staff → Contacts; foundation for Broadcasts)
+export {
+  syncLabUsersToResendAudience,
+  selectLabAudienceContacts,
+  type ResendAudienceSyncEnv,
+  type ResendAudienceSyncDeps,
+  type ResendAudienceSyncResult,
+  type RawAudienceMemberRow,
+  type LabAudienceContact,
+} from "./resend-audience-sync";
+
+export {
+  createResendContactsClient,
+  type ResendContactsClient,
+  type ResendContactsClientConfig,
+  type ContactUpsertInput,
+  type ContactUpsertResult,
+  type ContactTopic,
+  type TopicSubscription,
+} from "./resend-contacts-client";
+
+// Resend marketing Broadcasts (operator-triggered product-update sends)
+export {
+  sendMarketingBroadcast,
+  type SendMarketingBroadcastEnv,
+  type SendMarketingBroadcastOptions,
+  type SendMarketingBroadcastResult,
+  type SendMarketingBroadcastDeps,
+} from "./resend-broadcast";

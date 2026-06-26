@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono, type Context, type Next } from "hono";
 
-const mocks = vi.hoisted(() => ({
-  job: null as null | {
+const mocks = vi.hoisted(() => {
+  const job: {
     jobId: number;
     jobStatus: string;
     orgId: string;
     customerId: number;
     serviceOrderId: number | null;
     serviceOrderUnitId: number | null;
-  },
-  release: null as null | {
+  } | null = null;
+  const release: {
     id: number;
     status: string;
     appliedPolicyId: number | null;
@@ -19,16 +19,21 @@ const mocks = vi.hoisted(() => ({
     releasedByUserId: string | null;
     releaseReason: string | null;
     releasedByUserName: string | null;
-  },
-  policy: null as null | { id: number; mode: string },
-  recomputeCertificateRelease: vi.fn(async () => ({
-    releaseId: 1,
-    status: "RELEASED",
-    appliedPolicyId: 11,
-    changed: false,
-  })),
-  releaseByException: vi.fn(),
-}));
+  } | null = null;
+  const policy: { id: number; mode: string } | null = null;
+  return {
+    job,
+    release,
+    policy,
+    recomputeCertificateRelease: vi.fn(async () => ({
+      releaseId: 1,
+      status: "RELEASED",
+      appliedPolicyId: 11,
+      changed: false,
+    })),
+    releaseByException: vi.fn(),
+  };
+});
 
 vi.mock("@calibra-facil/db", () => {
   const buildSelect = (): unknown => {

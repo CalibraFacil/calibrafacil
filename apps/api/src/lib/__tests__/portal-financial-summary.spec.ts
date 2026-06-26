@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceOrderFinancialStatus } from "@calibra-facil/shared";
 
-const mocks = vi.hoisted(() => ({
-  remoteDocumentLinks: [] as Array<{
-    localEntityId: string;
-    metadata: Record<string, unknown> | null;
-  }>,
-}));
+const mocks = vi.hoisted(
+  (): {
+    remoteDocumentLinks: Array<{
+      localEntityId: string;
+      metadata: Record<string, unknown> | null;
+    }>;
+  } => ({
+    remoteDocumentLinks: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

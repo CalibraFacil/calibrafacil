@@ -10,11 +10,11 @@ import {
   type OperationsToCashStage,
 } from "../../lib/operations-to-cash";
 
-const STAGE_SET = new Set<string>(OPERATIONS_TO_CASH_STAGES);
-
-function parseStage(value: string | undefined): OperationsToCashStage | undefined {
+function parseStage(
+  value: string | undefined,
+): OperationsToCashStage | undefined {
   if (!value) return undefined;
-  return STAGE_SET.has(value) ? (value as OperationsToCashStage) : undefined;
+  return OPERATIONS_TO_CASH_STAGES.find((stage) => stage === value);
 }
 
 export const financeOperationsToCashRouter = new Hono<{

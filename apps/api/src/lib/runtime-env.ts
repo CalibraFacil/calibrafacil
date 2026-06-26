@@ -30,6 +30,11 @@ export type WorkerRuntimeEnv = {
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
+  // Marketing-audience sync (Resend Contacts) — operator-set, optional.
+  RESEND_AUDIENCE_ID?: string;
+  RESEND_TOPIC_NOVIDADES_ID?: string;
+  RESEND_TOPIC_DICAS_ID?: string;
+  MARKETING_CONTACT_SYNC_ENABLED?: string;
   EMAIL_FROM?: string;
   EMAIL_LOGO_URL?: string;
   WEB_URL?: string;
@@ -162,6 +167,11 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    // Marketing-audience sync (Resend Contacts) — operator-set, optional.
+    RESEND_AUDIENCE_ID: process.env.RESEND_AUDIENCE_ID,
+    RESEND_TOPIC_NOVIDADES_ID: process.env.RESEND_TOPIC_NOVIDADES_ID,
+    RESEND_TOPIC_DICAS_ID: process.env.RESEND_TOPIC_DICAS_ID,
+    MARKETING_CONTACT_SYNC_ENABLED: process.env.MARKETING_CONTACT_SYNC_ENABLED,
     EMAIL_FROM: process.env.EMAIL_FROM,
     EMAIL_LOGO_URL: process.env.EMAIL_LOGO_URL,
     WEB_URL: process.env.WEB_URL,

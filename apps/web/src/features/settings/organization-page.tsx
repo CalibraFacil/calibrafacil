@@ -131,6 +131,8 @@ type ActiveOrganization = NonNullable<
   accreditationNumber?: string | null
   accreditationBody?: string | null
   accreditationActive?: boolean | null
+  permissionariaAuthorizationNumber?: string | null
+  permissionariaAuthorizationState?: string | null
   street?: string | null
   number?: string | null
   complement?: string | null
@@ -217,6 +219,14 @@ function OrganizationSettingsPage({
   const [accreditationActive, setAccreditationActive] = useState(
     isoDraft.accreditationActive,
   )
+  const [
+    permissionariaAuthorizationNumber,
+    setPermissionariaAuthorizationNumber,
+  ] = useState(isoDraft.permissionariaAuthorizationNumber)
+  const [
+    permissionariaAuthorizationState,
+    setPermissionariaAuthorizationState,
+  ] = useState(isoDraft.permissionariaAuthorizationState)
   const [street, setStreet] = useState(isoDraft.street)
   const [number, setNumber] = useState(isoDraft.number)
   const [complement, setComplement] = useState(isoDraft.complement)
@@ -501,6 +511,8 @@ function OrganizationSettingsPage({
           accreditationNumber,
           accreditationBody,
           accreditationActive,
+          permissionariaAuthorizationNumber,
+          permissionariaAuthorizationState,
           street,
           number,
           complement,
@@ -1084,6 +1096,62 @@ function OrganizationSettingsPage({
                           accreditationNumber={accreditationNumber}
                         />
                       </div>
+
+                      <Separator />
+
+                      {/* Legal-metrology repair authorization (RBMLQ-I) */}
+                      <FieldGroup>
+                        <Field>
+                          <FieldLabel>
+                            Autorização de reparo (metrologia legal)
+                          </FieldLabel>
+                          <FieldDescription>
+                            Oficina permissionária do RBMLQ-I (Port. Inmetro
+                            65/2015). Distinta da acreditação RBC acima; aparece
+                            nos documentos de reparo de instrumentos sujeitos à
+                            metrologia legal.
+                          </FieldDescription>
+                        </Field>
+                        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                          <Field>
+                            <FieldLabel htmlFor="org-permissionaria-number">
+                              Nº de autorização
+                            </FieldLabel>
+                            <Input
+                              id="org-permissionaria-number"
+                              value={permissionariaAuthorizationNumber}
+                              onChange={(e) =>
+                                setPermissionariaAuthorizationNumber(
+                                  e.target.value,
+                                )
+                              }
+                              disabled={isUpdatingIso}
+                              placeholder="0123"
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="org-permissionaria-uf">
+                              UF
+                            </FieldLabel>
+                            <Input
+                              id="org-permissionaria-uf"
+                              className="w-20"
+                              maxLength={2}
+                              value={permissionariaAuthorizationState}
+                              onChange={(e) =>
+                                setPermissionariaAuthorizationState(
+                                  e.target.value
+                                    .toUpperCase()
+                                    .replace(/[^A-Z]/g, '')
+                                    .slice(0, 2),
+                                )
+                              }
+                              disabled={isUpdatingIso}
+                              placeholder="RS"
+                            />
+                          </Field>
+                        </div>
+                      </FieldGroup>
 
                       <Separator />
 

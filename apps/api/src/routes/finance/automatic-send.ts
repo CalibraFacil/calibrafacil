@@ -18,14 +18,14 @@ const RuleIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-const MILESTONES: AutomaticSendMilestone[] = [
+const MILESTONES = [
   "certificate_approved",
   "service_order_delivered",
   "contract_anniversary",
   "manual_only",
-];
+] as const satisfies readonly AutomaticSendMilestone[];
 
-const MilestoneSchema = z.enum(MILESTONES as [string, ...string[]]);
+const MilestoneSchema = z.enum(MILESTONES);
 
 const CreateRuleSchema = z.object({
   milestone: MilestoneSchema,
@@ -134,7 +134,7 @@ export const financeAutomaticSendRouter = new Hono<{
         .insert(automaticSendRule)
         .values({
           organizationId: member.organizationId,
-          milestone: body.milestone as AutomaticSendMilestone,
+          milestone: body.milestone,
           customerId: body.customerId ?? null,
           commercialAgreementId: body.commercialAgreementId ?? null,
           serviceCategory: body.serviceCategory ?? null,
@@ -208,7 +208,7 @@ export const financeAutomaticSendRouter = new Hono<{
         .update(automaticSendRule)
         .set({
           ...(body.milestone !== undefined
-            ? { milestone: body.milestone as AutomaticSendMilestone }
+            ? { milestone: body.milestone }
             : {}),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.archived === true ? { archivedAt: new Date() } : {}),

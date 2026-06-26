@@ -5,16 +5,20 @@ import type {
   ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
 
-const mocks = vi.hoisted(() => ({
-  policyRows: [] as Array<{
-    id: number;
-    mode: CertificateReleasePolicyMode;
-    customerId: number | null;
-    commercialAgreementId: number | null;
-    serviceCategory: string | null;
-    priority: number;
-  }>,
-}));
+const mocks = vi.hoisted(
+  (): {
+    policyRows: Array<{
+      id: number;
+      mode: CertificateReleasePolicyMode;
+      customerId: number | null;
+      commercialAgreementId: number | null;
+      serviceCategory: string | null;
+      priority: number;
+    }>;
+  } => ({
+    policyRows: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

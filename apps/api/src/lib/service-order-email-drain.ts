@@ -5,22 +5,31 @@
  * customer email template for each pending row. The drain is designed for
  * best-effort, idempotent delivery:
  *
- *  1. SELECT pending rows (processed_at IS NULL AND attempts < maxAttempts),
- *     ordered by created_at (uses the pending index), bounded by batch size.
- *  2. ATOMICALLY CLAIM each row:
- *       UPDATE ... SET processed_at = now()
+ *  1. SELECT pending rows: processed_at IS NULL (not yet done) AND attempts <
+ *     maxAttempts AND the row is not currently leased (claimed_at IS NULL OR
+ *     claimed_at older than the lease window), ordered by created_at (uses the
+ *     pending index), bounded by batch size.
+ *  2. ATOMICALLY CLAIM each row by taking a short lease:
+ *       UPDATE ... SET claimed_at = now()
  *       WHERE id = $1 AND processed_at IS NULL
+ *         AND (claimed_at IS NULL OR claimed_at < now() - lease)
  *       RETURNING id
- *     Only proceed if a row was returned — this is the idempotency guard.
+ *     Only proceed if a row was returned — this is the idempotency guard, and it
+ *     also lets a row whose previous lease expired (a drain killed mid-send) be
+ *     reclaimed instead of stranded.
  *  3. Re-load service order + customer data, resolve the template, send email.
- *  4. On send failure: RELEASE (processed_at = NULL, attempts++, last_error set).
- *  5. Best-effort: one bad row never aborts the batch; function never throws.
+ *  4. On success (or a graceful skip): MARK DONE (processed_at = now()).
+ *  5. On send failure: RELEASE the lease (claimed_at = NULL, attempts++,
+ *     last_error set) so the row is retried.
+ *  6. Best-effort: one bad row never aborts the batch; function never throws. A
+ *     row that throws after being claimed is NOT marked done, so its lease
+ *     simply expires and the next drain reclaims it.
  *
  * Template selection / routing:
  *
  *   eventKey namespace       → path
  *   ──────────────────────────────────────────────────────────────────
- *   "status_email:*"         → STATUS_EMAIL_MAP (existing E/F/G path, unchanged)
+ *   "status_email:*"         → STATUS_EMAIL_MAP (E/F/G), sent via sendServiceOrderEmailOnce
  *   "nova_os"                → dispatchNovaOsEmail via sendServiceOrderEmailOnce
  *   "orcamento_sent:*"       → dispatchNovoOrcamentoEmail via sendServiceOrderEmailOnce
  *   "quote_approved:*"       → dispatchOrcamentoAprovadoEmail via sendServiceOrderEmailOnce
@@ -37,10 +46,7 @@
  */
 
 import { db } from "@calibra-facil/db";
-import {
-  customer,
-  serviceOrderEmailOutbox,
-} from "@calibra-facil/db/schema";
+import { customer, serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 import { eq, and, isNull, lt, asc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import {
@@ -72,8 +78,22 @@ import { dispatchOrcamentoRecusadoEmail } from "../modules/service-orders/orcame
 // CONSTANTS
 // =============================================================================
 
-const DEFAULT_BATCH_SIZE = 50;
+// Each row reloads the service order + customer, renders a template, and sends
+// an email (network) sequentially, all inside the cron's 30s maxDuration. A
+// batch sized so the whole drain reliably finishes well under 30s minimises the
+// chance of being killed mid-batch. If that does happen, the claimed_at lease
+// (see below) lets the in-flight row recover on a later drain, and the
+// at-most-once ledger keeps a recovered-but-already-sent row from being
+// re-emailed. At the */5min cadence, 20 rows/run keeps the backlog draining
+// with margin to spare.
+const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
+// How long a claim lease is held before another drain may reclaim the row. Must
+// exceed the worst-case time to process one row (re-load + render + send) but be
+// short enough that a row stranded by a killed run recovers within a few drain
+// cycles. The cron runs every 5 min and its function maxDuration is 30s, so 120s
+// comfortably covers an in-flight row while bounding strand recovery.
+const CLAIM_LEASE_SECONDS = 120;
 
 // =============================================================================
 // TYPES
@@ -143,16 +163,21 @@ function toRecordOrNull(
 }
 
 /**
- * Atomically claim a single outbox row for processing.
- * Returns the row id when claimed, undefined if already claimed (concurrent drain).
- * Uses `UPDATE ... WHERE id = $id AND processed_at IS NULL RETURNING id` —
- * the WHERE clause is the idempotency guard.
+ * Atomically claim a single outbox row by taking a short lease.
+ * Returns the row id when claimed, undefined if it is already done or another
+ * drain holds a live lease. The WHERE clause is the idempotency guard:
+ *   - `processed_at IS NULL` — never re-send a row already marked done.
+ *   - `claimed_at IS NULL OR claimed_at < now() - lease` — a fresh lease blocks
+ *     concurrent drains, but an expired lease (a run killed mid-send) is
+ *     reclaimable, so the row recovers instead of stranding.
  */
 async function claimOutboxRow(rowId: number): Promise<ClaimResult | undefined> {
   const result = await db.execute(
     sql`UPDATE service_order_email_outbox
-        SET processed_at = now()
-        WHERE id = ${rowId} AND processed_at IS NULL
+        SET claimed_at = now()
+        WHERE id = ${rowId}
+          AND processed_at IS NULL
+          AND (claimed_at IS NULL OR claimed_at < now() - (${CLAIM_LEASE_SECONDS}::int * interval '1 second'))
         RETURNING id`,
   );
   // Drizzle's db.execute returns a PG QueryResult — rows is on .rows
@@ -172,7 +197,8 @@ async function claimOutboxRow(rowId: number): Promise<ClaimResult | undefined> {
 
 /**
  * Release a row back into the pending queue after a send failure.
- * Increments attempts and records the error message.
+ * Clears the lease (claimed_at), increments attempts, records the error. The
+ * row stays pending (processed_at is still NULL) so the next drain retries it.
  */
 async function releaseOutboxRow(
   rowId: number,
@@ -180,9 +206,23 @@ async function releaseOutboxRow(
 ): Promise<void> {
   await db.execute(
     sql`UPDATE service_order_email_outbox
-        SET processed_at = NULL,
+        SET claimed_at = NULL,
             attempts = attempts + 1,
             last_error = ${errorMessage}
+        WHERE id = ${rowId}`,
+  );
+}
+
+/**
+ * Mark a claimed row as terminally done. Set on a successful send and on a
+ * graceful skip (e.g. the service order / customer no longer exists), so the
+ * row is never re-leased. The `processed_at IS NULL` guard in the claim ensures
+ * a done row is never picked up again.
+ */
+async function markOutboxRowProcessed(rowId: number): Promise<void> {
+  await db.execute(
+    sql`UPDATE service_order_email_outbox
+        SET processed_at = now()
         WHERE id = ${rowId}`,
   );
 }
@@ -360,33 +400,46 @@ async function dispatchEmailForRow(
 
   const brand = await getLabEmailBrand(so.organizationId);
 
-  const result = await sendServiceOrderCustomerEmail({
-    serviceOrder: {
-      id: so.id,
-      publicId: so.publicId,
-      organizationId: so.organizationId,
-      customerId: so.customerId,
-      serviceOrderNumber: so.serviceOrderNumber,
-      clientContactSnapshot: so.clientContactSnapshot,
-    },
-    customer: {
-      id: cust.id,
-      name: cust.name,
-      email: cust.email,
-    },
-    brand,
-    subject: buildSubject(descriptor.emailType, so.serviceOrderNumber),
-    renderEmail: () =>
-      renderTemplate(
-        descriptor.emailType,
-        so.serviceOrderNumber,
-        cust.name,
-        row.targetStatus,
+  // Route through the at-most-once ledger (service_order_email_log keyed by
+  // serviceOrderId + eventKey) — same as the B/C/D path. This is what makes the
+  // lease-based strand recovery safe for status emails: if a drain delivered the
+  // email but died before marking the outbox row done, the lease expires and the
+  // row is reclaimed, but the ledger key is already recorded → dispatch is
+  // skipped ("deduped"), so the customer is NOT emailed twice.
+  const outcome = await sendServiceOrderEmailOnce({
+    serviceOrderId: so.id,
+    eventKey: row.eventKey ?? `status_email:${row.targetStatus}`,
+    dispatch: () =>
+      sendServiceOrderCustomerEmail({
+        serviceOrder: {
+          id: so.id,
+          publicId: so.publicId,
+          organizationId: so.organizationId,
+          customerId: so.customerId,
+          serviceOrderNumber: so.serviceOrderNumber,
+          clientContactSnapshot: so.clientContactSnapshot,
+        },
+        customer: {
+          id: cust.id,
+          name: cust.name,
+          email: cust.email,
+        },
         brand,
-      ),
+        subject: buildSubject(descriptor.emailType, so.serviceOrderNumber),
+        renderEmail: () =>
+          renderTemplate(
+            descriptor.emailType,
+            so.serviceOrderNumber,
+            cust.name,
+            row.targetStatus,
+            brand,
+          ),
+      }),
   });
 
-  return result.sent === true;
+  // "sent"/"deduped" → terminal success (mark the outbox row done).
+  // "failed" → release the outbox row for retry (transient send/DB failure).
+  return outcome !== "failed";
 }
 
 function buildSubject(emailType: string, serviceOrderNumber: string): string {
@@ -421,8 +474,15 @@ function renderTemplate(
     // with a stage prop that corresponds to the targetStatus.
     const isValidStage = (s: string): s is ServiceInProgressStage =>
       s === "awaiting_calibration" || s === "calibration_in_progress";
-    const stage = isValidStage(targetStatus) ? targetStatus : "awaiting_calibration";
-    return ServiceInProgressEmail({ brand, serviceOrderNumber, customerName, stage });
+    const stage = isValidStage(targetStatus)
+      ? targetStatus
+      : "awaiting_calibration";
+    return ServiceInProgressEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+      stage,
+    });
   }
 
   if (emailType === "awaiting_tech_evaluation") {
@@ -442,7 +502,11 @@ function renderTemplate(
   }
 
   if (emailType === "delivered") {
-    return ServiceOrderDeliveredEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderDeliveredEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+    });
   }
 
   if (emailType === "closed") {
@@ -454,7 +518,11 @@ function renderTemplate(
   }
 
   if (emailType === "canceled") {
-    return ServiceOrderCanceledEmail({ brand, serviceOrderNumber, customerName });
+    return ServiceOrderCanceledEmail({
+      brand,
+      serviceOrderNumber,
+      customerName,
+    });
   }
 
   if (emailType === "warranty_return") {
@@ -507,6 +575,9 @@ export async function drainServiceOrderEmailOutbox(options?: {
         and(
           isNull(serviceOrderEmailOutbox.processedAt),
           lt(serviceOrderEmailOutbox.attempts, maxAttempts),
+          // Not currently leased: never claimed, or the lease has expired (a
+          // prior drain was killed mid-send) so the row is reclaimable.
+          sql`(${serviceOrderEmailOutbox.claimedAt} IS NULL OR ${serviceOrderEmailOutbox.claimedAt} < now() - (${CLAIM_LEASE_SECONDS}::int * interval '1 second'))`,
         ),
       )
       .orderBy(asc(serviceOrderEmailOutbox.createdAt))
@@ -534,12 +605,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
         if (
           typeof eventKey === "string" &&
           row.payload !== undefined &&
-          (
-            eventKey === "nova_os" ||
+          (eventKey === "nova_os" ||
             eventKey.startsWith("orcamento_sent:") ||
             eventKey.startsWith("quote_approved:") ||
-            eventKey.startsWith("quote_rejected:")
-          )
+            eventKey.startsWith("quote_rejected:"))
         ) {
           // Narrow the row to the subtype expected by dispatchBcdEmailForRow
           const bcdRow = { ...row, eventKey, payload: row.payload };
@@ -555,10 +624,13 @@ export async function drainServiceOrderEmailOutbox(options?: {
           }
 
           if (handled) {
+            // Terminal success — mark done so the lease isn't reclaimed.
+            await markOutboxRowProcessed(row.id);
             result.sent++;
           } else {
             // Dispatch failed — release for retry.
-            const releaseMsg = "B/C/D dispatch did not complete — released for retry";
+            const releaseMsg =
+              "B/C/D dispatch did not complete — released for retry";
             try {
               await releaseOutboxRow(row.id, releaseMsg);
             } catch (releaseError) {
@@ -585,7 +657,9 @@ export async function drainServiceOrderEmailOutbox(options?: {
               LIMIT 1`,
         );
         const soResultRows: unknown = Reflect.get(soResult, "rows") ?? soResult;
-        const soRawRow: unknown = Array.isArray(soResultRows) ? soResultRows[0] : undefined;
+        const soRawRow: unknown = Array.isArray(soResultRows)
+          ? soResultRows[0]
+          : undefined;
 
         function parseSoRow(raw: unknown): ServiceOrderEmailData | undefined {
           if (typeof raw !== "object" || raw === null) return undefined;
@@ -617,8 +691,11 @@ export async function drainServiceOrderEmailOutbox(options?: {
         const soRow = parseSoRow(soRawRow);
         if (!soRow) {
           console.warn(
-            `[ServiceOrderEmailDrain] Service order ${row.serviceOrderId} not found for org ${row.organizationId} (outbox id=${row.id}); leaving processed.`,
+            `[ServiceOrderEmailDrain] Service order ${row.serviceOrderId} not found for org ${row.organizationId} (outbox id=${row.id}); marking processed.`,
           );
+          // Graceful terminal skip — the SO is gone, so mark done (don't let the
+          // lease expire and re-pick it forever).
+          await markOutboxRowProcessed(row.id);
           result.skipped++;
           continue;
         }
@@ -636,8 +713,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
         const custRow = custRows[0];
         if (!custRow) {
           console.warn(
-            `[ServiceOrderEmailDrain] Customer ${soRow.customerId} not found (outbox id=${row.id}); leaving processed.`,
+            `[ServiceOrderEmailDrain] Customer ${soRow.customerId} not found (outbox id=${row.id}); marking processed.`,
           );
+          // Graceful terminal skip — mark done so the lease isn't re-claimed.
+          await markOutboxRowProcessed(row.id);
           result.skipped++;
           continue;
         }
@@ -655,11 +734,12 @@ export async function drainServiceOrderEmailOutbox(options?: {
         }
 
         if (sent) {
+          // Terminal success — mark done so the lease isn't reclaimed.
+          await markOutboxRowProcessed(row.id);
           result.sent++;
         } else {
-          // 5. On failure: release back to pending for retry.
-          const releaseMsg =
-            "Send did not complete — released for retry";
+          // 5. On failure: release the lease back to pending for retry.
+          const releaseMsg = "Send did not complete — released for retry";
           await releaseOutboxRow(row.id, releaseMsg);
           result.released++;
         }

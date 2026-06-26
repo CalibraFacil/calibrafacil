@@ -37,6 +37,12 @@ vi.mock("../../lib/operator-alerts", () => ({
   recomputeOperatorAlerts: mocks.recomputeOperatorAlerts,
 }));
 
+// The runCron wrapper leases + heartbeats via db.execute. A row from the lease
+// UPDATE means "lease acquired" (run proceeds); the other calls are no-ops here.
+vi.mock("@calibra-facil/db", () => ({
+  db: { execute: vi.fn(async () => ({ rows: [{ job: "test" }] })) },
+}));
+
 const originalEnv = { ...process.env };
 
 function request(path: string, headers: HeadersInit = {}) {

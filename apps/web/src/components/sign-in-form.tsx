@@ -9,6 +9,7 @@ import {
 } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { calibraApi } from '@/utils/api'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { cn } from '@/lib/utils'
@@ -62,6 +63,48 @@ export function SignInForm({
   const safeRedirect = isLabMode
     ? sanitizeLabRedirect(redirect)
     : sanitizeBackofficeRedirect(redirect)
+
+  // Conditional-UI autofill: when the browser supports conditional mediation,
+  // pre-arm a passkey request on mount so the email field (autoComplete
+  // "username webauthn") surfaces saved passkeys / lets password managers fill.
+  // This is what makes Apple, Google, 1Password and Bitwarden actually prompt on
+  // page load. Best-effort: cancellations/absence of credentials are ignored.
+  useMountEffect(() => {
+    if (!isLabMode) return
+
+    let isActive = true
+
+    void (async () => {
+      try {
+        if (
+          typeof window === 'undefined' ||
+          !window.isSecureContext ||
+          !window.PublicKeyCredential ||
+          typeof window.PublicKeyCredential.isConditionalMediationAvailable !==
+            'function'
+        ) {
+          return
+        }
+
+        const available =
+          await window.PublicKeyCredential.isConditionalMediationAvailable()
+        if (!isActive || !available) return
+
+        const result = await labAuthClient.signIn.passkey({ autoFill: true })
+        if (!isActive || !result || result.error) return
+
+        clearDesktopSignedOut()
+        startDesktopInitialSync()
+        navigate({ to: safeRedirect })
+      } catch {
+        // Conditional UI is best-effort; ignore failures/cancellations.
+      }
+    })()
+
+    return () => {
+      isActive = false
+    }
+  })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

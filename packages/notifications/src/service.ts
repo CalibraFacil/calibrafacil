@@ -34,6 +34,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
+import { isEmailSuppressed } from "./suppression";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
@@ -2714,6 +2715,8 @@ export type PortalDigestRunResult = {
   recipients: number;
   sent: number;
   skippedEmpty: number;
+  /** Recipients skipped because their address is on the suppression ledger. */
+  suppressed: number;
   errors: number;
 };
 
@@ -2760,6 +2763,7 @@ export async function sendPortalDueDigests(
     recipients: 0,
     sent: 0,
     skippedEmpty: 0,
+    suppressed: 0,
     errors: 0,
   };
 
@@ -2962,12 +2966,26 @@ export async function sendPortalDueDigests(
         portalUrlByLab.set(recipient.labOrganizationId, portalBaseUrl);
       }
 
+      // The digest is marketing-class mail: never send it to an address on the
+      // suppression ledger (a Resend complaint / hard bounce, fed by the webhook
+      // in PR #591). isEmailSuppressed normalizes the address and also honours
+      // the broader 'all' scope. Per-recipient lookup is fine at cron volume.
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
+      if (await isEmailSuppressed(recipient.email, "all")) {
+        result.suppressed += 1;
+        continue;
+      }
+
       const frequencyLabel =
         recipient.frequency === "WEEKLY" ? "semanal" : "diário";
       const portalUrl =
         overdueCount > 0
           ? `${portalBaseUrl}/assets?dueStatus=overdue`
           : `${portalBaseUrl}/calendar`;
+      // The digest is a marketing-class email: expose a native unsubscribe via
+      // the portal notification-settings page (one-click List-Unsubscribe-Post
+      // is out of scope here).
+      const unsubscribeUrl = `${portalBaseUrl}/settings/notifications`;
 
       const emailElement = PortalDueDigestEmail({
         recipientName: recipient.name ?? "Usuário",
@@ -2998,6 +3016,9 @@ export async function sendPortalDueDigests(
         subject: `Resumo de calibrações: ${subjectParts.join(" · ")}`,
         html,
         replyTo: getReplyToEmail(emailBrand),
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        },
       });
 
       result.sent += 1;

@@ -14,6 +14,7 @@ import {
   triggerAutomaticSendForMilestone,
 } from "../lib/automatic-send";
 import { sendServiceOrdersToFinance } from "../lib/finance";
+import type { IntegrationsEnv } from "../lib/integrations";
 import {
   calibrationJob,
   jobAuditLog,
@@ -807,7 +808,10 @@ async function buildEnvironmentalSnapshot(
  * - POST /:id/approve: calibration:approve (admin, owner only)
  * - POST /:id/reject: calibration:reject (admin, owner only)
  */
-export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
+export const jobsRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: IntegrationsEnv;
+}>()
   // =========================================================================
   // GET /search - Lightweight search for command palette
   // =========================================================================
@@ -2305,7 +2309,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                     serviceOrderIds: [params.serviceOrderId],
                     actorUserId: params.actorUserId,
                     scope: memberData,
-                    env: c.env as never,
+                    env: c.env,
                   });
                   const first = results[0];
                   if (!first) {

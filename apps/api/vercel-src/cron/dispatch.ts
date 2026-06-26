@@ -9,15 +9,23 @@ import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
+import { runCron } from "./cron-run";
 
 // One function serves all Vercel cron jobs so Vercel packages a single bundle
-// instead of one per job. The vercel.json crons still hit the semantic paths
-// /api/cron/{integrations,notifications,portal-digest,operator-alerts,auth-maintenance};
-// the matching dynamic shim api/cron/[job].js routes them all here and we
-// dispatch on the trailing path segment. Auth is uniform and fail-closed: on
-// prod/Vercel a CRON_SECRET is REQUIRED for every job (503 when unset), and
-// secrets are compared in constant time. Local dev without a secret stays
-// open so the endpoints remain curl-able.
+// instead of one per job. The vercel.json crons hit the semantic paths
+// /api/cron/{integrations,notifications,portal-digest,operator-alerts,
+// auth-maintenance,service-order-emails}; the dynamic shim api/cron/[job].js
+// routes them all here and we dispatch on the trailing path segment. (The
+// cron-routing-parity test asserts these paths <-> JOB_HANDLERS stay in sync
+// and that no vercel.json rewrite swallows them into the Hono app.)
+//
+// Auth is uniform and fail-closed: on prod/Vercel a CRON_SECRET is REQUIRED for
+// every job (503 when unset), secrets are compared in constant time, and the
+// check runs BEFORE any work. Each authorized handler then runs its task under
+// runCron(), which adds a lease (no overlapping runs), a heartbeat (cron_run
+// table, so a silently-broken cron is detectable), and turns any throw into a
+// structured 500. Local dev without a secret stays open so endpoints are
+// curl-able.
 
 type CronTaskResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -88,31 +96,36 @@ async function handleIntegrations(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const env = createWorkerRuntimeEnv();
-  const integrationSyncs = await runCronTask("generic_http_syncs", () =>
-    processScheduledIntegrationSyncs(env, {
-      dispatch: async (message) => {
-        await enqueueBackgroundJob(message, {
-          idempotencyKey: `integration-sync-${message.runId}`,
-        });
-      },
-    }),
-  );
-  const contaAzulSyncs = await runCronTask("conta_azul_syncs", () =>
-    processScheduledContaAzulIntegrationSyncs({
-      env,
-      dispatch: async (message) => {
-        await enqueueBackgroundJob(message, {
-          idempotencyKey: `conta-azul-sync-${message.runId}`,
-        });
-      },
-    }),
-  );
-  const contaAzulPolling = await runCronTask("conta_azul_polling", () =>
-    processScheduledContaAzulPolls({ env }),
-  );
+  return runCron("integrations", { leaseSeconds: 120 }, async () => {
+    const env = createWorkerRuntimeEnv();
+    // Each sub-task is independently isolated via runCronTask so one failing
+    // provider never aborts the others; the run still reports 200 with the
+    // per-task ok/error breakdown.
+    const integrationSyncs = await runCronTask("generic_http_syncs", () =>
+      processScheduledIntegrationSyncs(env, {
+        dispatch: async (message) => {
+          await enqueueBackgroundJob(message, {
+            idempotencyKey: `integration-sync-${message.runId}`,
+          });
+        },
+      }),
+    );
+    const contaAzulSyncs = await runCronTask("conta_azul_syncs", () =>
+      processScheduledContaAzulIntegrationSyncs({
+        env,
+        dispatch: async (message) => {
+          await enqueueBackgroundJob(message, {
+            idempotencyKey: `conta-azul-sync-${message.runId}`,
+          });
+        },
+      }),
+    );
+    const contaAzulPolling = await runCronTask("conta_azul_polling", () =>
+      processScheduledContaAzulPolls({ env }),
+    );
 
-  return Response.json({ integrationSyncs, contaAzulSyncs, contaAzulPolling });
+    return { integrationSyncs, contaAzulSyncs, contaAzulPolling };
+  });
 }
 
 function todayKey() {
@@ -124,12 +137,12 @@ async function handleNotifications(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const result = await enqueueBackgroundJob(
-    { type: "SCHEDULED_NOTIFICATIONS" },
-    { idempotencyKey: `scheduled-notifications-${todayKey()}` },
+  return runCron("notifications", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "SCHEDULED_NOTIFICATIONS" },
+      { idempotencyKey: `scheduled-notifications-${todayKey()}` },
+    ),
   );
-
-  return Response.json(result);
 }
 
 async function handlePortalDigest(request: Request) {
@@ -137,12 +150,25 @@ async function handlePortalDigest(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const result = await enqueueBackgroundJob(
-    { type: "PORTAL_DIGEST" },
-    { idempotencyKey: `portal-digest-${todayKey()}` },
+  return runCron("portal-digest", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "PORTAL_DIGEST" },
+      { idempotencyKey: `portal-digest-${todayKey()}` },
+    ),
   );
+}
 
-  return Response.json(result);
+async function handleMarketingContactSync(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("marketing-contact-sync", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "MARKETING_CONTACT_SYNC" },
+      { idempotencyKey: `marketing-contact-sync-${todayKey()}` },
+    ),
+  );
 }
 
 async function handleOperatorAlerts(request: Request) {
@@ -150,8 +176,9 @@ async function handleOperatorAlerts(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const result = await recomputeOperatorAlerts();
-  return Response.json(result);
+  return runCron("operator-alerts", { leaseSeconds: 120 }, () =>
+    recomputeOperatorAlerts(),
+  );
 }
 
 async function handleAuthMaintenance(request: Request) {
@@ -159,8 +186,9 @@ async function handleAuthMaintenance(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const result = await cleanupExpiredAuthRecords();
-  return Response.json(result);
+  return runCron("auth-maintenance", { leaseSeconds: 120 }, () =>
+    cleanupExpiredAuthRecords(),
+  );
 }
 
 async function handleServiceOrderEmails(request: Request) {
@@ -168,14 +196,19 @@ async function handleServiceOrderEmails(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  const result = await drainServiceOrderEmailOutbox();
-  return Response.json(result);
+  return runCron("service-order-emails", { leaseSeconds: 120 }, () =>
+    drainServiceOrderEmailOutbox(),
+  );
 }
 
-const JOB_HANDLERS: Record<string, (request: Request) => Promise<Response>> = {
+export const JOB_HANDLERS: Record<
+  string,
+  (request: Request) => Promise<Response>
+> = {
   integrations: handleIntegrations,
   notifications: handleNotifications,
   "portal-digest": handlePortalDigest,
+  "marketing-contact-sync": handleMarketingContactSync,
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,
@@ -195,7 +228,18 @@ export async function GET(request: Request) {
       { status: 404 },
     );
   }
-  return handler(request);
+  // Last-resort guard: handlers already run their work under runCron (which
+  // catches task failures), but anything thrown before that — auth parsing, an
+  // import-time error — must still become a structured 500, never an uncaught
+  // rejection that 500s with a bare stack.
+  try {
+    return await handler(request);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Erro desconhecido no cron";
+    console.error("[Cron] handler crashed", { job, message });
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
 }
 
 export default {

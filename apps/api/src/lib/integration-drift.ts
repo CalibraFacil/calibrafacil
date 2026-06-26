@@ -62,19 +62,17 @@ interface QueueRow {
   linkId: string;
   integrationId: string;
   provider: IntegrationProvider;
-  target: string;
+  target: IntegrationObjectLinkTarget;
   localEntityId: string;
   remoteEntityId: string | null;
   remoteDisplayId: string | null;
-  metadata: unknown;
+  metadata: Record<string, unknown> | null;
   lastSyncedAt: Date | null;
 }
 
 function mapRow(row: QueueRow): IntegrationDriftRow | null {
   const metadata =
-    row.metadata && typeof row.metadata === "object"
-      ? (row.metadata as Record<string, unknown>)
-      : null;
+    row.metadata && typeof row.metadata === "object" ? row.metadata : null;
   const drift = isDriftMetadata(metadata?.drift) ? metadata.drift : null;
   if (drift?.status !== "remote_missing") return null;
 
@@ -82,7 +80,7 @@ function mapRow(row: QueueRow): IntegrationDriftRow | null {
     linkId: row.linkId,
     integrationId: row.integrationId,
     providerLabel: providerLabel(row.provider),
-    target: row.target as IntegrationObjectLinkTarget,
+    target: row.target,
     targetLabel: targetLabel(row.target),
     localEntityId: row.localEntityId,
     remoteEntityId: row.remoteEntityId,
@@ -139,7 +137,7 @@ export async function buildIntegrationDriftQueue(params: {
     .limit(limit);
 
   return rows
-    .map((row) => mapRow(row as QueueRow))
+    .map((row) => mapRow(row))
     .filter((row): row is IntegrationDriftRow => row !== null);
 }
 

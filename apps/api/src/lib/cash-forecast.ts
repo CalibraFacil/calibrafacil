@@ -6,7 +6,6 @@ import {
   receivableInstallment,
   serviceOrder,
 } from "@calibra-facil/db/schema";
-import type { CommercialAgreementStatus } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import { summarizeRecurringRevenue } from "./recurring-revenue";
 import { buildUnitScopeCondition } from "./units";
@@ -197,12 +196,11 @@ export async function buildCashForecast(
       ),
     );
 
-  const eligibleInstallments = installments
-    .filter((row) => row.dueDate !== null)
-    .map((row) => ({
-      amountCents: row.amountCents,
-      dueDate: row.dueDate as Date,
-    }));
+  const eligibleInstallments = installments.flatMap((row) =>
+    row.dueDate === null
+      ? []
+      : [{ amountCents: row.amountCents, dueDate: row.dueDate }],
+  );
 
   // Recurring projection: active agreements with a priced
   // monthlyRecurringCents field. The current schema doesn't carry
@@ -220,7 +218,7 @@ export async function buildCashForecast(
 
   const recurringSummary = summarizeRecurringRevenue(
     agreements.map((row) => ({
-      status: row.status as CommercialAgreementStatus,
+      status: row.status,
       effectiveFrom: row.effectiveFrom,
       effectiveTo: row.effectiveTo,
       monthlyRecurringCents: null,

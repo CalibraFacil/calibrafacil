@@ -159,7 +159,9 @@ describe("REQ-SOEMAIL-009: dispatch fails after claim → release key (DELETE)",
     const deleteChain = makeDeleteChain();
 
     // dispatch reports failure
-    const dispatch = vi.fn().mockResolvedValue({ sent: false, error: "Transport failure" });
+    const dispatch = vi
+      .fn()
+      .mockResolvedValue({ sent: false, error: "Transport failure" });
 
     await sendServiceOrderEmailOnce({
       serviceOrderId: 10,
@@ -222,7 +224,9 @@ describe("(d) claimed + dispatch sent → no release DELETE", () => {
   it("REQ-SOEMAIL-007+008: no DELETE when dispatch reports sent: true", async () => {
     makeInsertChain([{ id: 5 }]);
 
-    const dispatch = vi.fn().mockResolvedValue({ sent: true, emailId: "email-abc" });
+    const dispatch = vi
+      .fn()
+      .mockResolvedValue({ sent: true, emailId: "email-abc" });
 
     await sendServiceOrderEmailOnce({
       serviceOrderId: 20,
@@ -278,5 +282,88 @@ describe("helper never throws (best-effort)", () => {
         dispatch,
       }),
     ).resolves.not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Outcome contract — the outbox drain relies on this return value to decide
+// whether to mark a row done ("sent"/"deduped") or release it for retry
+// ("failed"). This is what makes the lease-based strand recovery safe for the
+// no-other-dedup status_email path.
+// ---------------------------------------------------------------------------
+
+describe("outcome contract (sent | deduped | failed)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 'sent' when the key is claimed and dispatch reports sent: true", async () => {
+    makeInsertChain([{ id: 1 }]);
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 1,
+      eventKey: "status_email:repair_in_progress",
+      dispatch: async () => ({ sent: true, emailId: "e-1" }),
+    });
+
+    expect(outcome).toBe("sent");
+  });
+
+  it("returns 'deduped' (no dispatch) when the key is already recorded — the reclaim-after-send case", async () => {
+    makeInsertChain([]); // ON CONFLICT DO NOTHING returned no row
+    const dispatch = vi.fn();
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 1,
+      eventKey: "status_email:repair_in_progress",
+      dispatch,
+    });
+
+    expect(outcome).toBe("deduped");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("returns 'failed' when dispatch reports not-sent (key released for retry)", async () => {
+    makeInsertChain([{ id: 1 }]);
+    makeDeleteChain();
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 1,
+      eventKey: "status_email:repair_in_progress",
+      dispatch: async () => ({ sent: false, error: "SMTP down" }),
+    });
+
+    expect(outcome).toBe("failed");
+  });
+
+  it("returns 'failed' when dispatch throws", async () => {
+    makeInsertChain([{ id: 1 }]);
+    makeDeleteChain();
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 1,
+      eventKey: "status_email:repair_in_progress",
+      dispatch: async () => {
+        throw new Error("transport exploded");
+      },
+    });
+
+    expect(outcome).toBe("failed");
+  });
+
+  it("returns 'failed' when the claim INSERT itself throws (no dispatch)", async () => {
+    mockInsert.mockImplementation(() => {
+      throw new Error("db down");
+    });
+    const dispatch = vi.fn();
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 1,
+      eventKey: "status_email:repair_in_progress",
+      dispatch,
+    });
+
+    expect(outcome).toBe("failed");
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

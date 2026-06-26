@@ -18,7 +18,10 @@ import {
   notifyStandardExpiring,
   notifyVisitReminder,
   sendPortalDueDigests,
+  syncLabUsersToResendAudience,
   type PortalDigestRunResult,
+  type ResendAudienceSyncEnv,
+  type ResendAudienceSyncResult,
 } from "@calibra-facil/notifications";
 
 interface ScheduledEnv {
@@ -795,4 +798,18 @@ export async function processScheduledNotifications(
  */
 export async function processPortalDigest(): Promise<PortalDigestRunResult> {
   return sendPortalDueDigests();
+}
+
+/**
+ * Sync lab-org staff into the Resend marketing audience (MARKETING_CONTACT_SYNC
+ * background job). Selection, suppression-awareness, the soft opt-in and the
+ * idempotent upsert all live in @calibra-facil/notifications; the worker just
+ * passes the runtime config (Resend key, audience + topic ids, the safety
+ * flag). The whole path is a no-op unless MARKETING_CONTACT_SYNC_ENABLED is
+ * exactly "true" AND the audience/topic ids are configured.
+ */
+export async function processMarketingContactSync(
+  env: ResendAudienceSyncEnv,
+): Promise<ResendAudienceSyncResult> {
+  return syncLabUsersToResendAudience(env);
 }
