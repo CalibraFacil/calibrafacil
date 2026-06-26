@@ -2673,6 +2673,19 @@ export const customerAuditLogRelations = relations(
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
 /**
+ * Provenance of an asset's calibration interval. The interval is the equipment
+ * owner's (customer's) decision, never the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
+ * ILAC-G24 / OIML D 10). There is deliberately NO `lab` value.
+ * - `customer_confirmed`: the customer set it in the portal.
+ * - `engine_applied`: the customer applied a reliability-engine suggestion.
+ * - `legal_fixed`: pinned to a legal-metrology regulated period (not optimizable).
+ */
+export type AssetIntervalSetBy =
+  | "customer_confirmed"
+  | "engine_applied"
+  | "legal_fixed";
+
+/**
  * Asset table - Equipment/Instruments linked to customers.
  * Each asset belongs to a customer and can have calibration history.
  */
@@ -2708,6 +2721,19 @@ export const asset = pgTable(
     subjectToLegalMetrology: boolean("subject_to_legal_metrology")
       .default(false)
       .notNull(),
+    // Calibration interval (periodicity) — OWNED BY THE CUSTOMER, never the lab
+    // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). NULL = "aguardando
+    // definição do cliente" (the lab no longer attributes periodicity). When set,
+    // `next_calibration_date` is derived = `last_calibration_date` + this many
+    // months. `interval_rationale` is the required §7.5 technical record.
+    calibrationIntervalMonths: integer("calibration_interval_months"),
+    intervalSetBy: text("interval_set_by").$type<AssetIntervalSetBy>(),
+    intervalSetAt: timestamp("interval_set_at"),
+    intervalSetByUserId: text("interval_set_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    intervalRationale: text("interval_rationale"),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -3944,6 +3970,15 @@ export const calibrationJob = pgTable(
     data: jsonb("data").$type<Record<string, unknown>>(),
     // Calculated results (output from math engine)
     results: jsonb("results").$type<Record<string, unknown>>(),
+    // As-found (pre-adjustment) conformity verdict — the reliability signal for
+    // ILAC-G24 / NCSL RP-1 interval analysis. Derived ONCE at approval from the
+    // frozen `results` (`margem_conformidade_antes`, NOT the as-left `_apos`) via
+    // `apps/api/src/lib/as-found-reliability-verdict.ts`. UNKNOWN when the method
+    // emits no as-found margin. Never feeds any certificate/approval logic.
+    asFoundConformity: text("as_found_conformity").$type<
+      "CONFORMING" | "NON_CONFORMING" | "UNKNOWN"
+    >(),
+    asFoundMargins: jsonb("as_found_margins").$type<number[]>(),
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),

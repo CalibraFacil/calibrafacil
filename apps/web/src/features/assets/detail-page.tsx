@@ -153,7 +153,7 @@ export function AssetDetailPage({ id }: { id: string }) {
     days === null
       ? calibration.level === 'retired'
         ? 'descartado'
-        : 'não agendada'
+        : 'aguardando definição do cliente'
       : days < 0
         ? `há ${Math.abs(days)} ${pluralDays(Math.abs(days))}`
         : days === 0
@@ -372,8 +372,10 @@ export function AssetDetailPage({ id }: { id: string }) {
                   <span className="inline-flex items-center gap-1">
                     Próxima calibração
                     <InfoHint label="Sobre a próxima calibração">
-                      Data limite para manter a validade metrológica do
-                      instrumento. Programe a recalibração antes deste prazo.
+                      A periodicidade de calibração é definida pelo cliente no
+                      portal — o laboratório não atribui periodicidade (NBR
+                      ISO/IEC 17025 §7.8.4.3). Exibida aqui somente para
+                      consulta.
                     </InfoHint>
                   </span>
                 }
@@ -386,7 +388,10 @@ export function AssetDetailPage({ id }: { id: string }) {
 
           {auditEvents.length > 0 ? (
             <Panel className="p-4 sm:p-5">
-              <PanelHeader eyebrow="Atividade" title="Histórico de alterações" />
+              <PanelHeader
+                eyebrow="Atividade"
+                title="Histórico de alterações"
+              />
               <div className="mt-4">
                 <AuditTimeline events={auditEvents} showCard={false} />
               </div>

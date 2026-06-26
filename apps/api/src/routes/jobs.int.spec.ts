@@ -192,6 +192,7 @@ async function seedJob(params: {
   createdBy: string;
   technicianId?: string | null;
   status?: JobStatus;
+  results?: Record<string, unknown>;
 }): Promise<number> {
   const status: JobStatus = params.status ?? "DRAFT";
   const [row] = await db
@@ -208,6 +209,7 @@ async function seedJob(params: {
       status,
       methodSnapshot: minimalMethodSnapshot(),
       certificateName: params.jobId,
+      results: params.results,
     })
     .returning({ id: calibrationJob.id });
   if (!row) throw new Error("seedJob: insert failed");
@@ -264,559 +266,595 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
   // =========================================================================
   // REQ-JOB-001: Tenant isolation on approve
   // =========================================================================
-  it(
-    "REQ-JOB-001: approve org B's REVIEW job as org A admin → not actionable; DB job stays REVIEW",
-    async () => {
-      const orgA = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
-      const orgB = await seedJobFixture({
-        orgId: "org-b",
-        userId: "user-b",
-        tagSuffix: "b",
-      });
+  it("REQ-JOB-001: approve org B's REVIEW job as org A admin → not actionable; DB job stays REVIEW", async () => {
+    const orgA = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const orgB = await seedJobFixture({
+      orgId: "org-b",
+      userId: "user-b",
+      tagSuffix: "b",
+    });
 
-      const jobBId = await seedJob({
-        jobId: "JOB-B-001",
-        organizationId: "org-b",
-        unitId: orgB.unitId,
-        customerId: orgB.customerId,
-        assetId: orgB.assetId,
-        serviceId: orgB.serviceId,
-        createdBy: orgB.userId,
-        status: "REVIEW",
-      });
+    const jobBId = await seedJob({
+      jobId: "JOB-B-001",
+      organizationId: "org-b",
+      unitId: orgB.unitId,
+      customerId: orgB.customerId,
+      assetId: orgB.assetId,
+      serviceId: orgB.serviceId,
+      createdBy: orgB.userId,
+      status: "REVIEW",
+    });
 
-      // Org A admin tries to approve org B's job by its numeric DB id
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await jobsRouter.request(`/${jobBId}/approve`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Cross-tenant approve attempt" }),
-      });
+    // Org A admin tries to approve org B's job by its numeric DB id
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await jobsRouter.request(`/${jobBId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Cross-tenant approve attempt" }),
+    });
 
-      // resolveJobRouteId scopes by org+unit → id not found under org A's session
-      expect(res.status).toBe(404);
+    // resolveJobRouteId scopes by org+unit → id not found under org A's session
+    expect(res.status).toBe(404);
 
-      // Verify org B's job was NOT touched
-      const [row] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, jobBId));
-      expect(row?.status).toBe("REVIEW");
-    },
-  );
+    // Verify org B's job was NOT touched
+    const [row] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobBId));
+    expect(row?.status).toBe("REVIEW");
+  });
 
   // =========================================================================
   // REQ-JOB-002: Approve requires REVIEW status
   // =========================================================================
-  it(
-    "REQ-JOB-002: distinct admin approves REVIEW job → 2xx + status GENERATING_PDF + approvedBy set; DRAFT → 400; APPROVED → 400",
-    async () => {
-      const fixture = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
+  it("REQ-JOB-002: distinct admin approves REVIEW job → 2xx + status GENERATING_PDF + approvedBy set; DRAFT → 400; APPROVED → 400", async () => {
+    const fixture = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
 
-      // Seed a second admin (distinct approver for four-eyes)
-      const approverUserId = "user-a-approver";
-      await db.insert(user).values({
-        id: approverUserId,
-        name: "Second Admin",
-        email: `${approverUserId}@lab.test`,
-      });
-      await db.insert(member).values({
-        id: `member-${approverUserId}`,
-        organizationId: "org-a",
-        userId: approverUserId,
-        role: "admin",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      });
+    // Seed a second admin (distinct approver for four-eyes)
+    const approverUserId = "user-a-approver";
+    await db.insert(user).values({
+      id: approverUserId,
+      name: "Second Admin",
+      email: `${approverUserId}@lab.test`,
+    });
+    await db.insert(member).values({
+      id: `member-${approverUserId}`,
+      organizationId: "org-a",
+      userId: approverUserId,
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
 
-      // Seed REVIEW job (technicianId = user-a, createdBy = user-a)
-      const reviewJobId = await seedJob({
-        jobId: "JOB-REVIEW-001",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        technicianId: fixture.userId,
-        status: "REVIEW",
-      });
+    // Seed REVIEW job (technicianId = user-a, createdBy = user-a)
+    const reviewJobId = await seedJob({
+      jobId: "JOB-REVIEW-001",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      technicianId: fixture.userId,
+      status: "REVIEW",
+    });
 
-      // Approve as DISTINCT admin → expect 2xx
-      loginAs({ userId: approverUserId, organizationId: "org-a" });
-      const approveRes = await jobsRouter.request(`/${reviewJobId}/approve`, {
+    // Approve as DISTINCT admin → expect 2xx
+    loginAs({ userId: approverUserId, organizationId: "org-a" });
+    const approveRes = await jobsRouter.request(`/${reviewJobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Looks good" }),
+    });
+
+    expect(approveRes.status).toBe(200);
+    const approveBody = await approveRes.json();
+    expect(approveBody.data.status).toBe("GENERATING_PDF");
+    expect(approveBody.data.approvedBy).toBe(approverUserId);
+
+    // Verify DB state
+    const [approvedRow] = await db
+      .select({
+        status: calibrationJob.status,
+        approvedBy: calibrationJob.approvedBy,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, reviewJobId));
+    expect(approvedRow?.status).toBe("GENERATING_PDF");
+    expect(approvedRow?.approvedBy).toBe(approverUserId);
+
+    // --- 2b: DRAFT job approve → 400 ---
+    const draftJobId = await seedJob({
+      jobId: "JOB-DRAFT-002",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status: "DRAFT",
+    });
+
+    const draftApproveRes = await jobsRouter.request(`/${draftJobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(draftApproveRes.status).toBe(400);
+
+    // DB: still DRAFT
+    const [draftRow] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, draftJobId));
+    expect(draftRow?.status).toBe("DRAFT");
+
+    // --- 2c: APPROVED job approve → 400 ---
+    const approvedJobId = await seedJob({
+      jobId: "JOB-APPROVED-003",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status: "APPROVED",
+    });
+
+    const alreadyApprovedRes = await jobsRouter.request(
+      `/${approvedJobId}/approve`,
+      {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Looks good" }),
-      });
+        body: JSON.stringify({}),
+      },
+    );
+    expect(alreadyApprovedRes.status).toBe(400);
 
-      expect(approveRes.status).toBe(200);
-      const approveBody = await approveRes.json();
-      expect(approveBody.data.status).toBe("GENERATING_PDF");
-      expect(approveBody.data.approvedBy).toBe(approverUserId);
+    const [approvedJobRow] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, approvedJobId));
+    expect(approvedJobRow?.status).toBe("APPROVED");
+  });
 
-      // Verify DB state
-      const [approvedRow] = await db
-        .select({
-          status: calibrationJob.status,
-          approvedBy: calibrationJob.approvedBy,
-        })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, reviewJobId));
-      expect(approvedRow?.status).toBe("GENERATING_PDF");
-      expect(approvedRow?.approvedBy).toBe(approverUserId);
+  // =========================================================================
+  // REQ-RELIA-011: approving a job persists the AS-FOUND reliability verdict
+  // (margem_conformidade_antes) derived from the frozen results. The as-found
+  // margins [0.5, -0.1, 0.3] include an out-of-tolerance point → NON_CONFORMING.
+  // This proves the wiring; the verdict math itself is unit-tested in
+  // as-found-reliability-verdict.spec.ts (incl. the no-as-left-fallback guard).
+  // =========================================================================
+  it("REQ-RELIA-011: approval persists as_found_conformity + as_found_margins from results", async () => {
+    const fixture = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
 
-      // --- 2b: DRAFT job approve → 400 ---
-      const draftJobId = await seedJob({
-        jobId: "JOB-DRAFT-002",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        status: "DRAFT",
-      });
+    const approverUserId = "user-a-approver";
+    await db.insert(user).values({
+      id: approverUserId,
+      name: "Second Admin",
+      email: `${approverUserId}@lab.test`,
+    });
+    await db.insert(member).values({
+      id: `member-${approverUserId}`,
+      organizationId: "org-a",
+      userId: approverUserId,
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
 
-      const draftApproveRes = await jobsRouter.request(
-        `/${draftJobId}/approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(draftApproveRes.status).toBe(400);
+    const reviewJobId = await seedJob({
+      jobId: "JOB-RELIA-001",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      technicianId: fixture.userId,
+      status: "REVIEW",
+      results: { margem_conformidade_antes: [0.5, -0.1, 0.3] },
+    });
 
-      // DB: still DRAFT
-      const [draftRow] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, draftJobId));
-      expect(draftRow?.status).toBe("DRAFT");
+    loginAs({ userId: approverUserId, organizationId: "org-a" });
+    const res = await jobsRouter.request(`/${reviewJobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "ok" }),
+    });
+    expect(res.status).toBe(200);
 
-      // --- 2c: APPROVED job approve → 400 ---
-      const approvedJobId = await seedJob({
-        jobId: "JOB-APPROVED-003",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        status: "APPROVED",
-      });
-
-      const alreadyApprovedRes = await jobsRouter.request(
-        `/${approvedJobId}/approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(alreadyApprovedRes.status).toBe(400);
-
-      const [approvedJobRow] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, approvedJobId));
-      expect(approvedJobRow?.status).toBe("APPROVED");
-    },
-  );
+    const [row] = await db
+      .select({
+        asFoundConformity: calibrationJob.asFoundConformity,
+        asFoundMargins: calibrationJob.asFoundMargins,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, reviewJobId));
+    expect(row?.asFoundConformity).toBe("NON_CONFORMING");
+    expect(row?.asFoundMargins).toEqual([0.5, -0.1, 0.3]);
+  });
 
   // =========================================================================
   // REQ-JOB-003: Reject requires REVIEW status
   // =========================================================================
-  it(
-    "REQ-JOB-003: reject REVIEW job → 200 + REJECTED; reject DRAFT job → 400",
-    async () => {
-      const fixture = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
+  it("REQ-JOB-003: reject REVIEW job → 200 + REJECTED; reject DRAFT job → 400", async () => {
+    const fixture = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
 
-      loginAs({ userId: fixture.userId, organizationId: "org-a" });
+    loginAs({ userId: fixture.userId, organizationId: "org-a" });
 
-      // --- 3a: REVIEW job → 200 + REJECTED ---
-      const reviewJobId = await seedJob({
-        jobId: "JOB-REJ-REVIEW-001",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        status: "REVIEW",
-      });
+    // --- 3a: REVIEW job → 200 + REJECTED ---
+    const reviewJobId = await seedJob({
+      jobId: "JOB-REJ-REVIEW-001",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status: "REVIEW",
+    });
 
-      const rejectRes = await jobsRouter.request(`/${reviewJobId}/reject`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Erros no procedimento" }),
-      });
+    const rejectRes = await jobsRouter.request(`/${reviewJobId}/reject`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Erros no procedimento" }),
+    });
 
-      expect(rejectRes.status).toBe(200);
-      const rejectBody = await rejectRes.json();
-      expect(rejectBody.data.status).toBe("REJECTED");
+    expect(rejectRes.status).toBe(200);
+    const rejectBody = await rejectRes.json();
+    expect(rejectBody.data.status).toBe("REJECTED");
 
-      // DB: persisted as REJECTED
-      const [rejectedRow] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, reviewJobId));
-      expect(rejectedRow?.status).toBe("REJECTED");
+    // DB: persisted as REJECTED
+    const [rejectedRow] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, reviewJobId));
+    expect(rejectedRow?.status).toBe("REJECTED");
 
-      // --- 3b: DRAFT job → 400 ---
-      const draftJobId = await seedJob({
-        jobId: "JOB-REJ-DRAFT-002",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        status: "DRAFT",
-      });
+    // --- 3b: DRAFT job → 400 ---
+    const draftJobId = await seedJob({
+      jobId: "JOB-REJ-DRAFT-002",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status: "DRAFT",
+    });
 
-      const draftRejectRes = await jobsRouter.request(`/${draftJobId}/reject`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Should be blocked" }),
-      });
-      expect(draftRejectRes.status).toBe(400);
+    const draftRejectRes = await jobsRouter.request(`/${draftJobId}/reject`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Should be blocked" }),
+    });
+    expect(draftRejectRes.status).toBe(400);
 
-      // DB: still DRAFT
-      const [draftRow] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, draftJobId));
-      expect(draftRow?.status).toBe("DRAFT");
-    },
-  );
+    // DB: still DRAFT
+    const [draftRow] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, draftJobId));
+    expect(draftRow?.status).toBe("DRAFT");
+  });
 
   // =========================================================================
   // REQ-JOB-004: Role separation of duties (calibration:approve absent for
   // technician, operator, member)
   // =========================================================================
-  it(
-    "REQ-JOB-004: technician → 403 on approve; operator → 403; member → 403; DB job stays REVIEW",
-    async () => {
-      // Admin seeds org and objects; restricted-role users test the gate
-      const admin = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-admin",
-        tagSuffix: "a",
-      });
+  it("REQ-JOB-004: technician → 403 on approve; operator → 403; member → 403; DB job stays REVIEW", async () => {
+    // Admin seeds org and objects; restricted-role users test the gate
+    const admin = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-admin",
+      tagSuffix: "a",
+    });
 
-      const reviewJobId = await seedJob({
-        jobId: "JOB-RBAC-001",
-        organizationId: "org-a",
-        unitId: admin.unitId,
-        customerId: admin.customerId,
-        assetId: admin.assetId,
-        serviceId: admin.serviceId,
-        createdBy: admin.userId,
-        status: "REVIEW",
-      });
+    const reviewJobId = await seedJob({
+      jobId: "JOB-RBAC-001",
+      organizationId: "org-a",
+      unitId: admin.unitId,
+      customerId: admin.customerId,
+      assetId: admin.assetId,
+      serviceId: admin.serviceId,
+      createdBy: admin.userId,
+      status: "REVIEW",
+    });
 
-      // Seed 3 additional users with restricted roles in the same org
-      const restrictedRoles = [
-        { userId: "user-tech", role: "technician" },
-        { userId: "user-op", role: "operator" },
-        { userId: "user-mem", role: "member" },
-      ] as const;
+    // Seed 3 additional users with restricted roles in the same org
+    const restrictedRoles = [
+      { userId: "user-tech", role: "technician" },
+      { userId: "user-op", role: "operator" },
+      { userId: "user-mem", role: "member" },
+    ] as const;
 
-      for (const { userId, role } of restrictedRoles) {
-        await db.insert(user).values({
-          id: userId,
-          name: `User ${userId}`,
-          email: `${userId}@lab.test`,
-        });
-        await db.insert(member).values({
-          id: `member-${userId}`,
-          organizationId: "org-a",
-          userId,
-          role,
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        });
-      }
-
-      for (const { userId } of restrictedRoles) {
-        loginAs({ userId, organizationId: "org-a" });
-        const res = await jobsRouter.request(`/${reviewJobId}/approve`, {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        });
-        expect(res.status, `Expected 403 for ${userId}`).toBe(403);
-      }
-
-      // DB: job must still be REVIEW (no role had permission to change it)
-      const [row] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, reviewJobId));
-      expect(row?.status).toBe("REVIEW");
-    },
-  );
-
-  // =========================================================================
-  // REQ-JOB-005: Four-eyes by identity (ISO/IEC 17025 §6.2.4)
-  // =========================================================================
-  it(
-    "REQ-JOB-005: four-eyes — self-approve blocked when alternate admin exists; approved by distinct admin; solo-lab exempt",
-    async () => {
-      // -----------------------------------------------------------------------
-      // Sub-test A: self-approval blocked (technicianId === approverId, alternate exists)
-      // -----------------------------------------------------------------------
-      const userA = "user-a-four";
-      const userB = "user-b-four";
-
-      const orgA = await seedJobFixture({
-        orgId: "org-four",
-        userId: userA,
-        tagSuffix: "four",
-      });
-
-      // Add second admin (userB = alternate approver)
+    for (const { userId, role } of restrictedRoles) {
       await db.insert(user).values({
-        id: userB,
-        name: "Second Admin",
-        email: `${userB}@lab.test`,
+        id: userId,
+        name: `User ${userId}`,
+        email: `${userId}@lab.test`,
       });
       await db.insert(member).values({
-        id: `member-${userB}`,
-        organizationId: "org-four",
-        userId: userB,
-        role: "admin",
+        id: `member-${userId}`,
+        organizationId: "org-a",
+        userId,
+        role,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
       });
+    }
 
-      // Job where technicianId = createdBy = userA
-      const fourEyesJobId = await seedJob({
-        jobId: "JOB-FOUR-001",
-        organizationId: "org-four",
-        unitId: orgA.unitId,
-        customerId: orgA.customerId,
-        assetId: orgA.assetId,
-        serviceId: orgA.serviceId,
-        createdBy: userA,
-        technicianId: userA,
-        status: "REVIEW",
-      });
-
-      // userA tries to self-approve → 403 SELF_APPROVAL_BLOCKED (alternate userB exists)
-      loginAs({ userId: userA, organizationId: "org-four" });
-      const selfApproveRes = await jobsRouter.request(
-        `/${fourEyesJobId}/approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(selfApproveRes.status).toBe(403);
-      const selfApproveBody = await selfApproveRes.json();
-      expect(selfApproveBody.code).toBe("SELF_APPROVAL_BLOCKED");
-
-      // DB: still REVIEW
-      const [blockedRow] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, fourEyesJobId));
-      expect(blockedRow?.status).toBe("REVIEW");
-
-      // -----------------------------------------------------------------------
-      // Sub-test B: distinct admin (userB) approves the same job → 2xx
-      // -----------------------------------------------------------------------
-      loginAs({ userId: userB, organizationId: "org-four" });
-      const distinctApproveRes = await jobsRouter.request(
-        `/${fourEyesJobId}/approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ reason: "Reviewed by alternate admin" }),
-        },
-      );
-      expect(distinctApproveRes.status).toBe(200);
-      const distinctApproveBody = await distinctApproveRes.json();
-      expect(distinctApproveBody.data.status).toBe("GENERATING_PDF");
-      expect(distinctApproveBody.data.approvedBy).toBe(userB);
-
-      // -----------------------------------------------------------------------
-      // Sub-test C: solo lab — only one admin in the org, self-approval allowed
-      // -----------------------------------------------------------------------
-      const soloUserId = "user-solo";
-      const orgSolo = await seedJobFixture({
-        orgId: "org-solo",
-        userId: soloUserId,
-        tagSuffix: "solo",
-      });
-      // orgSolo has ONLY soloUserId as the single admin/member
-
-      const soloJobId = await seedJob({
-        jobId: "JOB-SOLO-001",
-        organizationId: "org-solo",
-        unitId: orgSolo.unitId,
-        customerId: orgSolo.customerId,
-        assetId: orgSolo.assetId,
-        serviceId: orgSolo.serviceId,
-        createdBy: soloUserId,
-        technicianId: soloUserId,
-        status: "REVIEW",
-      });
-
-      loginAs({ userId: soloUserId, organizationId: "org-solo" });
-      const soloApproveRes = await jobsRouter.request(`/${soloJobId}/approve`, {
+    for (const { userId } of restrictedRoles) {
+      loginAs({ userId, organizationId: "org-a" });
+      const res = await jobsRouter.request(`/${reviewJobId}/approve`, {
         method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({}),
       });
-      // Solo lab: no alternate approver found → exemption → 200
-      expect(soloApproveRes.status).toBe(200);
-      const soloBody = await soloApproveRes.json();
-      expect(soloBody.data.status).toBe("GENERATING_PDF");
-      expect(soloBody.data.approvedBy).toBe(soloUserId);
-    },
-  );
+      expect(res.status, `Expected 403 for ${userId}`).toBe(403);
+    }
+
+    // DB: job must still be REVIEW (no role had permission to change it)
+    const [row] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, reviewJobId));
+    expect(row?.status).toBe("REVIEW");
+  });
+
+  // =========================================================================
+  // REQ-JOB-005: Four-eyes by identity (ISO/IEC 17025 §6.2.4)
+  // =========================================================================
+  it("REQ-JOB-005: four-eyes — self-approve blocked when alternate admin exists; approved by distinct admin; solo-lab exempt", async () => {
+    // -----------------------------------------------------------------------
+    // Sub-test A: self-approval blocked (technicianId === approverId, alternate exists)
+    // -----------------------------------------------------------------------
+    const userA = "user-a-four";
+    const userB = "user-b-four";
+
+    const orgA = await seedJobFixture({
+      orgId: "org-four",
+      userId: userA,
+      tagSuffix: "four",
+    });
+
+    // Add second admin (userB = alternate approver)
+    await db.insert(user).values({
+      id: userB,
+      name: "Second Admin",
+      email: `${userB}@lab.test`,
+    });
+    await db.insert(member).values({
+      id: `member-${userB}`,
+      organizationId: "org-four",
+      userId: userB,
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    // Job where technicianId = createdBy = userA
+    const fourEyesJobId = await seedJob({
+      jobId: "JOB-FOUR-001",
+      organizationId: "org-four",
+      unitId: orgA.unitId,
+      customerId: orgA.customerId,
+      assetId: orgA.assetId,
+      serviceId: orgA.serviceId,
+      createdBy: userA,
+      technicianId: userA,
+      status: "REVIEW",
+    });
+
+    // userA tries to self-approve → 403 SELF_APPROVAL_BLOCKED (alternate userB exists)
+    loginAs({ userId: userA, organizationId: "org-four" });
+    const selfApproveRes = await jobsRouter.request(
+      `/${fourEyesJobId}/approve`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({}),
+      },
+    );
+    expect(selfApproveRes.status).toBe(403);
+    const selfApproveBody = await selfApproveRes.json();
+    expect(selfApproveBody.code).toBe("SELF_APPROVAL_BLOCKED");
+
+    // DB: still REVIEW
+    const [blockedRow] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, fourEyesJobId));
+    expect(blockedRow?.status).toBe("REVIEW");
+
+    // -----------------------------------------------------------------------
+    // Sub-test B: distinct admin (userB) approves the same job → 2xx
+    // -----------------------------------------------------------------------
+    loginAs({ userId: userB, organizationId: "org-four" });
+    const distinctApproveRes = await jobsRouter.request(
+      `/${fourEyesJobId}/approve`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "Reviewed by alternate admin" }),
+      },
+    );
+    expect(distinctApproveRes.status).toBe(200);
+    const distinctApproveBody = await distinctApproveRes.json();
+    expect(distinctApproveBody.data.status).toBe("GENERATING_PDF");
+    expect(distinctApproveBody.data.approvedBy).toBe(userB);
+
+    // -----------------------------------------------------------------------
+    // Sub-test C: solo lab — only one admin in the org, self-approval allowed
+    // -----------------------------------------------------------------------
+    const soloUserId = "user-solo";
+    const orgSolo = await seedJobFixture({
+      orgId: "org-solo",
+      userId: soloUserId,
+      tagSuffix: "solo",
+    });
+    // orgSolo has ONLY soloUserId as the single admin/member
+
+    const soloJobId = await seedJob({
+      jobId: "JOB-SOLO-001",
+      organizationId: "org-solo",
+      unitId: orgSolo.unitId,
+      customerId: orgSolo.customerId,
+      assetId: orgSolo.assetId,
+      serviceId: orgSolo.serviceId,
+      createdBy: soloUserId,
+      technicianId: soloUserId,
+      status: "REVIEW",
+    });
+
+    loginAs({ userId: soloUserId, organizationId: "org-solo" });
+    const soloApproveRes = await jobsRouter.request(`/${soloJobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    // Solo lab: no alternate approver found → exemption → 200
+    expect(soloApproveRes.status).toBe(200);
+    const soloBody = await soloApproveRes.json();
+    expect(soloBody.data.status).toBe("GENERATING_PDF");
+    expect(soloBody.data.approvedBy).toBe(soloUserId);
+  });
 
   // =========================================================================
   // REQ-JOB-006: Approved job is immutable (ISO/IEC 17025 traceability)
   // =========================================================================
-  it(
-    "REQ-JOB-006: DELETE an APPROVED job → 400 + DB row still present+APPROVED; PUT an APPROVED job → 400",
-    async () => {
-      const fixture = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
+  it("REQ-JOB-006: DELETE an APPROVED job → 400 + DB row still present+APPROVED; PUT an APPROVED job → 400", async () => {
+    const fixture = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
 
-      loginAs({ userId: fixture.userId, organizationId: "org-a" });
+    loginAs({ userId: fixture.userId, organizationId: "org-a" });
 
-      // Seed a job already in APPROVED state (simulates post-PDF-generation state)
-      const approvedJobId = await seedJob({
-        jobId: "JOB-IMMUTABLE-001",
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        assetId: fixture.assetId,
-        serviceId: fixture.serviceId,
-        createdBy: fixture.userId,
-        status: "APPROVED",
-      });
+    // Seed a job already in APPROVED state (simulates post-PDF-generation state)
+    const approvedJobId = await seedJob({
+      jobId: "JOB-IMMUTABLE-001",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status: "APPROVED",
+    });
 
-      // --- 6a: DELETE → 400 ---
-      const deleteRes = await jobsRouter.request(`/${approvedJobId}`, {
-        method: "DELETE",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Attempting to delete approved job" }),
-      });
-      expect(deleteRes.status).toBe(400);
+    // --- 6a: DELETE → 400 ---
+    const deleteRes = await jobsRouter.request(`/${approvedJobId}`, {
+      method: "DELETE",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Attempting to delete approved job" }),
+    });
+    expect(deleteRes.status).toBe(400);
 
-      // DB: row must still exist and be APPROVED
-      const [rowAfterDelete] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, approvedJobId));
-      expect(rowAfterDelete).toBeDefined();
-      expect(rowAfterDelete?.status).toBe("APPROVED");
+    // DB: row must still exist and be APPROVED
+    const [rowAfterDelete] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, approvedJobId));
+    expect(rowAfterDelete).toBeDefined();
+    expect(rowAfterDelete?.status).toBe("APPROVED");
 
-      // --- 6b: PUT → 400 ---
-      const putRes = await jobsRouter.request(`/${approvedJobId}`, {
-        method: "PUT",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ technicianId: null }),
-      });
-      expect(putRes.status).toBe(400);
+    // --- 6b: PUT → 400 ---
+    const putRes = await jobsRouter.request(`/${approvedJobId}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: null }),
+    });
+    expect(putRes.status).toBe(400);
 
-      // DB: still APPROVED
-      const [rowAfterPut] = await db
-        .select({ status: calibrationJob.status })
-        .from(calibrationJob)
-        .where(eq(calibrationJob.id, approvedJobId));
-      expect(rowAfterPut?.status).toBe("APPROVED");
-    },
-  );
+    // DB: still APPROVED
+    const [rowAfterPut] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, approvedJobId));
+    expect(rowAfterPut?.status).toBe("APPROVED");
+  });
 
   // =========================================================================
   // REQ-JOB-007: Tenant isolation on read
   // =========================================================================
-  it(
-    "REQ-JOB-007: GET / returns only org A's jobs — exact count; cross-tenant GET /:id → not found",
-    async () => {
-      const orgA = await seedJobFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
-      const orgB = await seedJobFixture({
-        orgId: "org-b",
-        userId: "user-b",
-        tagSuffix: "b",
-      });
+  it("REQ-JOB-007: GET / returns only org A's jobs — exact count; cross-tenant GET /:id → not found", async () => {
+    const orgA = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const orgB = await seedJobFixture({
+      orgId: "org-b",
+      userId: "user-b",
+      tagSuffix: "b",
+    });
 
-      // Seed 2 jobs for org A and 1 for org B
-      await seedJob({
-        jobId: "JOB-A-001",
-        organizationId: "org-a",
-        unitId: orgA.unitId,
-        customerId: orgA.customerId,
-        assetId: orgA.assetId,
-        serviceId: orgA.serviceId,
-        createdBy: orgA.userId,
-        status: "DRAFT",
-      });
-      await seedJob({
-        jobId: "JOB-A-002",
-        organizationId: "org-a",
-        unitId: orgA.unitId,
-        customerId: orgA.customerId,
-        assetId: orgA.assetId,
-        serviceId: orgA.serviceId,
-        createdBy: orgA.userId,
-        status: "REVIEW",
-      });
-      const jobBDbId = await seedJob({
-        jobId: "JOB-B-001",
-        organizationId: "org-b",
-        unitId: orgB.unitId,
-        customerId: orgB.customerId,
-        assetId: orgB.assetId,
-        serviceId: orgB.serviceId,
-        createdBy: orgB.userId,
-        status: "DRAFT",
-      });
+    // Seed 2 jobs for org A and 1 for org B
+    await seedJob({
+      jobId: "JOB-A-001",
+      organizationId: "org-a",
+      unitId: orgA.unitId,
+      customerId: orgA.customerId,
+      assetId: orgA.assetId,
+      serviceId: orgA.serviceId,
+      createdBy: orgA.userId,
+      status: "DRAFT",
+    });
+    await seedJob({
+      jobId: "JOB-A-002",
+      organizationId: "org-a",
+      unitId: orgA.unitId,
+      customerId: orgA.customerId,
+      assetId: orgA.assetId,
+      serviceId: orgA.serviceId,
+      createdBy: orgA.userId,
+      status: "REVIEW",
+    });
+    const jobBDbId = await seedJob({
+      jobId: "JOB-B-001",
+      organizationId: "org-b",
+      unitId: orgB.unitId,
+      customerId: orgB.customerId,
+      assetId: orgB.assetId,
+      serviceId: orgB.serviceId,
+      createdBy: orgB.userId,
+      status: "DRAFT",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: "org-a" });
+    loginAs({ userId: orgA.userId, organizationId: "org-a" });
 
-      // List: should return exactly 2 (org A's)
-      const listRes = await jobsRouter.request("/", { headers: JSON_HEADERS });
-      expect(listRes.status).toBe(200);
-      const listBody = await listRes.json();
-      expect(listBody.pagination.total).toBe(2);
-      const jobIds = listBody.data.map((j: { jobId: string }) => j.jobId);
-      expect(jobIds).toContain("JOB-A-001");
-      expect(jobIds).toContain("JOB-A-002");
-      expect(jobIds).not.toContain("JOB-B-001");
+    // List: should return exactly 2 (org A's)
+    const listRes = await jobsRouter.request("/", { headers: JSON_HEADERS });
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    expect(listBody.pagination.total).toBe(2);
+    const jobIds = listBody.data.map((j: { jobId: string }) => j.jobId);
+    expect(jobIds).toContain("JOB-A-001");
+    expect(jobIds).toContain("JOB-A-002");
+    expect(jobIds).not.toContain("JOB-B-001");
 
-      // Cross-tenant GET /:id: org A cannot read org B's job
-      const getRes = await jobsRouter.request(`/${jobBDbId}`, {
-        headers: JSON_HEADERS,
-      });
-      // resolveJobRouteId scopes by org → null → 404
-      expect(getRes.status).toBe(404);
-    },
-  );
+    // Cross-tenant GET /:id: org A cannot read org B's job
+    const getRes = await jobsRouter.request(`/${jobBDbId}`, {
+      headers: JSON_HEADERS,
+    });
+    // resolveJobRouteId scopes by org → null → 404
+    expect(getRes.status).toBe(404);
+  });
 
   // =========================================================================
   // REQ-JOB-008: Unauthenticated approve → 401

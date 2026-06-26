@@ -429,6 +429,27 @@ export const ListAssetsQuerySchema = z.object({
 
 export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
 
+/**
+ * Customer-set calibration interval (portal). The interval/periodicity is the
+ * equipment owner's decision, not the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
+ * ILAC-G24 / OIML D 10). `rationale` is a required technical record
+ * (NBR ISO/IEC 17025 §7.5). The 1–120-month bound keeps intervals sane per
+ * ILAC-G24 §6.2.3 (avoid extremely long intervals → mass-recall risk).
+ * Spec: `specs/calibration-interval-customer-owned/spec.md` (REQ-INTERVAL-010/011).
+ */
+export const SetCalibrationIntervalSchema = z.object({
+  intervalMonths: z
+    .number()
+    .int("A periodicidade deve ser um número inteiro de meses")
+    .min(1, "A periodicidade deve ser de pelo menos 1 mês")
+    .max(120, "A periodicidade deve ser de no máximo 120 meses"),
+  rationale: z.string().trim().min(1, "Justificativa é obrigatória"),
+});
+
+export type SetCalibrationIntervalInput = z.infer<
+  typeof SetCalibrationIntervalSchema
+>;
+
 // =============================================================================
 // CALIBRATION REQUEST SCHEMAS - Portal Intake Queue
 // =============================================================================

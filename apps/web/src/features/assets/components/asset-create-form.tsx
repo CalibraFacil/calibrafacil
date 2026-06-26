@@ -26,7 +26,6 @@ import {
 } from '@/features/assets/queries'
 import {
   baseMeasurementUnitOptions,
-  buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetForm,
@@ -105,7 +104,6 @@ const FIELD_STEP: Record<string, string> = {
   subjectToLegalMetrology: 'sec-identificacao',
   baseMeasurementUnit: 'sec-especificacoes',
   lastCalibrationDate: 'sec-calibracao',
-  nextCalibrationDate: 'sec-calibracao',
   comments: 'sec-observacoes',
 }
 
@@ -125,7 +123,6 @@ const initialFormData: AssetFormData = {
   status: 'ACTIVE',
   baseMeasurementUnit: null,
   lastCalibrationDate: undefined,
-  nextCalibrationDate: undefined,
   comments: '',
   subjectToLegalMetrology: false,
   specifications: {},
@@ -774,22 +771,8 @@ export function AssetCreateForm({
                         disabled={isSaving}
                       />
                     </Field>
-                    <Field>
-                      <FieldLabel htmlFor="nextCalibrationDate">
-                        Próxima calibração
-                      </FieldLabel>
-                      <DatePicker
-                        id="nextCalibrationDate"
-                        name="nextCalibrationDate"
-                        value={formData.nextCalibrationDate}
-                        onChange={(date) =>
-                          updateField('nextCalibrationDate', date)
-                        }
-                        placeholder="Selecione a data…"
-                        disabled={isSaving}
-                        presets={buildCalibrationPeriodicityPresets()}
-                      />
-                    </Field>
+                    {/* Próxima calibração (periodicidade) é definida pelo cliente
+                        no portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). */}
                   </div>
                 </Panel>
               ) : null}
@@ -858,9 +841,6 @@ export function AssetCreateForm({
                       ) : null}
                       <BlueprintField label="Última calibração" mono>
                         {formatDate(formData.lastCalibrationDate)}
-                      </BlueprintField>
-                      <BlueprintField label="Próxima calibração" mono>
-                        {formatDate(formData.nextCalibrationDate)}
                       </BlueprintField>
                     </BlueprintGrid>
 

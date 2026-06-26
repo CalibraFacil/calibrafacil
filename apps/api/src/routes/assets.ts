@@ -211,12 +211,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Tag já está em uso" }, 400);
         }
 
-        // Parse dates if provided
+        // Parse dates if provided. The lab does NOT set the calibration interval
+        // or next-calibration date — that periodicity is the customer's decision,
+        // set in the portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24). Any
+        // client-supplied `nextCalibrationDate` is ignored here.
         const lastCalibrationDate = input.lastCalibrationDate
           ? new Date(input.lastCalibrationDate)
-          : null;
-        const nextCalibrationDate = input.nextCalibrationDate
-          ? new Date(input.nextCalibrationDate)
           : null;
         const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
           specifications: input.specifications || null,
@@ -239,7 +239,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             status: input.status || "ACTIVE",
             baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
             lastCalibrationDate,
-            nextCalibrationDate,
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
             subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
@@ -680,12 +679,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           }
         }
 
-        // Parse dates if provided
+        // Parse dates if provided. The lab does NOT set the next-calibration date
+        // / interval — periodicity is the customer's decision (portal); any
+        // client-supplied `nextCalibrationDate` is ignored here (§7.8.4.3 + ILAC-G24).
         const lastCalibrationDate = input.lastCalibrationDate
           ? new Date(input.lastCalibrationDate)
-          : undefined;
-        const nextCalibrationDate = input.nextCalibrationDate
-          ? new Date(input.nextCalibrationDate)
           : undefined;
 
         // Build update object
@@ -704,8 +702,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.status !== undefined) updateData.status = input.status;
         if (lastCalibrationDate !== undefined)
           updateData.lastCalibrationDate = lastCalibrationDate;
-        if (nextCalibrationDate !== undefined)
-          updateData.nextCalibrationDate = nextCalibrationDate;
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         if (input.subjectToLegalMetrology !== undefined)

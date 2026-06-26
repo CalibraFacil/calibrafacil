@@ -13,6 +13,7 @@ import {
   calibrationRequestItem,
   serviceOrder,
   asset,
+  assetAuditLog,
   assetType,
   service,
   referenceStandardCertificateDocument,
@@ -41,7 +42,10 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
+import {
+  ListAssetsQuerySchema,
+  SetCalibrationIntervalSchema,
+} from "@calibra-facil/schemas";
 import {
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
@@ -199,6 +203,10 @@ import {
   loadPortalReleaseStatuses,
 } from "../lib/portal-certificate-release-gate";
 import { buildPortalCertificateVerdict } from "../lib/portal-certificate-verdict";
+import {
+  decidePortalIntervalWrite,
+  deriveNextCalibrationDate,
+} from "../lib/portal-asset-interval";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
@@ -1001,6 +1009,12 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            // Customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+            // periodicity the customer sets/owns in the portal. `subjectToLegalMetrology`
+            // drives the read-only "fixada por regulamento (Inmetro)" lock.
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            intervalSetBy: asset.intervalSetBy,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             inLab: assetInLabSql(),
             comments: asset.comments,
             createdAt: asset.createdAt,
@@ -1298,6 +1312,125 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // PUT /notification-preferences - Update digest opt-in
   // =========================================================================
+  // =========================================================================
+  // PUT /assets/:id/interval - Customer sets their OWN calibration interval
+  // =========================================================================
+  // The interval/periodicity is the equipment owner's decision, never the lab's
+  // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) and
+  // the legal-metrology lock (409) are decided by the pure, unit-tested resolver
+  // `decidePortalIntervalWrite`; `rationale` is the required §7.5 technical record,
+  // persisted on the asset and the audit log. `next_calibration_date` is derived
+  // from the asset's last-calibration date + the chosen interval.
+  // =========================================================================
+  .put(
+    "/assets/:id/interval",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["update"] }),
+    zValidator("json", SetCalibrationIntervalSchema),
+    async (c) => {
+      const session = c.get("session");
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const { intervalMonths, rationale } = c.req.valid("json");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        const scopedCustomerIds = scope?.customerIds ?? [];
+
+        const [existing] = await db
+          .select({
+            id: asset.id,
+            customerId: asset.customerId,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            nextCalibrationDate: asset.nextCalibrationDate,
+          })
+          .from(asset)
+          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+          .limit(1);
+
+        const decision = decidePortalIntervalWrite({
+          asset: existing ?? null,
+          scopedCustomerIds,
+        });
+
+        if (!decision.allowed) {
+          const message =
+            decision.reason === "legal_metrology_locked"
+              ? "Periodicidade fixada por regulamento (Inmetro); nao editavel"
+              : "Ativo nao encontrado";
+          return c.json({ error: message }, decision.status);
+        }
+
+        // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const nextCalibrationDate = deriveNextCalibrationDate(
+          existing.lastCalibrationDate,
+          intervalMonths,
+        );
+
+        await db
+          .update(asset)
+          .set({
+            calibrationIntervalMonths: intervalMonths,
+            intervalSetBy: "customer_confirmed",
+            intervalSetByUserId: session.user.id,
+            intervalSetAt: new Date(),
+            intervalRationale: rationale,
+            nextCalibrationDate,
+          })
+          .where(eq(asset.id, id));
+
+        await db.insert(assetAuditLog).values({
+          assetId: id,
+          action: "interval_change",
+          changes: {
+            calibrationIntervalMonths: {
+              old: existing.calibrationIntervalMonths,
+              new: intervalMonths,
+            },
+            nextCalibrationDate: {
+              old: existing.nextCalibrationDate,
+              new: nextCalibrationDate,
+            },
+          },
+          performedBy: session.user.id,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
+          reason: rationale,
+        });
+
+        return c.json({
+          id,
+          calibrationIntervalMonths: intervalMonths,
+          nextCalibrationDate,
+          intervalSetBy: "customer_confirmed",
+        });
+      } catch (error) {
+        console.error("Error setting calibration interval:", error);
+        return c.json({ error: "Erro ao salvar periodicidade" }, 500);
+      }
+    },
+  )
+
   .put(
     "/notification-preferences",
     ...requirePortalProtected,

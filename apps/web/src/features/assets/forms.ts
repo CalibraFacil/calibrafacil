@@ -1,5 +1,3 @@
-import { addMonths, startOfDay } from 'date-fns'
-
 import {
   AssetStatusSchema,
   CreateAssetSchema,
@@ -36,35 +34,10 @@ export function baseMeasurementUnitOptions(
 
 export const ASSET_FORM_STATUSES = AssetStatusSchema.options
 
-/** Periodicity shortcuts (in months) offered when scheduling the next calibration. */
-export const CALIBRATION_PERIODICITY_MONTHS = [1, 2, 3, 6] as const
-
-export type CalibrationPeriodicityPreset = {
-  label: string
-  months: number
-  getDate: () => Date
-}
-
-export function calibrationPeriodicityLabel(months: number): string {
-  return `${months} ${months === 1 ? 'mês' : 'meses'}`
-}
-
-/**
- * Builds the "próxima calibração" quick-select presets. Each preset adds its
- * interval to the date returned by `getBaseDate` (today by default), resolved
- * at click time so "1 mês" always means one month from now. The base is
- * normalized to the start of the day so presets land on midnight like manual
- * calendar selections, keeping overdue comparisons consistent.
- */
-export function buildCalibrationPeriodicityPresets(
-  getBaseDate: () => Date = () => new Date(),
-): CalibrationPeriodicityPreset[] {
-  return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
-    label: calibrationPeriodicityLabel(months),
-    months,
-    getDate: () => addMonths(startOfDay(getBaseDate()), months),
-  }))
-}
+// NOTE: the lab no longer authors a calibration periodicity / next-calibration
+// date. Periodicity is the equipment owner's (customer's) decision, set in the
+// client portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). The old
+// `buildCalibrationPeriodicityPresets` quick-select was removed for that reason.
 
 export type AssetFormData = {
   customerId: number | null
@@ -77,7 +50,6 @@ export type AssetFormData = {
   status: AssetStatus
   baseMeasurementUnit: MeasurementUnit | null
   lastCalibrationDate: Date | undefined
-  nextCalibrationDate: Date | undefined
   comments: string
   subjectToLegalMetrology: boolean
   specifications: Record<string, unknown>
@@ -130,7 +102,6 @@ export function parseAssetForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
-  const nextCalibrationDate = data.nextCalibrationDate?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -170,7 +141,6 @@ export function parseAssetForm(
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
-    ...(nextCalibrationDate ? { nextCalibrationDate } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -187,7 +157,6 @@ export function parseAssetForm(
       'status',
       'baseMeasurementUnit',
       'lastCalibrationDate',
-      'nextCalibrationDate',
       'comments',
       'specifications',
     ])
@@ -238,7 +207,6 @@ export function parseAssetEditForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
-  const nextCalibrationDate = data.nextCalibrationDate?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -261,7 +229,6 @@ export function parseAssetEditForm(
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
-    ...(nextCalibrationDate ? { nextCalibrationDate } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -275,7 +242,6 @@ export function parseAssetEditForm(
       'tag',
       'status',
       'lastCalibrationDate',
-      'nextCalibrationDate',
       'comments',
       'specifications',
     ])

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildCalibrationPeriodicityPresets,
-  calibrationPeriodicityLabel,
-  CALIBRATION_PERIODICITY_MONTHS,
   isAssetFormStatus,
   parseAssetEditForm,
   parseAssetForm,
@@ -19,7 +16,6 @@ describe('asset feature forms', () => {
       model: '  XPE205  ',
       comments: '  Bancada analitica  ',
       lastCalibrationDate: new Date('2026-05-20T00:00:00.000Z'),
-      nextCalibrationDate: new Date('2027-05-20T00:00:00.000Z'),
     })
 
     expect(result).toMatchObject({
@@ -256,64 +252,12 @@ describe('asset feature forms', () => {
     expect(isAssetFormStatus('ACTIVE')).toBe(true)
     expect(isAssetFormStatus('UNKNOWN')).toBe(false)
   })
-})
 
-describe('calibration periodicity presets', () => {
-  it('labels singular and plural month intervals in pt-BR', () => {
-    expect(calibrationPeriodicityLabel(1)).toBe('1 mês')
-    expect(calibrationPeriodicityLabel(2)).toBe('2 meses')
-    expect(calibrationPeriodicityLabel(6)).toBe('6 meses')
-  })
-
-  it('offers a preset for every configured interval', () => {
-    const presets = buildCalibrationPeriodicityPresets(
-      () => new Date('2026-01-15T00:00:00.000Z'),
-    )
-
-    expect(presets.map((preset) => preset.months)).toEqual([
-      ...CALIBRATION_PERIODICITY_MONTHS,
-    ])
-    expect(presets.map((preset) => preset.label)).toEqual([
-      '1 mês',
-      '2 meses',
-      '3 meses',
-      '6 meses',
-    ])
-  })
-
-  it('adds each interval to the base date at resolve time', () => {
-    const presets = buildCalibrationPeriodicityPresets(
-      () => new Date('2026-01-15T00:00:00.000Z'),
-    )
-
-    expect(presets.map((preset) => preset.getDate().toISOString())).toEqual([
-      '2026-02-15T00:00:00.000Z',
-      '2026-03-15T00:00:00.000Z',
-      '2026-04-15T00:00:00.000Z',
-      '2026-07-15T00:00:00.000Z',
-    ])
-  })
-
-  it('normalizes the base to midnight so presets match date-only calendar picks', () => {
-    // A base with a time component must not leak hours/minutes into the result,
-    // otherwise the asset stays non-overdue for part of its due day.
-    const [oneMonth] = buildCalibrationPeriodicityPresets(
-      () => new Date('2026-01-15T15:30:00.000Z'),
-    )
-
-    expect(oneMonth?.getDate().toISOString()).toBe('2026-02-15T00:00:00.000Z')
-  })
-
-  it('tracks the latest base date returned by the getter', () => {
-    let base = new Date('2026-01-31T00:00:00.000Z')
-    const [oneMonth] = buildCalibrationPeriodicityPresets(() => base)
-
-    // Jan 31 + 1 month clamps to the last valid day of February.
-    expect(oneMonth?.getDate().toISOString()).toBe('2026-02-28T00:00:00.000Z')
-
-    base = new Date('2026-03-10T00:00:00.000Z')
-    expect(oneMonth?.getDate().toISOString()).toBe('2026-04-10T00:00:00.000Z')
-  })
+  // NOTE: the lab no longer authors a calibration periodicity / next-calibration
+  // date — periodicity is the customer's decision in the portal (§7.8.4.3 +
+  // ILAC-G24). The former "calibration periodicity presets" tests were removed
+  // with the feature. Next-date derivation now lives in the portal API
+  // (apps/api/src/lib/portal-asset-interval.ts + .spec.ts).
 })
 
 function validAssetForm(): AssetFormData {
@@ -328,7 +272,6 @@ function validAssetForm(): AssetFormData {
     status: 'ACTIVE',
     baseMeasurementUnit: null,
     lastCalibrationDate: undefined,
-    nextCalibrationDate: undefined,
     comments: '',
     subjectToLegalMetrology: false,
     specifications: {},
@@ -344,7 +287,6 @@ function validAssetEditForm(): AssetEditFormData {
     tag: 'BAL-002',
     status: 'MAINTENANCE',
     lastCalibrationDate: undefined,
-    nextCalibrationDate: undefined,
     comments: '',
     subjectToLegalMetrology: false,
     specifications: {},

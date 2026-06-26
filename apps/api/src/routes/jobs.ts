@@ -7,6 +7,7 @@ import {
   defaultRenderOptions,
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
 import { checkApproverIsAuthorizedSignatory } from "../lib/signatory";
 import {
   findServiceOrdersForCalibrationJob,
@@ -2230,6 +2231,13 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           memberData.organizationId,
         ));
 
+      // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
+      // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
+      // `results`; it does NOT influence approval, conformity, or the certificate.
+      const asFoundVerdict = buildAsFoundReliabilityVerdict({
+        results: existing.results,
+      });
+
       // Update job status to GENERATING_PDF and set approver info
       // (we set approved_by now so the PDF worker can fetch it)
       const [updated] = await db
@@ -2238,6 +2246,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           status: "GENERATING_PDF",
           approvedBy: session.user.id,
           approvedAt: new Date(),
+          asFoundConformity: asFoundVerdict.conformity,
+          asFoundMargins: asFoundVerdict.margins,
           certificateTemplateId:
             existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
           certificateTemplateSnapshot:

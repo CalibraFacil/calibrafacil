@@ -428,6 +428,13 @@
       "when": 1782062297941,
       "tag": "0060_integration_composite_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1782148697941,
+      "tag": "0061_customer_owned_calibration_interval",
+      "breakpoints": true
     }
   ]
 }

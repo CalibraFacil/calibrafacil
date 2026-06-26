@@ -7,7 +7,6 @@ import { FloppyDiskIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import { calibraApi } from '@/utils/api'
 import type { AssetDetail } from '@/features/assets/types'
 import {
-  buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetEditForm,
@@ -121,7 +120,6 @@ export function AssetEditForm({
     tag: asset.tag,
     status: asset.status,
     lastCalibrationDate: parseDate(asset.lastCalibrationDate),
-    nextCalibrationDate: parseDate(asset.nextCalibrationDate),
     comments: asset.comments || '',
     subjectToLegalMetrology: asset.subjectToLegalMetrology ?? false,
     specifications: asset.specifications || {},
@@ -428,18 +426,8 @@ export function AssetEditForm({
                   disabled={isSaving}
                 />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="nextCalibrationDate">
-                  Próxima calibração
-                </FieldLabel>
-                <DatePicker
-                  value={formData.nextCalibrationDate}
-                  onChange={(date) => updateField('nextCalibrationDate', date)}
-                  placeholder="Selecione a data"
-                  disabled={isSaving}
-                  presets={buildCalibrationPeriodicityPresets()}
-                />
-              </Field>
+              {/* Próxima calibração (periodicidade) é definida pelo cliente no
+                  portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). */}
             </div>
           </Panel>
 
