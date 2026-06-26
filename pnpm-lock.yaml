@@ -85,6 +85,9 @@ importers:
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
+      '@calibra-facil/documents':
+        specifier: workspace:^
+        version: link:../../packages/documents
       '@calibra-facil/email':
         specifier: workspace:^
         version: link:../../packages/email

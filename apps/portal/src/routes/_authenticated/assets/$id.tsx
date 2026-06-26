@@ -598,6 +598,24 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
             dados de conformidade).
           </p>
         ) : null}
+
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            render={
+              <a
+                href={`${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight/report`}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            }
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+            Baixar relatório
+          </Button>
+        </div>
       </div>
     </Panel>
   );

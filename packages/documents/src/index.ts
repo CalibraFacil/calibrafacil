@@ -1,5 +1,9 @@
 export { LabelHtml, type LabelData } from "./LabelHtml.js";
 export {
+  renderIntervalReportHtml,
+  type IntervalReportData,
+} from "./IntervalReportHtml.js";
+export {
   AccreditationSealSvg,
   ACCREDITATION_SEAL_VIEWBOX,
   type AccreditationSealEffect,

@@ -208,6 +208,7 @@ import {
   deriveNextCalibrationDate,
 } from "../lib/portal-asset-interval";
 import { buildIntervalInsight } from "../lib/interval-insight";
+import { renderIntervalReportHtml } from "@calibra-facil/documents";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
@@ -1426,6 +1427,134 @@ export const portalRouter = new Hono<{
           { error: "Erro ao calcular periodicidade sugerida" },
           500,
         );
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /assets/:id/interval-insight/report - printable HTML report (Phase E2)
+  // =========================================================================
+  // Self-contained, print-optimized HTML of the reliability analysis the customer
+  // can save as a PDF. Explicitly NOT a calibration certificate (§7.8.4.3 disclaimer);
+  // never rendered through the certificate path. Tenant-scoped, read-only.
+  // =========================================================================
+  .get(
+    "/assets/:id/interval-insight/report",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+        const { customerIds } = scope;
+
+        const [existing] = await db
+          .select({
+            name: asset.name,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            model: asset.model,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(asset.id, id),
+              inArray(asset.customerId, customerIds),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.assetId, id),
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(asc(calibrationJob.approvedAt));
+
+        const singleKnown = rows.filter(
+          (r) =>
+            r.asFoundConformity === "CONFORMING" ||
+            r.asFoundConformity === "NON_CONFORMING",
+        ).length;
+        const familyModel = existing.model;
+        const familyRows =
+          singleKnown < 3 && familyModel !== null
+            ? await db
+                .select({
+                  assetId: calibrationJob.assetId,
+                  approvedAt: calibrationJob.approvedAt,
+                  asFoundConformity: calibrationJob.asFoundConformity,
+                })
+                .from(calibrationJob)
+                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                .where(
+                  and(
+                    eq(asset.assetTypeId, existing.assetTypeId),
+                    eq(asset.model, familyModel),
+                    eq(asset.subjectToLegalMetrology, false),
+                    inArray(calibrationJob.customerId, customerIds),
+                    eq(calibrationJob.status, "APPROVED"),
+                  ),
+                )
+            : [];
+
+        const insight = buildIntervalInsight({
+          rows,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          subjectToLegalMetrology: existing.subjectToLegalMetrology,
+          familyRows,
+        });
+
+        const html = renderIntervalReportHtml({
+          assetName: existing.name,
+          assetTag: existing.tag,
+          serialNumber: existing.serialNumber,
+          customerName: existing.customerName,
+          classification: insight.classification,
+          reliability: insight.reliability,
+          coverage: insight.coverage,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          recommendation: insight.recommendation,
+          generatedAtIso: new Date().toISOString(),
+        });
+        return c.html(html);
+      } catch (error) {
+        console.error("Error rendering interval report:", error);
+        return c.json({ error: "Erro ao gerar o relatório" }, 500);
       }
     },
   )

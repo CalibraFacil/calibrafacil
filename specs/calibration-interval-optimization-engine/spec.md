@@ -191,10 +191,14 @@ Extends the existing `PUT /api/portal/assets/:id/interval`.
 ### Mini-spec E2 — Optimization report PDF — `REQ-ENGINE-REPORT`
 
 - REQ-ENGINE-REPORT-001: WHEN a customer requests an optimization report, the system SHALL
-  render a PDF (reusing `packages/documents`) showing the classification, reliability +
-  confidence, proposed vs current interval, coverage, and the cited method.
-- REQ-ENGINE-REPORT-002: The optimization-report PDF SHALL NOT be rendered through the
-  calibration-certificate path and SHALL NOT carry certificate identity (no §7.8.4.3 surface). [HIGH RISK]
+  serve a printable HTML report (reusing `packages/documents`
+  `renderIntervalReportHtml`; the customer saves a PDF via the browser) showing the
+  classification, reliability, coverage, proposed-vs-current interval, and the cited method.
+  (Realization note: a plain print-styled HTML string — lighter than adding server-side
+  React/gotenberg to `apps/api` for one endpoint; a true server PDF via gotenberg is a follow-up.)
+- REQ-ENGINE-REPORT-002: The optimization report SHALL NOT be rendered through the
+  calibration-certificate path and SHALL carry a §7.8.4.3 disclaimer with no certificate
+  identity (no number, signature, or accreditation seal). [HIGH RISK]
 
 ## Out-of-scope / Deferred
 

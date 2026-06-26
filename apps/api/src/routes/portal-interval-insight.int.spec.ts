@@ -104,6 +104,12 @@ function get(assetId: number | string) {
   });
 }
 
+function getReport(assetId: number | string) {
+  return portalRouter.request(`/assets/${assetId}/interval-insight/report`, {
+    headers: LOCAL_ORIGIN,
+  });
+}
+
 const FALLING = [
   { iso: "2024-01-01T00:00:00.000Z", margin: 1.0 },
   { iso: "2024-07-01T00:00:00.000Z", margin: 0.8 },
@@ -306,5 +312,81 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
   it("rejects an unauthenticated request (401)", async () => {
     logoutPortal();
     expect((await get(1)).status).toBe(401);
+  });
+
+  // REQ-ENGINE-REPORT-001/002: a printable HTML report that is NOT a certificate.
+  it("renders a printable HTML report with the §7.8.4.3 disclaimer (not a certificate)", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const serviceId = await seedService({
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      name: "Calibração",
+    });
+    const assetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-RPT",
+    });
+    for (const point of FALLING) {
+      await seedApprovedJob({
+        labOrgId: ctx.labOrgId,
+        labUnitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetId,
+        serviceId,
+        createdBy: ctx.portalUserId,
+        approvedAt: new Date(point.iso),
+        conformity: "CONFORMING",
+        margins: [point.margin],
+      });
+    }
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const res = await getReport(assetId);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("Relatório de análise de periodicidade");
+    expect(html).toContain("Derivando"); // classification rendered
+    expect(html).toContain("EQ-RPT"); // asset tag
+    expect(html).toContain("não é um certificado"); // §7.8.4.3 disclaimer
+    expect(html).not.toContain("Certificado de Calibração"); // REQ-ENGINE-REPORT-002
+  });
+
+  it("does not expose another tenant's report (404)", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctxA = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const customerBId = await seedPortalCustomer({
+      labOrgId: ctxA.labOrgId,
+      clientOrgId: "client-b",
+      portalUserId: "user-b",
+      customerName: "Customer B",
+    });
+    const bAssetId = await seedAsset({
+      labUnitId: ctxA.labUnitId,
+      customerId: customerBId,
+      assetTypeId,
+      tag: "EQ-B-RPT",
+    });
+    loginAsPortal({
+      userId: ctxA.portalUserId,
+      organizationId: ctxA.clientOrgId,
+    });
+    expect((await getReport(bAssetId)).status).toBe(404);
   });
 });
