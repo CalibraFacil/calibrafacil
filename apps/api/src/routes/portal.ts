@@ -207,6 +207,7 @@ import {
   decidePortalIntervalWrite,
   deriveNextCalibrationDate,
 } from "../lib/portal-asset-interval";
+import { buildIntervalInsight } from "../lib/interval-insight";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
@@ -1312,6 +1313,90 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // PUT /notification-preferences - Update digest opt-in
   // =========================================================================
+  // =========================================================================
+  // GET /assets/:id/interval-insight - reliability-based suggestion (read-only)
+  // =========================================================================
+  // Computes the ILAC-G24 / NCSL RP-1 classification + suggestion from the asset's
+  // approved as-found history. Tenant-scoped; legal-metrology assets resolve to
+  // LEGAL_FIXED with no suggestion. This NEVER writes — the customer applies via PUT.
+  // =========================================================================
+  .get(
+    "/assets/:id/interval-insight",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+        const { customerIds } = scope;
+
+        const [existing] = await db
+          .select({
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          })
+          .from(asset)
+          .where(
+            and(
+              eq(asset.id, id),
+              inArray(asset.customerId, customerIds),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.assetId, id),
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(asc(calibrationJob.approvedAt));
+
+        const insight = buildIntervalInsight({
+          rows,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          subjectToLegalMetrology: existing.subjectToLegalMetrology,
+        });
+        return c.json(insight);
+      } catch (error) {
+        console.error("Error building interval insight:", error);
+        return c.json(
+          { error: "Erro ao calcular periodicidade sugerida" },
+          500,
+        );
+      }
+    },
+  )
+
   // =========================================================================
   // PUT /assets/:id/interval - Customer sets their OWN calibration interval
   // =========================================================================

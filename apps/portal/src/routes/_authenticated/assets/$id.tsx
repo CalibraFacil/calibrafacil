@@ -355,6 +355,9 @@ function AssetDetailPage() {
           {/* Customer-owned calibration interval */}
           <IntervalEditorPanel asset={asset} />
 
+          {/* Reliability-based interval analysis (read-only) */}
+          <IntervalInsightPanel assetId={asset.id} />
+
           {/* Calibration history */}
           <Panel className="p-5">
             <PanelHeader
@@ -447,6 +450,173 @@ function AssetDetailPage() {
 
 function cnDot(tone: SignalTone): string {
   return `size-1.5 shrink-0 rounded-full ${TONE[tone].dot}`;
+}
+
+type IntervalInsight = {
+  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING" | "LEGAL_FIXED";
+  reliability: number | null;
+  coverage: number;
+  recommendation: {
+    action: "extend" | "keep" | "shorten";
+    method: string;
+    proposedIntervalMonths: number;
+    reliabilityBound: number | null;
+  } | null;
+  series: Array<{
+    approvedAt: string;
+    conformity: "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+    minMargin: number | null;
+  }>;
+  engineVersion: string;
+  fingerprint: string;
+};
+
+const CLASSIFICATION_META: Record<
+  Exclude<IntervalInsight["classification"], "LEGAL_FIXED">,
+  { label: string; tone: SignalTone }
+> = {
+  STABLE: { label: "Estável", tone: "ok" },
+  DRIFTING: { label: "Derivando", tone: "warning" },
+  INSUFFICIENT_DATA: { label: "Dados insuficientes", tone: "neutral" },
+};
+
+const ACTION_LABEL: Record<
+  NonNullable<IntervalInsight["recommendation"]>["action"],
+  string
+> = { extend: "Estender", keep: "Manter", shorten: "Encurtar" };
+
+/**
+ * Read-only reliability-based interval analysis (ILAC-G24 / NCSL RP-1). It only
+ * SUGGESTS — the customer applies via the editor above (§7.8.4.3). Legal-metrology
+ * assets resolve to LEGAL_FIXED server-side and the panel hides (the editor shows the lock).
+ */
+function IntervalInsightPanel({ assetId }: { assetId: number }) {
+  const query = useQuery({
+    queryKey: ["portal-interval-insight", assetId],
+    queryFn: async (): Promise<IntervalInsight> => {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Falha ao carregar a análise.");
+      return response.json();
+    },
+  });
+
+  const insight = query.data;
+  if (!insight || insight.classification === "LEGAL_FIXED") return null;
+  const meta = CLASSIFICATION_META[insight.classification];
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Programa metrológico"
+        title="Análise de periodicidade"
+        description="Sugestão baseada no histórico de calibração (ILAC-G24 / NCSL RP-1). Apenas indicativo — você decide."
+      />
+      <div className="mt-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className={cnDot(meta.tone)} aria-hidden />
+          <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
+        </div>
+
+        {insight.reliability !== null ? (
+          <BlueprintGrid className="sm:grid-cols-2">
+            <BlueprintField label="Confiabilidade" mono>
+              {(insight.reliability * 100).toFixed(0)}%
+            </BlueprintField>
+            <BlueprintField label="Cobertura" mono>
+              {(insight.coverage * 100).toFixed(0)}%
+            </BlueprintField>
+          </BlueprintGrid>
+        ) : null}
+
+        <MarginSparkline series={insight.series} />
+
+        {insight.recommendation ? (
+          <div className="bg-muted/45 rounded-xl p-4 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+            Sugestão:{" "}
+            <strong>
+              {ACTION_LABEL[insight.recommendation.action]} para{" "}
+              {insight.recommendation.proposedIntervalMonths}{" "}
+              {insight.recommendation.proposedIntervalMonths === 1
+                ? "mês"
+                : "meses"}
+            </strong>
+            . Aplique na periodicidade acima, se concordar.
+          </div>
+        ) : insight.classification === "INSUFFICIENT_DATA" ? (
+          <p className="text-muted-foreground text-sm text-pretty">
+            Histórico insuficiente para uma sugestão (mín. 3 calibrações com
+            dados de conformidade).
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/** Compact as-found margin trend; the dashed line is the tolerance limit (margin 0). */
+type SparklinePoint = IntervalInsight["series"][number] & { minMargin: number };
+
+function MarginSparkline({ series }: { series: IntervalInsight["series"] }) {
+  const points = series.filter(
+    (p): p is SparklinePoint => p.minMargin !== null,
+  );
+  if (points.length < 2) return null;
+
+  const width = 220;
+  const height = 44;
+  const margins = points.map((p) => p.minMargin);
+  const min = Math.min(...margins, 0);
+  const max = Math.max(...margins, 0);
+  const range = max - min || 1;
+  const span = points.length - 1;
+  const x = (i: number) => (i / span) * width;
+  const y = (value: number) => height - ((value - min) / range) * height;
+  const path = points
+    .map(
+      (p, i) =>
+        `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.minMargin).toFixed(1)}`,
+    )
+    .join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="h-12 w-full"
+      role="img"
+      aria-label="Tendência da margem de conformidade (encontrado)"
+      preserveAspectRatio="none"
+    >
+      <line
+        x1={0}
+        x2={width}
+        y1={y(0)}
+        y2={y(0)}
+        className="stroke-muted-foreground/40"
+        strokeDasharray="3 3"
+        strokeWidth={1}
+      />
+      <path
+        d={path}
+        fill="none"
+        className="stroke-foreground/70"
+        strokeWidth={1.5}
+      />
+      {points.map((p, i) => (
+        <circle
+          key={p.approvedAt}
+          cx={x(i)}
+          cy={y(p.minMargin)}
+          r={2.2}
+          className={
+            p.minMargin < 0 ? "fill-[var(--critical)]" : "fill-[var(--ok)]"
+          }
+        />
+      ))}
+    </svg>
+  );
 }
 
 /**

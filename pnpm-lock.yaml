@@ -88,6 +88,9 @@ importers:
       '@calibra-facil/email':
         specifier: workspace:^
         version: link:../../packages/email
+      '@calibra-facil/interval-analysis':
+        specifier: workspace:^
+        version: link:../../packages/interval-analysis
       '@calibra-facil/label-rendering':
         specifier: workspace:^
         version: link:../../packages/label-rendering
