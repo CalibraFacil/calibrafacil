@@ -1,11 +1,11 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from '@calibra-facil/auth/client'
-import { FingerPrintIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -39,10 +39,11 @@ function writeDismissed(userId: string): void {
 }
 
 /**
- * Discovery surface for passkeys: a slim, dismissible banner shown at the top of
- * the dashboard ONLY when the signed-in user has no passkey yet and the browser
- * supports WebAuthn. Creating one here (or signing in with it) clears the list
- * query and the banner self-hides.
+ * Discovery surface for passkeys: a dismissible card that floats in the
+ * bottom-right corner of the dashboard ONLY when the signed-in user has no
+ * passkey yet and the browser supports WebAuthn. It is rendered through a portal
+ * to <body> so it stays viewport-fixed regardless of layout/transform ancestors.
+ * Creating a passkey here clears the list query and the card self-hides.
  */
 export function PasskeyNudgeBanner() {
   const { data: session } = useSession()
@@ -61,7 +62,13 @@ export function PasskeyNudgeBanner() {
   const hasNoPasskey =
     passkeysQuery.isSuccess && (passkeysQuery.data?.length ?? 0) === 0
 
-  if (!webAuthnSupported || !userId || dismissed || !hasNoPasskey) {
+  if (
+    typeof document === 'undefined' ||
+    !webAuthnSupported ||
+    !userId ||
+    dismissed ||
+    !hasNoPasskey
+  ) {
     return null
   }
 
@@ -83,46 +90,56 @@ export function PasskeyNudgeBanner() {
     setLocallyDismissed(true)
   }
 
-  return (
-    <Alert className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
-          <HugeiconsIcon icon={FingerPrintIcon} className="size-5" />
-        </span>
-        <div className="space-y-0.5">
-          <AlertTitle>Entre mais rápido com uma passkey</AlertTitle>
-          <AlertDescription>
-            Use Face ID, Touch ID ou seu gerenciador de senhas (1Password,
-            Bitwarden) para entrar sem digitar senha nem código por email.
-          </AlertDescription>
+  return createPortal(
+    <section
+      aria-label="Configurar passkey"
+      className="fixed bottom-4 right-4 z-50 w-[min(22rem,calc(100vw-2rem))] animate-in fade-in slide-in-from-bottom-4 duration-300"
+    >
+      <div className="rounded-xl border bg-background p-4 shadow-lg ring-1 ring-foreground/10">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+            <HugeiconsIcon icon={FingerPrintIcon} className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-sm font-medium leading-none">
+              Entre mais rápido com uma passkey
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Use Face ID, Touch ID ou seu gerenciador de senhas para entrar sem
+              senha.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Agora não"
+            onClick={handleDismiss}
+            disabled={addPasskey.isPending}
+            className="-mr-1 -mt-1 shrink-0"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} className="size-4" />
+          </Button>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleCreate}
+            disabled={addPasskey.isPending}
+          >
+            {addPasskey.isPending ? (
+              <>
+                <Spinner className="mr-2" />
+                Criando...
+              </>
+            ) : (
+              'Criar passkey'
+            )}
+          </Button>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleCreate}
-          disabled={addPasskey.isPending}
-        >
-          {addPasskey.isPending ? (
-            <>
-              <Spinner className="mr-2" />
-              Criando...
-            </>
-          ) : (
-            'Criar passkey'
-          )}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={handleDismiss}
-          disabled={addPasskey.isPending}
-        >
-          Agora não
-        </Button>
-      </div>
-    </Alert>
+    </section>,
+    document.body,
   )
 }

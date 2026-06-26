@@ -70,6 +70,8 @@ afterEach(() => {
   cleanup()
 })
 
+// The card renders through a portal to <body>, so visibility is asserted via
+// document-wide screen queries (queryByText) rather than the render container.
 describe('PasskeyNudgeBanner visibility', () => {
   it('shows when WebAuthn is supported, a user is signed in, and there are no passkeys', () => {
     render(<PasskeyNudgeBanner />)
@@ -79,32 +81,32 @@ describe('PasskeyNudgeBanner visibility', () => {
 
   it('renders nothing when WebAuthn is unsupported', () => {
     state.webAuthnSupported = false
-    const { container } = render(<PasskeyNudgeBanner />)
-    expect(container.firstChild).toBeNull()
+    render(<PasskeyNudgeBanner />)
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 
   it('renders nothing when the session has no user yet', () => {
     state.session = { data: { user: { id: undefined } } }
-    const { container } = render(<PasskeyNudgeBanner />)
-    expect(container.firstChild).toBeNull()
+    render(<PasskeyNudgeBanner />)
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 
   it('renders nothing while the passkeys query is still loading', () => {
     state.query = { isSuccess: false, data: undefined }
-    const { container } = render(<PasskeyNudgeBanner />)
-    expect(container.firstChild).toBeNull()
+    render(<PasskeyNudgeBanner />)
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 
   it('renders nothing when the user already has a passkey', () => {
     state.query = { isSuccess: true, data: [{ id: 'pk-1' }] }
-    const { container } = render(<PasskeyNudgeBanner />)
-    expect(container.firstChild).toBeNull()
+    render(<PasskeyNudgeBanner />)
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 
   it('renders nothing when previously dismissed this session', () => {
     window.sessionStorage.setItem(DISMISS_KEY, '1')
-    const { container } = render(<PasskeyNudgeBanner />)
-    expect(container.firstChild).toBeNull()
+    render(<PasskeyNudgeBanner />)
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 })
 
@@ -121,12 +123,12 @@ describe('PasskeyNudgeBanner actions', () => {
     expect(state.toastSuccess).toHaveBeenCalled()
   })
 
-  it('dismisses for the session and hides when "Agora não" is clicked', () => {
-    const { container } = render(<PasskeyNudgeBanner />)
+  it('dismisses for the session and hides when the close button is clicked', () => {
+    render(<PasskeyNudgeBanner />)
 
-    fireEvent.click(screen.getByText('Agora não'))
+    fireEvent.click(screen.getByRole('button', { name: 'Agora não' }))
 
     expect(window.sessionStorage.getItem(DISMISS_KEY)).toBe('1')
-    expect(container.firstChild).toBeNull()
+    expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 })

@@ -138,9 +138,8 @@ export function PasskeysSettingsPage() {
             <CardTitle>Passkeys</CardTitle>
             <CardDescription>
               Entre sem senha usando Face ID, Touch ID, Windows Hello ou seu
-              gerenciador de senhas (1Password, Bitwarden). Suas passkeys ficam
-              no seu dispositivo ou no seu gerenciador — nunca em nossos
-              servidores.
+              gerenciador de senhas. Suas passkeys ficam no seu dispositivo ou
+              no seu gerenciador — nunca em nossos servidores.
             </CardDescription>
           </div>
           <Button
