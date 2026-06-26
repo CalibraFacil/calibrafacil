@@ -29,6 +29,7 @@ import {
   type WorkbookWarning,
 } from "@calibra-facil/certificate-xlsx-template";
 import {
+  processMarketingContactSync,
   processPortalDigest,
   processScheduledNotifications,
 } from "./scheduled.js";
@@ -101,6 +102,11 @@ export interface Env {
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
+  // Marketing-audience sync (Resend Contacts) — operator-set, optional.
+  RESEND_AUDIENCE_ID?: string;
+  RESEND_TOPIC_NOVIDADES_ID?: string;
+  RESEND_TOPIC_DICAS_ID?: string;
+  MARKETING_CONTACT_SYNC_ENABLED?: string;
   EMAIL_FROM?: string;
   EMAIL_LOGO_URL?: string;
   WEB_URL?: string;
@@ -2516,6 +2522,7 @@ function isDocumentMessage(
     message.type !== "INTEGRATION_SYNC" &&
     message.type !== "SCHEDULED_NOTIFICATIONS" &&
     message.type !== "PORTAL_DIGEST" &&
+    message.type !== "MARKETING_CONTACT_SYNC" &&
     message.type !== "CERTIFICATE_XLSX_PREVIEW"
   );
 }
@@ -3641,6 +3648,11 @@ export async function processBackgroundJob(
     return;
   }
 
+  if (message.type === "MARKETING_CONTACT_SYNC") {
+    await processMarketingContactSync(env);
+    return;
+  }
+
   if (await processXlsxCertificateMessageIfSelected(env, message)) {
     return;
   }
@@ -3678,6 +3690,9 @@ export async function processBackgroundJobBatch(
   const portalDigestMessages = messages.filter(
     (message) => message.type === "PORTAL_DIGEST",
   );
+  const marketingContactSyncMessages = messages.filter(
+    (message) => message.type === "MARKETING_CONTACT_SYNC",
+  );
   const xlsxPreviewMessages = messages.filter(
     (message): message is CertificateXlsxPreviewBackgroundJobMessage =>
       message.type === "CERTIFICATE_XLSX_PREVIEW",
@@ -3694,6 +3709,10 @@ export async function processBackgroundJobBatch(
 
   for (const _message of portalDigestMessages) {
     await processPortalDigest();
+  }
+
+  for (const _message of marketingContactSyncMessages) {
+    await processMarketingContactSync(env);
   }
 
   for (const message of xlsxPreviewMessages) {

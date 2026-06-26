@@ -158,6 +158,19 @@ async function handlePortalDigest(request: Request) {
   );
 }
 
+async function handleMarketingContactSync(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("marketing-contact-sync", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "MARKETING_CONTACT_SYNC" },
+      { idempotencyKey: `marketing-contact-sync-${todayKey()}` },
+    ),
+  );
+}
+
 async function handleOperatorAlerts(request: Request) {
   if (!isCronAuthorized(request)) {
     return cronAuthFailureResponse();
@@ -195,6 +208,7 @@ export const JOB_HANDLERS: Record<
   integrations: handleIntegrations,
   notifications: handleNotifications,
   "portal-digest": handlePortalDigest,
+  "marketing-contact-sync": handleMarketingContactSync,
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,

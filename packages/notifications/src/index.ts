@@ -59,3 +59,24 @@ export {
   type CustomerDispatchTarget,
   type ServiceOrderCustomerEmailResult,
 } from "./service-order-customer-email";
+
+// Resend marketing-audience sync (lab staff → Contacts; foundation for Broadcasts)
+export {
+  syncLabUsersToResendAudience,
+  selectLabAudienceContacts,
+  type ResendAudienceSyncEnv,
+  type ResendAudienceSyncDeps,
+  type ResendAudienceSyncResult,
+  type RawAudienceMemberRow,
+  type LabAudienceContact,
+} from "./resend-audience-sync";
+
+export {
+  createResendContactsClient,
+  type ResendContactsClient,
+  type ResendContactsClientConfig,
+  type ContactUpsertInput,
+  type ContactUpsertResult,
+  type ContactTopic,
+  type TopicSubscription,
+} from "./resend-contacts-client";

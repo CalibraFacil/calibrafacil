@@ -36,6 +36,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/marketing-contact-sync",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/operator-alerts",
       "schedule": "*/30 * * * *"
     },
