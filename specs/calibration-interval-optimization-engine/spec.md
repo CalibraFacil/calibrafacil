@@ -229,6 +229,12 @@ legal-metrology / never-auto-apply / UNKNOWN-exclusion HIGH-RISK guards. Start w
 
 ## Verification notes (from the independent oracle/EARS pass)
 
+- **Sources verified current (web-checked 2026-06-26):** ILAC-G24 / OIML D 10 **:2022** (latest;
+  approved Dec 2022), NCSL RP-1 **:2010** (latest; **paywalled** → computational basis is the
+  open RP-1-lineage papers, flagged provisional pending the primary), ISO/IEC 17025 **:2017**
+  (no amendment since), ABNT NBR ISO/IEC 17025:2017. Re-confirm RP-1:2010 against the primary
+  before the Method-5 math ships. Prefer the current primary edition; never rely on a dated
+  secondary figure unverified (a 1987 paper's CI was wrong in the first draft).
 - **Oracles independently checked:** `λ₀=0.034621` ✅, `i₀=4.694` ✅, Clopper–Pearson 18/20 @90%
   `[0.717, 0.982]` ✅ (the original draft's `[0.732, 0.976]` was wrong — fixed). The M5 i₀ CI was
   replaced with the reproducible delta-method `[1.47, 15.04]` (the cited `[3.48, 6.34]` could not

@@ -1,0 +1,31 @@
+{
+  "name": "@calibra-facil/interval-analysis",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Pure, deterministic calibration-interval optimization engine (ILAC-G24 M1/M2 + NCSL RP-1 M5).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsgo --noEmit",
+    "test": "vitest run",
+    "test:run": "vitest run"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.17"
+  }
+}
