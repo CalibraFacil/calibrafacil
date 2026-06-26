@@ -491,6 +491,7 @@ const ACTION_LABEL: Record<
  * assets resolve to LEGAL_FIXED server-side and the panel hides (the editor shows the lock).
  */
 function IntervalInsightPanel({ assetId }: { assetId: number }) {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["portal-interval-insight", assetId],
     queryFn: async (): Promise<IntervalInsight> => {
@@ -502,8 +503,39 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
       return response.json();
     },
   });
-
   const insight = query.data;
+
+  // REQ-ENGINE-APPLY: one-click apply the suggestion (writes engine_applied + an
+  // auditable rationale citing the method). The customer clicking IS their agreement.
+  const applyMutation = useMutation({
+    mutationFn: async () => {
+      const recommendation = insight?.recommendation;
+      if (!recommendation) return;
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            intervalMonths: recommendation.proposedIntervalMonths,
+            rationale: `Sugestão do motor de confiabilidade (ILAC-G24 / NCSL RP-1) aplicada — ${insight?.classification}, método ${recommendation.method}.`,
+            source: "engine",
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Não foi possível aplicar a sugestão.");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Periodicidade atualizada a partir da sugestão.");
+      queryClient.invalidateQueries({ queryKey: ["portal-asset"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-interval-insight"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   if (!insight || insight.classification === "LEGAL_FIXED") return null;
   const meta = CLASSIFICATION_META[insight.classification];
 
@@ -543,7 +575,22 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
                 ? "mês"
                 : "meses"}
             </strong>
-            . Aplique na periodicidade acima, se concordar.
+            .
+            {insight.recommendation.action === "keep" ? (
+              " A periodicidade atual já está adequada."
+            ) : (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => applyMutation.mutate()}
+                  disabled={applyMutation.isPending}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />
+                  {applyMutation.isPending ? "Aplicando…" : "Aplicar sugestão"}
+                </Button>
+              </div>
+            )}
           </div>
         ) : insight.classification === "INSUFFICIENT_DATA" ? (
           <p className="text-muted-foreground text-sm text-pretty">

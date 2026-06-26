@@ -1425,7 +1425,10 @@ export const portalRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const { intervalMonths, rationale } = c.req.valid("json");
+      const { intervalMonths, rationale, source } = c.req.valid("json");
+      // REQ-ENGINE-APPLY-001: applying an engine suggestion records `engine_applied`.
+      const intervalSetBy =
+        source === "engine" ? "engine_applied" : "customer_confirmed";
 
       try {
         const scope = await resolvePortalCustomerScope({
@@ -1474,7 +1477,7 @@ export const portalRouter = new Hono<{
           .update(asset)
           .set({
             calibrationIntervalMonths: intervalMonths,
-            intervalSetBy: "customer_confirmed",
+            intervalSetBy,
             intervalSetByUserId: session.user.id,
             intervalSetAt: new Date(),
             intervalRationale: rationale,
@@ -1507,7 +1510,7 @@ export const portalRouter = new Hono<{
           id,
           calibrationIntervalMonths: intervalMonths,
           nextCalibrationDate,
-          intervalSetBy: "customer_confirmed",
+          intervalSetBy,
         });
       } catch (error) {
         console.error("Error setting calibration interval:", error);

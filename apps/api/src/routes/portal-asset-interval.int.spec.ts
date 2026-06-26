@@ -123,6 +123,43 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
     );
   });
 
+  // REQ-ENGINE-APPLY-001: applying an engine suggestion (source="engine") records
+  // interval_set_by='engine_applied'.
+  it("REQ-ENGINE-APPLY-001: source=engine → interval_set_by=engine_applied", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const assetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-ENG",
+    });
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const res = await put(assetId, {
+      intervalMonths: 18,
+      rationale: "Sugestão do motor aplicada.",
+      source: "engine",
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).intervalSetBy).toBe("engine_applied");
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.intervalSetBy).toBe("engine_applied");
+  });
+
   // REQ-ACCESS-INT-004: the change writes an asset_audit_log row (old→new, user, rationale).
   it("REQ-ACCESS-INT-004: writes an asset_audit_log row with the rationale", async () => {
     const assetTypeId = await ensureAssetType();

@@ -444,6 +444,9 @@ export const SetCalibrationIntervalSchema = z.object({
     .min(1, "A periodicidade deve ser de pelo menos 1 mês")
     .max(120, "A periodicidade deve ser de no máximo 120 meses"),
   rationale: z.string().trim().min(1, "Justificativa é obrigatória"),
+  // Provenance of the change: "customer" (manual) or "engine" (the customer applied a
+  // reliability-engine suggestion → interval_set_by='engine_applied'). Spec REQ-ENGINE-APPLY-001.
+  source: z.enum(["customer", "engine"]).default("customer"),
 });
 
 export type SetCalibrationIntervalInput = z.infer<
