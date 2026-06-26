@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
 
-const mocks = vi.hoisted(() => ({
-  ruleRows: [] as Array<{
-    id: number;
-    milestone: AutomaticSendMilestone;
-    customerId: number | null;
-    commercialAgreementId: number | null;
-    serviceCategory: string | null;
-    priority: number;
-  }>,
-}));
+const mocks = vi.hoisted(
+  (): {
+    ruleRows: Array<{
+      id: number;
+      milestone: AutomaticSendMilestone;
+      customerId: number | null;
+      commercialAgreementId: number | null;
+      serviceCategory: string | null;
+      priority: number;
+    }>;
+  } => ({
+    ruleRows: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

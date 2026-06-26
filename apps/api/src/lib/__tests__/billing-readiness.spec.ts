@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
       return this;
     }
 
+    // oxlint-disable-next-line unicorn/no-thenable -- FakeQuery intentionally emulates Drizzle's awaitable query builder; `then` is required so `await db.select()...` resolves in the test.
     then<TResult1 = unknown[], TResult2 = never>(
       onfulfilled?:
         | ((value: unknown[]) => TResult1 | PromiseLike<TResult1>)
@@ -183,7 +184,7 @@ describe("evaluateOrderBlockers", () => {
       customer: {
         taxId: "12345678900",
         email: "cliente@example.com",
-        address: { city: "São Paulo", state: "SP" } as never,
+        address: { city: "São Paulo", state: "SP" },
       },
       certificateJobStatuses: ["APPROVED"],
       amountCents: 1_000,

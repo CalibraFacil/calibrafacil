@@ -42,6 +42,10 @@ const DRIFT_TARGETS: ReadonlySet<string> = new Set<IntegrationObjectLinkTarget>(
   "fiscal_document",
   "remote_document",
 ]);
+
+function isDriftTarget(value: string): value is IntegrationObjectLinkTarget {
+  return DRIFT_TARGETS.has(value);
+}
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   buildEmptyRemoteDocumentSummary,
@@ -666,7 +670,7 @@ async function upsertContaAzulConnection(params: {
       ? normalizeContaAzulConnectionConfig(existing.connection.config)
       : null;
     const config = normalizeContaAzulConnectionConfig({
-      ...(previousConfig ?? {}),
+      ...previousConfig,
       accessTokenExpiresAt: params.tokenBundle.expiresAt,
       scopes: params.tokenBundle.scopes,
     });
@@ -2581,10 +2585,7 @@ export const integrationsRouter = new Hono<{
       const target = c.req.query("target");
       const rows = await buildIntegrationDriftQueue({
         organizationId: member.organizationId,
-        target:
-          target && DRIFT_TARGETS.has(target)
-            ? (target as IntegrationObjectLinkTarget)
-            : undefined,
+        target: target && isDriftTarget(target) ? target : undefined,
       });
       return c.json({ data: rows });
     },

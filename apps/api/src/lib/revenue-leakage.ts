@@ -9,6 +9,7 @@ import {
   serviceOrderCertificateLink,
 } from "@calibra-facil/db/schema";
 import type {
+  BillingDocumentExportStatus,
   BillingDocumentStatus,
   ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
@@ -294,7 +295,7 @@ export async function buildRevenueLeakage(
     number,
     {
       status: BillingDocumentStatus;
-      exportStatus: string;
+      exportStatus: BillingDocumentExportStatus;
       issueDate: Date | null;
       updatedAt: Date | null;
     }
@@ -358,13 +359,7 @@ export async function buildRevenueLeakage(
     const classification = classifyServiceOrder({
       hasBillingDocument: existingDoc !== null,
       billingDocumentStatus: docInfo?.status ?? null,
-      billingDocumentExportStatus:
-        (docInfo?.exportStatus as
-          | "NOT_EXPORTED"
-          | "PENDING"
-          | "EXPORTED"
-          | "FAILED"
-          | undefined) ?? null,
+      billingDocumentExportStatus: docInfo?.exportStatus ?? null,
       installmentStatuses: installments.map((i) => i.status),
       blockers,
     });

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  rows: [] as Array<{ calibrationJobId: number; status: string }>,
-}));
+const mocks = vi.hoisted(
+  (): { rows: Array<{ calibrationJobId: number; status: string }> } => ({
+    rows: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

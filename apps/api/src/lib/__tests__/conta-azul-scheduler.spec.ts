@@ -6,6 +6,10 @@ import {
   runContaAzulScheduledPoll,
 } from "../integrations";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 const mocks = vi.hoisted(() => {
   const operations: Array<{
     kind: "insert" | "update";
@@ -529,9 +533,8 @@ describe("Conta Azul scheduled polling", () => {
       mocks.operations.some(
         (operation) =>
           operation.kind === "insert" &&
-          operation.value.summary &&
-          (operation.value.summary as { pollKind?: string }).pollKind ===
-            "protocols",
+          isRecord(operation.value.summary) &&
+          operation.value.summary.pollKind === "protocols",
       ),
     ).toBe(false);
   });
@@ -748,8 +751,9 @@ describe("Conta Azul scheduled polling", () => {
       mocks.operations.some(
         (operation) =>
           operation.kind === "update" &&
-          (operation.value.config as { polling?: Record<string, unknown> })
-            ?.polling?.protocolsLastRemoteUpdatedAt,
+          isRecord(operation.value.config) &&
+          isRecord(operation.value.config.polling) &&
+          Boolean(operation.value.config.polling.protocolsLastRemoteUpdatedAt),
       ),
     ).toBe(false);
   });

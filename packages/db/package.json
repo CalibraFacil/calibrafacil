@@ -20,6 +20,7 @@
     "db:seed:exemplo-modelo-demo-job": "node ./scripts/seed-exemplo-modelo-demo-job.mjs",
     "db:seed:calibrafacil-conta-azul-demo": "node ./scripts/seed-calibrafacil-conta-azul-demo.mjs",
     "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs",
+    "lint": "oxlint",
     "check-types": "tsgo --noEmit"
   },
   "keywords": [],

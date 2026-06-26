@@ -12,6 +12,7 @@ import {
   serviceOrderCertificateLink,
 } from "@calibra-facil/db/schema";
 import type {
+  BillingDocumentExportStatus,
   BillingDocumentStatus,
   CertificateReleaseAuditSource,
   CertificateReleasePaymentStateSnapshot,
@@ -541,7 +542,7 @@ async function buildPaymentStateForJob(
     id: number;
     status: BillingDocumentStatus;
     issuedAt: Date | null;
-    exportStatusRaw: string;
+    exportStatusRaw: BillingDocumentExportStatus;
   } | null = null;
 
   if (billingDocumentIds.length > 0) {
@@ -609,13 +610,7 @@ async function buildPaymentStateForJob(
   const continuityStatus = deriveFinancialContinuityStatus({
     hasBillingDocument: Boolean(billingDoc),
     billingDocumentStatus: billingDoc?.status ?? null,
-    exportStatus:
-      (billingDoc?.exportStatusRaw as
-        | "NOT_EXPORTED"
-        | "PENDING"
-        | "EXPORTED"
-        | "FAILED"
-        | undefined) ?? null,
+    exportStatus: billingDoc?.exportStatusRaw ?? null,
     installmentStatuses: activeInstallments.map(
       (installment) => installment.status,
     ),
@@ -639,11 +634,7 @@ async function buildPaymentStateForJob(
       ? {
           id: billingDoc.id,
           status: billingDoc.status,
-          exportStatus: billingDoc.exportStatusRaw as
-            | "NOT_EXPORTED"
-            | "PENDING"
-            | "EXPORTED"
-            | "FAILED",
+          exportStatus: billingDoc.exportStatusRaw,
           issuedAt: billingDoc.issuedAt
             ? billingDoc.issuedAt.toISOString()
             : null,

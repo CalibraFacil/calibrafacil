@@ -44,7 +44,7 @@ export async function findOrCreateSupplierByName(params: {
     .limit(1);
 
   if (existing) {
-    return existing as SupplierRow;
+    return existing;
   }
 
   const inserted = await db
@@ -57,7 +57,7 @@ export async function findOrCreateSupplierByName(params: {
     .returning();
 
   const created = inserted[0];
-  return created ? (created as SupplierRow) : null;
+  return created ?? null;
 }
 
 /**
@@ -85,7 +85,7 @@ export async function reconcileSupplierWithPersonLink(params: {
           ),
         )
         .limit(1);
-      if (byTaxId) return byTaxId as SupplierRow;
+      if (byTaxId) return byTaxId;
     }
   }
 
@@ -102,7 +102,7 @@ export async function reconcileSupplierWithPersonLink(params: {
       ),
     )
     .limit(1);
-  return byName ? (byName as SupplierRow) : null;
+  return byName ?? null;
 }
 
 export async function listSuppliers(params: {
@@ -118,5 +118,5 @@ export async function listSuppliers(params: {
     .from(supplier)
     .where(and(...conditions))
     .orderBy(supplier.name);
-  return rows as SupplierRow[];
+  return rows;
 }

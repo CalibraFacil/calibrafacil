@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  selectResult: [] as unknown[],
-  insertResult: [] as unknown[],
-  insertCalls: [] as Array<Record<string, unknown>>,
-}));
+const mocks = vi.hoisted(
+  (): {
+    selectResult: unknown[];
+    insertResult: unknown[];
+    insertCalls: Array<Record<string, unknown>>;
+  } => ({
+    selectResult: [],
+    insertResult: [],
+    insertCalls: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

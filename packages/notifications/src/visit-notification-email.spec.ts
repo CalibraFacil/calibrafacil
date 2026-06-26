@@ -89,26 +89,20 @@ vi.mock("@calibra-facil/db/schema", () => ({
   customerGroup: {},
 }));
 
-vi.mock("@calibra-facil/db", () => {
-  const dbMock = {
+const { dbMock } = vi.hoisted(() => ({
+  dbMock: {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
-  };
-  return { db: dbMock };
-});
+  },
+}));
+
+vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
 
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 import { sendNotification } from "./service";
-import { db } from "@calibra-facil/db";
-
-const dbMock = db as unknown as {
-  select: ReturnType<typeof vi.fn>;
-  insert: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-};
 
 // ---------------------------------------------------------------------------
 // Chain builder

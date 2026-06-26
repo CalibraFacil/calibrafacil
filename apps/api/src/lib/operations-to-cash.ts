@@ -335,12 +335,7 @@ export async function buildOperationsToCash(
     for (const row of docRows) {
       billingDocStatusByDoc.set(row.id, {
         status: row.status,
-        exportStatus: row.exportStatus as
-          | "NOT_EXPORTED"
-          | "PENDING"
-          | "EXPORTED"
-          | "FAILED"
-          | null,
+        exportStatus: row.exportStatus,
       });
     }
   }

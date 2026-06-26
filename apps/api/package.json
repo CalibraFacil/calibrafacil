@@ -16,6 +16,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "oxlint",
     "check-types": "tsgo --project tsconfig.build.json --noEmit"
   },
   "dependencies": {

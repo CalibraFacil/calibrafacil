@@ -1,19 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  rows: [] as Array<{
-    linkId: string;
-    integrationId: string;
-    provider: "conta_azul" | "generic_http";
-    target: string;
-    localEntityId: string;
-    remoteEntityId: string | null;
-    remoteDisplayId: string | null;
-    metadata: unknown;
-    lastSyncedAt: Date | null;
-  }>,
-  updateCalls: [] as Array<Record<string, unknown>>,
-}));
+const mocks = vi.hoisted(
+  (): {
+    rows: Array<{
+      linkId: string;
+      integrationId: string;
+      provider: "conta_azul" | "generic_http";
+      target: string;
+      localEntityId: string;
+      remoteEntityId: string | null;
+      remoteDisplayId: string | null;
+      metadata: unknown;
+      lastSyncedAt: Date | null;
+    }>;
+    updateCalls: Array<Record<string, unknown>>;
+  } => ({
+    rows: [],
+    updateCalls: [],
+  }),
+);
 
 vi.mock("@calibra-facil/db", () => ({
   db: {

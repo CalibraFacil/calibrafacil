@@ -22,11 +22,7 @@ import {
   recomputeCertificateRelease,
   releaseByException,
 } from "../../lib/certificate-release";
-import type {
-  CertificateReleasePaymentStateSnapshot,
-  CertificateReleasePolicyMode,
-  CertificateReleaseStatus,
-} from "@calibra-facil/shared";
+import type { CertificateReleasePolicyMode } from "@calibra-facil/shared";
 
 const JobIdParamSchema = z.object({
   calibrationJobId: z.coerce.number().int().positive(),
@@ -36,13 +32,13 @@ const PolicyIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-const POLICY_MODES: CertificateReleasePolicyMode[] = [
+const POLICY_MODES = [
   "release_after_invoice",
   "release_after_first_installment",
   "release_after_full_payment",
   "trusted_customer",
   "manual_only",
-];
+] as const satisfies readonly CertificateReleasePolicyMode[];
 
 const ReleaseByExceptionSchema = z.object({
   reason: z
@@ -53,7 +49,7 @@ const ReleaseByExceptionSchema = z.object({
     .refine((value) => value.length > 0, "Reason is required"),
 });
 
-const PolicyModeSchema = z.enum(POLICY_MODES as [string, ...string[]]);
+const PolicyModeSchema = z.enum(POLICY_MODES);
 
 const CreatePolicySchema = z.object({
   mode: PolicyModeSchema,
@@ -186,10 +182,9 @@ async function loadReleaseDto(calibrationJobId: number) {
   }
 
   return {
-    status: release.status as CertificateReleaseStatus,
+    status: release.status,
     appliedPolicy: policy,
-    paymentState:
-      release.paymentStateSnapshot as CertificateReleasePaymentStateSnapshot | null,
+    paymentState: release.paymentStateSnapshot,
     lastEvaluatedAt: release.lastEvaluatedAt.toISOString(),
     releasedByUserName: release.releasedByUserName ?? null,
     releaseReason: release.releaseReason ?? null,
@@ -365,7 +360,7 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
         .insert(certificateReleasePolicy)
         .values({
           organizationId: member.organizationId,
-          mode: body.mode as CertificateReleasePolicyMode,
+          mode: body.mode,
           customerId: body.customerId ?? null,
           commercialAgreementId: body.commercialAgreementId ?? null,
           serviceCategory: body.serviceCategory ?? null,
@@ -438,9 +433,7 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
       await db
         .update(certificateReleasePolicy)
         .set({
-          ...(body.mode !== undefined
-            ? { mode: body.mode as CertificateReleasePolicyMode }
-            : {}),
+          ...(body.mode !== undefined ? { mode: body.mode } : {}),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.archived === true ? { archivedAt: new Date() } : {}),
           ...(body.archived === false ? { archivedAt: null } : {}),

@@ -12,7 +12,8 @@
     "typecheck": "tsgo",
     "check-types": "tsgo --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "lint": "oxlint"
   },
   "keywords": [
     "notifications",
