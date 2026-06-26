@@ -79,6 +79,12 @@ export type DriftResult = {
  * REQ-ENGINE-006/007/008: per-point drift over the cycle series. A point is drifting
  * when its slope is significant AND negative (margin heading toward the 0 limit). The
  * projected time-to-limit is `min over drifting points of (m̄ − k·s)/|b|`, floored at 0.
+ *
+ * LIMITATION (documented): measurement points are matched POSITIONALLY by array index
+ * across cycles. This assumes the method emits a stable point order + length each cycle
+ * (true for a fixed method snapshot). A method whose `margem_conformidade_antes` array
+ * varies in length/order across cycles (e.g. a partial calibration) would mismatch points;
+ * point-identity keys are a future enhancement.
  */
 export function analyzeMarginDrift(
   cycles: readonly { tMonths: number; margins: readonly number[] }[],

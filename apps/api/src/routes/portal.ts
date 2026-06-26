@@ -209,6 +209,7 @@ import {
 } from "../lib/portal-asset-interval";
 import { buildIntervalInsight } from "../lib/interval-insight";
 import { renderIntervalReportHtml } from "@calibra-facil/documents";
+import { DEFAULT_INTERVAL_CONFIG } from "@calibra-facil/interval-analysis";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
@@ -1392,9 +1393,17 @@ export const portalRouter = new Hono<{
             r.asFoundConformity === "CONFORMING" ||
             r.asFoundConformity === "NON_CONFORMING",
         ).length;
+        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+        const singleCoverageLow =
+          rows.length > 0 &&
+          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
         const familyModel = existing.model;
         const familyRows =
-          singleKnown < 3 && familyModel !== null
+          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+            singleCoverageLow) &&
+          familyModel !== null
             ? await db
                 .select({
                   assetId: calibrationJob.assetId,
@@ -1408,6 +1417,7 @@ export const portalRouter = new Hono<{
                     eq(asset.assetTypeId, existing.assetTypeId),
                     eq(asset.model, familyModel),
                     eq(asset.subjectToLegalMetrology, false),
+                    isNull(asset.deletedAt),
                     inArray(calibrationJob.customerId, customerIds),
                     eq(calibrationJob.status, "APPROVED"),
                   ),
@@ -1510,9 +1520,17 @@ export const portalRouter = new Hono<{
             r.asFoundConformity === "CONFORMING" ||
             r.asFoundConformity === "NON_CONFORMING",
         ).length;
+        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+        const singleCoverageLow =
+          rows.length > 0 &&
+          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
         const familyModel = existing.model;
         const familyRows =
-          singleKnown < 3 && familyModel !== null
+          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+            singleCoverageLow) &&
+          familyModel !== null
             ? await db
                 .select({
                   assetId: calibrationJob.assetId,
@@ -1526,6 +1544,7 @@ export const portalRouter = new Hono<{
                     eq(asset.assetTypeId, existing.assetTypeId),
                     eq(asset.model, familyModel),
                     eq(asset.subjectToLegalMetrology, false),
+                    isNull(asset.deletedAt),
                     inArray(calibrationJob.customerId, customerIds),
                     eq(calibrationJob.status, "APPROVED"),
                   ),

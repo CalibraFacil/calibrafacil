@@ -12,6 +12,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { analyzeMarginDrift } from "./drift.js";
 import {
   clopperPearsonInterval,
+  m5DeltaConfidenceInterval,
   m5Estimate,
   summarizeReliability,
   type CycleVerdict,
@@ -61,6 +62,11 @@ export type Recommendation = {
   proposedIntervalMonths: number;
   /** The reliability bound that drove the decision (null for a drift-driven one). */
   reliabilityBound: number | null;
+  /**
+   * Delta-method confidence band on the M5 interval (months) — honest uncertainty for
+   * a regulated suggestion (REQ-ENGINE-004b). Null for drift-driven (M2) recommendations.
+   */
+  intervalConfidence: { lower: number; upper: number } | null;
 };
 
 /** Aggregated family stats for M5 borrow-strength (REQ-ENGINE-FAMILY-001/004). */
@@ -100,12 +106,16 @@ function fingerprint(
   cycles: readonly IntervalCycle[],
   config: IntervalConfig,
   subjectToLegalMetrology: boolean,
+  family: FamilyStats | undefined,
 ): string {
   const canonical = JSON.stringify({
     v: ENGINE_VERSION,
     config,
     legal: subjectToLegalMetrology,
     cycles: cycles.map((c) => ({ v: c.verdict, m: c.margins, t: c.tMonths })),
+    // The family inputs drive the M5_family interval — include them so that path's
+    // audit trail can reproduce the proposed number (§7.5).
+    family: family ?? null,
   });
   return `sha256:${bytesToHex(sha256(utf8ToBytes(canonical)))}`;
 }
@@ -135,12 +145,24 @@ function reliabilityRecommendation(input: {
     input.known,
     input.config.confidence,
   );
+  const rawCi = m5DeltaConfidenceInterval({
+    populationN: input.known,
+    observedReliability: input.conforming / input.known,
+    intervalMonths: m5.intervalMonths,
+    confidence: input.config.confidence,
+  });
+  // Clamp the band to policy bounds so it never implies an out-of-policy interval.
+  const intervalConfidence = {
+    lower: clampedMonths(rawCi.lower, input.config),
+    upper: clampedMonths(rawCi.upper, input.config),
+  };
   if (ci.lower > input.config.targetReliability) {
     return {
       action: "extend",
       method: input.method,
       proposedIntervalMonths: m5Interval,
       reliabilityBound: ci.lower,
+      intervalConfidence,
     };
   }
   if (ci.upper < input.config.targetReliability) {
@@ -149,6 +171,7 @@ function reliabilityRecommendation(input: {
       method: input.method,
       proposedIntervalMonths: m5Interval,
       reliabilityBound: ci.upper,
+      intervalConfidence,
     };
   }
   return {
@@ -156,6 +179,7 @@ function reliabilityRecommendation(input: {
     method: input.method,
     proposedIntervalMonths: input.currentIntervalMonths ?? m5Interval,
     reliabilityBound: ci.lower,
+    intervalConfidence,
   };
 }
 
@@ -178,6 +202,7 @@ export function analyzeInterval(input: {
       input.cycles,
       config,
       input.subjectToLegalMetrology,
+      input.family,
     ),
   };
 
@@ -241,6 +266,7 @@ export function analyzeInterval(input: {
         method: "M2_drift",
         proposedIntervalMonths: proposed,
         reliabilityBound: null,
+        intervalConfidence: null,
       },
       ...base,
     };

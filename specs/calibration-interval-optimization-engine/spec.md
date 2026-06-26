@@ -138,7 +138,7 @@ the **config snapshot + engine version** used.
   `GET /api/portal/assets/:id/interval-insight` SHALL return the classification, `R`,
   coverage, and the dated margin series. [HIGH RISK]
 - REQ-ENGINE-INSIGHT-002: IF the asset is `subjectToLegalMetrology`, THEN the endpoint SHALL
-  return classification `legal_fixed` and SHALL NOT compute an optimization suggestion. [HIGH RISK]
+  return classification `LEGAL_FIXED` and SHALL NOT compute an optimization suggestion. [HIGH RISK]
 - REQ-ENGINE-INSIGHT-003: The portal asset detail SHALL NOT write any interval from the
   insight surface (insight only). [HIGH RISK]
 - REQ-ENGINE-INSIGHT-004: The portal asset detail SHALL render the margin trend + the

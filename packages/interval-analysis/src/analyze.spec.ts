@@ -187,4 +187,77 @@ describe("analyzeInterval — provenance (REQ-ENGINE-011)", () => {
     expect(a.provenance.config.targetReliability).toBe(0.9);
     expect(a.provenance.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
+
+  // REQ-ENGINE-011: a constant-hash mutation must fail — different inputs → different
+  // fingerprints; identical inputs → identical (deterministic).
+  it("fingerprint is input-sensitive and deterministic", () => {
+    const a = analyzeInterval({
+      cycles: [cyc("CONFORMING", 0.5, 0)],
+      currentIntervalMonths: null,
+      subjectToLegalMetrology: false,
+    });
+    const b = analyzeInterval({
+      cycles: [cyc("NON_CONFORMING", -0.1, 0)],
+      currentIntervalMonths: null,
+      subjectToLegalMetrology: false,
+    });
+    const again = analyzeInterval({
+      cycles: [cyc("CONFORMING", 0.5, 0)],
+      currentIntervalMonths: null,
+      subjectToLegalMetrology: false,
+    });
+    expect(a.provenance.fingerprint).not.toBe(b.provenance.fingerprint);
+    expect(a.provenance.fingerprint).toBe(again.provenance.fingerprint);
+  });
+
+  // The family inputs drive M5_family → they must be in the fingerprint (audit trail).
+  it("fingerprint includes the family inputs", () => {
+    const base = {
+      cycles: [cyc("CONFORMING", 0.5, 0)],
+      currentIntervalMonths: null,
+      subjectToLegalMetrology: false,
+    };
+    const noFamily = analyzeInterval(base);
+    const withFamily = analyzeInterval({
+      ...base,
+      family: { populationN: 20, conformingS: 18, meanTimeSinceCalMonths: 12 },
+    });
+    expect(noFamily.provenance.fingerprint).not.toBe(
+      withFamily.provenance.fingerprint,
+    );
+  });
+});
+
+describe("analyzeInterval — proposed-interval derivation", () => {
+  // REQ-ENGINE-REC-005: the proposed interval is FLOORED, never rounded. 9/10 conforming
+  // one month apart (R=0.9, T=1) with R*=0.5 → extend; M5 i₀≈6.578 must floor to 6, not 7.
+  it("floors the proposed interval (does not round)", () => {
+    const cycles = Array.from({ length: 10 }, (_, i) =>
+      cyc(i === 9 ? "NON_CONFORMING" : "CONFORMING", null, i),
+    );
+    const a = analyzeInterval({
+      cycles,
+      currentIntervalMonths: 12,
+      subjectToLegalMetrology: false,
+      config: { targetReliability: 0.5 },
+    });
+    expect(a.recommendation?.action).toBe("extend");
+    expect(a.recommendation?.proposedIntervalMonths).toBe(6);
+  });
+
+  // REQ-ENGINE-FAMILY-004: at finite family R the interval derives from the family T.
+  // family R=0.9, T=12, R*=0.5 → λ₀=-ln(0.9)/12, i₀=-ln(0.5)/λ₀ ≈ 78.9 → 78.
+  it("derives the family interval from the family T at finite R", () => {
+    const a = analyzeInterval({
+      cycles: [cyc("CONFORMING", null, 0)],
+      currentIntervalMonths: 12,
+      subjectToLegalMetrology: false,
+      family: { populationN: 20, conformingS: 18, meanTimeSinceCalMonths: 12 },
+      config: { targetReliability: 0.5 },
+    });
+    expect(a.recommendation?.method).toBe("M5_family");
+    expect(a.recommendation?.action).toBe("extend");
+    expect(a.recommendation?.proposedIntervalMonths).toBe(78);
+    expect(a.recommendation?.intervalConfidence).not.toBeNull();
+  });
 });

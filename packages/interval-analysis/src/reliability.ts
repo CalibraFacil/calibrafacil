@@ -22,7 +22,7 @@ export type ReliabilitySummary = {
   conforming: number;
   /** Observed reliability R = conforming / known (null when no KNOWN cycles). */
   reliability: number | null;
-  /** Coverage = known / total (1 when no cycles, by convention 0). */
+  /** Coverage = known / total (0 when there are no cycles). */
   coverage: number;
 };
 

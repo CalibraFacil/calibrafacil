@@ -22,6 +22,7 @@ export type IntervalReportData = {
     action: "extend" | "keep" | "shorten";
     method: string;
     proposedIntervalMonths: number;
+    intervalConfidence?: { lower: number; upper: number } | null;
   } | null;
   generatedAtIso: string;
 };
@@ -71,6 +72,11 @@ export function renderIntervalReportHtml(data: IntervalReportData): string {
         data.recommendation.proposedIntervalMonths,
       )}`
     : "Sem sugestão (histórico insuficiente)";
+  const confidence = data.recommendation?.intervalConfidence
+    ? `${months(data.recommendation.intervalConfidence.lower)} – ${months(
+        data.recommendation.intervalConfidence.upper,
+      )}`
+    : "—";
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -118,6 +124,7 @@ export function renderIntervalReportHtml(data: IntervalReportData): string {
         <tr><th>Cobertura de dados</th><td>${pct(data.coverage)}</td></tr>
         <tr><th>Periodicidade atual</th><td>${esc(current)}</td></tr>
         <tr><th>Sugestão</th><td>${esc(suggestion)}</td></tr>
+        <tr><th>Faixa de confiança</th><td>${esc(confidence)}</td></tr>
         <tr><th>Método</th><td>${esc(data.recommendation?.method ?? "—")}</td></tr>
       </tbody>
     </table>

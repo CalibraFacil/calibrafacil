@@ -23,6 +23,7 @@ import {
   type MemberData,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
@@ -626,6 +627,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             baseMeasurementUnit: asset.baseMeasurementUnit,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
             comments: asset.comments,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
             deletedAt: asset.deletedAt,
@@ -700,8 +702,18 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.serialNumber = input.serialNumber;
         if (input.tag !== undefined) updateData.tag = input.tag;
         if (input.status !== undefined) updateData.status = input.status;
-        if (lastCalibrationDate !== undefined)
+        if (lastCalibrationDate !== undefined) {
           updateData.lastCalibrationDate = lastCalibrationDate;
+          // Keep the derived next-cal date in sync with the customer-owned interval
+          // (REQ-INTERVAL-003): next = last + interval. Null when no interval is set.
+          updateData.nextCalibrationDate =
+            existingAsset.calibrationIntervalMonths === null
+              ? null
+              : deriveNextCalibrationDate(
+                  lastCalibrationDate,
+                  existingAsset.calibrationIntervalMonths,
+                );
+        }
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         if (input.subjectToLegalMetrology !== undefined)

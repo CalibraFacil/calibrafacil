@@ -41,19 +41,27 @@ export function buildFamilyStats(
   rows: readonly FamilyJobRow[],
 ): FamilyStats | null {
   const known = rows.filter(
-    (r) =>
-      r.asFoundConformity === "CONFORMING" ||
-      r.asFoundConformity === "NON_CONFORMING",
+    (r): r is FamilyJobRow & { approvedAt: Date } =>
+      r.approvedAt !== null &&
+      (r.asFoundConformity === "CONFORMING" ||
+        r.asFoundConformity === "NON_CONFORMING"),
   );
   if (known.length === 0) return null;
 
-  const conformingS = known.filter(
+  // Collapse same-asset same-UTC-day cycles to the latest (no zero-Δt rows).
+  const sorted = [...known].sort(
+    (a, b) => a.approvedAt.getTime() - b.approvedAt.getTime(),
+  );
+  const byKey = new Map<string, FamilyJobRow & { approvedAt: Date }>();
+  for (const r of sorted) byKey.set(`${r.assetId}|${utcDay(r.approvedAt)}`, r);
+  const collapsed = [...byKey.values()];
+
+  const conformingS = collapsed.filter(
     (r) => r.asFoundConformity === "CONFORMING",
   ).length;
 
   const datesByAsset = new Map<number, Date[]>();
-  for (const r of known) {
-    if (!r.approvedAt) continue;
+  for (const r of collapsed) {
     const list = datesByAsset.get(r.assetId) ?? [];
     list.push(r.approvedAt);
     datesByAsset.set(r.assetId, list);
@@ -75,7 +83,7 @@ export function buildFamilyStats(
       ? deltas.reduce((acc, d) => acc + d, 0) / deltas.length
       : 12; // no inter-cal interval observed yet → default annual cadence
 
-  return { populationN: known.length, conformingS, meanTimeSinceCalMonths };
+  return { populationN: collapsed.length, conformingS, meanTimeSinceCalMonths };
 }
 
 export type IntervalInsightPoint = {
@@ -95,15 +103,25 @@ export type IntervalInsight = {
   fingerprint: string;
 };
 
+function utcDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 function sortedDatedRows(
   rows: readonly ReliabilityJobRow[],
 ): (ReliabilityJobRow & { approvedAt: Date })[] {
-  return rows
+  const sorted = rows
     .filter(
       (r): r is ReliabilityJobRow & { approvedAt: Date } =>
         r.approvedAt !== null,
     )
     .sort((a, b) => a.approvedAt.getTime() - b.approvedAt.getTime());
+  // Collapse same-UTC-day cycles to the latest (spec Definitions: no zero-Δt rows that
+  // would inflate the cycle count / understate the mean interval). Sorted ascending, so
+  // a Map keyed by day keeps the last (latest) row per day.
+  const byDay = new Map<string, ReliabilityJobRow & { approvedAt: Date }>();
+  for (const r of sorted) byDay.set(utcDay(r.approvedAt), r);
+  return [...byDay.values()];
 }
 
 /** REQ-ENGINE-INSIGHT-001/002: build the customer-facing insight from approved jobs. */

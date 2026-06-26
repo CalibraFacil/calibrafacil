@@ -235,6 +235,143 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
     expect(body.recommendation.method).toBe("M5_family");
   });
 
+  // REQ-ENGINE-DATA-003 [HIGH RISK]: the family pool must NOT leak across tenants.
+  it("excludes another tenant's siblings from the family pool", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctxA = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const customerBId = await seedPortalCustomer({
+      labOrgId: ctxA.labOrgId,
+      clientOrgId: "client-b",
+      portalUserId: "user-b",
+      customerName: "Customer B",
+    });
+    const serviceId = await seedService({
+      organizationId: ctxA.labOrgId,
+      unitId: ctxA.labUnitId,
+      name: "Calibração",
+    });
+    const targetId = await seedAsset({
+      labUnitId: ctxA.labUnitId,
+      customerId: ctxA.customerId,
+      assetTypeId,
+      tag: "EQ-T",
+      model: "BAL-X",
+    });
+    await seedApprovedJob({
+      labOrgId: ctxA.labOrgId,
+      labUnitId: ctxA.labUnitId,
+      customerId: ctxA.customerId,
+      assetId: targetId,
+      serviceId,
+      createdBy: ctxA.portalUserId,
+      approvedAt: new Date("2025-06-01T00:00:00.000Z"),
+      conformity: "CONFORMING",
+      margins: [0.5],
+    });
+    // 3 siblings owned by Customer B (same type+model, 9 jobs) — would make the family
+    // ≥ 8 if the customerId scope on the pool regressed. They must be excluded.
+    for (let s = 0; s < 3; s += 1) {
+      const sibId = await seedAsset({
+        labUnitId: ctxA.labUnitId,
+        customerId: customerBId,
+        assetTypeId,
+        tag: `EQ-B${s}`,
+        model: "BAL-X",
+      });
+      for (let j = 0; j < 3; j += 1) {
+        await seedApprovedJob({
+          labOrgId: ctxA.labOrgId,
+          labUnitId: ctxA.labUnitId,
+          customerId: customerBId,
+          assetId: sibId,
+          serviceId,
+          createdBy: ctxA.portalUserId,
+          approvedAt: new Date(`2024-0${j * 3 + 1}-01T00:00:00.000Z`),
+          conformity: "CONFORMING",
+          margins: [0.5],
+        });
+      }
+    }
+
+    loginAsPortal({
+      userId: ctxA.portalUserId,
+      organizationId: ctxA.clientOrgId,
+    });
+    const body = await (await get(targetId)).json();
+    // No cross-tenant borrow → the thin target stays INSUFFICIENT_DATA.
+    expect(body.classification).toBe("INSUFFICIENT_DATA");
+  });
+
+  // REQ-ENGINE-DATA-003 [HIGH RISK]: legal-metrology siblings must NOT enter the pool.
+  it("excludes legal-metrology siblings from the family pool", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const serviceId = await seedService({
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      name: "Calibração",
+    });
+    const targetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-TY",
+      model: "BAL-Y",
+    });
+    await seedApprovedJob({
+      labOrgId: ctx.labOrgId,
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId: targetId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      approvedAt: new Date("2025-06-01T00:00:00.000Z"),
+      conformity: "CONFORMING",
+      margins: [0.5],
+    });
+    // 3 legal-metrology siblings (same tenant, type, model, 9 jobs) — excluded from the pool.
+    for (let s = 0; s < 3; s += 1) {
+      const sibId = await seedAsset({
+        labUnitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetTypeId,
+        tag: `EQ-LM${s}`,
+        model: "BAL-Y",
+        subjectToLegalMetrology: true,
+      });
+      for (let j = 0; j < 3; j += 1) {
+        await seedApprovedJob({
+          labOrgId: ctx.labOrgId,
+          labUnitId: ctx.labUnitId,
+          customerId: ctx.customerId,
+          assetId: sibId,
+          serviceId,
+          createdBy: ctx.portalUserId,
+          approvedAt: new Date(`2024-0${j * 3 + 1}-01T00:00:00.000Z`),
+          conformity: "CONFORMING",
+          margins: [0.5],
+        });
+      }
+    }
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const body = await (await get(targetId)).json();
+    expect(body.classification).toBe("INSUFFICIENT_DATA");
+  });
+
   it("returns INSUFFICIENT_DATA below the cycle floor", async () => {
     const assetTypeId = await ensureAssetType();
     const ctx = await seedPortalContext({
