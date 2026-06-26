@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildFamilyStats,
   buildIntervalInsight,
   type ReliabilityJobRow,
 } from "./interval-insight";
@@ -83,5 +84,67 @@ describe("buildIntervalInsight", () => {
     });
     expect(insight.classification).toBe("INSUFFICIENT_DATA");
     expect(insight.recommendation).toBeNull();
+  });
+});
+
+describe("buildFamilyStats", () => {
+  it("aggregates KNOWN cycles + the mean inter-cal interval (UNKNOWN excluded)", () => {
+    const stats = buildFamilyStats([
+      {
+        assetId: 1,
+        approvedAt: new Date("2024-01-01T00:00:00Z"),
+        asFoundConformity: "CONFORMING",
+      },
+      {
+        assetId: 1,
+        approvedAt: new Date("2025-01-01T00:00:00Z"),
+        asFoundConformity: "CONFORMING",
+      },
+      {
+        assetId: 2,
+        approvedAt: new Date("2024-01-01T00:00:00Z"),
+        asFoundConformity: "NON_CONFORMING",
+      },
+      {
+        assetId: 3,
+        approvedAt: new Date("2024-01-01T00:00:00Z"),
+        asFoundConformity: "UNKNOWN",
+      },
+    ]);
+    expect(stats?.populationN).toBe(3); // 2 conforming + 1 non-conforming; UNKNOWN dropped
+    expect(stats?.conformingS).toBe(2);
+    expect(stats?.meanTimeSinceCalMonths).toBeCloseTo(12, 0); // asset 1: ~12 months apart
+  });
+
+  it("returns null when there is no KNOWN cycle", () => {
+    expect(
+      buildFamilyStats([
+        {
+          assetId: 1,
+          approvedAt: new Date("2024-01-01T00:00:00Z"),
+          asFoundConformity: "UNKNOWN",
+        },
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("buildIntervalInsight with family (REQ-ENGINE-FAMILY-001)", () => {
+  it("borrows from the family (M5_family) when single-unit history is thin", () => {
+    const familyRows = Array.from({ length: 12 }, (_, i) => ({
+      assetId: 10 + (i % 4),
+      approvedAt: new Date(
+        `2024-${String((i % 12) + 1).padStart(2, "0")}-01T00:00:00Z`,
+      ),
+      asFoundConformity: "CONFORMING" as const,
+    }));
+    const insight = buildIntervalInsight({
+      rows: [row("2025-01-01T00:00:00.000Z", "CONFORMING", [0.5])], // 1 known < 3
+      currentIntervalMonths: 12,
+      subjectToLegalMetrology: false,
+      familyRows,
+    });
+    expect(insight.classification).toBe("STABLE");
+    expect(insight.recommendation?.method).toBe("M5_family");
   });
 });

@@ -1348,6 +1348,8 @@ export const portalRouter = new Hono<{
 
         const [existing] = await db
           .select({
+            assetTypeId: asset.assetTypeId,
+            model: asset.model,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
           })
@@ -1381,10 +1383,41 @@ export const portalRouter = new Hono<{
           )
           .orderBy(asc(calibrationJob.approvedAt));
 
+        // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
+        // history is thin and it has a model to pool by; same assetType+model,
+        // tenant-scoped, excluding legal-metrology siblings.
+        const singleKnown = rows.filter(
+          (r) =>
+            r.asFoundConformity === "CONFORMING" ||
+            r.asFoundConformity === "NON_CONFORMING",
+        ).length;
+        const familyModel = existing.model;
+        const familyRows =
+          singleKnown < 3 && familyModel !== null
+            ? await db
+                .select({
+                  assetId: calibrationJob.assetId,
+                  approvedAt: calibrationJob.approvedAt,
+                  asFoundConformity: calibrationJob.asFoundConformity,
+                })
+                .from(calibrationJob)
+                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                .where(
+                  and(
+                    eq(asset.assetTypeId, existing.assetTypeId),
+                    eq(asset.model, familyModel),
+                    eq(asset.subjectToLegalMetrology, false),
+                    inArray(calibrationJob.customerId, customerIds),
+                    eq(calibrationJob.status, "APPROVED"),
+                  ),
+                )
+            : [];
+
         const insight = buildIntervalInsight({
           rows,
           currentIntervalMonths: existing.calibrationIntervalMonths,
           subjectToLegalMetrology: existing.subjectToLegalMetrology,
+          familyRows,
         });
         return c.json(insight);
       } catch (error) {

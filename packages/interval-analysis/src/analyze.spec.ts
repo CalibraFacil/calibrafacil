@@ -149,6 +149,33 @@ describe("analyzeInterval — DRIFTING overrides extend (REQ-ENGINE-REC-004)", (
   });
 });
 
+describe("analyzeInterval — family borrow-strength (REQ-ENGINE-FAMILY-001)", () => {
+  it("uses the family (M5_family) when single-unit history is thin", () => {
+    const a = analyzeInterval({
+      cycles: [cyc("CONFORMING", 0.5, 0)], // 1 known < minKnownCycles(3)
+      currentIntervalMonths: 12,
+      subjectToLegalMetrology: false,
+      family: { populationN: 30, conformingS: 30, meanTimeSinceCalMonths: 12 },
+      config: R85,
+    });
+    expect(a.classification).toBe("STABLE");
+    expect(a.recommendation?.method).toBe("M5_family");
+    expect(a.recommendation?.action).toBe("extend");
+    expect(a.recommendation?.proposedIntervalMonths).toBe(120);
+  });
+
+  it("falls back to INSUFFICIENT_DATA when the family is also below minFamilyN", () => {
+    const a = analyzeInterval({
+      cycles: [cyc("CONFORMING", 0.5, 0)],
+      currentIntervalMonths: 12,
+      subjectToLegalMetrology: false,
+      family: { populationN: 5, conformingS: 4, meanTimeSinceCalMonths: 12 },
+    });
+    expect(a.classification).toBe("INSUFFICIENT_DATA");
+    expect(a.recommendation).toBeNull();
+  });
+});
+
 describe("analyzeInterval — provenance (REQ-ENGINE-011)", () => {
   it("records the engine version, config snapshot, and a fingerprint", () => {
     const a = analyzeInterval({

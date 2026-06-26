@@ -35,6 +35,7 @@ export type IntervalConfig = {
   k: number; // drift guard-band sigmas
   minMonths: number;
   maxMonths: number;
+  minFamilyN: number; // min KNOWN family cycles for M5_family borrow-strength
 };
 
 export const DEFAULT_INTERVAL_CONFIG: IntervalConfig = {
@@ -45,6 +46,7 @@ export const DEFAULT_INTERVAL_CONFIG: IntervalConfig = {
   k: 2,
   minMonths: 1,
   maxMonths: 120,
+  minFamilyN: 8,
 };
 
 export type Classification =
@@ -55,10 +57,17 @@ export type Classification =
 
 export type Recommendation = {
   action: "extend" | "keep" | "shorten";
-  method: "M2_drift" | "M5_reliability";
+  method: "M2_drift" | "M5_reliability" | "M5_family";
   proposedIntervalMonths: number;
   /** The reliability bound that drove the decision (null for a drift-driven one). */
   reliabilityBound: number | null;
+};
+
+/** Aggregated family stats for M5 borrow-strength (REQ-ENGINE-FAMILY-001/004). */
+export type FamilyStats = {
+  populationN: number;
+  conformingS: number;
+  meanTimeSinceCalMonths: number;
 };
 
 export type IntervalAnalysis = {
@@ -101,10 +110,61 @@ function fingerprint(
   return `sha256:${bytesToHex(sha256(utf8ToBytes(canonical)))}`;
 }
 
+/**
+ * REQ-ENGINE-REC-001/002/003 + FAMILY-002/004: the reliability-based recommendation —
+ * Clopper–Pearson CI vs R* drives extend/shorten/keep; the M5 interval is the proposal.
+ * Shared by the single-unit (M5_reliability) and family (M5_family) paths.
+ */
+function reliabilityRecommendation(input: {
+  conforming: number;
+  known: number;
+  meanTimeSinceCalMonths: number;
+  currentIntervalMonths: number | null;
+  config: IntervalConfig;
+  method: "M5_reliability" | "M5_family";
+}): Recommendation {
+  const m5 = m5Estimate({
+    populationN: input.known,
+    conformingS: input.conforming,
+    meanTimeSinceCalMonths: input.meanTimeSinceCalMonths,
+    targetReliability: input.config.targetReliability,
+  });
+  const m5Interval = clampedMonths(m5.intervalMonths, input.config);
+  const ci = clopperPearsonInterval(
+    input.conforming,
+    input.known,
+    input.config.confidence,
+  );
+  if (ci.lower > input.config.targetReliability) {
+    return {
+      action: "extend",
+      method: input.method,
+      proposedIntervalMonths: m5Interval,
+      reliabilityBound: ci.lower,
+    };
+  }
+  if (ci.upper < input.config.targetReliability) {
+    return {
+      action: "shorten",
+      method: input.method,
+      proposedIntervalMonths: m5Interval,
+      reliabilityBound: ci.upper,
+    };
+  }
+  return {
+    action: "keep",
+    method: input.method,
+    proposedIntervalMonths: input.currentIntervalMonths ?? m5Interval,
+    reliabilityBound: ci.lower,
+  };
+}
+
 export function analyzeInterval(input: {
   cycles: readonly IntervalCycle[];
   currentIntervalMonths: number | null;
   subjectToLegalMetrology: boolean;
+  /** Aggregated family stats for borrow-strength when single-unit history is thin. */
+  family?: FamilyStats;
   config?: Partial<IntervalConfig>;
 }): IntervalAnalysis {
   const config: IntervalConfig = {
@@ -133,11 +193,26 @@ export function analyzeInterval(input: {
     return { classification: "LEGAL_FIXED", recommendation: null, ...base };
   }
 
-  // REQ-ENGINE-001: too few KNOWN cycles OR too little coverage → no recommendation.
+  // REQ-ENGINE-001: too few KNOWN cycles OR too little coverage for the single unit.
   if (
     summary.known < config.minKnownCycles ||
     summary.coverage < config.minCoverage
   ) {
+    // REQ-ENGINE-FAMILY-001: borrow strength from the family when it has enough history.
+    if (input.family && input.family.populationN >= config.minFamilyN) {
+      return {
+        classification: "STABLE",
+        recommendation: reliabilityRecommendation({
+          conforming: input.family.conformingS,
+          known: input.family.populationN,
+          meanTimeSinceCalMonths: input.family.meanTimeSinceCalMonths,
+          currentIntervalMonths: input.currentIntervalMonths,
+          config,
+          method: "M5_family",
+        }),
+        ...base,
+      };
+    }
     return {
       classification: "INSUFFICIENT_DATA",
       recommendation: null,
@@ -178,47 +253,17 @@ export function analyzeInterval(input: {
   const span = Math.max(...knownTimes) - Math.min(...knownTimes);
   const meanTimeSinceCalMonths =
     span > 0 ? span / (summary.known - 1) : config.minMonths;
-  const m5 = m5Estimate({
-    populationN: summary.known,
-    conformingS: summary.conforming,
-    meanTimeSinceCalMonths,
-    targetReliability: config.targetReliability,
-  });
-  const m5Interval = clampedMonths(m5.intervalMonths, config);
-  const ci = clopperPearsonInterval(
-    summary.conforming,
-    summary.known,
-    config.confidence,
-  );
-
-  let action: Recommendation["action"];
-  let reliabilityBound: number;
-  let proposed: number;
-  if (ci.lower > config.targetReliability) {
-    action = "extend";
-    reliabilityBound = ci.lower;
-    proposed = m5Interval;
-  } else if (ci.upper < config.targetReliability) {
-    action = "shorten";
-    reliabilityBound = ci.upper;
-    proposed = m5Interval;
-  } else {
-    action = "keep";
-    reliabilityBound = ci.lower;
-    proposed =
-      input.currentIntervalMonths === null
-        ? m5Interval
-        : input.currentIntervalMonths;
-  }
 
   return {
     classification: "STABLE",
-    recommendation: {
-      action,
+    recommendation: reliabilityRecommendation({
+      conforming: summary.conforming,
+      known: summary.known,
+      meanTimeSinceCalMonths,
+      currentIntervalMonths: input.currentIntervalMonths,
+      config,
       method: "M5_reliability",
-      proposedIntervalMonths: proposed,
-      reliabilityBound,
-    },
+    }),
     ...base,
   };
 }

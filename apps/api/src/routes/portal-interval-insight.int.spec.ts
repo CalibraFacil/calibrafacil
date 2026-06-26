@@ -32,6 +32,7 @@ async function seedAsset(params: {
   customerId: number;
   assetTypeId: number;
   tag: string;
+  model?: string;
   subjectToLegalMetrology?: boolean;
 }): Promise<number> {
   const [row] = await db
@@ -43,6 +44,7 @@ async function seedAsset(params: {
       name: `Ativo ${params.tag}`,
       serialNumber: `SN-${params.tag}`,
       tag: params.tag,
+      model: params.model ?? null,
       status: "ACTIVE",
       subjectToLegalMetrology: params.subjectToLegalMetrology ?? false,
     })
@@ -160,6 +162,71 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
     expect(body.recommendation.action).toBe("shorten");
     expect(body.series).toHaveLength(5);
     expect(body.fingerprint).toMatch(/^sha256:/);
+  });
+
+  it("borrows from the family (M5_family) when single-unit history is thin", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const serviceId = await seedService({
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      name: "Calibração",
+    });
+    // Target: same model, but only 1 approved job (thin → would be INSUFFICIENT alone).
+    const targetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-T",
+      model: "BAL-X",
+    });
+    await seedApprovedJob({
+      labOrgId: ctx.labOrgId,
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId: targetId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      approvedAt: new Date("2025-06-01T00:00:00.000Z"),
+      conformity: "CONFORMING",
+      margins: [0.5],
+    });
+    // 3 siblings (same assetType + model), each 3 approved CONFORMING jobs → family ≥ 8.
+    for (let s = 0; s < 3; s += 1) {
+      const sibId = await seedAsset({
+        labUnitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetTypeId,
+        tag: `EQ-S${s}`,
+        model: "BAL-X",
+      });
+      for (let j = 0; j < 3; j += 1) {
+        await seedApprovedJob({
+          labOrgId: ctx.labOrgId,
+          labUnitId: ctx.labUnitId,
+          customerId: ctx.customerId,
+          assetId: sibId,
+          serviceId,
+          createdBy: ctx.portalUserId,
+          approvedAt: new Date(`2024-0${j * 3 + 1}-01T00:00:00.000Z`),
+          conformity: "CONFORMING",
+          margins: [0.5],
+        });
+      }
+    }
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const body = await (await get(targetId)).json();
+    expect(body.classification).toBe("STABLE");
+    expect(body.recommendation.method).toBe("M5_family");
   });
 
   it("returns INSUFFICIENT_DATA below the cycle floor", async () => {

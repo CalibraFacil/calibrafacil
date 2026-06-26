@@ -3,6 +3,7 @@ export {
   DEFAULT_INTERVAL_CONFIG,
   ENGINE_VERSION,
   type Classification,
+  type FamilyStats,
   type IntervalAnalysis,
   type IntervalConfig,
   type IntervalCycle,
