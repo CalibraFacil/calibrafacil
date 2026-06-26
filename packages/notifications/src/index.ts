@@ -80,3 +80,12 @@ export {
   type ContactTopic,
   type TopicSubscription,
 } from "./resend-contacts-client";
+
+// Resend marketing Broadcasts (operator-triggered product-update sends)
+export {
+  sendMarketingBroadcast,
+  type SendMarketingBroadcastEnv,
+  type SendMarketingBroadcastOptions,
+  type SendMarketingBroadcastResult,
+  type SendMarketingBroadcastDeps,
+} from "./resend-broadcast";
