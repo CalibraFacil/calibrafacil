@@ -379,3 +379,68 @@ function installResizeObserver() {
     value: ResizeObserverStub,
   })
 }
+
+function installConditionalMediation(available: boolean) {
+  const isConditionalMediationAvailable = vi.fn(async () => available)
+  Object.defineProperty(window, 'PublicKeyCredential', {
+    configurable: true,
+    value: { isConditionalMediationAvailable },
+  })
+  return isConditionalMediationAvailable
+}
+
+describe('SignInForm passkey conditional-UI autofill', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.clearAllMocks()
+    installResizeObserver()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, assign: authMocks.locationAssign },
+    })
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.clearAllMocks()
+    Reflect.deleteProperty(globalThis, 'ResizeObserver')
+    Reflect.deleteProperty(window, 'calibraBridge')
+    Reflect.deleteProperty(window, 'PublicKeyCredential')
+    Reflect.deleteProperty(window, 'isSecureContext')
+  })
+
+  it('arms a conditional passkey request on mount and completes sign-in on success', async () => {
+    const startSync = vi.fn(async () => undefined)
+    installBridge({ startSync })
+    installConditionalMediation(true)
+    authMocks.signInPasskey.mockResolvedValue({ error: null })
+
+    render(<SignInForm />)
+
+    await waitFor(() => {
+      expect(authMocks.signInPasskey).toHaveBeenCalledWith({ autoFill: true })
+    })
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/dashboard' })
+    })
+    expect(authMocks.clearDesktopSignedOut).toHaveBeenCalledTimes(1)
+    expect(startSync).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not arm a passkey request when conditional mediation is unavailable', async () => {
+    const isConditionalMediationAvailable = installConditionalMediation(false)
+
+    render(<SignInForm />)
+
+    await waitFor(() => {
+      expect(isConditionalMediationAvailable).toHaveBeenCalled()
+    })
+    expect(authMocks.signInPasskey).not.toHaveBeenCalled()
+  })
+})

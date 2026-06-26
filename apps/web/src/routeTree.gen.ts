@@ -60,6 +60,7 @@ import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboa
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
 import { Route as DashboardSettingsPortalDomainRouteImport } from './routes/dashboard/settings/portal-domain'
+import { Route as DashboardSettingsPasskeysRouteImport } from './routes/dashboard/settings/passkeys'
 import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
 import { Route as DashboardSettingsNotificationsRouteImport } from './routes/dashboard/settings/notifications'
 import { Route as DashboardSettingsMembersRouteImport } from './routes/dashboard/settings/members'
@@ -402,6 +403,12 @@ const DashboardSettingsPortalDomainRoute =
   DashboardSettingsPortalDomainRouteImport.update({
     id: '/portal-domain',
     path: '/portal-domain',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsPasskeysRoute =
+  DashboardSettingsPasskeysRouteImport.update({
+    id: '/passkeys',
+    path: '/passkeys',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsOrganizationRoute =
@@ -918,6 +925,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/passkeys': typeof DashboardSettingsPasskeysRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
@@ -1031,6 +1039,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/passkeys': typeof DashboardSettingsPasskeysRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
@@ -1162,6 +1171,7 @@ export interface FileRoutesById {
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/passkeys': typeof DashboardSettingsPasskeysRoute
   '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
@@ -1295,6 +1305,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/passkeys'
     | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
@@ -1408,6 +1419,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/passkeys'
     | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
@@ -1538,6 +1550,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/members'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/passkeys'
     | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
@@ -1971,6 +1984,13 @@ declare module '@tanstack/react-router' {
       path: '/portal-domain'
       fullPath: '/dashboard/settings/portal-domain'
       preLoaderRoute: typeof DashboardSettingsPortalDomainRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/passkeys': {
+      id: '/dashboard/settings/passkeys'
+      path: '/passkeys'
+      fullPath: '/dashboard/settings/passkeys'
+      preLoaderRoute: typeof DashboardSettingsPasskeysRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/organization': {
@@ -2903,6 +2923,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsMembersRoute: typeof DashboardSettingsMembersRoute
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
   DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
+  DashboardSettingsPasskeysRoute: typeof DashboardSettingsPasskeysRoute
   DashboardSettingsPortalDomainRoute: typeof DashboardSettingsPortalDomainRoute
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute
   DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
@@ -2930,6 +2951,7 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsMembersRoute: DashboardSettingsMembersRoute,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
     DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
+    DashboardSettingsPasskeysRoute: DashboardSettingsPasskeysRoute,
     DashboardSettingsPortalDomainRoute: DashboardSettingsPortalDomainRoute,
     DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
     DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,

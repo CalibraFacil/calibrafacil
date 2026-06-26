@@ -1449,6 +1449,52 @@ async function findDefaultActiveOrganizationId(
   return membership?.organizationId ?? null;
 }
 
+// Web origins where the LAB UI is actually served. These are the only origins a
+// LAB passkey ceremony may run from; portal/ops/api hosts and the Electron
+// `app://` scheme are intentionally excluded (the LAB UI is not served there and
+// custom schemes are not valid WebAuthn origins). Mirrors the web entries in
+// PROD_TRUSTED_ORIGINS / DEV_TRUSTED_ORIGINS.
+const PROD_LAB_WEB_ORIGINS = [
+  "https://calibrafacil.com",
+  "https://www.calibrafacil.com",
+];
+
+const DEV_LAB_WEB_ORIGINS = [
+  "https://dev-web.calibrafacil.com",
+  "http://localhost:5173",
+  "https://localhost:5173",
+  "http://192.168.0.10:5173",
+  "https://192.168.0.10:5173",
+];
+
+// The relying-party ID must be a registrable domain so a single credential works
+// across the apex and every subdomain (calibrafacil.com + www). Returning
+// url.hostname (e.g. "www.calibrafacil.com") would scope the credential to that
+// exact host and break the apex, and vice-versa. localhost / LAN IPs keep their
+// own host. `PASSKEY_RP_ID` lets ops pin it explicitly if ever needed.
+function resolveLabPasskeyRpId(hostname: string): string {
+  const explicit = readEnv("PASSKEY_RP_ID");
+  if (explicit) return explicit;
+
+  const normalized = hostname.toLowerCase();
+  if (
+    normalized === "calibrafacil.com" ||
+    normalized.endsWith(".calibrafacil.com")
+  ) {
+    return "calibrafacil.com";
+  }
+
+  return normalized;
+}
+
+function resolveLabPasskeyOrigins(
+  isProduction: boolean,
+  primaryOrigin: string,
+): string[] {
+  const base = isProduction ? PROD_LAB_WEB_ORIGINS : DEV_LAB_WEB_ORIGINS;
+  return [...new Set([primaryOrigin, ...base])];
+}
+
 function createLabPasskeyPluginOptions(isProduction: boolean) {
   const webBaseUrl = resolveWebBaseUrl(isProduction);
 
@@ -1457,8 +1503,16 @@ function createLabPasskeyPluginOptions(isProduction: boolean) {
 
     return {
       rpName: "CalibraFácil",
-      rpID: url.hostname,
-      origin: url.origin,
+      rpID: resolveLabPasskeyRpId(url.hostname),
+      origin: resolveLabPasskeyOrigins(isProduction, url.origin),
+      // Leave authenticatorAttachment unset so platform authenticators
+      // (Apple/Google/Windows) AND password managers (1Password, Bitwarden) and
+      // cross-platform keys can all register. residentKey:"preferred" yields a
+      // discoverable credential (required for conditional-UI autofill on sign-in).
+      authenticatorSelection: {
+        residentKey: "preferred",
+        userVerification: "preferred",
+      },
       advanced: {
         webAuthnChallengeCookie: "lab-passkey-challenge",
       },

@@ -113,7 +113,6 @@ describe('ClaimAccountPage', () => {
     await waitFor(() => {
       expect(claimMocks.addPasskey).toHaveBeenCalledWith({
         name: 'CalibraFácil',
-        authenticatorAttachment: 'platform',
         context: 'setup-token',
       })
     })
