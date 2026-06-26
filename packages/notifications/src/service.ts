@@ -2968,6 +2968,10 @@ export async function sendPortalDueDigests(
         overdueCount > 0
           ? `${portalBaseUrl}/assets?dueStatus=overdue`
           : `${portalBaseUrl}/calendar`;
+      // The digest is a marketing-class email: expose a native unsubscribe via
+      // the portal notification-settings page (one-click List-Unsubscribe-Post
+      // is out of scope here).
+      const unsubscribeUrl = `${portalBaseUrl}/settings/notifications`;
 
       const emailElement = PortalDueDigestEmail({
         recipientName: recipient.name ?? "Usuário",
@@ -2998,6 +3002,9 @@ export async function sendPortalDueDigests(
         subject: `Resumo de calibrações: ${subjectParts.join(" · ")}`,
         html,
         replyTo: getReplyToEmail(emailBrand),
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        },
       });
 
       result.sent += 1;

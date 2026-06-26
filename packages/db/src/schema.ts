@@ -6881,6 +6881,65 @@ export const webhookEventLogRelations = relations(
 );
 
 // =============================================================================
+// EMAIL SUPPRESSION - unsubscribe / complaint / hard-bounce suppression list
+// =============================================================================
+
+/** Whether an address is suppressed for marketing-class email only, or all. */
+export type EmailSuppressionScope = "marketing" | "all";
+
+/** Why the address was suppressed. */
+export type EmailSuppressionReason =
+  | "unsubscribed"
+  | "complaint"
+  | "hard_bounce"
+  | "manual";
+
+/** What recorded the suppression. */
+export type EmailSuppressionSource = "resend_webhook" | "admin" | "api";
+
+/**
+ * Addresses that must not be emailed (at a given scope). Driven by Resend
+ * complaint/hard-bounce webhooks plus manual/API opt-outs. Email is stored
+ * lowercased/trimmed; UNIQUE (email, scope) makes the suppress upsert idempotent.
+ */
+export const emailSuppression = pgTable(
+  "email_suppression",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull(),
+    scope: text("scope")
+      .$type<EmailSuppressionScope>()
+      .default("all")
+      .notNull(),
+    reason: text("reason").$type<EmailSuppressionReason>().notNull(),
+    source: text("source").$type<EmailSuppressionSource>().notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("email_suppression_email_scope_uidx").on(
+      table.email,
+      table.scope,
+    ),
+    index("email_suppression_email_idx").on(table.email),
+  ],
+);
+
+/**
+ * Minimal dedup ledger for inbound Resend (Svix-signed) webhook deliveries.
+ * Delivery is at-least-once, so the unique `svix_id` lets a redelivery be
+ * recognized and skipped before the suppression side effect is applied again.
+ */
+export const emailWebhookEvent = pgTable("email_webhook_event", {
+  id: serial("id").primaryKey(),
+  svixId: text("svix_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+});
+
+// =============================================================================
 // NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications
 // =============================================================================
 

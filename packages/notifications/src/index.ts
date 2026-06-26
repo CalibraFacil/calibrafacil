@@ -37,6 +37,18 @@ export {
   type NotificationResult,
 } from "./service";
 
+// Email suppression / unsubscribe list (issue #577)
+export {
+  suppressEmail,
+  isEmailSuppressed,
+  normalizeSuppressionEmail,
+  suppressionScopesToCheck,
+  type SuppressEmailInput,
+  type EmailSuppressionScope,
+  type EmailSuppressionReason,
+  type EmailSuppressionSource,
+} from "./suppression";
+
 // Service-order customer-facing email dispatcher (mini-spec A)
 export {
   sendServiceOrderCustomerEmail,
