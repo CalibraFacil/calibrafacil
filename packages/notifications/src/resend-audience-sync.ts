@@ -83,6 +83,13 @@ export interface ResendAudienceSyncResult {
   updated: number;
   suppressed: number;
   failed: number;
+  /**
+   * Count of contacts synced WITHOUT their custom `properties` because Resend
+   * rejected an unknown property (422) — the contact still landed, only the
+   * metadata was dropped. A non-zero value signals the operator should
+   * pre-define the properties in the Resend dashboard.
+   */
+  propertiesSkipped: number;
 }
 
 interface ResolvedSyncConfig {
@@ -202,6 +209,7 @@ function buildUpsertInput(
 type ContactOutcome = {
   outcome: "created" | "updated" | "failed";
   suppressed: boolean;
+  propertiesSkipped: boolean;
 };
 
 export async function syncLabUsersToResendAudience(
@@ -216,6 +224,7 @@ export async function syncLabUsersToResendAudience(
     updated: 0,
     suppressed: 0,
     failed: 0,
+    propertiesSkipped: 0,
   };
 
   // REQ-SYNC-006: hard safety gate. Anything other than exactly "true" is a
@@ -262,17 +271,21 @@ export async function syncLabUsersToResendAudience(
       // Suppression-aware: banned users OR addresses on the marketing
       // suppression list are upserted unsubscribed, with no opt-in topics.
       const suppressed = contact.banned || (await isSuppressed(contact.email));
-      const { created } = await client.upsertContact(
+      const { created, propertiesSkipped } = await client.upsertContact(
         buildUpsertInput(contact, suppressed, config),
       );
-      return { outcome: created ? "created" : "updated", suppressed };
+      return {
+        outcome: created ? "created" : "updated",
+        suppressed,
+        propertiesSkipped,
+      };
     } catch (error) {
       // REQ-SYNC-007: one contact's HTTP error must not abort the whole run.
       logger.error("[MarketingContactSync] contact upsert failed", {
         email: contact.email,
         error: error instanceof Error ? error.message : "unknown error",
       });
-      return { outcome: "failed", suppressed: false };
+      return { outcome: "failed", suppressed: false, propertiesSkipped: false };
     }
   }
 
@@ -280,11 +293,14 @@ export async function syncLabUsersToResendAudience(
     const batch = contacts.slice(i, i + CONTACT_BATCH_SIZE);
     // oxlint-disable-next-line eslint/no-await-in-loop -- bounded batches: each batch must settle before the next so concurrency against the Resend API stays capped.
     const outcomes = await Promise.all(batch.map(syncOneContact));
-    for (const { outcome, suppressed } of outcomes) {
+    for (const { outcome, suppressed, propertiesSkipped } of outcomes) {
       if (outcome === "created") result.created += 1;
       else if (outcome === "updated") result.updated += 1;
       else result.failed += 1;
       if (suppressed && outcome !== "failed") result.suppressed += 1;
+      if (propertiesSkipped && outcome !== "failed") {
+        result.propertiesSkipped += 1;
+      }
     }
   }
 
