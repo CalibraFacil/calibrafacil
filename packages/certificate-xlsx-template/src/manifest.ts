@@ -44,6 +44,18 @@ const DANGEROUS_FIELD_SEGMENTS = new Set([
   "constructor",
   "prototype",
 ]);
+// ISO/IEC 17025:2017 §7.8.4.3: a calibration certificate or label shall not
+// contain any recommendation on the calibration interval. The interval /
+// next-calibration date is the equipment owner's (customer's) decision, set in
+// the portal (see apps/api/src/lib/portal-asset-interval.ts) — it must never be
+// bound onto a certificate cell. These leaf segments are forbidden in ANY
+// binding path, even under an otherwise-allowed root (e.g. `asset`).
+const INTERVAL_RECOMMENDATION_SEGMENTS = new Set([
+  "nextCalibrationDate",
+  "next_calibration_date",
+  "calibrationIntervalMonths",
+  "calibration_interval_months",
+]);
 
 export const scalarCellBindingSchema = z
   .object({
@@ -120,7 +132,7 @@ export type CertificateXlsxBindingManifest = z.infer<
 >;
 
 export type CertificateXlsxManifestFieldWarning = WorkbookWarning & {
-  code: "unknown_field_path";
+  code: "unknown_field_path" | "interval_recommendation_field";
 };
 
 export function validateCertificateXlsxBindingManifest(
@@ -236,6 +248,16 @@ function pushFieldPathWarning(
       fieldPath,
     });
   }
+
+  if (hasIntervalRecommendationSegment(segments)) {
+    warnings.push({
+      code: "interval_recommendation_field",
+      message: `Binding "${bindingId}" references a calibration-interval field "${fieldPath}". A calibration certificate must not contain a calibration-interval recommendation (NBR ISO/IEC 17025 §7.8.4.3).`,
+      sheet,
+      cell,
+      fieldPath,
+    });
+  }
 }
 
 function pushRelativeFieldPathWarning(
@@ -256,6 +278,16 @@ function pushRelativeFieldPathWarning(
       fieldPath,
     });
   }
+
+  if (hasIntervalRecommendationSegment(segments)) {
+    warnings.push({
+      code: "interval_recommendation_field",
+      message: `Binding "${bindingId}" references a calibration-interval field "${fieldPath}". A calibration certificate must not contain a calibration-interval recommendation (NBR ISO/IEC 17025 §7.8.4.3).`,
+      sheet,
+      cell,
+      fieldPath,
+    });
+  }
 }
 
 function splitFieldPath(fieldPath: string): string[] {
@@ -267,4 +299,10 @@ function splitFieldPath(fieldPath: string): string[] {
 
 function hasDangerousSegment(segments: string[]): boolean {
   return segments.some((segment) => DANGEROUS_FIELD_SEGMENTS.has(segment));
+}
+
+function hasIntervalRecommendationSegment(segments: string[]): boolean {
+  return segments.some((segment) =>
+    INTERVAL_RECOMMENDATION_SEGMENTS.has(segment),
+  );
 }

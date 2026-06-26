@@ -51,6 +51,7 @@ export type WorkbookWarning = {
     | "missing_required_field"
     | "unknown_field"
     | "unknown_field_path"
+    | "interval_recommendation_field"
     | "volatile_formula"
     | "image_source_missing"
     | "image_replacement_unavailable"

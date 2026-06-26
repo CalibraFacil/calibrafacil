@@ -605,6 +605,79 @@ describe("certificate XLSX binding manifest", () => {
       ]),
     );
   });
+
+  // ISO/IEC 17025:2017 §7.8.4.3 — a calibration certificate/label must NOT contain
+  // a calibration-interval recommendation. A binding to a next-cal / interval field
+  // is flagged even under an otherwise-allowed root (`asset`, `assetSnapshot`), so
+  // the API's "any warning → 400" enforcement blocks it. A normal field is unaffected.
+  it("flags calibration-interval field bindings (§7.8.4.3)", () => {
+    const manifest: CertificateXlsxBindingManifest = {
+      schemaVersion: "calibrafacil.certificateXlsxBinding.v1",
+      requiredFields: [],
+      governedFields: [],
+      scalarBindings: [
+        {
+          id: "next-cal",
+          sheet: "Certificado",
+          cell: "C5",
+          fieldPath: "asset.nextCalibrationDate",
+        },
+        {
+          id: "interval",
+          sheet: "Certificado",
+          cell: "C6",
+          fieldPath: "assetSnapshot.calibrationIntervalMonths",
+        },
+        {
+          id: "fine",
+          sheet: "Certificado",
+          cell: "C7",
+          fieldPath: "asset.serialNumber",
+        },
+      ],
+      imageBindings: [],
+      tableBindings: [
+        {
+          id: "rows",
+          kind: "table",
+          arrayPath: "resultRows",
+          sheet: "Certificado",
+          templateRange: "A10:B10",
+          itemAlias: "row",
+          columns: [{ cell: "A10", path: "next_calibration_date" }],
+          overflowPolicy: "appendRows",
+        },
+      ],
+      renderPolicy: {
+        formulas: "preserve",
+        macros: "reject",
+        externalLinks: "reject",
+        converter: "gotenberg-libreoffice",
+      },
+    };
+
+    const warnings = getCertificateXlsxManifestFieldWarnings(manifest);
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "interval_recommendation_field",
+          fieldPath: "asset.nextCalibrationDate",
+        }),
+        expect.objectContaining({
+          code: "interval_recommendation_field",
+          fieldPath: "assetSnapshot.calibrationIntervalMonths",
+        }),
+        expect.objectContaining({
+          code: "interval_recommendation_field",
+          fieldPath: "next_calibration_date",
+        }),
+      ]),
+    );
+    // The legitimate serial-number binding is not flagged as an interval field.
+    expect(
+      warnings.some((warning) => warning.fieldPath === "asset.serialNumber"),
+    ).toBe(false);
+  });
 });
 
 describe("GotenbergXlsxToPdfConverter", () => {
