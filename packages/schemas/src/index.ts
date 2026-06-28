@@ -396,9 +396,18 @@ export const CreateAssetSchema = z.object({
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
   specifications: z.record(z.string(), z.unknown()).optional(),
-  // Subject to legal metrology (Inmetro). Governs whether the service-order
-  // repair-seal (Etiqueta de Reparo) + lacre fields are shown for this asset.
+  // Subject to legal metrology (Inmetro). DEPRECATED in favour of `metrologyRegime`
+  // (kept for legacy clients; the API derives one from the other). Governs whether the
+  // service-order repair-seal (Etiqueta de Reparo) + lacre fields are shown for this asset.
   subjectToLegalMetrology: z.boolean().optional().default(false),
+  // Legal-metrology regime + the regulation-fixed VERIFICATION periodicity (Track 2,
+  // independent of the customer-owned calibration interval). `z.lazy` defers to the
+  // schemas declared below (declaration order). Spec: specs/legal-metrology-regime.
+  metrologyRegime: z.lazy(() => MetrologyRegimeSchema).optional(),
+  regulatedInterval: z
+    .lazy(() => RegulatedIntervalSchema)
+    .nullable()
+    .optional(),
 });
 
 export type CreateAssetInput = z.infer<typeof CreateAssetSchema>;
@@ -452,6 +461,78 @@ export const SetCalibrationIntervalSchema = z.object({
 export type SetCalibrationIntervalInput = z.infer<
   typeof SetCalibrationIntervalSchema
 >;
+
+/**
+ * Legal-metrology regime of an instrument. An instrument under Brazilian legal
+ * metrological control (Inmetro / RBMLQ-I) has a verification periodicity FIXED BY
+ * REGULATION; this is INDEPENDENT of the customer-owned calibration interval
+ * (`SetCalibrationIntervalSchema`) — a regulated instrument the lab also RBC-calibrates
+ * carries both. `UNKNOWN` = the lab has not yet determined the enquadramento.
+ * Spec: `specs/legal-metrology-regime/spec.md` (REQ-MLR-001).
+ */
+export const MetrologyRegimeSchema = z.enum(["INDUSTRIAL", "LEGAL", "UNKNOWN"]);
+export type MetrologyRegime = z.infer<typeof MetrologyRegimeSchema>;
+
+const regulatedMonths = () =>
+  z
+    .number()
+    .int("A periodicidade deve ser um número inteiro de meses")
+    .min(1, "A periodicidade deve ser de pelo menos 1 mês")
+    .max(600, "A periodicidade deve ser de no máximo 600 meses");
+
+const regulatedIntervalBase = {
+  // The governing act, verbatim (e.g. "Portaria Inmetro nº 157/2022").
+  regulationReference: z
+    .string()
+    .trim()
+    .min(1, "A referência do regulamento (Portaria) é obrigatória"),
+  // true (balanças/bombas/esfigmo) → the Ipem runs the cronograma, so the derived date is
+  // indicative, NOT a hard national deadline.
+  operationalizedByDelegate: z.boolean(),
+};
+
+/**
+ * The regulation-fixed legal-verification periodicity, as a shape-faithful discriminated
+ * union (the period is NOT one scalar — research 2026-06-28, primary-sourced):
+ *  - `fixed_months`            a fixed national value (taxímetro 24, etilômetro 12) OR an
+ *                              annual cadence anchored to the calendar year (balanças/IPNA).
+ *  - `max_months_from_install` a ceiling from year of installation (hidrômetros ≤84).
+ *  - `per_technology`          resolved per the instrument's technology (gás: diafragma 120 /
+ *                              ultrassônico 180 / turbina-rotativo 60).
+ *  - `not_nationally_fixed`    no national periodic interval (energia elétrica → cite ANEEL).
+ * Spec: `specs/legal-metrology-regime/spec.md` (REQ-MLR-010/011).
+ */
+export const RegulatedIntervalSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("fixed_months"),
+    valueMonths: regulatedMonths(),
+    anchor: z.enum(["last_verification", "calendar_year"]),
+    ...regulatedIntervalBase,
+  }),
+  z.object({
+    kind: z.literal("max_months_from_install"),
+    valueMonths: regulatedMonths(),
+    anchor: z.literal("install_year"),
+    ...regulatedIntervalBase,
+  }),
+  z.object({
+    kind: z.literal("per_technology"),
+    technology: z
+      .string()
+      .trim()
+      .min(1, "A tecnologia do instrumento é obrigatória"),
+    valueMonths: regulatedMonths(),
+    anchor: z.enum(["last_verification", "first_verification"]),
+    ...regulatedIntervalBase,
+  }),
+  z.object({
+    kind: z.literal("not_nationally_fixed"),
+    note: z.string().trim().optional(),
+    ...regulatedIntervalBase,
+  }),
+]);
+
+export type RegulatedInterval = z.infer<typeof RegulatedIntervalSchema>;
 
 // =============================================================================
 // CALIBRATION REQUEST SCHEMAS - Portal Intake Queue

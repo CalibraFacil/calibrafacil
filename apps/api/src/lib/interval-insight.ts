@@ -5,8 +5,9 @@
  * the portal route; this maps the approved-job rows into the pure engine's input and
  * shapes the customer-facing payload (classification + recommendation + trend series).
  *
- * The interval is the customer's decision; this only PROPOSES. Legal-metrology assets
- * are handled by the engine (subjectToLegalMetrology → LEGAL_FIXED, no suggestion).
+ * The interval is the customer's decision; this only PROPOSES. The engine is
+ * regime-agnostic (REQ-MLR-050): a legal-metrology asset gets a calibration suggestion
+ * like any other; its regulation-fixed verification periodicity is a separate track.
  */
 
 import {
@@ -94,7 +95,7 @@ export type IntervalInsightPoint = {
 };
 
 export type IntervalInsight = {
-  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING" | "LEGAL_FIXED";
+  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
   reliability: number | null;
   coverage: number;
   recommendation: Recommendation | null;
@@ -128,7 +129,6 @@ function sortedDatedRows(
 export function buildIntervalInsight(input: {
   rows: readonly ReliabilityJobRow[];
   currentIntervalMonths: number | null;
-  subjectToLegalMetrology: boolean;
   /** Family siblings' approved cycles — the engine borrows strength when single-unit is thin. */
   familyRows?: readonly FamilyJobRow[];
   config?: Partial<IntervalConfig>;
@@ -147,7 +147,6 @@ export function buildIntervalInsight(input: {
   const analysis = analyzeInterval({
     cycles,
     currentIntervalMonths: input.currentIntervalMonths,
-    subjectToLegalMetrology: input.subjectToLegalMetrology,
     config: input.config,
     ...(family ? { family } : {}),
   });

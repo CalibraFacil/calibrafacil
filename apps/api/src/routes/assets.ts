@@ -14,6 +14,7 @@ import {
   CreateAssetSchema,
   UpdateAssetSchema,
   ListAssetsQuerySchema,
+  RegulatedIntervalSchema,
 } from "@calibra-facil/schemas";
 import type { MeasurementUnit } from "@calibra-facil/shared";
 import { eq, ilike, or, count, and, isNull, desc } from "drizzle-orm";
@@ -24,6 +25,8 @@ import {
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
+import { deriveRegulatedNextDate } from "../lib/regulated-interval";
+import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
@@ -225,6 +228,23 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
         });
 
+        // Legal-metrology regime (Track 2): the regime + the regulation-fixed verification
+        // periodicity, independent of the customer-owned calibration interval (Track 1),
+        // which the lab never authors. (REQ-MLR-030/031/003)
+        const regimeWrite = resolveAssetRegimeWrite({
+          metrologyRegime: input.metrologyRegime,
+          subjectToLegalMetrology: input.subjectToLegalMetrology,
+          regulatedInterval: input.regulatedInterval,
+          current: { metrologyRegime: "INDUSTRIAL", regulatedInterval: null },
+        });
+        const nextLegalVerificationDate = regimeWrite.regulatedInterval
+          ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+              lastVerificationDate: lastCalibrationDate,
+              firstVerificationDate: lastCalibrationDate,
+              installDate: null,
+            }).date
+          : null;
+
         // Create asset
         const [newAsset] = await db
           .insert(asset)
@@ -242,7 +262,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             lastCalibrationDate,
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
-            subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
+            metrologyRegime: regimeWrite.metrologyRegime,
+            subjectToLegalMetrology: regimeWrite.subjectToLegalMetrology,
+            regulatedInterval: regimeWrite.regulatedInterval,
+            nextLegalVerificationDate,
           })
           .returning();
 
@@ -553,6 +576,9 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           nextCalibrationDate: asset.nextCalibrationDate,
           comments: asset.comments,
           subjectToLegalMetrology: asset.subjectToLegalMetrology,
+          metrologyRegime: asset.metrologyRegime,
+          regulatedInterval: asset.regulatedInterval,
+          nextLegalVerificationDate: asset.nextLegalVerificationDate,
           createdAt: asset.createdAt,
           updatedAt: asset.updatedAt,
         })
@@ -630,6 +656,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             comments: asset.comments,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            metrologyRegime: asset.metrologyRegime,
+            regulatedInterval: asset.regulatedInterval,
             deletedAt: asset.deletedAt,
             assetTypeDefinition: assetType.definition,
           })
@@ -716,8 +744,43 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         }
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
-        if (input.subjectToLegalMetrology !== undefined)
-          updateData.subjectToLegalMetrology = input.subjectToLegalMetrology;
+        // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
+        // the legacy boolean, or the regulated interval. Independent of Track 1 (the
+        // customer-owned calibration interval). (REQ-MLR-030/031/032/003)
+        if (
+          input.metrologyRegime !== undefined ||
+          input.subjectToLegalMetrology !== undefined ||
+          input.regulatedInterval !== undefined
+        ) {
+          const parsedCurrent = RegulatedIntervalSchema.safeParse(
+            existingAsset.regulatedInterval,
+          );
+          const regimeWrite = resolveAssetRegimeWrite({
+            metrologyRegime: input.metrologyRegime,
+            subjectToLegalMetrology: input.subjectToLegalMetrology,
+            regulatedInterval: input.regulatedInterval,
+            current: {
+              metrologyRegime: existingAsset.metrologyRegime,
+              regulatedInterval: parsedCurrent.success
+                ? parsedCurrent.data
+                : null,
+            },
+          });
+          updateData.metrologyRegime = regimeWrite.metrologyRegime;
+          updateData.subjectToLegalMetrology = regimeWrite.subjectToLegalMetrology;
+          updateData.regulatedInterval = regimeWrite.regulatedInterval;
+          const anchorDate =
+            (lastCalibrationDate !== undefined
+              ? lastCalibrationDate
+              : existingAsset.lastCalibrationDate) ?? null;
+          updateData.nextLegalVerificationDate = regimeWrite.regulatedInterval
+            ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+                lastVerificationDate: anchorDate,
+                firstVerificationDate: anchorDate,
+                installDate: null,
+              }).date
+            : null;
+        }
         if (input.specifications !== undefined) {
           const normalizedSpecifications =
             normalizeAssetSpecificationsFromInput({

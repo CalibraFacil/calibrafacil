@@ -1012,12 +1012,16 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
-            // Customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
-            // periodicity the customer sets/owns in the portal. `subjectToLegalMetrology`
-            // drives the read-only "fixada por regulamento (Inmetro)" lock.
+            // Track 1 — customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+            // periodicity the customer sets/owns in the portal (for EVERY regime).
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             intervalSetBy: asset.intervalSetBy,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            // Track 2 — legal-metrology regime + the regulation-fixed verification
+            // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
+            metrologyRegime: asset.metrologyRegime,
+            regulatedInterval: asset.regulatedInterval,
+            nextLegalVerificationDate: asset.nextLegalVerificationDate,
             inLab: assetInLabSql(),
             comments: asset.comments,
             createdAt: asset.createdAt,
@@ -1352,7 +1356,6 @@ export const portalRouter = new Hono<{
           .select({
             assetTypeId: asset.assetTypeId,
             model: asset.model,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
           })
           .from(asset)
@@ -1427,7 +1430,6 @@ export const portalRouter = new Hono<{
         const insight = buildIntervalInsight({
           rows,
           currentIntervalMonths: existing.calibrationIntervalMonths,
-          subjectToLegalMetrology: existing.subjectToLegalMetrology,
           familyRows,
         });
         return c.json(insight);
@@ -1481,7 +1483,6 @@ export const portalRouter = new Hono<{
             customerName: customer.name,
             assetTypeId: asset.assetTypeId,
             model: asset.model,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
           })
           .from(asset)
@@ -1554,7 +1555,6 @@ export const portalRouter = new Hono<{
         const insight = buildIntervalInsight({
           rows,
           currentIntervalMonths: existing.calibrationIntervalMonths,
-          subjectToLegalMetrology: existing.subjectToLegalMetrology,
           familyRows,
         });
 
@@ -1622,7 +1622,6 @@ export const portalRouter = new Hono<{
           .select({
             id: asset.id,
             customerId: asset.customerId,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             lastCalibrationDate: asset.lastCalibrationDate,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             nextCalibrationDate: asset.nextCalibrationDate,
@@ -1636,12 +1635,10 @@ export const portalRouter = new Hono<{
           scopedCustomerIds,
         });
 
+        // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
+        // calibration interval for every regime — a legal asset is NOT locked here.
         if (!decision.allowed) {
-          const message =
-            decision.reason === "legal_metrology_locked"
-              ? "Periodicidade fixada por regulamento (Inmetro); nao editavel"
-              : "Ativo nao encontrado";
-          return c.json({ error: message }, decision.status);
+          return c.json({ error: "Ativo nao encontrado" }, decision.status);
         }
 
         // `decision.allowed` guarantees a row matched; narrow explicitly for TS.

@@ -31,7 +31,6 @@ describe("buildIntervalInsight", () => {
     const insight = buildIntervalInsight({
       rows,
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
     });
     expect(insight.classification).toBe("DRIFTING");
     expect(insight.recommendation?.action).toBe("shorten");
@@ -44,18 +43,24 @@ describe("buildIntervalInsight", () => {
     expect(insight.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
-  // REQ-ENGINE-INSIGHT-002: legal-metrology → LEGAL_FIXED, no suggestion.
-  it("returns LEGAL_FIXED with no recommendation for legal-metrology assets", () => {
-    const rows = Array.from({ length: 6 }, (_, i) =>
-      row(`2024-0${i + 1}-01T00:00:00.000Z`, "CONFORMING", [0.5]),
+  // REQ-MLR-050: the insight is regime-agnostic — there is no LEGAL_FIXED path and no
+  // legal-metrology input; a healthy history yields a real STABLE recommendation (a legal
+  // instrument is no longer silenced — its verification periodicity is a separate track).
+  it("yields a STABLE recommendation regardless of regime (no LEGAL_FIXED)", () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      row(
+        `2020-${String(i + 1).padStart(2, "0")}-01T00:00:00.000Z`,
+        "CONFORMING",
+        [0.5],
+      ),
     );
     const insight = buildIntervalInsight({
       rows,
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: true,
+      config: { targetReliability: 0.85 },
     });
-    expect(insight.classification).toBe("LEGAL_FIXED");
-    expect(insight.recommendation).toBeNull();
+    expect(insight.classification).toBe("STABLE");
+    expect(insight.recommendation).not.toBeNull();
   });
 
   // REQ-ENGINE-002/INSIGHT: UNKNOWN cycles drop out of R but still appear in the series.
@@ -68,7 +73,6 @@ describe("buildIntervalInsight", () => {
     const insight = buildIntervalInsight({
       rows,
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     expect(insight.reliability).toBe(1); // 2 of 2 KNOWN conforming
     expect(insight.coverage).toBeCloseTo(2 / 3, 10);
@@ -80,7 +84,6 @@ describe("buildIntervalInsight", () => {
     const insight = buildIntervalInsight({
       rows: [row("2024-01-01T00:00:00.000Z", "CONFORMING", [0.5])],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     expect(insight.classification).toBe("INSUFFICIENT_DATA");
     expect(insight.recommendation).toBeNull();
@@ -141,7 +144,6 @@ describe("buildIntervalInsight with family (REQ-ENGINE-FAMILY-001)", () => {
     const insight = buildIntervalInsight({
       rows: [row("2025-01-01T00:00:00.000Z", "CONFORMING", [0.5])], // 1 known < 3
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       familyRows,
     });
     expect(insight.classification).toBe("STABLE");

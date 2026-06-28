@@ -999,6 +999,23 @@ export type AssetDetailData = AssetsListData["data"][number] & {
   specifications?: Record<string, unknown> | null;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
+  // Legal-metrology regime (Track 2) + the regulation-fixed verification periodicity,
+  // independent of the customer-owned calibration interval. See specs/legal-metrology-regime.
+  metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
+  regulatedInterval?: {
+    kind:
+      | "fixed_months"
+      | "max_months_from_install"
+      | "per_technology"
+      | "not_nationally_fixed";
+    valueMonths?: number;
+    anchor?: string;
+    technology?: string;
+    regulationReference: string;
+    operationalizedByDelegate: boolean;
+    note?: string;
+  } | null;
+  nextLegalVerificationDate?: string | Date | null;
 };
 
 export type UpdateAssetInput = Partial<

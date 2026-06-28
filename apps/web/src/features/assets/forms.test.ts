@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildRegulatedIntervalFromForm,
+  DEFAULT_REGULATED_FORM_FIELDS,
   isAssetFormStatus,
   parseAssetEditForm,
   parseAssetForm,
+  regulatedFormFieldsFromAsset,
   type AssetEditFormData,
   type AssetFormData,
 } from './forms'
@@ -188,28 +191,103 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
+        // The schema's default keeps the deprecated boolean in the payload; the API
+        // recomputes it from `metrologyRegime`, so its value here is immaterial.
         subjectToLegalMetrology: false,
+        metrologyRegime: 'INDUSTRIAL',
       },
     })
   })
 
-  it('round-trips the legal-metrology flag on create', () => {
-    const off = parseAssetForm(validAssetForm())
-    expect(off.success && off.data.subjectToLegalMetrology).toBe(false)
+  it('REQ-MLR-063: sets the regime LEGAL with a regulated interval on create', () => {
+    const industrial = parseAssetForm(validAssetForm())
+    expect(industrial.success && industrial.data.metrologyRegime).toBe(
+      'INDUSTRIAL',
+    )
+    expect(
+      industrial.success && industrial.data.regulatedInterval,
+    ).toBeUndefined()
 
-    const on = parseAssetForm({
+    const legal = parseAssetForm({
       ...validAssetForm(),
-      subjectToLegalMetrology: true,
+      metrologyRegime: 'LEGAL',
+      regulatedKind: 'fixed_months',
+      regulatedValueMonths: '12',
+      regulatedAnchor: 'calendar_year',
+      regulationReference: 'Portaria Inmetro nº 157/2022',
+      regulatedOperationalizedByDelegate: true,
     })
-    expect(on.success && on.data.subjectToLegalMetrology).toBe(true)
+    expect(legal.success && legal.data.metrologyRegime).toBe('LEGAL')
+    expect(legal.success && legal.data.regulatedInterval).toEqual({
+      kind: 'fixed_months',
+      valueMonths: 12,
+      anchor: 'calendar_year',
+      regulationReference: 'Portaria Inmetro nº 157/2022',
+      operationalizedByDelegate: true,
+    })
   })
 
-  it('round-trips the legal-metrology flag on update', () => {
+  it('REQ-MLR-063: rejects a LEGAL asset with an incomplete regulated interval', () => {
+    const result = parseAssetForm({
+      ...validAssetForm(),
+      metrologyRegime: 'LEGAL',
+      regulatedKind: 'fixed_months',
+      regulatedValueMonths: '',
+      regulationReference: '',
+    })
+    expect(result.success).toBe(false)
+    expect(
+      !result.success &&
+        result.fieldErrors.some((e) => e.field === 'regulationReference'),
+    ).toBe(true)
+  })
+
+  it('REQ-MLR-063: carries the regime + regulated interval through update', () => {
     const result = parseAssetEditForm({
       ...validAssetEditForm(),
-      subjectToLegalMetrology: true,
+      metrologyRegime: 'LEGAL',
+      regulatedKind: 'per_technology',
+      regulatedValueMonths: '120',
+      regulatedAnchor: 'first_verification',
+      regulatedTechnology: 'diafragma',
+      regulationReference: 'Portaria Inmetro nº 156/2022',
     })
-    expect(result.success && result.data.subjectToLegalMetrology).toBe(true)
+    expect(result.success && result.data.metrologyRegime).toBe('LEGAL')
+    expect(result.success && result.data.regulatedInterval).toEqual({
+      kind: 'per_technology',
+      valueMonths: 120,
+      anchor: 'first_verification',
+      technology: 'diafragma',
+      regulationReference: 'Portaria Inmetro nº 156/2022',
+      operationalizedByDelegate: false,
+    })
+  })
+
+  it('assembles + round-trips the regulated interval form fields', () => {
+    expect(
+      buildRegulatedIntervalFromForm({
+        metrologyRegime: 'INDUSTRIAL',
+        ...DEFAULT_REGULATED_FORM_FIELDS,
+      }),
+    ).toBeNull()
+
+    const fields = regulatedFormFieldsFromAsset({
+      metrologyRegime: 'LEGAL',
+      regulatedInterval: {
+        kind: 'not_nationally_fixed',
+        regulationReference: 'Portaria Inmetro nº 493/2021',
+        operationalizedByDelegate: false,
+        note: 'ANEEL Res. 414/2010 é regime distinto.',
+      },
+    })
+    expect(fields.metrologyRegime).toBe('LEGAL')
+    expect(fields.regulatedKind).toBe('not_nationally_fixed')
+    expect(buildRegulatedIntervalFromForm(fields)).toEqual({
+      kind: 'not_nationally_fixed',
+      regulationReference: 'Portaria Inmetro nº 493/2021',
+      operationalizedByDelegate: false,
+      note: 'ANEEL Res. 414/2010 é regime distinto.',
+    })
   })
 
   it('maps asset update specification errors to edit route fields', () => {
@@ -273,7 +351,8 @@ function validAssetForm(): AssetFormData {
     baseMeasurementUnit: null,
     lastCalibrationDate: undefined,
     comments: '',
-    subjectToLegalMetrology: false,
+    metrologyRegime: 'INDUSTRIAL',
+    ...DEFAULT_REGULATED_FORM_FIELDS,
     specifications: {},
   }
 }
@@ -288,7 +367,8 @@ function validAssetEditForm(): AssetEditFormData {
     status: 'MAINTENANCE',
     lastCalibrationDate: undefined,
     comments: '',
-    subjectToLegalMetrology: false,
+    metrologyRegime: 'INDUSTRIAL',
+    ...DEFAULT_REGULATED_FORM_FIELDS,
     specifications: {},
   }
 }

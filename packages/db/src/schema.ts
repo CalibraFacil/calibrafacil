@@ -2684,17 +2684,25 @@ export const customerAuditLogRelations = relations(
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
 /**
- * Provenance of an asset's calibration interval. The interval is the equipment
- * owner's (customer's) decision, never the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
- * ILAC-G24 / OIML D 10). There is deliberately NO `lab` value.
+ * Provenance of an asset's customer-owned calibration interval (Track 1). The interval is
+ * the equipment owner's (customer's) decision, never the lab's (ISO/IEC 17025:2017
+ * §7.8.4.3 + ILAC-G24 / OIML D 10). There is deliberately NO `lab` value, and no
+ * `legal_fixed` value — a legal-metrology instrument's regulation-fixed VERIFICATION
+ * periodicity is a separate, independent track (`metrologyRegime` + `regulatedInterval`),
+ * not a calibration-interval provenance.
  * - `customer_confirmed`: the customer set it in the portal.
  * - `engine_applied`: the customer applied a reliability-engine suggestion.
- * - `legal_fixed`: pinned to a legal-metrology regulated period (not optimizable).
  */
-export type AssetIntervalSetBy =
-  | "customer_confirmed"
-  | "engine_applied"
-  | "legal_fixed";
+export type AssetIntervalSetBy = "customer_confirmed" | "engine_applied";
+
+/**
+ * Legal-metrology regime of an instrument (Inmetro / RBMLQ-I), set by the lab as a known
+ * regulatory fact (enquadramento + finalidade de uso), never inferred from assetType.
+ * INDEPENDENT of the customer-owned calibration interval. `LEGAL` → the instrument has a
+ * regulation-fixed verification periodicity (`regulatedInterval`); `UNKNOWN` → the lab has
+ * not yet determined the enquadramento. Spec: `specs/legal-metrology-regime/spec.md`.
+ */
+export type MetrologyRegime = "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 
 /**
  * Asset table - Equipment/Instruments linked to customers.
@@ -2729,6 +2737,8 @@ export const asset = pgTable(
     // Whether this instrument is subject to legal metrology (Inmetro): governs
     // whether the repair seal (Etiqueta de Reparo) + security lacre fields are
     // shown on its service orders. See docs token `asset.inmetroRegistration`.
+    // DEPRECATED source-of-truth: kept consistent with `metrologyRegime` during the
+    // transition (= metrologyRegime === 'LEGAL'); migrate reads to `metrologyRegime`.
     subjectToLegalMetrology: boolean("subject_to_legal_metrology")
       .default(false)
       .notNull(),
@@ -2745,6 +2755,19 @@ export const asset = pgTable(
       { onDelete: "set null" },
     ),
     intervalRationale: text("interval_rationale"),
+    // Legal-metrology TRACK 2 (independent of the customer-owned calibration interval
+    // above): the regulation-fixed VERIFICATION periodicity for instruments under Inmetro /
+    // RBMLQ-I legal control. `metrologyRegime` is the lab-set source of truth;
+    // `regulatedInterval` is the structured period (validated by `RegulatedIntervalSchema`
+    // at the API boundary — stored loosely like `specifications`);
+    // `nextLegalVerificationDate` is derived from it and is SEPARATE from
+    // `nextCalibrationDate`. Spec: `specs/legal-metrology-regime/spec.md`.
+    metrologyRegime: text("metrology_regime")
+      .$type<MetrologyRegime>()
+      .default("INDUSTRIAL")
+      .notNull(),
+    regulatedInterval: jsonb("regulated_interval").$type<Record<string, unknown>>(),
+    nextLegalVerificationDate: timestamp("next_legal_verification_date"),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")

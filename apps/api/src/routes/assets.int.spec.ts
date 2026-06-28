@@ -25,8 +25,22 @@ import { seedOrg } from "../../test/integration/seed";
 //  REQ-ASSET-04  POST / as admin -> 201, persists with correct org/unit scope + audit log
 //  REQ-ASSET-05  Unit-scope filter: asset in unit-B is hidden from unit-A member
 //  REQ-ASSET-06  Unauthenticated requests -> 401
+//  REQ-MLR-030   Lab LEGAL write persists Track-2 + derives the date, leaves Track-1 untouched
+//  REQ-MLR-031   Switching to INDUSTRIAL clears Track-2, keeps the customer interval
+//  REQ-MLR-032   A regime change writes an asset_audit_log row
+//  REQ-MLR-033   PUT regime change without equipment:update -> 403
 
 const JSON_HEADERS = { "content-type": "application/json" };
+
+// A valid regulated (Track-2) verification periodicity: taxímetro-style fixed 24 months
+// anchored to the last verification. Validated by RegulatedIntervalSchema at the route.
+const LEGAL_REGULATED = {
+  kind: "fixed_months",
+  valueMonths: 24,
+  anchor: "last_verification",
+  regulationReference: "Portaria Inmetro nº 124/2022",
+  operationalizedByDelegate: false,
+};
 
 // ---------------------------------------------------------------------------
 // Domain seed helpers — inline so this file stays self-contained and parallel
@@ -296,4 +310,180 @@ describe("assetsRouter — real DB + real middleware", () => {
     const res = await assetsRouter.request("/", { headers: JSON_HEADERS });
     expect(res.status).toBe(401);
   });
+
+  // REQ-MLR-030 ---------------------------------------------------------------
+  it(
+    "REQ-MLR-030 [HIGH]: lab LEGAL write persists the regulated period + derives next_legal_verification_date, and leaves the customer interval (Track 1) untouched",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-mlr-030");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-MLR-030",
+      });
+
+      // Simulate a customer-owned calibration interval already set (Track 1) + a last date.
+      await db
+        .update(asset)
+        .set({
+          calibrationIntervalMonths: 12,
+          intervalSetBy: "customer_confirmed",
+          nextCalibrationDate: new Date("2025-01-15T00:00:00.000Z"),
+          lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z"),
+        })
+        .where(eq(asset.id, assetId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_REGULATED,
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      // Track 2 persisted + derived.
+      expect(row?.metrologyRegime).toBe("LEGAL");
+      expect(row?.subjectToLegalMetrology).toBe(true);
+      expect(row?.regulatedInterval).toMatchObject({
+        kind: "fixed_months",
+        valueMonths: 24,
+        regulationReference: "Portaria Inmetro nº 124/2022",
+      });
+      // 2024-01-15 + 24 months.
+      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+        "2026-01-15",
+      );
+      // Track 1 (customer-owned) is NOT touched by the regime write.
+      expect(row?.calibrationIntervalMonths).toBe(12);
+      expect(row?.intervalSetBy).toBe("customer_confirmed");
+      expect(row?.nextCalibrationDate?.toISOString().slice(0, 10)).toBe(
+        "2025-01-15",
+      );
+    },
+  );
+
+  // REQ-MLR-031 ---------------------------------------------------------------
+  it(
+    "REQ-MLR-031 [HIGH]: switching to INDUSTRIAL clears the regulated period (Track 2) and keeps the customer interval (Track 1)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-mlr-031");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-MLR-031",
+      });
+
+      // Start as a LEGAL asset with a regulated period AND a customer-owned interval.
+      await db
+        .update(asset)
+        .set({
+          metrologyRegime: "LEGAL",
+          subjectToLegalMetrology: true,
+          regulatedInterval: LEGAL_REGULATED,
+          nextLegalVerificationDate: new Date("2026-01-15T00:00:00.000Z"),
+          calibrationIntervalMonths: 12,
+          intervalSetBy: "customer_confirmed",
+        })
+        .where(eq(asset.id, assetId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ metrologyRegime: "INDUSTRIAL" }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      expect(row?.metrologyRegime).toBe("INDUSTRIAL");
+      expect(row?.subjectToLegalMetrology).toBe(false);
+      expect(row?.regulatedInterval).toBeNull();
+      expect(row?.nextLegalVerificationDate).toBeNull();
+      // Customer-owned interval (Track 1) is intact.
+      expect(row?.calibrationIntervalMonths).toBe(12);
+      expect(row?.intervalSetBy).toBe("customer_confirmed");
+    },
+  );
+
+  // REQ-MLR-032 ---------------------------------------------------------------
+  it(
+    "REQ-MLR-032 [HIGH]: a regime / regulated-interval change writes an asset_audit_log row",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-mlr-032");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-MLR-032",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_REGULATED,
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      const logs = await db
+        .select()
+        .from(assetAuditLog)
+        .where(eq(assetAuditLog.assetId, assetId));
+      const updateLog = logs.find((l) => l.action === "update");
+      expect(updateLog).toBeTruthy();
+      expect(updateLog?.performedBy).toBe(org.userId);
+      // The regime change is captured in the audit diff (INDUSTRIAL -> LEGAL).
+      expect(updateLog?.changes).toHaveProperty("metrologyRegime");
+    },
+  );
+
+  // REQ-MLR-033 ---------------------------------------------------------------
+  it(
+    "REQ-MLR-033 [HIGH]: PUT a regime / regulated-interval change as role=member -> 403 (equipment:update not granted)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "member" });
+      const typeId = await seedAssetType("type-mlr-033");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-MLR-033",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_REGULATED,
+        }),
+      });
+      expect(res.status).toBe(403);
+    },
+  );
 });

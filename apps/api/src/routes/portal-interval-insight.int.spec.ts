@@ -395,7 +395,9 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
     expect((await res.json()).classification).toBe("INSUFFICIENT_DATA");
   });
 
-  it("returns LEGAL_FIXED for a legal-metrology asset", async () => {
+  // REQ-MLR-050: the engine is regime-agnostic — a legal-metrology asset is analyzed like
+  // any other (no LEGAL_FIXED). With no calibration history it is simply INSUFFICIENT_DATA.
+  it("REQ-MLR-050: analyzes a legal-metrology asset like any other (no LEGAL_FIXED)", async () => {
     const assetTypeId = await ensureAssetType();
     const ctx = await seedPortalContext({
       labOrgId: "lab-1",
@@ -415,7 +417,7 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
       organizationId: ctx.clientOrgId,
     });
     const body = await (await get(assetId)).json();
-    expect(body.classification).toBe("LEGAL_FIXED");
+    expect(body.classification).toBe("INSUFFICIENT_DATA");
     expect(body.recommendation).toBeNull();
   });
 

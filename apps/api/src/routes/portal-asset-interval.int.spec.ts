@@ -242,8 +242,10 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
     expect(row?.calibrationIntervalMonths).toBeNull();
   });
 
-  // REQ-ACCESS-INT-005 [HIGH RISK]: legal-metrology asset → 409, not mutated.
-  it("REQ-ACCESS-INT-005: legal-metrology asset → 409 and is not mutated", async () => {
+  // REQ-MLR-040 [HIGH RISK]: the customer owns the calibration interval for EVERY regime —
+  // a legal-metrology asset is NOT locked; the interval is set. Its regulation-fixed
+  // VERIFICATION periodicity is a separate, lab-recorded track (not this endpoint).
+  it("REQ-MLR-040: legal-metrology asset → 200 and the interval is set", async () => {
     const assetTypeId = await ensureAssetType();
     const ctx = await seedPortalContext({
       labOrgId: "lab-1",
@@ -268,13 +270,13 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
       rationale: "estender",
     });
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     const [row] = await db
       .select()
       .from(asset)
       .where(eq(asset.id, assetId))
       .limit(1);
-    expect(row?.calibrationIntervalMonths).toBeNull();
+    expect(row?.calibrationIntervalMonths).toBe(24);
   });
 
   // REQ-ACCESS-INT-003 [HIGH RISK]: empty rationale → 400 (zValidator), no mutation.

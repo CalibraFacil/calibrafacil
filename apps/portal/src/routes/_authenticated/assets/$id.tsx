@@ -71,12 +71,24 @@ type AssetDetail = {
   specifications: Record<string, unknown> | null;
   lastCalibrationDate: string | null;
   nextCalibrationDate: string | null;
-  // Customer-owned calibration interval (periodicity). The customer sets it here
-  // (§7.8.4.3 + ILAC-G24); the lab never attributes it. `subjectToLegalMetrology`
-  // means a regulation-fixed period that is NOT editable.
+  // Track 1 — customer-owned calibration interval (periodicity). The customer sets it
+  // here for EVERY regime (§7.8.4.3 + ILAC-G24); the lab never attributes it.
   calibrationIntervalMonths: number | null;
-  intervalSetBy: "customer_confirmed" | "engine_applied" | "legal_fixed" | null;
+  intervalSetBy: "customer_confirmed" | "engine_applied" | null;
   subjectToLegalMetrology: boolean;
+  // Track 2 — legal-metrology regime + the regulation-fixed VERIFICATION periodicity
+  // (independent of Track 1; lab-recorded, read-only for the customer).
+  metrologyRegime: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
+  regulatedInterval: {
+    kind:
+      | "fixed_months"
+      | "max_months_from_install"
+      | "per_technology"
+      | "not_nationally_fixed";
+    regulationReference: string;
+    operationalizedByDelegate: boolean;
+  } | null;
+  nextLegalVerificationDate: string | null;
   inLab: boolean;
   comments: string | null;
   createdAt: string;
@@ -352,8 +364,11 @@ function AssetDetailPage() {
         </div>
 
         <div className="space-y-6">
-          {/* Customer-owned calibration interval */}
+          {/* Track 1 — customer-owned calibration interval */}
           <IntervalEditorPanel asset={asset} />
+
+          {/* Track 2 — regulation-fixed legal-metrology verification periodicity */}
+          <LegalVerificationPanel asset={asset} />
 
           {/* Reliability-based interval analysis (read-only) */}
           <IntervalInsightPanel assetId={asset.id} />
@@ -453,7 +468,7 @@ function cnDot(tone: SignalTone): string {
 }
 
 type IntervalInsight = {
-  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING" | "LEGAL_FIXED";
+  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
   reliability: number | null;
   coverage: number;
   recommendation: {
@@ -472,7 +487,7 @@ type IntervalInsight = {
 };
 
 const CLASSIFICATION_META: Record<
-  Exclude<IntervalInsight["classification"], "LEGAL_FIXED">,
+  IntervalInsight["classification"],
   { label: string; tone: SignalTone }
 > = {
   STABLE: { label: "Estável", tone: "ok" },
@@ -487,8 +502,9 @@ const ACTION_LABEL: Record<
 
 /**
  * Read-only reliability-based interval analysis (ILAC-G24 / NCSL RP-1). It only
- * SUGGESTS — the customer applies via the editor above (§7.8.4.3). Legal-metrology
- * assets resolve to LEGAL_FIXED server-side and the panel hides (the editor shows the lock).
+ * SUGGESTS — the customer applies via the editor above (§7.8.4.3). Regime-agnostic: a
+ * legal-metrology asset is analyzed like any other; its regulation-fixed verification
+ * periodicity is a separate, read-only track (see the legal-verification panel).
  */
 function IntervalInsightPanel({ assetId }: { assetId: number }) {
   const queryClient = useQueryClient();
@@ -536,7 +552,7 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  if (!insight || insight.classification === "LEGAL_FIXED") return null;
+  if (!insight) return null;
   const meta = CLASSIFICATION_META[insight.classification];
 
   return (
@@ -685,12 +701,66 @@ function MarginSparkline({ series }: { series: IntervalInsight["series"] }) {
 }
 
 /**
+ * Track 2 — the regulation-fixed legal-metrology VERIFICATION periodicity (read-only),
+ * shown only for LEGAL instruments and INDEPENDENT of the customer-owned calibration
+ * interval. The date is INDICATIVE when the Ipem runs the cadence
+ * (operationalizedByDelegate) and absent for `not_nationally_fixed` (REQ-MLR-060/061/062).
+ */
+function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
+  if (asset.metrologyRegime !== "LEGAL") return null;
+  const regulated = asset.regulatedInterval;
+  const noNationalPeriod =
+    !regulated ||
+    regulated.kind === "not_nationally_fixed" ||
+    !asset.nextLegalVerificationDate;
+  const indicative = regulated?.operationalizedByDelegate ?? false;
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Metrologia legal"
+        title="Verificação — metrologia legal"
+        description="Periodicidade fixada por regulamento (Inmetro / RBMLQ-I) — definida pela regulamentação, não editável."
+      />
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon
+            icon={Calendar03Icon}
+            className="text-muted-foreground size-4 shrink-0"
+            strokeWidth={2}
+          />
+          <span className="text-sm">
+            Próxima verificação:{" "}
+            <span className="font-mono tabular-nums">
+              {noNationalPeriod
+                ? "sem periodicidade nacional fixada"
+                : formatDate(asset.nextLegalVerificationDate)}
+            </span>
+          </span>
+        </div>
+        {indicative && !noNationalPeriod ? (
+          <p className="text-muted-foreground text-xs text-pretty">
+            Cadência operacionalizada pelo Ipem — data indicativa, não é prazo
+            nacional fixo.
+          </p>
+        ) : null}
+        {regulated ? (
+          <p className="text-muted-foreground text-xs text-pretty">
+            {regulated.regulationReference}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/**
  * Customer-owned calibration interval (periodicity) editor. The interval is the
  * equipment owner's decision, not the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
- * ILAC-G24 / OIML D 10). Legal-metrology instruments are regulation-fixed and
- * shown locked (REQ-INTERVAL-030); otherwise the customer sets months + a
- * mandatory rationale (the §7.5 technical record) and submission is blocked
- * without it (REQ-INTERVAL-040/041).
+ * ILAC-G24 / OIML D 10), for EVERY regime — there is no legal-metrology lock (a legal
+ * instrument's regulation-fixed verification periodicity is shown by
+ * LegalVerificationPanel). The customer sets months + a mandatory rationale (the §7.5
+ * technical record); submission is blocked without it (REQ-INTERVAL-040/041).
  */
 function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
   const queryClient = useQueryClient();
@@ -716,9 +786,6 @@ function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
         },
       );
       if (!response.ok) {
-        if (response.status === 409) {
-          throw new Error("Periodicidade fixada por regulamento (Inmetro).");
-        }
         throw new Error("Não foi possível salvar a periodicidade.");
       }
     },
@@ -733,30 +800,9 @@ function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
     },
   });
 
-  // REQ-INTERVAL-030: legal-metrology instruments are regulation-fixed → locked.
-  if (asset.subjectToLegalMetrology) {
-    return (
-      <Panel className="p-5">
-        <PanelHeader
-          eyebrow="Programa metrológico"
-          title="Periodicidade de calibração"
-        />
-        <div className="bg-muted/45 mt-4 flex items-start gap-3 rounded-xl p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
-          <HugeiconsIcon
-            icon={InformationCircleIcon}
-            className="text-muted-foreground mt-0.5 size-4 shrink-0"
-            strokeWidth={2}
-          />
-          <p className="text-muted-foreground text-sm text-pretty">
-            Periodicidade fixada por regulamento (Inmetro). Este instrumento
-            está sujeito à metrologia legal; sua verificação segue o prazo da
-            regulamentação e não é editável.
-          </p>
-        </div>
-      </Panel>
-    );
-  }
-
+  // REQ-MLR-040: the customer owns the calibration interval for EVERY regime — there is
+  // no legal-metrology lock here. A legal instrument's regulation-fixed verification
+  // periodicity is shown separately by LegalVerificationPanel (read-only).
   const monthsValue = Number(months);
   const monthsValid =
     Number.isInteger(monthsValue) && monthsValue >= 1 && monthsValue <= 120;

@@ -19,7 +19,6 @@ describe("analyzeInterval — classification gates", () => {
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0), cyc("CONFORMING", 0.5, 6)],
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
     });
     expect(a.classification).toBe("INSUFFICIENT_DATA");
     expect(a.recommendation).toBeNull();
@@ -37,23 +36,25 @@ describe("analyzeInterval — classification gates", () => {
         cyc("UNKNOWN", null, 30),
       ],
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
     });
     expect(a.classification).toBe("INSUFFICIENT_DATA");
     expect(a.coverage).toBeCloseTo(0.5, 10);
   });
 
-  // REQ-ENGINE-REC-006 / INSIGHT-002: legal-metrology is regulation-fixed.
-  it("LEGAL_FIXED with no recommendation", () => {
+  // REQ-MLR-050: the engine is regime-agnostic — there is NO LEGAL_FIXED suppression. The
+  // caller never passes a legal-metrology flag (the Track-2 verification periodicity is a
+  // separate, independent track), so a legal instrument with full conforming history still
+  // yields a real STABLE recommendation rather than being silenced.
+  it("never suppresses a suggestion for legal-metrology (regime-agnostic)", () => {
     const a = analyzeInterval({
       cycles: Array.from({ length: 10 }, (_, i) =>
         cyc("CONFORMING", 0.5, i * 6),
       ),
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: true,
+      config: R85,
     });
-    expect(a.classification).toBe("LEGAL_FIXED");
-    expect(a.recommendation).toBeNull();
+    expect(a.classification).toBe("STABLE");
+    expect(a.recommendation).not.toBeNull();
   });
 });
 
@@ -64,7 +65,6 @@ describe("analyzeInterval — STABLE recommendation (REQ-ENGINE-REC-001/002/003)
         cyc("CONFORMING", 0.5, i * 6),
       ),
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       config: R85,
     });
     expect(a.classification).toBe("STABLE");
@@ -83,7 +83,6 @@ describe("analyzeInterval — STABLE recommendation (REQ-ENGINE-REC-001/002/003)
         cyc("NON_CONFORMING", -0.1, i * 6),
       ),
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       config: R85,
     });
     expect(a.classification).toBe("STABLE");
@@ -102,7 +101,6 @@ describe("analyzeInterval — STABLE recommendation (REQ-ENGINE-REC-001/002/003)
     const a = analyzeInterval({
       cycles,
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       config: R85,
     });
     expect(a.classification).toBe("STABLE");
@@ -119,7 +117,6 @@ describe("analyzeInterval — STABLE recommendation (REQ-ENGINE-REC-001/002/003)
     const a = analyzeInterval({
       cycles,
       currentIntervalMonths: 9,
-      subjectToLegalMetrology: false,
       config: R85,
     });
     expect(a.classification).toBe("STABLE");
@@ -137,7 +134,6 @@ describe("analyzeInterval — DRIFTING overrides extend (REQ-ENGINE-REC-004)", (
     const a = analyzeInterval({
       cycles,
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       config: R85,
     });
     expect(a.classification).toBe("DRIFTING");
@@ -154,7 +150,6 @@ describe("analyzeInterval — family borrow-strength (REQ-ENGINE-FAMILY-001)", (
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0)], // 1 known < minKnownCycles(3)
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       family: { populationN: 30, conformingS: 30, meanTimeSinceCalMonths: 12 },
       config: R85,
     });
@@ -168,7 +163,6 @@ describe("analyzeInterval — family borrow-strength (REQ-ENGINE-FAMILY-001)", (
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0)],
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       family: { populationN: 5, conformingS: 4, meanTimeSinceCalMonths: 12 },
     });
     expect(a.classification).toBe("INSUFFICIENT_DATA");
@@ -181,7 +175,6 @@ describe("analyzeInterval — provenance (REQ-ENGINE-011)", () => {
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0)],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     expect(a.provenance.engineVersion).toBe("0.1.0");
     expect(a.provenance.config.targetReliability).toBe(0.9);
@@ -194,17 +187,14 @@ describe("analyzeInterval — provenance (REQ-ENGINE-011)", () => {
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0)],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     const b = analyzeInterval({
       cycles: [cyc("NON_CONFORMING", -0.1, 0)],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     const again = analyzeInterval({
       cycles: [cyc("CONFORMING", 0.5, 0)],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     });
     expect(a.provenance.fingerprint).not.toBe(b.provenance.fingerprint);
     expect(a.provenance.fingerprint).toBe(again.provenance.fingerprint);
@@ -215,7 +205,6 @@ describe("analyzeInterval — provenance (REQ-ENGINE-011)", () => {
     const base = {
       cycles: [cyc("CONFORMING", 0.5, 0)],
       currentIntervalMonths: null,
-      subjectToLegalMetrology: false,
     };
     const noFamily = analyzeInterval(base);
     const withFamily = analyzeInterval({
@@ -238,7 +227,6 @@ describe("analyzeInterval — proposed-interval derivation", () => {
     const a = analyzeInterval({
       cycles,
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       config: { targetReliability: 0.5 },
     });
     expect(a.recommendation?.action).toBe("extend");
@@ -251,7 +239,6 @@ describe("analyzeInterval — proposed-interval derivation", () => {
     const a = analyzeInterval({
       cycles: [cyc("CONFORMING", null, 0)],
       currentIntervalMonths: 12,
-      subjectToLegalMetrology: false,
       family: { populationN: 20, conformingS: 18, meanTimeSinceCalMonths: 12 },
       config: { targetReliability: 0.5 },
     });

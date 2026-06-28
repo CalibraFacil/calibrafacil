@@ -6,54 +6,31 @@ import {
 } from "./portal-asset-interval";
 
 describe("decidePortalIntervalWrite", () => {
-  const inScope = { customerId: 7, subjectToLegalMetrology: false };
-
-  // REQ-ACCESS-INT-001 precondition: an in-scope, non-legal asset is allowed.
-  it("allows when the asset is in scope and not legal-metrology", () => {
+  // REQ-MLR-040: an in-scope asset is allowed REGARDLESS of metrology regime — the customer
+  // owns the calibration interval for every instrument, so there is no legal-metrology lock
+  // here anymore (a legal asset's regulated verification periodicity is a separate track).
+  it("allows when the asset is in scope (any regime)", () => {
     expect(
-      decidePortalIntervalWrite({ asset: inScope, scopedCustomerIds: [7, 9] }),
+      decidePortalIntervalWrite({
+        asset: { customerId: 7 },
+        scopedCustomerIds: [7, 9],
+      }),
     ).toEqual({ allowed: true });
   });
 
-  // REQ-ACCESS-INT-002: a missing asset is 404 (never 403/200).
+  // REQ-MLR-041: a missing asset is 404 (never 403/200).
   it("rejects a missing asset with 404", () => {
     expect(
       decidePortalIntervalWrite({ asset: null, scopedCustomerIds: [7] }),
     ).toEqual({ allowed: false, status: 404, reason: "asset_not_found" });
   });
 
-  // REQ-ACCESS-INT-002: an asset belonging to another tenant is 404 (no disclosure).
+  // REQ-MLR-041: an asset belonging to another tenant is 404 (no disclosure, never 403).
   it("rejects an out-of-scope asset with 404", () => {
     expect(
       decidePortalIntervalWrite({
-        asset: { customerId: 99, subjectToLegalMetrology: false },
+        asset: { customerId: 99 },
         scopedCustomerIds: [7, 9],
-      }),
-    ).toEqual({ allowed: false, status: 404, reason: "asset_not_found" });
-  });
-
-  // REQ-ACCESS-INT-005: an in-scope legal-metrology asset is 409 (locked).
-  it("rejects an in-scope legal-metrology asset with 409", () => {
-    expect(
-      decidePortalIntervalWrite({
-        asset: { customerId: 7, subjectToLegalMetrology: true },
-        scopedCustomerIds: [7],
-      }),
-    ).toEqual({
-      allowed: false,
-      status: 409,
-      reason: "legal_metrology_locked",
-    });
-  });
-
-  // Ordering guard (REQ-ACCESS-INT-002 precedes -005): an OUT-of-scope asset that
-  // also happens to be legal-metrology must return 404, not 409 — otherwise a 409
-  // would disclose that the id exists in another tenant.
-  it("returns 404 (not 409) for an out-of-scope legal-metrology asset", () => {
-    expect(
-      decidePortalIntervalWrite({
-        asset: { customerId: 99, subjectToLegalMetrology: true },
-        scopedCustomerIds: [7],
       }),
     ).toEqual({ allowed: false, status: 404, reason: "asset_not_found" });
   });

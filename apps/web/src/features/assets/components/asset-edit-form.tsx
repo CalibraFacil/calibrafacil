@@ -10,12 +10,13 @@ import {
   isAssetFormStatus,
   isAssetSpecificationErrorField,
   parseAssetEditForm,
+  regulatedFormFieldsFromAsset,
   type AssetEditFormData,
   type AssetEditFormField,
 } from '@/features/assets/forms'
+import { MetrologyRegimeFields } from '@/features/assets/components/metrology-regime-fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import {
@@ -121,7 +122,7 @@ export function AssetEditForm({
     status: asset.status,
     lastCalibrationDate: parseDate(asset.lastCalibrationDate),
     comments: asset.comments || '',
-    subjectToLegalMetrology: asset.subjectToLegalMetrology ?? false,
+    ...regulatedFormFieldsFromAsset(asset),
     specifications: asset.specifications || {},
   })
   const [errors, setErrors] = useState<
@@ -356,26 +357,13 @@ export function AssetEditForm({
               </Field>
             </div>
 
-            <label className="mt-4 flex items-start gap-3 text-sm">
-              <Checkbox
-                className="mt-0.5"
-                checked={formData.subjectToLegalMetrology}
-                onCheckedChange={(checked) =>
-                  updateField('subjectToLegalMetrology', Boolean(checked))
-                }
-                disabled={isSaving}
-              />
-              <span>
-                <span className="font-medium">
-                  Sujeito a metrologia legal (Inmetro)
-                </span>
-                <span className="block text-muted-foreground">
-                  Instrumentos verificados pelo Inmetro (bombas de combustível,
-                  taxímetros, balanças comerciais…). Habilita os campos de lacre
-                  e Etiqueta de Reparo na ordem de serviço.
-                </span>
-              </span>
-            </label>
+            <MetrologyRegimeFields
+              values={formData}
+              onChange={(patch) =>
+                setFormData((prev) => ({ ...prev, ...patch }))
+              }
+              disabled={isSaving}
+            />
           </Panel>
 
           {hasSpecs || showEccentricityIndicator ? (

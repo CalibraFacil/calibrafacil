@@ -8,48 +8,41 @@
  *
  * `decidePortalIntervalWrite` decides, for an ALREADY-AUTHENTICATED and
  * ALREADY-PERMISSIONED portal caller, whether a specific asset may have its
- * interval changed. It enforces exactly two regulated guards and nothing else:
+ * CALIBRATION interval (Track 1) changed. It enforces exactly one regulated guard:
  *  - tenant scope: the asset must belong to one of the caller's in-scope
  *    customers; otherwise 404 (we return not-found, never 403, so a portal user
- *    cannot probe which asset ids exist in another tenant);
- *  - legal-metrology lock: an asset under Inmetro legal control has a
- *    regulation-fixed verification period the owner cannot change → 409.
+ *    cannot probe which asset ids exist in another tenant).
+ *
+ * The customer owns the calibration interval for EVERY instrument — including
+ * legal-metrology ones (REQ-MLR-040) — so there is NO legal-metrology lock here.
+ * A legal instrument's regulation-fixed verification periodicity is a SEPARATE
+ * track (`metrologyRegime` + `regulatedInterval`) the lab records; it is not
+ * editable through this endpoint.
  *
  * It deliberately does NOT grant access (the route's RBAC guard does that) and
  * does NOT validate the body (`SetCalibrationIntervalSchema` does that). Keeping
- * it pure makes both HIGH-RISK authorization decisions testable without a DB.
+ * it pure makes the HIGH-RISK tenant decision testable without a DB.
  */
 
 export type PortalIntervalWriteInput = {
   /** The target asset row, or null when no row matched the requested id. */
-  asset: { customerId: number; subjectToLegalMetrology: boolean } | null;
+  asset: { customerId: number } | null;
   /** Customer ids the caller may access (from `resolvePortalCustomerScope`). */
   scopedCustomerIds: readonly number[];
 };
 
 export type PortalIntervalWriteDecision =
   | { allowed: true }
-  | {
-      allowed: false;
-      status: 404 | 409;
-      reason: "asset_not_found" | "legal_metrology_locked";
-    };
+  | { allowed: false; status: 404; reason: "asset_not_found" };
 
 export function decidePortalIntervalWrite(
   input: PortalIntervalWriteInput,
 ): PortalIntervalWriteDecision {
   const { asset, scopedCustomerIds } = input;
 
-  // Tenant scope precedes everything: a not-found OR out-of-scope asset is 404.
-  // This MUST come before the legal-metrology check so a caller cannot
-  // distinguish "exists but locked" from "does not exist in my tenant".
+  // Tenant scope is the only guard: a not-found OR out-of-scope asset is 404.
   if (!asset || !scopedCustomerIds.includes(asset.customerId)) {
     return { allowed: false, status: 404, reason: "asset_not_found" };
-  }
-
-  // Legal-metrology lock: the regulated period is not customer-editable.
-  if (asset.subjectToLegalMetrology) {
-    return { allowed: false, status: 409, reason: "legal_metrology_locked" };
   }
 
   return { allowed: true };

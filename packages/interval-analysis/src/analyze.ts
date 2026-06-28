@@ -50,11 +50,7 @@ export const DEFAULT_INTERVAL_CONFIG: IntervalConfig = {
   minFamilyN: 8,
 };
 
-export type Classification =
-  | "INSUFFICIENT_DATA"
-  | "STABLE"
-  | "DRIFTING"
-  | "LEGAL_FIXED";
+export type Classification = "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
 
 export type Recommendation = {
   action: "extend" | "keep" | "shorten";
@@ -105,13 +101,11 @@ function clampedMonths(raw: number, config: IntervalConfig): number {
 function fingerprint(
   cycles: readonly IntervalCycle[],
   config: IntervalConfig,
-  subjectToLegalMetrology: boolean,
   family: FamilyStats | undefined,
 ): string {
   const canonical = JSON.stringify({
     v: ENGINE_VERSION,
     config,
-    legal: subjectToLegalMetrology,
     cycles: cycles.map((c) => ({ v: c.verdict, m: c.margins, t: c.tMonths })),
     // The family inputs drive the M5_family interval — include them so that path's
     // audit trail can reproduce the proposed number (§7.5).
@@ -186,7 +180,6 @@ function reliabilityRecommendation(input: {
 export function analyzeInterval(input: {
   cycles: readonly IntervalCycle[];
   currentIntervalMonths: number | null;
-  subjectToLegalMetrology: boolean;
   /** Aggregated family stats for borrow-strength when single-unit history is thin. */
   family?: FamilyStats;
   config?: Partial<IntervalConfig>;
@@ -198,12 +191,7 @@ export function analyzeInterval(input: {
   const provenance = {
     engineVersion: ENGINE_VERSION,
     config,
-    fingerprint: fingerprint(
-      input.cycles,
-      config,
-      input.subjectToLegalMetrology,
-      input.family,
-    ),
+    fingerprint: fingerprint(input.cycles, config, input.family),
   };
 
   const summary = summarizeReliability(input.cycles.map((c) => c.verdict));
@@ -213,10 +201,11 @@ export function analyzeInterval(input: {
     provenance,
   };
 
-  // REQ-ENGINE-REC-006 / INSIGHT-002: legal-metrology is regulation-fixed.
-  if (input.subjectToLegalMetrology) {
-    return { classification: "LEGAL_FIXED", recommendation: null, ...base };
-  }
+  // REQ-MLR-050/051: the engine is regime-agnostic — it analyzes the customer-owned
+  // calibration interval (Track 1) for EVERY instrument and never special-cases
+  // legal-metrology. A legal instrument's regulation-fixed verification periodicity is a
+  // separate track the engine does not see. (A purely-legal, never-calibrated instrument
+  // simply has no KNOWN cycles → INSUFFICIENT_DATA below.)
 
   // REQ-ENGINE-001: too few KNOWN cycles OR too little coverage for the single unit.
   if (
