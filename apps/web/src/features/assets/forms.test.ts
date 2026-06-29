@@ -216,9 +216,9 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
-        // The schema's default keeps the deprecated boolean in the payload; the API
-        // recomputes it from `metrologyRegime`, so its value here is immaterial.
-        subjectToLegalMetrology: false,
+        // No deprecated boolean in the payload: with the `.default(false)` removed, an
+        // omitted regime leaves the API to keep the asset's current regime (so a
+        // non-regime update never silently resets a LEGAL asset to INDUSTRIAL).
         metrologyRegime: 'INDUSTRIAL',
       },
     })

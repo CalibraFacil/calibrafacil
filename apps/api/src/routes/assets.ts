@@ -761,12 +761,15 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
-        // the legacy boolean, or the regulated interval. Independent of Track 1 (the
-        // customer-owned calibration interval). (REQ-MLR-030/031/032/003)
+        // the legacy boolean, the regulated interval, OR the install anchor (a standalone
+        // installed_at change must re-derive next_legal_verification_date for an
+        // install-anchored LEGAL asset). Independent of Track 1 (the customer-owned
+        // calibration interval). (REQ-MLR-030/031/032/003 + REQ-INSTALL-002)
         if (
           input.metrologyRegime !== undefined ||
           input.subjectToLegalMetrology !== undefined ||
-          input.regulatedInterval !== undefined
+          input.regulatedInterval !== undefined ||
+          installedAt !== undefined
         ) {
           const parsedCurrent = RegulatedIntervalSchema.safeParse(
             existingAsset.regulatedInterval,

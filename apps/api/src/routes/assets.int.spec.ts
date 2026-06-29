@@ -588,6 +588,98 @@ describe("assetsRouter — real DB + real middleware", () => {
     },
   );
 
+  // REQ-INSTALL-002 (standalone PATCH) ----------------------------------------
+  it(
+    "REQ-INSTALL-002 [HIGH]: PUT setting ONLY installed_at on an existing LEGAL max_months_from_install asset re-derives next_legal_verification_date",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-install-002c");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-INSTALL-002C",
+      });
+      // Already LEGAL + max_months_from_install but WITHOUT an install date → date is null.
+      await db
+        .update(asset)
+        .set({
+          metrologyRegime: "LEGAL",
+          subjectToLegalMetrology: true,
+          regulatedInterval: LEGAL_FROM_INSTALL,
+          nextLegalVerificationDate: null,
+        })
+        .where(eq(asset.id, assetId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      // PATCH with ONLY the install date — no regime/regulatedInterval field.
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ installedAt: "2020-03-01T00:00:00.000Z" }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
+      // Re-derived from the standalone install-date PATCH: 2020-03-01 + 84 months.
+      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+        "2027-03-01",
+      );
+    },
+  );
+
+  // Regime preservation (regression for the omitted-boolean reset) -----------
+  it(
+    "REQ-INSTALL-002 regression: a non-regime update (name only) preserves a LEGAL asset's regime + regulated interval",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-install-regime");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-INSTALL-REGIME",
+      });
+      await db
+        .update(asset)
+        .set({
+          metrologyRegime: "LEGAL",
+          subjectToLegalMetrology: true,
+          regulatedInterval: LEGAL_FROM_INSTALL,
+        })
+        .where(eq(asset.id, assetId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      // Update an unrelated field (name) with NO metrologyRegime in the request.
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ name: "Renamed" }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      expect(row?.name).toBe("Renamed");
+      // The regime is NOT silently reset by the omitted (previously defaulted-false) boolean.
+      expect(row?.metrologyRegime).toBe("LEGAL");
+      expect(row?.subjectToLegalMetrology).toBe(true);
+      expect(row?.regulatedInterval).toMatchObject({
+        kind: "max_months_from_install",
+      });
+    },
+  );
+
   // REQ-MLR-033 ---------------------------------------------------------------
   it(
     "REQ-MLR-033 [HIGH]: PUT a regime / regulated-interval change as role=member -> 403 (equipment:update not granted)",
