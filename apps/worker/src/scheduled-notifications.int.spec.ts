@@ -5,7 +5,9 @@ import { db, truncateAll } from "../test/integration/db";
 import {
   daysFromNow,
   seedCompetence,
+  seedMember,
   seedReferenceStandard,
+  seedScheduledAsset,
   seedScheduledNotification,
   seedScheduledOrg,
   seedUser,
@@ -125,6 +127,21 @@ async function scheduledNotificationRows(filters?: {
         return false;
       return true;
     });
+}
+
+// Read the in-app `notification.message` copy the sweep wrote for a given asset's
+// legal-verification reminder (only populated when an admin/owner `member` exists,
+// so getRecipientsByRole resolves a recipient). Used for the REQ-LVRECALL-006
+// content check against REAL output (no mock).
+async function legalVerificationMessages(assetId: number): Promise<string[]> {
+  const result = await db.execute(
+    sql`SELECT message
+        FROM notification
+        WHERE type = 'ASSET_DUE_FOR_LEGAL_VERIFICATION'
+          AND (related_entity->>'entityId')::int = ${assetId}
+        ORDER BY id`,
+  );
+  return toRows(result).map((row) => asString(field(row, "message")));
 }
 
 beforeEach(async () => {
@@ -356,5 +373,201 @@ describe("processScheduledNotifications (worker real-DB integration)", () => {
 
     // The competence was also auto-expired as part of the same sweep.
     expect(await competenceStatus(competenceId)).toBe("EXPIRED");
+  });
+});
+
+// =============================================================================
+// Legal-metrology VERIFICATION recall (Track 2 — Inmetro / RBMLQ-I).
+// Deferred item #1 of #423: a PARALLEL, INDEPENDENT reminder for the regulation-
+// fixed `next_legal_verification_date`, distinct from the recalibration recall.
+// =============================================================================
+describe("processScheduledNotifications — legal-verification recall (REQ-LVRECALL)", () => {
+  // A representative national-fixed period (taxímetro-style): last-verification
+  // anchored, NOT operationalized by a delegate → a hard regulatory deadline.
+  const fixedInterval = {
+    kind: "fixed_months",
+    valueMonths: 12,
+    anchor: "last_verification",
+    regulationReference: "Portaria Inmetro nº 157/2022",
+    operationalizedByDelegate: false,
+  };
+
+  // ── REQ-LVRECALL-001 + 002: select + enqueue + dedupe record ───────────────
+  it("REQ-LVRECALL-001/002 LEGAL asset within the 30-day window → 1 reminder + exactly one deduped scheduled_notification (lead_time_days=30)", async () => {
+    const org = await seedScheduledOrg({ orgId: "org-1", userId: "owner-1" });
+    const { assetId } = await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "BAL-LEGAL-1",
+      metrologyRegime: "LEGAL",
+      nextLegalVerificationDate: daysFromNow(20),
+      regulatedInterval: fixedInterval,
+    });
+
+    const result = await processScheduledNotifications(buildEnv());
+    expect(result.legalVerificationsProcessed).toBe(1);
+
+    const rows = await scheduledNotificationRows({
+      type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+      entityType: "asset",
+      entityId: assetId,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.lead_time_days).toBe(30);
+    expect(rows[0]?.organization_id).toBe(org.orgId);
+    expect(rows[0]?.sent_at).not.toBeNull();
+  });
+
+  // ── REQ-LVRECALL-003 [HIGH]: regime gate + null-date gate ───────────────────
+  // Even WITH a legal-verification date present, a non-LEGAL regime is ignored;
+  // and a LEGAL asset with a NULL date is ignored. No reminder in either case.
+  it("REQ-LVRECALL-003 non-LEGAL regime OR null next_legal_verification_date → NO legal-verification reminder", async () => {
+    const org = await seedScheduledOrg({ orgId: "org-1", userId: "owner-1" });
+    // INDUSTRIAL but with a date in-window → excluded by the regime gate.
+    await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "IND-1",
+      metrologyRegime: "INDUSTRIAL",
+      nextLegalVerificationDate: daysFromNow(10),
+    });
+    // LEGAL but no date → excluded by the null-date gate.
+    await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "LEG-NULL",
+      metrologyRegime: "LEGAL",
+      nextLegalVerificationDate: null,
+    });
+    // UNKNOWN regime with a date → excluded by the regime gate.
+    await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "UNK-1",
+      metrologyRegime: "UNKNOWN",
+      nextLegalVerificationDate: daysFromNow(10),
+    });
+
+    const result = await processScheduledNotifications(buildEnv());
+    expect(result.legalVerificationsProcessed).toBe(0);
+    expect(
+      await scheduledNotificationRows({
+        type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+      }),
+    ).toHaveLength(0);
+  });
+
+  // ── REQ-LVRECALL-004 [HIGH]: distinct track, no cross-suppression ───────────
+  // The SAME asset is due for BOTH recalibration (Track 1, lead 7) and legal
+  // verification (Track 2, lead 30). Each fires under its OWN distinct type;
+  // neither suppresses the other.
+  it("REQ-LVRECALL-004 LEGAL asset also due for recalibration → BOTH distinct reminders, neither suppresses the other", async () => {
+    const org = await seedScheduledOrg({ orgId: "org-1", userId: "owner-1" });
+    const { assetId } = await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "DUAL-1",
+      metrologyRegime: "LEGAL",
+      nextCalibrationDate: daysFromNow(5), // Track 1 window (<= 7 days)
+      nextLegalVerificationDate: daysFromNow(20), // Track 2 window (<= 30 days)
+      regulatedInterval: fixedInterval,
+    });
+
+    const result = await processScheduledNotifications(buildEnv());
+    expect(result.assetsProcessed).toBe(1);
+    expect(result.legalVerificationsProcessed).toBe(1);
+
+    const recal = await scheduledNotificationRows({
+      type: "ASSET_DUE_FOR_RECALIBRATION",
+      entityType: "asset",
+      entityId: assetId,
+    });
+    const legal = await scheduledNotificationRows({
+      type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+      entityType: "asset",
+      entityId: assetId,
+    });
+    expect(recal).toHaveLength(1);
+    expect(legal).toHaveLength(1);
+    expect(recal[0]?.lead_time_days).toBe(7);
+    expect(legal[0]?.lead_time_days).toBe(30);
+    // The two reminders for the same asset carry DISTINCT notification types.
+    expect(recal[0]?.type).toBe("ASSET_DUE_FOR_RECALIBRATION");
+    expect(legal[0]?.type).toBe("ASSET_DUE_FOR_LEGAL_VERIFICATION");
+    expect(recal[0]?.type).not.toBe(legal[0]?.type);
+  });
+
+  // ── REQ-LVRECALL-005: idempotent within the dedup window ────────────────────
+  it("REQ-LVRECALL-005 second sweep within the dedup window with no state change → no duplicate (idempotent)", async () => {
+    const org = await seedScheduledOrg({ orgId: "org-1", userId: "owner-1" });
+    const { assetId } = await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "IDEMPOTENT-1",
+      metrologyRegime: "LEGAL",
+      nextLegalVerificationDate: daysFromNow(20),
+      regulatedInterval: fixedInterval,
+    });
+
+    const first = await processScheduledNotifications(buildEnv());
+    expect(first.legalVerificationsProcessed).toBe(1);
+    expect(
+      await scheduledNotificationRows({
+        type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+        entityType: "asset",
+        entityId: assetId,
+      }),
+    ).toHaveLength(1);
+
+    // Second run: the NOT EXISTS recency guard skips it; ON CONFLICT keeps one row.
+    const second = await processScheduledNotifications(buildEnv());
+    expect(second.legalVerificationsProcessed).toBe(0);
+    expect(
+      await scheduledNotificationRows({
+        type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+        entityType: "asset",
+        entityId: assetId,
+      }),
+    ).toHaveLength(1);
+  });
+
+  // ── REQ-LVRECALL-006: indicative copy when operationalizedByDelegate ─────────
+  // Seed an admin `member` so getRecipientsByRole resolves a recipient and the
+  // sweep writes a REAL in-app notification row; assert its message copy.
+  it("REQ-LVRECALL-006 operationalizedByDelegate=true → in-app reminder copy is indicative (Ipem), not a hard deadline", async () => {
+    const org = await seedScheduledOrg({ orgId: "org-1", userId: "owner-1" });
+    await seedMember({
+      memberId: "m-admin-1",
+      organizationId: org.orgId,
+      userId: org.ownerUserId,
+      role: "admin",
+    });
+    const { assetId } = await seedScheduledAsset({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      tag: "DELEG-1",
+      metrologyRegime: "LEGAL",
+      nextLegalVerificationDate: daysFromNow(20),
+      regulatedInterval: {
+        kind: "fixed_months",
+        valueMonths: 12,
+        anchor: "calendar_year",
+        regulationReference: "Portaria Inmetro nº 157/2022",
+        operationalizedByDelegate: true,
+      },
+    });
+
+    const result = await processScheduledNotifications(buildEnv());
+    expect(result.legalVerificationsProcessed).toBe(1);
+
+    const messages = await legalVerificationMessages(assetId);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("operacionalizada pelo Ipem");
+    expect(messages[0]).toContain("indicativa");
+    expect(messages[0]).toContain("não é um prazo nacional fixo");
+    // Verbatim regulation reference is preserved.
+    expect(messages[0]).toContain("Portaria Inmetro nº 157/2022");
+    // It must NOT present the indicative date as a hard deadline.
+    expect(messages[0]).not.toContain("vencendo em");
   });
 });

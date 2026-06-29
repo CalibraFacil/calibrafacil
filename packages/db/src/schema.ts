@@ -7012,6 +7012,7 @@ export type NotificationType =
   | "CERTIFICATE_READY"
   | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
   | "ASSET_DUE_FOR_RECALIBRATION"
+  | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   | "STANDARD_EXPIRING"
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
   | "JOB_OVERDUE"
