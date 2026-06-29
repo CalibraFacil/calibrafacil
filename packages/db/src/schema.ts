@@ -2733,6 +2733,11 @@ export const asset = pgTable(
     baseMeasurementUnit: text("base_measurement_unit").$type<MeasurementUnit>(),
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
+    // Date the instrument was installed/commissioned. Nullable. Anchors the
+    // legal-metrology verification ceiling for `regulated_interval.kind =
+    // 'max_months_from_install'` (hidrômetros): `next_legal_verification_date`
+    // = `installed_at` + valueMonths. NULL → no fabricated date (REQ-INSTALL-003).
+    installedAt: timestamp("installed_at"),
     comments: text("comments"), // Additional notes about the equipment
     // Whether this instrument is subject to legal metrology (Inmetro): governs
     // whether the repair seal (Etiqueta de Reparo) + security lacre fields are

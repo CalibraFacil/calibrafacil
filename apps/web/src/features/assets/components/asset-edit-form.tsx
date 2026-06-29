@@ -121,6 +121,7 @@ export function AssetEditForm({
     tag: asset.tag,
     status: asset.status,
     lastCalibrationDate: parseDate(asset.lastCalibrationDate),
+    installedAt: parseDate(asset.installedAt),
     comments: asset.comments || '',
     ...regulatedFormFieldsFromAsset(asset),
     specifications: asset.specifications || {},
@@ -414,8 +415,20 @@ export function AssetEditForm({
                   disabled={isSaving}
                 />
               </Field>
+              <Field>
+                <FieldLabel htmlFor="installedAt">
+                  Data de instalação
+                </FieldLabel>
+                <DatePicker
+                  value={formData.installedAt}
+                  onChange={(date) => updateField('installedAt', date)}
+                  placeholder="Selecione a data"
+                  disabled={isSaving}
+                />
+              </Field>
               {/* Próxima calibração (periodicidade) é definida pelo cliente no
-                  portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). */}
+                  portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). A data de
+                  instalação ancora a verificação legal (max_months_from_install). */}
             </div>
           </Panel>
 

@@ -53,6 +53,9 @@ export type AssetFormData = {
   status: AssetStatus
   baseMeasurementUnit: MeasurementUnit | null
   lastCalibrationDate: Date | undefined
+  // Installation/commissioning date. Anchors the legal-metrology verification
+  // ceiling for regulated_interval.kind = 'max_months_from_install'.
+  installedAt: Date | undefined
   comments: string
   // Legal-metrology regime (Track 2) — set by the lab. WHEN 'LEGAL', the flat regulated-*
   // fields are assembled into a RegulatedInterval (the verification periodicity fixed by
@@ -304,6 +307,7 @@ export function parseAssetForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
+  const installedAt = data.installedAt?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -357,6 +361,7 @@ export function parseAssetForm(
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
+    ...(installedAt ? { installedAt } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -373,6 +378,7 @@ export function parseAssetForm(
       'status',
       'baseMeasurementUnit',
       'lastCalibrationDate',
+      'installedAt',
       'comments',
       'specifications',
     ])
@@ -423,6 +429,7 @@ export function parseAssetEditForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
+  const installedAt = data.installedAt?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -459,6 +466,7 @@ export function parseAssetEditForm(
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
+    ...(installedAt ? { installedAt } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -472,6 +480,7 @@ export function parseAssetEditForm(
       'tag',
       'status',
       'lastCalibrationDate',
+      'installedAt',
       'comments',
       'specifications',
     ])

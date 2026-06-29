@@ -222,6 +222,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const lastCalibrationDate = input.lastCalibrationDate
           ? new Date(input.lastCalibrationDate)
           : null;
+        // Installation date anchors the legal-metrology verification ceiling
+        // (regulated_interval.kind = 'max_months_from_install'). (REQ-INSTALL-002/003)
+        const installedAt = input.installedAt
+          ? new Date(input.installedAt)
+          : null;
         const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
           specifications: input.specifications || null,
           definition: foundAssetType.definition,
@@ -241,7 +246,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
               lastVerificationDate: lastCalibrationDate,
               firstVerificationDate: lastCalibrationDate,
-              installDate: null,
+              installDate: installedAt,
             }).date
           : null;
 
@@ -260,6 +265,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             status: input.status || "ACTIVE",
             baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
             lastCalibrationDate,
+            installedAt,
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
             metrologyRegime: regimeWrite.metrologyRegime,
@@ -574,6 +580,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           specifications: asset.specifications,
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
+          installedAt: asset.installedAt,
           comments: asset.comments,
           subjectToLegalMetrology: asset.subjectToLegalMetrology,
           metrologyRegime: asset.metrologyRegime,
@@ -653,6 +660,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             baseMeasurementUnit: asset.baseMeasurementUnit,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            installedAt: asset.installedAt,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             comments: asset.comments,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
@@ -715,6 +723,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const lastCalibrationDate = input.lastCalibrationDate
           ? new Date(input.lastCalibrationDate)
           : undefined;
+        // Installation date (Track-2 install anchor). undefined → not provided in this
+        // PATCH; only persisted when the client sends it. (REQ-INSTALL-002/004)
+        const installedAt = input.installedAt
+          ? new Date(input.installedAt)
+          : undefined;
 
         // Build update object
         const updateData: Record<string, unknown> = {
@@ -742,15 +755,21 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
                   existingAsset.calibrationIntervalMonths,
                 );
         }
+        if (installedAt !== undefined) {
+          updateData.installedAt = installedAt;
+        }
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
-        // the legacy boolean, or the regulated interval. Independent of Track 1 (the
-        // customer-owned calibration interval). (REQ-MLR-030/031/032/003)
+        // the legacy boolean, the regulated interval, OR the install anchor (a standalone
+        // installed_at change must re-derive next_legal_verification_date for an
+        // install-anchored LEGAL asset). Independent of Track 1 (the customer-owned
+        // calibration interval). (REQ-MLR-030/031/032/003 + REQ-INSTALL-002)
         if (
           input.metrologyRegime !== undefined ||
           input.subjectToLegalMetrology !== undefined ||
-          input.regulatedInterval !== undefined
+          input.regulatedInterval !== undefined ||
+          installedAt !== undefined
         ) {
           const parsedCurrent = RegulatedIntervalSchema.safeParse(
             existingAsset.regulatedInterval,
@@ -773,11 +792,17 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             (lastCalibrationDate !== undefined
               ? lastCalibrationDate
               : existingAsset.lastCalibrationDate) ?? null;
+          // Install anchor: the PATCHed value if provided, else the stored one.
+          // (REQ-INSTALL-002/003 — never fabricated when absent.)
+          const installAnchor =
+            (installedAt !== undefined
+              ? installedAt
+              : existingAsset.installedAt) ?? null;
           updateData.nextLegalVerificationDate = regimeWrite.regulatedInterval
             ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
                 lastVerificationDate: anchorDate,
                 firstVerificationDate: anchorDate,
-                installDate: null,
+                installDate: installAnchor,
               }).date
             : null;
         }

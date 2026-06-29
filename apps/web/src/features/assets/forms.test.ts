@@ -40,6 +40,31 @@ describe('asset feature forms', () => {
     )
   })
 
+  it('REQ-INSTALL-004: carries the installation date through create as an ISO string', () => {
+    const result = parseAssetForm({
+      ...validAssetForm(),
+      installedAt: new Date('2021-07-15T00:00:00.000Z'),
+    })
+    expect(result.success && result.data.installedAt).toBe(
+      '2021-07-15T00:00:00.000Z',
+    )
+  })
+
+  it('REQ-INSTALL-004: omits installedAt from the create payload when unset', () => {
+    const result = parseAssetForm(validAssetForm())
+    expect(result.success && result.data.installedAt).toBeUndefined()
+  })
+
+  it('REQ-INSTALL-004: carries the installation date through update as an ISO string', () => {
+    const result = parseAssetEditForm({
+      ...validAssetEditForm(),
+      installedAt: new Date('2020-03-01T00:00:00.000Z'),
+    })
+    expect(result.success && result.data.installedAt).toBe(
+      '2020-03-01T00:00:00.000Z',
+    )
+  })
+
   it('maps shared schema issues and required field checks to route fields', () => {
     const result = parseAssetForm({
       ...validAssetForm(),
@@ -191,9 +216,9 @@ describe('asset feature forms', () => {
         serialNumber: 'SN-002',
         tag: 'BAL-002',
         status: 'MAINTENANCE',
-        // The schema's default keeps the deprecated boolean in the payload; the API
-        // recomputes it from `metrologyRegime`, so its value here is immaterial.
-        subjectToLegalMetrology: false,
+        // No deprecated boolean in the payload: with the `.default(false)` removed, an
+        // omitted regime leaves the API to keep the asset's current regime (so a
+        // non-regime update never silently resets a LEGAL asset to INDUSTRIAL).
         metrologyRegime: 'INDUSTRIAL',
       },
     })
@@ -350,6 +375,7 @@ function validAssetForm(): AssetFormData {
     status: 'ACTIVE',
     baseMeasurementUnit: null,
     lastCalibrationDate: undefined,
+    installedAt: undefined,
     comments: '',
     metrologyRegime: 'INDUSTRIAL',
     ...DEFAULT_REGULATED_FORM_FIELDS,
@@ -366,6 +392,7 @@ function validAssetEditForm(): AssetEditFormData {
     tag: 'BAL-002',
     status: 'MAINTENANCE',
     lastCalibrationDate: undefined,
+    installedAt: undefined,
     comments: '',
     metrologyRegime: 'INDUSTRIAL',
     ...DEFAULT_REGULATED_FORM_FIELDS,
