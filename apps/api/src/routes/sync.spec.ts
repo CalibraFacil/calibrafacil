@@ -1304,4 +1304,94 @@ describe("syncRouter", () => {
       900,
     );
   });
+
+  it("REQ-OFFLINE-003: push update_local_asset carries the four legal-metrology columns into the cloud asset update", async () => {
+    const regulatedInterval = {
+      kind: "fixed_months",
+      valueMonths: 12,
+      anchor: "last_verification",
+      regulationReference: "Portaria Inmetro nº 157/2022",
+      operationalizedByDelegate: false,
+    };
+    // Select order for one update_local_asset event:
+    //   1. findAppliedDesktopSyncEvent (idempotency) → not yet applied
+    //   2. findDesktopSyncRemoteEntityId → maps local id → remote asset 42
+    //   3. existing asset (regime read) → INDUSTRIAL, no interval, install anchor set
+    //   4. db.update(...).returning() → updated asset row
+    //   5. db.insert(assetAuditLog) (changes recorded)
+    //   6. writeOrganizationAuditEvent → db.insert(organizationEventLog)
+    mocks.selectResults.push(
+      [],
+      [{ details: { remoteEntityId: 42 } }],
+      [
+        {
+          id: 42,
+          customerId: 20,
+          name: "Hidrômetro",
+          manufacturer: null,
+          model: null,
+          serialNumber: "SN-1",
+          tag: "TAG-1",
+          status: "ACTIVE",
+          baseMeasurementUnit: null,
+          lastCalibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+          nextCalibrationDate: null,
+          comments: null,
+          specifications: {},
+          subjectToLegalMetrology: false,
+          metrologyRegime: "INDUSTRIAL",
+          regulatedInterval: null,
+          installedAt: new Date("2026-02-01T00:00:00.000Z"),
+          assetTypeDefinition: null,
+        },
+      ],
+      [{ id: 42, tag: "TAG-1", status: "ACTIVE" }],
+      [],
+      [],
+    );
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-regime",
+        baseCursor: "cursor-before",
+        events: [
+          syncEvent({
+            eventId: "evt-regime",
+            entityType: "asset",
+            entityId: "local-asset-1",
+            operation: "update_local_asset",
+            payload: {
+              metrologyRegime: "LEGAL",
+              regulatedInterval,
+            },
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.rejected).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+
+    expect(mocks.db.update).toHaveBeenCalledTimes(1);
+    const updateQuery = mocks.db.update.mock.results[0]?.value;
+    expect(updateQuery.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metrologyRegime: "LEGAL",
+        // REQ-MLR-003: the deprecated boolean stays consistent with the regime.
+        subjectToLegalMetrology: true,
+        regulatedInterval: expect.objectContaining({
+          kind: "fixed_months",
+          valueMonths: 12,
+        }),
+        // Derived from last verification (2026-01-01) + 12 months.
+        nextLegalVerificationDate: new Date("2027-01-01T00:00:00.000Z"),
+      }),
+    );
+  });
 });

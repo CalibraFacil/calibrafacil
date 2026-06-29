@@ -240,6 +240,10 @@ INSERT INTO assets (
   next_calibration_date,
   comments,
   subject_to_legal_metrology,
+  metrology_regime,
+  regulated_interval,
+  next_legal_verification_date,
+  installed_at,
   status,
   updated_at,
   sync_state
@@ -261,6 +265,10 @@ INSERT INTO assets (
   @nextCalibrationDate,
   @comments,
   @subjectToLegalMetrology,
+  @metrologyRegime,
+  @regulatedIntervalJson,
+  @nextLegalVerificationDate,
+  @installedAt,
   @status,
   @updatedAt,
   'synced'
@@ -279,6 +287,10 @@ ON CONFLICT(id) DO UPDATE SET
   next_calibration_date = excluded.next_calibration_date,
   comments = excluded.comments,
   subject_to_legal_metrology = excluded.subject_to_legal_metrology,
+  metrology_regime = excluded.metrology_regime,
+  regulated_interval = excluded.regulated_interval,
+  next_legal_verification_date = excluded.next_legal_verification_date,
+  installed_at = excluded.installed_at,
   status = excluded.status,
   updated_at = excluded.updated_at,
   sync_state = excluded.sync_state
@@ -304,6 +316,13 @@ ON CONFLICT(id) DO UPDATE SET
           subjectToLegalMetrology: getBoolean(row, "subjectToLegalMetrology")
             ? 1
             : 0,
+          metrologyRegime: getString(row, "metrologyRegime") ?? "INDUSTRIAL",
+          regulatedIntervalJson: JSON.stringify(row.regulatedInterval ?? null),
+          nextLegalVerificationDate: getDateString(
+            row,
+            "nextLegalVerificationDate",
+          ),
+          installedAt: getDateString(row, "installedAt"),
           status: getString(row, "status") ?? "ACTIVE",
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
         });
