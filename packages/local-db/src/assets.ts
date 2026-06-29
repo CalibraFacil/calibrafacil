@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { MetrologyRegime } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
@@ -39,6 +40,12 @@ export type LocalAssetsListData = {
     nextCalibrationDate: string | null;
     comments: string | null;
     subjectToLegalMetrology: boolean;
+    // Legal-metrology TRACK 2 (mirrors the cloud `asset` columns). `regulatedInterval`
+    // is the structured period (stored loosely like `specifications`).
+    metrologyRegime: MetrologyRegime;
+    regulatedInterval: Record<string, unknown> | null;
+    nextLegalVerificationDate: string | null;
+    installedAt: string | null;
     createdAt: string;
     updatedAt: string;
     syncState: string;
@@ -67,6 +74,10 @@ export type CreateLocalAssetInput = {
   nextCalibrationDate?: string | null;
   comments?: string | null;
   subjectToLegalMetrology?: boolean;
+  metrologyRegime?: MetrologyRegime;
+  regulatedInterval?: Record<string, unknown> | null;
+  nextLegalVerificationDate?: string | null;
+  installedAt?: string | null;
   specifications?: Record<string, unknown> | null;
   actorUserId?: string | null;
   deviceId?: string | null;
@@ -85,6 +96,10 @@ export type UpdateLocalAssetInput = {
   nextCalibrationDate?: string | null;
   comments?: string | null;
   subjectToLegalMetrology?: boolean;
+  metrologyRegime?: MetrologyRegime;
+  regulatedInterval?: Record<string, unknown> | null;
+  nextLegalVerificationDate?: string | null;
+  installedAt?: string | null;
   specifications?: Record<string, unknown> | null;
   actorUserId?: string | null;
   deviceId?: string | null;
@@ -115,6 +130,10 @@ type LocalAssetListRow = {
   next_calibration_date: string | null;
   comments: string | null;
   subject_to_legal_metrology: number;
+  metrology_regime: MetrologyRegime;
+  regulated_interval: string | null;
+  next_legal_verification_date: string | null;
+  installed_at: string | null;
   updated_at: string;
   sync_state: string;
 };
@@ -177,6 +196,9 @@ LIMIT 1
     nextCalibrationDate: input.nextCalibrationDate ?? null,
     comments: input.comments || null,
     subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
+    metrologyRegime: input.metrologyRegime ?? "INDUSTRIAL",
+    regulatedInterval: input.regulatedInterval ?? null,
+    installedAt: input.installedAt ?? null,
     specifications: input.specifications ?? null,
   };
 
@@ -201,6 +223,10 @@ INSERT INTO assets (
   next_calibration_date,
   comments,
   subject_to_legal_metrology,
+  metrology_regime,
+  regulated_interval,
+  next_legal_verification_date,
+  installed_at,
   status,
   updated_at,
   sync_state
@@ -221,6 +247,10 @@ INSERT INTO assets (
   @nextCalibrationDate,
   @comments,
   @subjectToLegalMetrology,
+  @metrologyRegime,
+  @regulatedIntervalJson,
+  @nextLegalVerificationDate,
+  @installedAt,
   @status,
   @updatedAt,
   'local'
@@ -244,6 +274,10 @@ INSERT INTO assets (
         nextCalibrationDate: input.nextCalibrationDate ?? null,
         comments: input.comments || null,
         subjectToLegalMetrology: input.subjectToLegalMetrology ? 1 : 0,
+        metrologyRegime: input.metrologyRegime ?? "INDUSTRIAL",
+        regulatedIntervalJson: JSON.stringify(input.regulatedInterval ?? null),
+        nextLegalVerificationDate: input.nextLegalVerificationDate ?? null,
+        installedAt: input.installedAt ?? null,
         status: input.status ?? "ACTIVE",
         updatedAt: now,
       });
@@ -337,6 +371,10 @@ SELECT
   a.next_calibration_date,
   a.comments,
   a.subject_to_legal_metrology,
+  a.metrology_regime,
+  a.regulated_interval,
+  a.next_legal_verification_date,
+  a.installed_at,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -387,6 +425,10 @@ SELECT
   a.next_calibration_date,
   a.comments,
   a.subject_to_legal_metrology,
+  a.metrology_regime,
+  a.regulated_interval,
+  a.next_legal_verification_date,
+  a.installed_at,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -441,6 +483,10 @@ SELECT
   a.next_calibration_date,
   a.comments,
   a.subject_to_legal_metrology,
+  a.metrology_regime,
+  a.regulated_interval,
+  a.next_legal_verification_date,
+  a.installed_at,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -517,6 +563,20 @@ LIMIT 1
       input.subjectToLegalMetrology === undefined
         ? row.subject_to_legal_metrology === 1
         : input.subjectToLegalMetrology,
+    metrologyRegime:
+      input.metrologyRegime === undefined
+        ? row.metrology_regime
+        : input.metrologyRegime,
+    regulatedInterval:
+      input.regulatedInterval === undefined
+        ? parseRecord(row.regulated_interval)
+        : input.regulatedInterval,
+    nextLegalVerificationDate:
+      input.nextLegalVerificationDate === undefined
+        ? row.next_legal_verification_date
+        : input.nextLegalVerificationDate,
+    installedAt:
+      input.installedAt === undefined ? row.installed_at : input.installedAt,
     specifications:
       input.specifications === undefined
         ? parseJson(row.specifications_json)
@@ -540,6 +600,10 @@ SET name = @name,
   next_calibration_date = @nextCalibrationDate,
   comments = @comments,
   subject_to_legal_metrology = @subjectToLegalMetrology,
+  metrology_regime = @metrologyRegime,
+  regulated_interval = @regulatedIntervalJson,
+  next_legal_verification_date = @nextLegalVerificationDate,
+  installed_at = @installedAt,
   updated_at = @updatedAt,
   sync_state = 'local'
 WHERE id = @id
@@ -559,6 +623,10 @@ WHERE id = @id
         nextCalibrationDate: values.nextCalibrationDate ?? null,
         comments: values.comments || null,
         subjectToLegalMetrology: values.subjectToLegalMetrology ? 1 : 0,
+        metrologyRegime: values.metrologyRegime,
+        regulatedIntervalJson: JSON.stringify(values.regulatedInterval ?? null),
+        nextLegalVerificationDate: values.nextLegalVerificationDate ?? null,
+        installedAt: values.installedAt ?? null,
         updatedAt: now,
       });
 
@@ -615,6 +683,10 @@ SELECT
   a.next_calibration_date,
   a.comments,
   a.subject_to_legal_metrology,
+  a.metrology_regime,
+  a.regulated_interval,
+  a.next_legal_verification_date,
+  a.installed_at,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -685,6 +757,10 @@ SELECT
   a.next_calibration_date,
   a.comments,
   a.subject_to_legal_metrology,
+  a.metrology_regime,
+  a.regulated_interval,
+  a.next_legal_verification_date,
+  a.installed_at,
   a.updated_at,
   a.sync_state
 FROM assets a
@@ -740,6 +816,10 @@ function toLocalAsset(row: LocalAssetListRow): LocalAsset {
     nextCalibrationDate: row.next_calibration_date,
     comments: row.comments,
     subjectToLegalMetrology: row.subject_to_legal_metrology === 1,
+    metrologyRegime: row.metrology_regime,
+    regulatedInterval: parseRecord(row.regulated_interval),
+    nextLegalVerificationDate: row.next_legal_verification_date,
+    installedAt: row.installed_at,
     createdAt: row.updated_at,
     updatedAt: row.updated_at,
     syncState: row.sync_state,
@@ -873,4 +953,15 @@ function parseJson(value: string | null) {
   } catch {
     return null;
   }
+}
+
+// Parse a stored JSON object column (e.g. `regulated_interval`) back into a plain
+// record, mirroring the cloud column's `Record<string, unknown>` shape. Non-objects
+// (and arrays / parse failures) collapse to null so the round-trip stays well-typed.
+function parseRecord(value: string | null): Record<string, unknown> | null {
+  const parsed = parseJson(value);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return Object.fromEntries(Object.entries(parsed));
+  }
+  return null;
 }

@@ -64,6 +64,7 @@ import {
   CreateServiceOrderQuoteSchema,
   CreateServiceOrderSchema,
   IssueServiceOrderDeliveryDocumentSchema,
+  RegulatedIntervalSchema,
   StandardSnapshotSchema,
   UpdateAssetSchema,
   UpdateComplianceSchema,
@@ -85,6 +86,8 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { resolveAssetRegimeWrite } from "../lib/asset-regime";
+import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import {
   asRecord,
   buildSyncAttachmentObjectKey,
@@ -215,6 +218,10 @@ export const syncRouter = new Hono<{
             baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
             subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            metrologyRegime: asset.metrologyRegime,
+            regulatedInterval: asset.regulatedInterval,
+            nextLegalVerificationDate: asset.nextLegalVerificationDate,
+            installedAt: asset.installedAt,
             status: asset.status,
             updatedAt: asset.updatedAt,
           })
@@ -844,6 +851,10 @@ async function loadCloudSyncEventsSince(
         baseMeasurementUnit: asset.baseMeasurementUnit,
         specifications: asset.specifications,
         subjectToLegalMetrology: asset.subjectToLegalMetrology,
+        metrologyRegime: asset.metrologyRegime,
+        regulatedInterval: asset.regulatedInterval,
+        nextLegalVerificationDate: asset.nextLegalVerificationDate,
+        installedAt: asset.installedAt,
         status: asset.status,
         updatedAt: asset.updatedAt,
       })
@@ -1779,6 +1790,23 @@ async function applyCreateLocalAsset(
 
   const lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
   const nextCalibrationDate = parseSyncDate(values.nextCalibrationDate);
+  // Legal-metrology TRACK 2 (mirrors the cloud asset-create route): resolve the regime
+  // trio + derive next_legal_verification_date so a desktop-created LEGAL instrument lands
+  // consistent (REQ-MLR-003/030/031 + REQ-INSTALL-002), not as a half-set state.
+  const installedAt = parseSyncDate(values.installedAt);
+  const regimeWrite = resolveAssetRegimeWrite({
+    metrologyRegime: values.metrologyRegime,
+    subjectToLegalMetrology: values.subjectToLegalMetrology,
+    regulatedInterval: values.regulatedInterval,
+    current: { metrologyRegime: "INDUSTRIAL", regulatedInterval: null },
+  });
+  const nextLegalVerificationDate = regimeWrite.regulatedInterval
+    ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+        lastVerificationDate: lastCalibrationDate,
+        firstVerificationDate: lastCalibrationDate,
+        installDate: installedAt,
+      }).date
+    : null;
   const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
     specifications: values.specifications || null,
     definition: foundAssetType.definition,
@@ -1801,9 +1829,13 @@ async function applyCreateLocalAsset(
         baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
         lastCalibrationDate,
         nextCalibrationDate,
+        installedAt,
         comments: values.comments || null,
         specifications: normalizedSpecifications.specifications || null,
-        subjectToLegalMetrology: values.subjectToLegalMetrology ?? false,
+        metrologyRegime: regimeWrite.metrologyRegime,
+        subjectToLegalMetrology: regimeWrite.subjectToLegalMetrology,
+        regulatedInterval: regimeWrite.regulatedInterval,
+        nextLegalVerificationDate,
       })
       .returning();
 
@@ -1892,6 +1924,9 @@ async function applyUpdateLocalAsset(
       comments: asset.comments,
       specifications: asset.specifications,
       subjectToLegalMetrology: asset.subjectToLegalMetrology,
+      metrologyRegime: asset.metrologyRegime,
+      regulatedInterval: asset.regulatedInterval,
+      installedAt: asset.installedAt,
       assetTypeDefinition: assetType.definition,
     })
     .from(asset)
@@ -1949,8 +1984,55 @@ async function applyUpdateLocalAsset(
   }
   if (values.comments !== undefined)
     updateData.comments = values.comments || null;
-  if (values.subjectToLegalMetrology !== undefined)
-    updateData.subjectToLegalMetrology = values.subjectToLegalMetrology;
+  // Track-2 install anchor (only persisted when the desktop event provides it).
+  const installedAtUpdate =
+    values.installedAt !== undefined
+      ? parseSyncDate(values.installedAt)
+      : undefined;
+  if (installedAtUpdate !== undefined) {
+    updateData.installedAt = installedAtUpdate;
+  }
+  // Legal-metrology regime (mirrors the cloud asset-update route): recompute the regime
+  // trio + next_legal_verification_date when the desktop event touches the regime, the
+  // legacy boolean, the regulated interval, OR the install anchor. Keeps the four columns
+  // mutually consistent (REQ-MLR-003/030/031/032 + REQ-INSTALL-002).
+  if (
+    values.metrologyRegime !== undefined ||
+    values.subjectToLegalMetrology !== undefined ||
+    values.regulatedInterval !== undefined ||
+    installedAtUpdate !== undefined
+  ) {
+    const parsedCurrent = RegulatedIntervalSchema.safeParse(
+      existingAsset.regulatedInterval,
+    );
+    const regimeWrite = resolveAssetRegimeWrite({
+      metrologyRegime: values.metrologyRegime,
+      subjectToLegalMetrology: values.subjectToLegalMetrology,
+      regulatedInterval: values.regulatedInterval,
+      current: {
+        metrologyRegime: existingAsset.metrologyRegime,
+        regulatedInterval: parsedCurrent.success ? parsedCurrent.data : null,
+      },
+    });
+    updateData.metrologyRegime = regimeWrite.metrologyRegime;
+    updateData.subjectToLegalMetrology = regimeWrite.subjectToLegalMetrology;
+    updateData.regulatedInterval = regimeWrite.regulatedInterval;
+    const anchorDate =
+      (values.lastCalibrationDate !== undefined
+        ? parseSyncDate(values.lastCalibrationDate)
+        : existingAsset.lastCalibrationDate) ?? null;
+    const installAnchor =
+      (installedAtUpdate !== undefined
+        ? installedAtUpdate
+        : existingAsset.installedAt) ?? null;
+    updateData.nextLegalVerificationDate = regimeWrite.regulatedInterval
+      ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+          lastVerificationDate: anchorDate,
+          firstVerificationDate: anchorDate,
+          installDate: installAnchor,
+        }).date
+      : null;
+  }
   if (values.specifications !== undefined) {
     const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
       specifications: values.specifications || null,

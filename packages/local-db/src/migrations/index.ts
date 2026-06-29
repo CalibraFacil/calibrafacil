@@ -8,6 +8,7 @@ import { migration0007CalibrationPhaseSnapshot } from "./0007_calibration_phase_
 import { migration0008PrinterProfiles } from "./0008_printer_profiles";
 import { migration0009AssetSubjectToLegalMetrology } from "./0009_asset_subject_to_legal_metrology";
 import { migration0010MassCompositionProfiles } from "./0010_mass_composition_profiles";
+import { migration0011AssetLegalMetrologyRegime } from "./0011_asset_legal_metrology_regime";
 
 export type LocalDbMigration = {
   id: number;
@@ -26,6 +27,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0008PrinterProfiles,
   migration0009AssetSubjectToLegalMetrology,
   migration0010MassCompositionProfiles,
+  migration0011AssetLegalMetrologyRegime,
 ];
 
 export const currentLocalDbSchemaVersion =
