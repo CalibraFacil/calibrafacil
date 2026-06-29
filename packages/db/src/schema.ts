@@ -2855,6 +2855,75 @@ export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
 }));
 
 // =============================================================================
+// LEGAL-METROLOGY REGULATION CATALOG (deferred #3 of #423)
+// =============================================================================
+
+/**
+ * The shape of a regulation-fixed verification periodicity. Mirrors
+ * `RegulatedInterval['kind']` from `@calibra-facil/schemas` (kept as a local union so
+ * `schema.ts` carries no cross-package type import). Spec:
+ * `specs/legal-metrology-regime/spec.md` (REQ-MLR-010/011).
+ */
+export type LegalMetrologyRegulationKind =
+  | "fixed_months"
+  | "max_months_from_install"
+  | "per_technology"
+  | "not_nationally_fixed";
+
+/**
+ * Provenance of a catalog row. `primary` → the period shape was confirmed against the
+ * official Inmetro RTM / DOU. `secondary` → corroborated but the exact article still needs
+ * operator re-confirmation before it backs a compliance certificate; the UI shows a
+ * "(verificar artigo no DOU)" caveat. Spec: REQ-CATALOG-002/005.
+ */
+export type LegalMetrologyProvenance = "primary" | "secondary";
+
+/**
+ * Curated, in-house lookup of legal-metrology Portarias → the default regulated-interval
+ * shape, so the lab regime form can auto-fill the regulated fields from a chosen regulation
+ * (a default the lab can still override — the regime is use-dependent). There is no public
+ * Inmetro registry, so this is seeded with provenance. GLOBAL reference data (the same
+ * Portarias apply to every lab) — NOT tenant-scoped. `category` is the idempotent natural
+ * key. Spec: `specs/legal-metrology-catalog/spec.md` (REQ-CATALOG-001).
+ */
+export const legalMetrologyRegulation = pgTable(
+  "legal_metrology_regulation",
+  {
+    id: serial("id").primaryKey(),
+    // Human label of the regulated instrument class (e.g. "Taxímetros").
+    category: text("category").notNull(),
+    // The period shape (reuses RegulatedInterval kinds).
+    kind: text("kind").$type<LegalMetrologyRegulationKind>().notNull(),
+    // Scalar months for `fixed_months` / `max_months_from_install`; NULL for
+    // `per_technology` (resolved from byTechnology) and `not_nationally_fixed`.
+    valueMonths: integer("value_months"),
+    // Per-technology month map for `per_technology` (e.g. {"diafragma":120,...}).
+    byTechnology: jsonb("by_technology").$type<Record<string, number>>(),
+    // The counting anchor (last_verification / calendar_year / first_verification /
+    // install_year). NULL for `not_nationally_fixed`.
+    anchor: text("anchor"),
+    // true → the Ipem operationalizes the cadence (derived date is indicative).
+    operationalizedByDelegate: boolean("operationalized_by_delegate")
+      .default(false)
+      .notNull(),
+    // The governing act, verbatim (e.g. "Portaria Inmetro nº 157, de 30 de março de 2022").
+    regulationReference: text("regulation_reference").notNull(),
+    // primary (RTM/DOU-confirmed) | secondary (needs operator re-confirmation).
+    provenance: text("provenance").$type<LegalMetrologyProvenance>().notNull(),
+    // Optional curator note (e.g. the distinct ANEEL regime for energia elétrica).
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("legal_metrology_regulation_category_uidx").on(table.category),
+  ],
+);
+
+// =============================================================================
 // CALIBRATION METHOD - ISO 17025 Validated Calibration Templates
 // =============================================================================
 

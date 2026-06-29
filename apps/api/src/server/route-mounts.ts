@@ -24,6 +24,7 @@ import { integrationsRouter } from "../routes/integrations";
 import { internalCustomerSuccessRouter } from "../routes/internal-customer-success";
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
+import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regulations";
 import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
 import { notificationsRouter } from "../routes/notifications";
@@ -87,6 +88,7 @@ export function mountApiRoutes(
     .route("/api/portal/service-orders", portalServiceOrdersRouter)
     .route("/api/assets", assetsRouter)
     .route("/api/asset-types", assetTypesRouter)
+    .route("/api/legal-metrology-regulations", legalMetrologyRegulationsRouter)
     .route("/api/methods", methodsRouter)
     .route("/api/services", servicesRouter)
     .route("/api/standards", standardsRouter)

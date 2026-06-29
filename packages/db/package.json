@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/db.ts",
     "./queue": "./src/queue.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"
   },
   "description": "",
   "main": "index.js",
@@ -19,6 +20,7 @@
     "db:seed:exemplo-reference-standards": "node ./scripts/seed-exemplo-reference-standards.mjs",
     "db:seed:exemplo-modelo-demo-job": "node ./scripts/seed-exemplo-modelo-demo-job.mjs",
     "db:seed:calibrafacil-conta-azul-demo": "node ./scripts/seed-calibrafacil-conta-azul-demo.mjs",
+    "db:seed:legal-metrology-regulations": "tsx ./src/seed-legal-metrology-regulations.ts",
     "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs",
     "lint": "oxlint",
     "check-types": "tsgo --noEmit"

@@ -7,6 +7,7 @@
 
 import { db } from "./db";
 import { assetType, type AssetTypeFieldDefinition } from "./schema";
+import { seedLegalMetrologyRegulations } from "./seed-legal-metrology-regulations";
 
 const assetTypes: Array<{
   name: string;
@@ -628,6 +629,12 @@ async function seed() {
       console.error(`  ✗ ${type.name}:`, error);
     }
   }
+
+  // Also seed the GLOBAL legal-metrology regulation catalog (deferred #3 of #423).
+  // Idempotent + data-only (ON CONFLICT DO NOTHING on `category`; touches no asset row).
+  console.log("Seeding legal-metrology regulations...");
+  await seedLegalMetrologyRegulations(db);
+  console.log("  ✓ legal-metrology regulation catalog");
 
   console.log("\nDone! Seeded", assetTypes.length, "asset types.");
   process.exit(0);
