@@ -20,6 +20,8 @@ files:
   - assets/icon.png
 extraMetadata:
   main: dist/main/main.cjs
+# Feed served from a Cloudflare R2 bucket (custom domain). Fed by the
+# "Desktop Publish Update Feed" workflow — see docs/desktop-auto-update.md.
 publish:
   provider: generic
   url: https://updates.calibrafacil.com/desktop
