@@ -279,6 +279,87 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
     expect(row?.calibrationIntervalMonths).toBe(24);
   });
 
+  // REQ-POLISH-003 [HIGH RISK]: hardens REQ-MLR-042 — the two tracks are INDEPENDENT. A
+  // portal calibration-interval write touches Track 1 only; the lab-recorded Track-2 columns
+  // (regulated_interval + next_legal_verification_date) are byte-unchanged. We compare a
+  // DB-roundtrip taken right after the seed to a DB-roundtrip taken after the portal write,
+  // so the assertion is exact regardless of timestamp/jsonb storage round-tripping.
+  it("REQ-POLISH-003: portal interval write on a LEGAL asset leaves both Track-2 columns byte-unchanged", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const assetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-LM2",
+      lastCalibrationDate: new Date(Date.UTC(2026, 0, 15)),
+      subjectToLegalMetrology: true,
+    });
+
+    // The lab records the legal regime + a regulation-fixed verification periodicity (Track 2)
+    // plus an existing customer interval (Track 1).
+    const seededRegulatedInterval = {
+      kind: "fixed_months",
+      valueMonths: 24,
+      anchor: "last_verification",
+      regulationReference: "Portaria Inmetro nº 124/2022",
+      operationalizedByDelegate: false,
+    };
+    await db
+      .update(asset)
+      .set({
+        metrologyRegime: "LEGAL",
+        subjectToLegalMetrology: true,
+        regulatedInterval: seededRegulatedInterval,
+        nextLegalVerificationDate: new Date("2027-03-10T00:00:00.000Z"),
+        calibrationIntervalMonths: 12,
+        intervalSetBy: "customer_confirmed",
+      })
+      .where(eq(asset.id, assetId));
+
+    const [before] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(before?.calibrationIntervalMonths).toBe(12);
+    expect(before?.regulatedInterval).toEqual(seededRegulatedInterval);
+    expect(before?.nextLegalVerificationDate).toBeInstanceOf(Date);
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const res = await put(assetId, {
+      intervalMonths: 36,
+      rationale: "estender por histórico estável",
+    });
+    expect(res.status).toBe(200);
+
+    const [after] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+
+    // Track 1 (customer-owned) changed to the new interval.
+    expect(after?.calibrationIntervalMonths).toBe(36);
+    expect(after?.calibrationIntervalMonths).not.toBe(
+      before?.calibrationIntervalMonths,
+    );
+
+    // Track 2 (lab-recorded) is byte-unchanged — neither column was touched.
+    expect(after?.regulatedInterval).toEqual(before?.regulatedInterval);
+    expect(after?.nextLegalVerificationDate?.getTime()).toBe(
+      before?.nextLegalVerificationDate?.getTime(),
+    );
+  });
+
   // REQ-ACCESS-INT-003 [HIGH RISK]: empty rationale → 400 (zValidator), no mutation.
   it("REQ-ACCESS-INT-003: empty rationale → 400", async () => {
     const assetTypeId = await ensureAssetType();

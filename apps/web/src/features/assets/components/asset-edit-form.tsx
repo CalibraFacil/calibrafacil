@@ -364,6 +364,7 @@ export function AssetEditForm({
                 setFormData((prev) => ({ ...prev, ...patch }))
               }
               disabled={isSaving}
+              errors={errors}
             />
           </Panel>
 

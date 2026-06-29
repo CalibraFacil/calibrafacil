@@ -174,3 +174,69 @@ describe('MetrologyRegimeFields — regulation catalog auto-fill', () => {
     expect(screen.queryByText('Regulamento (catálogo)')).toBeNull()
   })
 })
+
+describe('MetrologyRegimeFields — inline regulated-field errors', () => {
+  // The flat lab-form fields are validated against RegulatedIntervalSchema in parseAssetForm;
+  // each issue is mapped to a regulated field key (regulationReference / regulatedValueMonths /
+  // regulatedTechnology / regulatedAnchor). REQ-POLISH-001: those field-keyed messages must be
+  // surfaced inline, next to the offending field, not only as a form-level banner.
+  const REGULATED_ERRORS = {
+    regulationReference: 'A referência do regulamento (Portaria) é obrigatória',
+    regulatedValueMonths: 'A periodicidade deve ser de no máximo 600 meses',
+    regulatedAnchor: 'Âncora da contagem inválida',
+    regulatedTechnology: 'A tecnologia do instrumento é obrigatória',
+  } as const
+
+  it('REQ-POLISH-001: renders an inline error for every regulated field that has one', () => {
+    queryMocks.data = []
+    render(
+      <MetrologyRegimeFields
+        values={{ ...INITIAL, regulatedKind: 'per_technology' }}
+        onChange={vi.fn()}
+        errors={REGULATED_ERRORS}
+      />,
+    )
+
+    // Each field's message is rendered (per_technology renders all four fields).
+    expect(
+      screen.getByText(REGULATED_ERRORS.regulationReference),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(REGULATED_ERRORS.regulatedValueMonths),
+    ).toBeTruthy()
+    expect(screen.getByText(REGULATED_ERRORS.regulatedAnchor)).toBeTruthy()
+    expect(
+      screen.getByText(REGULATED_ERRORS.regulatedTechnology),
+    ).toBeTruthy()
+  })
+
+  it('REQ-POLISH-001: renders only the errors that are present', () => {
+    queryMocks.data = []
+    render(
+      <MetrologyRegimeFields
+        values={{ ...INITIAL, regulatedKind: 'per_technology' }}
+        onChange={vi.fn()}
+        errors={{ regulationReference: REGULATED_ERRORS.regulationReference }}
+      />,
+    )
+
+    expect(
+      screen.getByText(REGULATED_ERRORS.regulationReference),
+    ).toBeTruthy()
+    expect(
+      screen.queryByText(REGULATED_ERRORS.regulatedValueMonths),
+    ).toBeNull()
+    expect(screen.queryByText(REGULATED_ERRORS.regulatedTechnology)).toBeNull()
+  })
+
+  it('REQ-POLISH-001: renders no error node when no errors are passed', () => {
+    queryMocks.data = []
+    render(
+      <MetrologyRegimeFields
+        values={{ ...INITIAL, regulatedKind: 'per_technology' }}
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
