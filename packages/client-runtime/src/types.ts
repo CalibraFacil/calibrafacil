@@ -995,6 +995,7 @@ export type AssetDetailData = AssetsListData["data"][number] & {
   baseMeasurementUnit?: "mg" | "g" | "kg" | string | null;
   lastCalibrationDate?: string | Date | null;
   nextCalibrationDate?: string | Date | null;
+  installedAt?: string | Date | null;
   comments?: string | null;
   specifications?: Record<string, unknown> | null;
   createdAt?: string | Date | null;

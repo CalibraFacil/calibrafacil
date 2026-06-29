@@ -394,6 +394,9 @@ export const CreateAssetSchema = z.object({
   baseMeasurementUnit: MeasurementUnitSchema.optional().nullable(),
   lastCalibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
+  // Installation/commissioning date (ISO). Anchors the legal-metrology verification
+  // ceiling for `regulated_interval.kind = 'max_months_from_install'` (REQ-INSTALL-002).
+  installedAt: z.string().optional(),
   comments: z.string().optional(),
   specifications: z.record(z.string(), z.unknown()).optional(),
   // Subject to legal metrology (Inmetro). DEPRECATED in favour of `metrologyRegime`

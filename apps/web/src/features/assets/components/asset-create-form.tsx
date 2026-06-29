@@ -109,6 +109,7 @@ const FIELD_STEP: Record<string, string> = {
   regulatedTechnology: 'sec-identificacao',
   baseMeasurementUnit: 'sec-especificacoes',
   lastCalibrationDate: 'sec-calibracao',
+  installedAt: 'sec-calibracao',
   comments: 'sec-observacoes',
 }
 
@@ -128,6 +129,7 @@ const initialFormData: AssetFormData = {
   status: 'ACTIVE',
   baseMeasurementUnit: null,
   lastCalibrationDate: undefined,
+  installedAt: undefined,
   comments: '',
   metrologyRegime: 'INDUSTRIAL',
   ...DEFAULT_REGULATED_FORM_FIELDS,
@@ -763,8 +765,23 @@ export function AssetCreateForm({
                         disabled={isSaving}
                       />
                     </Field>
+                    <Field>
+                      <FieldLabel htmlFor="installedAt">
+                        Data de instalação
+                      </FieldLabel>
+                      <DatePicker
+                        id="installedAt"
+                        name="installedAt"
+                        value={formData.installedAt}
+                        onChange={(date) => updateField('installedAt', date)}
+                        placeholder="Selecione a data…"
+                        disabled={isSaving}
+                      />
+                    </Field>
                     {/* Próxima calibração (periodicidade) é definida pelo cliente
-                        no portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). */}
+                        no portal, não pelo laboratório (§7.8.4.3 + ILAC-G24).
+                        A data de instalação ancora a verificação legal de
+                        instrumentos com periodicidade max_months_from_install. */}
                   </div>
                 </Panel>
               ) : null}

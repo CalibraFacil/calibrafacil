@@ -42,6 +42,16 @@ const LEGAL_REGULATED = {
   operationalizedByDelegate: false,
 };
 
+// A regulated period anchored to the installation date (hidrômetro-style ceiling).
+// Track-2: next_legal_verification_date = installed_at + valueMonths (REQ-INSTALL-002).
+const LEGAL_FROM_INSTALL = {
+  kind: "max_months_from_install",
+  valueMonths: 84,
+  anchor: "install_year",
+  regulationReference: "Portaria Inmetro nº 155/2022",
+  operationalizedByDelegate: false,
+};
+
 // ---------------------------------------------------------------------------
 // Domain seed helpers — inline so this file stays self-contained and parallel
 // makers cannot conflict with the shared seed.ts
@@ -457,6 +467,124 @@ describe("assetsRouter — real DB + real middleware", () => {
       expect(updateLog?.performedBy).toBe(org.userId);
       // The regime change is captured in the audit diff (INDUSTRIAL -> LEGAL).
       expect(updateLog?.changes).toHaveProperty("metrologyRegime");
+    },
+  );
+
+  // REQ-INSTALL-002 / 003 / 004 ------------------------------------------------
+  it(
+    "REQ-INSTALL-002/004 [HIGH]: lab creates a LEGAL asset with max_months_from_install + installed_at -> next_legal_verification_date = installed + valueMonths",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-install-002");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request("/", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          customerId: cid,
+          assetTypeId: typeId,
+          name: "Hidrômetro",
+          serialNumber: "SN-INSTALL-002",
+          tag: "TAG-INSTALL-002",
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_FROM_INSTALL,
+          installedAt: "2020-03-01T00:00:00.000Z",
+        }),
+      });
+      expect(res.status).toBe(201);
+      const created = await res.json();
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, created.id))
+        .limit(1);
+      // REQ-INSTALL-004: the installation date is persisted.
+      expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
+      // REQ-INSTALL-002: 2020-03-01 + 84 months = 2027-03-01 (ceiling from install).
+      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+        "2027-03-01",
+      );
+    },
+  );
+
+  it(
+    "REQ-INSTALL-003 [HIGH]: a LEGAL max_months_from_install asset with installed_at null leaves next_legal_verification_date null (no fabricated date)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-install-003");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-INSTALL-003",
+      });
+
+      // A last verification IS present — proves the date is NOT fabricated from it.
+      await db
+        .update(asset)
+        .set({ lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z") })
+        .where(eq(asset.id, assetId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_FROM_INSTALL,
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      expect(row?.installedAt).toBeNull();
+      expect(row?.nextLegalVerificationDate).toBeNull();
+    },
+  );
+
+  it(
+    "REQ-INSTALL-002/004 [HIGH]: PUT setting installed_at on a LEGAL max_months_from_install asset derives the date",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-install-002b");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-INSTALL-002B",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: LEGAL_FROM_INSTALL,
+          installedAt: "2018-06-10T00:00:00.000Z",
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      expect(row?.installedAt?.toISOString()).toBe("2018-06-10T00:00:00.000Z");
+      // 2018-06-10 + 84 months = 2025-06-10.
+      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+        "2025-06-10",
+      );
     },
   );
 

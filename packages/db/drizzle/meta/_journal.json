@@ -470,6 +470,13 @@
 			"when": 1782610759873,
 			"tag": "0066_legal_metrology_regime",
 			"breakpoints": true
+		},
+		{
+			"idx": 67,
+			"version": "7",
+			"when": 1782697159873,
+			"tag": "0067_asset_installed_at",
+			"breakpoints": true
 		}
 	]
 }
