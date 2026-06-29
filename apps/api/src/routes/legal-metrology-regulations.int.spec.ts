@@ -61,6 +61,26 @@ describe("legal-metrology regulation catalog — real DB", () => {
     expect(byCategory.get("Esfigmomanômetros")?.regulationReference).toBe(
       "Portaria Inmetro nº 341, de 9 de agosto de 2021",
     );
+    expect(byCategory.get("Cronotacógrafos")?.regulationReference).toBe(
+      "Portaria Inmetro nº 481, de 6 de dezembro de 2021",
+    );
+    expect(byCategory.get("Etilômetros")?.regulationReference).toBe(
+      "Portaria Inmetro nº 369, de 8 de setembro de 2021",
+    );
+    expect(
+      byCategory.get("Medidores de velocidade (radar)")?.regulationReference,
+    ).toBe("Portaria Inmetro nº 158, de 31 de março de 2022");
+    expect(byCategory.get("Medidores de gás")?.regulationReference).toBe(
+      "Portaria Inmetro nº 156, de 30 de março de 2022",
+    );
+    expect(byCategory.get("Hidrômetros")?.regulationReference).toBe(
+      "Portaria Inmetro nº 155, de 30 de março de 2022",
+    );
+    expect(
+      byCategory.get("Medidores de energia elétrica")?.regulationReference,
+    ).toBe(
+      "Inmetro: aprovação de modelo + verificação inicial (ANEEL REN 414/2010 é regime distinto)",
+    );
 
     // Provenance: exactly gás + hidrômetro are secondary; everything else primary.
     for (const row of rows) {
