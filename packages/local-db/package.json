@@ -17,7 +17,7 @@
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/sync": "workspace:*",
-    "better-sqlite3": "^12.10.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
