@@ -27,6 +27,8 @@
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/db": "workspace:^",
+    "@calibra-facil/documents": "workspace:^",
+    "@calibra-facil/interval-analysis": "workspace:^",
     "@calibra-facil/label-rendering": "workspace:^",
     "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/method-definition": "workspace:^",

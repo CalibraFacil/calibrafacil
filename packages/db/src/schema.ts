@@ -2684,6 +2684,27 @@ export const customerAuditLogRelations = relations(
 export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
 /**
+ * Provenance of an asset's customer-owned calibration interval (Track 1). The interval is
+ * the equipment owner's (customer's) decision, never the lab's (ISO/IEC 17025:2017
+ * §7.8.4.3 + ILAC-G24 / OIML D 10). There is deliberately NO `lab` value, and no
+ * `legal_fixed` value — a legal-metrology instrument's regulation-fixed VERIFICATION
+ * periodicity is a separate, independent track (`metrologyRegime` + `regulatedInterval`),
+ * not a calibration-interval provenance.
+ * - `customer_confirmed`: the customer set it in the portal.
+ * - `engine_applied`: the customer applied a reliability-engine suggestion.
+ */
+export type AssetIntervalSetBy = "customer_confirmed" | "engine_applied";
+
+/**
+ * Legal-metrology regime of an instrument (Inmetro / RBMLQ-I), set by the lab as a known
+ * regulatory fact (enquadramento + finalidade de uso), never inferred from assetType.
+ * INDEPENDENT of the customer-owned calibration interval. `LEGAL` → the instrument has a
+ * regulation-fixed verification periodicity (`regulatedInterval`); `UNKNOWN` → the lab has
+ * not yet determined the enquadramento. Spec: `specs/legal-metrology-regime/spec.md`.
+ */
+export type MetrologyRegime = "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
+
+/**
  * Asset table - Equipment/Instruments linked to customers.
  * Each asset belongs to a customer and can have calibration history.
  */
@@ -2716,9 +2737,37 @@ export const asset = pgTable(
     // Whether this instrument is subject to legal metrology (Inmetro): governs
     // whether the repair seal (Etiqueta de Reparo) + security lacre fields are
     // shown on its service orders. See docs token `asset.inmetroRegistration`.
+    // DEPRECATED source-of-truth: kept consistent with `metrologyRegime` during the
+    // transition (= metrologyRegime === 'LEGAL'); migrate reads to `metrologyRegime`.
     subjectToLegalMetrology: boolean("subject_to_legal_metrology")
       .default(false)
       .notNull(),
+    // Calibration interval (periodicity) — OWNED BY THE CUSTOMER, never the lab
+    // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). NULL = "aguardando
+    // definição do cliente" (the lab no longer attributes periodicity). When set,
+    // `next_calibration_date` is derived = `last_calibration_date` + this many
+    // months. `interval_rationale` is the required §7.5 technical record.
+    calibrationIntervalMonths: integer("calibration_interval_months"),
+    intervalSetBy: text("interval_set_by").$type<AssetIntervalSetBy>(),
+    intervalSetAt: timestamp("interval_set_at"),
+    intervalSetByUserId: text("interval_set_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    intervalRationale: text("interval_rationale"),
+    // Legal-metrology TRACK 2 (independent of the customer-owned calibration interval
+    // above): the regulation-fixed VERIFICATION periodicity for instruments under Inmetro /
+    // RBMLQ-I legal control. `metrologyRegime` is the lab-set source of truth;
+    // `regulatedInterval` is the structured period (validated by `RegulatedIntervalSchema`
+    // at the API boundary — stored loosely like `specifications`);
+    // `nextLegalVerificationDate` is derived from it and is SEPARATE from
+    // `nextCalibrationDate`. Spec: `specs/legal-metrology-regime/spec.md`.
+    metrologyRegime: text("metrology_regime")
+      .$type<MetrologyRegime>()
+      .default("INDUSTRIAL")
+      .notNull(),
+    regulatedInterval: jsonb("regulated_interval").$type<Record<string, unknown>>(),
+    nextLegalVerificationDate: timestamp("next_legal_verification_date"),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -3955,6 +4004,15 @@ export const calibrationJob = pgTable(
     data: jsonb("data").$type<Record<string, unknown>>(),
     // Calculated results (output from math engine)
     results: jsonb("results").$type<Record<string, unknown>>(),
+    // As-found (pre-adjustment) conformity verdict — the reliability signal for
+    // ILAC-G24 / NCSL RP-1 interval analysis. Derived ONCE at approval from the
+    // frozen `results` (`margem_conformidade_antes`, NOT the as-left `_apos`) via
+    // `apps/api/src/lib/as-found-reliability-verdict.ts`. UNKNOWN when the method
+    // emits no as-found margin. Never feeds any certificate/approval logic.
+    asFoundConformity: text("as_found_conformity").$type<
+      "CONFORMING" | "NON_CONFORMING" | "UNKNOWN"
+    >(),
+    asFoundMargins: jsonb("as_found_margins").$type<number[]>(),
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),

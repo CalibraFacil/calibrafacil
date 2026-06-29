@@ -456,6 +456,20 @@
 			"when": 1782437959873,
 			"tag": "0064_email_suppression",
 			"breakpoints": true
+		},
+		{
+			"idx": 65,
+			"version": "7",
+			"when": 1782524359873,
+			"tag": "0065_customer_owned_calibration_interval",
+			"breakpoints": true
+		},
+		{
+			"idx": 66,
+			"version": "7",
+			"when": 1782610759873,
+			"tag": "0066_legal_metrology_regime",
+			"breakpoints": true
 		}
 	]
 }

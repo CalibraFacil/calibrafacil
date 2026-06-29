@@ -1,12 +1,13 @@
-import { addMonths, startOfDay } from 'date-fns'
-
 import {
   AssetStatusSchema,
   CreateAssetSchema,
+  RegulatedIntervalSchema,
   UpdateAssetSchema,
   type AssetStatus,
   type CreateAssetInput,
   type MeasurementUnit,
+  type MetrologyRegime,
+  type RegulatedInterval,
   type UpdateAssetInput,
 } from '@calibra-facil/schemas'
 import {
@@ -36,35 +37,10 @@ export function baseMeasurementUnitOptions(
 
 export const ASSET_FORM_STATUSES = AssetStatusSchema.options
 
-/** Periodicity shortcuts (in months) offered when scheduling the next calibration. */
-export const CALIBRATION_PERIODICITY_MONTHS = [1, 2, 3, 6] as const
-
-export type CalibrationPeriodicityPreset = {
-  label: string
-  months: number
-  getDate: () => Date
-}
-
-export function calibrationPeriodicityLabel(months: number): string {
-  return `${months} ${months === 1 ? 'mês' : 'meses'}`
-}
-
-/**
- * Builds the "próxima calibração" quick-select presets. Each preset adds its
- * interval to the date returned by `getBaseDate` (today by default), resolved
- * at click time so "1 mês" always means one month from now. The base is
- * normalized to the start of the day so presets land on midnight like manual
- * calendar selections, keeping overdue comparisons consistent.
- */
-export function buildCalibrationPeriodicityPresets(
-  getBaseDate: () => Date = () => new Date(),
-): CalibrationPeriodicityPreset[] {
-  return CALIBRATION_PERIODICITY_MONTHS.map((months) => ({
-    label: calibrationPeriodicityLabel(months),
-    months,
-    getDate: () => addMonths(startOfDay(getBaseDate()), months),
-  }))
-}
+// NOTE: the lab no longer authors a calibration periodicity / next-calibration
+// date. Periodicity is the equipment owner's (customer's) decision, set in the
+// client portal (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). The old
+// `buildCalibrationPeriodicityPresets` quick-select was removed for that reason.
 
 export type AssetFormData = {
   customerId: number | null
@@ -77,9 +53,18 @@ export type AssetFormData = {
   status: AssetStatus
   baseMeasurementUnit: MeasurementUnit | null
   lastCalibrationDate: Date | undefined
-  nextCalibrationDate: Date | undefined
   comments: string
-  subjectToLegalMetrology: boolean
+  // Legal-metrology regime (Track 2) — set by the lab. WHEN 'LEGAL', the flat regulated-*
+  // fields are assembled into a RegulatedInterval (the verification periodicity fixed by
+  // regulation). The customer-owned calibration interval is never authored here.
+  metrologyRegime: MetrologyRegime
+  regulatedKind: RegulatedInterval['kind']
+  regulatedValueMonths: string
+  regulatedAnchor: string
+  regulationReference: string
+  regulatedOperationalizedByDelegate: boolean
+  regulatedTechnology: string
+  regulatedNote: string
   specifications: Record<string, unknown>
 }
 
@@ -90,6 +75,195 @@ export type AssetEditFormData = Omit<
 
 export type AssetFormField = keyof AssetFormData | `spec_${string}`
 export type AssetEditFormField = keyof AssetEditFormData | `spec_${string}`
+
+export const METROLOGY_REGIMES = [
+  'INDUSTRIAL',
+  'LEGAL',
+  'UNKNOWN',
+] as const satisfies readonly MetrologyRegime[]
+
+export const REGULATED_INTERVAL_KINDS = [
+  'fixed_months',
+  'max_months_from_install',
+  'per_technology',
+  'not_nationally_fixed',
+] as const satisfies readonly RegulatedInterval['kind'][]
+
+export const DEFAULT_REGULATED_FORM_FIELDS = {
+  regulatedKind: 'fixed_months',
+  regulatedValueMonths: '',
+  regulatedAnchor: 'last_verification',
+  regulationReference: '',
+  regulatedOperationalizedByDelegate: false,
+  regulatedTechnology: '',
+  regulatedNote: '',
+} satisfies Pick<
+  AssetFormData,
+  | 'regulatedKind'
+  | 'regulatedValueMonths'
+  | 'regulatedAnchor'
+  | 'regulationReference'
+  | 'regulatedOperationalizedByDelegate'
+  | 'regulatedTechnology'
+  | 'regulatedNote'
+>
+
+export type MetrologyRegimeFormValues = Pick<
+  AssetFormData,
+  | 'metrologyRegime'
+  | 'regulatedKind'
+  | 'regulatedValueMonths'
+  | 'regulatedAnchor'
+  | 'regulationReference'
+  | 'regulatedOperationalizedByDelegate'
+  | 'regulatedTechnology'
+  | 'regulatedNote'
+>
+
+export const METROLOGY_REGIME_LABELS: Record<MetrologyRegime, string> = {
+  INDUSTRIAL: 'Industrial (fora da metrologia legal)',
+  LEGAL: 'Metrologia legal (Inmetro)',
+  UNKNOWN: 'A determinar',
+}
+
+export const REGULATED_KIND_LABELS: Record<RegulatedInterval['kind'], string> =
+  {
+    fixed_months: 'Período fixo (meses)',
+    max_months_from_install: 'Limite a partir da instalação',
+    per_technology: 'Por tecnologia',
+    not_nationally_fixed: 'Sem periodicidade nacional fixa',
+  }
+
+export const REGULATED_ANCHOR_LABELS: Record<string, string> = {
+  last_verification: 'Última verificação',
+  calendar_year: 'Ano-calendário (até o fim do ano seguinte)',
+  first_verification: 'Primeira verificação',
+  install_year: 'Ano de instalação',
+}
+
+export function isMetrologyRegime(value: string): value is MetrologyRegime {
+  return METROLOGY_REGIMES.some((regime) => regime === value)
+}
+
+export function isRegulatedKind(
+  value: string,
+): value is RegulatedInterval['kind'] {
+  return REGULATED_INTERVAL_KINDS.some((kind) => kind === value)
+}
+
+type RegulatedFormFieldKey =
+  | 'regulationReference'
+  | 'regulatedValueMonths'
+  | 'regulatedTechnology'
+  | 'regulatedAnchor'
+
+/**
+ * Assemble the structured RegulatedInterval (Track 2) from the flat lab-form fields, or
+ * null when the regime is not LEGAL. The result is validated by RegulatedIntervalSchema in
+ * the parse step (so an empty reference / non-integer months surfaces as a field error).
+ * Spec: REQ-MLR-062/063.
+ */
+export function buildRegulatedIntervalFromForm(
+  data: MetrologyRegimeFormValues,
+): RegulatedInterval | null {
+  if (data.metrologyRegime !== 'LEGAL') return null
+  const regulationReference = data.regulationReference.trim()
+  const operationalizedByDelegate = data.regulatedOperationalizedByDelegate
+  const valueMonths = Number(data.regulatedValueMonths)
+  switch (data.regulatedKind) {
+    case 'fixed_months':
+      return {
+        kind: 'fixed_months',
+        valueMonths,
+        anchor:
+          data.regulatedAnchor === 'calendar_year'
+            ? 'calendar_year'
+            : 'last_verification',
+        regulationReference,
+        operationalizedByDelegate,
+      }
+    case 'max_months_from_install':
+      return {
+        kind: 'max_months_from_install',
+        valueMonths,
+        anchor: 'install_year',
+        regulationReference,
+        operationalizedByDelegate,
+      }
+    case 'per_technology':
+      return {
+        kind: 'per_technology',
+        valueMonths,
+        anchor:
+          data.regulatedAnchor === 'first_verification'
+            ? 'first_verification'
+            : 'last_verification',
+        technology: data.regulatedTechnology.trim(),
+        regulationReference,
+        operationalizedByDelegate,
+      }
+    case 'not_nationally_fixed':
+      return {
+        kind: 'not_nationally_fixed',
+        regulationReference,
+        operationalizedByDelegate,
+        ...(data.regulatedNote.trim()
+          ? { note: data.regulatedNote.trim() }
+          : {}),
+      }
+  }
+}
+
+function regulatedFieldFor(
+  path: PropertyKey | undefined,
+): RegulatedFormFieldKey {
+  switch (path) {
+    case 'valueMonths':
+      return 'regulatedValueMonths'
+    case 'technology':
+      return 'regulatedTechnology'
+    case 'anchor':
+      return 'regulatedAnchor'
+    default:
+      return 'regulationReference'
+  }
+}
+
+/**
+ * Reverse of buildRegulatedIntervalFromForm: derive the flat lab-form fields from a stored
+ * asset's regime + regulated interval, to pre-fill the edit form.
+ */
+export function regulatedFormFieldsFromAsset(asset: {
+  metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN'
+  subjectToLegalMetrology?: boolean
+  regulatedInterval?: {
+    kind: RegulatedInterval['kind']
+    valueMonths?: number
+    anchor?: string
+    technology?: string
+    regulationReference: string
+    operationalizedByDelegate: boolean
+    note?: string
+  } | null
+}): MetrologyRegimeFormValues {
+  const metrologyRegime: MetrologyRegime =
+    asset.metrologyRegime ??
+    (asset.subjectToLegalMetrology ? 'LEGAL' : 'INDUSTRIAL')
+  const r = asset.regulatedInterval
+  if (!r) {
+    return { metrologyRegime, ...DEFAULT_REGULATED_FORM_FIELDS }
+  }
+  return {
+    metrologyRegime,
+    regulatedKind: r.kind,
+    regulatedValueMonths: r.valueMonths != null ? String(r.valueMonths) : '',
+    regulatedAnchor: r.anchor ?? 'last_verification',
+    regulationReference: r.regulationReference,
+    regulatedOperationalizedByDelegate: r.operationalizedByDelegate,
+    regulatedTechnology: r.technology ?? '',
+    regulatedNote: r.note ?? '',
+  }
+}
 
 export type AssetSpecificationField = {
   key: string
@@ -130,7 +304,6 @@ export function parseAssetForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
-  const nextCalibrationDate = data.nextCalibrationDate?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -158,6 +331,19 @@ export function parseAssetForm(
     })
   }
 
+  const regulatedInterval = buildRegulatedIntervalFromForm(data)
+  if (data.metrologyRegime === 'LEGAL') {
+    const regCheck = RegulatedIntervalSchema.safeParse(regulatedInterval)
+    if (!regCheck.success) {
+      for (const issue of regCheck.error.issues) {
+        fieldErrors.push({
+          field: regulatedFieldFor(issue.path[0]),
+          message: issue.message,
+        })
+      }
+    }
+  }
+
   const parsed = CreateAssetSchema.safeParse({
     customerId: hasCustomerId ? data.customerId : 1,
     assetTypeId: hasAssetTypeId ? data.assetTypeId : 1,
@@ -166,11 +352,11 @@ export function parseAssetForm(
     tag: data.tag.trim(),
     status: data.status,
     baseMeasurementUnit: data.baseMeasurementUnit,
-    subjectToLegalMetrology: data.subjectToLegalMetrology,
+    metrologyRegime: data.metrologyRegime,
+    ...(regulatedInterval ? { regulatedInterval } : {}),
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
-    ...(nextCalibrationDate ? { nextCalibrationDate } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -187,7 +373,6 @@ export function parseAssetForm(
       'status',
       'baseMeasurementUnit',
       'lastCalibrationDate',
-      'nextCalibrationDate',
       'comments',
       'specifications',
     ])
@@ -238,7 +423,6 @@ export function parseAssetEditForm(
   const manufacturer = optionalText(data.manufacturer)
   const model = optionalText(data.model)
   const lastCalibrationDate = data.lastCalibrationDate?.toISOString()
-  const nextCalibrationDate = data.nextCalibrationDate?.toISOString()
   const comments = optionalText(data.comments)
   const specifications =
     Object.keys(data.specifications).length > 0
@@ -252,16 +436,29 @@ export function parseAssetEditForm(
     })
   }
 
+  const regulatedInterval = buildRegulatedIntervalFromForm(data)
+  if (data.metrologyRegime === 'LEGAL') {
+    const regCheck = RegulatedIntervalSchema.safeParse(regulatedInterval)
+    if (!regCheck.success) {
+      for (const issue of regCheck.error.issues) {
+        fieldErrors.push({
+          field: regulatedFieldFor(issue.path[0]),
+          message: issue.message,
+        })
+      }
+    }
+  }
+
   const parsed = UpdateAssetSchema.safeParse({
     name: name || 'Ativo',
     serialNumber: data.serialNumber.trim(),
     tag: data.tag.trim(),
     status: data.status,
-    subjectToLegalMetrology: data.subjectToLegalMetrology,
+    metrologyRegime: data.metrologyRegime,
+    ...(regulatedInterval ? { regulatedInterval } : {}),
     ...(manufacturer ? { manufacturer } : {}),
     ...(model ? { model } : {}),
     ...(lastCalibrationDate ? { lastCalibrationDate } : {}),
-    ...(nextCalibrationDate ? { nextCalibrationDate } : {}),
     ...(comments ? { comments } : {}),
     ...(specifications ? { specifications } : {}),
   })
@@ -275,7 +472,6 @@ export function parseAssetEditForm(
       'tag',
       'status',
       'lastCalibrationDate',
-      'nextCalibrationDate',
       'comments',
       'specifications',
     ])

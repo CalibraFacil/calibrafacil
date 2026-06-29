@@ -26,8 +26,8 @@ import {
 } from '@/features/assets/queries'
 import {
   baseMeasurementUnitOptions,
-  buildCalibrationPeriodicityPresets,
   isAssetFormStatus,
+  DEFAULT_REGULATED_FORM_FIELDS,
   isAssetSpecificationErrorField,
   parseAssetForm,
   type AssetFormData,
@@ -37,9 +37,9 @@ import {
   FormSectionNav,
   type FormNavSection,
 } from '@/features/assets/components/form-section-nav'
+import { MetrologyRegimeFields } from '@/features/assets/components/metrology-regime-fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -102,10 +102,13 @@ const FIELD_STEP: Record<string, string> = {
   manufacturer: 'sec-identificacao',
   model: 'sec-identificacao',
   status: 'sec-identificacao',
-  subjectToLegalMetrology: 'sec-identificacao',
+  metrologyRegime: 'sec-identificacao',
+  regulationReference: 'sec-identificacao',
+  regulatedValueMonths: 'sec-identificacao',
+  regulatedAnchor: 'sec-identificacao',
+  regulatedTechnology: 'sec-identificacao',
   baseMeasurementUnit: 'sec-especificacoes',
   lastCalibrationDate: 'sec-calibracao',
-  nextCalibrationDate: 'sec-calibracao',
   comments: 'sec-observacoes',
 }
 
@@ -125,9 +128,9 @@ const initialFormData: AssetFormData = {
   status: 'ACTIVE',
   baseMeasurementUnit: null,
   lastCalibrationDate: undefined,
-  nextCalibrationDate: undefined,
   comments: '',
-  subjectToLegalMetrology: false,
+  metrologyRegime: 'INDUSTRIAL',
+  ...DEFAULT_REGULATED_FORM_FIELDS,
   specifications: {},
 }
 
@@ -645,27 +648,13 @@ export function AssetCreateForm({
                     </Field>
                   </div>
 
-                  <label className="mt-4 flex items-start gap-3 text-sm">
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={formData.subjectToLegalMetrology}
-                      onCheckedChange={(checked) =>
-                        updateField('subjectToLegalMetrology', Boolean(checked))
-                      }
-                      disabled={isSaving}
-                    />
-                    <span>
-                      <span className="font-medium">
-                        Sujeito a metrologia legal (Inmetro)
-                      </span>
-                      <span className="block text-muted-foreground">
-                        Instrumentos verificados pelo Inmetro (bombas de
-                        combustível, taxímetros, balanças comerciais…). Habilita
-                        os campos de lacre e Etiqueta de Reparo na ordem de
-                        serviço.
-                      </span>
-                    </span>
-                  </label>
+                  <MetrologyRegimeFields
+                    values={formData}
+                    onChange={(patch) =>
+                      setFormData((prev) => ({ ...prev, ...patch }))
+                    }
+                    disabled={isSaving}
+                  />
                 </Panel>
               ) : null}
 
@@ -774,22 +763,8 @@ export function AssetCreateForm({
                         disabled={isSaving}
                       />
                     </Field>
-                    <Field>
-                      <FieldLabel htmlFor="nextCalibrationDate">
-                        Próxima calibração
-                      </FieldLabel>
-                      <DatePicker
-                        id="nextCalibrationDate"
-                        name="nextCalibrationDate"
-                        value={formData.nextCalibrationDate}
-                        onChange={(date) =>
-                          updateField('nextCalibrationDate', date)
-                        }
-                        placeholder="Selecione a data…"
-                        disabled={isSaving}
-                        presets={buildCalibrationPeriodicityPresets()}
-                      />
-                    </Field>
+                    {/* Próxima calibração (periodicidade) é definida pelo cliente
+                        no portal, não pelo laboratório (§7.8.4.3 + ILAC-G24). */}
                   </div>
                 </Panel>
               ) : null}
@@ -858,9 +833,6 @@ export function AssetCreateForm({
                       ) : null}
                       <BlueprintField label="Última calibração" mono>
                         {formatDate(formData.lastCalibrationDate)}
-                      </BlueprintField>
-                      <BlueprintField label="Próxima calibração" mono>
-                        {formatDate(formData.nextCalibrationDate)}
                       </BlueprintField>
                     </BlueprintGrid>
 

@@ -1,5 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft02Icon,
@@ -12,6 +14,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusPill, TONE } from "@/components/status-pill";
 import { Timeline } from "@/components/timeline";
@@ -66,6 +71,24 @@ type AssetDetail = {
   specifications: Record<string, unknown> | null;
   lastCalibrationDate: string | null;
   nextCalibrationDate: string | null;
+  // Track 1 — customer-owned calibration interval (periodicity). The customer sets it
+  // here for EVERY regime (§7.8.4.3 + ILAC-G24); the lab never attributes it.
+  calibrationIntervalMonths: number | null;
+  intervalSetBy: "customer_confirmed" | "engine_applied" | null;
+  subjectToLegalMetrology: boolean;
+  // Track 2 — legal-metrology regime + the regulation-fixed VERIFICATION periodicity
+  // (independent of Track 1; lab-recorded, read-only for the customer).
+  metrologyRegime: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
+  regulatedInterval: {
+    kind:
+      | "fixed_months"
+      | "max_months_from_install"
+      | "per_technology"
+      | "not_nationally_fixed";
+    regulationReference: string;
+    operationalizedByDelegate: boolean;
+  } | null;
+  nextLegalVerificationDate: string | null;
   inLab: boolean;
   comments: string | null;
   createdAt: string;
@@ -341,6 +364,15 @@ function AssetDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {/* Track 1 — customer-owned calibration interval */}
+          <IntervalEditorPanel asset={asset} />
+
+          {/* Track 2 — regulation-fixed legal-metrology verification periodicity */}
+          <LegalVerificationPanel asset={asset} />
+
+          {/* Reliability-based interval analysis (read-only) */}
+          <IntervalInsightPanel assetId={asset.id} />
+
           {/* Calibration history */}
           <Panel className="p-5">
             <PanelHeader
@@ -353,10 +385,7 @@ function AssetDetailPage() {
                     variant="ghost"
                     size="sm"
                     render={
-                      <Link
-                        to="/certificates"
-                        search={{ assetId: asset.id }}
-                      />
+                      <Link to="/certificates" search={{ assetId: asset.id }} />
                     }
                     className={ACTION_BUTTON_CLASS}
                   >
@@ -436,6 +465,424 @@ function AssetDetailPage() {
 
 function cnDot(tone: SignalTone): string {
   return `size-1.5 shrink-0 rounded-full ${TONE[tone].dot}`;
+}
+
+type IntervalInsight = {
+  classification: "INSUFFICIENT_DATA" | "STABLE" | "DRIFTING";
+  reliability: number | null;
+  coverage: number;
+  recommendation: {
+    action: "extend" | "keep" | "shorten";
+    method: string;
+    proposedIntervalMonths: number;
+    reliabilityBound: number | null;
+  } | null;
+  series: Array<{
+    approvedAt: string;
+    conformity: "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
+    minMargin: number | null;
+  }>;
+  engineVersion: string;
+  fingerprint: string;
+};
+
+const CLASSIFICATION_META: Record<
+  IntervalInsight["classification"],
+  { label: string; tone: SignalTone }
+> = {
+  STABLE: { label: "Estável", tone: "ok" },
+  DRIFTING: { label: "Derivando", tone: "warning" },
+  INSUFFICIENT_DATA: { label: "Dados insuficientes", tone: "neutral" },
+};
+
+const ACTION_LABEL: Record<
+  NonNullable<IntervalInsight["recommendation"]>["action"],
+  string
+> = { extend: "Estender", keep: "Manter", shorten: "Encurtar" };
+
+/**
+ * Read-only reliability-based interval analysis (ILAC-G24 / NCSL RP-1). It only
+ * SUGGESTS — the customer applies via the editor above (§7.8.4.3). Regime-agnostic: a
+ * legal-metrology asset is analyzed like any other; its regulation-fixed verification
+ * periodicity is a separate, read-only track (see the legal-verification panel).
+ */
+function IntervalInsightPanel({ assetId }: { assetId: number }) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["portal-interval-insight", assetId],
+    queryFn: async (): Promise<IntervalInsight> => {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Falha ao carregar a análise.");
+      return response.json();
+    },
+  });
+  const insight = query.data;
+
+  // REQ-ENGINE-APPLY: one-click apply the suggestion (writes engine_applied + an
+  // auditable rationale citing the method). The customer clicking IS their agreement.
+  const applyMutation = useMutation({
+    mutationFn: async () => {
+      const recommendation = insight?.recommendation;
+      if (!recommendation) return;
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            intervalMonths: recommendation.proposedIntervalMonths,
+            rationale: `Sugestão do motor de confiabilidade (ILAC-G24 / NCSL RP-1) aplicada — ${insight?.classification}, método ${recommendation.method}.`,
+            source: "engine",
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Não foi possível aplicar a sugestão.");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Periodicidade atualizada a partir da sugestão.");
+      queryClient.invalidateQueries({ queryKey: ["portal-asset"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-interval-insight"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  if (!insight) return null;
+  const meta = CLASSIFICATION_META[insight.classification];
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Programa metrológico"
+        title="Análise de periodicidade"
+        description="Sugestão baseada no histórico de calibração (ILAC-G24 / NCSL RP-1). Apenas indicativo — você decide."
+      />
+      <div className="mt-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className={cnDot(meta.tone)} aria-hidden />
+          <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
+        </div>
+
+        {insight.reliability !== null ? (
+          <BlueprintGrid className="sm:grid-cols-2">
+            <BlueprintField label="Confiabilidade" mono>
+              {(insight.reliability * 100).toFixed(0)}%
+            </BlueprintField>
+            <BlueprintField label="Cobertura" mono>
+              {(insight.coverage * 100).toFixed(0)}%
+            </BlueprintField>
+          </BlueprintGrid>
+        ) : null}
+
+        <MarginSparkline series={insight.series} />
+
+        {insight.recommendation ? (
+          <div className="bg-muted/45 rounded-xl p-4 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+            Sugestão:{" "}
+            <strong>
+              {ACTION_LABEL[insight.recommendation.action]} para{" "}
+              {insight.recommendation.proposedIntervalMonths}{" "}
+              {insight.recommendation.proposedIntervalMonths === 1
+                ? "mês"
+                : "meses"}
+            </strong>
+            .
+            {insight.recommendation.action === "keep" ? (
+              " A periodicidade atual já está adequada."
+            ) : (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => applyMutation.mutate()}
+                  disabled={applyMutation.isPending}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />
+                  {applyMutation.isPending ? "Aplicando…" : "Aplicar sugestão"}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : insight.classification === "INSUFFICIENT_DATA" ? (
+          <p className="text-muted-foreground text-sm text-pretty">
+            Histórico insuficiente para uma sugestão (mín. 3 calibrações com
+            dados de conformidade).
+          </p>
+        ) : null}
+
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            render={
+              <a
+                href={`${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight/report`}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            }
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+            Baixar relatório
+          </Button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** Compact as-found margin trend; the dashed line is the tolerance limit (margin 0). */
+type SparklinePoint = IntervalInsight["series"][number] & { minMargin: number };
+
+function MarginSparkline({ series }: { series: IntervalInsight["series"] }) {
+  const points = series.filter(
+    (p): p is SparklinePoint => p.minMargin !== null,
+  );
+  if (points.length < 2) return null;
+
+  const width = 220;
+  const height = 44;
+  const margins = points.map((p) => p.minMargin);
+  const min = Math.min(...margins, 0);
+  const max = Math.max(...margins, 0);
+  const range = max - min || 1;
+  const span = points.length - 1;
+  const x = (i: number) => (i / span) * width;
+  const y = (value: number) => height - ((value - min) / range) * height;
+  const path = points
+    .map(
+      (p, i) =>
+        `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.minMargin).toFixed(1)}`,
+    )
+    .join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="h-12 w-full"
+      role="img"
+      aria-label="Tendência da margem de conformidade (encontrado)"
+      preserveAspectRatio="none"
+    >
+      <line
+        x1={0}
+        x2={width}
+        y1={y(0)}
+        y2={y(0)}
+        className="stroke-muted-foreground/40"
+        strokeDasharray="3 3"
+        strokeWidth={1}
+      />
+      <path
+        d={path}
+        fill="none"
+        className="stroke-foreground/70"
+        strokeWidth={1.5}
+      />
+      {points.map((p, i) => (
+        <circle
+          key={p.approvedAt}
+          cx={x(i)}
+          cy={y(p.minMargin)}
+          r={2.2}
+          className={
+            p.minMargin < 0 ? "fill-[var(--critical)]" : "fill-[var(--ok)]"
+          }
+        />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * Track 2 — the regulation-fixed legal-metrology VERIFICATION periodicity (read-only),
+ * shown only for LEGAL instruments and INDEPENDENT of the customer-owned calibration
+ * interval. The date is INDICATIVE when the Ipem runs the cadence
+ * (operationalizedByDelegate) and absent for `not_nationally_fixed` (REQ-MLR-060/061/062).
+ */
+function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
+  if (asset.metrologyRegime !== "LEGAL") return null;
+  const regulated = asset.regulatedInterval;
+  const noNationalPeriod =
+    !regulated ||
+    regulated.kind === "not_nationally_fixed" ||
+    !asset.nextLegalVerificationDate;
+  const indicative = regulated?.operationalizedByDelegate ?? false;
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Metrologia legal"
+        title="Verificação — metrologia legal"
+        description="Periodicidade fixada por regulamento (Inmetro / RBMLQ-I) — definida pela regulamentação, não editável."
+      />
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon
+            icon={Calendar03Icon}
+            className="text-muted-foreground size-4 shrink-0"
+            strokeWidth={2}
+          />
+          <span className="text-sm">
+            Próxima verificação:{" "}
+            <span className="font-mono tabular-nums">
+              {noNationalPeriod
+                ? "sem periodicidade nacional fixada"
+                : formatDate(asset.nextLegalVerificationDate)}
+            </span>
+          </span>
+        </div>
+        {indicative && !noNationalPeriod ? (
+          <p className="text-muted-foreground text-xs text-pretty">
+            Cadência operacionalizada pelo Ipem — data indicativa, não é prazo
+            nacional fixo.
+          </p>
+        ) : null}
+        {regulated ? (
+          <p className="text-muted-foreground text-xs text-pretty">
+            {regulated.regulationReference}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Customer-owned calibration interval (periodicity) editor. The interval is the
+ * equipment owner's decision, not the lab's (ISO/IEC 17025:2017 §7.8.4.3 +
+ * ILAC-G24 / OIML D 10), for EVERY regime — there is no legal-metrology lock (a legal
+ * instrument's regulation-fixed verification periodicity is shown by
+ * LegalVerificationPanel). The customer sets months + a mandatory rationale (the §7.5
+ * technical record); submission is blocked without it (REQ-INTERVAL-040/041).
+ */
+function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
+  const queryClient = useQueryClient();
+  const [months, setMonths] = useState(
+    asset.calibrationIntervalMonths != null
+      ? String(asset.calibrationIntervalMonths)
+      : "",
+  );
+  const [rationale, setRationale] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async (input: {
+      intervalMonths: number;
+      rationale: string;
+    }) => {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/assets/${asset.id}/interval`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Não foi possível salvar a periodicidade.");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Periodicidade atualizada.");
+      setRationale("");
+      queryClient.invalidateQueries({ queryKey: ["portal-asset"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-assets"] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // REQ-MLR-040: the customer owns the calibration interval for EVERY regime — there is
+  // no legal-metrology lock here. A legal instrument's regulation-fixed verification
+  // periodicity is shown separately by LegalVerificationPanel (read-only).
+  const monthsValue = Number(months);
+  const monthsValid =
+    Number.isInteger(monthsValue) && monthsValue >= 1 && monthsValue <= 120;
+  const canSubmit =
+    monthsValid && rationale.trim().length > 0 && !mutation.isPending;
+
+  const currentLabel =
+    asset.calibrationIntervalMonths != null
+      ? `${asset.calibrationIntervalMonths} ${asset.calibrationIntervalMonths === 1 ? "mês" : "meses"} · definida por você`
+      : "aguardando definição do cliente";
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Programa metrológico"
+        title="Periodicidade de calibração"
+        description="Você define com que frequência este instrumento deve ser recalibrado — o laboratório não atribui periodicidade."
+      />
+      <div className="mt-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon
+            icon={Calendar03Icon}
+            className="text-muted-foreground size-4 shrink-0"
+            strokeWidth={2}
+          />
+          <span className="text-sm">
+            Atual:{" "}
+            <span className="font-mono tabular-nums">{currentLabel}</span>
+          </span>
+        </div>
+
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!canSubmit) return;
+            mutation.mutate({
+              intervalMonths: monthsValue,
+              rationale: rationale.trim(),
+            });
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="interval-months">Intervalo (meses)</Label>
+            <Input
+              id="interval-months"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={120}
+              value={months}
+              onChange={(event) => setMonths(event.target.value)}
+              placeholder="Ex.: 12"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="interval-rationale">Justificativa</Label>
+            <Textarea
+              id="interval-rationale"
+              value={rationale}
+              onChange={(event) => setRationale(event.target.value)}
+              placeholder="Motivo (histórico de estabilidade, recomendação do fabricante, intensidade de uso…)."
+              rows={3}
+            />
+            <p className="text-muted-foreground text-xs text-pretty">
+              Registro técnico obrigatório (NBR ISO/IEC 17025 §7.5).
+            </p>
+          </div>
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />
+            {mutation.isPending ? "Salvando…" : "Salvar periodicidade"}
+          </Button>
+        </form>
+      </div>
+    </Panel>
+  );
 }
 
 function AssetDetailSkeleton() {

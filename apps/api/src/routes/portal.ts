@@ -13,6 +13,7 @@ import {
   calibrationRequestItem,
   serviceOrder,
   asset,
+  assetAuditLog,
   assetType,
   service,
   referenceStandardCertificateDocument,
@@ -41,7 +42,10 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
+import {
+  ListAssetsQuerySchema,
+  SetCalibrationIntervalSchema,
+} from "@calibra-facil/schemas";
 import {
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
@@ -199,6 +203,13 @@ import {
   loadPortalReleaseStatuses,
 } from "../lib/portal-certificate-release-gate";
 import { buildPortalCertificateVerdict } from "../lib/portal-certificate-verdict";
+import {
+  decidePortalIntervalWrite,
+  deriveNextCalibrationDate,
+} from "../lib/portal-asset-interval";
+import { buildIntervalInsight } from "../lib/interval-insight";
+import { renderIntervalReportHtml } from "@calibra-facil/documents";
+import { DEFAULT_INTERVAL_CONFIG } from "@calibra-facil/interval-analysis";
 import {
   applyUnitFilter,
   resolvePortalAccessibleCustomerIds,
@@ -1001,6 +1012,16 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            // Track 1 — customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+            // periodicity the customer sets/owns in the portal (for EVERY regime).
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            intervalSetBy: asset.intervalSetBy,
+            subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            // Track 2 — legal-metrology regime + the regulation-fixed verification
+            // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
+            metrologyRegime: asset.metrologyRegime,
+            regulatedInterval: asset.regulatedInterval,
+            nextLegalVerificationDate: asset.nextLegalVerificationDate,
             inLab: assetInLabSql(),
             comments: asset.comments,
             createdAt: asset.createdAt,
@@ -1298,6 +1319,384 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // PUT /notification-preferences - Update digest opt-in
   // =========================================================================
+  // =========================================================================
+  // GET /assets/:id/interval-insight - reliability-based suggestion (read-only)
+  // =========================================================================
+  // Computes the ILAC-G24 / NCSL RP-1 classification + suggestion from the asset's
+  // approved as-found history. Tenant-scoped; legal-metrology assets resolve to
+  // LEGAL_FIXED with no suggestion. This NEVER writes — the customer applies via PUT.
+  // =========================================================================
+  .get(
+    "/assets/:id/interval-insight",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+        const { customerIds } = scope;
+
+        const [existing] = await db
+          .select({
+            assetTypeId: asset.assetTypeId,
+            model: asset.model,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          })
+          .from(asset)
+          .where(
+            and(
+              eq(asset.id, id),
+              inArray(asset.customerId, customerIds),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.assetId, id),
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(asc(calibrationJob.approvedAt));
+
+        // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
+        // history is thin and it has a model to pool by; same assetType+model,
+        // tenant-scoped, excluding legal-metrology siblings.
+        const singleKnown = rows.filter(
+          (r) =>
+            r.asFoundConformity === "CONFORMING" ||
+            r.asFoundConformity === "NON_CONFORMING",
+        ).length;
+        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+        const singleCoverageLow =
+          rows.length > 0 &&
+          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+        const familyModel = existing.model;
+        const familyRows =
+          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+            singleCoverageLow) &&
+          familyModel !== null
+            ? await db
+                .select({
+                  assetId: calibrationJob.assetId,
+                  approvedAt: calibrationJob.approvedAt,
+                  asFoundConformity: calibrationJob.asFoundConformity,
+                })
+                .from(calibrationJob)
+                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                .where(
+                  and(
+                    eq(asset.assetTypeId, existing.assetTypeId),
+                    eq(asset.model, familyModel),
+                    eq(asset.subjectToLegalMetrology, false),
+                    isNull(asset.deletedAt),
+                    inArray(calibrationJob.customerId, customerIds),
+                    eq(calibrationJob.status, "APPROVED"),
+                  ),
+                )
+            : [];
+
+        const insight = buildIntervalInsight({
+          rows,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          familyRows,
+        });
+        return c.json(insight);
+      } catch (error) {
+        console.error("Error building interval insight:", error);
+        return c.json(
+          { error: "Erro ao calcular periodicidade sugerida" },
+          500,
+        );
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /assets/:id/interval-insight/report - printable HTML report (Phase E2)
+  // =========================================================================
+  // Self-contained, print-optimized HTML of the reliability analysis the customer
+  // can save as a PDF. Explicitly NOT a calibration certificate (§7.8.4.3 disclaimer);
+  // never rendered through the certificate path. Tenant-scoped, read-only.
+  // =========================================================================
+  .get(
+    "/assets/:id/interval-insight/report",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+        const { customerIds } = scope;
+
+        const [existing] = await db
+          .select({
+            name: asset.name,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            model: asset.model,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(asset.id, id),
+              inArray(asset.customerId, customerIds),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.assetId, id),
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(asc(calibrationJob.approvedAt));
+
+        const singleKnown = rows.filter(
+          (r) =>
+            r.asFoundConformity === "CONFORMING" ||
+            r.asFoundConformity === "NON_CONFORMING",
+        ).length;
+        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+        const singleCoverageLow =
+          rows.length > 0 &&
+          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+        const familyModel = existing.model;
+        const familyRows =
+          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+            singleCoverageLow) &&
+          familyModel !== null
+            ? await db
+                .select({
+                  assetId: calibrationJob.assetId,
+                  approvedAt: calibrationJob.approvedAt,
+                  asFoundConformity: calibrationJob.asFoundConformity,
+                })
+                .from(calibrationJob)
+                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                .where(
+                  and(
+                    eq(asset.assetTypeId, existing.assetTypeId),
+                    eq(asset.model, familyModel),
+                    eq(asset.subjectToLegalMetrology, false),
+                    isNull(asset.deletedAt),
+                    inArray(calibrationJob.customerId, customerIds),
+                    eq(calibrationJob.status, "APPROVED"),
+                  ),
+                )
+            : [];
+
+        const insight = buildIntervalInsight({
+          rows,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          familyRows,
+        });
+
+        const html = renderIntervalReportHtml({
+          assetName: existing.name,
+          assetTag: existing.tag,
+          serialNumber: existing.serialNumber,
+          customerName: existing.customerName,
+          classification: insight.classification,
+          reliability: insight.reliability,
+          coverage: insight.coverage,
+          currentIntervalMonths: existing.calibrationIntervalMonths,
+          recommendation: insight.recommendation,
+          generatedAtIso: new Date().toISOString(),
+        });
+        return c.html(html);
+      } catch (error) {
+        console.error("Error rendering interval report:", error);
+        return c.json({ error: "Erro ao gerar o relatório" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // PUT /assets/:id/interval - Customer sets their OWN calibration interval
+  // =========================================================================
+  // The interval/periodicity is the equipment owner's decision, never the lab's
+  // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) and
+  // the legal-metrology lock (409) are decided by the pure, unit-tested resolver
+  // `decidePortalIntervalWrite`; `rationale` is the required §7.5 technical record,
+  // persisted on the asset and the audit log. `next_calibration_date` is derived
+  // from the asset's last-calibration date + the chosen interval.
+  // =========================================================================
+  .put(
+    "/assets/:id/interval",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["update"] }),
+    zValidator("json", SetCalibrationIntervalSchema),
+    async (c) => {
+      const session = c.get("session");
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const { intervalMonths, rationale, source } = c.req.valid("json");
+      // REQ-ENGINE-APPLY-001: applying an engine suggestion records `engine_applied`.
+      const intervalSetBy =
+        source === "engine" ? "engine_applied" : "customer_confirmed";
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        const scopedCustomerIds = scope?.customerIds ?? [];
+
+        const [existing] = await db
+          .select({
+            id: asset.id,
+            customerId: asset.customerId,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            nextCalibrationDate: asset.nextCalibrationDate,
+          })
+          .from(asset)
+          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+          .limit(1);
+
+        const decision = decidePortalIntervalWrite({
+          asset: existing ?? null,
+          scopedCustomerIds,
+        });
+
+        // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
+        // calibration interval for every regime — a legal asset is NOT locked here.
+        if (!decision.allowed) {
+          return c.json({ error: "Ativo nao encontrado" }, decision.status);
+        }
+
+        // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const nextCalibrationDate = deriveNextCalibrationDate(
+          existing.lastCalibrationDate,
+          intervalMonths,
+        );
+
+        await db
+          .update(asset)
+          .set({
+            calibrationIntervalMonths: intervalMonths,
+            intervalSetBy,
+            intervalSetByUserId: session.user.id,
+            intervalSetAt: new Date(),
+            intervalRationale: rationale,
+            nextCalibrationDate,
+          })
+          .where(eq(asset.id, id));
+
+        await db.insert(assetAuditLog).values({
+          assetId: id,
+          action: "interval_change",
+          changes: {
+            calibrationIntervalMonths: {
+              old: existing.calibrationIntervalMonths,
+              new: intervalMonths,
+            },
+            nextCalibrationDate: {
+              old: existing.nextCalibrationDate,
+              new: nextCalibrationDate,
+            },
+          },
+          performedBy: session.user.id,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
+          reason: rationale,
+        });
+
+        return c.json({
+          id,
+          calibrationIntervalMonths: intervalMonths,
+          nextCalibrationDate,
+          intervalSetBy,
+        });
+      } catch (error) {
+        console.error("Error setting calibration interval:", error);
+        return c.json({ error: "Erro ao salvar periodicidade" }, 500);
+      }
+    },
+  )
+
   .put(
     "/notification-preferences",
     ...requirePortalProtected,
