@@ -370,7 +370,7 @@ export function buildServiceOrderIntakeHtml(
           // Blueprint-driven specs frozen at intake (null for pre-0056 orders, where
           // the web preview simply omits the spec grid; the worker PDF still falls back).
           specs: snapshot?.displaySpecs ?? undefined,
-          subjectToLegalMetrology: order.assetSubjectToLegalMetrology ?? false,
+          metrologyRegime: order.assetMetrologyRegime ?? undefined,
         },
         intake: {
           claimedDefect: order.claimedDefect,

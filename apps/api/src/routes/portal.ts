@@ -23,6 +23,7 @@ import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
   eq,
+  ne,
   and,
   inArray,
   notInArray,
@@ -1016,7 +1017,6 @@ export const portalRouter = new Hono<{
             // periodicity the customer sets/owns in the portal (for EVERY regime).
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             intervalSetBy: asset.intervalSetBy,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             // Track 2 — legal-metrology regime + the regulation-fixed verification
             // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
             metrologyRegime: asset.metrologyRegime,
@@ -1419,7 +1419,7 @@ export const portalRouter = new Hono<{
                   and(
                     eq(asset.assetTypeId, existing.assetTypeId),
                     eq(asset.model, familyModel),
-                    eq(asset.subjectToLegalMetrology, false),
+                    ne(asset.metrologyRegime, "LEGAL"),
                     isNull(asset.deletedAt),
                     inArray(calibrationJob.customerId, customerIds),
                     eq(calibrationJob.status, "APPROVED"),
@@ -1544,7 +1544,7 @@ export const portalRouter = new Hono<{
                   and(
                     eq(asset.assetTypeId, existing.assetTypeId),
                     eq(asset.model, familyModel),
-                    eq(asset.subjectToLegalMetrology, false),
+                    ne(asset.metrologyRegime, "LEGAL"),
                     isNull(asset.deletedAt),
                     inArray(calibrationJob.customerId, customerIds),
                     eq(calibrationJob.status, "APPROVED"),

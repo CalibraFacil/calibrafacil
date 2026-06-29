@@ -48,8 +48,11 @@ export type ServiceOrderDocumentData = {
      * the live asset-type blueprint for snapshots created before migration 0056.
      */
     specs?: Array<{ label: string; value: string }>;
-    /** Legal-metrology instrument: gates the lacre / Etiqueta de Reparo blocks. */
-    subjectToLegalMetrology?: boolean;
+    /**
+     * Legal-metrology regime of the instrument. The lacre / Etiqueta de Reparo blocks
+     * render IFF `metrologyRegime === 'LEGAL'` (Inmetro / RBMLQ-I legal control).
+     */
+    metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN';
   };
   intake: {
     claimedDefect: string;
@@ -450,7 +453,7 @@ const QR_CAPTION =
   "Leia o QR Code para acompanhar a OS e validar a autenticidade no portal.";
 
 function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
-  const legalMetrology = data.asset.subjectToLegalMetrology;
+  const legalMetrology = data.asset.metrologyRegime === "LEGAL";
   const cnpjLine = [
     `CNPJ ${text(data.lab.cnpj)}`,
     data.lab.authorizationNumber
@@ -715,7 +718,7 @@ function DeliveryReceiptCopy({
         </tbody>
       </table>
 
-      {data.asset.subjectToLegalMetrology ? (
+      {data.asset.metrologyRegime === "LEGAL" ? (
         <>
           <div className="section-title">
             Marca de Reparo e Lacres — Inmetro / RBMLQ-I
@@ -881,7 +884,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell label="Acessórios" value={data.intake.accessories} />
           </tr>
           <tr>
-            {data.asset.subjectToLegalMetrology ? (
+            {data.asset.metrologyRegime === "LEGAL" ? (
               <Cell label="Lacre antigo" value={data.intake.oldSealNumber} />
             ) : null}
             <Cell
@@ -892,7 +895,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
               }
             />
           </tr>
-          {data.asset.subjectToLegalMetrology ? (
+          {data.asset.metrologyRegime === "LEGAL" ? (
             <tr>
               <Cell
                 label="Nº Etiqueta de Reparo"

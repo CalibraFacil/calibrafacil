@@ -26,7 +26,6 @@ function write(
 ): AssetRegimeWriteInput {
   return {
     metrologyRegime: undefined,
-    subjectToLegalMetrology: undefined,
     regulatedInterval: undefined,
     current: industrialNow,
     ...partial,
@@ -34,18 +33,17 @@ function write(
 }
 
 describe("resolveAssetRegimeWrite", () => {
-  // REQ-MLR-030 + REQ-MLR-003: LEGAL + a regulated interval → boolean true, interval stored.
-  it("stores the regulated interval and sets the boolean for a LEGAL write", () => {
+  // REQ-MLR-030: LEGAL + a regulated interval → regime LEGAL, interval stored.
+  it("stores the regulated interval for a LEGAL write", () => {
     const r = resolveAssetRegimeWrite(
       write({ metrologyRegime: "LEGAL", regulatedInterval: fixed24 }),
     );
     expect(r.metrologyRegime).toBe("LEGAL");
-    expect(r.subjectToLegalMetrology).toBe(true);
     expect(r.regulatedInterval).toEqual(fixed24);
   });
 
-  // REQ-MLR-031: a non-LEGAL regime clears the regulated interval and the boolean — even
-  // if the client mistakenly supplies one.
+  // REQ-MLR-031: a non-LEGAL regime clears the regulated interval — even if the client
+  // mistakenly supplies one.
   it("clears the regulated interval for INDUSTRIAL / UNKNOWN", () => {
     for (const regime of ["INDUSTRIAL", "UNKNOWN"] as const) {
       const r = resolveAssetRegimeWrite(
@@ -56,28 +54,11 @@ describe("resolveAssetRegimeWrite", () => {
         }),
       );
       expect(r.metrologyRegime).toBe(regime);
-      expect(r.subjectToLegalMetrology).toBe(false);
       expect(r.regulatedInterval).toBeNull();
     }
   });
 
-  // REQ-MLR-003: the legacy boolean maps to a regime when no explicit regime is given.
-  it("maps the legacy boolean to a regime", () => {
-    expect(
-      resolveAssetRegimeWrite(write({ subjectToLegalMetrology: true }))
-        .metrologyRegime,
-    ).toBe("LEGAL");
-    expect(
-      resolveAssetRegimeWrite(
-        write({
-          subjectToLegalMetrology: false,
-          current: { metrologyRegime: "LEGAL", regulatedInterval: fixed24 },
-        }),
-      ).metrologyRegime,
-    ).toBe("INDUSTRIAL");
-  });
-
-  // Keeps the current regime when neither regime nor boolean is supplied.
+  // Keeps the current regime when no explicit regime is supplied.
   it("keeps the current regime when nothing regime-related is supplied", () => {
     const r = resolveAssetRegimeWrite(
       write({ current: { metrologyRegime: "LEGAL", regulatedInterval: fixed24 } }),

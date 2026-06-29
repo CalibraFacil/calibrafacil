@@ -326,7 +326,6 @@ function regulatedFieldFor(
  */
 export function regulatedFormFieldsFromAsset(asset: {
   metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN'
-  subjectToLegalMetrology?: boolean
   regulatedInterval?: {
     kind: RegulatedInterval['kind']
     valueMonths?: number
@@ -337,9 +336,7 @@ export function regulatedFormFieldsFromAsset(asset: {
     note?: string
   } | null
 }): MetrologyRegimeFormValues {
-  const metrologyRegime: MetrologyRegime =
-    asset.metrologyRegime ??
-    (asset.subjectToLegalMetrology ? 'LEGAL' : 'INDUSTRIAL')
+  const metrologyRegime: MetrologyRegime = asset.metrologyRegime ?? 'INDUSTRIAL'
   const r = asset.regulatedInterval
   if (!r) {
     return { metrologyRegime, ...DEFAULT_REGULATED_FORM_FIELDS }

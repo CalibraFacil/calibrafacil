@@ -248,7 +248,6 @@ describe("legal-metrology offline parity", () => {
           model: null,
           baseMeasurementUnit: null,
           specifications: null,
-          subjectToLegalMetrology: true,
           metrologyRegime: "LEGAL",
           regulatedInterval,
           nextLegalVerificationDate: "2027-12-31T00:00:00.000Z",
@@ -272,7 +271,6 @@ describe("legal-metrology offline parity", () => {
     expect(asset?.regulatedInterval).toEqual(regulatedInterval);
     expect(asset?.nextLegalVerificationDate).toBe("2027-12-31T00:00:00.000Z");
     expect(asset?.installedAt).toBe("2026-03-01T00:00:00.000Z");
-    expect(asset?.subjectToLegalMetrology).toBe(true);
 
     database.close();
   });

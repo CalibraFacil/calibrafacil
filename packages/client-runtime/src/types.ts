@@ -961,7 +961,6 @@ export type CreateAssetInput = {
   nextCalibrationDate?: string;
   comments?: string;
   specifications?: Record<string, unknown>;
-  subjectToLegalMetrology?: boolean;
 };
 
 export type AssetsListData = {
@@ -979,7 +978,9 @@ export type AssetsListData = {
     assetTypeName: string;
     status: AssetStatus;
     nextCalibrationDate?: string | null;
-    subjectToLegalMetrology: boolean;
+    // Legal-metrology regime (Track 2). The service-order repair-seal / lacre gating
+    // renders for `metrologyRegime === 'LEGAL'`.
+    metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
   }>;
   pagination?: {
     page: number;
