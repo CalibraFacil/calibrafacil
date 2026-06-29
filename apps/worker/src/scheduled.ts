@@ -10,6 +10,7 @@
 
 import { Client } from "pg";
 import {
+  notifyAssetDueForLegalVerification,
   notifyAssetDueForRecalibration,
   notifyCompetenceExpired,
   notifyCompetenceExpiring,
@@ -43,6 +44,17 @@ interface AssetDueRow {
   customer_name: string;
   organization_id: string;
   next_calibration_date: Date;
+  days_until_due: number;
+}
+
+interface AssetLegalVerificationDueRow {
+  id: number;
+  name: string;
+  tag: string;
+  customer_id: number;
+  customer_name: string;
+  organization_id: string;
+  next_legal_verification_date: Date;
   days_until_due: number;
 }
 
@@ -156,6 +168,60 @@ async function checkAssetsDueForRecalibration(
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
     ORDER BY a.next_calibration_date ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+/**
+ * Check for LEGAL-metrology instruments due for their regulation-fixed
+ * VERIFICATION (Track 2 — Inmetro / RBMLQ-I) within the 30-day lead window.
+ *
+ * This is INDEPENDENT of the recalibration sweep above: it selects on the
+ * separate `metrology_regime='LEGAL'` + `next_legal_verification_date` columns
+ * and dedupes against its OWN distinct scheduled_notification type
+ * (`ASSET_DUE_FOR_LEGAL_VERIFICATION`, lead_time_days=30), so a recalibration
+ * reminder for the same asset is neither suppressed nor created here.
+ *
+ * Duplicate prevention: notified once per 7-day window (NOT EXISTS recency
+ * guard). With a 30-day lead time, up to ~4 weekly reminders before the date.
+ */
+async function checkAssetsDueForLegalVerification(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<AssetLegalVerificationDueRow[]> {
+  const result = await client.query<AssetLegalVerificationDueRow>(
+    `
+    SELECT
+      a.id,
+      a.name,
+      a.tag,
+      a.customer_id,
+      c.name as customer_name,
+      ou.organization_id,
+      a.next_legal_verification_date,
+      EXTRACT(DAY FROM a.next_legal_verification_date - CURRENT_DATE)::int as days_until_due
+    FROM asset a
+    JOIN customer c ON a.customer_id = c.id
+    JOIN organization_unit ou ON a.unit_id = ou.id
+    WHERE a.status = 'ACTIVE'
+      AND a.metrology_regime = 'LEGAL'
+      AND a.next_legal_verification_date IS NOT NULL
+      AND a.next_legal_verification_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'asset'
+          AND sn.entity_id = a.id
+          AND sn.type = 'ASSET_DUE_FOR_LEGAL_VERIFICATION'
+          AND sn.lead_time_days = 30
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY a.next_legal_verification_date ASC
     LIMIT $1 OFFSET $2
     `,
     [batchSize, offset],
@@ -467,6 +533,7 @@ export async function processScheduledNotifications(
   env: ScheduledEnv,
 ): Promise<{
   assetsProcessed: number;
+  legalVerificationsProcessed: number;
   standardsProcessed: number;
   standardsExpiredProcessed: number;
   jobsProcessed: number;
@@ -475,6 +542,7 @@ export async function processScheduledNotifications(
   visitsProcessed: number;
 }> {
   let assetsProcessed = 0;
+  let legalVerificationsProcessed = 0;
   let standardsProcessed = 0;
   let standardsExpiredProcessed = 0;
   let jobsProcessed = 0;
@@ -523,6 +591,51 @@ export async function processScheduledNotifications(
 
       assetOffset += BATCH_SIZE;
     } while (assetBatch.length === BATCH_SIZE);
+
+    // 1b. Process LEGAL-metrology instruments due for regulation-fixed
+    // VERIFICATION (Track 2 — Inmetro / RBMLQ-I), INDEPENDENT of recalibration.
+    let legalOffset = 0;
+    let legalBatch: AssetLegalVerificationDueRow[];
+
+    do {
+      legalBatch = await checkAssetsDueForLegalVerification(
+        client,
+        legalOffset,
+        BATCH_SIZE,
+      );
+      if (legalBatch.length > 0) {
+        console.log(
+          `[Scheduled] Processing ${legalBatch.length} legal-verification reminders (offset ${legalOffset})`,
+        );
+      }
+
+      for (const legalAsset of legalBatch) {
+        try {
+          await notifyAssetDueForLegalVerification(
+            legalAsset.id,
+            legalAsset.organization_id,
+          );
+
+          await recordScheduledNotification(client, {
+            organizationId: legalAsset.organization_id,
+            type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+            entityType: "asset",
+            entityId: legalAsset.id,
+            scheduledFor: legalAsset.next_legal_verification_date,
+            leadTimeDays: 30,
+          });
+
+          legalVerificationsProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing legal-verification for asset ${legalAsset.id}:`,
+            error,
+          );
+        }
+      }
+
+      legalOffset += BATCH_SIZE;
+    } while (legalBatch.length === BATCH_SIZE);
 
     // 2. Process expiring reference standards (with pagination)
     let standardOffset = 0;
@@ -781,6 +894,7 @@ export async function processScheduledNotifications(
 
   return {
     assetsProcessed,
+    legalVerificationsProcessed,
     standardsProcessed,
     standardsExpiredProcessed,
     jobsProcessed,

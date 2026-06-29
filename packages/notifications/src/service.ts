@@ -34,6 +34,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
+import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { isEmailSuppressed } from "./suppression";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
@@ -174,6 +175,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   CERTIFICATE_READY: { inApp: true, email: true },
   CERTIFICATE_AMENDED: { inApp: true, email: true },
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
+  ASSET_DUE_FOR_LEGAL_VERIFICATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
   STANDARD_EXPIRED: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
@@ -634,6 +636,7 @@ function renderEmailTemplate(
     emailContext?.type === "compliance" &&
     [
       "ASSET_DUE_FOR_RECALIBRATION",
+      "ASSET_DUE_FOR_LEGAL_VERIFICATION",
       "STANDARD_EXPIRING",
       "STANDARD_EXPIRED",
     ].includes(type)
@@ -642,7 +645,8 @@ function renderEmailTemplate(
     return ComplianceAlertEmail({
       recipientName,
       type:
-        type === "ASSET_DUE_FOR_RECALIBRATION"
+        type === "ASSET_DUE_FOR_RECALIBRATION" ||
+        type === "ASSET_DUE_FOR_LEGAL_VERIFICATION"
           ? "asset"
           : type === "STANDARD_EXPIRED"
             ? "standardExpired"
@@ -1954,6 +1958,100 @@ export async function notifyAssetDueForRecalibration(
       priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
       title: "Ativo vencendo calibração",
       message: `O instrumento ${assetIdentifier} está com calibração vencendo em ${daysRemaining} dias (${dueDate}).`,
+      relatedEntity: {
+        entityType: "asset",
+        entityId: assetId,
+      },
+      actionUrl: `/dashboard/assets/${assetId}`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify lab members when a customer's legal-metrology instrument is due for its
+ * regulation-fixed VERIFICATION (Track 2 — Inmetro / RBMLQ-I), INDEPENDENTLY of
+ * the recalibration reminder (`notifyAssetDueForRecalibration`). Called by the
+ * scheduled sweep that checks asset.nextLegalVerificationDate for LEGAL-regime
+ * instruments. No-ops for any asset whose `metrologyRegime` is not 'LEGAL' or
+ * whose `nextLegalVerificationDate` is null.
+ */
+export async function notifyAssetDueForLegalVerification(
+  assetId: number,
+  organizationId: string,
+): Promise<void> {
+  // Get asset details with regime + regulated-interval info
+  const [assetData] = await db
+    .select({
+      name: asset.name,
+      serialNumber: asset.serialNumber,
+      tag: asset.tag,
+      metrologyRegime: asset.metrologyRegime,
+      nextLegalVerificationDate: asset.nextLegalVerificationDate,
+      regulatedInterval: asset.regulatedInterval,
+      customerId: asset.customerId,
+    })
+    .from(asset)
+    .where(eq(asset.id, assetId))
+    .limit(1);
+
+  // Track 2 only: never fire for a non-LEGAL regime or a missing legal-verification date.
+  if (assetData?.metrologyRegime !== "LEGAL") return;
+  if (!assetData.nextLegalVerificationDate) return;
+
+  // Read the structured regulated interval defensively (stored loosely as
+  // Record<string, unknown>; no `as` assertions — narrow by typeof).
+  const regulated = assetData.regulatedInterval;
+  const operationalizedByDelegate =
+    regulated?.operationalizedByDelegate === true;
+  const regulationRefValue = regulated?.regulationReference;
+  const regulationReference =
+    typeof regulationRefValue === "string" ? regulationRefValue : null;
+
+  // Get customer name
+  const [customerData] = await db
+    .select({ name: customer.name })
+    .from(customer)
+    .where(eq(customer.id, assetData.customerId))
+    .limit(1);
+
+  const daysRemaining = getDaysRemaining(assetData.nextLegalVerificationDate);
+  const dueDate = formatDateBR(assetData.nextLegalVerificationDate);
+  const assetIdentifier =
+    assetData.tag || assetData.serialNumber || assetData.name;
+  const itemName = customerData
+    ? `${assetData.name} (${customerData.name})`
+    : assetData.name;
+
+  const message = buildLegalVerificationMessage({
+    assetIdentifier,
+    dueDate,
+    daysRemaining,
+    operationalizedByDelegate,
+    regulationReference,
+  });
+
+  // Notify admins and owners of the lab
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
+      priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
+      title: "Verificação metrológica legal próxima",
+      message,
       relatedEntity: {
         entityType: "asset",
         entityId: assetId,

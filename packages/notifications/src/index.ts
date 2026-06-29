@@ -15,6 +15,7 @@ export {
   notifyCompetenceExpiring,
   notifyCompetenceExpired,
   notifyAssetDueForRecalibration,
+  notifyAssetDueForLegalVerification,
   notifyStandardExpiring,
   notifyStandardExpired,
   notifyJobOverdue,
@@ -36,6 +37,9 @@ export {
   type SendNotificationOptions,
   type NotificationResult,
 } from "./service";
+
+// Pure pt-BR copy builder for the legal-metrology verification reminder
+export { buildLegalVerificationMessage } from "./legal-verification-message";
 
 // Email suppression / unsubscribe list (issue #577)
 export {
