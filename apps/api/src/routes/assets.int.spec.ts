@@ -383,6 +383,76 @@ describe("assetsRouter — real DB + real middleware", () => {
     },
   );
 
+  // REQ-POLISH-002 ------------------------------------------------------------
+  // Hardens REQ-MLR-012: a malformed regulatedInterval (empty regulationReference OR
+  // valueMonths outside [1,600]) is rejected by RegulatedIntervalSchema at the zValidator
+  // gate — BEFORE the handler runs — so no Track-2 column is partially written.
+  it(
+    "REQ-POLISH-002 [HIGH]: a LEGAL PUT with a malformed regulatedInterval -> 400 and writes NO Track-2 columns (no partial write)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-polish-002");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const assetId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "TAG-POLISH-002",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      async function readAsset() {
+        const [row] = await db
+          .select()
+          .from(asset)
+          .where(eq(asset.id, assetId))
+          .limit(1);
+        return row;
+      }
+
+      // Case A — empty regulationReference (otherwise valid) is rejected, nothing persisted.
+      const emptyReference = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: {
+            kind: "fixed_months",
+            valueMonths: 24,
+            anchor: "last_verification",
+            regulationReference: "",
+            operationalizedByDelegate: false,
+          },
+        }),
+      });
+      expect(emptyReference.status).toBe(400);
+      const afterEmptyReference = await readAsset();
+      expect(afterEmptyReference?.regulatedInterval).toBeNull();
+      expect(afterEmptyReference?.nextLegalVerificationDate).toBeNull();
+
+      // Case B — valueMonths outside [1,600] is rejected, nothing persisted.
+      const outOfRange = await assetsRouter.request(`/${assetId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          metrologyRegime: "LEGAL",
+          regulatedInterval: {
+            kind: "fixed_months",
+            valueMonths: 999,
+            anchor: "last_verification",
+            regulationReference: "Portaria Inmetro nº 124/2022",
+            operationalizedByDelegate: false,
+          },
+        }),
+      });
+      expect(outOfRange.status).toBe(400);
+      const afterOutOfRange = await readAsset();
+      expect(afterOutOfRange?.regulatedInterval).toBeNull();
+      expect(afterOutOfRange?.nextLegalVerificationDate).toBeNull();
+    },
+  );
+
   // REQ-MLR-031 ---------------------------------------------------------------
   it(
     "REQ-MLR-031 [HIGH]: switching to INDUSTRIAL clears the regulated period (Track 2) and keeps the customer interval (Track 1)",

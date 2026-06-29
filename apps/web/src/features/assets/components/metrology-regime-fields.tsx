@@ -1,7 +1,12 @@
 import { useState } from 'react'
 
 import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -38,10 +43,22 @@ export function MetrologyRegimeFields({
   values,
   onChange,
   disabled,
+  errors,
 }: {
   values: MetrologyRegimeFormValues
   onChange: (patch: Partial<MetrologyRegimeFormValues>) => void
   disabled?: boolean
+  // Field-keyed validation messages from the parse step (REQ-POLISH-001). Each
+  // regulated field surfaces its own inline error, next to the offending input.
+  errors?: Partial<
+    Record<
+      | 'regulationReference'
+      | 'regulatedValueMonths'
+      | 'regulatedTechnology'
+      | 'regulatedAnchor',
+      string
+    >
+  >
 }) {
   const { regulatedKind } = values
   const anchorOptions =
@@ -226,6 +243,9 @@ export function MetrologyRegimeFields({
                 de usar em certificado.
               </FieldDescription>
             ) : null}
+            {errors?.regulationReference ? (
+              <FieldError>{errors.regulationReference}</FieldError>
+            ) : null}
           </Field>
 
           {regulatedKind !== 'not_nationally_fixed' ? (
@@ -244,6 +264,9 @@ export function MetrologyRegimeFields({
                 }
                 disabled={disabled}
               />
+              {errors?.regulatedValueMonths ? (
+                <FieldError>{errors.regulatedValueMonths}</FieldError>
+              ) : null}
             </Field>
           ) : null}
 
@@ -273,6 +296,9 @@ export function MetrologyRegimeFields({
                   ))}
                 </SelectContent>
               </Select>
+              {errors?.regulatedAnchor ? (
+                <FieldError>{errors.regulatedAnchor}</FieldError>
+              ) : null}
             </Field>
           ) : null}
 
@@ -291,6 +317,9 @@ export function MetrologyRegimeFields({
                 disabled={disabled}
                 autoComplete="off"
               />
+              {errors?.regulatedTechnology ? (
+                <FieldError>{errors.regulatedTechnology}</FieldError>
+              ) : null}
             </Field>
           ) : null}
 

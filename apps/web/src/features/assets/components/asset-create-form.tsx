@@ -656,6 +656,7 @@ export function AssetCreateForm({
                       setFormData((prev) => ({ ...prev, ...patch }))
                     }
                     disabled={isSaving}
+                    errors={errors}
                   />
                 </Panel>
               ) : null}
