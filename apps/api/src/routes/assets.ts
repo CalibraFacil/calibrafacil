@@ -238,7 +238,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         // which the lab never authors. (REQ-MLR-030/031/003)
         const regimeWrite = resolveAssetRegimeWrite({
           metrologyRegime: input.metrologyRegime,
-          subjectToLegalMetrology: input.subjectToLegalMetrology,
           regulatedInterval: input.regulatedInterval,
           current: { metrologyRegime: "INDUSTRIAL", regulatedInterval: null },
         });
@@ -269,7 +268,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
             metrologyRegime: regimeWrite.metrologyRegime,
-            subjectToLegalMetrology: regimeWrite.subjectToLegalMetrology,
             regulatedInterval: regimeWrite.regulatedInterval,
             nextLegalVerificationDate,
           })
@@ -453,7 +451,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
             comments: asset.comments,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
+            metrologyRegime: asset.metrologyRegime,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
           })
@@ -582,7 +580,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           nextCalibrationDate: asset.nextCalibrationDate,
           installedAt: asset.installedAt,
           comments: asset.comments,
-          subjectToLegalMetrology: asset.subjectToLegalMetrology,
           metrologyRegime: asset.metrologyRegime,
           regulatedInterval: asset.regulatedInterval,
           nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -663,7 +660,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             installedAt: asset.installedAt,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
             comments: asset.comments,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             metrologyRegime: asset.metrologyRegime,
             regulatedInterval: asset.regulatedInterval,
             deletedAt: asset.deletedAt,
@@ -761,13 +757,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
-        // the legacy boolean, the regulated interval, OR the install anchor (a standalone
-        // installed_at change must re-derive next_legal_verification_date for an
-        // install-anchored LEGAL asset). Independent of Track 1 (the customer-owned
-        // calibration interval). (REQ-MLR-030/031/032/003 + REQ-INSTALL-002)
+        // the regulated interval, OR the install anchor (a standalone installed_at change
+        // must re-derive next_legal_verification_date for an install-anchored LEGAL asset).
+        // Independent of Track 1 (the customer-owned calibration interval).
+        // (REQ-MLR-030/031/032 + REQ-INSTALL-002)
         if (
           input.metrologyRegime !== undefined ||
-          input.subjectToLegalMetrology !== undefined ||
           input.regulatedInterval !== undefined ||
           installedAt !== undefined
         ) {
@@ -776,7 +771,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           );
           const regimeWrite = resolveAssetRegimeWrite({
             metrologyRegime: input.metrologyRegime,
-            subjectToLegalMetrology: input.subjectToLegalMetrology,
             regulatedInterval: input.regulatedInterval,
             current: {
               metrologyRegime: existingAsset.metrologyRegime,
@@ -786,7 +780,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             },
           });
           updateData.metrologyRegime = regimeWrite.metrologyRegime;
-          updateData.subjectToLegalMetrology = regimeWrite.subjectToLegalMetrology;
           updateData.regulatedInterval = regimeWrite.regulatedInterval;
           const anchorDate =
             (lastCalibrationDate !== undefined

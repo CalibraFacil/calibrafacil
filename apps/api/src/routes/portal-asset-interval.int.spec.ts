@@ -41,7 +41,7 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
   lastCalibrationDate?: Date;
-  subjectToLegalMetrology?: boolean;
+  metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 }): Promise<number> {
   const [row] = await db
     .insert(asset)
@@ -54,7 +54,7 @@ async function seedAsset(params: {
       tag: params.tag,
       status: "ACTIVE",
       lastCalibrationDate: params.lastCalibrationDate ?? null,
-      subjectToLegalMetrology: params.subjectToLegalMetrology ?? false,
+      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
     })
     .returning({ id: asset.id });
   if (!row) throw new Error("seedAsset: insert failed");
@@ -258,7 +258,7 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
       customerId: ctx.customerId,
       assetTypeId,
       tag: "EQ-LM",
-      subjectToLegalMetrology: true,
+      metrologyRegime: "LEGAL",
     });
 
     loginAsPortal({
@@ -298,7 +298,7 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
       assetTypeId,
       tag: "EQ-LM2",
       lastCalibrationDate: new Date(Date.UTC(2026, 0, 15)),
-      subjectToLegalMetrology: true,
+      metrologyRegime: "LEGAL",
     });
 
     // The lab records the legal regime + a regulation-fixed verification periodicity (Track 2)
@@ -314,7 +314,6 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
       .update(asset)
       .set({
         metrologyRegime: "LEGAL",
-        subjectToLegalMetrology: true,
         regulatedInterval: seededRegulatedInterval,
         nextLegalVerificationDate: new Date("2027-03-10T00:00:00.000Z"),
         calibrationIntervalMonths: 12,

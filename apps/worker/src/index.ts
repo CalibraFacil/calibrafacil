@@ -1712,7 +1712,7 @@ async function fetchServiceOrderDocumentData(
       snap.display_specs,
       snap.specifications,
       atype.definition as asset_type_definition,
-      a.subject_to_legal_metrology,
+      a.metrology_regime,
       settings.default_intake_terms
     FROM service_order so
     LEFT JOIN organization o ON so.organization_id = o.id
@@ -1800,7 +1800,7 @@ async function fetchServiceOrderDocumentData(
       patrimonyNumber: row.patrimony_number,
       observedIdentification: row.observed_identification,
       specs: assetSpecs,
-      subjectToLegalMetrology: row.subject_to_legal_metrology ?? false,
+      metrologyRegime: row.metrology_regime ?? "INDUSTRIAL",
     },
     intake: {
       claimedDefect: row.claimed_defect,

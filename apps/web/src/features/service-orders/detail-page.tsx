@@ -458,7 +458,7 @@ function ServiceOrderDetailContent({
   // The repair seal (Etiqueta de Reparo) + lacre only apply to instruments
   // subject to legal metrology. Show the editor only for those; for others,
   // surface any already-recorded value read-only so history never disappears.
-  const isSubjectToLegalMetrology = Boolean(order.assetSubjectToLegalMetrology)
+  const isSubjectToLegalMetrology = order.assetMetrologyRegime === 'LEGAL'
   const hasRepairSealRecord = Boolean(
     order.inmetroRepairSealNumber ||
     order.inmetroRepairSealNotes ||

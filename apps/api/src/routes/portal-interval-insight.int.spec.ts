@@ -33,7 +33,7 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
   model?: string;
-  subjectToLegalMetrology?: boolean;
+  metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 }): Promise<number> {
   const [row] = await db
     .insert(asset)
@@ -46,7 +46,7 @@ async function seedAsset(params: {
       tag: params.tag,
       model: params.model ?? null,
       status: "ACTIVE",
-      subjectToLegalMetrology: params.subjectToLegalMetrology ?? false,
+      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
     })
     .returning({ id: asset.id });
   if (!row) throw new Error("seedAsset failed");
@@ -347,7 +347,7 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
         assetTypeId,
         tag: `EQ-LM${s}`,
         model: "BAL-Y",
-        subjectToLegalMetrology: true,
+        metrologyRegime: "LEGAL",
       });
       for (let j = 0; j < 3; j += 1) {
         await seedApprovedJob({
@@ -410,7 +410,7 @@ describe("GET /api/portal/assets/:id/interval-insight — real DB + portal middl
       customerId: ctx.customerId,
       assetTypeId,
       tag: "EQ-LM",
-      subjectToLegalMetrology: true,
+      metrologyRegime: "LEGAL",
     });
     loginAsPortal({
       userId: ctx.portalUserId,

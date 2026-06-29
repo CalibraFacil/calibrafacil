@@ -113,7 +113,7 @@ async function seedAsset(params: {
       serialNumber: `SN-${params.tag}`,
       tag: params.tag,
       status: "ACTIVE",
-      subjectToLegalMetrology: false,
+      metrologyRegime: "INDUSTRIAL",
     })
     .returning({ id: asset.id });
   if (!row) throw new Error("seedAsset: insert failed");

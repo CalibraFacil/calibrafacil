@@ -39,7 +39,6 @@ export type LocalAssetsListData = {
     lastCalibrationDate: string | null;
     nextCalibrationDate: string | null;
     comments: string | null;
-    subjectToLegalMetrology: boolean;
     // Legal-metrology TRACK 2 (mirrors the cloud `asset` columns). `regulatedInterval`
     // is the structured period (stored loosely like `specifications`).
     metrologyRegime: MetrologyRegime;
@@ -73,7 +72,6 @@ export type CreateLocalAssetInput = {
   lastCalibrationDate?: string | null;
   nextCalibrationDate?: string | null;
   comments?: string | null;
-  subjectToLegalMetrology?: boolean;
   metrologyRegime?: MetrologyRegime;
   regulatedInterval?: Record<string, unknown> | null;
   nextLegalVerificationDate?: string | null;
@@ -95,7 +93,6 @@ export type UpdateLocalAssetInput = {
   lastCalibrationDate?: string | null;
   nextCalibrationDate?: string | null;
   comments?: string | null;
-  subjectToLegalMetrology?: boolean;
   metrologyRegime?: MetrologyRegime;
   regulatedInterval?: Record<string, unknown> | null;
   nextLegalVerificationDate?: string | null;
@@ -129,7 +126,6 @@ type LocalAssetListRow = {
   last_calibration_date: string | null;
   next_calibration_date: string | null;
   comments: string | null;
-  subject_to_legal_metrology: number;
   metrology_regime: MetrologyRegime;
   regulated_interval: string | null;
   next_legal_verification_date: string | null;
@@ -195,7 +191,6 @@ LIMIT 1
     lastCalibrationDate: input.lastCalibrationDate ?? null,
     nextCalibrationDate: input.nextCalibrationDate ?? null,
     comments: input.comments || null,
-    subjectToLegalMetrology: input.subjectToLegalMetrology ?? false,
     metrologyRegime: input.metrologyRegime ?? "INDUSTRIAL",
     regulatedInterval: input.regulatedInterval ?? null,
     installedAt: input.installedAt ?? null,
@@ -222,7 +217,6 @@ INSERT INTO assets (
   last_calibration_date,
   next_calibration_date,
   comments,
-  subject_to_legal_metrology,
   metrology_regime,
   regulated_interval,
   next_legal_verification_date,
@@ -246,7 +240,6 @@ INSERT INTO assets (
   @lastCalibrationDate,
   @nextCalibrationDate,
   @comments,
-  @subjectToLegalMetrology,
   @metrologyRegime,
   @regulatedIntervalJson,
   @nextLegalVerificationDate,
@@ -273,7 +266,6 @@ INSERT INTO assets (
         lastCalibrationDate: input.lastCalibrationDate ?? null,
         nextCalibrationDate: input.nextCalibrationDate ?? null,
         comments: input.comments || null,
-        subjectToLegalMetrology: input.subjectToLegalMetrology ? 1 : 0,
         metrologyRegime: input.metrologyRegime ?? "INDUSTRIAL",
         regulatedIntervalJson: JSON.stringify(input.regulatedInterval ?? null),
         nextLegalVerificationDate: input.nextLegalVerificationDate ?? null,
@@ -370,7 +362,6 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
-  a.subject_to_legal_metrology,
   a.metrology_regime,
   a.regulated_interval,
   a.next_legal_verification_date,
@@ -424,7 +415,6 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
-  a.subject_to_legal_metrology,
   a.metrology_regime,
   a.regulated_interval,
   a.next_legal_verification_date,
@@ -482,7 +472,6 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
-  a.subject_to_legal_metrology,
   a.metrology_regime,
   a.regulated_interval,
   a.next_legal_verification_date,
@@ -559,10 +548,6 @@ LIMIT 1
         ? row.next_calibration_date
         : input.nextCalibrationDate,
     comments: input.comments === undefined ? row.comments : input.comments,
-    subjectToLegalMetrology:
-      input.subjectToLegalMetrology === undefined
-        ? row.subject_to_legal_metrology === 1
-        : input.subjectToLegalMetrology,
     metrologyRegime:
       input.metrologyRegime === undefined
         ? row.metrology_regime
@@ -599,7 +584,6 @@ SET name = @name,
   last_calibration_date = @lastCalibrationDate,
   next_calibration_date = @nextCalibrationDate,
   comments = @comments,
-  subject_to_legal_metrology = @subjectToLegalMetrology,
   metrology_regime = @metrologyRegime,
   regulated_interval = @regulatedIntervalJson,
   next_legal_verification_date = @nextLegalVerificationDate,
@@ -622,7 +606,6 @@ WHERE id = @id
         lastCalibrationDate: values.lastCalibrationDate ?? null,
         nextCalibrationDate: values.nextCalibrationDate ?? null,
         comments: values.comments || null,
-        subjectToLegalMetrology: values.subjectToLegalMetrology ? 1 : 0,
         metrologyRegime: values.metrologyRegime,
         regulatedIntervalJson: JSON.stringify(values.regulatedInterval ?? null),
         nextLegalVerificationDate: values.nextLegalVerificationDate ?? null,
@@ -682,7 +665,6 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
-  a.subject_to_legal_metrology,
   a.metrology_regime,
   a.regulated_interval,
   a.next_legal_verification_date,
@@ -756,7 +738,6 @@ SELECT
   a.last_calibration_date,
   a.next_calibration_date,
   a.comments,
-  a.subject_to_legal_metrology,
   a.metrology_regime,
   a.regulated_interval,
   a.next_legal_verification_date,
@@ -815,7 +796,6 @@ function toLocalAsset(row: LocalAssetListRow): LocalAsset {
     lastCalibrationDate: row.last_calibration_date,
     nextCalibrationDate: row.next_calibration_date,
     comments: row.comments,
-    subjectToLegalMetrology: row.subject_to_legal_metrology === 1,
     metrologyRegime: row.metrology_regime,
     regulatedInterval: parseRecord(row.regulated_interval),
     nextLegalVerificationDate: row.next_legal_verification_date,

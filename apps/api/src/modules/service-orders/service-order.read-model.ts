@@ -54,7 +54,7 @@ export async function getServiceOrderDetail(
       assetName: asset.name,
       assetTag: asset.tag,
       assetSerialNumber: asset.serialNumber,
-      assetSubjectToLegalMetrology: asset.subjectToLegalMetrology,
+      assetMetrologyRegime: asset.metrologyRegime,
       status: serviceOrder.status,
       priority: serviceOrder.priority,
       intakeType: serviceOrder.intakeType,

@@ -1320,6 +1320,8 @@ describe("syncRouter", () => {
     //   4. db.update(...).returning() → updated asset row
     //   5. db.insert(assetAuditLog) (changes recorded)
     //   6. writeOrganizationAuditEvent → db.insert(organizationEventLog)
+    // REQ-OFFLINE-003 here doubles as REQ-DROPBOOL-005 coverage: the cloud update set
+    // carries `metrology_regime` (the boolean is gone) + the derived verification date.
     mocks.selectResults.push(
       [],
       [{ details: { remoteEntityId: 42 } }],
@@ -1338,7 +1340,6 @@ describe("syncRouter", () => {
           nextCalibrationDate: null,
           comments: null,
           specifications: {},
-          subjectToLegalMetrology: false,
           metrologyRegime: "INDUSTRIAL",
           regulatedInterval: null,
           installedAt: new Date("2026-02-01T00:00:00.000Z"),
@@ -1383,8 +1384,6 @@ describe("syncRouter", () => {
     expect(updateQuery.set).toHaveBeenCalledWith(
       expect.objectContaining({
         metrologyRegime: "LEGAL",
-        // REQ-MLR-003: the deprecated boolean stays consistent with the regime.
-        subjectToLegalMetrology: true,
         regulatedInterval: expect.objectContaining({
           kind: "fixed_months",
           valueMonths: 12,

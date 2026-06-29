@@ -217,7 +217,6 @@ export const syncRouter = new Hono<{
             model: asset.model,
             baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
-            subjectToLegalMetrology: asset.subjectToLegalMetrology,
             metrologyRegime: asset.metrologyRegime,
             regulatedInterval: asset.regulatedInterval,
             nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -850,7 +849,6 @@ async function loadCloudSyncEventsSince(
         model: asset.model,
         baseMeasurementUnit: asset.baseMeasurementUnit,
         specifications: asset.specifications,
-        subjectToLegalMetrology: asset.subjectToLegalMetrology,
         metrologyRegime: asset.metrologyRegime,
         regulatedInterval: asset.regulatedInterval,
         nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -1796,7 +1794,6 @@ async function applyCreateLocalAsset(
   const installedAt = parseSyncDate(values.installedAt);
   const regimeWrite = resolveAssetRegimeWrite({
     metrologyRegime: values.metrologyRegime,
-    subjectToLegalMetrology: values.subjectToLegalMetrology,
     regulatedInterval: values.regulatedInterval,
     current: { metrologyRegime: "INDUSTRIAL", regulatedInterval: null },
   });
@@ -1833,7 +1830,6 @@ async function applyCreateLocalAsset(
         comments: values.comments || null,
         specifications: normalizedSpecifications.specifications || null,
         metrologyRegime: regimeWrite.metrologyRegime,
-        subjectToLegalMetrology: regimeWrite.subjectToLegalMetrology,
         regulatedInterval: regimeWrite.regulatedInterval,
         nextLegalVerificationDate,
       })
@@ -1923,7 +1919,6 @@ async function applyUpdateLocalAsset(
       nextCalibrationDate: asset.nextCalibrationDate,
       comments: asset.comments,
       specifications: asset.specifications,
-      subjectToLegalMetrology: asset.subjectToLegalMetrology,
       metrologyRegime: asset.metrologyRegime,
       regulatedInterval: asset.regulatedInterval,
       installedAt: asset.installedAt,
@@ -1992,13 +1987,12 @@ async function applyUpdateLocalAsset(
   if (installedAtUpdate !== undefined) {
     updateData.installedAt = installedAtUpdate;
   }
-  // Legal-metrology regime (mirrors the cloud asset-update route): recompute the regime
-  // trio + next_legal_verification_date when the desktop event touches the regime, the
-  // legacy boolean, the regulated interval, OR the install anchor. Keeps the four columns
-  // mutually consistent (REQ-MLR-003/030/031/032 + REQ-INSTALL-002).
+  // Legal-metrology regime (mirrors the cloud asset-update route): recompute the regime +
+  // next_legal_verification_date when the desktop event touches the regime, the regulated
+  // interval, OR the install anchor. Keeps the regime columns mutually consistent
+  // (REQ-MLR-030/031/032 + REQ-INSTALL-002).
   if (
     values.metrologyRegime !== undefined ||
-    values.subjectToLegalMetrology !== undefined ||
     values.regulatedInterval !== undefined ||
     installedAtUpdate !== undefined
   ) {
@@ -2007,7 +2001,6 @@ async function applyUpdateLocalAsset(
     );
     const regimeWrite = resolveAssetRegimeWrite({
       metrologyRegime: values.metrologyRegime,
-      subjectToLegalMetrology: values.subjectToLegalMetrology,
       regulatedInterval: values.regulatedInterval,
       current: {
         metrologyRegime: existingAsset.metrologyRegime,
@@ -2015,7 +2008,6 @@ async function applyUpdateLocalAsset(
       },
     });
     updateData.metrologyRegime = regimeWrite.metrologyRegime;
-    updateData.subjectToLegalMetrology = regimeWrite.subjectToLegalMetrology;
     updateData.regulatedInterval = regimeWrite.regulatedInterval;
     const anchorDate =
       (values.lastCalibrationDate !== undefined

@@ -484,6 +484,13 @@
 			"when": 1782783559873,
 			"tag": "0068_legal_metrology_regulation",
 			"breakpoints": true
+		},
+		{
+			"idx": 69,
+			"version": "7",
+			"when": 1782869959873,
+			"tag": "0069_drop_asset_subject_to_legal_metrology",
+			"breakpoints": true
 		}
 	]
 }

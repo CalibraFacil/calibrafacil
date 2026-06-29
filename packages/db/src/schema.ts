@@ -2739,14 +2739,6 @@ export const asset = pgTable(
     // = `installed_at` + valueMonths. NULL → no fabricated date (REQ-INSTALL-003).
     installedAt: timestamp("installed_at"),
     comments: text("comments"), // Additional notes about the equipment
-    // Whether this instrument is subject to legal metrology (Inmetro): governs
-    // whether the repair seal (Etiqueta de Reparo) + security lacre fields are
-    // shown on its service orders. See docs token `asset.inmetroRegistration`.
-    // DEPRECATED source-of-truth: kept consistent with `metrologyRegime` during the
-    // transition (= metrologyRegime === 'LEGAL'); migrate reads to `metrologyRegime`.
-    subjectToLegalMetrology: boolean("subject_to_legal_metrology")
-      .default(false)
-      .notNull(),
     // Calibration interval (periodicity) — OWNED BY THE CUSTOMER, never the lab
     // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). NULL = "aguardando
     // definição do cliente" (the lab no longer attributes periodicity). When set,

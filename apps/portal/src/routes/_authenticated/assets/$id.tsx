@@ -75,7 +75,6 @@ type AssetDetail = {
   // here for EVERY regime (§7.8.4.3 + ILAC-G24); the lab never attributes it.
   calibrationIntervalMonths: number | null;
   intervalSetBy: "customer_confirmed" | "engine_applied" | null;
-  subjectToLegalMetrology: boolean;
   // Track 2 — legal-metrology regime + the regulation-fixed VERIFICATION periodicity
   // (independent of Track 1; lab-recorded, read-only for the customer).
   metrologyRegime: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";

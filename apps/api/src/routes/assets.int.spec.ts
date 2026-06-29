@@ -128,7 +128,7 @@ async function seedAsset(params: {
       serialNumber: `SN-${params.tag}`,
       tag: params.tag,
       status: "ACTIVE",
-      subjectToLegalMetrology: false,
+      metrologyRegime: "INDUSTRIAL",
     })
     .returning({ id: asset.id });
 
@@ -364,7 +364,6 @@ describe("assetsRouter — real DB + real middleware", () => {
         .limit(1);
       // Track 2 persisted + derived.
       expect(row?.metrologyRegime).toBe("LEGAL");
-      expect(row?.subjectToLegalMetrology).toBe(true);
       expect(row?.regulatedInterval).toMatchObject({
         kind: "fixed_months",
         valueMonths: 24,
@@ -472,7 +471,6 @@ describe("assetsRouter — real DB + real middleware", () => {
         .update(asset)
         .set({
           metrologyRegime: "LEGAL",
-          subjectToLegalMetrology: true,
           regulatedInterval: LEGAL_REGULATED,
           nextLegalVerificationDate: new Date("2026-01-15T00:00:00.000Z"),
           calibrationIntervalMonths: 12,
@@ -494,7 +492,6 @@ describe("assetsRouter — real DB + real middleware", () => {
         .where(eq(asset.id, assetId))
         .limit(1);
       expect(row?.metrologyRegime).toBe("INDUSTRIAL");
-      expect(row?.subjectToLegalMetrology).toBe(false);
       expect(row?.regulatedInterval).toBeNull();
       expect(row?.nextLegalVerificationDate).toBeNull();
       // Customer-owned interval (Track 1) is intact.
@@ -676,7 +673,6 @@ describe("assetsRouter — real DB + real middleware", () => {
         .update(asset)
         .set({
           metrologyRegime: "LEGAL",
-          subjectToLegalMetrology: true,
           regulatedInterval: LEGAL_FROM_INSTALL,
           nextLegalVerificationDate: null,
         })
@@ -721,7 +717,6 @@ describe("assetsRouter — real DB + real middleware", () => {
         .update(asset)
         .set({
           metrologyRegime: "LEGAL",
-          subjectToLegalMetrology: true,
           regulatedInterval: LEGAL_FROM_INSTALL,
         })
         .where(eq(asset.id, assetId));
@@ -741,9 +736,8 @@ describe("assetsRouter — real DB + real middleware", () => {
         .where(eq(asset.id, assetId))
         .limit(1);
       expect(row?.name).toBe("Renamed");
-      // The regime is NOT silently reset by the omitted (previously defaulted-false) boolean.
+      // The regime is NOT silently reset by a non-regime (name-only) update.
       expect(row?.metrologyRegime).toBe("LEGAL");
-      expect(row?.subjectToLegalMetrology).toBe(true);
       expect(row?.regulatedInterval).toMatchObject({
         kind: "max_months_from_install",
       });

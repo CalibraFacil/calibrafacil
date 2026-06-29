@@ -334,9 +334,8 @@ export function NewServiceOrderPage() {
     // carry a typed value into the payload if the chosen asset isn't subject.
     const parsed = parseServiceOrderForm({
       ...formData,
-      oldSealNumber: selectedAsset?.subjectToLegalMetrology
-        ? formData.oldSealNumber
-        : '',
+      oldSealNumber:
+        selectedAsset?.metrologyRegime === 'LEGAL' ? formData.oldSealNumber : '',
     })
     if (!parsed.success) {
       setErrors(
@@ -828,7 +827,7 @@ export function NewServiceOrderPage() {
                 </Field>
               </div>
 
-              {selectedAsset?.subjectToLegalMetrology ? (
+              {selectedAsset?.metrologyRegime === 'LEGAL' ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field>
                     <FieldLabel>Lacre rompido na entrada</FieldLabel>

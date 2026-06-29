@@ -399,10 +399,6 @@ export const CreateAssetSchema = z.object({
   installedAt: z.string().optional(),
   comments: z.string().optional(),
   specifications: z.record(z.string(), z.unknown()).optional(),
-  // Subject to legal metrology (Inmetro). DEPRECATED in favour of `metrologyRegime`
-  // (kept for legacy clients; the API derives one from the other). Governs whether the
-  // service-order repair-seal (Etiqueta de Reparo) + lacre fields are shown for this asset.
-  subjectToLegalMetrology: z.boolean().optional(),
   // Legal-metrology regime + the regulation-fixed VERIFICATION periodicity (Track 2,
   // independent of the customer-owned calibration interval). `z.lazy` defers to the
   // schemas declared below (declaration order). Spec: specs/legal-metrology-regime.
