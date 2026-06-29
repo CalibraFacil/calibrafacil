@@ -154,6 +154,94 @@ export function isRegulatedKind(
   return REGULATED_INTERVAL_KINDS.some((kind) => kind === value)
 }
 
+// =============================================================================
+// LEGAL-METROLOGY REGULATION CATALOG — auto-fill (deferred #3 of #423)
+// =============================================================================
+
+/**
+ * A row of the GLOBAL legal-metrology regulation catalog (Portaria → default regulated-
+ * interval shape), fetched from `/api/legal-metrology-regulations`. Selecting one pre-fills
+ * the editable regime fields — a default the lab can still override (suggestion-only).
+ * Spec: `specs/legal-metrology-catalog/spec.md`.
+ */
+export type LegalMetrologyRegulationCatalogEntry = {
+  id: number
+  category: string
+  kind: RegulatedInterval['kind']
+  valueMonths: number | null
+  byTechnology: Record<string, number> | null
+  anchor: string | null
+  operationalizedByDelegate: boolean
+  regulationReference: string
+  provenance: 'primary' | 'secondary'
+  note: string | null
+}
+
+/**
+ * Caveat shown next to a SECONDARY catalog entry's auto-filled reference — its exact DOU
+ * article still needs operator re-confirmation before it backs a compliance certificate
+ * (REQ-CATALOG-005).
+ */
+export const REGULATION_CATALOG_SECONDARY_CAVEAT = '(verificar artigo no DOU)'
+
+/** REQ-CATALOG-005: a catalog entry whose provenance is `secondary` triggers the caveat. */
+export function isSecondaryRegulationProvenance(entry: {
+  provenance: 'primary' | 'secondary'
+}): boolean {
+  return entry.provenance === 'secondary'
+}
+
+/**
+ * REQ-CATALOG-004: derive the regime-field patch from a selected catalog entry. Populates
+ * `regulatedKind`, the scalar `valueMonths` (where the kind carries one), `anchor`,
+ * `regulationReference`, and `operationalizedByDelegate`. For `per_technology` the catalog
+ * binds a per-technology MAP (not one period), so the technology + months are cleared for
+ * the lab to pick from `byTechnology` (see `regulationTechnologyPatch`). The lab can still
+ * override ANY field afterward — the patch is merged into the form, never locked.
+ */
+export function regulationCatalogToRegimePatch(
+  entry: LegalMetrologyRegulationCatalogEntry,
+): Partial<MetrologyRegimeFormValues> {
+  const patch: Partial<MetrologyRegimeFormValues> = {
+    metrologyRegime: 'LEGAL',
+    regulatedKind: entry.kind,
+    regulationReference: entry.regulationReference,
+    regulatedOperationalizedByDelegate: entry.operationalizedByDelegate,
+  }
+  if (entry.anchor !== null) {
+    patch.regulatedAnchor = entry.anchor
+  }
+  if (entry.kind === 'fixed_months' || entry.kind === 'max_months_from_install') {
+    patch.regulatedValueMonths =
+      entry.valueMonths !== null ? String(entry.valueMonths) : ''
+  }
+  if (entry.kind === 'per_technology') {
+    // The lab must pick which technology applies to THIS instrument; reset both so a
+    // stale value from a previously-selected entry never leaks.
+    patch.regulatedTechnology = ''
+    patch.regulatedValueMonths = ''
+  }
+  if (entry.kind === 'not_nationally_fixed' && entry.note !== null) {
+    patch.regulatedNote = entry.note
+  }
+  return patch
+}
+
+/**
+ * REQ-CATALOG-004 (per_technology): once the lab picks a technology from a `per_technology`
+ * entry's `byTechnology` map, fill the technology + its regulated months.
+ */
+export function regulationTechnologyPatch(
+  entry: LegalMetrologyRegulationCatalogEntry,
+  technology: string,
+): Partial<MetrologyRegimeFormValues> {
+  const months = entry.byTechnology?.[technology]
+  return {
+    regulatedTechnology: technology,
+    regulatedValueMonths: months !== undefined ? String(months) : '',
+  }
+}
+
 type RegulatedFormFieldKey =
   | 'regulationReference'
   | 'regulatedValueMonths'

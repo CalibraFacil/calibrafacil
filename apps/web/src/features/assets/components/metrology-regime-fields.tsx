@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -11,13 +13,19 @@ import {
 import {
   isMetrologyRegime,
   isRegulatedKind,
+  isSecondaryRegulationProvenance,
   METROLOGY_REGIME_LABELS,
   METROLOGY_REGIMES,
   REGULATED_ANCHOR_LABELS,
   REGULATED_INTERVAL_KINDS,
   REGULATED_KIND_LABELS,
+  REGULATION_CATALOG_SECONDARY_CAVEAT,
+  regulationCatalogToRegimePatch,
+  regulationTechnologyPatch,
+  type LegalMetrologyRegulationCatalogEntry,
   type MetrologyRegimeFormValues,
 } from '@/features/assets/forms'
+import { useLegalMetrologyRegulationsData } from '@/features/assets/queries'
 
 /**
  * Lab-form fields for the legal-metrology regime + the regulation-fixed verification
@@ -42,6 +50,26 @@ export function MetrologyRegimeFields({
       : regulatedKind === 'per_technology'
         ? (['last_verification', 'first_verification'] as const)
         : null
+
+  // The GLOBAL regulation catalog the lab can auto-fill from (suggestion-only). Only
+  // fetched while the LEGAL regime is active.
+  const isLegal = values.metrologyRegime === 'LEGAL'
+  const catalogQuery = useLegalMetrologyRegulationsData(isLegal)
+  const catalog = catalogQuery.data ?? []
+  const [selectedRegulationId, setSelectedRegulationId] = useState<number | null>(
+    null,
+  )
+  const selectedRegulation =
+    catalog.find((entry) => entry.id === selectedRegulationId) ?? null
+
+  function applyRegulation(entry: LegalMetrologyRegulationCatalogEntry) {
+    setSelectedRegulationId(entry.id)
+    onChange(regulationCatalogToRegimePatch(entry))
+  }
+
+  const showSecondaryCaveat =
+    selectedRegulation !== null &&
+    isSecondaryRegulationProvenance(selectedRegulation)
 
   return (
     <div className="mt-4 space-y-4">
@@ -75,6 +103,81 @@ export function MetrologyRegimeFields({
 
       {values.metrologyRegime === 'LEGAL' ? (
         <div className="space-y-4 rounded-xl border p-4">
+          {catalog.length > 0 ? (
+            <Field>
+              <FieldLabel htmlFor="regulationCatalog">
+                Regulamento (catálogo)
+              </FieldLabel>
+              <Select
+                value={
+                  selectedRegulationId !== null
+                    ? String(selectedRegulationId)
+                    : ''
+                }
+                onValueChange={(value) => {
+                  const entry = catalog.find(
+                    (candidate) => String(candidate.id) === value,
+                  )
+                  if (entry) applyRegulation(entry)
+                }}
+                disabled={disabled}
+              >
+                <SelectTrigger id="regulationCatalog">
+                  <span>
+                    {selectedRegulation?.category ??
+                      'Selecione um regulamento para preencher'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {catalog.map((entry) => (
+                    <SelectItem key={entry.id} value={String(entry.id)}>
+                      {entry.category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                Preenche os campos abaixo a partir da Portaria escolhida — um
+                padrão que você pode ajustar (o enquadramento depende do uso).
+              </FieldDescription>
+            </Field>
+          ) : null}
+
+          {selectedRegulation !== null &&
+          selectedRegulation.kind === 'per_technology' &&
+          selectedRegulation.byTechnology !== null ? (
+            <Field>
+              <FieldLabel htmlFor="regulationCatalogTechnology">
+                Tecnologia (catálogo)
+              </FieldLabel>
+              <Select
+                value={values.regulatedTechnology}
+                onValueChange={(value) => {
+                  if (value)
+                    onChange(
+                      regulationTechnologyPatch(selectedRegulation, value),
+                    )
+                }}
+                disabled={disabled}
+              >
+                <SelectTrigger id="regulationCatalogTechnology">
+                  <span>
+                    {values.regulatedTechnology || 'Selecione a tecnologia'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(selectedRegulation.byTechnology).map(
+                    ([technology, months]) => (
+                      <SelectItem key={technology} value={technology}>
+                        {technology} — {months} meses
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
+
           <Field>
             <FieldLabel htmlFor="regulatedKind">
               Tipo de periodicidade
@@ -114,6 +217,15 @@ export function MetrologyRegimeFields({
               disabled={disabled}
               autoComplete="off"
             />
+            {showSecondaryCaveat ? (
+              <FieldDescription>
+                <span className="text-amber-600">
+                  {REGULATION_CATALOG_SECONDARY_CAVEAT}
+                </span>{' '}
+                — confirme o artigo da Portaria no Diário Oficial da União antes
+                de usar em certificado.
+              </FieldDescription>
+            ) : null}
           </Field>
 
           {regulatedKind !== 'not_nationally_fixed' ? (

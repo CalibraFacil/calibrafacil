@@ -1,7 +1,9 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
+import { z } from 'zod'
 
-import { calibraApi } from '@/utils/api'
+import { calibraApi, getApiBaseURL } from '@/utils/api'
+import type { LegalMetrologyRegulationCatalogEntry } from './forms'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -94,6 +96,56 @@ export function assetTypesQueryOptions() {
     },
     staleTime: 60_000,
   })
+}
+
+// The GLOBAL legal-metrology regulation catalog (deferred #3 of #423). Fetched with a raw
+// same-origin request (NOT calibraApi) so the client-runtime data-policy snapshot is left
+// untouched. Suggestion-only reference data — if the fetch fails (e.g. offline desktop) the
+// regime form simply offers no catalog options and stays fully editable by hand.
+const LegalMetrologyRegulationEntrySchema = z.object({
+  id: z.number(),
+  category: z.string(),
+  kind: z.enum([
+    'fixed_months',
+    'max_months_from_install',
+    'per_technology',
+    'not_nationally_fixed',
+  ]),
+  valueMonths: z.number().nullable(),
+  byTechnology: z.record(z.string(), z.number()).nullable(),
+  anchor: z.string().nullable(),
+  operationalizedByDelegate: z.boolean(),
+  regulationReference: z.string(),
+  provenance: z.enum(['primary', 'secondary']),
+  note: z.string().nullable(),
+}) satisfies z.ZodType<LegalMetrologyRegulationCatalogEntry>
+
+const LegalMetrologyRegulationListSchema = z.object({
+  data: z.array(LegalMetrologyRegulationEntrySchema),
+})
+
+export function legalMetrologyRegulationsQueryOptions() {
+  return queryOptions({
+    queryKey: ['legal-metrology-regulations'],
+    queryFn: async (): Promise<LegalMetrologyRegulationCatalogEntry[]> => {
+      const response = await fetch(
+        `${getApiBaseURL()}/api/legal-metrology-regulations`,
+        { credentials: 'include' },
+      )
+      if (!response.ok) {
+        throw new Error(
+          `Falha ao carregar o catálogo de regulamentos (${response.status})`,
+        )
+      }
+      const json: unknown = await response.json()
+      return LegalMetrologyRegulationListSchema.parse(json).data
+    },
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useLegalMetrologyRegulationsData(enabled = true) {
+  return useQuery({ ...legalMetrologyRegulationsQueryOptions(), enabled })
 }
 
 export function newAssetCustomersQueryOptions(search = '') {
