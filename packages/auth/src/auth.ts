@@ -492,6 +492,28 @@ function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
   return sanitizeMailHeader(email);
 }
 
+/**
+ * Send a transactional email through Resend and FAIL LOUDLY on a provider error.
+ *
+ * The Resend SDK resolves `emails.send()` with `{ data, error }` rather than
+ * throwing when the Resend API rejects a message (invalid/rotated key, unverified
+ * sender domain, suppressed recipient, quota/rate limit). Every auth email below
+ * previously discarded that result, so a total delivery outage surfaced as a
+ * silent HTTP 200 with nothing logged — undetectable until users reported it.
+ * Surfacing the error (log + throw → 5xx) makes a provider rejection observable
+ * instead of invisible.
+ */
+async function sendResend(
+  resend: Resend,
+  payload: Parameters<Resend["emails"]["send"]>[0],
+): Promise<void> {
+  const { error } = await resend.emails.send(payload);
+  if (error) {
+    console.error("[Resend] Email delivery failed", error);
+    throw new Error(`Resend email delivery failed: ${error.message}`);
+  }
+}
+
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
 
@@ -772,7 +794,7 @@ async function sendPortalMagicLink(
     process.env.EMAIL_FROM ||
     "Calibra Fácil <noreply@calibrafacil.com>";
 
-  await resend.emails.send({
+  await sendResend(resend, {
     from: formatFromEmail(fromEmail, labBrand),
     to: normalizedEmail,
     subject,
@@ -897,7 +919,7 @@ async function sendLabMagicLink(
 
   const accessUrl = buildLabMagicLinkAccessUrl(data);
 
-  await resend.emails.send({
+  await sendResend(resend, {
     from: fromEmail,
     to: normalizedEmail,
     subject: "Acesse o CalibraFácil",
@@ -953,7 +975,7 @@ async function sendLabVerificationOtp(data: {
     process.env.EMAIL_FROM ||
     "Calibra Fácil <noreply@calibrafacil.com>";
 
-  await resend.emails.send({
+  await sendResend(resend, {
     from: fromEmail,
     to: normalizedEmail,
     subject: "Código de acesso ao CalibraFácil",
@@ -998,7 +1020,7 @@ export async function sendLabAccountSetupEmail(input: {
     process.env.EMAIL_FROM ||
     "Calibra Fácil <noreply@calibrafacil.com>";
 
-  await resend.emails.send({
+  await sendResend(resend, {
     from: fromEmail,
     to: normalizedEmail,
     subject: `Configure seu acesso a ${sanitizeMailHeader(input.organizationName)}`,
@@ -1188,7 +1210,7 @@ function createOrganizationPlugin() {
         process.env.EMAIL_FROM ||
         "Calibra Fácil <noreply@calibrafacil.com>";
 
-      await resend.emails.send({
+      await sendResend(resend, {
         from: fromEmail,
         to: data.email,
         subject: `Convite para ${data.organization.name}`,
@@ -1264,7 +1286,7 @@ function createSharedConfig(surface: AuthSurface) {
           process.env.EMAIL_FROM ||
           "Calibra Fácil <noreply@calibrafacil.com>";
 
-        await resend.emails.send({
+        await sendResend(resend, {
           from: fromEmail,
           to: user.email,
           subject: "Defina sua senha no CalibraFácil",
@@ -1323,7 +1345,7 @@ function createSharedConfig(surface: AuthSurface) {
           process.env.EMAIL_FROM ||
           "Calibra Fácil <noreply@calibrafacil.com>";
 
-        await resend.emails.send({
+        await sendResend(resend, {
           from: fromEmail,
           to: user.email,
           subject: "Confirme seu e-mail no CalibraFácil",
