@@ -1,7 +1,10 @@
 appId: com.calibrafacil.desktop
 productName: CalibraFácil
 executableName: calibrafacil
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+# Keep the artifact filename ASCII (NOT ${productName} — the accented "á" gets
+# stripped from GitHub release asset names but NOT from latest.yml, which breaks
+# the auto-update download. See docs/desktop-auto-update.md.
+artifactName: CalibraFacil-${version}-${os}-${arch}.${ext}
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**

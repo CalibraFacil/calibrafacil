@@ -90,5 +90,17 @@ curl -fsSI https://updates.calibrafacil.com/desktop/CalibraFacil-0.0.2-win-x64.e
 ```
 
 `latest.yml` should report the published `version:` and a `sha512:` matching the installer.
+The filename in `latest.yml` (`url:`/`path:`) must exactly match the uploaded object key.
+
+## Gotchas
+
+- **Keep the artifact filename ASCII.** `electron-builder.yml` uses
+  `artifactName: CalibraFacil-${version}-…`, *not* `${productName}` ("CalibraF**á**cil").
+  GitHub release assets **strip the accent** from the filename but `latest.yml`'s content
+  keeps it, so the manifest would point `electron-updater` at a URL that 404s. (This bit the
+  first v0.0.2 publish; the manifest was corrected in-place.) An ASCII `artifactName` keeps
+  the installer, blockmap, and manifest self-consistent through the GitHub → R2 round-trip.
+- **The AWS CLI ↔ R2 checksum issue** is handled in the workflow via
+  `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` — don't remove it.
 
 [`electron-updater`]: https://www.electron.build/auto-update
