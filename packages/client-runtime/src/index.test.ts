@@ -714,6 +714,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-first-read-through-sync",
         },
         {
+          "method": "lookupCnpj",
+          "namespace": "customers",
+          "policy": "cloud-only",
+        },
+        {
           "method": "create",
           "namespace": "customers",
           "policy": "local-command-sync",

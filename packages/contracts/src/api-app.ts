@@ -120,6 +120,7 @@ type ApiRoutePath =
   | "/api/customer-success/profile"
   | "/api/customer-success/requests"
   | "/api/customers"
+  | "/api/customers/cnpj-lookup/:cnpj"
   | "/api/customers/:id"
   | "/api/customers/:id/audit-log"
   | "/api/customers/:id/compliance"

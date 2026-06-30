@@ -31,6 +31,7 @@ import {
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 import { getLabCustomerById } from "../lib/customer-access";
+import { fetchCnpjRegistration } from "../lib/cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
@@ -234,6 +235,39 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error searching customers:", error);
         return c.json({ error: "Erro ao buscar clientes" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /cnpj-lookup/:cnpj - Resolve a CNPJ against the Receita Federal mirrors
+  // to pre-fill the cadastro. Read-only enrichment; never persists on its own.
+  // The static "cnpj-lookup" segment is registered before the /:id routes and
+  // cannot collide with them (their third segment is always static).
+  // =========================================================================
+  .get(
+    "/cnpj-lookup/:cnpj",
+    ...withLabPermission({ client: ["read"] }),
+    async (c) => {
+      const outcome = await fetchCnpjRegistration(c.req.param("cnpj"));
+      switch (outcome.status) {
+        case "ok":
+          return c.json(outcome.result);
+        case "invalid":
+          return c.json({ error: "CNPJ invalido" }, 422);
+        case "not-found":
+          return c.json(
+            { error: "CNPJ nao encontrado na Receita Federal" },
+            404,
+          );
+        case "error":
+          return c.json(
+            {
+              error:
+                "Nao foi possivel consultar o CNPJ agora. Tente novamente.",
+            },
+            502,
+          );
       }
     },
   )

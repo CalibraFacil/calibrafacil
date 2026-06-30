@@ -33,6 +33,11 @@ import {
   type ViaCepAddress,
   useViaCepLookup,
 } from '@/lib/viacep'
+import {
+  keepOrFill,
+  useCnpjLookup,
+  type CnpjLookupResult,
+} from '@/lib/cnpj-lookup'
 import { cn } from '@/lib/utils'
 
 /** The customer record returned by `customers.create` (used to auto-select it). */
@@ -157,6 +162,39 @@ export function CustomerCreateForm({
     onResolved: handleViaCepResolved,
   })
 
+  const handleCnpjResolved = useCallback((result: CnpjLookupResult) => {
+    // Fill only blank fields so we never clobber what the user already typed.
+    setFormData((prev) => ({
+      ...prev,
+      name: keepOrFill(prev.name, result.name),
+      tradeName: keepOrFill(prev.tradeName, result.tradeName),
+      email: keepOrFill(prev.email, result.email),
+      phone: keepOrFill(prev.phone, result.phone),
+      address: {
+        ...prev.address,
+        cep: keepOrFill(prev.address.cep, result.address.cep),
+        street: keepOrFill(prev.address.street, result.address.street),
+        number: keepOrFill(prev.address.number, result.address.number),
+        complement: keepOrFill(
+          prev.address.complement,
+          result.address.complement,
+        ),
+        neighbourhood: keepOrFill(
+          prev.address.neighbourhood,
+          result.address.neighbourhood,
+        ),
+        city: keepOrFill(prev.address.city, result.address.city),
+        state: keepOrFill(prev.address.state, result.address.state),
+      },
+    }))
+  }, [])
+
+  const cnpjLookup = useCnpjLookup({
+    cnpj: formData.taxId,
+    disabled: isSaving,
+    onResolved: handleCnpjResolved,
+  })
+
   // Non-blocking: warn on a malformed 14-char CNPJ (CPFs are 11 chars and never trigger this).
   const invalidCnpjHint =
     normalizeCnpj(formData.taxId).length === 14 && !isValidCnpj(formData.taxId)
@@ -217,17 +255,41 @@ export function CustomerCreateForm({
                   name="taxId"
                   maskOptions={cpfCnpjMask}
                   value={formData.taxId}
-                  onInput={(e) => updateField('taxId', e.currentTarget.value)}
+                  onInput={(e) => {
+                    const nextTaxId = e.currentTarget.value
+                    updateField('taxId', nextTaxId)
+                    cnpjLookup.lookupCnpj(nextTaxId)
+                  }}
                   placeholder="Ex.: 00.000.000/0000-00…"
                   disabled={isSaving}
                   className="font-mono"
                   autoComplete="off"
                   spellCheck={false}
+                  aria-describedby={
+                    cnpjLookup.message ? 'taxId-lookup-description' : undefined
+                  }
                 />
                 {invalidCnpjHint && (
                   <FieldDescription className="text-amber-700 dark:text-amber-400">
                     CNPJ inválido — verifique os dígitos. Você ainda pode
                     salvar.
+                  </FieldDescription>
+                )}
+                {cnpjLookup.message && (
+                  <FieldDescription
+                    id="taxId-lookup-description"
+                    aria-live="polite"
+                    className={
+                      cnpjLookup.status === 'not-found' ||
+                      cnpjLookup.status === 'error'
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : undefined
+                    }
+                  >
+                    {cnpjLookup.isLoading && (
+                      <Spinner className="mr-1.5 inline size-3" />
+                    )}
+                    {cnpjLookup.message}
                   </FieldDescription>
                 )}
               </Field>

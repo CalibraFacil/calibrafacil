@@ -696,6 +696,12 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CustomersListData["data"][number]>(response);
       },
+      // Cloud-only enrichment: it reaches the external Receita Federal mirrors,
+      // which the offline local server can't proxy. The cadastro still works
+      // with manual entry; the autofill is simply unavailable in desktop mode.
+      async lookupCnpj() {
+        throw desktopUnsupportedAuthAction("Consulta de CNPJ");
+      },
       async get<TCustomer = CustomerDetailData>(id: string | number) {
         const response = await fetchImpl(
           new URL(

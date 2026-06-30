@@ -786,8 +786,29 @@ export type CustomerAuditLogData<TRecord = unknown> = {
   };
 };
 
+/** Receita Federal registry data resolved from a CNPJ, used to pre-fill the cadastro. */
+export type CnpjLookupResult = {
+  taxId: string;
+  name: string;
+  tradeName: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string | null;
+  address: {
+    cep: string | null;
+    street: string | null;
+    number: string | null;
+    complement: string | null;
+    neighbourhood: string | null;
+    city: string | null;
+    state: string | null;
+  };
+};
+
 export interface CustomersApi {
   list(input: CustomersListInput): Promise<CustomersListData>;
+  /** Resolve a CNPJ against the Receita Federal mirrors. Returns null when not found. */
+  lookupCnpj(cnpj: string): Promise<CnpjLookupResult | null>;
   create(
     input: CreateCustomerInput,
   ): Promise<CustomersListData["data"][number]>;

@@ -1,4 +1,5 @@
 import type {
+  CnpjLookupResult,
   CreateCustomerInput,
   CustomerAuditLogData,
   CustomerDetailData,
@@ -28,6 +29,20 @@ export function createCustomersApi(rawCloudClient: any): CustomersApi {
       return readJsonResponse<CustomersListData["data"][number]>(
         await rawCloudClient.api.customers.$post({ json: input }),
         "Erro ao criar cliente",
+      );
+    },
+    async lookupCnpj(cnpj: string) {
+      const response = await rawCloudClient.api.customers["cnpj-lookup"][
+        ":cnpj"
+      ].$get({ param: { cnpj } });
+      // A 404 means the CNPJ isn't in the Receita dump — a normal "no match",
+      // not an error. Other non-2xx (422 invalid, 502 upstream) still throw.
+      if (response.status === 404) {
+        return null;
+      }
+      return readJsonResponse<CnpjLookupResult>(
+        response,
+        "Falha ao consultar o CNPJ",
       );
     },
     async get<TCustomer = CustomerDetailData>(id: string | number) {
