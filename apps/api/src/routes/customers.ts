@@ -24,7 +24,7 @@ import {
   PORTAL_VISIBLE_MEMBER_ROLES,
   isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
-import { eq, ilike, or, count, and, desc, inArray } from "drizzle-orm";
+import { eq, ilike, or, count, and, desc, inArray, sql } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
@@ -117,6 +117,22 @@ function portalErrorStatus(
     default:
       return 500;
   }
+}
+
+/**
+ * Accent-insensitive customer search. Name + trade name match through the
+ * `immutable_unaccent` wrapper (so "construcao" finds "construção"), accelerated by the
+ * pg_trgm GIN indexes from migration 0071. Tax id and email stay plain ilike (ASCII, no
+ * accents to fold). The matched value is normalized only for comparison — never stored.
+ */
+function customerSearchCondition(query: string) {
+  const pattern = `%${query}%`;
+  return or(
+    sql`lower(immutable_unaccent(${customer.name})) like lower(immutable_unaccent(${pattern}))`,
+    sql`lower(immutable_unaccent(${customer.tradeName})) like lower(immutable_unaccent(${pattern}))`,
+    ilike(customer.taxId, pattern),
+    ilike(customer.email, pattern),
+  );
 }
 
 export const customersRouter = new Hono<{ Variables: AuthVariables }>()
@@ -221,11 +237,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(customer.labOrganizationId, memberData.organizationId),
-              or(
-                ilike(customer.name, `%${query}%`),
-                ilike(customer.taxId, `%${query}%`),
-                ilike(customer.email, `%${query}%`),
-              )!,
+              customerSearchCondition(query)!,
             ),
           )
           .orderBy(customer.name)
@@ -293,11 +305,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Add search condition if query provided
         if (query) {
-          const searchCondition = or(
-            ilike(customer.name, `%${query}%`),
-            ilike(customer.taxId, `%${query}%`),
-            ilike(customer.email, `%${query}%`),
-          );
+          const searchCondition = customerSearchCondition(query);
           if (searchCondition) {
             conditions.push(searchCondition);
           }

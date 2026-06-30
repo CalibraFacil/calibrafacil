@@ -498,6 +498,13 @@
 			"when": 1782956359873,
 			"tag": "0070_customer_trade_name",
 			"breakpoints": true
+		},
+		{
+			"idx": 71,
+			"version": "7",
+			"when": 1783042759873,
+			"tag": "0071_customer_unaccent_search",
+			"breakpoints": true
 		}
 	]
 }

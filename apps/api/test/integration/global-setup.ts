@@ -16,7 +16,9 @@ import { assertEphemeralTestDb } from "./guard";
 
 // Unique per run so parallel worktrees (Phase 2 makers, CI matrix) don't collide.
 const CONTAINER = `cf-api-int-pg-${process.pid}`;
-const dbDir = fileURLToPath(new URL("../../../../packages/db", import.meta.url));
+const dbDir = fileURLToPath(
+  new URL("../../../../packages/db", import.meta.url),
+);
 
 const TEMPLATE_DB = "calibra_tmpl";
 
@@ -60,7 +62,8 @@ export async function setup({ provide }: GlobalSetupContext) {
 
     const mapped = execSync(`docker port ${CONTAINER} 5432`).toString().trim();
     const port = mapped.split(":").pop();
-    if (!port) throw new Error(`could not resolve mapped port from "${mapped}"`);
+    if (!port)
+      throw new Error(`could not resolve mapped port from "${mapped}"`);
 
     // Wait for pg_isready to first succeed (initdb phase).
     let ready = false;
@@ -86,7 +89,8 @@ export async function setup({ provide }: GlobalSetupContext) {
       }
       await sleep(1000);
     }
-    if (!ready) throw new Error("integration Postgres restart did not complete");
+    if (!ready)
+      throw new Error("integration Postgres restart did not complete");
 
     // 127.0.0.1 (not localhost) so postgres-js doesn't try the IPv6 ::1 route first
     // when Docker only maps IPv4.
@@ -120,6 +124,17 @@ export async function setup({ provide }: GlobalSetupContext) {
     cwd: dbDir,
     env: { ...process.env, DATABASE_URL: templateUrl },
     stdio: "inherit",
+  });
+
+  // Apply the migration-only DB objects that `drizzle-kit push` can't create from
+  // the schema: the unaccent/pg_trgm extensions + the IMMUTABLE unaccent wrapper that
+  // accent-insensitive customer search depends on (migration 0071).
+  const extensionsSql = fileURLToPath(
+    new URL("./extensions.sql", import.meta.url),
+  );
+  execSync(`psql -d ${TEMPLATE_DB} -f "${extensionsSql}"`, {
+    env: { ...pgEnv, PGDATABASE: TEMPLATE_DB },
+    stdio: "ignore",
   });
 
   // Provide base connection URL (no db name) and template name so per-worker
