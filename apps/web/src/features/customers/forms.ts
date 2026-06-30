@@ -10,6 +10,7 @@ import {
 
 export type CustomerFormData = {
   name: string
+  tradeName: string
   taxId: string
   email: string
   phone: string
@@ -45,6 +46,9 @@ export function parseCustomerForm(
 
   const parsed = CreateCustomerSchema.safeParse({
     name: name || 'Cliente',
+    ...(optionalText(data.tradeName)
+      ? { tradeName: optionalText(data.tradeName) }
+      : {}),
     ...(optionalText(data.taxId) ? { taxId: optionalText(data.taxId) } : {}),
     ...(email ? { email } : {}),
     ...(optionalText(data.phone) ? { phone: optionalText(data.phone) } : {}),
@@ -54,6 +58,7 @@ export function parseCustomerForm(
   if (!parsed.success) {
     const schemaErrors = zodFormError(parsed.error.issues, [
       'name',
+      'tradeName',
       'taxId',
       'email',
       'phone',

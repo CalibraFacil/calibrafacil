@@ -10,9 +10,16 @@ export const clientsColumns: ColumnDef<Client>[] = [
     accessorKey: 'name',
     header: 'Nome',
     cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{row.original.name}</span>
-        <SyncStateBadge syncState={row.original.syncState} />
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{row.original.name}</span>
+          <SyncStateBadge syncState={row.original.syncState} />
+        </div>
+        {row.original.tradeName && (
+          <span className="text-xs text-muted-foreground">
+            {row.original.tradeName}
+          </span>
+        )}
       </div>
     ),
   },

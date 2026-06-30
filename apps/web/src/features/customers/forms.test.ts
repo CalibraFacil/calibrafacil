@@ -7,6 +7,7 @@ describe('customer feature forms', () => {
     const result = parseCustomerForm({
       ...validCustomerForm(),
       name: '  Empresa ACME  ',
+      tradeName: '  ACME  ',
       taxId: '  12.345.678/0001-90  ',
       email: '  contato@acme.test  ',
       phone: '  (11) 99999-9999  ',
@@ -25,6 +26,7 @@ describe('customer feature forms', () => {
       success: true,
       data: {
         name: 'Empresa ACME',
+        tradeName: 'ACME',
         taxId: '12.345.678/0001-90',
         email: 'contato@acme.test',
         phone: '(11) 99999-9999',
@@ -49,6 +51,26 @@ describe('customer feature forms', () => {
       data: {
         name: 'Empresa ACME',
       },
+    })
+  })
+
+  it('omits an empty trade name but keeps a provided one', () => {
+    const withTradeName = parseCustomerForm({
+      ...validCustomerForm(),
+      tradeName: '  ACME  ',
+    })
+    expect(withTradeName).toEqual({
+      success: true,
+      data: { name: 'Empresa ACME', tradeName: 'ACME' },
+    })
+
+    const blankTradeName = parseCustomerForm({
+      ...validCustomerForm(),
+      tradeName: '   ',
+    })
+    expect(blankTradeName).toEqual({
+      success: true,
+      data: { name: 'Empresa ACME' },
     })
   })
 
@@ -97,6 +119,7 @@ describe('customer feature forms', () => {
 function validCustomerForm(): CustomerFormData {
   return {
     name: 'Empresa ACME',
+    tradeName: '',
     taxId: '',
     email: '',
     phone: '',

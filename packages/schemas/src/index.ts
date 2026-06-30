@@ -42,6 +42,9 @@ export type Address = z.infer<typeof AddressSchema>;
  */
 export const CreateCustomerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  // Nome Fantasia (trade name). Display-only; the legal `name` stays the
+  // identifier on certificates and fiscal integrations.
+  tradeName: z.string().optional(),
   taxId: z.string().optional(),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),

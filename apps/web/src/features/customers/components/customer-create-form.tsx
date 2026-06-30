@@ -54,6 +54,7 @@ export function getCustomerInvitationId(data: unknown): string | null {
 
 const initialFormData: CustomerFormData = {
   name: '',
+  tradeName: '',
   taxId: '',
   email: '',
   phone: '',
@@ -193,6 +194,23 @@ export function CustomerCreateForm({
               </Field>
 
               <Field>
+                <FieldLabel htmlFor="tradeName">Nome fantasia</FieldLabel>
+                <Input
+                  id="tradeName"
+                  name="tradeName"
+                  value={formData.tradeName}
+                  onChange={(e) => updateField('tradeName', e.target.value)}
+                  placeholder="Ex.: ACME…"
+                  disabled={isSaving}
+                  autoComplete="off"
+                />
+                <FieldDescription>
+                  Opcional. A razão social continua sendo o nome oficial em
+                  certificados e documentos.
+                </FieldDescription>
+              </Field>
+
+              <Field>
                 <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
                 <MaskedInput
                   id="taxId"
@@ -208,7 +226,8 @@ export function CustomerCreateForm({
                 />
                 {invalidCnpjHint && (
                   <FieldDescription className="text-amber-700 dark:text-amber-400">
-                    CNPJ inválido — verifique os dígitos. Você ainda pode salvar.
+                    CNPJ inválido — verifique os dígitos. Você ainda pode
+                    salvar.
                   </FieldDescription>
                 )}
               </Field>

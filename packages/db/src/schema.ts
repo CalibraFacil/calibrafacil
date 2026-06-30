@@ -1982,7 +1982,8 @@ export const customer = pgTable(
   "customer",
   {
     id: serial("id").primaryKey(),
-    name: text("name").notNull(), // Razao Social / Nome Fantasia
+    name: text("name").notNull(), // Razao Social (legal name, the official identifier on documents)
+    tradeName: text("trade_name"), // Nome Fantasia (trade name, display-only — never replaces razao social on certificates)
     taxId: text("tax_id"), // CNPJ/VAT
     email: text("email"), // Contact email
     phone: text("phone"), // Optional
@@ -2763,7 +2764,8 @@ export const asset = pgTable(
       .$type<MetrologyRegime>()
       .default("INDUSTRIAL")
       .notNull(),
-    regulatedInterval: jsonb("regulated_interval").$type<Record<string, unknown>>(),
+    regulatedInterval:
+      jsonb("regulated_interval").$type<Record<string, unknown>>(),
     nextLegalVerificationDate: timestamp("next_legal_verification_date"),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),

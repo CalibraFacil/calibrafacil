@@ -65,6 +65,7 @@ export type ActiveCommercialAgreement = {
 export type CustomerDetail = {
   id: number
   name?: string
+  tradeName?: string
   taxId?: string
   email?: string
   phone?: string

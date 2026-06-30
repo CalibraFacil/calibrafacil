@@ -124,6 +124,11 @@ export function ClientDetailLayout({ id }: ClientDetailLayoutProps) {
               </Badge>
             )}
           </div>
+          {customer.tradeName && (
+            <p className="text-sm text-muted-foreground">
+              {customer.tradeName}
+            </p>
+          )}
         </div>
       ) : (
         <h1 className="text-2xl font-semibold tracking-tight text-destructive">

@@ -162,6 +162,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .insert(customer)
           .values({
             name: input.name,
+            tradeName: input.tradeName || null,
             taxId: input.taxId || null,
             email: input.email || null,
             phone: input.phone || null,

@@ -711,6 +711,7 @@ export type CustomersListData = {
   data: Array<{
     id: number;
     name: string;
+    tradeName?: string | null;
     taxId: string | null;
     email: string | null;
     phone?: string | null;
@@ -731,6 +732,7 @@ export type CustomersListData = {
 
 export type CreateCustomerInput = {
   name: string;
+  tradeName?: string;
   taxId?: string;
   email?: string;
   phone?: string;

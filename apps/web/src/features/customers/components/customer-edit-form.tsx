@@ -86,6 +86,7 @@ export function CustomerEditForm({
   const [addressOpen, setAddressOpen] = useState(false)
 
   const [name, setName] = useState(customer.name || '')
+  const [tradeName, setTradeName] = useState(customer.tradeName || '')
   const [taxId, setTaxId] = useState(customer.taxId || '')
   const [email, setEmail] = useState(customer.email || '')
   const [phone, setPhone] = useState(customer.phone || '')
@@ -100,6 +101,7 @@ export function CustomerEditForm({
   const updateMutation = useMutation({
     mutationFn: async (data: {
       name?: string
+      tradeName?: string
       taxId?: string
       email?: string
       phone?: string
@@ -137,6 +139,7 @@ export function CustomerEditForm({
 
     updateMutation.mutate({
       name: name.trim(),
+      tradeName: tradeName.trim() || undefined,
       taxId: taxId.trim() || undefined,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
@@ -192,6 +195,23 @@ export function CustomerEditForm({
                 aria-invalid={formError ? true : undefined}
               />
               {formError && <FieldError>{formError}</FieldError>}
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="tradeName">Nome fantasia</FieldLabel>
+              <Input
+                id="tradeName"
+                name="tradeName"
+                autoComplete="off"
+                value={tradeName}
+                onChange={(e) => setTradeName(e.target.value)}
+                disabled={isSaving}
+                placeholder="Ex.: ACME…"
+              />
+              <FieldDescription>
+                Opcional. A razão social continua sendo o nome oficial em
+                certificados e documentos.
+              </FieldDescription>
             </Field>
 
             <Field>
