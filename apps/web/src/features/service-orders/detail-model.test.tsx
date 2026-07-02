@@ -8,9 +8,13 @@ import {
   buildServiceOrderTimelineItems,
   createEmptyQuoteItem,
   financialStatusBadgeVariant,
+  formatCentsForMoneyInput,
   getPublicUrl,
+  materialToQuoteItemPatch,
   parseMoneyToCents,
+  quoteDraftItemFromApiItem,
   quoteItemsTotal,
+  quoteItemTypeChangePatch,
   serviceOrderFinancialStatusSummary,
   toApiItems,
 } from './detail-model'
@@ -34,6 +38,7 @@ describe('service order detail model', () => {
       quantity: '1',
       unit: 'un',
       unitPrice: '',
+      materialId: null,
     })
 
     expect(
@@ -79,6 +84,7 @@ describe('service order detail model', () => {
         unitPriceCents: 2000,
         taxable: true,
         warrantyCovered: false,
+        materialId: null,
       },
     ])
 
@@ -94,6 +100,139 @@ describe('service order detail model', () => {
         },
       ]),
     ).toThrow('Informe a descrição de todos os itens.')
+  })
+
+  it('REQ-SOPICK-004: toApiItems carries materialId (number and null) through the payload', () => {
+    expect(
+      toApiItems([
+        {
+          id: 'a',
+          type: 'part',
+          description: 'Correia',
+          quantity: '2',
+          unit: 'un',
+          unitPrice: '15,00',
+          materialId: 42,
+        },
+        {
+          id: 'b',
+          type: 'part',
+          description: 'Peça avulsa',
+          quantity: '1',
+          unit: 'un',
+          unitPrice: '5,00',
+          materialId: null,
+        },
+        {
+          id: 'c',
+          type: 'service',
+          description: 'Mão de obra',
+          quantity: '1',
+          unit: 'un',
+          unitPrice: '30,00',
+        },
+      ]).map((item) => ({
+        description: item.description,
+        materialId: item.materialId,
+      })),
+    ).toEqual([
+      { description: 'Correia', materialId: 42 },
+      { description: 'Peça avulsa', materialId: null },
+      { description: 'Mão de obra', materialId: null },
+    ])
+  })
+
+  it('REQ-SOPICK-004: round-trips an API item into a draft item preserving materialId', () => {
+    const draftWithMaterial = quoteDraftItemFromApiItem({
+      id: 7,
+      type: 'part',
+      description: 'Rolamento 6203',
+      quantity: 3,
+      unit: 'pç',
+      unitPriceCents: 123456,
+      totalPriceCents: 370368,
+      materialId: 91,
+    })
+    expect(draftWithMaterial).toEqual({
+      id: '7',
+      type: 'part',
+      description: 'Rolamento 6203',
+      quantity: '3',
+      unit: 'pç',
+      unitPrice: '1.234,56',
+      materialId: 91,
+    })
+    // The draft round-trips back to an API payload keeping the catalog reference.
+    expect(toApiItems([draftWithMaterial])[0].materialId).toBe(91)
+
+    const draftFreeForm = quoteDraftItemFromApiItem({
+      id: 8,
+      type: 'part',
+      description: 'Peça livre',
+      quantity: 1,
+      unit: 'un',
+      unitPriceCents: 5000,
+      totalPriceCents: 5000,
+    })
+    expect(draftFreeForm.materialId).toBeNull()
+    expect(toApiItems([draftFreeForm])[0].materialId).toBeNull()
+  })
+
+  it('REQ-SOPICK-003: changing a row type away from "part" resets materialId', () => {
+    expect(quoteItemTypeChangePatch('part')).toEqual({ type: 'part' })
+    expect(quoteItemTypeChangePatch('service')).toEqual({
+      type: 'service',
+      materialId: null,
+    })
+    expect(quoteItemTypeChangePatch('freight')).toEqual({
+      type: 'freight',
+      materialId: null,
+    })
+  })
+
+  it('REQ-SOPICK-002: builds a quote-item prefill patch from a selected material', () => {
+    expect(
+      materialToQuoteItemPatch({
+        id: 5,
+        name: 'Correia dentada',
+        description: null,
+        sku: 'CB-100',
+        unit: 'pç',
+        unitCostCents: 800,
+        unitPriceCents: 1990,
+        controlsStock: true,
+        isActive: true,
+        createdAt: null,
+        updatedAt: null,
+      }),
+    ).toEqual({
+      materialId: 5,
+      description: 'Correia dentada',
+      unit: 'pç',
+      unitPrice: '19,90',
+    })
+  })
+
+  it('REQ-SOPICK-002: prefill leaves the price blank when the material has no list price', () => {
+    expect(formatCentsForMoneyInput(null)).toBe('')
+    expect(formatCentsForMoneyInput(undefined)).toBe('')
+    expect(formatCentsForMoneyInput(1990)).toBe('19,90')
+    expect(formatCentsForMoneyInput(123456)).toBe('1.234,56')
+    expect(
+      materialToQuoteItemPatch({
+        id: 6,
+        name: 'Item sem preço',
+        description: null,
+        sku: null,
+        unit: 'un',
+        unitCostCents: null,
+        unitPriceCents: null,
+        controlsStock: false,
+        isActive: true,
+        createdAt: null,
+        updatedAt: null,
+      }).unitPrice,
+    ).toBe('')
   })
 
   it('maps service order events to timeline items', () => {

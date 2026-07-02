@@ -83,6 +83,7 @@ export type ServiceOrderQuoteItem = {
   taxable?: boolean
   warrantyCovered?: boolean
   notes?: string | null
+  materialId?: number | null
 }
 
 export type ServiceOrderQuote = {

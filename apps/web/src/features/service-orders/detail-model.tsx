@@ -8,6 +8,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
+import type { MaterialsListData } from '@calibra-facil/client-runtime'
 import type { EventTimelineItem } from '@/components/event-timeline'
 import type {
   FinancialContinuityStatus,
@@ -17,8 +18,11 @@ import type {
   ServiceOrderDetail,
   ServiceOrderExecutionResult,
   ServiceOrderItemType,
+  ServiceOrderQuoteItem,
   ServiceOrderRecommendedAction,
 } from './types'
+
+export type MaterialOption = MaterialsListData['data'][number]
 
 export type QuoteDraftItem = {
   id: string
@@ -27,6 +31,8 @@ export type QuoteDraftItem = {
   quantity: string
   unit: string
   unitPrice: string
+  // Catalog reference for "part" rows; absent/`null` on free-text items.
+  materialId?: number | null
 }
 
 export const ITEM_TYPE_LABELS: Record<ServiceOrderItemType, string> = {
@@ -236,6 +242,61 @@ export function createEmptyQuoteItem(
     quantity: '1',
     unit: 'un',
     unitPrice: '',
+    materialId: null,
+  }
+}
+
+const MONEY_INPUT_FORMAT = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+// Formats catalog cents into the same masked money string the row input
+// expects (pt-BR: thousands dot, decimal comma) so `parseMoneyToCents`
+// round-trips it. Missing prices stay blank so the row remains editable.
+export function formatCentsForMoneyInput(
+  cents: number | null | undefined,
+): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) return ''
+  return MONEY_INPUT_FORMAT.format(cents / 100)
+}
+
+// Prefill patch applied when a catalog material is selected on a part row.
+// Binds the catalog reference and seeds description/unit/price; the caller
+// keeps these editable.
+export function materialToQuoteItemPatch(
+  material: MaterialOption,
+): Pick<QuoteDraftItem, 'materialId' | 'description' | 'unit' | 'unitPrice'> {
+  return {
+    materialId: material.id,
+    description: material.name,
+    unit: material.unit,
+    unitPrice: formatCentsForMoneyInput(material.unitPriceCents),
+  }
+}
+
+// Patch applied when a row's type changes. Only "part" rows may reference the
+// material catalog, so switching to any other type drops the binding while
+// leaving the typed description intact (free-form fallback).
+export function quoteItemTypeChangePatch(
+  type: ServiceOrderItemType,
+): Partial<QuoteDraftItem> {
+  return type === 'part' ? { type } : { type, materialId: null }
+}
+
+// Maps an API quote/execution item back into editable draft state, carrying
+// the catalog reference (materialId) through so it round-trips on save.
+export function quoteDraftItemFromApiItem(
+  item: ServiceOrderQuoteItem,
+): QuoteDraftItem {
+  return {
+    id: String(item.id),
+    type: item.type,
+    description: item.description,
+    quantity: String(item.quantity),
+    unit: item.unit,
+    unitPrice: formatCentsForMoneyInput(item.unitPriceCents),
+    materialId: item.materialId ?? null,
   }
 }
 
@@ -269,6 +330,7 @@ export function toApiItems(items: QuoteDraftItem[]) {
       unitPriceCents,
       taxable: true,
       warrantyCovered: false,
+      materialId: item.materialId ?? null,
     }
   })
 }

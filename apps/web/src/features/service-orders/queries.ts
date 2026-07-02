@@ -1,5 +1,6 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
+import type { MaterialsListData } from '@calibra-facil/client-runtime'
 import { calibraApi } from '@/utils/api'
 import {
   ensureRouteQueries,
@@ -123,6 +124,34 @@ export function newServiceOrderAssetsQueryOptions({
       })
     },
   })
+}
+
+export const SERVICE_ORDER_MATERIAL_PICKER_LIMIT = 20
+
+// Typeahead over the active material catalog for the SO part-item picker.
+// Keyed on the typed query so the debounce is data-driven (no useEffect). On
+// desktop/offline `calibraApi.materials.list` returns `{ data: [] }`, so the
+// picker degrades to free-text with no error surfaced.
+export function fetchServiceOrderMaterials(
+  search = '',
+): Promise<MaterialsListData> {
+  return calibraApi.materials.list({
+    page: 1,
+    limit: SERVICE_ORDER_MATERIAL_PICKER_LIMIT,
+    query: search.trim() || undefined,
+    isActive: true,
+  })
+}
+
+export function serviceOrderMaterialsQueryOptions(search = '') {
+  return queryOptions({
+    queryKey: ['materials', 'service-order-picker', search],
+    queryFn: () => fetchServiceOrderMaterials(search),
+  })
+}
+
+export function useServiceOrderMaterialsData(search = '') {
+  return useQuery(serviceOrderMaterialsQueryOptions(search))
 }
 
 export async function getServiceOrderIntakeDocumentUrl(id: string) {

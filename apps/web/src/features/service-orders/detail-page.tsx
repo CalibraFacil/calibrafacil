@@ -36,15 +36,19 @@ import {
   formatDateTime,
   getPublicUrl,
   ITEM_TYPE_LABELS,
+  materialToQuoteItemPatch,
   money,
   QUOTE_STATUS_LABELS,
   quoteItemsTotal,
+  quoteItemTypeChangePatch,
   RECOMMENDED_ACTION_LABELS,
   serviceOrderFinancialStatusSummary,
   toApiItems,
   WORKFLOW_TABS,
+  type MaterialOption,
   type QuoteDraftItem,
 } from '@/features/service-orders/detail-model'
+import { QuoteItemMaterialPicker } from '@/features/service-orders/components/quote-item-material-picker'
 import { EventTimeline } from '@/components/event-timeline'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -574,6 +578,9 @@ function ServiceOrderDetailContent({
           quantity: item.quantity,
           unit: item.unit,
           unitPriceCents: item.unitPriceCents,
+          // Carry the catalog reference from the approved quote through to the
+          // execution items so it round-trips on save.
+          materialId: item.materialId ?? null,
         })),
       })
     },
@@ -749,6 +756,19 @@ function ServiceOrderDetailContent({
     setQuoteItems((items) =>
       items.length === 1 ? items : items.filter((item) => item.id !== itemId),
     )
+  }
+
+  function changeQuoteItemType(itemId: string, type: QuoteDraftItem['type']) {
+    updateQuoteItem(itemId, quoteItemTypeChangePatch(type))
+  }
+
+  function selectQuoteItemMaterial(itemId: string, material: MaterialOption) {
+    updateQuoteItem(itemId, materialToQuoteItemPatch(material))
+  }
+
+  function clearQuoteItemMaterial(itemId: string) {
+    // Keep the typed description; only the catalog binding is reset.
+    updateQuoteItem(itemId, { materialId: null })
   }
 
   const execution = order.execution
@@ -1082,9 +1102,10 @@ function ServiceOrderDetailContent({
                           className="w-full"
                           value={item.type}
                           onChange={(event) =>
-                            updateQuoteItem(item.id, {
-                              type: toServiceOrderItemType(event.target.value),
-                            })
+                            changeQuoteItemType(
+                              item.id,
+                              toServiceOrderItemType(event.target.value),
+                            )
                           }
                         >
                           {Object.entries(ITEM_TYPE_LABELS).map(
@@ -1098,6 +1119,23 @@ function ServiceOrderDetailContent({
                       </div>
                       <div className="space-y-2">
                         <Label>Descrição</Label>
+                        {item.type === 'part' ? (
+                          <div className="space-y-1.5">
+                            <QuoteItemMaterialPicker
+                              materialId={item.materialId ?? null}
+                              disabled={isDesktop}
+                              onSelectMaterial={(material) =>
+                                selectQuoteItemMaterial(item.id, material)
+                              }
+                              onClearMaterial={() =>
+                                clearQuoteItemMaterial(item.id)
+                              }
+                            />
+                            <span className="text-muted-foreground text-xs">
+                              Material do catálogo (opcional)
+                            </span>
+                          </div>
+                        ) : null}
                         <Input
                           value={item.description}
                           onChange={(event) =>

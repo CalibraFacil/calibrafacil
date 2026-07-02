@@ -12,6 +12,7 @@ export type DashboardIconId =
   | 'file'
   | 'home'
   | 'jobs'
+  | 'materials'
   | 'methods'
   | 'personnel'
   | 'quality'
@@ -51,6 +52,7 @@ export const dashboardRouteMeta = [
   { path: '/dashboard/capa', cloudOnly: 'prefix' },
   { path: '/dashboard/certificate-templates', cloudOnly: true },
   { path: '/dashboard/finance', cloudOnly: 'prefix' },
+  { path: '/dashboard/materials', cloudOnly: 'prefix' },
   { path: '/dashboard/settings', cloudOnly: 'prefix' },
   { path: '/dashboard/customer-success', cloudOnly: true },
   { path: '/dashboard/internal', cloudOnly: 'prefix' },
@@ -127,6 +129,11 @@ export const dashboardPrimaryNavItems = [
     title: 'Serviços',
     url: '/dashboard/services',
     icon: 'services',
+  },
+  {
+    title: 'Materiais',
+    url: '/dashboard/materials',
+    icon: 'materials',
   },
   {
     title: 'Calibrações',

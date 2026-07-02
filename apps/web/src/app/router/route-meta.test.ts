@@ -14,6 +14,18 @@ describe('dashboard route metadata', () => {
     expect(isDashboardCloudOnlyPath('/dashboard/jobs/42/execute')).toBe(false)
   })
 
+  it('registers the materials catalog as a cloud-only route (REQ-MATUI-005)', () => {
+    expect(isDashboardCloudOnlyPath('/dashboard/materials')).toBe(true)
+    expect(isDashboardCloudOnlyPath('/dashboard/materials/new')).toBe(true)
+    expect(isDashboardCloudOnlyPath('/dashboard/materials/1/edit')).toBe(true)
+  })
+
+  it('lists Materiais alongside Serviços in the primary nav', () => {
+    const titles = dashboardPrimaryNavItems.map((item) => item.title)
+    expect(titles).toContain('Materiais')
+    expect(titles.indexOf('Materiais')).toBe(titles.indexOf('Serviços') + 1)
+  })
+
   it('filters finance nav items by module and role access', () => {
     const withoutFinance = filterDashboardNavItems(dashboardPrimaryNavItems, {
       canAccessFinance: false,
