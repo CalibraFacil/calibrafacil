@@ -14,6 +14,7 @@ import {
   integrationSyncItem,
   integrationSyncRun,
   financialAuditLog,
+  material,
   organizationEventLog,
   organizationIntegration,
   organizationUnit,
@@ -917,11 +918,11 @@ async function loadPayablePayloads(
     .filter((payload) => payload.amountCents > 0);
 }
 
-async function loadCatalogItemPayloads(
+export async function loadCatalogItemPayloads(
   organizationId: string,
   limit: number,
 ): Promise<IntegrationCatalogItemPayload[]> {
-  const rows = await db
+  const serviceRows = await db
     .select({
       id: service.id,
       name: service.name,
@@ -929,26 +930,92 @@ async function loadCatalogItemPayloads(
       price: service.price,
       currency: service.currency,
       isActive: service.isActive,
+      updatedAt: service.updatedAt,
     })
     .from(service)
     .where(eq(service.organizationId, organizationId))
     .orderBy(desc(service.updatedAt))
     .limit(limit);
 
-  return rows.map((row) => ({
-    externalId: `service:${row.id}`,
-    organizationId,
-    kind: "service",
-    code: `SVC-${row.id}`,
-    name: row.name,
-    description: row.description,
-    priceCents: row.price,
-    currency: row.currency,
-    unitOfMeasureId: null,
-    categoryId: null,
-    fiscalMetadata: null,
-    active: row.isActive,
-  }));
+  // Materials (peças/materiais consumed on service orders) are the product
+  // half of the Conta Azul catalog: /v1/servicos for services, /v1/produtos
+  // for materials. externalId "material:{id}" keeps the object-link namespace
+  // disjoint from "service:{id}".
+  const materialRows = await db
+    .select({
+      id: material.id,
+      name: material.name,
+      description: material.description,
+      sku: material.sku,
+      unitPriceCents: material.unitPriceCents,
+      isActive: material.isActive,
+      updatedAt: material.updatedAt,
+    })
+    .from(material)
+    .where(eq(material.organizationId, organizationId))
+    .orderBy(desc(material.updatedAt))
+    .limit(limit);
+
+  const entries: Array<{
+    updatedAt: Date;
+    payload: IntegrationCatalogItemPayload;
+  }> = [
+    ...serviceRows.map((row) => ({
+      updatedAt: row.updatedAt,
+      payload: {
+        externalId: `service:${row.id}`,
+        organizationId,
+        kind: "service" as const,
+        code: `SVC-${row.id}`,
+        name: row.name,
+        description: row.description,
+        priceCents: row.price,
+        currency: row.currency,
+        unitOfMeasureId: null,
+        categoryId: null,
+        fiscalMetadata: null,
+        active: row.isActive,
+      },
+    })),
+    ...materialRows.map((row) => ({
+      updatedAt: row.updatedAt,
+      payload: {
+        externalId: `material:${row.id}`,
+        organizationId,
+        kind: "product" as const,
+        code: row.sku ?? `MAT-${row.id}`,
+        name: row.name,
+        description: row.description,
+        priceCents: row.unitPriceCents,
+        currency: "BRL",
+        unitOfMeasureId: null,
+        categoryId: null,
+        fiscalMetadata: null,
+        active: row.isActive,
+      },
+    })),
+  ];
+
+  entries.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  return entries.slice(0, limit).map((entry) => entry.payload);
+}
+
+/**
+ * Restrict catalog payloads to the kinds the Conta Azul connection actually
+ * enabled: `enabledTargets.services` gates service items (/v1/servicos) and
+ * `enabledTargets.products` gates product items (/v1/produtos, i.e. the
+ * materials catalog). Applied before run/preview so a service-only setup
+ * never creates surprise products (or noisy failed sync items) in the ERP.
+ */
+export function filterContaAzulCatalogPayloadsByEnabledKinds(
+  config: ReturnType<typeof normalizeContaAzulConnectionConfig>,
+  payloads: IntegrationCatalogItemPayload[],
+): IntegrationCatalogItemPayload[] {
+  return payloads.filter((payload) =>
+    payload.kind === "service"
+      ? config.enabledTargets.services
+      : config.enabledTargets.products,
+  );
 }
 
 function addDays(date: Date, days: number) {
@@ -1979,7 +2046,10 @@ function getLocalCatalogLinkFromContaAzulReference(params: {
     };
   }
 
-  if (params.domain === "products" && externalId.startsWith("product:")) {
+  if (
+    params.domain === "products" &&
+    (externalId.startsWith("product:") || externalId.startsWith("material:"))
+  ) {
     return {
       target: "catalog_item",
       localEntityId: externalId,
@@ -2269,11 +2339,21 @@ export async function previewIntegrationSync(params: {
     throw new Error("Alvo de sincronização inválido");
   }
 
-  const payloads = await loadTargetPayloads(
+  const loadedPayloads = await loadTargetPayloads(
     params.record.integration.organizationId,
     params.target,
     Math.min(params.limit, 25),
   );
+  // Mirror the run-time behavior: previews for a Conta Azul catalog only
+  // include the kinds (services vs products/materials) the connection enabled.
+  const payloads =
+    params.target === "catalog_item" &&
+    params.record.integration.provider !== "generic_http"
+      ? filterContaAzulCatalogPayloadsByEnabledKinds(
+          normalizeContaAzulConnectionConfig(params.record.connection.config),
+          loadedPayloads.filter(isCatalogItemPayload),
+        )
+      : loadedPayloads;
 
   return {
     target: params.target,
@@ -3423,8 +3503,9 @@ export async function processScheduledContaAzulPolls(params: {
   intervalMs?: number;
 }) {
   const now = params.now ?? new Date();
-  const results: Awaited<ReturnType<typeof processScheduledContaAzulPollKind>>[] =
-    [];
+  const results: Awaited<
+    ReturnType<typeof processScheduledContaAzulPollKind>
+  >[] = [];
 
   for (const definition of CONTA_AZUL_POLL_DEFINITIONS) {
     const startedAt = Date.now();
@@ -4932,8 +5013,13 @@ async function pushContaAzulTargetRecord(params: {
     if (!isCatalogItemPayload(params.payload)) {
       throw new Error("Payload de catálogo inválido para Conta Azul");
     }
-    if (!config.enabledTargets.products && !config.enabledTargets.services) {
-      throw new Error("Sincronização de catálogo Conta Azul desativada");
+    // Gate per kind: services and products (materials) are enabled
+    // independently on the connection.
+    if (params.payload.kind === "service" && !config.enabledTargets.services) {
+      throw new Error("Sincronização de serviços Conta Azul desativada");
+    }
+    if (params.payload.kind === "product" && !config.enabledTargets.products) {
+      throw new Error("Sincronização de produtos Conta Azul desativada");
     }
     if (!adapter.upsertCatalogItem) {
       throw new Error("Provider Conta Azul sem suporte a catálogo");
@@ -5385,11 +5471,20 @@ export async function runIntegrationSync(params: {
       assertValidMappings(config, params.target);
     }
 
-    const payloads = await loadTargetPayloads(
+    const loadedPayloads = await loadTargetPayloads(
       params.organizationId,
       params.target,
       params.limit,
     );
+    // Catalog runs against Conta Azul only push the kinds the connection
+    // enabled (services vs products/materials) instead of failing per item.
+    const payloads =
+      params.target === "catalog_item" && !isGenericHttp
+        ? filterContaAzulCatalogPayloadsByEnabledKinds(
+            normalizeContaAzulConnectionConfig(record.connection.config),
+            loadedPayloads.filter(isCatalogItemPayload),
+          )
+        : loadedPayloads;
 
     let successCount = 0;
     let errorCount = 0;

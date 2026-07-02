@@ -323,6 +323,48 @@ describe("Conta Azul mappers", () => {
     ).toThrow(/produto/);
   });
 
+  it("maps material catalog payloads to products keyed by material:{id}", () => {
+    const mapped = mapCatalogItemToContaAzulProduct(
+      {
+        ...catalogProductPayload,
+        externalId: "material:7",
+        code: "CEL-050",
+        name: "Célula de carga 50kg",
+        description: null,
+        priceCents: 80_000,
+        unitOfMeasureId: null,
+        fiscalMetadata: null,
+      },
+      normalizeContaAzulConnectionConfig(),
+    );
+
+    expect(mapped).toMatchObject({
+      codigo_sku: "CEL-050",
+      nome: "Célula de carga 50kg",
+      formato: "SIMPLES",
+      status: "ATIVO",
+      estoque: { valor_venda: 800 },
+    });
+  });
+
+  it("never emits stock quantity — catalog sync sets price only (stock moves via sales)", () => {
+    // The estoque/inventory rule: catalog upserts must not write quantities.
+    // Saída happens via the exported Venda; entrada/ajuste is an explicit
+    // action. And services must never fake stock fields at all.
+    const product = mapCatalogItemToContaAzulProduct(
+      { ...catalogProductPayload, externalId: "material:7" },
+      normalizeContaAzulConnectionConfig(),
+    );
+    expect(Object.keys(product.estoque ?? {})).toEqual(["valor_venda"]);
+
+    const servico = mapCatalogItemToContaAzulServico({
+      ...catalogProductPayload,
+      externalId: "service:1",
+      kind: "service",
+    });
+    expect(servico).not.toHaveProperty("estoque");
+  });
+
   it("maps service catalog items to the Conta Azul /v1/servicos shape", () => {
     const mapped = mapCatalogItemToContaAzulServico({
       ...catalogProductPayload,
@@ -562,7 +604,10 @@ describe("Conta Azul mappers", () => {
     const pix = mapContractToContaAzulContract(
       {
         ...contractPayload,
-        paymentTerms: { ...contractPayload.paymentTerms, paymentMethodId: "PIX" },
+        paymentTerms: {
+          ...contractPayload.paymentTerms,
+          paymentMethodId: "PIX",
+        },
       },
       config,
       "remote-customer-1",
