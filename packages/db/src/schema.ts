@@ -4578,6 +4578,12 @@ export const billingDocumentItem = pgTable(
       { onDelete: "set null" },
     ),
     serviceOrderId: integer("service_order_id"),
+    // Optional material-catalog reference copied from the SO part line item.
+    // When set (and the material is bound to an ERP product), the exported
+    // sale carries the product line so ERP stock decrements on billing.
+    materialId: integer("material_id").references(() => material.id, {
+      onDelete: "set null",
+    }),
     description: text("description").notNull(),
     quantity: integer("quantity").default(1).notNull(),
     unitPriceCents: integer("unit_price_cents").notNull(),
@@ -4596,6 +4602,7 @@ export const billingDocumentItem = pgTable(
       table.jobCommercialSnapshotId,
     ),
     index("billing_document_item_service_order_idx").on(table.serviceOrderId),
+    index("billing_document_item_material_idx").on(table.materialId),
   ],
 );
 

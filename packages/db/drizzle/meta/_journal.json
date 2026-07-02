@@ -512,6 +512,13 @@
 			"when": 1782952094952,
 			"tag": "0072_material_catalog",
 			"breakpoints": true
+		},
+		{
+			"idx": 73,
+			"version": "7",
+			"when": 1782959042693,
+			"tag": "0073_billing_item_material",
+			"breakpoints": true
 		}
 	]
 }

@@ -627,6 +627,7 @@ export async function createBillingDocumentFromServiceOrder(params: {
         ? quoteItems.map((item, index) => ({
             documentId: document.id,
             serviceOrderId: order.id,
+            materialId: item.materialId ?? null,
             description: item.description,
             quantity: Math.max(Math.round(item.quantity), 1),
             unitPriceCents: item.unitPriceCents,

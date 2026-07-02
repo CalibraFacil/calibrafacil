@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { CustomerAddress, CustomerCompliance } from "@calibra-facil/db/schema";
+import type {
+  CustomerAddress,
+  CustomerCompliance,
+} from "@calibra-facil/db/schema";
 import type { ActiveCommercialAgreementSummary } from "../finance";
 import {
   evaluateOrderBlockers,
@@ -16,7 +19,11 @@ function makeCustomer(
     email: string | null;
     address: CustomerAddress | null;
   }> = {},
-): { taxId: string | null; email: string | null; address: CustomerAddress | null } {
+): {
+  taxId: string | null;
+  email: string | null;
+  address: CustomerAddress | null;
+} {
   return {
     taxId: "12.345.678/0001-90",
     email: "financeiro@cliente.com",
@@ -166,7 +173,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       amountCents: 5000,
     });
     const taxBlocker = blockers.find(
-      (b) => b.code === "BLOCKED_BY_CUSTOMER_DATA" && b.label === "CPF/CNPJ do cliente ausente",
+      (b) =>
+        b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+        b.label === "CPF/CNPJ do cliente ausente",
     );
     expect(taxBlocker).toBeDefined();
     expect(taxBlocker?.owner).toBe("finance");
@@ -180,9 +189,13 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: 5000,
     });
-    expect(blockers.some(
-      (b) => b.code === "BLOCKED_BY_CUSTOMER_DATA" && b.label === "CPF/CNPJ do cliente ausente",
-    )).toBe(true);
+    expect(
+      blockers.some(
+        (b) =>
+          b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+          b.label === "CPF/CNPJ do cliente ausente",
+      ),
+    ).toBe(true);
   });
 
   // REQ-BLK-002: null email → BLOCKED_BY_CUSTOMER_DATA (e-mail ausente)
@@ -193,7 +206,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       amountCents: 5000,
     });
     const emailBlocker = blockers.find(
-      (b) => b.code === "BLOCKED_BY_CUSTOMER_DATA" && b.label === "E-mail do cliente ausente",
+      (b) =>
+        b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+        b.label === "E-mail do cliente ausente",
     );
     expect(emailBlocker).toBeDefined();
     expect(emailBlocker?.owner).toBe("finance");
@@ -207,9 +222,13 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: 5000,
     });
-    expect(blockers.some(
-      (b) => b.code === "BLOCKED_BY_CUSTOMER_DATA" && b.label === "E-mail do cliente ausente",
-    )).toBe(true);
+    expect(
+      blockers.some(
+        (b) =>
+          b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+          b.label === "E-mail do cliente ausente",
+      ),
+    ).toBe(true);
   });
 
   // REQ-BLK-003: null address → BLOCKED_BY_CUSTOMER_DATA (endereço incompleto)
@@ -236,11 +255,13 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: 5000,
     });
-    expect(blockers.some(
-      (b) =>
-        b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
-        b.label === "Endereço do cliente incompleto",
-    )).toBe(true);
+    expect(
+      blockers.some(
+        (b) =>
+          b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+          b.label === "Endereço do cliente incompleto",
+      ),
+    ).toBe(true);
   });
 
   // REQ-BLK-003: address with whitespace state → blocked
@@ -250,11 +271,13 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: 5000,
     });
-    expect(blockers.some(
-      (b) =>
-        b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
-        b.label === "Endereço do cliente incompleto",
-    )).toBe(true);
+    expect(
+      blockers.some(
+        (b) =>
+          b.code === "BLOCKED_BY_CUSTOMER_DATA" &&
+          b.label === "Endereço do cliente incompleto",
+      ),
+    ).toBe(true);
   });
 
   // REQ-BLK-004 HIGH RISK: non-empty list with no APPROVED/SUPERSEDED → blocked
@@ -279,7 +302,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["REVIEW", "APPROVED"],
       amountCents: 5000,
     });
-    expect(blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS")).toBe(false);
+    expect(
+      blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS"),
+    ).toBe(false);
   });
 
   // REQ-BLK-004 HIGH RISK: at least one SUPERSEDED → NOT blocked
@@ -289,7 +314,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["DRAFT", "SUPERSEDED"],
       amountCents: 5000,
     });
-    expect(blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS")).toBe(false);
+    expect(
+      blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS"),
+    ).toBe(false);
   });
 
   // REQ-BLK-004 HIGH RISK: empty list → NOT blocked (no cert gate when no certs linked)
@@ -299,7 +326,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: [],
       amountCents: 5000,
     });
-    expect(blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS")).toBe(false);
+    expect(
+      blockers.some((b) => b.code === "BLOCKED_BY_CERTIFICATE_STATUS"),
+    ).toBe(false);
   });
 
   // REQ-BLK-005 HIGH RISK: amountCents === 0 → BLOCKED_BY_UNMAPPED_SERVICE
@@ -324,7 +353,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: -1,
     });
-    expect(blockers.some((b) => b.code === "BLOCKED_BY_UNMAPPED_SERVICE")).toBe(true);
+    expect(blockers.some((b) => b.code === "BLOCKED_BY_UNMAPPED_SERVICE")).toBe(
+      true,
+    );
   });
 
   // REQ-BLK-005 HIGH RISK: positive amount → NOT blocked by service
@@ -334,7 +365,9 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
       certificateJobStatuses: ["APPROVED"],
       amountCents: 1,
     });
-    expect(blockers.some((b) => b.code === "BLOCKED_BY_UNMAPPED_SERVICE")).toBe(false);
+    expect(blockers.some((b) => b.code === "BLOCKED_BY_UNMAPPED_SERVICE")).toBe(
+      false,
+    );
   });
 
   // REQ-BLK-006 HIGH RISK: fully billable → empty array
@@ -369,10 +402,16 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
     expect(blockers).toHaveLength(5);
 
     const codes = blockers.map((b) => b.code);
-    const customerDataCount = codes.filter((c) => c === "BLOCKED_BY_CUSTOMER_DATA").length;
+    const customerDataCount = codes.filter(
+      (c) => c === "BLOCKED_BY_CUSTOMER_DATA",
+    ).length;
     expect(customerDataCount).toBe(3); // taxId + email + address each emit one
-    expect(codes.filter((c) => c === "BLOCKED_BY_CERTIFICATE_STATUS")).toHaveLength(1);
-    expect(codes.filter((c) => c === "BLOCKED_BY_UNMAPPED_SERVICE")).toHaveLength(1);
+    expect(
+      codes.filter((c) => c === "BLOCKED_BY_CERTIFICATE_STATUS"),
+    ).toHaveLength(1);
+    expect(
+      codes.filter((c) => c === "BLOCKED_BY_UNMAPPED_SERVICE"),
+    ).toHaveLength(1);
   });
 
   // REQ-BLK-007: two customer-data failures + one other
@@ -387,6 +426,55 @@ describe("evaluateOrderBlockers — REQ-BLK-*", () => {
     const labels = blockers.map((b) => b.label);
     expect(labels).toContain("CPF/CNPJ do cliente ausente");
     expect(labels).toContain("E-mail do cliente ausente");
+  });
+
+  // REQ-BLK-007: unmapped catalog parts (sale-mode exports) block per order
+  it("REQ-BLK-007: unmappedCatalogPartCount > 0 emits an order-scoped unmapped-material blocker", () => {
+    const blockers = evaluateOrderBlockers({
+      customer: makeCustomer({}),
+      certificateJobStatuses: ["APPROVED"],
+      amountCents: 5000,
+      unmappedCatalogPartCount: 3,
+    });
+    const partBlocker = blockers.find(
+      (b) =>
+        b.code === "BLOCKED_BY_UNMAPPED_SERVICE" &&
+        b.label === "3 peças sem material do catálogo vinculado",
+    );
+    expect(partBlocker).toBeDefined();
+    expect(partBlocker?.owner).toBe("commercial");
+    expect(partBlocker?.scope).toBe("order");
+    expect(partBlocker?.fixAction).toBe(
+      "Vincule as peças do orçamento a materiais do catálogo",
+    );
+  });
+
+  it("REQ-BLK-007: singular label for exactly one unmapped part", () => {
+    const blockers = evaluateOrderBlockers({
+      customer: makeCustomer({}),
+      certificateJobStatuses: ["APPROVED"],
+      amountCents: 5000,
+      unmappedCatalogPartCount: 1,
+    });
+    expect(
+      blockers.some(
+        (b) => b.label === "1 peça sem material do catálogo vinculado",
+      ),
+    ).toBe(true);
+  });
+
+  it("REQ-BLK-007: zero or omitted unmapped parts emit no material blocker", () => {
+    for (const input of [0, undefined]) {
+      const blockers = evaluateOrderBlockers({
+        customer: makeCustomer({}),
+        certificateJobStatuses: ["APPROVED"],
+        amountCents: 5000,
+        unmappedCatalogPartCount: input,
+      });
+      expect(
+        blockers.some((b) => b.label.includes("material do catálogo")),
+      ).toBe(false);
+    }
   });
 });
 
@@ -429,12 +517,12 @@ describe("syncComplianceWithActiveAgreement — REQ-CMP-*", () => {
     const result = syncComplianceWithActiveAgreement(
       makeCompliance({
         qualificationStatus: "qualified",
-        contractAgreementId: 5,           // OLD agreement id
+        contractAgreementId: 5, // OLD agreement id
         contractSignedAt: "2025-12-01T00:00:00.000Z",
         qualityRequirementsAcknowledged: true,
         qualityRequirementsAcknowledgedAt: "2025-12-02T00:00:00.000Z",
       }),
-      makeAgreement({ id: 99 }),            // NEW agreement id differs
+      makeAgreement({ id: 99 }), // NEW agreement id differs
     );
 
     // contractSignedAt must be cleared to force re-signature
@@ -467,7 +555,9 @@ describe("syncComplianceWithActiveAgreement — REQ-CMP-*", () => {
     // Signature state must be preserved
     expect(result.contractSignedAt).toBe("2026-01-15T00:00:00.000Z");
     expect(result.qualityRequirementsAcknowledged).toBe(true);
-    expect(result.qualityRequirementsAcknowledgedAt).toBe("2026-01-16T00:00:00.000Z");
+    expect(result.qualityRequirementsAcknowledgedAt).toBe(
+      "2026-01-16T00:00:00.000Z",
+    );
     // Agreement fields updated from agreement
     expect(result.contractAgreementId).toBe(42);
     expect(result.contractNumber).toBe("CTR-42");

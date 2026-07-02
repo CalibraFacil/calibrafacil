@@ -111,6 +111,13 @@ export function evaluateOrderBlockers(input: {
   };
   certificateJobStatuses: string[];
   amountCents: number;
+  /**
+   * Part line items on the approved quote that have no material-catalog
+   * reference. Only relevant (and only passed) when the org's ERP export
+   * runs in sale mode: every sale line must resolve to a remote
+   * product/service, so an unlinked part would fail the whole export.
+   */
+  unmappedCatalogPartCount?: number;
 }): BillingBlocker[] {
   const blockers: BillingBlocker[] = [];
   const { customer: c, certificateJobStatuses, amountCents } = input;
@@ -171,6 +178,20 @@ export function evaluateOrderBlockers(input: {
       owner: "admin",
       fixAction: "Defina o valor aprovado ou o mapeamento do serviço",
       scope: "all_future",
+    });
+  }
+
+  const unmappedParts = input.unmappedCatalogPartCount ?? 0;
+  if (unmappedParts > 0) {
+    blockers.push({
+      code: "BLOCKED_BY_UNMAPPED_SERVICE",
+      label:
+        unmappedParts === 1
+          ? "1 peça sem material do catálogo vinculado"
+          : `${unmappedParts} peças sem material do catálogo vinculado`,
+      owner: "commercial",
+      fixAction: "Vincule as peças do orçamento a materiais do catálogo",
+      scope: "order",
     });
   }
 
@@ -930,6 +951,7 @@ export async function loadBillingDocumentExportPayload(
       quantity: billingDocumentItem.quantity,
       unitPriceCents: billingDocumentItem.unitPriceCents,
       totalCents: billingDocumentItem.totalCents,
+      materialId: billingDocumentItem.materialId,
       jobDisplayId: calibrationJob.jobId,
       serviceId: calibrationJob.serviceId,
     })
@@ -954,9 +976,15 @@ export async function loadBillingDocumentExportPayload(
     items: items.map((item) => ({
       lineId: `billing_document_item:${item.id}`,
       jobId: item.jobDisplayId ?? null,
+      // Calibration lines resolve via the job's service; SO part lines via
+      // the material catalog. The ERP adapter maps these external ids to the
+      // linked remote service/product — a product line on the exported sale
+      // is what makes Conta Azul decrement stock on billing.
       catalogItemExternalId: item.serviceId
         ? `service:${item.serviceId}`
-        : null,
+        : item.materialId
+          ? `material:${item.materialId}`
+          : null,
       description: item.description,
       quantity: item.quantity,
       unitPriceCents: item.unitPriceCents,

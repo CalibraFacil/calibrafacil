@@ -2,10 +2,13 @@ import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   customer,
+  integrationConnection,
   organizationIntegration,
   organizationUnit,
   serviceOrder,
   serviceOrderCertificateLink,
+  serviceOrderQuote,
+  serviceOrderQuoteItem,
 } from "@calibra-facil/db/schema";
 import {
   type BillingBlocker,
@@ -15,8 +18,9 @@ import {
   type BillingReadinessSummary,
   SERVICE_ORDER_BILLABLE_STATUSES,
   isServiceOrderBillable,
+  normalizeContaAzulConnectionConfig,
 } from "@calibra-facil/shared";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   evaluateOrderBlockers,
   resolveServiceOrderBillingDocumentLinks,
@@ -79,6 +83,38 @@ export interface BillingReadinessQueue {
  * data (no materialized table). Lists completed service orders and classifies
  * each as READY / BLOCKED / BILLED / SENT with lab-facing blocker reasons.
  */
+/**
+ * Whether the org's active Conta Azul connection exports billing documents as
+ * sales (Venda). Only then does every line need a resolvable catalog item —
+ * an unlinked part would fail the whole export, so the queue should surface
+ * it as a blocker up front.
+ */
+async function isSaleExportModeActive(organizationId: string) {
+  const rows = await db
+    .select({ config: integrationConnection.config })
+    .from(organizationIntegration)
+    .innerJoin(
+      integrationConnection,
+      eq(integrationConnection.integrationId, organizationIntegration.id),
+    )
+    .where(
+      and(
+        eq(organizationIntegration.organizationId, organizationId),
+        eq(organizationIntegration.type, "financial_erp"),
+        eq(organizationIntegration.provider, "conta_azul"),
+        eq(organizationIntegration.status, "ACTIVE"),
+      ),
+    );
+
+  return rows.some((row) => {
+    const config = normalizeContaAzulConnectionConfig(row.config);
+    return (
+      config.exportMode === "sale" ||
+      config.exportMode === "sale_and_receivable"
+    );
+  });
+}
+
 export async function computeBillingReadinessQueue(params: {
   organizationId: string;
   scope: UnitScope;
@@ -153,6 +189,38 @@ export async function computeBillingReadinessQueue(params: {
     list.push(link);
     linksByOrder.set(link.serviceOrderId, list);
   }
+  // Unlinked part lines on the approved quote (sale-mode exports only):
+  // sale lines must resolve to a remote catalog item, so surface these
+  // before the export fails wholesale.
+  const saleModeActive = orderIds.length
+    ? await isSaleExportModeActive(organizationId)
+    : false;
+  const unmappedPartRows =
+    saleModeActive && orderIds.length
+      ? await db
+          .select({
+            serviceOrderId: serviceOrderQuote.serviceOrderId,
+            total: count(),
+          })
+          .from(serviceOrderQuoteItem)
+          .innerJoin(
+            serviceOrderQuote,
+            eq(serviceOrderQuoteItem.quoteId, serviceOrderQuote.id),
+          )
+          .where(
+            and(
+              inArray(serviceOrderQuote.serviceOrderId, orderIds),
+              eq(serviceOrderQuote.status, "approved"),
+              eq(serviceOrderQuoteItem.type, "part"),
+              isNull(serviceOrderQuoteItem.materialId),
+            ),
+          )
+          .groupBy(serviceOrderQuote.serviceOrderId)
+      : [];
+  const unmappedPartCountByOrder = new Map(
+    unmappedPartRows.map((row) => [row.serviceOrderId, Number(row.total)]),
+  );
+
   const resolvedDocumentLinks = await resolveServiceOrderBillingDocumentLinks(
     billableOrders.map((order) => ({
       serviceOrderId: order.id,
@@ -191,6 +259,7 @@ export async function computeBillingReadinessQueue(params: {
           },
           certificateJobStatuses: orderLinks.map((link) => link.jobStatus),
           amountCents,
+          unmappedCatalogPartCount: unmappedPartCountByOrder.get(order.id) ?? 0,
         });
 
     const readinessStatus = resolveReadinessStatus(existingDoc, blockers);

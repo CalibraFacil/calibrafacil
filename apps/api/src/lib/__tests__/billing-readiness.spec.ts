@@ -27,6 +27,10 @@ const mocks = vi.hoisted(() => {
       return this;
     }
 
+    groupBy(..._columns: unknown[]) {
+      return this;
+    }
+
     limit(_count: number) {
       return this;
     }
@@ -238,6 +242,8 @@ describe("computeBillingReadinessQueue", () => {
         },
       ],
       [],
+      // isSaleExportModeActive: no Conta Azul sale-mode connection
+      [],
       [],
       [{ id: 55, status: "ISSUED", exportStatus: "EXPORTED" }],
     );
@@ -258,5 +264,58 @@ describe("computeBillingReadinessQueue", () => {
       existingBillingDocumentId: 55,
     });
     expect(queue.summary).toMatchObject({ sent: 1 });
+  });
+
+  it("blocks orders with unmapped catalog parts when the ERP exports sales", async () => {
+    useDbResults(
+      [{ status: "ACTIVE" }],
+      [
+        {
+          id: 42,
+          number: "OS-42",
+          status: "delivered",
+          closingReason: null,
+          customerId: 10,
+          customerName: "Cliente A",
+          taxId: "12345678000190",
+          email: "financeiro@cliente.test",
+          address: { city: "Sao Paulo", state: "SP" },
+          unitId: 7,
+          unitName: "Matriz",
+          amountApprovedCents: 120_00,
+          amountQuotedCents: 0,
+          readyAt: null,
+          deliveredAt: new Date("2026-05-20T00:00:00.000Z"),
+          closedAt: null,
+          billingDocumentId: null,
+        },
+      ],
+      [],
+      // isSaleExportModeActive: active Conta Azul connection in sale mode
+      [{ config: { exportMode: "sale" } }],
+      // unmapped part items on the approved quote
+      [{ serviceOrderId: 42, total: 2 }],
+      [],
+    );
+
+    const queue = await computeBillingReadinessQueue({
+      organizationId: "org-1",
+      scope: {
+        activeUnitId: 7,
+        accessibleUnitIds: [7],
+        selectedUnitScope: "unit",
+      },
+    });
+
+    expect(queue.items).toHaveLength(1);
+    expect(queue.items[0]?.readinessStatus).toBe("BLOCKED");
+    expect(queue.items[0]?.blockers).toContainEqual(
+      expect.objectContaining({
+        code: "BLOCKED_BY_UNMAPPED_SERVICE",
+        label: "2 peças sem material do catálogo vinculado",
+        owner: "commercial",
+        scope: "order",
+      }),
+    );
   });
 });
