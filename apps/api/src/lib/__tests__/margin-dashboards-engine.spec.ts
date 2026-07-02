@@ -31,6 +31,7 @@ describe("summarizeMarginByEntity", () => {
     expect(a).toMatchObject({
       revenueCents: 100_000,
       outsourcedCostCents: 35_000,
+      partsCostCents: 0,
       marginCents: 65_000,
       marginPercent: 65,
       serviceOrderCount: 3,
@@ -38,9 +39,34 @@ describe("summarizeMarginByEntity", () => {
     expect(b).toMatchObject({
       revenueCents: 50_000,
       outsourcedCostCents: 0,
+      partsCostCents: 0,
       marginCents: 50_000,
       marginPercent: 100,
       serviceOrderCount: 1,
+    });
+  });
+
+  it("subtracts parts COGS alongside outsourced costs per entity", () => {
+    const result = summarizeMarginByEntity([
+      {
+        entityId: 1,
+        entityName: "Cliente com peças",
+        revenueCents: 100_000,
+        outsourcedCosts: [
+          { expectedCostCents: 20_000, actualCostCents: null, voided: false },
+        ],
+        partsCosts: [
+          { quantity: 2, unitCostCents: 10_000 },
+          { quantity: 1, unitCostCents: 5_000 },
+        ],
+        serviceOrderCount: 2,
+      },
+    ]);
+    expect(result[0]).toMatchObject({
+      outsourcedCostCents: 20_000,
+      partsCostCents: 25_000,
+      marginCents: 55_000,
+      marginPercent: 55,
     });
   });
 

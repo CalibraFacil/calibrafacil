@@ -13,7 +13,9 @@ vi.mock('@/utils/api', () => ({
 import { MarginDashboardsPage } from './margin-dashboards-page'
 
 function renderWithClient(ui: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
@@ -40,8 +42,9 @@ describe('MarginDashboardsPage', () => {
           entityName: 'Cliente A',
           revenueCents: 100_000,
           outsourcedCostCents: 30_000,
-          marginCents: 70_000,
-          marginPercent: 70,
+          partsCostCents: 12_000,
+          marginCents: 58_000,
+          marginPercent: 58,
           serviceOrderCount: 3,
         },
       ],
@@ -51,6 +54,9 @@ describe('MarginDashboardsPage', () => {
     expect(await screen.findByText('Cliente A')).toBeTruthy()
     // header row + one data row
     expect(screen.getAllByRole('row').length).toBeGreaterThanOrEqual(2)
+    // both cost columns render: outsourced and parts COGS
+    expect(screen.getByText('Terceiros')).toBeTruthy()
+    expect(screen.getByText('Peças')).toBeTruthy()
   })
 
   it('renders an error card when the query fails', async () => {
@@ -69,8 +75,9 @@ describe('MarginDashboardsPage', () => {
           entityName: 'Cliente A',
           revenueCents: 100_000,
           outsourcedCostCents: 30_000,
-          marginCents: 70_000,
-          marginPercent: 70,
+          partsCostCents: 12_000,
+          marginCents: 58_000,
+          marginPercent: 58,
           serviceOrderCount: 3,
         },
       ],

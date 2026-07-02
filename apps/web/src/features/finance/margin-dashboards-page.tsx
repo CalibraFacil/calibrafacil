@@ -19,6 +19,7 @@ interface MarginRow {
   entityName: string
   revenueCents: number
   outsourcedCostCents: number
+  partsCostCents: number
   marginCents: number
   marginPercent: number | null
   serviceOrderCount: number
@@ -73,12 +74,25 @@ const marginColumns: ColumnDef<MarginRow, unknown>[] = [
     accessorKey: 'outsourcedCostCents',
     id: 'outsourcedCostCents',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Custo" />
+      <DataTableColumnHeader column={column} title="Terceiros" />
     ),
-    meta: { label: 'Custo' },
+    meta: { label: 'Terceiros' },
     cell: ({ row }) => (
       <div className="text-right">
         <Money cents={row.original.outsourcedCostCents} muted />
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'partsCostCents',
+    id: 'partsCostCents',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Peças" />
+    ),
+    meta: { label: 'Peças' },
+    cell: ({ row }) => (
+      <div className="text-right">
+        <Money cents={row.original.partsCostCents} muted />
       </div>
     ),
   },
@@ -150,7 +164,7 @@ export function MarginDashboardsPage() {
           <PanelHeader
             eyebrow="Rentabilidade"
             title="Margem por cliente"
-            description="Receita vs. custo terceirizado; margem efetiva quando conciliada."
+            description="Receita vs. custos de terceiros e peças utilizadas; margem efetiva quando conciliada."
           />
           <div className="mt-4">
             <FinanceDataTable

@@ -1,7 +1,5 @@
 import { db } from "@calibra-facil/db";
-import {
-  serviceOrderOutsourcedCost,
-} from "@calibra-facil/db/schema";
+import { serviceOrderOutsourcedCost } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export interface ServiceOrderMarginInput {
@@ -11,6 +9,10 @@ export interface ServiceOrderMarginInput {
     actualCostCents: number | null;
     voided: boolean;
   }>;
+  partsCosts?: ReadonlyArray<{
+    quantity: number;
+    unitCostCents: number;
+  }>;
 }
 
 export interface ServiceOrderMargin {
@@ -18,14 +20,18 @@ export interface ServiceOrderMargin {
   expectedCostCents: number;
   actualCostCents: number;
   outsourcedCostCents: number;
+  partsCostCents: number;
   marginCents: number;
   marginPercent: number | null;
 }
 
 /**
- * Pure margin computation. `outsourcedCostCents` is the best-known cost
- * (actual when available, otherwise expected), so the margin pill
- * stays meaningful even before Conta Azul reconciles the payable.
+ * Pure margin computation. `outsourcedCostCents` is the best-known
+ * outsourced cost (actual when available, otherwise expected), so the
+ * margin pill stays meaningful even before Conta Azul reconciles the
+ * payable. `partsCosts` are the parts consumed during execution
+ * (`serviceOrderExecutionItem` rows with `type = "part"`); each row is
+ * rounded per item since `quantity` can be fractional.
  */
 export function summarizeServiceOrderMargin(
   input: ServiceOrderMarginInput,
@@ -45,7 +51,12 @@ export function summarizeServiceOrderMargin(
     }
   }
 
-  const marginCents = input.revenueCents - bestKnownCostCents;
+  let partsCostCents = 0;
+  for (const part of input.partsCosts ?? []) {
+    partsCostCents += Math.round(part.quantity * part.unitCostCents);
+  }
+
+  const marginCents = input.revenueCents - bestKnownCostCents - partsCostCents;
   const marginPercent =
     input.revenueCents > 0
       ? Math.round((marginCents / input.revenueCents) * 10_000) / 100
@@ -56,6 +67,7 @@ export function summarizeServiceOrderMargin(
     expectedCostCents,
     actualCostCents,
     outsourcedCostCents: bestKnownCostCents,
+    partsCostCents,
     marginCents,
     marginPercent,
   };
