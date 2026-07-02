@@ -472,11 +472,13 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", QuoteParamSchema),
     zValidator("json", UpdateServiceOrderQuoteDraftSchema),
     async (c) => {
+      const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
       const input = c.req.valid("json");
       const result = await updateServiceOrderQuoteDraft({
         serviceOrderId: id,
         quoteId,
+        member,
         values: input,
       });
       if (result.status === "not_found") {

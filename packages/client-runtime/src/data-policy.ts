@@ -253,6 +253,15 @@ export const calibraApiPolicyRegistry = {
     update: "cloud-only",
     deactivate: "cloud-only",
   },
+  // Material catalog is cloud-only in v1: the desktop SO flow keeps the
+  // free-form part-item fallback when offline (materialId stays null).
+  materials: {
+    list: "cloud-only",
+    get: "cloud-only",
+    create: "cloud-only",
+    update: "cloud-only",
+    deactivate: "cloud-only",
+  },
   methods: {
     list: "local-first-read-through-sync",
     get: "local-first-read-through-sync",

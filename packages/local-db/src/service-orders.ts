@@ -58,6 +58,7 @@ export type LocalServiceOrderExecutionResult =
 export type LocalServiceOrderPricedItemInput = {
   type: LocalServiceOrderItemType;
   description: string;
+  materialId?: number | null;
   quantity: number;
   unit?: string;
   unitCostCents?: number;
@@ -1161,6 +1162,7 @@ ORDER BY sort_order ASC
     id: row.remote_id ?? stableLocalNumericId(row.id),
     type: row.type,
     description: row.description,
+    materialId: row.material_id,
     quantity: row.quantity,
     unit: row.unit,
     unitCostCents: row.unit_cost_cents,
@@ -1234,6 +1236,7 @@ ORDER BY sort_order ASC
     quoteItemId: row.quote_item_id,
     type: row.type,
     description: row.description,
+    materialId: row.material_id,
     quantity: row.quantity,
     unit: row.unit,
     unitCostCents: row.unit_cost_cents,
@@ -1302,6 +1305,7 @@ function normalizePricedItems(items: LocalServiceOrderPricedItemInput[]) {
       ...item,
       quantity,
       unit: item.unit ?? "un",
+      materialId: item.materialId ?? null,
       unitCostCents: item.unitCostCents ?? null,
       taxable: item.taxable ?? true,
       warrantyCovered: item.warrantyCovered ?? false,
@@ -1364,6 +1368,7 @@ INSERT INTO service_order_quote_items (
   remote_id,
   type,
   description,
+  material_id,
   quantity,
   unit,
   unit_cost_cents,
@@ -1381,6 +1386,7 @@ INSERT INTO service_order_quote_items (
   NULL,
   @type,
   @description,
+  @materialId,
   @quantity,
   @unit,
   @unitCostCents,
@@ -1427,6 +1433,7 @@ INSERT INTO service_order_execution_items (
   quote_item_id,
   type,
   description,
+  material_id,
   quantity,
   unit,
   unit_cost_cents,
@@ -1441,6 +1448,7 @@ INSERT INTO service_order_execution_items (
   NULL,
   @type,
   @description,
+  @materialId,
   @quantity,
   @unit,
   @unitCostCents,
@@ -1836,6 +1844,7 @@ type LocalServiceOrderQuoteItemRow = {
   remote_id: number | null;
   type: LocalServiceOrderItemType;
   description: string;
+  material_id: number | null;
   quantity: number;
   unit: string;
   unit_cost_cents: number | null;
@@ -1873,6 +1882,7 @@ type LocalServiceOrderExecutionItemRow = {
   quote_item_id: string | null;
   type: LocalServiceOrderItemType;
   description: string;
+  material_id: number | null;
   quantity: number;
   unit: string;
   unit_cost_cents: number;

@@ -88,6 +88,7 @@ export async function updateServiceOrderExecution(input: {
 
   if (input.values.items) {
     await replaceExecutionItems({
+      organizationId: input.member.organizationId,
       executionId: execution.id,
       items: input.values.items,
     });
@@ -143,6 +144,7 @@ export async function finishServiceOrderExecution(input: {
 
   if (input.values.items) {
     await replaceExecutionItems({
+      organizationId: input.member.organizationId,
       executionId: execution.id,
       items: input.values.items,
     });

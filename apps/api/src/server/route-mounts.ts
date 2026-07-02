@@ -5,10 +5,7 @@ import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
-import {
-  visitJobsRouter,
-  visitsRouter,
-} from "../routes/visits";
+import { visitJobsRouter, visitsRouter } from "../routes/visits";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
@@ -47,6 +44,7 @@ import {
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
 } from "../routes/service-orders";
+import { materialsRouter } from "../routes/materials";
 import { servicesRouter } from "../routes/services";
 import { sessionsRouter } from "../routes/sessions";
 import { signaturesRouter } from "../routes/signatures";
@@ -91,6 +89,7 @@ export function mountApiRoutes(
     .route("/api/legal-metrology-regulations", legalMetrologyRegulationsRouter)
     .route("/api/methods", methodsRouter)
     .route("/api/services", servicesRouter)
+    .route("/api/materials", materialsRouter)
     .route("/api/standards", standardsRouter)
     .route("/api/jobs", jobsRouter)
     .route("/api/service-orders", serviceOrdersRouter)

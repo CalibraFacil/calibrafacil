@@ -4,6 +4,7 @@ import type {
   CreateAssetInput,
   CreateCustomerInput,
   CreateJobInput,
+  CreateMaterialInput,
   CreateServiceInput,
   CreateServiceOrderInput,
   CreateServiceOrderQuoteInput,
@@ -30,6 +31,7 @@ import type {
   UpdateCertificateNumberingProfileInput,
   UpdateCustomerComplianceInput,
   UpdateCustomerInput,
+  UpdateMaterialInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
   UploadSigningCertificateInput,
@@ -79,6 +81,7 @@ import { createPublicInvitationsApi } from "./modules/public-invitations";
 import { createReportsApi } from "./modules/reports";
 import { createSessionsApi } from "./modules/sessions";
 import { createServiceOrdersApi } from "./modules/service-orders";
+import { createMaterialsApi } from "./modules/materials";
 import { createServicesApi } from "./modules/services";
 import { createSignaturesApi } from "./modules/signatures";
 import { createSigningCertificatesApi } from "./modules/signing-certificates";
@@ -465,6 +468,26 @@ export function createCloudApiClient(
           };
         };
       };
+      materials: {
+        $get(input: {
+          query: {
+            page?: string;
+            limit?: string;
+            query?: string;
+            controlsStock?: string;
+            isActive?: string;
+          };
+        }): Promise<Response>;
+        $post(input: { json: CreateMaterialInput }): Promise<Response>;
+        ":id": {
+          $get(input: { param: { id: string } }): Promise<Response>;
+          $put(input: {
+            param: { id: string };
+            json: UpdateMaterialInput;
+          }): Promise<Response>;
+          $delete(input: { param: { id: string } }): Promise<Response>;
+        };
+      };
       methods: {
         $get(input: {
           query: {
@@ -768,6 +791,7 @@ export function createCloudApiClient(
     environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient),
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),
+    materials: createMaterialsApi(rawCloudClient),
     methods: createMethodsApi(rawCloudClient),
     standards: createStandardsApi(rawCloudClient, options),
     jobs: createJobsApi(rawCloudClient),

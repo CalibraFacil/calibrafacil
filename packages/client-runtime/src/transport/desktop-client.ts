@@ -1409,6 +1409,26 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Integrações");
       },
     },
+    materials: {
+      // Material catalog is cloud-only in v1; the desktop SO flow keeps the
+      // free-form part-item fallback. Reads degrade to empty, writes are
+      // unsupported offline.
+      async list() {
+        return { data: [] };
+      },
+      async get() {
+        throw desktopUnsupportedAuthAction("Catálogo de materiais");
+      },
+      async create() {
+        throw desktopUnsupportedAuthAction("Catálogo de materiais");
+      },
+      async update() {
+        throw desktopUnsupportedAuthAction("Catálogo de materiais");
+      },
+      async deactivate() {
+        throw desktopUnsupportedAuthAction("Catálogo de materiais");
+      },
+    },
     services: {
       async list(input = {}) {
         const url = new URL("/api/services", options.baseUrl);

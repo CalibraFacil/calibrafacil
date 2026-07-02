@@ -238,6 +238,8 @@ export const ServiceOrderPricedItemSchema = z.object({
   id: z.number().int().positive().optional(),
   type: ServiceOrderItemTypeSchema,
   description: z.string().trim().min(1).max(500),
+  // Optional material-catalog reference for "part" items; free-form items omit it
+  materialId: z.number().int().positive().optional().nullable(),
   quantity: positiveQuantity,
   unit: z.string().trim().min(1).max(32).default("un"),
   unitCostCents: moneyCents.optional(),

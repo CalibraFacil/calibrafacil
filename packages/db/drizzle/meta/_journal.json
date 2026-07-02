@@ -505,6 +505,13 @@
 			"when": 1783042759873,
 			"tag": "0071_customer_unaccent_search",
 			"breakpoints": true
+		},
+		{
+			"idx": 72,
+			"version": "7",
+			"when": 1782952094952,
+			"tag": "0072_material_catalog",
+			"breakpoints": true
 		}
 	]
 }

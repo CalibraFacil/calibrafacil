@@ -1436,6 +1436,78 @@ export const ListServicesQuerySchema = z.object({
 export type ListServicesQuery = z.infer<typeof ListServicesQuerySchema>;
 
 // =============================================================================
+// MATERIAL CATALOG SCHEMAS - Peças e materiais (parts consumed on OS)
+// =============================================================================
+
+/**
+ * Schema for creating a material (part) in the catalog.
+ * Costs/prices are stored in cents; both optional ("sob consulta" /
+ * cost-not-tracked materials are allowed).
+ */
+export const CreateMaterialSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  description: z.string().optional().nullable(),
+  sku: z
+    .string()
+    .trim()
+    .min(1, "Código não pode ser vazio")
+    .max(64, "Código deve ter no máximo 64 caracteres")
+    .optional()
+    .nullable(),
+  unit: z.string().trim().min(1).max(32).default("un"),
+  unitCostCents: z.coerce
+    .number()
+    .int("Custo deve ser um número inteiro (centavos)")
+    .min(0, "Custo não pode ser negativo")
+    .optional()
+    .nullable(),
+  unitPriceCents: z.coerce
+    .number()
+    .int("Preço deve ser um número inteiro (centavos)")
+    .min(0, "Preço não pode ser negativo")
+    .optional()
+    .nullable(),
+  controlsStock: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
+});
+
+export type CreateMaterialInput = z.infer<typeof CreateMaterialSchema>;
+
+/**
+ * Schema for updating a material
+ */
+export const UpdateMaterialSchema = CreateMaterialSchema.partial();
+
+export type UpdateMaterialInput = z.infer<typeof UpdateMaterialSchema>;
+
+/**
+ * Schema for listing materials with filtering
+ */
+export const ListMaterialsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  controlsStock: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (val === "true") return true;
+      if (val === "false") return false;
+      return undefined;
+    }),
+  isActive: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (val === "true") return true;
+      if (val === "false") return false;
+      return undefined;
+    }),
+});
+
+export type ListMaterialsQuery = z.infer<typeof ListMaterialsQuerySchema>;
+
+// =============================================================================
 // REFERENCE STANDARD SCHEMAS - Lab Equipment Registry (ISO 17025 Clause 6.4)
 // =============================================================================
 

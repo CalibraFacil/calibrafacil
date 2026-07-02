@@ -31,9 +31,7 @@ import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
 import { getQuoteForAction } from "./service-order.queries";
 import { getServiceOrderDetail } from "./service-order.read-model";
 import { getPortalCustomerForAuthOrganization } from "./service-order.list-queries";
-import {
-  enqueueServiceOrderEmail,
-} from "./email-outbox-payloads";
+import { enqueueServiceOrderEmail } from "./email-outbox-payloads";
 import type {
   OrcamentoSentOutboxPayload,
   QuoteApprovedOutboxPayload,
@@ -118,6 +116,7 @@ export async function createServiceOrderQuote(input: {
 
     const totals = await replaceQuoteItems(
       {
+        organizationId: order.organizationId,
         quoteId: quote.id,
         items: quoteItemsWithDates(input.values.items),
       },
@@ -155,8 +154,25 @@ export async function createServiceOrderQuote(input: {
 export async function updateServiceOrderQuoteDraft(input: {
   serviceOrderId: number;
   quoteId: number;
+  member: ServiceOrderMember;
   values: UpdateQuoteDraftInput;
 }) {
+  const [order] = await db
+    .select({
+      id: serviceOrder.id,
+      organizationId: serviceOrder.organizationId,
+    })
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, input.member.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, input.member),
+      ),
+    )
+    .limit(1);
+  if (!order) return { status: "not_found" as const };
+
   const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
   if (!quote) return { status: "not_found" as const };
   if (!canEditServiceOrderQuote(quote.status)) {
@@ -165,6 +181,7 @@ export async function updateServiceOrderQuoteDraft(input: {
 
   const totals = input.values.items
     ? await replaceQuoteItems({
+        organizationId: order.organizationId,
         quoteId: input.quoteId,
         items: quoteItemsWithDates(input.values.items),
       })
@@ -267,8 +284,8 @@ export async function sendServiceOrderQuote(input: {
   // Enqueue is awaited so the row is persisted before the handler returns.
   // Email delivery happens in the worker drain (not in this request path).
   // The raw token is captured here (not reminted later) — REQ-SOEMAIL-023.
-  const [orderRow, quoteItemRows, snapshotRow, customerRow] =
-    await Promise.all([
+  const [orderRow, quoteItemRows, snapshotRow, customerRow] = await Promise.all(
+    [
       db
         .select({
           publicId: serviceOrder.publicId,
@@ -287,10 +304,7 @@ export async function sendServiceOrderQuote(input: {
         .select()
         .from(serviceOrderQuoteItem)
         .where(eq(serviceOrderQuoteItem.quoteId, input.quoteId))
-        .orderBy(
-          serviceOrderQuoteItem.sortOrder,
-          serviceOrderQuoteItem.id,
-        ),
+        .orderBy(serviceOrderQuoteItem.sortOrder, serviceOrderQuoteItem.id),
       db
         .select({
           manufacturer: serviceOrderAssetSnapshot.manufacturer,
@@ -320,7 +334,8 @@ export async function sendServiceOrderQuote(input: {
         )
         .limit(1)
         .then((rows) => rows[0] ?? null),
-    ]);
+    ],
+  );
 
   const portalAppUrl =
     process.env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com";
@@ -338,8 +353,7 @@ export async function sendServiceOrderQuote(input: {
       organizationId: input.member.organizationId,
       publicId: orderRow.publicId,
       customerId: detail.customerId,
-      clientContactSnapshot:
-        orderRow.clientContactSnapshot ?? null,
+      clientContactSnapshot: orderRow.clientContactSnapshot ?? null,
       customerName: customerRow?.name ?? detail.customerName ?? "",
       customerEmail: customerRow?.email ?? detail.customerEmail ?? null,
       customerTaxId: customerRow?.taxId ?? detail.customerTaxId ?? null,

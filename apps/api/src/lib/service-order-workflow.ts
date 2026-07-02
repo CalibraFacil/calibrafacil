@@ -6,6 +6,7 @@ import {
   billingDocumentItem,
   customer,
   financialAuditLog,
+  material,
   receivableInstallment,
   serviceOrder,
   serviceOrderAssetSnapshot,
@@ -25,7 +26,7 @@ import type {
 } from "@calibra-facil/shared";
 import { DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS } from "@calibra-facil/shared";
 import { formatSpecificationsForDisplay } from "@calibra-facil/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   DEFAULT_SERVICE_ORDER_NUMBERING_SETTINGS,
   generateServiceOrderNumber,
@@ -53,9 +54,7 @@ export type ServiceOrderEventInput = {
 };
 
 function toHex(bytes: Uint8Array) {
-  return [...bytes]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function hashServiceOrderToken(token: string) {
@@ -406,11 +405,44 @@ export async function createPublicServiceOrderAccessToken(params: {
   return { token, tokenHash };
 }
 
+/**
+ * Tenant boundary for material-catalog references on line items: returns the
+ * subset of `materialId`s that actually belong to `organizationId`. Ids that
+ * don't (cross-tenant, deleted or garbage) are dropped by the callers so the
+ * item degrades to a free-form line instead of storing a foreign reference.
+ */
+async function resolveValidMaterialIds(
+  organizationId: string,
+  items: ReadonlyArray<{ materialId?: number | null }>,
+  executor: ServiceOrderDbExecutor,
+): Promise<Set<number>> {
+  const ids = [
+    ...new Set(
+      items
+        .map((item) => item.materialId)
+        .filter((value): value is number => typeof value === "number"),
+    ),
+  ];
+  if (ids.length === 0) return new Set();
+  const rows = await executor
+    .select({ id: material.id })
+    .from(material)
+    .where(
+      and(
+        eq(material.organizationId, organizationId),
+        inArray(material.id, ids),
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
+}
+
 export async function replaceQuoteItems(
   params: {
+    organizationId: string;
     quoteId: number;
     items: Array<{
       description: string;
+      materialId?: number | null;
       notes?: string | null;
       quantity: number;
       taxable?: boolean;
@@ -425,6 +457,11 @@ export async function replaceQuoteItems(
   executor: ServiceOrderDbExecutor = db,
 ) {
   const calculated = calculatePricedItems(params.items);
+  const validMaterialIds = await resolveValidMaterialIds(
+    params.organizationId,
+    params.items,
+    executor,
+  );
   await executor
     .delete(serviceOrderQuoteItem)
     .where(eq(serviceOrderQuoteItem.quoteId, params.quoteId));
@@ -434,6 +471,11 @@ export async function replaceQuoteItems(
         quoteId: params.quoteId,
         type: item.type,
         description: item.description,
+        materialId:
+          typeof item.materialId === "number" &&
+          validMaterialIds.has(item.materialId)
+            ? item.materialId
+            : null,
         quantity: item.quantity,
         unit: item.unit,
         unitPriceCents: item.unitPriceCents,
@@ -452,9 +494,11 @@ export async function replaceQuoteItems(
 
 export async function replaceExecutionItems(
   params: {
+    organizationId: string;
     executionId: number;
     items: Array<{
       description: string;
+      materialId?: number | null;
       quantity: number;
       quoteItemId?: number | null;
       technicianId?: string | null;
@@ -467,6 +511,11 @@ export async function replaceExecutionItems(
   executor: ServiceOrderDbExecutor = db,
 ) {
   const calculated = calculatePricedItems(params.items);
+  const validMaterialIds = await resolveValidMaterialIds(
+    params.organizationId,
+    params.items,
+    executor,
+  );
   await executor
     .delete(serviceOrderExecutionItem)
     .where(eq(serviceOrderExecutionItem.executionId, params.executionId));
@@ -477,6 +526,11 @@ export async function replaceExecutionItems(
         quoteItemId: item.quoteItemId ?? null,
         type: item.type,
         description: item.description,
+        materialId:
+          typeof item.materialId === "number" &&
+          validMaterialIds.has(item.materialId)
+            ? item.materialId
+            : null,
         quantity: item.quantity,
         unit: item.unit,
         unitCostCents: item.unitCostCents ?? 0,

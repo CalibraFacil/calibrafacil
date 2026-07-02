@@ -9,6 +9,7 @@ import { migration0008PrinterProfiles } from "./0008_printer_profiles";
 import { migration0009AssetSubjectToLegalMetrology } from "./0009_asset_subject_to_legal_metrology";
 import { migration0010MassCompositionProfiles } from "./0010_mass_composition_profiles";
 import { migration0011AssetLegalMetrologyRegime } from "./0011_asset_legal_metrology_regime";
+import { migration0012ServiceOrderItemMaterial } from "./0012_service_order_item_material";
 
 export type LocalDbMigration = {
   id: number;
@@ -28,6 +29,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0009AssetSubjectToLegalMetrology,
   migration0010MassCompositionProfiles,
   migration0011AssetLegalMetrologyRegime,
+  migration0012ServiceOrderItemMaterial,
 ];
 
 export const currentLocalDbSchemaVersion =

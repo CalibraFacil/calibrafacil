@@ -2934,6 +2934,7 @@ async function applyCreateLocalServiceOrderQuoteDraft(
 
     const totals = await replaceQuoteItems(
       {
+        organizationId: order.organizationId,
         quoteId: created.id,
         items: values.items.map((item) => ({
           ...item,
@@ -3061,6 +3062,7 @@ async function applyLocalServiceOrderExecutionNotes(
     if (values.items) {
       await replaceExecutionItems(
         {
+          organizationId: order.organizationId,
           executionId: current.id,
           items: values.items.map((item) => ({
             ...item,

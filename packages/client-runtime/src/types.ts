@@ -246,6 +246,62 @@ export interface ServicesApi {
   deactivate(id: string | number): Promise<unknown>;
 }
 
+export type MaterialsListInput = {
+  page?: number;
+  limit?: number;
+  query?: string;
+  controlsStock?: boolean;
+  isActive?: boolean;
+};
+
+export type MaterialsListData = {
+  data: Array<{
+    id: number;
+    name: string;
+    description: string | null;
+    sku: string | null;
+    unit: string;
+    unitCostCents: number | null;
+    unitPriceCents: number | null;
+    controlsStock: boolean;
+    isActive: boolean;
+    createdAt: string | Date | null;
+    updatedAt: string | Date | null;
+  }>;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type MaterialDetailData = MaterialsListData["data"][number];
+
+export type CreateMaterialInput = {
+  name: string;
+  description?: string | null;
+  sku?: string | null;
+  unit?: string;
+  unitCostCents?: number | null;
+  unitPriceCents?: number | null;
+  controlsStock?: boolean;
+  isActive?: boolean;
+};
+
+export type UpdateMaterialInput = Partial<CreateMaterialInput>;
+
+export interface MaterialsApi {
+  list(input?: MaterialsListInput): Promise<MaterialsListData>;
+  get(id: string | number): Promise<MaterialDetailData>;
+  create(input: CreateMaterialInput): Promise<{ id: number }>;
+  update(
+    id: string | number,
+    input: UpdateMaterialInput,
+  ): Promise<MaterialDetailData>;
+  deactivate(id: string | number): Promise<unknown>;
+}
+
 export type MethodsListInput = {
   page?: number;
   limit?: number;
@@ -2656,6 +2712,7 @@ export interface CalibraApi {
   assets: AssetsApi;
   assetTypes: AssetTypesApi;
   services: ServicesApi;
+  materials: MaterialsApi;
   methods: MethodsApi;
   standards: StandardsApi;
   jobs: JobsApi;

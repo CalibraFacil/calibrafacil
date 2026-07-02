@@ -3475,6 +3475,67 @@ export const serviceAuditLogRelations = relations(
 );
 
 // =============================================================================
+// MATERIAL CATALOG - Peças e materiais (parts consumed on service orders)
+// =============================================================================
+
+/**
+ * Provider-neutral parts/materials catalog. Service-order part line items
+ * can reference a material to get unit/cost/price prefills and, when the
+ * material is bound to an ERP product (via integrationObjectLink target
+ * "catalog_item", localEntityId "material:{id}"), drive stock decrement
+ * through the exported sale. `controlsStock` gates which materials ever
+ * carry stock semantics — services must never fake stock fields.
+ */
+export const material = pgTable(
+  "material",
+  {
+    id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // E.g., "Célula de carga 50kg"
+    description: text("description"),
+    // Internal part code / SKU (also seeds the ERP product SKU when bound)
+    sku: text("sku"),
+    unit: text("unit").default("un").notNull(),
+    // Default costs/prices in cents; line items still snapshot their own
+    unitCostCents: integer("unit_cost_cents"),
+    unitPriceCents: integer("unit_price_cents"),
+    // Only stock-controlled materials participate in ERP stock movement
+    controlsStock: boolean("controls_stock").default(false).notNull(),
+    // Soft delete - never hard delete commercial data
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("material_unit_id_idx").on(table.unitId),
+    index("material_organization_id_idx").on(table.organizationId),
+    index("material_is_active_idx").on(table.isActive),
+    uniqueIndex("material_org_sku_uidx")
+      .on(table.organizationId, table.sku)
+      .where(sql`${table.sku} is not null`),
+  ],
+);
+
+export const materialRelations = relations(material, ({ one }) => ({
+  organization: one(organization, {
+    fields: [material.organizationId],
+    references: [organization.id],
+  }),
+  unit: one(organizationUnit, {
+    fields: [material.unitId],
+    references: [organizationUnit.id],
+  }),
+}));
+
+// =============================================================================
 // REFERENCE STANDARD - Lab's Own Calibration Equipment (ISO 17025 Clause 6.4)
 // =============================================================================
 
@@ -5352,6 +5413,10 @@ export const serviceOrderQuoteItem = pgTable(
       .references(() => serviceOrderQuote.id, { onDelete: "cascade" }),
     type: text("type").$type<ServiceOrderItemType>().notNull(),
     description: text("description").notNull(),
+    // Optional catalog reference for "part" items; free-form items keep null
+    materialId: integer("material_id").references(() => material.id, {
+      onDelete: "set null",
+    }),
     quantity: real("quantity").default(1).notNull(),
     unit: text("unit").default("un").notNull(),
     unitPriceCents: integer("unit_price_cents").notNull(),
@@ -5364,7 +5429,10 @@ export const serviceOrderQuoteItem = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("service_order_quote_item_quote_idx").on(table.quoteId)],
+  (table) => [
+    index("service_order_quote_item_quote_idx").on(table.quoteId),
+    index("service_order_quote_item_material_idx").on(table.materialId),
+  ],
 );
 
 export const serviceOrderExecution = pgTable(
@@ -5420,6 +5488,10 @@ export const serviceOrderExecutionItem = pgTable(
     ),
     type: text("type").$type<ServiceOrderItemType>().notNull(),
     description: text("description").notNull(),
+    // Optional catalog reference for "part" items; free-form items keep null
+    materialId: integer("material_id").references(() => material.id, {
+      onDelete: "set null",
+    }),
     quantity: real("quantity").default(1).notNull(),
     unit: text("unit").default("un").notNull(),
     unitCostCents: integer("unit_cost_cents").default(0).notNull(),
@@ -5434,6 +5506,7 @@ export const serviceOrderExecutionItem = pgTable(
   (table) => [
     index("service_order_execution_item_execution_idx").on(table.executionId),
     index("service_order_execution_item_quote_item_idx").on(table.quoteItemId),
+    index("service_order_execution_item_material_idx").on(table.materialId),
   ],
 );
 

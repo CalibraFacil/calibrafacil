@@ -890,6 +890,31 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "list",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "update",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "deactivate",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
           "namespace": "methods",
           "policy": "local-first-read-through-sync",
         },
