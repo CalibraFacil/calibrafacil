@@ -35,6 +35,7 @@ import {
   CreateJobSchema,
   ExecuteJobSchema,
   JobStatusSchema,
+  RegulatedIntervalSchema,
   RejectJobSchema,
   SubmitForReviewSchema,
   UpdateAssetSchema,
@@ -93,6 +94,9 @@ import {
 import { requireFeature } from "../middleware/tier-guard";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
+import { resolveAssetRegimeWrite } from "../lib/asset-regime";
+import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import {
   denormalizeAssetSpecificationsForResponse,
   normalizeAssetSpecificationsFromInput,
@@ -1224,6 +1228,32 @@ publicApiV2Router
           baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
         });
 
+        // The lab does NOT set the next-calibration date / interval — that
+        // periodicity is the customer's decision, set in the portal
+        // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24); the field is not part of
+        // the schema, so an integration-sent value is stripped, never persisted.
+        const lastCalibrationDate = input.lastCalibrationDate
+          ? new Date(input.lastCalibrationDate)
+          : null;
+        // Legal-metrology regime (Track 2) + install anchor — mirrors the
+        // dashboard asset-create route so an integration-created LEGAL
+        // instrument lands consistent, not as a half-set state.
+        const installedAt = input.installedAt
+          ? new Date(input.installedAt)
+          : null;
+        const regimeWrite = resolveAssetRegimeWrite({
+          metrologyRegime: input.metrologyRegime,
+          regulatedInterval: input.regulatedInterval,
+          current: { metrologyRegime: "INDUSTRIAL", regulatedInterval: null },
+        });
+        const nextLegalVerificationDate = regimeWrite.regulatedInterval
+          ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+              lastVerificationDate: lastCalibrationDate,
+              firstVerificationDate: lastCalibrationDate,
+              installDate: installedAt,
+            }).date
+          : null;
+
         const [created] = await db
           .insert(asset)
           .values({
@@ -1237,14 +1267,13 @@ publicApiV2Router
             tag: input.tag,
             status: input.status || "ACTIVE",
             baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
-            lastCalibrationDate: input.lastCalibrationDate
-              ? new Date(input.lastCalibrationDate)
-              : null,
-            nextCalibrationDate: input.nextCalibrationDate
-              ? new Date(input.nextCalibrationDate)
-              : null,
+            lastCalibrationDate,
+            installedAt,
             comments: input.comments || null,
             specifications: normalizedSpecifications.specifications || null,
+            metrologyRegime: regimeWrite.metrologyRegime,
+            regulatedInterval: regimeWrite.regulatedInterval,
+            nextLegalVerificationDate,
           })
           .returning();
 
@@ -1343,6 +1372,10 @@ publicApiV2Router
           status: asset.status,
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
+          calibrationIntervalMonths: asset.calibrationIntervalMonths,
+          installedAt: asset.installedAt,
+          metrologyRegime: asset.metrologyRegime,
+          regulatedInterval: asset.regulatedInterval,
           comments: asset.comments,
           specifications: asset.specifications,
           assetTypeDefinition: assetType.definition,
@@ -1393,6 +1426,77 @@ publicApiV2Router
             })
           : null;
 
+      // The lab does NOT set the next-calibration date / interval — periodicity is
+      // the customer's decision (portal, §7.8.4.3 + ILAC-G24); the field is not in
+      // the schema, so an integration-sent value is stripped. When the integration
+      // moves `lastCalibrationDate`, the next-cal date is re-derived from the
+      // customer-owned interval — null when no interval is set (REQ-INTERVAL-003),
+      // mirroring the dashboard asset-update route.
+      const lastCalibrationDate =
+        input.lastCalibrationDate === undefined
+          ? undefined
+          : input.lastCalibrationDate
+            ? new Date(input.lastCalibrationDate)
+            : null;
+      const nextCalibrationDate =
+        lastCalibrationDate === undefined
+          ? existing.nextCalibrationDate
+          : existing.calibrationIntervalMonths === null
+            ? null
+            : deriveNextCalibrationDate(
+                lastCalibrationDate,
+                existing.calibrationIntervalMonths,
+              );
+      // Track-2 install anchor + legal-metrology regime — mirrors the dashboard
+      // asset-update route: recompute next_legal_verification_date when the
+      // integration touches the regime, the regulated interval, the install
+      // anchor, or the last-calibration date (the last-verification proxy).
+      const installedAt =
+        input.installedAt === undefined
+          ? undefined
+          : input.installedAt
+            ? new Date(input.installedAt)
+            : null;
+      const regimeTouched =
+        input.metrologyRegime !== undefined ||
+        input.regulatedInterval !== undefined ||
+        installedAt !== undefined ||
+        lastCalibrationDate !== undefined;
+      const regimeUpdate = (() => {
+        if (!regimeTouched) return null;
+        const parsedCurrent = RegulatedIntervalSchema.safeParse(
+          existing.regulatedInterval,
+        );
+        const regimeWrite = resolveAssetRegimeWrite({
+          metrologyRegime: input.metrologyRegime,
+          regulatedInterval: input.regulatedInterval,
+          current: {
+            metrologyRegime: existing.metrologyRegime,
+            regulatedInterval: parsedCurrent.success
+              ? parsedCurrent.data
+              : null,
+          },
+        });
+        const anchorDate =
+          (lastCalibrationDate !== undefined
+            ? lastCalibrationDate
+            : existing.lastCalibrationDate) ?? null;
+        const installAnchor =
+          (installedAt !== undefined ? installedAt : existing.installedAt) ??
+          null;
+        return {
+          metrologyRegime: regimeWrite.metrologyRegime,
+          regulatedInterval: regimeWrite.regulatedInterval,
+          nextLegalVerificationDate: regimeWrite.regulatedInterval
+            ? deriveRegulatedNextDate(regimeWrite.regulatedInterval, {
+                lastVerificationDate: anchorDate,
+                firstVerificationDate: anchorDate,
+                installDate: installAnchor,
+              }).date
+            : null,
+        };
+      })();
+
       const [updated] = await db
         .update(asset)
         .set({
@@ -1403,20 +1507,15 @@ publicApiV2Router
           tag: input.tag ?? existing.tag,
           status: input.status ?? existing.status,
           lastCalibrationDate:
-            input.lastCalibrationDate === undefined
+            lastCalibrationDate === undefined
               ? existing.lastCalibrationDate
-              : input.lastCalibrationDate
-                ? new Date(input.lastCalibrationDate)
-                : null,
-          nextCalibrationDate:
-            input.nextCalibrationDate === undefined
-              ? existing.nextCalibrationDate
-              : input.nextCalibrationDate
-                ? new Date(input.nextCalibrationDate)
-                : null,
+              : lastCalibrationDate,
+          nextCalibrationDate,
+          ...(installedAt !== undefined ? { installedAt } : {}),
           comments: input.comments ?? existing.comments,
           specifications:
             normalizedSpecifications?.specifications ?? existing.specifications,
+          ...regimeUpdate,
         })
         .where(eq(asset.id, existing.id))
         .returning();
@@ -2373,7 +2472,10 @@ publicApiV2Router
         eq(calibrationRequest.organizationId, apiKey.organizationId),
         unitId ? eq(calibrationRequest.unitId, unitId) : undefined,
         CalibrationRequestStatusSchema.safeParse(status).success
-          ? eq(calibrationRequest.status, CalibrationRequestStatusSchema.parse(status))
+          ? eq(
+              calibrationRequest.status,
+              CalibrationRequestStatusSchema.parse(status),
+            )
           : undefined,
         resolvedCustomerId
           ? eq(calibrationRequest.customerId, resolvedCustomerId)

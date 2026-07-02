@@ -8,6 +8,7 @@ import {
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
+import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../lib/signatory";
 import {
   findServiceOrdersForCalibrationJob,
@@ -2271,6 +2272,17 @@ export const jobsRouter = new Hono<{
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
         reason: input.reason || "Aprovado - Gerando PDF",
+      });
+
+      // Advance the asset's calibration dates from the approved work
+      // (last_calibration_date + the derived next dates) — forward-only and
+      // never fails the approval. Without this the due sweeps re-remind for
+      // an instrument that was just calibrated.
+      await advanceAssetCalibrationDatesOnApproval({
+        assetId: existing.assetId,
+        calibrationDate: existing.performedAt ?? updated?.approvedAt ?? null,
+        performedBy: session.user.id,
+        source: "job_approval",
       });
 
       await enqueueBackgroundJob({

@@ -9,7 +9,14 @@ import {
   syncConflictResolutionResponseSchema,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
-import { syncRouter } from "./sync";
+import {
+  DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
+  DesktopCreateAssetSchema,
+  DesktopUpdateAssetSchema,
+  DesktopUpdateServiceOrderExecutionSchema,
+  stripDesktopNullEntries,
+  syncRouter,
+} from "./sync";
 
 const mocks = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
@@ -1392,5 +1399,155 @@ describe("syncRouter", () => {
         nextLegalVerificationDate: new Date("2027-01-01T00:00:00.000Z"),
       }),
     );
+  });
+
+  it("push update_local_asset accepts a REAL local-db-shaped payload (explicit nulls) and derives — never applies — the desktop next-cal date", async () => {
+    // The local outbox merges the FULL SQLite row into the payload, so every
+    // optional field arrives as explicit `null` and Track-1 dates are always
+    // present. Before the Desktop* schema variants, this payload was rejected
+    // wholesale ("expected string, received null"): every real desktop asset
+    // edit died with INVALID_DESKTOP_EVENT_PAYLOAD.
+    mocks.selectResults.push(
+      [],
+      [{ details: { remoteEntityId: 42 } }],
+      [
+        {
+          id: 42,
+          customerId: 20,
+          name: "Balança",
+          manufacturer: null,
+          model: null,
+          serialNumber: "SN-1",
+          tag: "TAG-1",
+          status: "ACTIVE",
+          baseMeasurementUnit: null,
+          lastCalibrationDate: new Date("2025-06-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
+          // Customer-owned interval (Track 1) — set via the portal.
+          calibrationIntervalMonths: 12,
+          comments: null,
+          specifications: null,
+          metrologyRegime: "INDUSTRIAL",
+          regulatedInterval: null,
+          installedAt: null,
+          assetTypeDefinition: null,
+        },
+      ],
+      [{ id: 42, tag: "TAG-1", status: "ACTIVE" }],
+      [],
+      [],
+    );
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-real-payload",
+        baseCursor: "cursor-before",
+        events: [
+          syncEvent({
+            eventId: "evt-real-payload",
+            entityType: "asset",
+            entityId: "local-asset-1",
+            operation: "update_local_asset",
+            // Exactly what packages/local-db updateLocalAsset enqueues: the
+            // full row merge, nulls included, plus the local copy of
+            // nextCalibrationDate (which the cloud must IGNORE — §7.8.4.3).
+            payload: {
+              remoteId: 42,
+              name: "Balança",
+              manufacturer: null,
+              model: null,
+              serialNumber: "SN-1",
+              tag: "TAG-1",
+              status: "ACTIVE",
+              baseMeasurementUnit: null,
+              lastCalibrationDate: "2026-06-01T00:00:00.000Z",
+              nextCalibrationDate: "2030-12-31T00:00:00.000Z",
+              comments: null,
+              metrologyRegime: "INDUSTRIAL",
+              regulatedInterval: null,
+              nextLegalVerificationDate: null,
+              installedAt: null,
+              specifications: null,
+            },
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.rejected).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+
+    expect(mocks.db.update).toHaveBeenCalledTimes(1);
+    const updateQuery = mocks.db.update.mock.results[0]?.value;
+    expect(updateQuery.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
+        // Derived: last (2026-06-01) + the CUSTOMER interval (12 months) —
+        // NOT the desktop-sent 2030-12-31 value.
+        nextCalibrationDate: new Date("2027-06-01T00:00:00.000Z"),
+      }),
+    );
+  });
+
+  describe("desktop payload tolerance (null-vs-optional)", () => {
+    it("accepts explicit nulls exactly where the local SQLite row produces them", () => {
+      // create_local_asset — full-row shape from packages/local-db createLocalAsset.
+      expect(
+        DesktopCreateAssetSchema.safeParse({
+          customerId: 20,
+          assetTypeId: 3,
+          name: "Balança",
+          manufacturer: null,
+          model: null,
+          serialNumber: "SN-1",
+          tag: "TAG-1",
+          status: "ACTIVE",
+          baseMeasurementUnit: null,
+          lastCalibrationDate: null,
+          comments: null,
+          metrologyRegime: "INDUSTRIAL",
+          regulatedInterval: null,
+          installedAt: null,
+          specifications: null,
+        }).success,
+      ).toBe(true);
+
+      // Service-order execution notes — the fields the local-db builder sends
+      // as `?? null` (result, items).
+      expect(
+        DesktopUpdateServiceOrderExecutionSchema.shape.result.safeParse(null)
+          .success,
+      ).toBe(true);
+      expect(
+        DesktopUpdateServiceOrderExecutionSchema.shape.items.safeParse(null)
+          .success,
+      ).toBe(true);
+
+      // Service-order intake — `CreateServiceOrderSchema` is refined (no
+      // extend), so explicit nulls for clientContactSnapshot/assetSnapshot are
+      // dropped BEFORE the parse (null ≡ absent on a create).
+      const stripped = stripDesktopNullEntries(
+        {
+          clientContactSnapshot: null,
+          assetSnapshot: null,
+          claimedDefect: "x",
+        },
+        DESKTOP_SERVICE_ORDER_NULLABLE_KEYS,
+      );
+      expect(stripped).toEqual({ claimedDefect: "x" });
+    });
+
+    it("strips a desktop-sent nextCalibrationDate instead of accepting it (§7.8.4.3)", () => {
+      const parsed = DesktopUpdateAssetSchema.parse({
+        nextCalibrationDate: "2030-12-31T00:00:00.000Z",
+      });
+      expect(Object.keys(parsed)).not.toContain("nextCalibrationDate");
+    });
   });
 });

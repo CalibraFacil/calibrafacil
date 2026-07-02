@@ -1231,8 +1231,16 @@ export function createLocalServer(
         serialNumber: input.serialNumber,
         tag: input.tag,
         status: input.status,
+        baseMeasurementUnit: input.baseMeasurementUnit,
+        // No `nextCalibrationDate`: the interval / next-cal date is customer-owned
+        // (portal, §7.8.4.3) — the lab never authors it, on desktop either.
         lastCalibrationDate: input.lastCalibrationDate,
-        nextCalibrationDate: input.nextCalibrationDate,
+        // Legal-metrology regime (Track 2) + install anchor — previously dropped
+        // here, so a desktop-set LEGAL regime was silently lost. The regulated
+        // next-verification date is derived on the cloud during sync push.
+        metrologyRegime: input.metrologyRegime,
+        regulatedInterval: input.regulatedInterval,
+        installedAt: input.installedAt,
         comments: input.comments,
         specifications: input.specifications,
         actorUserId: context.userId,
@@ -1268,8 +1276,13 @@ export function createLocalServer(
         serialNumber: input.serialNumber,
         tag: input.tag,
         status: input.status,
+        // No `nextCalibrationDate`: customer-owned (portal, §7.8.4.3); the local
+        // column is refreshed from the cloud on pull.
         lastCalibrationDate: input.lastCalibrationDate,
-        nextCalibrationDate: input.nextCalibrationDate,
+        // Legal-metrology regime (Track 2) + install anchor — previously dropped.
+        metrologyRegime: input.metrologyRegime,
+        regulatedInterval: input.regulatedInterval,
+        installedAt: input.installedAt,
         comments: input.comments,
         specifications: input.specifications,
         actorUserId: context.userId,

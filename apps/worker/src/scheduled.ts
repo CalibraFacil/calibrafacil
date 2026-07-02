@@ -567,6 +567,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const asset of assetBatch) {
         try {
           await notifyAssetDueForRecalibration(asset.id, asset.organization_id);
@@ -582,6 +583,7 @@ export async function processScheduledNotifications(
 
           assetsProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing asset ${asset.id}:`,
             error,
@@ -589,7 +591,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      assetOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      assetOffset += batchFailures;
     } while (assetBatch.length === BATCH_SIZE);
 
     // 1b. Process LEGAL-metrology instruments due for regulation-fixed
@@ -609,6 +615,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const legalAsset of legalBatch) {
         try {
           await notifyAssetDueForLegalVerification(
@@ -627,6 +634,7 @@ export async function processScheduledNotifications(
 
           legalVerificationsProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing legal-verification for asset ${legalAsset.id}:`,
             error,
@@ -634,7 +642,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      legalOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      legalOffset += batchFailures;
     } while (legalBatch.length === BATCH_SIZE);
 
     // 2. Process expiring reference standards (with pagination)
@@ -653,6 +665,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const standard of standardBatch) {
         try {
           await notifyStandardExpiring(standard.id, standard.organization_id);
@@ -668,6 +681,7 @@ export async function processScheduledNotifications(
 
           standardsProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing standard ${standard.id}:`,
             error,
@@ -675,7 +689,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      standardOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      standardOffset += batchFailures;
     } while (standardBatch.length === BATCH_SIZE);
 
     // 3. Process EXPIRED reference standards - ISO 17025 Clause 6.4.6 (with pagination)
@@ -694,6 +712,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const standard of expiredBatch) {
         try {
           await notifyStandardExpired(standard.id, standard.organization_id);
@@ -709,6 +728,7 @@ export async function processScheduledNotifications(
 
           standardsExpiredProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing expired standard ${standard.id}:`,
             error,
@@ -716,7 +736,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      expiredOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      expiredOffset += batchFailures;
     } while (expiredBatch.length === BATCH_SIZE);
 
     // 4. Process overdue jobs (with pagination)
@@ -731,6 +755,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const job of jobBatch) {
         try {
           await notifyJobOverdue(job.id);
@@ -746,11 +771,16 @@ export async function processScheduledNotifications(
 
           jobsProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(`[Scheduled] Error processing job ${job.id}:`, error);
         }
       }
 
-      jobOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      jobOffset += batchFailures;
     } while (jobBatch.length === BATCH_SIZE);
 
     // 5. Process competences expiring within 30 days - ISO 17025 Clause 6.2.3 (with pagination)
@@ -769,6 +799,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const comp of compExpiringBatch) {
         try {
           await notifyCompetenceExpiring(comp.id, comp.organization_id);
@@ -784,6 +815,7 @@ export async function processScheduledNotifications(
 
           competencesExpiringProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing expiring competence ${comp.id}:`,
             error,
@@ -791,7 +823,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      compExpiringOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      compExpiringOffset += batchFailures;
     } while (compExpiringBatch.length === BATCH_SIZE);
 
     // 6. Process EXPIRED competences - auto-expire and notify (with pagination)
@@ -810,6 +846,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const comp of compExpiredBatch) {
         try {
           // Auto-expire: update status to EXPIRED
@@ -844,6 +881,7 @@ export async function processScheduledNotifications(
 
           competencesExpiredProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing expired competence ${comp.id}:`,
             error,
@@ -851,7 +889,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      compExpiredOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      compExpiredOffset += batchFailures;
     } while (compExpiredBatch.length === BATCH_SIZE);
 
     // 7. Remind técnico + customer of upcoming on-site visits (with pagination)
@@ -866,6 +908,7 @@ export async function processScheduledNotifications(
         );
       }
 
+      let batchFailures = 0;
       for (const visit of visitBatch) {
         try {
           await notifyVisitReminder(visit.id);
@@ -881,6 +924,7 @@ export async function processScheduledNotifications(
 
           visitsProcessed++;
         } catch (error) {
+          batchFailures++;
           console.error(
             `[Scheduled] Error processing visit ${visit.id}:`,
             error,
@@ -888,7 +932,11 @@ export async function processScheduledNotifications(
         }
       }
 
-      visitOffset += BATCH_SIZE;
+      // Successful rows leave the NOT-EXISTS window (recordScheduledNotification
+      // sets sent_at), so the next page must start where the FAILED rows left
+      // off — advancing by the full batch size skipped up to BATCH_SIZE
+      // still-due rows per pass.
+      visitOffset += batchFailures;
     } while (visitBatch.length === BATCH_SIZE);
   });
 

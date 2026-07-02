@@ -396,7 +396,11 @@ export const CreateAssetSchema = z.object({
   status: AssetStatusSchema.optional().default("ACTIVE"),
   baseMeasurementUnit: MeasurementUnitSchema.optional().nullable(),
   lastCalibrationDate: z.string().optional(),
-  nextCalibrationDate: z.string().optional(),
+  // NO `nextCalibrationDate` here: the calibration interval / next-cal date is the
+  // equipment owner's (customer's) decision, set via the portal — the lab never
+  // authors it (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24). Keeping the field out of
+  // the schema guarantees every consumer (assets API, public API, desktop sync,
+  // local-server) strips it instead of having to remember to ignore it.
   // Installation/commissioning date (ISO). Anchors the legal-metrology verification
   // ceiling for `regulated_interval.kind = 'max_months_from_install'` (REQ-INSTALL-002).
   installedAt: z.string().optional(),

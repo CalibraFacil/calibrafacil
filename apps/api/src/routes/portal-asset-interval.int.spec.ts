@@ -41,6 +41,7 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
   lastCalibrationDate?: Date;
+  nextCalibrationDate?: Date;
   metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 }): Promise<number> {
   const [row] = await db
@@ -54,6 +55,7 @@ async function seedAsset(params: {
       tag: params.tag,
       status: "ACTIVE",
       lastCalibrationDate: params.lastCalibrationDate ?? null,
+      nextCalibrationDate: params.nextCalibrationDate ?? null,
       metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
     })
     .returning({ id: asset.id });
@@ -120,6 +122,48 @@ describe("PUT /api/portal/assets/:id/interval — real DB + real portal middlewa
     // Derived next-cal = last (2026-01-15) + 12 months = 2027-01-15.
     expect(row?.nextCalibrationDate?.toISOString()).toBe(
       "2027-01-15T00:00:00.000Z",
+    );
+  });
+
+  // REQ-INTERVAL-003 boundary: an interval on an asset with NO last-calibration
+  // date derives nothing — and must NOT erase a pre-existing (grandfathered,
+  // pre-flip lab-set) next date, or the asset silently drops out of the
+  // due-calibration reminders the moment the customer sets an interval.
+  it("keeps a grandfathered next date when the asset has no last-calibration date", async () => {
+    const assetTypeId = await ensureAssetType();
+    const ctx = await seedPortalContext({
+      labOrgId: "lab-1",
+      clientOrgId: "client-a",
+      portalUserId: "user-a",
+      customerName: "Customer A",
+    });
+    const grandfathered = new Date(Date.UTC(2026, 9, 1));
+    const assetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-GRANDFATHER",
+      nextCalibrationDate: grandfathered,
+    });
+
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
+    const res = await put(assetId, {
+      intervalMonths: 12,
+      rationale: "Primeira definição de periodicidade.",
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.calibrationIntervalMonths).toBe(12);
+    expect(row?.nextCalibrationDate?.toISOString()).toBe(
+      grandfathered.toISOString(),
     );
   });
 

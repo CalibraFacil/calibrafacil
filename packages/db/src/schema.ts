@@ -2780,6 +2780,10 @@ export const asset = pgTable(
     index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
     uniqueIndex("asset_tag_uidx").on(table.tag),
+    // Partial index for the legal-verification recall sweep (migration 0075).
+    index("asset_legal_verification_due_idx")
+      .on(table.nextLegalVerificationDate)
+      .where(sql`${table.metrologyRegime} = 'LEGAL'`),
   ],
 );
 

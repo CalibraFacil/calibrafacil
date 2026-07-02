@@ -526,6 +526,13 @@
 			"when": 1782989925694,
 			"tag": "0074_material_stock_snapshot",
 			"breakpoints": true
+		},
+		{
+			"idx": 75,
+			"version": "7",
+			"when": 1782989925695,
+			"tag": "0075_legal_verification_due_index",
+			"breakpoints": true
 		}
 	]
 }

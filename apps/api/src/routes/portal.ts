@@ -1582,11 +1582,14 @@ export const portalRouter = new Hono<{
   // PUT /assets/:id/interval - Customer sets their OWN calibration interval
   // =========================================================================
   // The interval/periodicity is the equipment owner's decision, never the lab's
-  // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) and
-  // the legal-metrology lock (409) are decided by the pure, unit-tested resolver
-  // `decidePortalIntervalWrite`; `rationale` is the required §7.5 technical record,
-  // persisted on the asset and the audit log. `next_calibration_date` is derived
-  // from the asset's last-calibration date + the chosen interval.
+  // (ISO/IEC 17025:2017 §7.8.4.3 + ILAC-G24 / OIML D 10). Tenant scope (404) is
+  // decided by the pure, unit-tested resolver `decidePortalIntervalWrite` — the
+  // ONLY guard: the customer owns the calibration interval for every regime
+  // (REQ-MLR-040/041; a legal instrument's regulation-fixed VERIFICATION
+  // periodicity is a separate, lab-recorded track). `rationale` is the required
+  // §7.5 technical record, persisted on the asset and the audit log.
+  // `next_calibration_date` is derived from the asset's last-calibration date +
+  // the chosen interval.
   // =========================================================================
   .put(
     "/assets/:id/interval",
@@ -1646,10 +1649,16 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const nextCalibrationDate = deriveNextCalibrationDate(
-          existing.lastCalibrationDate,
-          intervalMonths,
-        );
+        // next = last + interval (REQ-INTERVAL-003). When the asset has no
+        // last-calibration date yet, the interval alone derives nothing — keep
+        // any pre-existing (grandfathered, pre-flip lab-set) next date instead
+        // of erasing it, so the asset does not silently drop out of the
+        // due-calibration reminders the moment the customer sets an interval.
+        const nextCalibrationDate =
+          deriveNextCalibrationDate(
+            existing.lastCalibrationDate,
+            intervalMonths,
+          ) ?? existing.nextCalibrationDate;
 
         await db
           .update(asset)

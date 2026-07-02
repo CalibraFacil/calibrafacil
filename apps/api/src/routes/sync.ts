@@ -66,7 +66,6 @@ import {
   IssueServiceOrderDeliveryDocumentSchema,
   RegulatedIntervalSchema,
   StandardSnapshotSchema,
-  UpdateAssetSchema,
   UpdateComplianceSchema,
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
@@ -88,6 +87,9 @@ import {
 import { buildUnitScopeCondition } from "../lib/units";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
+import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
+import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
+import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
 import {
   asRecord,
   buildSyncAttachmentObjectKey,
@@ -135,6 +137,62 @@ const METHOD_ENGINE_OPTIONS = {
 const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
 const CERTIFICATE_PUBLIC_BASE_URL = "https://certificates.calibrafacil.com";
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
+
+// ============================================================================
+// Desktop payload tolerance
+// ============================================================================
+// Desktop outbox payloads are built by merging the FULL local SQLite row
+// (packages/local-db), so optional fields arrive as explicit `null`, never as
+// an absent key. The shared schemas declare those fields `.optional()`
+// (absent-only) for the web/local-server boundary, which rejected every real
+// desktop event here ("expected string, received null") — the push path only
+// ever passed with hand-crafted null-free payloads. These variants accept
+// `null` exactly where the local row can produce it; the apply handlers below
+// already normalize null (`|| null`, `?? null`, `parseSyncDate`).
+// Exported for spec coverage (sync.spec.ts) — not part of the route surface.
+export const DesktopCreateAssetSchema = CreateAssetSchema.extend({
+  manufacturer: CreateAssetSchema.shape.manufacturer.nullable(),
+  model: CreateAssetSchema.shape.model.nullable(),
+  comments: CreateAssetSchema.shape.comments.nullable(),
+  lastCalibrationDate: CreateAssetSchema.shape.lastCalibrationDate.nullable(),
+  installedAt: CreateAssetSchema.shape.installedAt.nullable(),
+  specifications: CreateAssetSchema.shape.specifications.nullable(),
+});
+
+export const DesktopUpdateAssetSchema = DesktopCreateAssetSchema.partial().omit(
+  {
+    customerId: true,
+    assetTypeId: true,
+    baseMeasurementUnit: true,
+  },
+);
+
+export const DesktopUpdateServiceOrderExecutionSchema =
+  UpdateServiceOrderExecutionSchema.extend({
+    result: UpdateServiceOrderExecutionSchema.shape.result.nullable(),
+    items: UpdateServiceOrderExecutionSchema.shape.items.nullable(),
+  });
+
+// `CreateServiceOrderSchema` carries a superRefine, so it cannot be extended
+// (Zod throws at runtime and `safeExtend` rejects the widened field types).
+// For the two keys the local-db intake builder sends as `?? null`
+// (`clientContactSnapshot`, `assetSnapshot`), drop an explicit null before the
+// parse — for a CREATE, null and absent mean the same thing.
+export const DESKTOP_SERVICE_ORDER_NULLABLE_KEYS = [
+  "clientContactSnapshot",
+  "assetSnapshot",
+] as const;
+
+export function stripDesktopNullEntries(
+  payload: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> {
+  const cleaned = { ...payload };
+  for (const key of keys) {
+    if (cleaned[key] === null) delete cleaned[key];
+  }
+  return cleaned;
+}
 
 function getMemberData(c: { get: (key: "member") => MemberData }) {
   return c.get("member");
@@ -217,6 +275,12 @@ export const syncRouter = new Hono<{
             model: asset.model,
             baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
+            // Track-1 dates + comments: the local upsert maps them; omitting
+            // them here both hid due dates from the desktop AND nulled the
+            // local columns on every pull (the upsert writes absent as null).
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            comments: asset.comments,
             metrologyRegime: asset.metrologyRegime,
             regulatedInterval: asset.regulatedInterval,
             nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -849,6 +913,10 @@ async function loadCloudSyncEventsSince(
         model: asset.model,
         baseMeasurementUnit: asset.baseMeasurementUnit,
         specifications: asset.specifications,
+        // Track-1 dates + comments — same projection as the bootstrap select.
+        lastCalibrationDate: asset.lastCalibrationDate,
+        nextCalibrationDate: asset.nextCalibrationDate,
+        comments: asset.comments,
         metrologyRegime: asset.metrologyRegime,
         regulatedInterval: asset.regulatedInterval,
         nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -1412,6 +1480,14 @@ async function applyDesktopCertificatePdfUpload(
       "application/pdf",
     );
 
+    // AS-FOUND (pre-adjustment) reliability verdict — mirrors the cloud
+    // approval route so a desktop-approved cycle feeds the ILAC-G24 / NCSL
+    // RP-1 interval analysis instead of staying permanently UNKNOWN.
+    // Read-only over the frozen `results`; recomputing is idempotent.
+    const asFoundVerdict = buildAsFoundReliabilityVerdict({
+      results: job.results,
+    });
+
     await db
       .update(calibrationJob)
       .set({
@@ -1419,6 +1495,8 @@ async function applyDesktopCertificatePdfUpload(
         certificateUrl,
         approvedBy: job.approvedBy ?? actorUserId,
         approvedAt,
+        asFoundConformity: asFoundVerdict.conformity,
+        asFoundMargins: asFoundVerdict.margins,
         certificateTemplateId:
           job.certificateTemplateId ??
           (typeof effectiveTemplateSnapshot.id === "number"
@@ -1429,6 +1507,15 @@ async function applyDesktopCertificatePdfUpload(
         updatedAt: new Date(),
       })
       .where(eq(calibrationJob.id, job.id));
+
+    // Advance the asset's calibration dates from the published work — same
+    // rule as the cloud approval route (forward-only, never fails the sync).
+    await advanceAssetCalibrationDatesOnApproval({
+      assetId: job.assetId,
+      calibrationDate: job.performedAt ?? approvedAt,
+      performedBy: actorUserId,
+      source: "desktop_certificate_publish",
+    });
 
     await db.insert(jobAuditLog).values({
       jobId: job.id,
@@ -1688,7 +1775,7 @@ async function applyCreateLocalAsset(
   }
 
   const payload = asRecord(input.event.payload);
-  const parseResult = CreateAssetSchema.safeParse(payload);
+  const parseResult = DesktopCreateAssetSchema.safeParse(payload);
   if (!parseResult.success) {
     return {
       ok: false,
@@ -1786,8 +1873,11 @@ async function applyCreateLocalAsset(
     };
   }
 
+  // The desktop never authors `nextCalibrationDate` — the calibration interval /
+  // next-cal date is the customer's decision, set in the portal (§7.8.4.3 +
+  // ILAC-G24); the field is not in the schema, so a desktop-sent value is
+  // stripped and a freshly created asset lands with no next-cal date.
   const lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
-  const nextCalibrationDate = parseSyncDate(values.nextCalibrationDate);
   // Legal-metrology TRACK 2 (mirrors the cloud asset-create route): resolve the regime
   // trio + derive next_legal_verification_date so a desktop-created LEGAL instrument lands
   // consistent (REQ-MLR-003/030/031 + REQ-INSTALL-002), not as a half-set state.
@@ -1825,7 +1915,6 @@ async function applyCreateLocalAsset(
         status: values.status || "ACTIVE",
         baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
         lastCalibrationDate,
-        nextCalibrationDate,
         installedAt,
         comments: values.comments || null,
         specifications: normalizedSpecifications.specifications || null,
@@ -1892,7 +1981,7 @@ async function applyUpdateLocalAsset(
     };
   }
 
-  const parseResult = UpdateAssetSchema.safeParse(payload);
+  const parseResult = DesktopUpdateAssetSchema.safeParse(payload);
   if (!parseResult.success) {
     return {
       ok: false,
@@ -1917,6 +2006,7 @@ async function applyUpdateLocalAsset(
       baseMeasurementUnit: asset.baseMeasurementUnit,
       lastCalibrationDate: asset.lastCalibrationDate,
       nextCalibrationDate: asset.nextCalibrationDate,
+      calibrationIntervalMonths: asset.calibrationIntervalMonths,
       comments: asset.comments,
       specifications: asset.specifications,
       metrologyRegime: asset.metrologyRegime,
@@ -1972,10 +2062,18 @@ async function applyUpdateLocalAsset(
   if (values.tag !== undefined) updateData.tag = values.tag;
   if (values.status !== undefined) updateData.status = values.status;
   if (values.lastCalibrationDate !== undefined) {
-    updateData.lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
-  }
-  if (values.nextCalibrationDate !== undefined) {
-    updateData.nextCalibrationDate = parseSyncDate(values.nextCalibrationDate);
+    const lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
+    updateData.lastCalibrationDate = lastCalibrationDate;
+    // The desktop never authors `nextCalibrationDate` (customer-owned, §7.8.4.3);
+    // mirror the cloud asset-update route: next = last + customer interval,
+    // null when no interval has been set (REQ-INTERVAL-003).
+    updateData.nextCalibrationDate =
+      existingAsset.calibrationIntervalMonths === null
+        ? null
+        : deriveNextCalibrationDate(
+            lastCalibrationDate,
+            existingAsset.calibrationIntervalMonths,
+          );
   }
   if (values.comments !== undefined)
     updateData.comments = values.comments || null;
@@ -1989,12 +2087,14 @@ async function applyUpdateLocalAsset(
   }
   // Legal-metrology regime (mirrors the cloud asset-update route): recompute the regime +
   // next_legal_verification_date when the desktop event touches the regime, the regulated
-  // interval, OR the install anchor. Keeps the regime columns mutually consistent
+  // interval, the install anchor, OR the last-calibration date (the stored proxy for the
+  // last-verification anchor). Keeps the regime columns mutually consistent
   // (REQ-MLR-030/031/032 + REQ-INSTALL-002).
   if (
     values.metrologyRegime !== undefined ||
     values.regulatedInterval !== undefined ||
-    installedAtUpdate !== undefined
+    installedAtUpdate !== undefined ||
+    values.lastCalibrationDate !== undefined
   ) {
     const parsedCurrent = RegulatedIntervalSchema.safeParse(
       existingAsset.regulatedInterval,
@@ -2743,7 +2843,9 @@ async function applyCreateLocalServiceOrderIntake(
   }
 
   const payload = asRecord(input.event.payload);
-  const parseResult = CreateServiceOrderSchema.safeParse(payload);
+  const parseResult = CreateServiceOrderSchema.safeParse(
+    stripDesktopNullEntries(payload, DESKTOP_SERVICE_ORDER_NULLABLE_KEYS),
+  );
   if (!parseResult.success) {
     return {
       ok: false,
@@ -2799,7 +2901,9 @@ async function applyCreateLocalServiceOrderIntake(
     customerId: values.customerId,
     assetId: values.assetId,
     userId: actorUserId,
-    assetSnapshot: values.assetSnapshot,
+    // Desktop payloads send an absent snapshot as explicit null; the intake
+    // creator expects undefined for "none".
+    assetSnapshot: values.assetSnapshot ?? undefined,
     signatureData: values.signatureData ?? null,
     values: {
       clientContactId: values.clientContactId ?? null,
@@ -3009,7 +3113,8 @@ async function applyLocalServiceOrderExecutionNotes(
     };
   }
 
-  const parseResult = UpdateServiceOrderExecutionSchema.safeParse(payload);
+  const parseResult =
+    DesktopUpdateServiceOrderExecutionSchema.safeParse(payload);
   if (!parseResult.success) {
     return {
       ok: false,

@@ -757,14 +757,18 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
         // Legal-metrology regime (Track 2) — recompute when the client touches the regime,
-        // the regulated interval, OR the install anchor (a standalone installed_at change
-        // must re-derive next_legal_verification_date for an install-anchored LEGAL asset).
+        // the regulated interval, the install anchor (a standalone installed_at change
+        // must re-derive next_legal_verification_date for an install-anchored LEGAL asset),
+        // OR the last-calibration date (the stored proxy for the last-verification anchor —
+        // without this, an anchor-based regulated date goes stale after a verification is
+        // recorded and the recall sweep keeps re-reminding).
         // Independent of Track 1 (the customer-owned calibration interval).
         // (REQ-MLR-030/031/032 + REQ-INSTALL-002)
         if (
           input.metrologyRegime !== undefined ||
           input.regulatedInterval !== undefined ||
-          installedAt !== undefined
+          installedAt !== undefined ||
+          lastCalibrationDate !== undefined
         ) {
           const parsedCurrent = RegulatedIntervalSchema.safeParse(
             existingAsset.regulatedInterval,

@@ -193,6 +193,7 @@ async function seedJob(params: {
   technicianId?: string | null;
   status?: JobStatus;
   results?: Record<string, unknown>;
+  performedAt?: Date;
 }): Promise<number> {
   const status: JobStatus = params.status ?? "DRAFT";
   const [row] = await db
@@ -210,6 +211,7 @@ async function seedJob(params: {
       methodSnapshot: minimalMethodSnapshot(),
       certificateName: params.jobId,
       results: params.results,
+      performedAt: params.performedAt,
     })
     .returning({ id: calibrationJob.id });
   if (!row) throw new Error("seedJob: insert failed");
@@ -423,6 +425,80 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
       .from(calibrationJob)
       .where(eq(calibrationJob.id, approvedJobId));
     expect(approvedJobRow?.status).toBe("APPROVED");
+  });
+
+  // =========================================================================
+  // Approval advances the asset's calibration dates: last_calibration_date
+  // moves to the job's performed_at (forward-only) and next_calibration_date
+  // is re-derived from the CUSTOMER-owned interval — without this, the due
+  // sweeps keep re-reminding for an instrument that was just calibrated.
+  // =========================================================================
+  it("approval advances asset last_calibration_date + derives next from the customer interval", async () => {
+    const fixture = await seedJobFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+
+    // Customer-owned interval (portal-set) + an older last-calibration date.
+    await db
+      .update(asset)
+      .set({
+        calibrationIntervalMonths: 12,
+        lastCalibrationDate: new Date("2025-06-10T00:00:00.000Z"),
+        nextCalibrationDate: new Date("2026-06-10T00:00:00.000Z"),
+      })
+      .where(eq(asset.id, fixture.assetId));
+
+    const approverUserId = "user-a-approver";
+    await db.insert(user).values({
+      id: approverUserId,
+      name: "Second Admin",
+      email: `${approverUserId}@lab.test`,
+    });
+    await db.insert(member).values({
+      id: `member-${approverUserId}`,
+      organizationId: "org-a",
+      userId: approverUserId,
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const reviewJobId = await seedJob({
+      jobId: "JOB-ADVANCE-001",
+      organizationId: "org-a",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      technicianId: fixture.userId,
+      status: "REVIEW",
+      performedAt: new Date("2026-06-10T00:00:00.000Z"),
+    });
+
+    loginAs({ userId: approverUserId, organizationId: "org-a" });
+    const approveRes = await jobsRouter.request(`/${reviewJobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Looks good" }),
+    });
+    expect(approveRes.status).toBe(200);
+
+    const [assetRow] = await db
+      .select({
+        lastCalibrationDate: asset.lastCalibrationDate,
+        nextCalibrationDate: asset.nextCalibrationDate,
+      })
+      .from(asset)
+      .where(eq(asset.id, fixture.assetId));
+    expect(assetRow?.lastCalibrationDate?.toISOString()).toBe(
+      "2026-06-10T00:00:00.000Z",
+    );
+    // Derived: performed_at + 12 months (customer interval).
+    expect(assetRow?.nextCalibrationDate?.toISOString()).toBe(
+      "2027-06-10T00:00:00.000Z",
+    );
   });
 
   // =========================================================================

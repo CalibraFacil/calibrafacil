@@ -1041,6 +1041,9 @@ LIMIT 1
         tag: "TAG-001A",
         status: "MAINTENANCE",
         lastCalibrationDate: "2026-01-01T00:00:00.000Z",
+        // Attempted lab attribution — the next-cal date is customer-owned
+        // (portal, §7.8.4.3): the field is stripped by the schema and must
+        // NOT be persisted by the local server either.
         nextCalibrationDate: "2027-01-01T00:00:00.000Z",
         comments: "Atualizado offline",
         specifications: { capacity: 220 },
@@ -1054,7 +1057,7 @@ LIMIT 1
       tag: "TAG-001A",
       status: "MAINTENANCE",
       lastCalibrationDate: "2026-01-01T00:00:00.000Z",
-      nextCalibrationDate: "2027-01-01T00:00:00.000Z",
+      nextCalibrationDate: null,
       comments: "Atualizado offline",
     });
 
