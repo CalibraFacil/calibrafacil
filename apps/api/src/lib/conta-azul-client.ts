@@ -2,9 +2,7 @@ import { CONTA_AZUL_API_BASE_URL } from "@calibra-facil/shared";
 
 // Conta Azul's OpenAPI specs restrict `tamanho_pagina` to this enum across
 // every paginated endpoint. Requests outside the set are rejected with 400.
-export const CONTA_AZUL_PAGE_SIZES = [
-  10, 20, 50, 100, 200, 500, 1000,
-] as const;
+export const CONTA_AZUL_PAGE_SIZES = [10, 20, 50, 100, 200, 500, 1000] as const;
 
 export type ContaAzulPageSize = (typeof CONTA_AZUL_PAGE_SIZES)[number];
 
@@ -79,6 +77,10 @@ export type ContaAzulProductPayload = {
   descricao?: string;
   estoque?: {
     valor_venda?: number;
+    // Absolute on-hand quantity. Catalog upserts must NEVER send this —
+    // saída happens via the exported sale. Only the explicit stock-adjust
+    // action writes it (Conta Azul records a movement equal to the diff).
+    quantidade?: number;
   };
   fiscal?: {
     cest?: {
@@ -635,13 +637,18 @@ function sanitizeErrorValue(value: unknown, depth = 0): unknown {
   if (typeof value === "string") return redactString(value).slice(0, 500);
   if (!value || typeof value !== "object") return value;
   if (Array.isArray(value)) {
-    return value.slice(0, 20).map((item) => sanitizeErrorValue(item, depth + 1));
+    return value
+      .slice(0, 20)
+      .map((item) => sanitizeErrorValue(item, depth + 1));
   }
 
   return sanitizeErrorRecord(value, depth);
 }
 
-function sanitizeErrorRecord(value: object, depth = 0): Record<string, unknown> {
+function sanitizeErrorRecord(
+  value: object,
+  depth = 0,
+): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     sanitized[key] = shouldRedactErrorKey(key)

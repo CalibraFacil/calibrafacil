@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { normalizeContaAzulConnectionConfig } from "@calibra-facil/shared";
 import {
+  extractContaAzulProductStockQuantity,
   mapBillingDocumentToReceivableEvent,
   mapCatalogItemToContaAzulProduct,
   mapCatalogItemToContaAzulServico,
@@ -345,6 +346,36 @@ describe("Conta Azul mappers", () => {
       status: "ATIVO",
       estoque: { valor_venda: 800 },
     });
+  });
+
+  it("extracts on-hand stock from product reads across known field spellings", () => {
+    expect(
+      extractContaAzulProductStockQuantity({ estoque: { quantidade: 12 } }),
+    ).toBe(12);
+    expect(
+      extractContaAzulProductStockQuantity({ estoque: { saldo: "3.5" } }),
+    ).toBe(3.5);
+    expect(
+      extractContaAzulProductStockQuantity({
+        estoque: { quantidade_disponivel: 0 },
+      }),
+    ).toBe(0);
+  });
+
+  it("returns null when the product read carries no parsable stock", () => {
+    expect(extractContaAzulProductStockQuantity(null)).toBeNull();
+    expect(extractContaAzulProductStockQuantity({})).toBeNull();
+    expect(
+      extractContaAzulProductStockQuantity({ estoque: { valor_venda: 10 } }),
+    ).toBeNull();
+    expect(
+      extractContaAzulProductStockQuantity({
+        estoque: { quantidade: "abc" },
+      }),
+    ).toBeNull();
+    expect(
+      extractContaAzulProductStockQuantity({ estoque: { quantidade: NaN } }),
+    ).toBeNull();
   });
 
   it("never emits stock quantity — catalog sync sets price only (stock moves via sales)", () => {

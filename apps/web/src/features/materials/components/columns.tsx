@@ -96,6 +96,28 @@ export const materialsColumns: ColumnDef<Material>[] = [
     ),
   },
   {
+    accessorKey: 'stockQuantity',
+    header: 'Estoque',
+    cell: ({ row }) => {
+      if (!row.original.controlsStock) {
+        return <span className="text-muted-foreground">-</span>
+      }
+      if (row.original.stockQuantity === null) {
+        return <span className="text-muted-foreground">Sem saldo</span>
+      }
+      return (
+        <span
+          className={cn(
+            'font-mono tabular-nums',
+            row.original.stockQuantity <= 0 && 'text-destructive',
+          )}
+        >
+          {row.original.stockQuantity}
+        </span>
+      )
+    },
+  },
+  {
     accessorKey: 'isActive',
     header: 'Status',
     cell: ({ row }) => (

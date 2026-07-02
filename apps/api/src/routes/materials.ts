@@ -3,10 +3,15 @@ import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import { material } from "@calibra-facil/db/schema";
 import {
+  AdjustMaterialStockSchema,
   CreateMaterialSchema,
   UpdateMaterialSchema,
   ListMaterialsQuerySchema,
 } from "@calibra-facil/schemas";
+import {
+  adjustMaterialErpStock,
+  type IntegrationsEnv,
+} from "../lib/integrations";
 import {
   withLabPermission,
   type AuthVariables,
@@ -48,7 +53,10 @@ function isUniqueViolation(error: unknown) {
   return typeof code === "string" && code === "23505";
 }
 
-export const materialsRouter = new Hono<{ Variables: AuthVariables }>()
+export const materialsRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: IntegrationsEnv;
+}>()
   // =========================================================================
   // GET / - List materials with pagination and filtering
   // =========================================================================
@@ -100,6 +108,8 @@ export const materialsRouter = new Hono<{ Variables: AuthVariables }>()
           unitCostCents: material.unitCostCents,
           unitPriceCents: material.unitPriceCents,
           controlsStock: material.controlsStock,
+          stockQuantity: material.stockQuantity,
+          stockSyncedAt: material.stockSyncedAt,
           isActive: material.isActive,
           createdAt: material.createdAt,
           updatedAt: material.updatedAt,
@@ -274,6 +284,60 @@ export const materialsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
         throw error;
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/stock - Manual entrada/ajuste via the linked ERP product
+  // =========================================================================
+  .post(
+    "/:id/stock",
+    ...withLabPermission({ service: ["update"] }),
+    zValidator("json", AdjustMaterialStockSchema),
+    async (c) => {
+      const member = c.get("member");
+      const input = c.req.valid("json");
+      const id = parseMaterialId(c.req.param("id"));
+
+      if (id === null) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [existing] = await db
+        .select({ id: material.id })
+        .from(material)
+        .where(
+          and(
+            eq(material.id, id),
+            eq(material.organizationId, member.organizationId),
+            buildUnitScopeCondition(material.unitId, member),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Material não encontrado" }, 404);
+      }
+
+      try {
+        const result = await adjustMaterialErpStock({
+          organizationId: member.organizationId,
+          materialId: id,
+          quantity: input.quantityOnHand,
+          env: c.env,
+        });
+        return c.json({
+          stockQuantity: result.stockQuantity,
+          stockSyncedAt: result.stockSyncedAt,
+        });
+      } catch (error) {
+        // Lab-actionable preconditions (no integration, unlinked material,
+        // products sync disabled, plan gate) surface as a conflict with the
+        // pt-BR message; unexpected failures still bubble to the 500 handler.
+        const message =
+          error instanceof Error ? error.message : "Falha ao ajustar estoque";
+        return c.json({ error: message }, 409);
       }
     },
   )

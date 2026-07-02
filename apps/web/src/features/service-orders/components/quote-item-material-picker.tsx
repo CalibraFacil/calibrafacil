@@ -82,9 +82,14 @@ export function QuoteItemMaterialPicker({
           </ComboboxEmpty>
           {materials.map((material) => {
             const priceLabel = formatCentsForMoneyInput(material.unitPriceCents)
+            const stockLabel =
+              material.controlsStock && material.stockQuantity !== null
+                ? `Estoque: ${material.stockQuantity}`
+                : null
             const subtitle = [
               material.sku,
               priceLabel ? `R$ ${priceLabel}` : null,
+              stockLabel,
             ]
               .filter(Boolean)
               .join(' | ')

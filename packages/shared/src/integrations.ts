@@ -839,6 +839,16 @@ export interface FinancialErpAdapter {
   pollRemoteDrift?(
     cursor: IntegrationSyncCursor,
   ): Promise<RemoteStatusPollResult>;
+  /** Read the ERP on-hand stock for a linked product (materials mirror). */
+  fetchProductStock?(
+    remoteEntityId: string,
+  ): Promise<{ quantity: number | null }>;
+  /**
+   * Set the ERP product's absolute on-hand quantity (entrada/ajuste — the
+   * ERP records a movement equal to the difference). Never called by
+   * catalog upserts; only by the explicit stock-adjust action.
+   */
+  setProductStock?(remoteEntityId: string, quantity: number): Promise<void>;
 }
 
 export interface FinancialErpAdapterContext {

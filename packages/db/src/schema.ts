@@ -3506,6 +3506,10 @@ export const material = pgTable(
     unitPriceCents: integer("unit_price_cents"),
     // Only stock-controlled materials participate in ERP stock movement
     controlsStock: boolean("controls_stock").default(false).notNull(),
+    // Read-mostly snapshot of the ERP on-hand balance (stock truth lives in
+    // the ERP; this mirror powers picker badges and the materials list).
+    stockQuantity: real("stock_quantity"),
+    stockSyncedAt: timestamp("stock_synced_at"),
     // Soft delete - never hard delete commercial data
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

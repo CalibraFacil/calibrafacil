@@ -914,6 +914,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "adjustStock",
+          "namespace": "materials",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "methods",
           "policy": "local-first-read-through-sync",

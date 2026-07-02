@@ -1,4 +1,6 @@
 import type {
+  AdjustMaterialStockData,
+  AdjustMaterialStockInput,
   CreateMaterialInput,
   MaterialDetailData,
   MaterialsApi,
@@ -57,6 +59,15 @@ export function createMaterialsApi(rawCloudClient: any): MaterialsApi {
           param: { id: String(id) },
         }),
         "Erro ao desativar material",
+      );
+    },
+    async adjustStock(id: string | number, input: AdjustMaterialStockInput) {
+      return readJsonResponse<AdjustMaterialStockData>(
+        await rawCloudClient.api.materials[":id"].stock.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao ajustar estoque do material",
       );
     },
   };

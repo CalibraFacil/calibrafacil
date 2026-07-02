@@ -264,6 +264,8 @@ export type MaterialsListData = {
     unitCostCents: number | null;
     unitPriceCents: number | null;
     controlsStock: boolean;
+    stockQuantity: number | null;
+    stockSyncedAt: string | Date | null;
     isActive: boolean;
     createdAt: string | Date | null;
     updatedAt: string | Date | null;
@@ -291,6 +293,15 @@ export type CreateMaterialInput = {
 
 export type UpdateMaterialInput = Partial<CreateMaterialInput>;
 
+export type AdjustMaterialStockInput = {
+  quantityOnHand: number;
+};
+
+export type AdjustMaterialStockData = {
+  stockQuantity: number;
+  stockSyncedAt: string | Date;
+};
+
 export interface MaterialsApi {
   list(input?: MaterialsListInput): Promise<MaterialsListData>;
   get(id: string | number): Promise<MaterialDetailData>;
@@ -300,6 +311,10 @@ export interface MaterialsApi {
     input: UpdateMaterialInput,
   ): Promise<MaterialDetailData>;
   deactivate(id: string | number): Promise<unknown>;
+  adjustStock(
+    id: string | number,
+    input: AdjustMaterialStockInput,
+  ): Promise<AdjustMaterialStockData>;
 }
 
 export type MethodsListInput = {

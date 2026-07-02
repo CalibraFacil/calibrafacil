@@ -179,19 +179,23 @@ export const DEFAULT_CONTA_AZUL_PAYMENT_POLLING_INTERVAL_MS = 30 * 60 * 1000;
 export const DEFAULT_CONTA_AZUL_FISCAL_POLLING_INTERVAL_MS = 60 * 60 * 1000;
 export const DEFAULT_CONTA_AZUL_PROTOCOL_POLLING_INTERVAL_MS = 15 * 60 * 1000;
 export const DEFAULT_CONTA_AZUL_DRIFT_POLLING_INTERVAL_MS = 4 * 60 * 60 * 1000;
+export const DEFAULT_CONTA_AZUL_PRODUCT_STOCK_POLLING_INTERVAL_MS =
+  4 * 60 * 60 * 1000;
 const CONTA_AZUL_TOKEN_REFRESH_SKEW_MS = 5 * 60 * 1000;
 const CONTA_AZUL_RECEIVABLES_CURSOR_TYPE = "conta_azul_receivables";
 const CONTA_AZUL_PAYABLES_CURSOR_TYPE = "conta_azul_payables";
 const CONTA_AZUL_FISCAL_DOCUMENTS_CURSOR_TYPE = "conta_azul_fiscal_documents";
 const CONTA_AZUL_PROTOCOLS_CURSOR_TYPE = "conta_azul_protocols";
 const CONTA_AZUL_DRIFT_CURSOR_TYPE = "conta_azul_remote_drift";
+const CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE = "conta_azul_product_stock";
 
 export type ContaAzulScheduledPollKind =
   | "paymentStatusPolling"
   | "payables"
   | "fiscalDocuments"
   | "protocols"
-  | "driftChecks";
+  | "driftChecks"
+  | "productStock";
 
 type ContaAzulPollDefinition = {
   kind: ContaAzulScheduledPollKind;
@@ -248,6 +252,15 @@ const CONTA_AZUL_POLL_DEFINITIONS = [
     disabledMessage: "Verificação de drift da Conta Azul está desativada",
     failedMessage: "Falha na verificação de drift da Conta Azul",
     completedEvent: "integration.conta_azul.drift_poll.completed",
+  },
+  {
+    kind: "productStock",
+    cursorType: CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE,
+    target: "catalog_item",
+    intervalMs: DEFAULT_CONTA_AZUL_PRODUCT_STOCK_POLLING_INTERVAL_MS,
+    disabledMessage: "Sincronização de produtos da Conta Azul está desativada",
+    failedMessage: "Falha no polling de estoque de produtos da Conta Azul",
+    completedEvent: "integration.conta_azul.product_stock_poll.completed",
   },
 ] as const satisfies readonly ContaAzulPollDefinition[];
 
@@ -3122,6 +3135,10 @@ function isContaAzulPollEnabled(
   if (kind === "protocols") {
     return config.enabledTargets.protocols;
   }
+  if (kind === "productStock") {
+    // The stock mirror rides on the products catalog sync opt-in.
+    return config.enabledTargets.products;
+  }
   return config.enabledTargets.driftChecks;
 }
 
@@ -3207,6 +3224,9 @@ async function runContaAzulPollByKind(params: {
   }
   if (params.kind === "protocols") {
     return pollContaAzulProtocols(params);
+  }
+  if (params.kind === "productStock") {
+    return pollContaAzulProductStock(params);
   }
   return pollContaAzulRemoteDrift(params);
 }
@@ -3680,6 +3700,7 @@ export async function getContaAzulScheduleState(params: {
     fiscalDocuments: buildEmptyScheduleRow(),
     protocols: buildEmptyScheduleRow(),
     driftChecks: buildEmptyScheduleRow(),
+    productStock: buildEmptyScheduleRow(),
   };
 
   for (const definition of CONTA_AZUL_POLL_DEFINITIONS) {
@@ -4280,6 +4301,238 @@ export async function pollContaAzulPayableStatus(params: {
     level: result.warnings.length > 0 ? "warning" : "info",
     event: "integration.conta_azul.payable_poll.completed",
     message: "Polling de contas a pagar da Conta Azul concluído",
+    details: {
+      processedCount: result.processedCount,
+      updatedCount: result.updatedCount,
+      warnings: result.warnings,
+    },
+  });
+
+  return result;
+}
+
+/**
+ * Manual entrada/ajuste for a catalog material bound to a Conta Azul
+ * product: sets the ERP product's absolute on-hand quantity (the ERP
+ * records the movement as the difference) and refreshes the local
+ * snapshot. Stock truth stays in the ERP — this is the one deliberate
+ * write path besides the sale-driven decrement.
+ */
+export async function adjustMaterialErpStock(params: {
+  organizationId: string;
+  materialId: number;
+  quantity: number;
+  env: IntegrationsEnv;
+}): Promise<{ stockQuantity: number; stockSyncedAt: Date }> {
+  if (!Number.isFinite(params.quantity) || params.quantity < 0) {
+    throw new Error("Quantidade de estoque inválida");
+  }
+
+  const entitled = await organizationHasEntitlement(
+    params.organizationId,
+    "financial_integrations",
+  );
+  if (!entitled) {
+    throw new Error("O plano atual não inclui integrações financeiras");
+  }
+
+  const [integrationRow] = await db
+    .select({ integrationId: organizationIntegration.id })
+    .from(organizationIntegration)
+    .where(
+      and(
+        eq(organizationIntegration.organizationId, params.organizationId),
+        eq(organizationIntegration.type, "financial_erp"),
+        eq(organizationIntegration.provider, "conta_azul"),
+        eq(organizationIntegration.status, "ACTIVE"),
+      ),
+    )
+    .orderBy(desc(organizationIntegration.updatedAt))
+    .limit(1);
+  if (!integrationRow) {
+    throw new Error("Nenhuma integração Conta Azul ativa encontrada");
+  }
+
+  const record = await getIntegrationRecord(
+    params.organizationId,
+    integrationRow.integrationId,
+  );
+  if (!record) {
+    throw new Error("Integração Conta Azul não encontrada");
+  }
+
+  const config = normalizeContaAzulConnectionConfig(record.connection.config);
+  if (!config.enabledTargets.products) {
+    throw new Error("Sincronização de produtos da Conta Azul está desativada");
+  }
+
+  const [link] = await db
+    .select({ remoteEntityId: integrationObjectLink.remoteEntityId })
+    .from(integrationObjectLink)
+    .where(
+      and(
+        eq(integrationObjectLink.integrationId, integrationRow.integrationId),
+        eq(integrationObjectLink.target, "catalog_item"),
+        eq(
+          integrationObjectLink.localEntityId,
+          `material:${params.materialId}`,
+        ),
+      ),
+    )
+    .limit(1);
+  if (!link?.remoteEntityId) {
+    throw new Error(
+      "Material não está vinculado a um produto na Conta Azul — sincronize o catálogo antes de ajustar o estoque",
+    );
+  }
+  const remoteEntityId = link.remoteEntityId;
+
+  const adapter = await createContaAzulAdapterForRecord({
+    record,
+    env: params.env,
+  });
+  if (!adapter.setProductStock) {
+    throw new Error("Provider Conta Azul sem suporte a ajuste de estoque");
+  }
+
+  await adapter.setProductStock(remoteEntityId, params.quantity);
+
+  const stockSyncedAt = new Date();
+  await db
+    .update(material)
+    .set({ stockQuantity: params.quantity, stockSyncedAt })
+    .where(
+      and(
+        eq(material.id, params.materialId),
+        eq(material.organizationId, params.organizationId),
+      ),
+    );
+
+  await writeIntegrationEvent({
+    integrationId: integrationRow.integrationId,
+    organizationId: params.organizationId,
+    level: "info",
+    event: "integration.conta_azul.product_stock_adjusted",
+    message: "Ajuste de estoque enviado à Conta Azul",
+    details: {
+      materialId: params.materialId,
+      quantity: params.quantity,
+      remoteEntityId,
+    },
+  });
+
+  return { stockQuantity: params.quantity, stockSyncedAt };
+}
+
+/**
+ * Refresh the local on-hand snapshot (material.stock_quantity) from the ERP
+ * for materials bound to Conta Azul products. Stock truth stays remote —
+ * saída happens via the exported sale, entrada/ajuste via the explicit
+ * stock-adjust action; this poll only mirrors balances for picker badges
+ * and the materials list. Stalest snapshots refresh first so every linked
+ * material converges even when there are more links than the per-run limit.
+ */
+export async function pollContaAzulProductStock(params: {
+  integrationId: string;
+  organizationId: string;
+  env: IntegrationsEnv;
+  limit?: number;
+}): Promise<RemoteStatusPollResult> {
+  const record = await getIntegrationRecord(
+    params.organizationId,
+    params.integrationId,
+  );
+
+  if (!record || record.integration.provider !== "conta_azul") {
+    throw new Error("Integração Conta Azul não encontrada");
+  }
+
+  const config = normalizeContaAzulConnectionConfig(record.connection.config);
+  if (!config.enabledTargets.products) {
+    throw new Error("Sincronização de produtos da Conta Azul está desativada");
+  }
+
+  const adapter = await createContaAzulAdapterForRecord({
+    record,
+    env: params.env,
+  });
+  if (!adapter.fetchProductStock) {
+    throw new Error("Provider Conta Azul sem suporte a estoque de produtos");
+  }
+
+  const limit = Math.max(1, Math.min(params.limit ?? 50, 200));
+  const rows = await db
+    .select({
+      materialId: material.id,
+      remoteEntityId: integrationObjectLink.remoteEntityId,
+    })
+    .from(integrationObjectLink)
+    .innerJoin(
+      material,
+      sql`${integrationObjectLink.localEntityId} = 'material:' || ${material.id}`,
+    )
+    .where(
+      and(
+        eq(integrationObjectLink.integrationId, params.integrationId),
+        eq(integrationObjectLink.target, "catalog_item"),
+        eq(material.organizationId, params.organizationId),
+        eq(material.isActive, true),
+      ),
+    )
+    .orderBy(sql`${material.stockSyncedAt} asc nulls first`)
+    .limit(limit);
+
+  const warnings: string[] = [];
+  let updatedCount = 0;
+
+  for (const row of rows) {
+    if (!row.remoteEntityId) {
+      warnings.push(`material:${row.materialId}: vínculo sem id remoto`);
+      continue;
+    }
+    try {
+      const { quantity } = await adapter.fetchProductStock(row.remoteEntityId);
+      await db
+        .update(material)
+        .set({ stockQuantity: quantity, stockSyncedAt: new Date() })
+        .where(eq(material.id, row.materialId));
+      updatedCount += 1;
+    } catch (error) {
+      warnings.push(
+        `material:${row.materialId}: ${
+          error instanceof Error
+            ? error.message
+            : "falha ao ler estoque do produto"
+        }`,
+      );
+    }
+  }
+
+  const result: RemoteStatusPollResult = {
+    processedCount: rows.length,
+    updatedCount,
+    warnings,
+    cursor: {
+      cursorType: CONTA_AZUL_PRODUCT_STOCK_CURSOR_TYPE,
+      lastRemoteUpdatedAt: null,
+      lastSuccessfulPollAt: new Date().toISOString(),
+      nextPage: null,
+      state: {},
+    },
+  };
+
+  await upsertIntegrationCursor({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    cursor: result.cursor,
+  });
+
+  await writeIntegrationEvent({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    level: warnings.length > 0 ? "warning" : "info",
+    event: "integration.conta_azul.product_stock_poll.completed",
+    message: "Polling de estoque de produtos da Conta Azul concluído",
     details: {
       processedCount: result.processedCount,
       updatedCount: result.updatedCount,

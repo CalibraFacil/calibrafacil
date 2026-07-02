@@ -1428,6 +1428,9 @@ export function createDesktopApiClient(
       async deactivate() {
         throw desktopUnsupportedAuthAction("Catálogo de materiais");
       },
+      async adjustStock() {
+        throw desktopUnsupportedAuthAction("Catálogo de materiais");
+      },
     },
     services: {
       async list(input = {}) {

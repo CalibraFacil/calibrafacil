@@ -59,6 +59,7 @@ import {
   mapBillingDocumentToReceivableEvent,
   mapContaAzulProductInvoiceToFiscalMetadata,
   mapContaAzulServiceInvoiceToFiscalMetadata,
+  extractContaAzulProductStockQuantity,
   mapCatalogItemToContaAzulProduct,
   mapCatalogItemToContaAzulServico,
   mapContractToContaAzulContract,
@@ -1272,6 +1273,24 @@ export class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
       : this.upsertCatalogProduto(payload);
   }
 
+  async fetchProductStock(
+    remoteEntityId: string,
+  ): Promise<{ quantity: number | null }> {
+    const product = await this.client.getProduct<unknown>(remoteEntityId);
+    return { quantity: extractContaAzulProductStockQuantity(product) };
+  }
+
+  async setProductStock(remoteEntityId: string, quantity: number) {
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      throw new Error("Quantidade de estoque inválida");
+    }
+    // PATCH with the absolute quantity — Conta Azul records the entrada or
+    // ajuste movement as the difference from the current balance.
+    await this.client.patchProduct(remoteEntityId, {
+      estoque: { quantidade: quantity },
+    });
+  }
+
   private async upsertCatalogProduto(
     payload: IntegrationCatalogItemPayload,
   ): Promise<RemoteEntityRef> {
@@ -1778,7 +1797,9 @@ export class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
     }
   }
 
-  async exportBudget(payload: IntegrationBudgetPayload): Promise<RemoteEntityRef> {
+  async exportBudget(
+    payload: IntegrationBudgetPayload,
+  ): Promise<RemoteEntityRef> {
     const existingRemoteId =
       (await this.links?.getExistingRemoteId({
         target: "budget",
@@ -2085,10 +2106,7 @@ export class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
     },
   ) {
     const situation = extractContaAzulSituationName(item);
-    if (
-      !situation ||
-      !isContaAzulBudgetSaleSituation(situation)
-    ) {
+    if (!situation || !isContaAzulBudgetSaleSituation(situation)) {
       return false;
     }
 
@@ -2925,11 +2943,9 @@ export class ContaAzulFinancialErpAdapter implements FinancialErpAdapter {
       const situation = extractContaAzulSituationName(item);
       return (
         (remoteId === link.remoteEntityId ||
-          (parsedBudgetNumber !== null && remoteNumber === parsedBudgetNumber)) &&
-        Boolean(
-          situation &&
-            isContaAzulBudgetSaleSituation(situation),
-        )
+          (parsedBudgetNumber !== null &&
+            remoteNumber === parsedBudgetNumber)) &&
+        Boolean(situation && isContaAzulBudgetSaleSituation(situation))
       );
     });
 

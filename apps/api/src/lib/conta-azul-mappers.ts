@@ -1120,3 +1120,41 @@ export function mapContaAzulInstallmentStatus(
       };
   }
 }
+
+/**
+ * Extract the on-hand stock quantity from a Conta Azul product read
+ * (GET /v1/produtos/{id}). The Inventory API models stock as a property of
+ * the product; field naming has drifted across API revisions, so accept the
+ * known spellings and return null when none parses — the poll stores null
+ * rather than guessing. Defensive by design: there is no Conta Azul sandbox
+ * to pin the exact shape against.
+ */
+export function extractContaAzulProductStockQuantity(
+  product: unknown,
+): number | null {
+  if (!product || typeof product !== "object") return null;
+  const root: Record<string, unknown> =
+    "estoque" in product &&
+    product.estoque &&
+    typeof product.estoque === "object" &&
+    !Array.isArray(product.estoque)
+      ? Object.fromEntries(Object.entries(product.estoque))
+      : {};
+
+  for (const key of [
+    "quantidade",
+    "saldo",
+    "quantidade_disponivel",
+    "quantidadeDisponivel",
+  ]) {
+    const value = root[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}

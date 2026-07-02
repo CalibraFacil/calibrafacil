@@ -22,6 +22,8 @@ const MATERIAL: MaterialsListData['data'][number] = {
   unitCostCents: 800,
   unitPriceCents: 1990,
   controlsStock: true,
+  stockQuantity: null,
+  stockSyncedAt: null,
   isActive: true,
   createdAt: null,
   updatedAt: null,

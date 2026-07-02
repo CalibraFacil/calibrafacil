@@ -519,6 +519,13 @@
 			"when": 1782959042693,
 			"tag": "0073_billing_item_material",
 			"breakpoints": true
+		},
+		{
+			"idx": 74,
+			"version": "7",
+			"when": 1782989925694,
+			"tag": "0074_material_stock_snapshot",
+			"breakpoints": true
 		}
 	]
 }

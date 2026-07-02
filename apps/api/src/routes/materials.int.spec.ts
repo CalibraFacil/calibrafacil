@@ -186,6 +186,63 @@ describe("materialsRouter — real DB + real RBAC middleware", () => {
     expect(row?.isActive).toBe(false);
   });
 
+  it("REQ-MAT-008: POST /:id/stock as member → 403 (service:update denied)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const id = await seedMaterial({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      name: "Material",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await materialsRouter.request(`/${id}/stock`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ quantityOnHand: 5 }),
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("REQ-MAT-009: POST /:id/stock without an active ERP integration → 409 with actionable message", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const id = await seedMaterial({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      name: "Material",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await materialsRouter.request(`/${id}/stock`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ quantityOnHand: 5 }),
+    });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(typeof body.error).toBe("string");
+  });
+
+  it("REQ-MAT-010: cross-tenant POST /:id/stock → 404, remote never touched", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const bMaterialId = await seedMaterial({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      name: "Material B",
+    });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await materialsRouter.request(`/${bMaterialId}/stock`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ quantityOnHand: 5 }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
   it("REQ-MAT-007: unauthenticated → 401", async () => {
     logout();
     const res = await materialsRouter.request("/", { headers: JSON_HEADERS });

@@ -1507,6 +1507,21 @@ export const ListMaterialsQuerySchema = z.object({
 
 export type ListMaterialsQuery = z.infer<typeof ListMaterialsQuerySchema>;
 
+/**
+ * Schema for the manual stock adjust (entrada/ajuste): sets the ERP
+ * product's absolute on-hand quantity for a catalog-linked material.
+ */
+export const AdjustMaterialStockSchema = z.object({
+  quantityOnHand: z.coerce
+    .number()
+    .min(0, "Quantidade não pode ser negativa")
+    .finite(),
+});
+
+export type AdjustMaterialStockInput = z.infer<
+  typeof AdjustMaterialStockSchema
+>;
+
 // =============================================================================
 // REFERENCE STANDARD SCHEMAS - Lab Equipment Registry (ISO 17025 Clause 6.4)
 // =============================================================================

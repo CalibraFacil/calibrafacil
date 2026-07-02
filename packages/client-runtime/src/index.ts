@@ -1,4 +1,5 @@
 import type {
+  AdjustMaterialStockInput,
   CalibraApi,
   CreateApiKeyInput,
   CreateAssetInput,
@@ -486,6 +487,12 @@ export function createCloudApiClient(
             json: UpdateMaterialInput;
           }): Promise<Response>;
           $delete(input: { param: { id: string } }): Promise<Response>;
+          stock: {
+            $post(input: {
+              param: { id: string };
+              json: AdjustMaterialStockInput;
+            }): Promise<Response>;
+          };
         };
       };
       methods: {
