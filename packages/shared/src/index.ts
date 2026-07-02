@@ -21,3 +21,4 @@ export * from "./format-specifications";
 export * from "./background-jobs";
 export * from "./portal-digest";
 export * from "./accreditation";
+export * from "./legal-metrology";

@@ -365,6 +365,7 @@ export function AssetEditForm({
               }
               disabled={isSaving}
               errors={errors}
+              assetTypeSlug={asset.assetTypeSlug}
             />
           </Panel>
 

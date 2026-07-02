@@ -55,6 +55,7 @@ describe("registry membership", () => {
     expect(unitsForKind("mass")).toEqual(["mg", "g", "kg"]);
     expect(unitsForKind("humidity")).toEqual(["%RH"]);
     expect(unitsForKind("length")).toEqual(["µm", "mm", "cm", "m"]);
+    expect(unitsForKind("volume")).toEqual(["µL", "mL", "L", "m³"]);
     expect(unitsForKind("force")).toEqual(["N", "kN", "kgf"]);
     expect(unitsForKind("voltage")).toEqual(["µV", "mV", "V", "kV"]);
     expect(unitsForKind("current")).toEqual(["µA", "mA", "A"]);
@@ -83,6 +84,7 @@ describe("convertUnitValue / Delta round-trips", () => {
     ["µm", "m", 9.87],
     ["bar", "psi", 3.2],
     ["mL", "L", 250],
+    ["m³", "L", 1.5],
     ["min", "h", 90],
     ["kgf·m", "N·m", 4.4],
     ["kgf", "N", 5],
@@ -141,6 +143,10 @@ describe("normalizeUnitToken pitfalls", () => {
     ["um", "µm"],
     ["uL", "µL"],
     ["ml", "mL"],
+    ["m³", "m³"], // U+00B3 superscript three
+    ["m3", "m³"],
+    ["M3", "m³"],
+    ["m^3", "m³"],
     ["ºC", "°C"], // U+00BA masculine ordinal
     ["°C", "°C"], // U+00B0 degree sign
     ["C", "°C"],
@@ -203,6 +209,12 @@ describe("normalizeUnitToken pitfalls", () => {
       ["A", "A"], // multímetro corrente
       ["MΩ", "MΩ"], // multímetro resistência (M = U+004D, Ω = U+03A9)
       ["rpm", "rpm"], // tacômetro
+      ["mmHg", "mmHg"], // esfigmomanômetro
+      ["m³", "m³"], // hidrômetro / medidor de gás (³ = U+00B3)
+      ["L", "L"], // hidrômetro resolução
+      ["mL", "mL"], // vidraria volumétrica
+      ["m", "m"], // trena
+      ["kN", "kN"], // prensa hidráulica
     ];
     for (const [token, expected] of seedTokens) {
       expect(normalizeUnitToken(token)).toBe(expected);

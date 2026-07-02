@@ -1011,6 +1011,7 @@ export type MeasurementUnit =
   | "µL"
   | "mL"
   | "L"
+  | "m³"
   | "ms"
   | "s"
   | "min"

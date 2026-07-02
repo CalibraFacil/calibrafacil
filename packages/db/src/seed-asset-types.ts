@@ -9,12 +9,14 @@ import { db } from "./db";
 import { assetType, type AssetTypeFieldDefinition } from "./schema";
 import { seedLegalMetrologyRegulations } from "./seed-legal-metrology-regulations";
 
-const assetTypes: Array<{
+export type AssetTypeSeed = {
   name: string;
   slug: string;
   description: string;
   definition: AssetTypeFieldDefinition[];
-}> = [
+};
+
+export const ASSET_TYPE_SEED: AssetTypeSeed[] = [
   {
     name: "Balança Digital",
     slug: "balanca-digital",
@@ -613,12 +615,526 @@ const assetTypes: Array<{
       },
     ],
   },
+  {
+    name: "Hidrômetro",
+    slug: "hidrometro",
+    description:
+      "Hidrômetros para medição de volume de água (metrologia legal — verificação periódica)",
+    definition: [
+      {
+        // Taxonomy per NBR 8194 / mercado: velocimétricos (unijato, multijato,
+        // Woltmann), volumétricos e estáticos (ultrassônico, eletromagnético).
+        key: "measurementPrinciple",
+        label: "Princípio de Medição",
+        type: "select",
+        options: [
+          "Velocimétrico unijato",
+          "Velocimétrico multijato",
+          "Woltmann",
+          "Volumétrico",
+          "Ultrassônico (estático)",
+          "Eletromagnético (estático)",
+        ],
+        required: true,
+      },
+      {
+        key: "indicatorType",
+        label: "Tipo de Indicação",
+        type: "select",
+        options: ["Analógico (relojoaria)", "Digital (eletrônico)"],
+        required: true,
+      },
+      {
+        key: "nominalDiameter",
+        label: "Diâmetro Nominal (DN)",
+        type: "number",
+        unit: "mm",
+        required: false,
+      },
+      {
+        // Rosca BSP conforme NBR 8194 / NBR NM-ISO 7-1 (DN15 → 3/4", DN20 → 1");
+        // acima de DN40 a conexão é usualmente flangeada.
+        key: "connectionThread",
+        label: "Rosca de Conexão",
+        type: "select",
+        options: ['1/2"', '3/4"', '1"', '1 1/4"', '1 1/2"', '2"', "Flangeado"],
+        required: false,
+      },
+      {
+        key: "permanentFlowRate",
+        label: "Vazão Permanente (Q3)",
+        type: "number",
+        unit: "m³/h",
+        required: true,
+      },
+      {
+        key: "metrologicalClass",
+        label: "Classe Metrológica (razão R)",
+        type: "text",
+        required: false,
+      },
+      {
+        key: "totalizerCapacity",
+        label: "Capacidade do Totalizador",
+        type: "number",
+        unit: "m³",
+        required: false,
+      },
+      {
+        key: "resolution",
+        label: "Menor Divisão do Totalizador",
+        type: "number",
+        unit: "L",
+        required: true,
+      },
+      {
+        key: "inmetroRegistration",
+        label: "Registro/Aprovação Inmetro",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Esfigmomanômetro",
+    slug: "esfigmomanometro",
+    description:
+      "Esfigmomanômetros mecânicos e digitais para medição de pressão arterial",
+    definition: [
+      {
+        key: "rangeMin",
+        label: "Faixa Mín.",
+        type: "number",
+        unit: "mmHg",
+        required: true,
+      },
+      {
+        key: "rangeMax",
+        label: "Faixa Máx.",
+        type: "number",
+        unit: "mmHg",
+        required: true,
+      },
+      {
+        key: "scaleDivision",
+        label: "Divisão de Escala",
+        type: "number",
+        unit: "mmHg",
+        required: true,
+      },
+      {
+        key: "instrumentType",
+        label: "Tipo",
+        type: "select",
+        options: ["Aneroide", "Digital", "Coluna de mercúrio"],
+        required: true,
+      },
+      {
+        key: "inmetroRegistration",
+        label: "Registro/Aprovação Inmetro",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Medidor de Gás",
+    slug: "medidor-gas",
+    description:
+      "Medidores de gás para medição de volume (diafragma, ultrassônico, turbina, rotativo)",
+    definition: [
+      {
+        // Values match the technology keys of the "Medidores de gás"
+        // legal-metrology catalog entry (byTechnology), so the asset spec and
+        // the regulated-interval technology stay consistent.
+        key: "technology",
+        label: "Tecnologia de Medição",
+        type: "select",
+        options: ["diafragma", "ultrassonico", "turbina", "rotativo"],
+        required: true,
+      },
+      {
+        key: "cyclicVolume",
+        label: "Volume Cíclico",
+        type: "number",
+        unit: "L",
+        required: false,
+      },
+      {
+        key: "minFlowRate",
+        label: "Vazão Mín. (Qmin)",
+        type: "number",
+        unit: "m³/h",
+        required: false,
+      },
+      {
+        key: "maxFlowRate",
+        label: "Vazão Máx. (Qmax)",
+        type: "number",
+        unit: "m³/h",
+        required: true,
+      },
+      {
+        key: "totalizerCapacity",
+        label: "Capacidade do Totalizador",
+        type: "number",
+        unit: "m³",
+        required: false,
+      },
+      {
+        key: "inmetroRegistration",
+        label: "Registro/Aprovação Inmetro",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Peso Padrão",
+    slug: "peso-padrao",
+    description:
+      "Pesos padrão e massas de referência para calibração de instrumentos de pesagem",
+    definition: [
+      {
+        key: "nominalValue",
+        label: "Valor Nominal",
+        type: "number",
+        unit: "g",
+        required: true,
+      },
+      {
+        key: "oimlClass",
+        label: "Classe de Exatidão (OIML R 111)",
+        type: "select",
+        options: ["E1", "E2", "F1", "F2", "M1", "M1-2", "M2", "M2-3", "M3"],
+        required: true,
+      },
+      {
+        key: "material",
+        label: "Material",
+        type: "select",
+        options: ["Aço inoxidável", "Latão", "Ferro fundido", "Outro"],
+        required: false,
+      },
+      {
+        key: "shape",
+        label: "Forma",
+        type: "select",
+        options: ["Cilíndrico", "Paralelepípedo", "Disco", "Outro"],
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Termômetro Infravermelho",
+    slug: "termometro-infravermelho",
+    description:
+      "Termômetros de radiação infravermelha (pirômetros) para medição de temperatura sem contato",
+    definition: [
+      {
+        key: "rangeMin",
+        label: "Faixa Mín.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "rangeMax",
+        label: "Faixa Máx.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "emissivity",
+        label: "Emissividade (ajuste)",
+        type: "text",
+        required: false,
+      },
+      {
+        key: "distanceToSpotRatio",
+        label: "Relação Distância:Alvo (D:S)",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Estufa / Banho Térmico",
+    slug: "estufa-banho-termico",
+    description:
+      "Estufas, muflas, banhos termostáticos e incubadoras (caracterização térmica de câmara)",
+    definition: [
+      {
+        key: "instrumentType",
+        label: "Tipo",
+        type: "select",
+        options: [
+          "Estufa",
+          "Mufla",
+          "Banho termostático",
+          "Incubadora",
+          "Freezer/Refrigerador",
+        ],
+        required: true,
+      },
+      {
+        key: "rangeMin",
+        label: "Faixa Mín.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "rangeMax",
+        label: "Faixa Máx.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução do Indicador",
+        type: "number",
+        unit: "°C",
+        required: false,
+      },
+      {
+        key: "chamberVolume",
+        label: "Volume da Câmara",
+        type: "number",
+        unit: "L",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Câmara Climática",
+    slug: "camara-climatica",
+    description:
+      "Câmaras climáticas e de estabilidade para temperatura e umidade relativa",
+    definition: [
+      {
+        key: "tempRangeMin",
+        label: "Faixa de Temperatura Mín.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "tempRangeMax",
+        label: "Faixa de Temperatura Máx.",
+        type: "number",
+        unit: "°C",
+        required: true,
+      },
+      {
+        key: "tempResolution",
+        label: "Resolução de Temperatura",
+        type: "number",
+        unit: "°C",
+        required: false,
+      },
+      {
+        key: "humidityRangeMin",
+        label: "Faixa de Umidade Mín.",
+        type: "number",
+        unit: "%RH",
+        required: true,
+      },
+      {
+        key: "humidityRangeMax",
+        label: "Faixa de Umidade Máx.",
+        type: "number",
+        unit: "%RH",
+        required: true,
+      },
+      {
+        key: "humidityResolution",
+        label: "Resolução de Umidade",
+        type: "number",
+        unit: "%RH",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Vidraria Volumétrica",
+    slug: "vidraria-volumetrica",
+    description:
+      "Balões volumétricos, buretas, provetas e pipetas de vidro (calibração gravimétrica de volume)",
+    definition: [
+      {
+        key: "nominalVolume",
+        label: "Volume Nominal",
+        type: "number",
+        unit: "mL",
+        required: true,
+      },
+      {
+        key: "instrumentType",
+        label: "Tipo",
+        type: "select",
+        options: [
+          "Balão volumétrico",
+          "Bureta",
+          "Proveta",
+          "Pipeta volumétrica",
+          "Pipeta graduada",
+          "Dispensador",
+        ],
+        required: true,
+      },
+      {
+        key: "accuracyClass",
+        label: "Classe",
+        type: "select",
+        options: ["A", "B"],
+        required: false,
+      },
+      {
+        key: "calibrationMode",
+        label: "Modo de Calibração",
+        type: "select",
+        options: ["Para conter (TC/In)", "Para dispensar (TD/Ex)"],
+        required: false,
+      },
+      {
+        key: "scaleDivision",
+        label: "Menor Divisão",
+        type: "number",
+        unit: "mL",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Trena / Escala Métrica",
+    slug: "trena-escala",
+    description:
+      "Trenas, escalas e réguas metálicas para medição dimensional linear",
+    definition: [
+      {
+        key: "capacity",
+        label: "Capacidade",
+        type: "number",
+        unit: "m",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução (menor divisão)",
+        type: "number",
+        unit: "mm",
+        required: true,
+      },
+      {
+        key: "instrumentType",
+        label: "Tipo",
+        type: "select",
+        options: ["Trena", "Escala/Régua", "Fita métrica"],
+        required: true,
+      },
+      {
+        key: "accuracyClass",
+        label: "Classe de Exatidão",
+        type: "select",
+        options: ["I", "II", "III"],
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Analisador de Umidade",
+    slug: "analisador-umidade",
+    description:
+      "Analisadores de umidade por termogravimetria (balança de secagem por aquecimento)",
+    definition: [
+      {
+        key: "capacity",
+        label: "Capacidade Máxima",
+        type: "number",
+        unit: "g",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução de Massa (d)",
+        type: "number",
+        unit: "g",
+        required: true,
+      },
+      {
+        key: "moistureResolution",
+        label: "Resolução de Umidade",
+        type: "number",
+        unit: "%",
+        required: false,
+      },
+      {
+        key: "dryingTempMax",
+        label: "Temperatura Máx. de Secagem",
+        type: "number",
+        unit: "°C",
+        required: false,
+      },
+      {
+        key: "heatingTechnology",
+        label: "Tecnologia de Aquecimento",
+        type: "select",
+        options: ["Halógeno", "Infravermelho", "Micro-ondas"],
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "Prensa Hidráulica",
+    slug: "prensa-hidraulica",
+    description:
+      "Prensas hidráulicas e máquinas de ensaio para medição de força de compressão",
+    definition: [
+      {
+        key: "capacity",
+        label: "Capacidade Máxima",
+        type: "number",
+        unit: "kN",
+        required: true,
+      },
+      {
+        key: "resolution",
+        label: "Resolução",
+        type: "number",
+        unit: "kN",
+        required: true,
+      },
+      {
+        key: "loadMode",
+        label: "Modo de Carga",
+        type: "select",
+        options: ["Compressão", "Tração", "Tração/Compressão"],
+        required: true,
+      },
+      {
+        key: "accuracyClass",
+        label: "Classe de Exatidão",
+        type: "text",
+        required: false,
+      },
+    ],
+  },
 ];
 
 async function seed() {
   console.log("Seeding asset types...");
 
-  for (const type of assetTypes) {
+  for (const type of ASSET_TYPE_SEED) {
     try {
       await db
         .insert(assetType)
@@ -636,11 +1152,21 @@ async function seed() {
   await seedLegalMetrologyRegulations(db);
   console.log("  ✓ legal-metrology regulation catalog");
 
-  console.log("\nDone! Seeded", assetTypes.length, "asset types.");
+  console.log("\nDone! Seeded", ASSET_TYPE_SEED.length, "asset types.");
   process.exit(0);
 }
 
-seed().catch((error) => {
-  console.error("Seed failed:", error);
-  process.exit(1);
-});
+// Only run when executed directly (`bun run src/seed-asset-types.ts`), so the
+// seed array stays importable by tests without touching a database.
+const invokedDirectly =
+  typeof process !== "undefined" &&
+  Array.isArray(process.argv) &&
+  process.argv[1] !== undefined &&
+  process.argv[1].includes("seed-asset-types");
+
+if (invokedDirectly) {
+  seed().catch((error) => {
+    console.error("Seed failed:", error);
+    process.exit(1);
+  });
+}

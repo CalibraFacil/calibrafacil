@@ -657,6 +657,7 @@ export function AssetCreateForm({
                     }
                     disabled={isSaving}
                     errors={errors}
+                    assetTypeSlug={selectedAssetType?.slug}
                   />
                 </Panel>
               ) : null}

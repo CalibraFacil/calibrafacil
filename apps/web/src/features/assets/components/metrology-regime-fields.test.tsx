@@ -30,11 +30,28 @@ const CATALOG: LegalMetrologyRegulationCatalogEntry[] = [
     category: 'Medidores de gás',
     kind: 'per_technology',
     valueMonths: null,
-    byTechnology: { diafragma: 120, ultrassonico: 180, turbina: 60, rotativo: 60 },
+    byTechnology: {
+      diafragma: 120,
+      ultrassonico: 180,
+      turbina: 60,
+      rotativo: 60,
+    },
     anchor: 'first_verification',
     operationalizedByDelegate: true,
     regulationReference: 'Portaria Inmetro nº 156, de 30 de março de 2022',
     provenance: 'secondary',
+    note: null,
+  },
+  {
+    id: 5,
+    category: 'Balanças (IPNA)',
+    kind: 'fixed_months',
+    valueMonths: 12,
+    byTechnology: null,
+    anchor: 'calendar_year',
+    operationalizedByDelegate: true,
+    regulationReference: 'Portaria Inmetro nº 157, de 30 de março de 2022',
+    provenance: 'primary',
     note: null,
   },
 ]
@@ -175,6 +192,67 @@ describe('MetrologyRegimeFields — regulation catalog auto-fill', () => {
   })
 })
 
+describe('MetrologyRegimeFields — catalog scoped by asset type', () => {
+  it('a mapped asset type (balança) only sees its own regulation category', () => {
+    queryMocks.data = CATALOG
+    render(
+      <MetrologyRegimeFields
+        values={INITIAL}
+        onChange={vi.fn()}
+        assetTypeSlug="balanca-digital"
+      />,
+    )
+
+    expect(screen.getByRole('option', { name: 'Balanças (IPNA)' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Taxímetros' })).toBeNull()
+    expect(
+      screen.queryByRole('option', { name: 'Medidores de gás' }),
+    ).toBeNull()
+  })
+
+  it('medidor-gas only sees the gás regulation', () => {
+    queryMocks.data = CATALOG
+    render(
+      <MetrologyRegimeFields
+        values={INITIAL}
+        onChange={vi.fn()}
+        assetTypeSlug="medidor-gas"
+      />,
+    )
+
+    expect(
+      screen.getByRole('option', { name: 'Medidores de gás' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Taxímetros' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'Balanças (IPNA)' })).toBeNull()
+  })
+
+  it('an unmapped asset type sees the full catalog (suggestion-only design)', () => {
+    queryMocks.data = CATALOG
+    render(
+      <MetrologyRegimeFields
+        values={INITIAL}
+        onChange={vi.fn()}
+        assetTypeSlug="paquimetro"
+      />,
+    )
+
+    expect(screen.getByRole('option', { name: 'Taxímetros' })).toBeTruthy()
+    expect(
+      screen.getByRole('option', { name: 'Medidores de gás' }),
+    ).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'Balanças (IPNA)' })).toBeTruthy()
+  })
+
+  it('no asset type selected → full catalog', () => {
+    queryMocks.data = CATALOG
+    render(<MetrologyRegimeFields values={INITIAL} onChange={vi.fn()} />)
+
+    expect(screen.getByRole('option', { name: 'Taxímetros' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'Balanças (IPNA)' })).toBeTruthy()
+  })
+})
+
 describe('MetrologyRegimeFields — inline regulated-field errors', () => {
   // The flat lab-form fields are validated against RegulatedIntervalSchema in parseAssetForm;
   // each issue is mapped to a regulated field key (regulationReference / regulatedValueMonths /
@@ -198,16 +276,10 @@ describe('MetrologyRegimeFields — inline regulated-field errors', () => {
     )
 
     // Each field's message is rendered (per_technology renders all four fields).
-    expect(
-      screen.getByText(REGULATED_ERRORS.regulationReference),
-    ).toBeTruthy()
-    expect(
-      screen.getByText(REGULATED_ERRORS.regulatedValueMonths),
-    ).toBeTruthy()
+    expect(screen.getByText(REGULATED_ERRORS.regulationReference)).toBeTruthy()
+    expect(screen.getByText(REGULATED_ERRORS.regulatedValueMonths)).toBeTruthy()
     expect(screen.getByText(REGULATED_ERRORS.regulatedAnchor)).toBeTruthy()
-    expect(
-      screen.getByText(REGULATED_ERRORS.regulatedTechnology),
-    ).toBeTruthy()
+    expect(screen.getByText(REGULATED_ERRORS.regulatedTechnology)).toBeTruthy()
   })
 
   it('REQ-POLISH-001: renders only the errors that are present', () => {
@@ -220,12 +292,8 @@ describe('MetrologyRegimeFields — inline regulated-field errors', () => {
       />,
     )
 
-    expect(
-      screen.getByText(REGULATED_ERRORS.regulationReference),
-    ).toBeTruthy()
-    expect(
-      screen.queryByText(REGULATED_ERRORS.regulatedValueMonths),
-    ).toBeNull()
+    expect(screen.getByText(REGULATED_ERRORS.regulationReference)).toBeTruthy()
+    expect(screen.queryByText(REGULATED_ERRORS.regulatedValueMonths)).toBeNull()
     expect(screen.queryByText(REGULATED_ERRORS.regulatedTechnology)).toBeNull()
   })
 

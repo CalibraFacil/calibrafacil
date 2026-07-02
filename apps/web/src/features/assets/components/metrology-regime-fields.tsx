@@ -1,3 +1,4 @@
+import { regulationCategoryForAssetTypeSlug } from '@calibra-facil/shared'
 import { useState } from 'react'
 
 import { Checkbox } from '@/components/ui/checkbox'
@@ -44,10 +45,16 @@ export function MetrologyRegimeFields({
   onChange,
   disabled,
   errors,
+  assetTypeSlug,
 }: {
   values: MetrologyRegimeFormValues
   onChange: (patch: Partial<MetrologyRegimeFormValues>) => void
   disabled?: boolean
+  // Slug of the selected asset type. When it maps to a regulation category
+  // (shared REGULATION_CATEGORY_BY_ASSET_TYPE_SLUG), the catalog picker is
+  // scoped to that category — a Balança Digital is never offered the
+  // Cronotacógrafos Portaria. Unmapped/custom types see the full catalog.
+  assetTypeSlug?: string | null
   // Field-keyed validation messages from the parse step (REQ-POLISH-001). Each
   // regulated field surfaces its own inline error, next to the offending input.
   errors?: Partial<
@@ -72,10 +79,18 @@ export function MetrologyRegimeFields({
   // fetched while the LEGAL regime is active.
   const isLegal = values.metrologyRegime === 'LEGAL'
   const catalogQuery = useLegalMetrologyRegulationsData(isLegal)
-  const catalog = catalogQuery.data ?? []
-  const [selectedRegulationId, setSelectedRegulationId] = useState<number | null>(
-    null,
-  )
+  const fullCatalog = catalogQuery.data ?? []
+  // Scope the picker to the asset type's regulation category when one is
+  // mapped. Selection state is derived against the SCOPED list, so switching
+  // to a differently-mapped asset type drops an out-of-scope selection.
+  const scopedCategory = regulationCategoryForAssetTypeSlug(assetTypeSlug)
+  const catalog =
+    scopedCategory !== null
+      ? fullCatalog.filter((entry) => entry.category === scopedCategory)
+      : fullCatalog
+  const [selectedRegulationId, setSelectedRegulationId] = useState<
+    number | null
+  >(null)
   const selectedRegulation =
     catalog.find((entry) => entry.id === selectedRegulationId) ?? null
 

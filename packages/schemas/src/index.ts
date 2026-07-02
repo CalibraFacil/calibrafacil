@@ -347,6 +347,7 @@ export const MeasurementUnitSchema = z.enum([
   "µL",
   "mL",
   "L",
+  "m³",
   // time
   "ms",
   "s",

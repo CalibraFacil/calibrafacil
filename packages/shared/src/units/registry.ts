@@ -63,6 +63,7 @@ export type MeasurementUnit =
   | "µL"
   | "mL"
   | "L"
+  | "m³"
   // time
   | "ms"
   | "s"
@@ -134,13 +135,16 @@ export const UNIT_REGISTRY = {
   g: { kind: "mass", toCanonical: { factor: 1 } },
   kg: { kind: "mass", toCanonical: { factor: 1000 } },
   // length — canonical mm
-  "µm": { kind: "length", toCanonical: { factor: 0.001 } },
+  µm: { kind: "length", toCanonical: { factor: 0.001 } },
   mm: { kind: "length", toCanonical: { factor: 1 } },
   cm: { kind: "length", toCanonical: { factor: 10 } },
   m: { kind: "length", toCanonical: { factor: 1000 } },
   // temperature — canonical °C (affine)
   "°C": { kind: "temperature", toCanonical: { factor: 1, offset: 0 } },
-  "°F": { kind: "temperature", toCanonical: { factor: 5 / 9, offset: -160 / 9 } },
+  "°F": {
+    kind: "temperature",
+    toCanonical: { factor: 5 / 9, offset: -160 / 9 },
+  },
   K: { kind: "temperature", toCanonical: { factor: 1, offset: -273.15 } },
   // pressure — canonical kPa
   Pa: { kind: "pressure", toCanonical: { factor: 0.001 } },
@@ -152,9 +156,10 @@ export const UNIT_REGISTRY = {
   mmHg: { kind: "pressure", toCanonical: { factor: 0.1333224 } },
   inHg: { kind: "pressure", toCanonical: { factor: 3.386389 } },
   // volume — canonical µL
-  "µL": { kind: "volume", toCanonical: { factor: 1 } },
+  µL: { kind: "volume", toCanonical: { factor: 1 } },
   mL: { kind: "volume", toCanonical: { factor: 1000 } },
   L: { kind: "volume", toCanonical: { factor: 1000000 } },
+  "m³": { kind: "volume", toCanonical: { factor: 1000000000 } },
   // time — canonical s
   ms: { kind: "time", toCanonical: { factor: 0.001 } },
   s: { kind: "time", toCanonical: { factor: 1 } },
@@ -170,18 +175,18 @@ export const UNIT_REGISTRY = {
   kN: { kind: "force", toCanonical: { factor: 1000 } },
   kgf: { kind: "force", toCanonical: { factor: 9.80665 } },
   // voltage — canonical V
-  "µV": { kind: "voltage", toCanonical: { factor: 0.000001 } },
+  µV: { kind: "voltage", toCanonical: { factor: 0.000001 } },
   mV: { kind: "voltage", toCanonical: { factor: 0.001 } },
   V: { kind: "voltage", toCanonical: { factor: 1 } },
   kV: { kind: "voltage", toCanonical: { factor: 1000 } },
   // current — canonical A
-  "µA": { kind: "current", toCanonical: { factor: 0.000001 } },
+  µA: { kind: "current", toCanonical: { factor: 0.000001 } },
   mA: { kind: "current", toCanonical: { factor: 0.001 } },
   A: { kind: "current", toCanonical: { factor: 1 } },
   // resistance — canonical Ω
-  "Ω": { kind: "resistance", toCanonical: { factor: 1 } },
-  "kΩ": { kind: "resistance", toCanonical: { factor: 1000 } },
-  "MΩ": { kind: "resistance", toCanonical: { factor: 1000000 } },
+  Ω: { kind: "resistance", toCanonical: { factor: 1 } },
+  kΩ: { kind: "resistance", toCanonical: { factor: 1000 } },
+  MΩ: { kind: "resistance", toCanonical: { factor: 1000000 } },
   // frequency — canonical Hz
   Hz: { kind: "frequency", toCanonical: { factor: 1 } },
   kHz: { kind: "frequency", toCanonical: { factor: 1000 } },
@@ -189,9 +194,8 @@ export const UNIT_REGISTRY = {
   rpm: { kind: "frequency", toCanonical: { factor: 1 / 60 } },
 } as const satisfies Record<MeasurementUnit, UnitDef>;
 
-const ALL_UNITS: MeasurementUnit[] = Object.keys(UNIT_REGISTRY).filter(
-  isMeasurementUnit,
-);
+const ALL_UNITS: MeasurementUnit[] =
+  Object.keys(UNIT_REGISTRY).filter(isMeasurementUnit);
 
 /** Ordered list of every registry token (storage tokens, not aliases). */
 export const MEASUREMENT_UNITS: readonly MeasurementUnit[] = ALL_UNITS;
@@ -227,8 +231,8 @@ export function unitsForKind(kind: QuantityKind): MeasurementUnit[] {
  * and bare `C`/`F` for Celsius/Fahrenheit.
  */
 const EXACT_ALIASES: Record<string, MeasurementUnit> = {
-  "ºC": "°C",
-  "ºF": "°F",
+  ºC: "°C",
+  ºF: "°F",
   C: "°C",
   F: "°F",
 };
@@ -245,18 +249,18 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   g: "g",
   kg: "kg",
   // length
-  "µm": "µm",
-  "μm": "µm",
+  µm: "µm",
+  μm: "µm",
   um: "µm",
   mm: "mm",
   cm: "cm",
   m: "m",
   // temperature
   "°c": "°C",
-  "ºc": "°C",
+  ºc: "°C",
   celsius: "°C",
   "°f": "°F",
-  "ºf": "°F",
+  ºf: "°F",
   fahrenheit: "°F",
   k: "K",
   kelvin: "K",
@@ -272,11 +276,14 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   mmhg: "mmHg",
   inhg: "inHg",
   // volume
-  "µl": "µL",
-  "μl": "µL",
+  µl: "µL",
+  μl: "µL",
   ul: "µL",
   ml: "mL",
   l: "L",
+  "m³": "m³",
+  m3: "m³",
+  "m^3": "m³",
   // time
   ms: "ms",
   s: "s",
@@ -305,8 +312,8 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   kgf: "kgf",
   kgforca: "kgf",
   // voltage
-  "µv": "µV",
-  "μv": "µV",
+  µv: "µV",
+  μv: "µV",
   uv: "µV",
   mv: "mV",
   v: "V",
@@ -314,8 +321,8 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   volts: "V",
   kv: "kV",
   // current
-  "µa": "µA",
-  "μa": "µA",
+  µa: "µA",
+  μa: "µA",
   ua: "µA",
   ma: "mA",
   a: "A",
@@ -325,10 +332,10 @@ const LOWER_ALIASES: Record<string, MeasurementUnit> = {
   amperes: "A",
   // resistance (bare `mω` is deliberately absent — it is ambiguous between
   // milliohm and megaohm under lowercasing; type the `MΩ` symbol or `megohm`)
-  "ω": "Ω",
+  ω: "Ω",
   ohm: "Ω",
   ohms: "Ω",
-  "kω": "kΩ",
+  kω: "kΩ",
   kohm: "kΩ",
   megohm: "MΩ",
   megaohm: "MΩ",
