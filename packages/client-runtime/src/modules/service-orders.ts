@@ -12,7 +12,7 @@ import type {
   SaveServiceOrderEvaluationInput,
   SaveServiceOrderExecutionInput,
   SendServiceOrderQuoteInput,
-  ServiceOrderRepairSealInput,
+  ServiceOrderRepairMarkInput,
   ServiceOrdersListInput,
   ServiceOrdersApi,
   UpdateServiceOrderInput,
@@ -155,18 +155,18 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
         "PDF ainda indisponível",
       );
     },
-    async updateRepairSeal(
+    async updateRepairMark(
       id: string | number,
-      input: ServiceOrderRepairSealInput,
+      input: ServiceOrderRepairMarkInput,
     ) {
       return readJsonResponse<unknown>(
-        await rawCloudClient.api["service-orders"][":id"]["repair-seal"].$patch(
+        await rawCloudClient.api["service-orders"][":id"]["repair-mark"].$patch(
           {
             param: { id: String(id) },
             json: input,
           },
         ),
-        "Erro ao salvar a Etiqueta de Reparo",
+        "Erro ao salvar a Marca de Reparo",
       );
     },
     async deliver(id: string | number, input: DeliverServiceOrderInput) {

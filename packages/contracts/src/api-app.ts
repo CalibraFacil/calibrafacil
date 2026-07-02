@@ -267,7 +267,7 @@ type ApiRoutePath =
   | "/api/service-orders/:id/intake-document.pdf"
   | "/api/service-orders/:id/quotes"
   | "/api/service-orders/:id/quotes/:quoteId/send"
-  | "/api/service-orders/:id/repair-seal"
+  | "/api/service-orders/:id/repair-mark"
   | "/api/service-orders/:id/tag"
   | "/api/service-orders/:id/tag.pdf"
   | "/api/services"

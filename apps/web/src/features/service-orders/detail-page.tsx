@@ -447,26 +447,26 @@ function ServiceOrderDetailContent({
     order.deliveredToDocument ?? '',
   )
   const [deliveryNotes, setDeliveryNotes] = useState(order.deliveryNotes ?? '')
-  const [repairSealNumber, setRepairSealNumber] = useState(
-    order.inmetroRepairSealNumber ?? '',
+  const [repairMarkNumber, setRepairMarkNumber] = useState(
+    order.inmetroRepairMarkNumber ?? '',
   )
-  const [repairSealNotes, setRepairSealNotes] = useState(
-    order.inmetroRepairSealNotes ?? '',
+  const [repairMarkNotes, setRepairMarkNotes] = useState(
+    order.inmetroRepairMarkNotes ?? '',
   )
-  const [repairSealApplied, setRepairSealApplied] = useState(
-    Boolean(order.inmetroRepairSealAppliedAt),
+  const [repairMarkApplied, setRepairMarkApplied] = useState(
+    Boolean(order.inmetroRepairMarkAppliedAt),
   )
   const [serviceStartedAt, setServiceStartedAt] = useState(
     toDateTimeLocalValue(order.serviceStartedAt),
   )
-  // The repair seal (Etiqueta de Reparo) + lacre only apply to instruments
+  // The repair seal (Marca de Reparo) + marca de selagem only apply to instruments
   // subject to legal metrology. Show the editor only for those; for others,
   // surface any already-recorded value read-only so history never disappears.
   const isSubjectToLegalMetrology = order.assetMetrologyRegime === 'LEGAL'
-  const hasRepairSealRecord = Boolean(
-    order.inmetroRepairSealNumber ||
-    order.inmetroRepairSealNotes ||
-    order.inmetroRepairSealAppliedAt,
+  const hasRepairMarkRecord = Boolean(
+    order.inmetroRepairMarkNumber ||
+    order.inmetroRepairMarkNotes ||
+    order.inmetroRepairMarkAppliedAt,
   )
   const [activeTab, setActiveTab] =
     useState<(typeof WORKFLOW_TABS)[number]['value']>('evaluation')
@@ -640,21 +640,21 @@ function ServiceOrderDetailContent({
     },
   })
 
-  const updateRepairSeal = useMutation({
+  const updateRepairMark = useMutation({
     mutationFn: async () => {
-      await calibraApi.serviceOrders.updateRepairSeal(id, {
-        inmetroRepairSealNumber: repairSealNumber || null,
-        inmetroRepairSealIssuedAt: repairSealNumber
+      await calibraApi.serviceOrders.updateRepairMark(id, {
+        inmetroRepairMarkNumber: repairMarkNumber || null,
+        inmetroRepairMarkIssuedAt: repairMarkNumber
           ? new Date().toISOString()
           : null,
-        inmetroRepairSealAppliedAt: repairSealApplied
+        inmetroRepairMarkAppliedAt: repairMarkApplied
           ? new Date().toISOString()
           : null,
-        inmetroRepairSealNotes: repairSealNotes || null,
+        inmetroRepairMarkNotes: repairMarkNotes || null,
       })
     },
     onSuccess: () => {
-      toast.success('Etiqueta de Reparo atualizada')
+      toast.success('Marca de Reparo atualizada')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
       returnToSyncConflicts()
     },
@@ -662,7 +662,7 @@ function ServiceOrderDetailContent({
       toast.error(
         error instanceof Error
           ? error.message
-          : 'Erro ao salvar a Etiqueta de Reparo',
+          : 'Erro ao salvar a Marca de Reparo',
       )
     },
   })
@@ -697,7 +697,7 @@ function ServiceOrderDetailContent({
         deliveredToName: order.customerName,
         deliveredToDocument: deliveredToDocument || null,
         deliveryNotes: deliveryNotes || null,
-        inmetroRepairSealNumber: repairSealNumber || null,
+        inmetroRepairMarkNumber: repairMarkNumber || null,
       })
     },
     onSuccess: () => {
@@ -1481,10 +1481,10 @@ function ServiceOrderDetailContent({
               <CardHeader>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <CardTitle>Entrega e Etiqueta de Reparo</CardTitle>
+                    <CardTitle>Entrega e Marca de Reparo</CardTitle>
                     <CardDescription>
                       Gere as duas vias do comprovante com valores, assinaturas
-                      e a Etiqueta de Reparo do Inmetro.
+                      e a Marca de Reparo do Inmetro.
                     </CardDescription>
                   </div>
                   {latestDeliveryDocument ? (
@@ -1557,88 +1557,88 @@ function ServiceOrderDetailContent({
                   <div className="grid gap-4 rounded-lg bg-muted/40 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                     <div className="space-y-2 md:col-span-2">
                       <p className="text-sm font-medium">
-                        Etiqueta de Reparo (Inmetro)
+                        Marca de Reparo (Inmetro)
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label>Nº da Etiqueta de Reparo</Label>
+                      <Label>Nº da Marca de Reparo</Label>
                       <Input
                         className="tabular-nums"
-                        value={repairSealNumber}
+                        value={repairMarkNumber}
                         onChange={(event) =>
-                          setRepairSealNumber(event.target.value)
+                          setRepairMarkNumber(event.target.value)
                         }
                         placeholder="Número digitado que irá na via do cliente"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Status da etiqueta física</Label>
+                      <Label>Status da marca física</Label>
                       <div className="flex min-h-10 items-center rounded-md bg-background px-3 text-sm shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
-                        {repairSealApplied
-                          ? 'Aplicado na via do laboratório'
-                          : 'Pendente de aplicação física'}
+                        {repairMarkApplied
+                          ? 'Aposta na via do laboratório'
+                          : 'Pendente de aposição física'}
                       </div>
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Observações da Etiqueta de Reparo</Label>
+                      <Label>Observações da Marca de Reparo</Label>
                       <Input
-                        value={repairSealNotes}
+                        value={repairMarkNotes}
                         onChange={(event) =>
-                          setRepairSealNotes(event.target.value)
+                          setRepairMarkNotes(event.target.value)
                         }
-                        placeholder="Ex.: Etiqueta de Reparo será colada na via do laboratório após conferência."
+                        placeholder="Ex.: Marca de Reparo será colada na via do laboratório após conferência."
                       />
                     </div>
                     <label className="flex min-h-10 items-center gap-3 text-sm">
                       <Checkbox
-                        checked={repairSealApplied}
+                        checked={repairMarkApplied}
                         onCheckedChange={(checked) =>
-                          setRepairSealApplied(Boolean(checked))
+                          setRepairMarkApplied(Boolean(checked))
                         }
                       />
-                      Etiqueta física aplicada
+                      Marca física aposta
                     </label>
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="outline"
                         className="active:scale-[0.96] transition-transform"
-                        onClick={() => updateRepairSeal.mutate()}
-                        disabled={isDesktop || updateRepairSeal.isPending}
+                        onClick={() => updateRepairMark.mutate()}
+                        disabled={isDesktop || updateRepairMark.isPending}
                       >
-                        Salvar Etiqueta de Reparo
+                        Salvar Marca de Reparo
                       </Button>
                     </div>
                   </div>
-                ) : hasRepairSealRecord ? (
+                ) : hasRepairMarkRecord ? (
                   <div className="grid gap-3 rounded-lg bg-muted/40 p-4 text-sm md:grid-cols-2">
                     <div className="space-y-1 md:col-span-2">
                       <p className="font-medium">
-                        Etiqueta de Reparo (registro existente)
+                        Marca de Reparo (registro existente)
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Instrumento não está marcado como sujeito a metrologia
                         legal — exibindo apenas o registro já gravado.
                       </p>
                     </div>
-                    {order.inmetroRepairSealNumber ? (
+                    {order.inmetroRepairMarkNumber ? (
                       <div className="space-y-1">
-                        <p className="text-muted-foreground">Nº da etiqueta</p>
+                        <p className="text-muted-foreground">Nº da marca</p>
                         <p className="font-medium tabular-nums">
-                          {order.inmetroRepairSealNumber}
+                          {order.inmetroRepairMarkNumber}
                         </p>
                       </div>
                     ) : null}
-                    {order.inmetroRepairSealAppliedAt ? (
+                    {order.inmetroRepairMarkAppliedAt ? (
                       <div className="space-y-1">
-                        <p className="text-muted-foreground">Etiqueta física</p>
-                        <p className="font-medium">Aplicado</p>
+                        <p className="text-muted-foreground">Marca física</p>
+                        <p className="font-medium">Aposta</p>
                       </div>
                     ) : null}
-                    {order.inmetroRepairSealNotes ? (
+                    {order.inmetroRepairMarkNotes ? (
                       <div className="space-y-1 md:col-span-2">
                         <p className="text-muted-foreground">Observações</p>
                         <p className="font-medium">
-                          {order.inmetroRepairSealNotes}
+                          {order.inmetroRepairMarkNotes}
                         </p>
                       </div>
                     ) : null}

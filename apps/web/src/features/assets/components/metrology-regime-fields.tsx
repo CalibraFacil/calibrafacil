@@ -129,7 +129,8 @@ export function MetrologyRegimeFields({
         <FieldDescription>
           Definido pelo enquadramento legal do instrumento, não pelo
           laboratório. “Metrologia legal” fixa a periodicidade de verificação
-          por regulamento (Inmetro); habilita lacre e Etiqueta de Reparo na OS.
+          por regulamento (Inmetro); habilita marcas de selagem e Marca de
+          Reparo na OS.
         </FieldDescription>
       </Field>
 

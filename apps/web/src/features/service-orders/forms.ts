@@ -28,7 +28,7 @@ export type ServiceOrderFormData = {
   claimedDefect: string
   intakeCondition: string
   accessories: string
-  oldSealNumber: string
+  removedSealingMarkNumber: string
   invoiceRemittanceNumber: string
   invoiceRemittanceKey: string
   carrierName: string
@@ -102,7 +102,7 @@ export function parseServiceOrderForm(
     claimedDefect: data.claimedDefect.trim(),
     intakeCondition: data.intakeCondition.trim(),
     accessories: optionalText(data.accessories),
-    oldSealNumber: optionalText(data.oldSealNumber),
+    removedSealingMarkNumber: optionalText(data.removedSealingMarkNumber),
     invoiceRemittanceNumber: optionalText(data.invoiceRemittanceNumber),
     invoiceRemittanceKey: optionalText(data.invoiceRemittanceKey),
     carrierName:
@@ -138,7 +138,7 @@ export function parseServiceOrderForm(
       'claimedDefect',
       'intakeCondition',
       'accessories',
-      'oldSealNumber',
+      'removedSealingMarkNumber',
       'invoiceRemittanceNumber',
       'invoiceRemittanceKey',
       'carrierName',

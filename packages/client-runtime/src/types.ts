@@ -24,7 +24,7 @@ import type {
   SendServiceOrderQuoteInput,
   ServiceOrderDetail,
   ServiceOrderDocumentUrl,
-  ServiceOrderRepairSealInput,
+  ServiceOrderRepairMarkInput,
   ServiceOrdersListData,
   ServiceOrdersListInput,
   UpdateServiceOrderInput,
@@ -49,7 +49,7 @@ export type {
   ServiceOrderDetail,
   ServiceOrderDocumentUrl,
   ServiceOrderListItem,
-  ServiceOrderRepairSealInput,
+  ServiceOrderRepairMarkInput,
   ServiceOrdersListData,
   ServiceOrdersListInput,
   ServiceOrderStatus,
@@ -1073,7 +1073,7 @@ export type AssetsListData = {
     assetTypeName: string;
     status: AssetStatus;
     nextCalibrationDate?: string | null;
-    // Legal-metrology regime (Track 2). The service-order repair-seal / lacre gating
+    // Legal-metrology regime (Track 2). The service-order repair-mark / lacre gating
     // renders for `metrologyRegime === 'LEGAL'`.
     metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
   }>;
@@ -1747,9 +1747,9 @@ export interface ServiceOrdersApi {
   getIntakeDocumentPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
   generateTag(id: string | number): Promise<unknown>;
   getTagPdf(id: string | number): Promise<ServiceOrderDocumentUrl>;
-  updateRepairSeal(
+  updateRepairMark(
     id: string | number,
-    input: ServiceOrderRepairSealInput,
+    input: ServiceOrderRepairMarkInput,
   ): Promise<unknown>;
   deliver(
     id: string | number,

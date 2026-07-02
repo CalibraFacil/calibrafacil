@@ -179,12 +179,12 @@ export type ServiceOrderDetail = {
   invoiceRemittanceKey?: string | null
   carrierName?: string | null
   thirdPartyName?: string | null
-  oldSealNumber?: string | null
-  newSealNumber?: string | null
-  inmetroRepairSealNumber?: string | null
-  inmetroRepairSealIssuedAt?: string | null
-  inmetroRepairSealAppliedAt?: string | null
-  inmetroRepairSealNotes?: string | null
+  removedSealingMarkNumber?: string | null
+  affixedSealingMarkNumber?: string | null
+  inmetroRepairMarkNumber?: string | null
+  inmetroRepairMarkIssuedAt?: string | null
+  inmetroRepairMarkAppliedAt?: string | null
+  inmetroRepairMarkNotes?: string | null
   deliveredAt?: string | null
   deliveredToName?: string | null
   deliveredToDocument?: string | null

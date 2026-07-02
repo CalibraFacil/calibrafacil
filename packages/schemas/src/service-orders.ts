@@ -150,10 +150,9 @@ const ServiceOrderInputBaseSchema = z.object({
   claimedDefect: z.string().trim().min(1).max(5000),
   intakeCondition: z.string().trim().min(1).max(5000),
   accessories: z.string().trim().max(5000).optional().nullable(),
-  oldSealNumber: z.string().trim().max(120).optional().nullable(),
-  newSealNumber: z.string().trim().max(120).optional().nullable(),
-  repairedSealNumber: z.string().trim().max(120).optional().nullable(),
-  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
+  removedSealingMarkNumber: z.string().trim().max(120).optional().nullable(),
+  affixedSealingMarkNumber: z.string().trim().max(120).optional().nullable(),
+  inmetroRepairMarkNumber: z.string().trim().max(120).optional().nullable(),
   invoiceRemittanceNumber: z.string().trim().max(120).optional().nullable(),
   invoiceRemittanceKey: z.string().trim().max(80).optional().nullable(),
   invoiceRemittanceIssuedAt: z.string().datetime().optional().nullable(),
@@ -314,14 +313,14 @@ export const DeliverServiceOrderSchema = z.object({
   deliveredToName: z.string().trim().min(1).max(200),
   deliveredToDocument: z.string().trim().max(80).optional().nullable(),
   deliveryNotes: nullableText,
-  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
+  inmetroRepairMarkNumber: z.string().trim().max(120).optional().nullable(),
 });
 
-export const UpdateServiceOrderRepairSealSchema = z.object({
-  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
-  inmetroRepairSealIssuedAt: z.string().datetime().optional().nullable(),
-  inmetroRepairSealAppliedAt: z.string().datetime().optional().nullable(),
-  inmetroRepairSealNotes: nullableText,
+export const UpdateServiceOrderRepairMarkSchema = z.object({
+  inmetroRepairMarkNumber: z.string().trim().max(120).optional().nullable(),
+  inmetroRepairMarkIssuedAt: z.string().datetime().optional().nullable(),
+  inmetroRepairMarkAppliedAt: z.string().datetime().optional().nullable(),
+  inmetroRepairMarkNotes: nullableText,
 });
 
 export const IssueServiceOrderDeliveryDocumentSchema = z.object({

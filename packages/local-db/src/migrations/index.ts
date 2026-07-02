@@ -10,6 +10,7 @@ import { migration0009AssetSubjectToLegalMetrology } from "./0009_asset_subject_
 import { migration0010MassCompositionProfiles } from "./0010_mass_composition_profiles";
 import { migration0011AssetLegalMetrologyRegime } from "./0011_asset_legal_metrology_regime";
 import { migration0012ServiceOrderItemMaterial } from "./0012_service_order_item_material";
+import { migration0013OfficialSealingMarkTerminology } from "./0013_official_sealing_mark_terminology";
 
 export type LocalDbMigration = {
   id: number;
@@ -30,6 +31,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0010MassCompositionProfiles,
   migration0011AssetLegalMetrologyRegime,
   migration0012ServiceOrderItemMaterial,
+  migration0013OfficialSealingMarkTerminology,
 ];
 
 export const currentLocalDbSchemaVersion =

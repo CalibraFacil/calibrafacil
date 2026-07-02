@@ -93,10 +93,9 @@ export async function createServiceOrder(input: {
       claimedDefect: input.values.claimedDefect,
       intakeCondition: input.values.intakeCondition,
       accessories: input.values.accessories ?? null,
-      oldSealNumber: input.values.oldSealNumber ?? null,
-      newSealNumber: input.values.newSealNumber ?? null,
-      repairedSealNumber: input.values.repairedSealNumber ?? null,
-      inmetroRepairSealNumber: input.values.inmetroRepairSealNumber ?? null,
+      removedSealingMarkNumber: input.values.removedSealingMarkNumber ?? null,
+      affixedSealingMarkNumber: input.values.affixedSealingMarkNumber ?? null,
+      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber ?? null,
       invoiceRemittanceNumber: input.values.invoiceRemittanceNumber ?? null,
       invoiceRemittanceKey: input.values.invoiceRemittanceKey ?? null,
       invoiceRemittanceIssuedAt: parseDate(
@@ -280,31 +279,31 @@ export async function updateServiceOrder(input: {
   return { status: "ok" as const, data: updated };
 }
 
-export async function updateServiceOrderRepairSeal(input: {
+export async function updateServiceOrderRepairMark(input: {
   serviceOrderId: number;
   member: ServiceOrderMember;
   actorUserId: string;
   values: {
-    inmetroRepairSealNumber?: string | null;
-    inmetroRepairSealIssuedAt?: DateLikeInput;
-    inmetroRepairSealAppliedAt?: DateLikeInput;
-    inmetroRepairSealNotes?: string | null;
+    inmetroRepairMarkNumber?: string | null;
+    inmetroRepairMarkIssuedAt?: DateLikeInput;
+    inmetroRepairMarkAppliedAt?: DateLikeInput;
+    inmetroRepairMarkNotes?: string | null;
   };
 }) {
   const [updated] = await db
     .update(serviceOrder)
     .set({
-      inmetroRepairSealNumber: input.values.inmetroRepairSealNumber ?? null,
-      inmetroRepairSealIssuedAt: parseDate(
-        input.values.inmetroRepairSealIssuedAt,
+      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber ?? null,
+      inmetroRepairMarkIssuedAt: parseDate(
+        input.values.inmetroRepairMarkIssuedAt,
       ),
-      inmetroRepairSealAppliedAt: parseDate(
-        input.values.inmetroRepairSealAppliedAt,
+      inmetroRepairMarkAppliedAt: parseDate(
+        input.values.inmetroRepairMarkAppliedAt,
       ),
-      inmetroRepairSealAppliedByUserId: input.values.inmetroRepairSealAppliedAt
+      inmetroRepairMarkAppliedByUserId: input.values.inmetroRepairMarkAppliedAt
         ? input.actorUserId
         : null,
-      inmetroRepairSealNotes: input.values.inmetroRepairSealNotes ?? null,
+      inmetroRepairMarkNotes: input.values.inmetroRepairMarkNotes ?? null,
       updatedAt: new Date(),
     })
     .where(
@@ -324,9 +323,9 @@ export async function updateServiceOrderRepairSeal(input: {
     serviceOrderId: input.serviceOrderId,
     actorType: "lab_user",
     actorId: input.actorUserId,
-    eventType: "service_order.repair_seal_updated",
+    eventType: "service_order.repair_mark_updated",
     metadata: {
-      inmetroRepairSealNumber: input.values.inmetroRepairSealNumber,
+      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber,
     },
   });
 
@@ -378,7 +377,7 @@ export async function deliverServiceOrder(input: {
     deliveredToName: string;
     deliveredToDocument?: string | null;
     deliveryNotes?: string | null;
-    inmetroRepairSealNumber?: string | null;
+    inmetroRepairMarkNumber?: string | null;
   };
 }) {
   const [updated] = await db
@@ -390,8 +389,8 @@ export async function deliverServiceOrder(input: {
       deliveredToName: input.values.deliveredToName,
       deliveredToDocument: input.values.deliveredToDocument ?? null,
       deliveryNotes: input.values.deliveryNotes ?? null,
-      inmetroRepairSealNumber:
-        input.values.inmetroRepairSealNumber ?? undefined,
+      inmetroRepairMarkNumber:
+        input.values.inmetroRepairMarkNumber ?? undefined,
     })
     .where(
       and(

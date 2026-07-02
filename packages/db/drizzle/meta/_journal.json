@@ -533,6 +533,13 @@
 			"when": 1782989925695,
 			"tag": "0075_legal_verification_due_index",
 			"breakpoints": true
+		},
+		{
+			"idx": 76,
+			"version": "7",
+			"when": 1783024855125,
+			"tag": "0076_official_sealing_mark_terminology",
+			"breakpoints": true
 		}
 	]
 }

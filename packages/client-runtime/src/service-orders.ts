@@ -59,12 +59,12 @@ export type ServiceOrderDetail = {
   invoiceRemittanceKey?: string | null;
   carrierName?: string | null;
   thirdPartyName?: string | null;
-  oldSealNumber?: string | null;
-  newSealNumber?: string | null;
-  inmetroRepairSealNumber?: string | null;
-  inmetroRepairSealIssuedAt?: string | null;
-  inmetroRepairSealAppliedAt?: string | null;
-  inmetroRepairSealNotes?: string | null;
+  removedSealingMarkNumber?: string | null;
+  affixedSealingMarkNumber?: string | null;
+  inmetroRepairMarkNumber?: string | null;
+  inmetroRepairMarkIssuedAt?: string | null;
+  inmetroRepairMarkAppliedAt?: string | null;
+  inmetroRepairMarkNotes?: string | null;
   deliveredAt?: string | null;
   deliveredToName?: string | null;
   deliveredToDocument?: string | null;
@@ -155,7 +155,7 @@ export type CreateServiceOrderInput = {
   claimedDefect: string;
   intakeCondition: string;
   accessories: string | null;
-  oldSealNumber: string | null;
+  removedSealingMarkNumber: string | null;
   invoiceRemittanceNumber: string | null;
   invoiceRemittanceKey: string | null;
   carrierName: string | null;
@@ -230,11 +230,11 @@ export type IssueServiceOrderDeliveryDocumentInput = {
   clientSignatureData?: unknown | null;
 };
 
-export type ServiceOrderRepairSealInput = {
-  inmetroRepairSealNumber?: string | null;
-  inmetroRepairSealIssuedAt?: string | null;
-  inmetroRepairSealAppliedAt?: string | null;
-  inmetroRepairSealNotes?: string | null;
+export type ServiceOrderRepairMarkInput = {
+  inmetroRepairMarkNumber?: string | null;
+  inmetroRepairMarkIssuedAt?: string | null;
+  inmetroRepairMarkAppliedAt?: string | null;
+  inmetroRepairMarkNotes?: string | null;
 };
 
 export type DeliverServiceOrderInput = {
@@ -242,7 +242,7 @@ export type DeliverServiceOrderInput = {
   deliveredToName: string;
   deliveredToDocument?: string | null;
   deliveryNotes?: string | null;
-  inmetroRepairSealNumber?: string | null;
+  inmetroRepairMarkNumber?: string | null;
 };
 
 export type ServiceOrderDocumentUrl = {

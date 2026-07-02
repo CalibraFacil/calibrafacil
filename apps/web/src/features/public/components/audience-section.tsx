@@ -64,14 +64,14 @@ const audiences: Record<AudienceKey, Audience> = {
     short: 'Oficinas permissionárias',
     tag: 'Portaria Inmetro nº 157',
     title: 'Para oficinas autorizadas pelo Inmetro.',
-    lead: 'Registra cada verificação e cada lacre, no formato que a fiscalização pede. Sem montar planilha pra inspeção.',
+    lead: 'Registra cada verificação e cada marca de selagem, no formato que a fiscalização pede. Sem montar planilha pra inspeção.',
     image: '/landing/audience-oficinas.webp',
     alt: 'Oficina permissionária do Inmetro',
     items: [
       [
         '01',
-        'Lacres sob controle',
-        'Numeração de lacres aplicada e removida pelo sistema. Acaba o caderno avulso e a planilha pessoal. Cada lacre rastreado até o instrumento.',
+        'Marcas de selagem sob controle',
+        'Numeração de marcas de selagem apostas e retiradas pelo sistema. Acaba o caderno avulso e a planilha pessoal. Cada marca rastreada até o instrumento.',
       ],
       [
         '02',

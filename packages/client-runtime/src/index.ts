@@ -24,7 +24,7 @@ import type {
   SaveServiceOrderEvaluationInput,
   SaveServiceOrderExecutionInput,
   SendServiceOrderQuoteInput,
-  ServiceOrderRepairSealInput,
+  ServiceOrderRepairMarkInput,
   UpdateServiceOrderInput,
   StandardWriteInput,
   StartSsoInput,
@@ -747,10 +747,10 @@ export function createCloudApiClient(
           "tag.pdf": {
             $get(input: { param: { id: string } }): Promise<Response>;
           };
-          "repair-seal": {
+          "repair-mark": {
             $patch(input: {
               param: { id: string };
-              json: ServiceOrderRepairSealInput;
+              json: ServiceOrderRepairMarkInput;
             }): Promise<Response>;
           };
           deliver: {

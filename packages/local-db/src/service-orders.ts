@@ -86,10 +86,9 @@ export type CreateLocalServiceOrderIntakeInput = {
   claimedDefect: string;
   intakeCondition: string;
   accessories?: string | null;
-  oldSealNumber?: string | null;
-  newSealNumber?: string | null;
-  repairedSealNumber?: string | null;
-  inmetroRepairSealNumber?: string | null;
+  removedSealingMarkNumber?: string | null;
+  affixedSealingMarkNumber?: string | null;
+  inmetroRepairMarkNumber?: string | null;
   invoiceRemittanceNumber?: string | null;
   invoiceRemittanceKey?: string | null;
   invoiceRemittanceIssuedAt?: string | null;
@@ -237,10 +236,9 @@ export function createLocalServiceOrderIntake(
     claimedDefect: input.claimedDefect,
     intakeCondition: input.intakeCondition,
     accessories: input.accessories ?? null,
-    oldSealNumber: input.oldSealNumber ?? null,
-    newSealNumber: input.newSealNumber ?? null,
-    repairedSealNumber: input.repairedSealNumber ?? null,
-    inmetroRepairSealNumber: input.inmetroRepairSealNumber ?? null,
+    removedSealingMarkNumber: input.removedSealingMarkNumber ?? null,
+    affixedSealingMarkNumber: input.affixedSealingMarkNumber ?? null,
+    inmetroRepairMarkNumber: input.inmetroRepairMarkNumber ?? null,
     invoiceRemittanceNumber: input.invoiceRemittanceNumber ?? null,
     invoiceRemittanceKey: input.invoiceRemittanceKey ?? null,
     invoiceRemittanceIssuedAt: input.invoiceRemittanceIssuedAt ?? null,
@@ -283,10 +281,9 @@ INSERT INTO service_orders (
   claimed_defect,
   intake_condition,
   accessories,
-  old_seal_number,
-  new_seal_number,
-  repaired_seal_number,
-  inmetro_repair_seal_number,
+  removed_sealing_mark_number,
+  affixed_sealing_mark_number,
+  inmetro_repair_mark_number,
   invoice_remittance_number,
   invoice_remittance_key,
   invoice_remittance_issued_at,
@@ -322,10 +319,9 @@ INSERT INTO service_orders (
   @claimedDefect,
   @intakeCondition,
   @accessories,
-  @oldSealNumber,
-  @newSealNumber,
-  @repairedSealNumber,
-  @inmetroRepairSealNumber,
+  @removedSealingMarkNumber,
+  @affixedSealingMarkNumber,
+  @inmetroRepairMarkNumber,
   @invoiceRemittanceNumber,
   @invoiceRemittanceKey,
   @invoiceRemittanceIssuedAt,
@@ -365,10 +361,9 @@ INSERT INTO service_orders (
         claimedDefect: input.claimedDefect,
         intakeCondition: input.intakeCondition,
         accessories: input.accessories ?? null,
-        oldSealNumber: input.oldSealNumber ?? null,
-        newSealNumber: input.newSealNumber ?? null,
-        repairedSealNumber: input.repairedSealNumber ?? null,
-        inmetroRepairSealNumber: input.inmetroRepairSealNumber ?? null,
+        removedSealingMarkNumber: input.removedSealingMarkNumber ?? null,
+        affixedSealingMarkNumber: input.affixedSealingMarkNumber ?? null,
+        inmetroRepairMarkNumber: input.inmetroRepairMarkNumber ?? null,
         invoiceRemittanceNumber: input.invoiceRemittanceNumber ?? null,
         invoiceRemittanceKey: input.invoiceRemittanceKey ?? null,
         invoiceRemittanceIssuedAt: input.invoiceRemittanceIssuedAt ?? null,
@@ -590,9 +585,9 @@ export function getLocalServiceOrderDetail(
     invoiceRemittanceKey: row.invoice_remittance_key,
     carrierName: row.carrier_name,
     thirdPartyName: row.third_party_name,
-    oldSealNumber: row.old_seal_number,
-    newSealNumber: row.new_seal_number,
-    inmetroRepairSealNumber: row.inmetro_repair_seal_number,
+    removedSealingMarkNumber: row.removed_sealing_mark_number,
+    affixedSealingMarkNumber: row.affixed_sealing_mark_number,
+    inmetroRepairMarkNumber: row.inmetro_repair_mark_number,
     deliveryMethod: row.delivery_method,
     clientVisibleNotes: row.client_visible_notes,
     internalNotes: row.internal_notes,
@@ -1786,9 +1781,9 @@ type LocalServiceOrderDetailRow = {
   claimed_defect: string;
   intake_condition: string;
   accessories: string | null;
-  old_seal_number: string | null;
-  new_seal_number: string | null;
-  inmetro_repair_seal_number: string | null;
+  removed_sealing_mark_number: string | null;
+  affixed_sealing_mark_number: string | null;
+  inmetro_repair_mark_number: string | null;
   invoice_remittance_number: string | null;
   invoice_remittance_key: string | null;
   carrier_name: string | null;

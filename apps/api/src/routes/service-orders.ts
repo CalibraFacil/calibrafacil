@@ -23,7 +23,7 @@ import {
   UpdateServiceOrderEvaluationSchema,
   UpdateServiceOrderExecutionSchema,
   UpdateServiceOrderQuoteDraftSchema,
-  UpdateServiceOrderRepairSealSchema,
+  UpdateServiceOrderRepairMarkSchema,
   UpdateServiceOrderSchema,
   UpdateServiceOrderSettingsSchema,
 } from "@calibra-facil/schemas";
@@ -73,7 +73,7 @@ import {
   getServiceOrderSettings,
   reopenServiceOrder,
   updateServiceOrder,
-  updateServiceOrderRepairSeal,
+  updateServiceOrderRepairMark,
   updateServiceOrderSettings,
 } from "../modules/service-orders/service-order.commands";
 import {
@@ -352,16 +352,16 @@ export const serviceOrdersRouter = new Hono<{
     },
   )
   .patch(
-    "/:id/repair-seal",
+    "/:id/repair-mark",
     ...withLabPermission({ service_order: ["deliver"] }),
     zValidator("param", IdParamSchema),
-    zValidator("json", UpdateServiceOrderRepairSealSchema),
+    zValidator("json", UpdateServiceOrderRepairMarkSchema),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await updateServiceOrderRepairSeal({
+      const updated = await updateServiceOrderRepairMark({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,

@@ -73,11 +73,10 @@ type ServiceOrderDetail = {
   intakeCondition: string | null;
   accessories: string | null;
   clientVisibleNotes: string | null;
-  oldSealNumber?: string | null;
-  newSealNumber?: string | null;
-  repairedSealNumber?: string | null;
-  inmetroRepairSealNumber?: string | null;
-  inmetroRepairSealNotes?: string | null;
+  removedSealingMarkNumber?: string | null;
+  affixedSealingMarkNumber?: string | null;
+  inmetroRepairMarkNumber?: string | null;
+  inmetroRepairMarkNotes?: string | null;
   warrantyUntil?: string | null;
   warrantyTerms?: string | null;
   assetSnapshot?: {
@@ -201,8 +200,8 @@ const EVENT_META: Record<string, { label: string; tone: SignalTone }> = {
     label: "Reparo concluído",
     tone: "info",
   },
-  "service_order.repair_seal_updated": {
-    label: "Lacre atualizado",
+  "service_order.repair_mark_updated": {
+    label: "Marca de Reparo atualizada",
     tone: "info",
   },
   "service_order.ready_for_pickup": {
@@ -359,11 +358,14 @@ function ServiceOrderDetailPage() {
   const canAnswerQuote = latestQuote?.status === "sent";
 
   const seals = [
-    { label: "Lacre anterior", value: order.oldSealNumber },
-    { label: "Lacre novo", value: order.newSealNumber },
     {
-      label: "Etiqueta de Reparo",
-      value: order.inmetroRepairSealNumber,
+      label: "Marca de selagem retirada",
+      value: order.removedSealingMarkNumber,
+    },
+    { label: "Marca de selagem aposta", value: order.affixedSealingMarkNumber },
+    {
+      label: "Marca de Reparo",
+      value: order.inmetroRepairMarkNumber,
     },
   ].filter((seal) => seal.value?.trim());
 
@@ -593,9 +595,9 @@ function ServiceOrderDetailPage() {
           {seals.length > 0 ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Lacres"
-                title="Lacres e Etiqueta de Reparo"
-                description="Selagem do instrumento (inclui a Etiqueta de Reparo do Inmetro quando aplicável)."
+                eyebrow="Selagem"
+                title="Marcas de Reparo e de Selagem"
+                description="Marcas de selagem do instrumento, incluindo a Marca de Reparo do Inmetro quando aplicável."
               />
               <BlueprintGrid className="mt-4 sm:grid-cols-2">
                 {seals.map((seal) => (
@@ -604,9 +606,9 @@ function ServiceOrderDetailPage() {
                   </BlueprintField>
                 ))}
               </BlueprintGrid>
-              {order.inmetroRepairSealNotes?.trim() ? (
+              {order.inmetroRepairMarkNotes?.trim() ? (
                 <p className="text-muted-foreground mt-3 text-xs text-pretty">
-                  {order.inmetroRepairSealNotes}
+                  {order.inmetroRepairMarkNotes}
                 </p>
               ) : null}
             </Panel>

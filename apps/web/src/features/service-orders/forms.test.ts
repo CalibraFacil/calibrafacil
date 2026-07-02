@@ -82,7 +82,7 @@ function validServiceOrderForm(): ServiceOrderFormData {
     claimedDefect: 'Nao liga',
     intakeCondition: 'Sem danos aparentes',
     accessories: '',
-    oldSealNumber: '',
+    removedSealingMarkNumber: '',
     invoiceRemittanceNumber: '',
     invoiceRemittanceKey: '',
     carrierName: '',

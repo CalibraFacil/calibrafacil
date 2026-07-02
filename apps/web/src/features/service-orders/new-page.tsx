@@ -78,7 +78,7 @@ const initialFormData: ServiceOrderFormData = {
   claimedDefect: '',
   intakeCondition: '',
   accessories: '',
-  oldSealNumber: '',
+  removedSealingMarkNumber: '',
   invoiceRemittanceNumber: '',
   invoiceRemittanceKey: '',
   carrierName: '',
@@ -330,12 +330,14 @@ export function NewServiceOrderPage() {
     event.preventDefault()
     if (selectedCustomerIsSuspended) return
 
-    // The lacre only applies to instruments subject to legal metrology — never
+    // The marca de selagem only applies to instruments subject to legal metrology — never
     // carry a typed value into the payload if the chosen asset isn't subject.
     const parsed = parseServiceOrderForm({
       ...formData,
-      oldSealNumber:
-        selectedAsset?.metrologyRegime === 'LEGAL' ? formData.oldSealNumber : '',
+      removedSealingMarkNumber:
+        selectedAsset?.metrologyRegime === 'LEGAL'
+          ? formData.removedSealingMarkNumber
+          : '',
     })
     if (!parsed.success) {
       setErrors(
@@ -792,7 +794,7 @@ export function NewServiceOrderPage() {
                     onChange={(event) =>
                       updateField('intakeCondition', event.target.value)
                     }
-                    placeholder="Estado físico, danos, sujeira, lacres, embalagem"
+                    placeholder="Estado físico, danos, sujeira, marcas de selagem, embalagem"
                   />
                   {errors.intakeCondition && (
                     <FieldError>{errors.intakeCondition}</FieldError>
@@ -830,17 +832,20 @@ export function NewServiceOrderPage() {
               {selectedAsset?.metrologyRegime === 'LEGAL' ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field>
-                    <FieldLabel>Lacre rompido na entrada</FieldLabel>
+                    <FieldLabel>Marca de selagem retirada</FieldLabel>
                     <Input
-                      value={formData.oldSealNumber}
+                      value={formData.removedSealingMarkNumber}
                       onChange={(event) =>
-                        updateField('oldSealNumber', event.target.value)
+                        updateField(
+                          'removedSealingMarkNumber',
+                          event.target.value,
+                        )
                       }
-                      placeholder="Nº do lacre de segurança rompido"
+                      placeholder="Nº da marca de selagem retirada"
                     />
                     <FieldDescription>
-                      Lacre de segurança (metrologia legal) rompido para abrir o
-                      instrumento.
+                      Marca de selagem (metrologia legal) rompida na entrada
+                      para abrir o instrumento.
                     </FieldDescription>
                   </Field>
                 </div>

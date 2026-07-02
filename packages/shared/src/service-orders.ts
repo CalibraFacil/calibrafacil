@@ -144,7 +144,7 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.repair_started",
   "service_order.repair_finished",
   "service_order.delivery_document_issued",
-  "service_order.repair_seal_updated",
+  "service_order.repair_mark_updated",
   "service_order.ready_for_pickup",
   "service_order.delivered",
   "service_order.closed",

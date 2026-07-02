@@ -6,12 +6,12 @@ import {
   type ServiceOrderDocumentData,
 } from '@calibra-facil/documents'
 
-// REQ-DROPBOOL-001: the repair-seal / lacre (Etiqueta de Reparo) gating on a service-order
-// document renders IFF the instrument's `metrology_regime === 'LEGAL'` — byte-identical to
-// the old `subject_to_legal_metrology` boolean (which was kept in lock-step = regime LEGAL).
+// REQ-DROPBOOL-001: the repair-mark (Marca de Reparo) / marca-de-selagem gating on a
+// service-order document renders IFF the instrument's `metrology_regime === 'LEGAL'` —
+// byte-identical to the old `subject_to_legal_metrology` boolean (kept in lock-step = LEGAL).
 // This renders the REAL document component to markup and asserts the regulated fields appear
 // for a LEGAL instrument and are absent otherwise. Mutation check: drop the regime gate from
-// `ServiceOrderHtml.tsx` (render the lacre cells unconditionally / never) and this goes red.
+// `ServiceOrderHtml.tsx` (render the seal cells unconditionally / never) and this goes red.
 
 function docData(
   metrologyRegime: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN',
@@ -29,33 +29,33 @@ function docData(
     intake: {
       claimedDefect: 'Não mede',
       intakeCondition: 'Recebido com avarias',
-      oldSealNumber: 'LACRE-ANTIGO-1',
-      newSealNumber: 'LACRE-NOVO-1',
-      inmetroRepairSealNumber: 'ETQ-REPARO-1',
+      removedSealingMarkNumber: 'LACRE-ANTIGO-1',
+      affixedSealingMarkNumber: 'LACRE-NOVO-1',
+      inmetroRepairMarkNumber: 'ETQ-REPARO-1',
     },
   }
 }
 
-describe('REQ-DROPBOOL-001: service-order repair-seal gating by metrology_regime', () => {
-  it('renders the Etiqueta de Reparo / lacre fields for a LEGAL instrument', () => {
+describe('REQ-DROPBOOL-001: service-order repair-mark gating by metrology_regime', () => {
+  it('renders the Marca de Reparo / marca de selagem fields for a LEGAL instrument', () => {
     const html = renderToStaticMarkup(
       <ServiceOrderIntakeDocumentHtml data={docData('LEGAL')} />,
     )
 
-    expect(html).toContain('Etiqueta de Reparo')
-    expect(html).toContain('Lacre antigo')
-    expect(html).toContain('Lacre novo')
+    expect(html).toContain('Nº Marca de Reparo')
+    expect(html).toContain('Marca de selagem retirada')
+    expect(html).toContain('Marca de selagem aposta')
   })
 
-  it('omits the Etiqueta de Reparo / lacre fields for a non-LEGAL instrument', () => {
+  it('omits the Marca de Reparo / marca de selagem fields for a non-LEGAL instrument', () => {
     for (const regime of ['INDUSTRIAL', 'UNKNOWN'] as const) {
       const html = renderToStaticMarkup(
         <ServiceOrderIntakeDocumentHtml data={docData(regime)} />,
       )
 
-      expect(html).not.toContain('Etiqueta de Reparo')
-      expect(html).not.toContain('Lacre antigo')
-      expect(html).not.toContain('Lacre novo')
+      expect(html).not.toContain('Nº Marca de Reparo')
+      expect(html).not.toContain('Marca de selagem retirada')
+      expect(html).not.toContain('Marca de selagem aposta')
     }
   })
 })

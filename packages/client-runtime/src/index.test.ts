@@ -1214,7 +1214,7 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "updateRepairSeal",
+          "method": "updateRepairMark",
           "namespace": "serviceOrders",
           "policy": "cloud-only",
         },

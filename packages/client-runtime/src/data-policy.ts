@@ -329,7 +329,7 @@ export const calibraApiPolicyRegistry = {
     getIntakeDocumentPdf: "cloud-only",
     generateTag: "cloud-only",
     getTagPdf: "cloud-only",
-    updateRepairSeal: "cloud-only",
+    updateRepairMark: "cloud-only",
     deliver: "cloud-only",
     issueDeliveryDocument: "local-command-sync",
     getDeliveryDocumentPdf: "cloud-only",

@@ -49,10 +49,10 @@ export type ServiceOrderDocumentData = {
      */
     specs?: Array<{ label: string; value: string }>;
     /**
-     * Legal-metrology regime of the instrument. The lacre / Etiqueta de Reparo blocks
+     * Legal-metrology regime of the instrument. The marca-de-selagem / Marca de Reparo blocks
      * render IFF `metrologyRegime === 'LEGAL'` (Inmetro / RBMLQ-I legal control).
      */
-    metrologyRegime?: 'INDUSTRIAL' | 'LEGAL' | 'UNKNOWN';
+    metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
   };
   intake: {
     claimedDefect: string;
@@ -62,9 +62,9 @@ export type ServiceOrderDocumentData = {
     invoiceRemittanceKey?: string | null;
     carrierName?: string | null;
     thirdPartyName?: string | null;
-    oldSealNumber?: string | null;
-    newSealNumber?: string | null;
-    inmetroRepairSealNumber?: string | null;
+    removedSealingMarkNumber?: string | null;
+    affixedSealingMarkNumber?: string | null;
+    inmetroRepairMarkNumber?: string | null;
     clientVisibleNotes?: string | null;
     internalNotes?: string | null;
     terms?: string | null;
@@ -131,8 +131,8 @@ export type ServiceOrderDeliveryReceiptData = ServiceOrderDocumentData & {
     deliveredToDocument?: string | null;
     deliveryMethod?: string | null;
     deliveryNotes?: string | null;
-    inmetroRepairSealNumber?: string | null;
-    inmetroRepairSealIssuedAt?: Date | string | null;
+    inmetroRepairMarkNumber?: string | null;
+    inmetroRepairMarkIssuedAt?: Date | string | null;
     technicianSignature?: ServiceOrderSignatureBlock | null;
     clientSignature?: ServiceOrderSignatureBlock | null;
   };
@@ -466,7 +466,11 @@ function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
     <div className="receipt-head">
       <div className="receipt-brand">
         {data.lab.logoUrl ? (
-          <img className="lab-logo" src={data.lab.logoUrl} alt={data.lab.name} />
+          <img
+            className="lab-logo"
+            src={data.lab.logoUrl}
+            alt={data.lab.name}
+          />
         ) : null}
         <div className="receipt-brand-text">
           <div className="receipt-lab-name">{data.lab.name}</div>
@@ -482,8 +486,8 @@ function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
         <div className="receipt-doc-title">Comprovante de Entrega</div>
         {legalMetrology ? (
           <div className="receipt-doc-sub">
-            Instrumento sujeito a controle metrológico legal — reparo por oficina
-            permissionária (Port. Inmetro 65/2015).
+            Instrumento sujeito a controle metrológico legal — reparo por
+            oficina permissionária (Port. Inmetro 65/2015).
           </div>
         ) : null}
         <div className="os-number">{data.serviceOrderNumber}</div>
@@ -563,14 +567,13 @@ function DeliveryReceiptCopy({
   copy: "client" | "lab";
 }) {
   const sealNumber =
-    data.delivery.inmetroRepairSealNumber ??
-    data.intake.inmetroRepairSealNumber;
+    data.delivery.inmetroRepairMarkNumber ??
+    data.intake.inmetroRepairMarkNumber;
   const receivedBy =
     [data.delivery.deliveredToName, data.delivery.deliveredToDocument]
       .filter(Boolean)
       .join("  ·  ") || null;
-  const requestedService =
-    (data.requestedServices ?? []).join(", ") || null;
+  const requestedService = (data.requestedServices ?? []).join(", ") || null;
   const serviceLocation = data.isExternalService
     ? (data.customer.address ?? "No cliente (in loco)")
     : "No laboratório";
@@ -721,7 +724,7 @@ function DeliveryReceiptCopy({
       {data.asset.metrologyRegime === "LEGAL" ? (
         <>
           <div className="section-title">
-            Marca de Reparo e Lacres — Inmetro / RBMLQ-I
+            Marcas de Reparo e de Selagem — Inmetro / RBMLQ-I
           </div>
           <table className="form-table seal-section">
             <tbody>
@@ -729,13 +732,13 @@ function DeliveryReceiptCopy({
                 <Cell label="Marca de Reparo (nº)" value={sealNumber} />
                 <Cell
                   label="Emitida em"
-                  value={formatDate(data.delivery.inmetroRepairSealIssuedAt)}
+                  value={formatDate(data.delivery.inmetroRepairMarkIssuedAt)}
                 />
                 <td className="seal-cell" rowSpan={3}>
                   {copy === "lab" ? (
                     <>
                       <div className="seal-cap">
-                        Cole aqui a Etiqueta de Reparo
+                        Cole aqui a Marca de Reparo
                       </div>
                       <div className="seal-target">
                         <span className="seal-cm seal-cm-tl" />
@@ -759,12 +762,12 @@ function DeliveryReceiptCopy({
               </tr>
               <tr>
                 <Cell
-                  label="Lacre retirado (nº)"
-                  value={data.intake.oldSealNumber}
+                  label="Marca de selagem retirada (nº)"
+                  value={data.intake.removedSealingMarkNumber}
                 />
                 <Cell
-                  label="Lacre colocado (nº)"
-                  value={data.intake.newSealNumber}
+                  label="Marca de selagem aposta (nº)"
+                  value={data.intake.affixedSealingMarkNumber}
                 />
               </tr>
               <tr>
@@ -798,8 +801,8 @@ function DeliveryReceiptCopy({
       {copy === "client" ? (
         <div className="ack-line">
           Declaro ter recebido o equipamento nas condições descritas neste
-          comprovante, conferido o serviço executado e os lacres aplicados, e
-          atesto sua conformidade no ato da entrega.
+          comprovante, conferido o serviço executado e as marcas de selagem
+          apostas, e atesto sua conformidade no ato da entrega.
         </div>
       ) : null}
 
@@ -885,7 +888,10 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
           <tr>
             {data.asset.metrologyRegime === "LEGAL" ? (
-              <Cell label="Lacre antigo" value={data.intake.oldSealNumber} />
+              <Cell
+                label="Marca de selagem retirada"
+                value={data.intake.removedSealingMarkNumber}
+              />
             ) : null}
             <Cell
               label="Documento / NF"
@@ -898,14 +904,14 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           {data.asset.metrologyRegime === "LEGAL" ? (
             <tr>
               <Cell
-                label="Nº Etiqueta de Reparo"
-                value={data.intake.inmetroRepairSealNumber}
+                label="Nº Marca de Reparo"
+                value={data.intake.inmetroRepairMarkNumber}
                 fallback=""
                 tall
               />
               <Cell
-                label="Lacre novo"
-                value={data.intake.newSealNumber}
+                label="Marca de selagem aposta"
+                value={data.intake.affixedSealingMarkNumber}
                 fallback=""
                 tall
               />

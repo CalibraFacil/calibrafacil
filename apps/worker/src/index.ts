@@ -339,7 +339,7 @@ type JobData = {
   assetSnapshot?: AssetSnapshot | null;
   standardsSnapshot: StandardSnapshot[] | null;
   serviceOrder?: {
-    inmetroRepairSealNumber?: string | null;
+    inmetroRepairMarkNumber?: string | null;
   } | null;
   data: Record<string, unknown> | null;
   results: Record<string, unknown> | null;
@@ -955,7 +955,7 @@ async function fetchJobData(
       -- Original job info (if this is an amendment)
       original.job_id as original_job_id,
       original.approved_at as original_approved_at,
-      service_order_link.inmetro_repair_seal_number,
+      service_order_link.inmetro_repair_mark_number,
       snapshot_method.accredited_scope as method_accredited_scope_current
     FROM calibration_job cj
     LEFT JOIN organization o ON cj.organization_id = o.id
@@ -967,7 +967,7 @@ async function fetchJobData(
     LEFT JOIN "user" u ON cj.approved_by = u.id
     LEFT JOIN calibration_job original ON cj.supersedes_id = original.id
     LEFT JOIN LATERAL (
-      SELECT so.inmetro_repair_seal_number
+      SELECT so.inmetro_repair_mark_number
       FROM service_order_certificate_link socl
       INNER JOIN service_order so ON so.id = socl.service_order_id
       WHERE socl.certificate_job_id = cj.id
@@ -1127,7 +1127,7 @@ async function fetchJobData(
     assetSnapshot: row.asset_snapshot,
     standardsSnapshot: row.standards_snapshot,
     serviceOrder: {
-      inmetroRepairSealNumber: row.inmetro_repair_seal_number,
+      inmetroRepairMarkNumber: row.inmetro_repair_mark_number,
     },
     environmentalSnapshot: row.environmental_snapshot,
     calibrationLocationSnapshot: row.calibration_location_snapshot,
@@ -1682,9 +1682,9 @@ async function fetchServiceOrderDocumentData(
       so.invoice_remittance_key,
       so.carrier_name,
       so.third_party_name,
-      so.old_seal_number,
-      so.new_seal_number,
-      so.inmetro_repair_seal_number,
+      so.removed_sealing_mark_number,
+      so.affixed_sealing_mark_number,
+      so.inmetro_repair_mark_number,
       so.client_visible_notes,
       so.internal_notes,
       src.service_order_number as previous_so_number,
@@ -1810,9 +1810,9 @@ async function fetchServiceOrderDocumentData(
       invoiceRemittanceKey: row.invoice_remittance_key,
       carrierName: row.carrier_name,
       thirdPartyName: row.third_party_name,
-      oldSealNumber: row.old_seal_number,
-      newSealNumber: row.new_seal_number,
-      inmetroRepairSealNumber: row.inmetro_repair_seal_number,
+      removedSealingMarkNumber: row.removed_sealing_mark_number,
+      affixedSealingMarkNumber: row.affixed_sealing_mark_number,
+      inmetroRepairMarkNumber: row.inmetro_repair_mark_number,
       clientVisibleNotes: row.client_visible_notes,
       internalNotes: row.internal_notes,
       terms: row.default_intake_terms,
@@ -2089,7 +2089,7 @@ async function processServiceOrderDeliveryReceipt(
         `
         SELECT organization_id, service_order_number, opened_at, delivered_at,
           delivered_to_name, delivered_to_document, delivery_method, delivery_notes,
-          inmetro_repair_seal_number, inmetro_repair_seal_issued_at
+          inmetro_repair_mark_number, inmetro_repair_mark_issued_at
         FROM service_order
         WHERE id = $1
         `,
@@ -2160,8 +2160,8 @@ async function processServiceOrderDeliveryReceipt(
         deliveredToDocument: payload.order.delivered_to_document,
         deliveryMethod: payload.order.delivery_method,
         deliveryNotes: payload.order.delivery_notes,
-        inmetroRepairSealNumber: payload.order.inmetro_repair_seal_number,
-        inmetroRepairSealIssuedAt: payload.order.inmetro_repair_seal_issued_at,
+        inmetroRepairMarkNumber: payload.order.inmetro_repair_mark_number,
+        inmetroRepairMarkIssuedAt: payload.order.inmetro_repair_mark_issued_at,
         technicianSignature: payload.document.technician_signature_data,
         clientSignature: payload.document.client_signature_data,
       },
@@ -3348,7 +3348,7 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
     calibrationPhaseSnapshot: job.calibrationPhaseSnapshot,
     certificateTemplateSnapshot: job.certificateTemplateSnapshot,
     serviceOrder: {
-      inmetroRepairSealNumber: job.serviceOrder?.inmetroRepairSealNumber,
+      inmetroRepairMarkNumber: job.serviceOrder?.inmetroRepairMarkNumber,
     },
     graphics: {
       eccentricityIndicator: null,

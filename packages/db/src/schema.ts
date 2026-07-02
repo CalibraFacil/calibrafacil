@@ -5118,22 +5118,19 @@ export const serviceOrder = pgTable(
     claimedDefect: text("claimed_defect").notNull(),
     intakeCondition: text("intake_condition").notNull(),
     accessories: text("accessories"),
-    // Lacre (security seal) numbers: rompido na entrada / afixado na saída.
-    oldSealNumber: text("old_seal_number"),
-    newSealNumber: text("new_seal_number"),
-    // DEPRECATED: orphaned column — no input UI, not rendered on certificates,
-    // redundant with inmetroRepairSealNumber (the Etiqueta de Reparo / selo).
-    // No longer displayed anywhere; drop in a future contract migration.
-    repairedSealNumber: text("repaired_seal_number"),
-    // Etiqueta de Reparo (Inmetro "Marca de Instrumento Reparado") — the glued
-    // repair sticker. Kept the inmetroRepairSeal* column names for stability.
-    inmetroRepairSealNumber: text("inmetro_repair_seal_number"),
-    inmetroRepairSealIssuedAt: timestamp("inmetro_repair_seal_issued_at"),
-    inmetroRepairSealAppliedAt: timestamp("inmetro_repair_seal_applied_at"),
-    inmetroRepairSealAppliedByUserId: text(
-      "inmetro_repair_seal_applied_by_user_id",
+    // Marca de selagem (Inmetro; "lacre" coloquial) numbers: retirada na
+    // entrada / aposta na saída.
+    removedSealingMarkNumber: text("removed_sealing_mark_number"),
+    affixedSealingMarkNumber: text("affixed_sealing_mark_number"),
+    // Marca de Reparo (Inmetro / RBMLQ-I) — the glued repair mark applied by
+    // the permissionária.
+    inmetroRepairMarkNumber: text("inmetro_repair_mark_number"),
+    inmetroRepairMarkIssuedAt: timestamp("inmetro_repair_mark_issued_at"),
+    inmetroRepairMarkAppliedAt: timestamp("inmetro_repair_mark_applied_at"),
+    inmetroRepairMarkAppliedByUserId: text(
+      "inmetro_repair_mark_applied_by_user_id",
     ).references(() => user.id, { onDelete: "set null" }),
-    inmetroRepairSealNotes: text("inmetro_repair_seal_notes"),
+    inmetroRepairMarkNotes: text("inmetro_repair_mark_notes"),
     invoiceRemittanceNumber: text("invoice_remittance_number"),
     invoiceRemittanceKey: text("invoice_remittance_key"),
     invoiceRemittanceIssuedAt: timestamp("invoice_remittance_issued_at"),

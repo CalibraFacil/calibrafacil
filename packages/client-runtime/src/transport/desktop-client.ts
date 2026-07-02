@@ -2322,8 +2322,8 @@ export function createDesktopApiClient(
       async getTagPdf() {
         throw desktopUnsupportedServiceOrderAction("Abertura de etiqueta");
       },
-      async updateRepairSeal() {
-        throw desktopUnsupportedServiceOrderAction("Etiqueta de Reparo");
+      async updateRepairMark() {
+        throw desktopUnsupportedServiceOrderAction("Marca de Reparo");
       },
       async deliver() {
         throw desktopUnsupportedServiceOrderAction("Registro de entrega");
