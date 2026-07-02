@@ -20,10 +20,17 @@ describe('dashboard route metadata', () => {
     expect(isDashboardCloudOnlyPath('/dashboard/materials/1/edit')).toBe(true)
   })
 
-  it('lists Materiais alongside Serviços in the primary nav', () => {
-    const titles = dashboardPrimaryNavItems.map((item) => item.title)
-    expect(titles).toContain('Materiais')
-    expect(titles.indexOf('Materiais')).toBe(titles.indexOf('Serviços') + 1)
+  it('groups Serviços and Materiais under the Catálogo nav section', () => {
+    const catalogo = dashboardPrimaryNavItems.find(
+      (item) => item.title === 'Catálogo',
+    )
+    expect(catalogo).toBeDefined()
+    const childTitles = (catalogo?.items ?? []).map((item) => item.title)
+    expect(childTitles).toEqual(['Serviços', 'Materiais'])
+    // Neither appears as a top-level entry anymore
+    const topTitles = dashboardPrimaryNavItems.map((item) => item.title)
+    expect(topTitles).not.toContain('Serviços')
+    expect(topTitles).not.toContain('Materiais')
   })
 
   it('filters finance nav items by module and role access', () => {

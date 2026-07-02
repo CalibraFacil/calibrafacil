@@ -126,14 +126,21 @@ export const dashboardPrimaryNavItems = [
     ],
   },
   {
-    title: 'Serviços',
-    url: '/dashboard/services',
+    title: 'Catálogo',
+    url: '#',
     icon: 'services',
-  },
-  {
-    title: 'Materiais',
-    url: '/dashboard/materials',
-    icon: 'materials',
+    items: [
+      {
+        title: 'Serviços',
+        url: '/dashboard/services',
+        icon: 'services',
+      },
+      {
+        title: 'Materiais',
+        url: '/dashboard/materials',
+        icon: 'materials',
+      },
+    ],
   },
   {
     title: 'Calibrações',

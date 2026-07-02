@@ -116,6 +116,12 @@ const routeLabels: Record<string, string> = {
   '/dashboard/services/$id': 'Serviço',
   '/dashboard/services/$id/edit': 'Editar Serviço',
 
+  // Materials
+  '/dashboard/materials': 'Materiais',
+  '/dashboard/materials/new': 'Novo Material',
+  '/dashboard/materials/$id': 'Material',
+  '/dashboard/materials/$id/edit': 'Editar Material',
+
   // Standards
   '/dashboard/standards': 'Padrões',
   '/dashboard/standards/new': 'Novo Padrão',
