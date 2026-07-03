@@ -7,6 +7,43 @@ Documento controlado que registra a validação do motor matemático conforme di
 - `dossier.tex` — fonte LaTeX (única fonte da verdade).
 - `Makefile` — pipeline de build.
 - O PDF compilado **não é versionado**; é gerado a partir da fonte e assinado eletronicamente antes de ser distribuído.
+- `manifest.json` — **sidecar legível por máquina** (DOM-11 / #664). Espelha a
+  versão validada e fixa um _fingerprint_ de referência do motor para o gate
+  automatizado. Ver abaixo.
+
+## Gate automatizado motor ↔ dossiê (`manifest.json`)
+
+O `dossier.tex` declara a versão validada como texto (`\docVersion`) mas **não
+registra um fingerprint legível por máquina**. Para permitir uma checagem
+automatizada de que o motor em produção corresponde a este dossiê, o
+`manifest.json` adjacente é a fonte da verdade parseável:
+
+```json
+{
+  "engineVersion": "0.3.0",
+  "referenceFormula": "reference + correction - drift",
+  "fingerprint": "sha256:<digest>"
+}
+```
+
+- `engineVersion` — deve ser idêntico a `\docVersion` no `dossier.tex` e à
+  constante `ENGINE_VERSION` do pacote.
+- `referenceFormula` — modelo canônico (sem literais numéricos nem funções
+  transcendentais, portanto reproduzível bit a bit entre _runtimes_) que o gate
+  recompila para obter o fingerprint do motor.
+- `fingerprint` — `formulaFingerprint` (SHA-256 canônico sobre AST + opções +
+  versão) que o motor validado produz ao compilar `referenceFormula`. Valor
+  **extraído do motor real** e fixado como _baseline_. ⚠️ **Ainda NÃO ratificado
+  por revisão humana** — a ratificação metrológica do modelo de referência e
+  deste fingerprint é um bloqueio de merge (ver PR #664/DOM-11). O gate detecta
+  fielmente qualquer divergência _futura_ deste baseline; se o próprio baseline
+  for corrigido na ratificação, atualize este valor.
+
+O teste `packages/math-engine/src/audit/engine-dossier-gate.spec.ts` falha se
+`ENGINE_VERSION` divergir da versão do dossiê vigente (REQ-DOM-GAT-001) ou se o
+motor não reproduzir o `fingerprint` registrado (REQ-DOM-GAT-002). Qualquer
+`release` que mude `ENGINE_VERSION` exige novo diretório de dossiê **com seu
+próprio `manifest.json`** antes de passar no gate.
 
 ## Como compilar
 

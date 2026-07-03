@@ -1,0 +1,5 @@
+{
+  "engineVersion": "0.3.0",
+  "referenceFormula": "reference + correction - drift",
+  "fingerprint": "sha256:7e36ad35c2bc1f480738b43a9e35a4b6120a8934846ac5861046866ca4e7fea7"
+}
