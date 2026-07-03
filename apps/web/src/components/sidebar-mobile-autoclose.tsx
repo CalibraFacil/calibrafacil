@@ -24,7 +24,14 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
  *   that reach a new location without an `onBeforeNavigate` of their own (e.g.
  *   the target of a redirect, where the initial event is suppressed).
  *
- * Both just call the idempotent `setOpenMobile(false)`.
+ * `onResolved` must only close when the location actually changed: route
+ * PRELOADS (the nav links' prewarm-on-touch intent) also settle through an
+ * `onResolved` with `pathChanged`/`hrefChanged` both false. Closing on those
+ * dismissed the sheet mid-scroll on touch devices — dragging across a link
+ * scheduled a prewarm and the sheet vanished under the user's finger. The
+ * deliberate "tap the current page's link still dismisses" behavior is not
+ * affected: that is a real (same-URL) navigation and comes in through
+ * `onBeforeNavigate`.
  */
 export function SidebarMobileAutoClose() {
   const router = useRouter()
@@ -32,8 +39,14 @@ export function SidebarMobileAutoClose() {
 
   useMountEffect(() => {
     const close = () => setOpenMobile(false)
-    const unsubscribeBeforeNavigate = router.subscribe('onBeforeNavigate', close)
-    const unsubscribeResolved = router.subscribe('onResolved', close)
+    const unsubscribeBeforeNavigate = router.subscribe(
+      'onBeforeNavigate',
+      close,
+    )
+    const unsubscribeResolved = router.subscribe('onResolved', (event) => {
+      if (!event.pathChanged && !event.hrefChanged) return
+      close()
+    })
 
     return () => {
       unsubscribeBeforeNavigate()
