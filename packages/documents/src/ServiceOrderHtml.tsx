@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import type { ReactNode } from "react";
+
 export type ServiceOrderDocumentItem = {
   description: string;
   quantity: number;
@@ -20,7 +22,7 @@ export type ServiceOrderDocumentData = {
     logoUrl?: string | null;
     /**
      * Permissionária authorization number + UF (e.g. "0123/RS") from the RBMLQ-I.
-     * Mandatory OS content for legal-metrology repairs (Port. Inmetro 65/2015); the
+     * Mandatory OS content for legal-metrology repairs (Portaria Inmetro nº 65/2015); the
      * repairer's own seal also carries it. Optional so non-regulated docs omit it.
      */
     authorizationNumber?: string | null;
@@ -175,6 +177,10 @@ const pageStyles = `
   .cell-label { display: block; font-size: 6.1pt; font-weight: 700; text-transform: uppercase; margin-bottom: 0.15mm; }
   .cell-value { display: block; min-height: 1.8mm; white-space: pre-wrap; overflow-wrap: anywhere; }
   .cell-value-tall { min-height: 6.5mm; }
+  /* Handwriting slot: same rule everywhere a field is completed by pen, so blank
+     fields read as "fill me" while absent data reads as an em dash. */
+  .fill-line { display: inline-block; min-width: 20mm; height: 2.7mm; border-bottom: 0.25mm solid #000; }
+  .mono-id { font-family: "Courier New", monospace; font-variant-numeric: tabular-nums; }
   .notes-box { border: 1px solid #000; min-height: 6mm; padding: 0.65mm 0.85mm; white-space: pre-wrap; margin-bottom: 0.55mm; }
   .writing-box { border: 1px solid #000; height: 12mm; padding: 0; margin-bottom: 0.6mm; background: repeating-linear-gradient(to bottom, #fff 0, #fff 4.6mm, #000 4.6mm, #000 4.72mm); }
   .writing-box.compact { height: 7mm; }
@@ -254,6 +260,7 @@ const pageStyles = `
   .receipt-qr-wrap .qr { width: 64px; height: 64px; flex: 0 0 auto; }
   .receipt-qr-cap { font-size: 5.9pt; line-height: 1.18; max-width: 29mm; }
   .exec-notes { min-height: 12mm; }
+  .exec-note + .exec-note { margin-top: 1mm; }
   .num, .receipt-total, .os-number { font-variant-numeric: tabular-nums; }
   .total-strong { background: #f2f2f2; border: 1.4pt solid #000 !important; text-align: right; }
   .total-strong .receipt-total { font-size: 12pt; }
@@ -290,7 +297,7 @@ const pageStyles = `
 `;
 
 function formatDate(value: Date | string | null | undefined) {
-  if (!value) return "-";
+  if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -308,7 +315,7 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
-function text(value: unknown, fallback = "-") {
+function text(value: unknown, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
 }
@@ -322,7 +329,7 @@ const INTAKE_TYPE_LABELS: Record<string, string> = {
 };
 
 function intakeTypeLabel(value?: string | null) {
-  if (!value) return "-";
+  if (!value) return "—";
   return INTAKE_TYPE_LABELS[value] ?? value;
 }
 
@@ -330,7 +337,7 @@ function Field({ label, value }: { label: string; value?: unknown }) {
   return (
     <div className="field">
       <span className="label">{label}: </span>
-      <span>{value ? String(value) : "-"}</span>
+      <span>{value ? String(value) : "—"}</span>
     </div>
   );
 }
@@ -340,17 +347,39 @@ function Cell({
   value,
   fallback,
   tall,
+  mono,
+  fillIn,
+  colSpan,
 }: {
   label: string;
   value?: unknown;
   fallback?: string;
   tall?: boolean;
+  /** Traceable identifiers (mark numbers, fiscal docs) print in the same
+   * monospace face as the OS number so every id reads as one family. */
+  mono?: boolean;
+  /** Field meant to be completed by hand: an empty value renders a writing
+   * rule instead of the "absent data" em dash. */
+  fillIn?: boolean;
+  colSpan?: number;
 }) {
+  const valueClass = [
+    "cell-value",
+    tall ? "cell-value-tall" : null,
+    mono ? "mono-id" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const isEmpty = value === null || value === undefined || value === "";
   return (
-    <td>
+    <td colSpan={colSpan}>
       <span className="cell-label">{label}</span>
-      <span className={tall ? "cell-value cell-value-tall" : "cell-value"}>
-        {text(value, fallback)}
+      <span className={valueClass}>
+        {fillIn && isEmpty ? (
+          <span className="fill-line" />
+        ) : (
+          text(value, fallback)
+        )}
       </span>
     </td>
   );
@@ -386,7 +415,7 @@ function CheckboxLine({
   label,
   checked,
 }: {
-  label: string;
+  label: ReactNode;
   checked?: boolean;
 }) {
   return (
@@ -429,7 +458,7 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
                   <div className="header-info-line">
                     {[data.lab.phone, data.lab.email]
                       .filter(Boolean)
-                      .join(" | ") || "-"}
+                      .join(" | ") || "—"}
                   </div>
                   <div className="header-info-line">
                     CNPJ: {text(data.lab.cnpj)}
@@ -452,7 +481,9 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
                 <div className="meta-line">
                   Entrada: {formatDate(data.openedAt)}
                 </div>
-                <div className="meta-line">Previsão: -</div>
+                <div className="meta-line">
+                  Previsão: <span className="fill-line" />
+                </div>
               </div>
               {data.qrCodeDataUrl ? (
                 <div className="qr-cell">
@@ -501,7 +532,7 @@ function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
           <div className="receipt-lab-name">{data.lab.name}</div>
           <div className="receipt-lab-line">
             {[data.lab.phone, data.lab.email].filter(Boolean).join("  ·  ") ||
-              "-"}
+              "—"}
           </div>
           <div className="receipt-lab-line">{cnpjLine}</div>
           <div className="receipt-lab-line">{text(data.lab.address)}</div>
@@ -512,12 +543,14 @@ function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
         {legalMetrology ? (
           <div className="receipt-doc-sub">
             Instrumento sujeito a controle metrológico legal — reparo por
-            oficina permissionária (Port. Inmetro 65/2015).
+            oficina permissionária (Portaria Inmetro nº 65/2015).
           </div>
         ) : null}
         <div className="os-number">{data.serviceOrderNumber}</div>
         <div className="receipt-meta-row">
-          Documento {data.delivery.documentNumber} · v{data.delivery.version}
+          Documento{" "}
+          <span className="mono-id">{data.delivery.documentNumber}</span> · v
+          {data.delivery.version}
         </div>
         <div className="receipt-meta-row">
           Emissão: {formatDate(data.delivery.issuedAt)}
@@ -688,12 +721,23 @@ function DeliveryReceiptCopy({
       </table>
       <div className="notes-box exec-notes">
         {[
-          data.execution.servicePerformed,
-          data.execution.partsUsedSummary,
-          data.execution.technicalNotes,
+          {
+            label: "Serviço executado",
+            value: data.execution.servicePerformed,
+          },
+          { label: "Peças utilizadas", value: data.execution.partsUsedSummary },
+          {
+            label: "Observações técnicas",
+            value: data.execution.technicalNotes,
+          },
         ]
-          .filter(Boolean)
-          .join("\n")}
+          .filter((block) => block.value)
+          .map((block) => (
+            <div key={block.label} className="exec-note">
+              <span className="cell-label">{block.label}</span>
+              <span className="cell-value">{block.value}</span>
+            </div>
+          ))}
       </div>
 
       <div className="section-title">Itens cobrados / peças utilizadas</div>
@@ -754,7 +798,7 @@ function DeliveryReceiptCopy({
           <table className="form-table seal-section">
             <tbody>
               <tr>
-                <Cell label="Marca de Reparo (nº)" value={sealNumber} />
+                <Cell label="Marca de Reparo (nº)" value={sealNumber} mono />
                 <Cell
                   label="Emitida em"
                   value={formatDate(data.delivery.inmetroRepairMarkIssuedAt)}
@@ -788,10 +832,12 @@ function DeliveryReceiptCopy({
                 <Cell
                   label="Marca de selagem retirada (nº)"
                   value={data.intake.removedSealingMarkNumber}
+                  mono
                 />
                 <Cell
                   label="Marca de selagem aposta (nº)"
                   value={data.intake.affixedSealingMarkNumber}
+                  mono
                 />
               </tr>
               <tr>
@@ -863,7 +909,13 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           <tr>
             <Cell label="Cliente" value={data.customer.name} />
             <Cell label="Documento" value={data.customer.taxId} />
-            <Cell label="Entrada / Protocolo" value={data.serviceOrderNumber} />
+            <Cell
+              label="Início do serviço"
+              value={
+                data.serviceStartedAt ? formatDate(data.serviceStartedAt) : null
+              }
+              fillIn
+            />
           </tr>
           <tr>
             <Cell
@@ -915,6 +967,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
               <Cell
                 label="Marca de selagem retirada (nº)"
                 value={data.intake.removedSealingMarkNumber}
+                mono
               />
             ) : null}
             <Cell
@@ -923,6 +976,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
                 data.intake.invoiceRemittanceNumber ??
                 data.intake.invoiceRemittanceKey
               }
+              mono
             />
           </tr>
           {data.asset.metrologyRegime === "LEGAL" ? (
@@ -931,12 +985,14 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
                 label="Marca de Reparo (nº)"
                 value={data.intake.inmetroRepairMarkNumber}
                 fallback=""
+                mono
                 tall
               />
               <Cell
                 label="Marca de selagem aposta (nº)"
                 value={data.intake.affixedSealingMarkNumber}
                 fallback=""
+                mono
                 tall
               />
             </tr>
@@ -952,14 +1008,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell
               label="Técnico anterior"
               value={data.previousTechnicianName}
-            />
-            <Cell
-              label="Início do serviço"
-              value={
-                data.serviceStartedAt
-                  ? formatDate(data.serviceStartedAt)
-                  : "___/___/_____  ___:___"
-              }
+              colSpan={2}
             />
           </tr>
         </tbody>
@@ -996,7 +1045,11 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
                   checked={requested.has("Garantia")}
                 />
                 <CheckboxLine
-                  label="Outro: -"
+                  label={
+                    <>
+                      Outro: <span className="fill-line" />
+                    </>
+                  }
                   checked={requested.has("Outro")}
                 />
               </td>
@@ -1113,9 +1166,9 @@ function ClientCopy({ data }: { data: ServiceOrderDocumentData }) {
       <table className="form-table">
         <tbody>
           <tr>
-            <Cell label="Número da OS" value={data.serviceOrderNumber} />
-            <Cell label="Entrada / Protocolo" value={data.serviceOrderNumber} />
-            <Cell label="Previsão" value={null} />
+            <Cell label="Número da OS" value={data.serviceOrderNumber} mono />
+            <Cell label="Recebido em" value={formatDate(data.openedAt)} />
+            <Cell label="Previsão" value={null} fillIn />
           </tr>
           <tr>
             <Cell label="Cliente" value={data.customer.name} />
@@ -1188,10 +1241,12 @@ function ClientCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell
               label="Responsável pela entrada no laboratório"
               value={data.receiverName}
+              fillIn
             />
             <Cell
               label="Cliente / entregador"
               value={data.signatureDataUrl ? "Assinado digitalmente" : null}
+              fillIn
             />
           </tr>
         </tbody>
