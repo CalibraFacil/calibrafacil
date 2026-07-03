@@ -1,6 +1,5 @@
 import { useRouter } from '@tanstack/react-router'
 
-import { sidebarDebugLog } from '@/components/sidebar-debug'
 import { useSidebar } from '@/components/ui/sidebar'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
@@ -42,14 +41,10 @@ export function SidebarMobileAutoClose() {
     const close = () => setOpenMobile(false)
     const unsubscribeBeforeNavigate = router.subscribe(
       'onBeforeNavigate',
-      (event) => {
-        sidebarDebugLog(`autoclose onBeforeNavigate ${event.toLocation.href}`)
-        close()
-      },
+      close,
     )
     const unsubscribeResolved = router.subscribe('onResolved', (event) => {
       if (!event.pathChanged && !event.hrefChanged) return
-      sidebarDebugLog('autoclose onResolved (location changed)')
       close()
     })
 

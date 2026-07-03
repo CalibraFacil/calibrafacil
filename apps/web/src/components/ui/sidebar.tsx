@@ -17,7 +17,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { sidebarDebugLog } from '@/components/sidebar-debug'
 import { createSidebarScrollTapGuard } from '@/components/sidebar-scroll-tap-guard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,16 +85,7 @@ function SidebarProvider({
   onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
-  const [openMobile, rawSetOpenMobile] = useState(false)
-  // Temporary tracing for the mobile-sheet dismissal bug (sidebar-debug.ts):
-  // records who asked to close, with a stack, when `?sidebar-debug` is on.
-  const setOpenMobile = useCallback((open: boolean) => {
-    if (!open) {
-      const stack = (new Error().stack ?? '').split('\n').slice(1, 5).join('\n')
-      sidebarDebugLog(`setOpenMobile(false)\n${stack}`)
-    }
-    rawSetOpenMobile(open)
-  }, [])
+  const [openMobile, setOpenMobile] = useState(false)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -119,9 +109,9 @@ function SidebarProvider({
   // Helper to toggle the sidebar.
   const toggleSidebar = useCallback(() => {
     return isMobile
-      ? rawSetOpenMobile((state) => !state)
+      ? setOpenMobile((state) => !state)
       : setOpen((state) => !state)
-  }, [isMobile, setOpen])
+  }, [isMobile, setOpen, setOpenMobile])
   const toggleSidebarRef = useRef(toggleSidebar)
   toggleSidebarRef.current = toggleSidebar
 
@@ -215,18 +205,7 @@ function Sidebar({
     }
 
     return (
-      <Sheet
-        open={openMobile}
-        onOpenChange={(open, eventDetails) => {
-          if (!open) {
-            sidebarDebugLog(
-              `sheet onOpenChange reason=${eventDetails.reason} event=${String(eventDetails.event?.type)}`,
-            )
-          }
-          setOpenMobile(open)
-        }}
-        {...props}
-      >
+      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
           data-sidebar="sidebar"
           data-slot="sidebar"
