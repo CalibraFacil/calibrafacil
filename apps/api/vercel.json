@@ -49,7 +49,7 @@
     },
     {
       "path": "/api/cron/service-order-emails",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/30 * * * *"
     }
   ],
   "rewrites": [
