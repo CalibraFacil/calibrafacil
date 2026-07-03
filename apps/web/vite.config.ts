@@ -53,7 +53,9 @@ export default defineConfig({
         short_name: 'CalibraFácil',
         description:
           'Gestão de calibração, cálculo de incerteza conforme GUM e emissão automática de certificados para laboratórios alinhados à ISO/IEC 17025.',
-        start_url: '/',
+        // Installed app launches into the product, not the marketing landing
+        // page; the dashboard guard redirects to /sign-in when logged out.
+        start_url: '/dashboard',
         display: 'standalone',
         theme_color: '#4f46e5',
         background_color: '#ffffff',
