@@ -3,6 +3,7 @@ import tanstackRouter from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import viteTsConfigPaths from 'vite-tsconfig-paths'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -40,6 +41,58 @@ export default defineConfig({
       autoCodeSplitting: true,
     }),
     viteReact(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Registration happens in src/main.tsx behind the desktop-runtime guard,
+      // so the Electron shell never installs the service worker.
+      injectRegister: false,
+      manifest: {
+        id: '/',
+        lang: 'pt-BR',
+        name: 'CalibraFácil | Software para Laboratórios de Calibração',
+        short_name: 'CalibraFácil',
+        description:
+          'Gestão de calibração, cálculo de incerteza conforme GUM e emissão automática de certificados para laboratórios alinhados à ISO/IEC 17025.',
+        start_url: '/',
+        display: 'standalone',
+        theme_color: '#4f46e5',
+        background_color: '#ffffff',
+        icons: [
+          {
+            src: 'logo-mark-light.svg',
+            type: 'image/svg+xml',
+            sizes: 'any',
+            purpose: 'any',
+          },
+          {
+            src: 'logo192.png',
+            type: 'image/png',
+            sizes: '192x192',
+          },
+          {
+            src: 'logo512.png',
+            type: 'image/png',
+            sizes: '512x512',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,svg,png,woff,woff2}'],
+        // Marketing/OG imagery is not part of the app shell.
+        globIgnores: [
+          'og/**',
+          'landing/**',
+          'integrations/**',
+          'hero-preview*.png',
+          'tanstack-*',
+        ],
+        // /api is the same-origin backend (incl. Better-Auth and magic-link
+        // GETs) and /blog is rewritten by Vercel to the external CMS — the SPA
+        // navigation fallback must never swallow either.
+        navigateFallbackDenylist: [/^\/api\//, /^\/blog(\/|$)/],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+    }),
   ],
   build: {
     rollupOptions: {
