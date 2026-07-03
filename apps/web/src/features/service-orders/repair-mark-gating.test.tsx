@@ -42,7 +42,7 @@ describe('REQ-DROPBOOL-001: service-order repair-mark gating by metrology_regime
       <ServiceOrderIntakeDocumentHtml data={docData('LEGAL')} />,
     )
 
-    expect(html).toContain('Nº Marca de Reparo')
+    expect(html).toContain('Marca de Reparo (nº)')
     expect(html).toContain('Marca de selagem retirada')
     expect(html).toContain('Marca de selagem aposta')
   })
@@ -53,7 +53,7 @@ describe('REQ-DROPBOOL-001: service-order repair-mark gating by metrology_regime
         <ServiceOrderIntakeDocumentHtml data={docData(regime)} />,
       )
 
-      expect(html).not.toContain('Nº Marca de Reparo')
+      expect(html).not.toContain('Marca de Reparo (nº)')
       expect(html).not.toContain('Marca de selagem retirada')
       expect(html).not.toContain('Marca de selagem aposta')
     }

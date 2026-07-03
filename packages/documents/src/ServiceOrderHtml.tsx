@@ -207,8 +207,14 @@ const pageStyles = `
   .lab-copy .parts-table td { height: 7mm; }
   .lab-copy .signature-table td { height: 4mm; }
   .qr { width: 82px; height: 82px; object-fit: contain; }
-  .qr-cell { text-align: right; }
-  .qr-url { font-size: 7pt; overflow-wrap: anywhere; margin-top: 1mm; }
+  /* Brand block centers in the header cell instead of floating at the top of the
+     taller QR column; the QR sits BESIDE the OS metadata (not stacked under it), so
+     the header no longer dictates ~14mm of dead space — that spill was what pushed
+     the lab via past one A4 on instruments with a full spec blueprint. */
+  .header .header-brand-cell { vertical-align: middle; }
+  .header-meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 1.6mm; }
+  .qr-cell { flex: 0 0 auto; text-align: center; }
+  .qr-url { font-size: 5.4pt; line-height: 1.15; overflow-wrap: anywhere; margin-top: 0.5mm; }
   .field { margin: 2px 0; }
   .label { font-weight: 700; }
   table.quote-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -243,7 +249,9 @@ const pageStyles = `
   .receipt-meta .os-number { font-size: 11pt; margin: 0; }
   .receipt-meta-row { font-size: 6.7pt; line-height: 1.15; }
   .receipt-qr-wrap { display: flex; align-items: center; gap: 1.8mm; margin-top: 0.7mm; }
-  .receipt-qr-wrap .qr { width: 46px; height: 46px; flex: 0 0 auto; }
+  /* 46px (~12mm) put the QR modules under the ~0.4mm reliable laser-print floor for
+     a 60+ char URL; 64px (~17mm) keeps error-margin for the portal link. */
+  .receipt-qr-wrap .qr { width: 64px; height: 64px; flex: 0 0 auto; }
   .receipt-qr-cap { font-size: 5.9pt; line-height: 1.18; max-width: 29mm; }
   .exec-notes { min-height: 12mm; }
   .num, .receipt-total, .os-number { font-variant-numeric: tabular-nums; }
@@ -389,12 +397,23 @@ function CheckboxLine({
   );
 }
 
+/**
+ * Host shown under the header QR. The full public URL (protocol + UUID path) wraps
+ * to two-plus lines nobody types; the QR carries the exact link, the text only needs
+ * to say where it leads.
+ */
+function formatPublicUrlHost(publicUrl?: string | null) {
+  if (!publicUrl) return null;
+  const match = publicUrl.match(/^https?:\/\/([^/]+)/);
+  return match ? match[1] : publicUrl;
+}
+
 function Header({ data }: { data: ServiceOrderDocumentData }) {
   return (
     <table className="header">
       <tbody>
         <tr>
-          <td style={{ width: "64%" }}>
+          <td className="header-brand-cell" style={{ width: "64%" }}>
             <div className="header-brand">
               {data.lab.logoUrl ? (
                 <img
@@ -423,21 +442,27 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
             </div>
           </td>
           <td style={{ width: "36%" }}>
-            <div className="meta-title">Número da OS</div>
-            <div className="os-number">{data.serviceOrderNumber}</div>
-            <div className="meta-line">
-              Abertura: {formatDate(data.openedAt)}
-            </div>
-            <div className="meta-line">
-              Entrada: {formatDate(data.openedAt)}
-            </div>
-            <div className="meta-line">Previsão: -</div>
-            {data.qrCodeDataUrl ? (
-              <div className="qr-cell">
-                <img className="qr" src={data.qrCodeDataUrl} alt="QR Code" />
-                <div className="qr-url">{data.publicUrl}</div>
+            <div className="header-meta">
+              <div>
+                <div className="meta-title">Número da OS</div>
+                <div className="os-number">{data.serviceOrderNumber}</div>
+                <div className="meta-line">
+                  Abertura: {formatDate(data.openedAt)}
+                </div>
+                <div className="meta-line">
+                  Entrada: {formatDate(data.openedAt)}
+                </div>
+                <div className="meta-line">Previsão: -</div>
               </div>
-            ) : null}
+              {data.qrCodeDataUrl ? (
+                <div className="qr-cell">
+                  <img className="qr" src={data.qrCodeDataUrl} alt="QR Code" />
+                  <div className="qr-url">
+                    {formatPublicUrlHost(data.publicUrl)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </td>
         </tr>
       </tbody>
@@ -748,15 +773,14 @@ function DeliveryReceiptCopy({
                       </div>
                     </>
                   ) : (
-                    <>
-                      <span className="cell-label">
-                        Marca de Reparo aplicada (nº)
-                      </span>
-                      <span className="cell-value">{text(sealNumber)}</span>
-                      <span className="seal-note">
-                        Sujeito a verificação após reparo pelo IPEM / RBMLQ-I.
-                      </span>
-                    </>
+                    // The number already prints in the first column of this same
+                    // section — repeating it here (old "Marca de Reparo aplicada")
+                    // gave the reader two labels for one fact. The client via keeps
+                    // only the verification notice.
+                    <span className="seal-note">
+                      Marca de Reparo sujeita a verificação após o reparo pelo
+                      IPEM / RBMLQ-I.
+                    </span>
                   )}
                 </td>
               </tr>
@@ -889,7 +913,7 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           <tr>
             {data.asset.metrologyRegime === "LEGAL" ? (
               <Cell
-                label="Marca de selagem retirada"
+                label="Marca de selagem retirada (nº)"
                 value={data.intake.removedSealingMarkNumber}
               />
             ) : null}
@@ -904,13 +928,13 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           {data.asset.metrologyRegime === "LEGAL" ? (
             <tr>
               <Cell
-                label="Nº Marca de Reparo"
+                label="Marca de Reparo (nº)"
                 value={data.intake.inmetroRepairMarkNumber}
                 fallback=""
                 tall
               />
               <Cell
-                label="Marca de selagem aposta"
+                label="Marca de selagem aposta (nº)"
                 value={data.intake.affixedSealingMarkNumber}
                 fallback=""
                 tall
