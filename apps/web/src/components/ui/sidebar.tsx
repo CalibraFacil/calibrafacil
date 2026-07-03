@@ -17,6 +17,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
+import { createSidebarScrollTapGuard } from '@/components/sidebar-scroll-tap-guard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
@@ -181,6 +182,7 @@ function Sidebar({
   collapsible?: 'offExamples' | 'icon' | 'none'
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const scrollTapGuard = useMemo(() => createSidebarScrollTapGuard(), [])
 
   if (collapsible === 'none') {
     return (
@@ -218,7 +220,21 @@ function Sidebar({
               Mostra a barra lateral em dispositivos móveis.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div
+            className="flex h-full w-full flex-col"
+            // iOS synthesizes a click on the link under the finger when a
+            // touch stops a still-moving scroll; swallow clicks that arrive
+            // while scroll events are still fresh (see the guard's docs).
+            onScrollCapture={scrollTapGuard.noteScroll}
+            onClickCapture={(event) => {
+              if (scrollTapGuard.shouldSuppressTap()) {
+                event.preventDefault()
+                event.stopPropagation()
+              }
+            }}
+          >
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     )
