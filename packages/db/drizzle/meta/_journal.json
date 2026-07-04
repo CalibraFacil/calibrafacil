@@ -540,6 +540,13 @@
 			"when": 1783024855125,
 			"tag": "0076_official_sealing_mark_terminology",
 			"breakpoints": true
+		},
+		{
+			"idx": 77,
+			"version": "7",
+			"when": 1783100000000,
+			"tag": "0077_calibration_job_source_service_order",
+			"breakpoints": true
 		}
 	]
 }

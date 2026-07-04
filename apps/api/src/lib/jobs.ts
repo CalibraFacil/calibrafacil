@@ -10,6 +10,7 @@ import {
   memberUnitAssignment,
   personnelCompetence,
   service,
+  serviceOrder,
   type AssetSnapshot,
   type MethodInputField,
   type MethodSnapshot,
@@ -36,6 +37,11 @@ type CreateCalibrationJobParams = {
   ipAddress?: string | null;
   sourceRequestId?: number;
   sourceRequestItemId?: number;
+  // DOM-02 (#655): the repair service order this calibration is being opened
+  // from (flagged calibrationRequiredAfterRepair). Persisted as the back-link on
+  // the job. Re-validated to be in the caller's organization before persisting;
+  // a cross-tenant id is dropped to null rather than linked.
+  sourceServiceOrderId?: number | null;
   executor?: JobDbExecutor;
   notifyOnAssignment?: boolean;
   // On-site (calibração in loco): pre-freeze the calibration location to the
@@ -430,6 +436,24 @@ async function persistCalibrationJob(
     dueDate = addBusinessDays(new Date(), serviceData.tat);
   }
 
+  // DOM-02: record the source repair OS, but only if it belongs to the caller's
+  // organization. A cross-tenant id is silently dropped to null so the link can
+  // never point across the tenant boundary.
+  let sourceServiceOrderId: number | null = null;
+  if (params.sourceServiceOrderId) {
+    const [sourceOrder] = await executor
+      .select({ id: serviceOrder.id })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, params.sourceServiceOrderId),
+          eq(serviceOrder.organizationId, params.organizationId),
+        ),
+      )
+      .limit(1);
+    sourceServiceOrderId = sourceOrder?.id ?? null;
+  }
+
   const [newJob] = await executor
     .insert(calibrationJob)
     .values({
@@ -447,6 +471,7 @@ async function persistCalibrationJob(
       status: "DRAFT",
       dueDate,
       visitId: params.visitId ?? null,
+      sourceServiceOrderId,
       calibrationLocationSnapshot: params.onsiteLocation
         ? {
             type: "customer_site",
@@ -492,6 +517,7 @@ async function persistCalibrationJob(
         },
         sourceRequestId: params.sourceRequestId,
         sourceRequestItemId: params.sourceRequestItemId,
+        sourceServiceOrderId,
       },
     },
     performedBy: params.createdBy,

@@ -4134,6 +4134,16 @@ export const calibrationJob = pgTable(
     visitId: integer("visit_id").references(() => calibrationVisit.id, {
       onDelete: "set null",
     }),
+    // Source repair service order (DOM-02): when this calibration was opened
+    // directly from a service order flagged "calibration required after repair"
+    // (serviceOrderExecution.calibrationRequiredAfterRepair), record the link
+    // back so the OS's follow-up calibration is tracked and the technician does
+    // not re-enter customer/asset. Null for standalone jobs. Set-null on delete
+    // so removing an OS never cascades into an issued certificate.
+    sourceServiceOrderId: integer("source_service_order_id").references(
+      () => serviceOrder.id,
+      { onDelete: "set null" },
+    ),
     // Dates
     dueDate: timestamp("due_date"),
     performedAt: timestamp("performed_at"),
@@ -4304,6 +4314,9 @@ export const calibrationJob = pgTable(
     index("job_supersedes_id_idx").on(table.supersedesId),
     index("job_superseded_by_id_idx").on(table.supersededById),
     index("job_certificate_template_id_idx").on(table.certificateTemplateId),
+    // DOM-02: resolve "does this repair OS already have a calibration opened?"
+    // (the pending-after-repair queue leftJoins on this column).
+    index("job_source_service_order_id_idx").on(table.sourceServiceOrderId),
   ],
 );
 

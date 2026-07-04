@@ -535,6 +535,9 @@ function serviceOrderDetail(): ServiceOrderDetail {
   return {
     id: 1,
     serviceOrderNumber: 'OS-1',
+    customerId: 1,
+    assetId: 1,
+    status: 'opened',
     priority: 'normal',
     statusLabel: 'Aberta',
     customerName: 'Cliente',

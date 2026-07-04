@@ -139,6 +139,11 @@ export type ServiceOrderDeliveryDocument = {
 export type ServiceOrderDetail = {
   id: number
   serviceOrderNumber: string
+  // Present in the read-model payload; needed to open a pre-filled calibration
+  // from a repair OS (DOM-02) without re-selecting customer/asset.
+  customerId: number
+  assetId: number
+  status: ServiceOrderStatus
   organizationName?: string | null
   organizationCnpj?: string | null
   organizationPhone?: string | null

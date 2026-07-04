@@ -795,6 +795,28 @@ function ServiceOrderDetailContent({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {execution?.calibrationRequiredAfterRepair && (
+                // DOM-02 (#655) — REQ-DOM-REP-001/002: this repair OS needs a
+                // calibration afterward. Open it pre-filled with the OS's
+                // customer + asset (and record the back-link on the job).
+                <Button
+                  size="sm"
+                  className={ACTION_BUTTON_CLASS}
+                  onClick={() =>
+                    navigate({
+                      to: '/dashboard/jobs/new',
+                      search: {
+                        customerId: order.customerId,
+                        assetId: order.assetId,
+                        serviceOrderId: order.id,
+                      },
+                    })
+                  }
+                >
+                  <HugeiconsIcon icon={Wrench01Icon} className="mr-2 size-4" />
+                  Abrir calibração
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

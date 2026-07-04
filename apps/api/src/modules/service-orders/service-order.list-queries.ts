@@ -1,13 +1,26 @@
 import { db } from "@calibra-facil/db";
 import {
   asset,
+  calibrationJob,
   customer,
   organizationUnit,
   serviceOrder,
+  serviceOrderExecution,
   user,
 } from "@calibra-facil/db/schema";
 import { SERVICE_ORDER_STATUS_LABELS } from "@calibra-facil/shared";
-import { and, count, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+} from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { buildUnitScopeCondition } from "../../lib/units";
 
@@ -158,6 +171,66 @@ export async function listServiceOrdersForLab(
       total: total?.total ?? 0,
       totalPages: Math.ceil((total?.total ?? 0) / limit),
     },
+  };
+}
+
+/**
+ * DOM-02 (#655) — REQ-DOM-REP-001: the "calibração pendente após reparo" queue.
+ *
+ * A service order belongs here when its execution was FINALIZED
+ * (`finishedAt` set) with `calibrationRequiredAfterRepair = true` and no
+ * calibration job has been opened from it yet (no `calibration_job` back-links to
+ * it via `sourceServiceOrderId`). Once the follow-up calibration is opened the
+ * left-joined job exists, so the OS drops off the queue.
+ *
+ * Org + unit scoped like every other lab query; only the caller's own pending
+ * OSs are ever returned.
+ */
+export async function listServiceOrdersPendingCalibrationAfterRepair(
+  member: AuthVariables["member"],
+) {
+  const rows = await db
+    .select({
+      id: serviceOrder.id,
+      publicId: serviceOrder.publicId,
+      serviceOrderNumber: serviceOrder.serviceOrderNumber,
+      status: serviceOrder.status,
+      customerId: serviceOrder.customerId,
+      customerName: customer.name,
+      assetId: serviceOrder.assetId,
+      assetName: asset.name,
+      assetSerialNumber: asset.serialNumber,
+      repairFinishedAt: serviceOrderExecution.finishedAt,
+      result: serviceOrderExecution.result,
+    })
+    .from(serviceOrder)
+    .innerJoin(
+      serviceOrderExecution,
+      eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+    )
+    .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+    .leftJoin(
+      calibrationJob,
+      eq(calibrationJob.sourceServiceOrderId, serviceOrder.id),
+    )
+    .where(
+      and(
+        eq(serviceOrder.organizationId, member.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+        eq(serviceOrderExecution.calibrationRequiredAfterRepair, true),
+        isNotNull(serviceOrderExecution.finishedAt),
+        isNull(calibrationJob.id),
+      ),
+    )
+    .orderBy(desc(serviceOrderExecution.finishedAt));
+
+  return {
+    data: rows.map((row) => ({
+      ...row,
+      statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
+    })),
+    total: rows.length,
   };
 }
 

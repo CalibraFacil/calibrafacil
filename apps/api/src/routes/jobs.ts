@@ -1239,6 +1239,10 @@ export const jobsRouter = new Hono<{
           serviceId: input.serviceId,
           technicianId: input.technicianId,
           dueDate: input.dueDate,
+          // DOM-02 (#655): back-link to the repair OS this calibration came from,
+          // when opened from the pending-after-repair flow. Org-scoped in
+          // createCalibrationJob.
+          sourceServiceOrderId: input.sourceServiceOrderId ?? null,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 

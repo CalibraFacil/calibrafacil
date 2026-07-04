@@ -1897,6 +1897,11 @@ export const CreateJobSchema = z.object({
   serviceId: z.coerce.number().min(1, "Serviço é obrigatório"),
   technicianId: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(), // ISO date string
+  // DOM-02 (#655): when this calibration is opened from a repair service order
+  // flagged "calibration required after repair", record the source OS so the
+  // pending-after-repair queue can tell the follow-up was opened. Server
+  // re-validates the OS belongs to the caller's org before persisting the link.
+  sourceServiceOrderId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 export type CreateJobInput = z.infer<typeof CreateJobSchema>;

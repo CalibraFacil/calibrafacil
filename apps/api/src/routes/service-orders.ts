@@ -52,6 +52,7 @@ import {
   getServiceOrderSummaryReport,
   listServiceOrdersForLab,
   listServiceOrdersForPortalCustomer,
+  listServiceOrdersPendingCalibrationAfterRepair,
   resolvePortalServiceOrderIdByPublicId,
 } from "../modules/service-orders/service-order.list-queries";
 import {
@@ -197,6 +198,18 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       return c.json({ data: await getServiceOrderSummaryReport(member) });
+    },
+  )
+  // DOM-02 (#655) — REQ-DOM-REP-001: queue of repair OSs finalized with
+  // "calibration required after repair" that don't have a calibration opened yet.
+  .get(
+    "/pending-calibration",
+    ...withLabPermission({ service_order: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      return c.json(
+        await listServiceOrdersPendingCalibrationAfterRepair(member),
+      );
     },
   )
   .get(

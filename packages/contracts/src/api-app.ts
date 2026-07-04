@@ -270,6 +270,7 @@ type ApiRoutePath =
   | "/api/service-orders/:id/repair-mark"
   | "/api/service-orders/:id/tag"
   | "/api/service-orders/:id/tag.pdf"
+  | "/api/service-orders/pending-calibration"
   | "/api/services"
   | "/api/services/:id"
   | "/api/services/:id/audit-log"

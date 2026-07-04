@@ -33,18 +33,12 @@ import {
   useNewJobServicesData,
 } from '@/features/jobs/queries'
 import {
+  buildInitialJobFormData,
   parseJobForm,
   type JobFormData,
   type JobFormField,
 } from '@/features/jobs/forms'
-
-const initialFormData: JobFormData = {
-  customerId: null,
-  assetId: null,
-  serviceId: null,
-  technicianId: null,
-  dueDate: null,
-}
+import type { NewJobSearch } from '@/features/jobs/new-job-search'
 
 function formatPrice(priceInCents: number | null, currency: string): string {
   if (priceInCents === null) {
@@ -54,11 +48,15 @@ function formatPrice(priceInCents: number | null, currency: string): string {
   return formatFinanceMoney(priceInCents, currency || 'BRL')
 }
 
-export function NewJobPage() {
+export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const [formData, setFormData] = useState<JobFormData>(initialFormData)
+  // REQ-DOM-REP-002: when opened from a repair OS, seed customer + asset (and
+  // carry the source OS id) so the technician does not re-enter them.
+  const [formData, setFormData] = useState<JobFormData>(() =>
+    buildInitialJobFormData(search),
+  )
   const [errors, setErrors] = useState<Partial<Record<JobFormField, string>>>(
     {},
   )
@@ -164,13 +162,16 @@ export function NewJobPage() {
     setFormData((prev) => {
       const newData = { ...prev, [field]: value }
 
-      // Reset dependent fields
+      // Reset dependent fields. Changing customer or asset diverges from the
+      // source repair OS, so drop the (now-stale) back-link (DOM-02).
       if (field === 'customerId') {
         newData.assetId = null
         newData.serviceId = null
+        newData.sourceServiceOrderId = null
       }
       if (field === 'assetId') {
         newData.serviceId = null
+        newData.sourceServiceOrderId = null
       }
       if (field === 'serviceId' && value) {
         const service = servicesData?.data?.find((s) => s.id === Number(value))
