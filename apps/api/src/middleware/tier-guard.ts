@@ -22,6 +22,7 @@ import {
   type SubscriptionStatus,
 } from "@calibra-facil/shared";
 import type { AuthVariables } from "./permission";
+import { getOrganizationStorageBytes } from "../lib/storage-usage-db";
 
 // =============================================================================
 // TIER GUARD MIDDLEWARE
@@ -260,11 +261,12 @@ async function getUserUsage(organizationId: string): Promise<number> {
 }
 
 /**
- * Get storage usage (placeholder - implement when file storage tracking is added)
+ * Get storage usage (total bytes of size-tracked R2 objects for the org).
+ * See `lib/storage-usage-db.ts` for the sources counted and the known limitation
+ * (generated PDFs/XLSX are not yet size-tracked).
  */
-async function getStorageUsage(_organizationId: string): Promise<number> {
-  // TODO: Implement storage tracking
-  return 0;
+async function getStorageUsage(organizationId: string): Promise<number> {
+  return getOrganizationStorageBytes(organizationId);
 }
 
 /**

@@ -130,6 +130,9 @@ export function BillingSettingsPage() {
   const userPercentage = limits?.users
     ? Math.min(100, (usage.users / limits.users) * 100)
     : 0
+  const storagePercentage = limits?.storage
+    ? Math.min(100, (usage.storage / limits.storage) * 100)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -209,7 +212,7 @@ export function BillingSettingsPage() {
           </div>
 
           {/* Usage Meters */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Certificates Usage */}
             <div className="p-4 border rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
@@ -243,6 +246,23 @@ export function BillingSettingsPage() {
               {userPercentage >= 80 && limits?.users !== 999 && (
                 <p className="text-xs text-amber-600">
                   Você está próximo do limite de usuários.
+                </p>
+              )}
+            </div>
+
+            {/* Storage Usage */}
+            <div className="p-4 border rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Armazenamento</span>
+                <span className="text-muted-foreground">
+                  {formatStorageSize(usage.storage)} /{' '}
+                  {formatStorageSize(limits?.storage ?? 0)}
+                </span>
+              </div>
+              <Progress value={storagePercentage} className="h-2" />
+              {storagePercentage >= 80 && (
+                <p className="text-xs text-amber-600">
+                  Você está próximo do limite de armazenamento.
                 </p>
               )}
             </div>
@@ -361,6 +381,19 @@ export function BillingSettingsPage() {
 }
 
 // Helper functions
+function formatStorageSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  const rounded = unitIndex === 0 ? value : Math.round(value * 10) / 10
+  return `${rounded} ${units[unitIndex]}`
+}
+
 function getFeatureLabel(feature: string): string {
   const metadata = Object.entries(ENTITLEMENT_METADATA).find(
     ([key]) => key === feature,

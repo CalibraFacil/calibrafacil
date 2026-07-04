@@ -17,6 +17,7 @@ import {
   isValidPlanId,
   type PlanId,
 } from "@calibra-facil/shared";
+import { getOrganizationStorageBytes } from "../../lib/storage-usage-db";
 
 // =============================================================================
 // SUBSCRIPTION ROUTES - Organization subscription management
@@ -193,11 +194,12 @@ export async function getOrganizationUsage(organizationId: string) {
     .from(member)
     .where(eq(member.organizationId, organizationId));
 
-  // TODO: Calculate storage usage when file storage is implemented
+  // Real storage usage (bytes) across size-tracked R2 objects for the org.
+  const storage = await getOrganizationStorageBytes(organizationId);
 
   return {
     jobsCreated: certResult?.count ?? 0,
     users: memberResult?.count ?? 0,
-    storage: 0, // Placeholder until storage tracking is implemented
+    storage,
   };
 }
