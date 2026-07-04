@@ -7168,6 +7168,7 @@ export type NotificationType =
   | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   | "STANDARD_EXPIRING"
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
+  | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission degrades to unsigned once expired)
   | "JOB_OVERDUE"
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED"
@@ -7328,7 +7329,8 @@ export type ScheduledNotificationEntityType =
   | "standard"
   | "job"
   | "competence"
-  | "visit";
+  | "visit"
+  | "signing_certificate"; // CMP-02 - ICP-Brasil A1 signing-certificate expiry alert
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.

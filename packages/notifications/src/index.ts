@@ -18,6 +18,7 @@ export {
   notifyAssetDueForLegalVerification,
   notifyStandardExpiring,
   notifyStandardExpired,
+  notifySigningCertificateExpiring,
   notifyJobOverdue,
   notifyPaymentReceived,
   notifyPaymentFailed,
@@ -40,6 +41,15 @@ export {
 
 // Pure pt-BR copy builder for the legal-metrology verification reminder
 export { buildLegalVerificationMessage } from "./legal-verification-message";
+
+// Pure decider for the ICP-Brasil A1 signing-certificate expiry alert (CMP-02)
+export {
+  decideSigningCertificateExpiryAlert,
+  daysUntilCalendar,
+  SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
+  type SigningCertificateExpiryInput,
+  type SigningCertificateExpiryDecision,
+} from "./signing-certificate-expiry";
 
 // Email suppression / unsubscribe list (issue #577)
 export {

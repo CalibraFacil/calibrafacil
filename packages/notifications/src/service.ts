@@ -15,6 +15,8 @@ import {
   calibrationVisit,
   organization,
   organizationCustomDomain,
+  organizationSigningCertificate,
+  organizationUnit,
   customerGroup,
   type NotificationType,
   type NotificationPriority,
@@ -178,6 +180,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   ASSET_DUE_FOR_LEGAL_VERIFICATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
   STANDARD_EXPIRED: { inApp: true, email: true },
+  SIGNING_CERTIFICATE_EXPIRING: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
@@ -2177,6 +2180,76 @@ export async function notifyStandardExpired(
         entityId: standardId,
       },
       actionUrl: `/dashboard/standards/${standardId}`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify a lab's admins/owners that an ICP-Brasil A1 signing certificate is
+ * nearing its `validUntil` (issue #645 · CMP-02). Called by the daily
+ * compliance cron when a certificate enters an escalating lead window
+ * (30/15/7 days). Reads validity only — never touches signing crypto.
+ *
+ * `daysRemaining`/`leadTimeDays` come from the pure decider so the copy stays
+ * consistent with the window that triggered the alert.
+ */
+export async function notifySigningCertificateExpiring(
+  certificateId: number,
+  organizationId: string,
+  context: { daysRemaining: number },
+): Promise<void> {
+  // Org-scoped read (defense in depth): a certificate id is globally unique,
+  // but filtering by organizationId guarantees we never resolve/notify across
+  // tenants. Join the unit so the alert names which unit's certificate expires.
+  const [certData] = await db
+    .select({
+      name: organizationSigningCertificate.name,
+      serialNumber: organizationSigningCertificate.serialNumber,
+      validUntil: organizationSigningCertificate.validUntil,
+      unitName: organizationUnit.name,
+    })
+    .from(organizationSigningCertificate)
+    .innerJoin(
+      organizationUnit,
+      eq(organizationSigningCertificate.unitId, organizationUnit.id),
+    )
+    .where(
+      and(
+        eq(organizationSigningCertificate.id, certificateId),
+        eq(organizationSigningCertificate.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!certData) return;
+
+  const dueDate = formatDateBR(certData.validUntil);
+  const daysRemaining = context.daysRemaining;
+  const itemName = `${certData.name} (${certData.serialNumber}) — unidade ${certData.unitName}`;
+
+  // Notify admins and owners of the lab
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "SIGNING_CERTIFICATE_EXPIRING",
+      priority: daysRemaining <= 7 ? "HIGH" : "MEDIUM",
+      title: "Certificado de assinatura expirando",
+      message: `O certificado de assinatura ${certData.name} (${certData.serialNumber}) da unidade ${certData.unitName} expira em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} (${dueDate}). Renove o certificado A1 ICP-Brasil antes do vencimento para manter a emissão assinada.`,
+      actionUrl: "/dashboard/settings/signature",
       emailContext: {
         type: "compliance",
         data: {

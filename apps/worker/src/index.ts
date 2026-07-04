@@ -3830,7 +3830,8 @@ export default {
           `${result.assetsProcessed} assets, ` +
           `${result.standardsProcessed} standards, ` +
           `${result.jobsProcessed} jobs, ` +
-          `${result.visitsProcessed} visits`,
+          `${result.visitsProcessed} visits, ` +
+          `${result.signingCertsProcessed} signing certs`,
       );
     } catch (error) {
       console.error("[Scheduled] Error processing notifications:", error);

@@ -10,11 +10,13 @@
 
 import { Client } from "pg";
 import {
+  decideSigningCertificateExpiryAlert,
   notifyAssetDueForLegalVerification,
   notifyAssetDueForRecalibration,
   notifyCompetenceExpired,
   notifyCompetenceExpiring,
   notifyJobOverdue,
+  notifySigningCertificateExpiring,
   notifyStandardExpired,
   notifyStandardExpiring,
   notifyVisitReminder,
@@ -111,6 +113,16 @@ interface VisitDueRow {
   organization_id: string;
   scheduled_at: Date;
   days_until_visit: number;
+}
+
+interface SigningCertificateExpiringRow {
+  id: number;
+  organization_id: string;
+  unit_id: number;
+  valid_until: Date;
+  // Lead windows (lead_time_days) already alerted for this certificate. Drives
+  // idempotency-per-window in the pure decider.
+  alerted_lead_days: number[];
 }
 
 // Helper to run a database operation with a fresh connection
@@ -524,6 +536,60 @@ async function checkVisitsDueSoon(
   return result.rows;
 }
 
+/**
+ * Check for ICP-Brasil A1 signing certificates nearing `validUntil` — CMP-02
+ * (issue #645). When a signing certificate expires, emission silently degrades
+ * to unsigned (CMP-01), so admins are warned ahead of time.
+ *
+ * This scan is a COARSE candidate filter: still-valid, active, non-revoked
+ * certificates whose validity ends within the widest lead window (30 days),
+ * scoped per organization + unit. The escalating-window decision and the
+ * idempotency-per-window logic live in the pure decider
+ * (`decideSigningCertificateExpiryAlert`); this query only gathers its inputs,
+ * including the set of lead windows already alerted for each certificate.
+ *
+ * Signing certificates are low-cardinality (roughly one per unit), and this
+ * scan carries no NOT-EXISTS narrowing, so the candidate set is stable across a
+ * single run and pagination advances by the full page.
+ */
+async function checkSigningCertificatesExpiring(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<SigningCertificateExpiringRow[]> {
+  const result = await client.query<SigningCertificateExpiringRow>(
+    `
+    SELECT
+      c.id,
+      c.organization_id,
+      c.unit_id,
+      c.valid_until,
+      COALESCE(
+        ARRAY(
+          SELECT sn.lead_time_days
+          FROM scheduled_notification sn
+          WHERE sn.type = 'SIGNING_CERTIFICATE_EXPIRING'
+            AND sn.entity_type = 'signing_certificate'
+            AND sn.entity_id = c.id
+            AND sn.organization_id = c.organization_id
+            AND sn.sent_at IS NOT NULL
+        ),
+        ARRAY[]::int[]
+      ) AS alerted_lead_days
+    FROM organization_signing_certificate c
+    WHERE c.is_active = true
+      AND c.revoked_at IS NULL
+      AND c.valid_until > NOW()
+      AND c.valid_until <= NOW() + INTERVAL '30 days'
+    ORDER BY c.valid_until ASC, c.id ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
 const BATCH_SIZE = 100;
 
 /**
@@ -540,6 +606,7 @@ export async function processScheduledNotifications(
   competencesExpiringProcessed: number;
   competencesExpiredProcessed: number;
   visitsProcessed: number;
+  signingCertsProcessed: number;
 }> {
   let assetsProcessed = 0;
   let legalVerificationsProcessed = 0;
@@ -549,6 +616,7 @@ export async function processScheduledNotifications(
   let competencesExpiringProcessed = 0;
   let competencesExpiredProcessed = 0;
   let visitsProcessed = 0;
+  let signingCertsProcessed = 0;
 
   await withDbClient(env, async (client) => {
     // 1. Process assets due for recalibration (with pagination)
@@ -938,6 +1006,69 @@ export async function processScheduledNotifications(
       // still-due rows per pass.
       visitOffset += batchFailures;
     } while (visitBatch.length === BATCH_SIZE);
+
+    // 8. Warn admins/owners that an ICP-Brasil A1 signing certificate is nearing
+    // validUntil — CMP-02 (issue #645). The escalating-window + idempotency
+    // decision is delegated to the pure `decideSigningCertificateExpiryAlert`;
+    // this loop only feeds it the candidate certificates and records the fired
+    // window. Reads validity only — never touches signing crypto.
+    let signingCertOffset = 0;
+    let signingCertBatch: SigningCertificateExpiringRow[];
+
+    do {
+      signingCertBatch = await checkSigningCertificatesExpiring(
+        client,
+        signingCertOffset,
+        BATCH_SIZE,
+      );
+      if (signingCertBatch.length > 0) {
+        console.log(
+          `[Scheduled] Evaluating ${signingCertBatch.length} signing certificates (offset ${signingCertOffset})`,
+        );
+      }
+
+      const now = new Date();
+      for (const cert of signingCertBatch) {
+        try {
+          const decision = decideSigningCertificateExpiryAlert({
+            validUntil: cert.valid_until,
+            now,
+            alreadyAlertedLeadDays: cert.alerted_lead_days,
+          });
+
+          if (!decision.shouldAlert || decision.leadTimeDays === null) {
+            continue;
+          }
+
+          await notifySigningCertificateExpiring(
+            cert.id,
+            cert.organization_id,
+            { daysRemaining: decision.daysUntilExpiry },
+          );
+
+          await recordScheduledNotification(client, {
+            organizationId: cert.organization_id,
+            type: "SIGNING_CERTIFICATE_EXPIRING",
+            entityType: "signing_certificate",
+            entityId: cert.id,
+            scheduledFor: cert.valid_until,
+            leadTimeDays: decision.leadTimeDays,
+          });
+
+          signingCertsProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing signing certificate ${cert.id}:`,
+            error,
+          );
+        }
+      }
+
+      // This scan carries no NOT-EXISTS narrowing, so the candidate set is
+      // stable across the run — advance by the full page to make forward
+      // progress (a suppressed "already-alerted" row stays in the set).
+      signingCertOffset += signingCertBatch.length;
+    } while (signingCertBatch.length === BATCH_SIZE);
   });
 
   return {
@@ -949,6 +1080,7 @@ export async function processScheduledNotifications(
     competencesExpiringProcessed,
     competencesExpiredProcessed,
     visitsProcessed,
+    signingCertsProcessed,
   };
 }
 
