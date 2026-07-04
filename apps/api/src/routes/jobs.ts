@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
@@ -67,7 +68,10 @@ import {
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
 import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
-import { requirePlanLimit } from "../middleware/tier-guard";
+import {
+  requirePlanLimit,
+  assertPlanLimitInTransaction,
+} from "../middleware/tier-guard";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
 import {
   eq,
@@ -1223,7 +1227,8 @@ export const jobsRouter = new Hono<{
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      if (!memberData.activeUnitId) {
+      const activeUnitId = memberData.activeUnitId;
+      if (!activeUnitId) {
         return c.json(
           { error: "Selecione uma unidade específica para criar ordens" },
           400,
@@ -1231,23 +1236,65 @@ export const jobsRouter = new Hono<{
       }
 
       try {
-        const newJob = await createCalibrationJob({
-          organizationId: memberData.organizationId,
-          unitId: memberData.activeUnitId,
-          createdBy: session.user.id,
-          assetId: input.assetId,
-          serviceId: input.serviceId,
-          technicianId: input.technicianId,
-          dueDate: input.dueDate,
-          // DOM-02 (#655): back-link to the repair OS this calibration came from,
-          // when opened from the pending-after-repair flow. Org-scoped in
-          // createCalibrationJob.
-          sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+        const newJob = await db.transaction(async (tx) => {
+          // The requirePlanLimit middleware above is a fast, non-transactional
+          // pre-check (good UX, but two concurrent requests can both pass it
+          // and both proceed to insert past the limit). Re-check the limit
+          // here under an advisory lock, inside the SAME transaction as the
+          // insert, closing that TOCTOU window (REQ-DOM-QTA-001) the same way
+          // calibration-requests.ts's POST /:id/convert already does.
+          await assertPlanLimitInTransaction(tx, {
+            organizationId: memberData.organizationId,
+            resource: "certificates",
+          });
+
+          return createCalibrationJob({
+            organizationId: memberData.organizationId,
+            unitId: activeUnitId,
+            createdBy: session.user.id,
+            assetId: input.assetId,
+            serviceId: input.serviceId,
+            technicianId: input.technicianId,
+            dueDate: input.dueDate,
+            // DOM-02 (#655): back-link to the repair OS this calibration came
+            // from, when opened from the pending-after-repair flow. Org-scoped
+            // in createCalibrationJob.
+            sourceServiceOrderId: input.sourceServiceOrderId ?? null,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            executor: tx,
+            // Defer the assignment notification until after commit (below) —
+            // sending it from inside an open transaction that might still
+            // roll back would notify a technician about a job that never
+            // existed.
+            notifyOnAssignment: false,
+          });
         });
+
+        if (newJob.technicianId) {
+          try {
+            await notifyJobAssigned(
+              newJob.id,
+              newJob.technicianId,
+              session.user.id,
+            );
+          } catch (error) {
+            console.error(
+              "Error sending job assignment notification:",
+              error,
+            );
+          }
+        }
 
         return c.json(newJob, 201);
       } catch (error) {
+        // A plan-limit or subscription-status re-check failure inside the
+        // transaction throws HTTPException (same as the pre-check middleware
+        // above) — let Hono handle it identically rather than mapping it to
+        // the generic 500 below.
+        if (error instanceof HTTPException) {
+          throw error;
+        }
+
         console.error("Error creating job:", error);
         const message =
           error instanceof Error ? error.message : "Erro ao criar job";

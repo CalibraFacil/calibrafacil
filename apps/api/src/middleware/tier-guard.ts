@@ -8,7 +8,7 @@ import {
   member,
   organization,
 } from "@calibra-facil/db/schema";
-import { eq, and, gte, count } from "drizzle-orm";
+import { eq, and, gte, count, sql } from "drizzle-orm";
 import {
   ENTITLEMENT_METADATA,
   getPlan,
@@ -32,6 +32,14 @@ import { getOrganizationStorageBytes } from "../lib/storage-usage-db";
  * Resource types that can be limited by plan
  */
 export type LimitResource = keyof PlanLimits;
+
+/**
+ * Minimal DB surface needed to check a plan limit — satisfied by both the
+ * shared `db` singleton (used by the fast pre-check) and a Drizzle
+ * transaction (`tx`) handed in by a caller (used by the in-transaction,
+ * lock-protected re-check).
+ */
+export type PlanLimitDbExecutor = Pick<typeof db, "execute" | "select">;
 
 /**
  * Middleware to check plan limits before allowing resource creation.
@@ -87,7 +95,7 @@ export async function assertPlanLimit(
   ];
 
   // Get current usage
-  const usage = await getResourceUsage(memberData.organizationId, resource);
+  const usage = await getResourceUsage(memberData.organizationId, resource, db);
   const projectedUsage = usage + requestedCount;
 
   // Check if limit exceeded
@@ -124,6 +132,104 @@ export function requirePlanLimit(resource: LimitResource) {
     await assertPlanLimit(c, resource);
     await next();
   });
+}
+
+/**
+ * Re-check a plan limit INSIDE a caller-owned transaction, holding a
+ * per-organization+resource Postgres advisory lock (`pg_advisory_xact_lock`,
+ * automatically released at transaction end) for the duration of that
+ * transaction.
+ *
+ * Why this exists: `assertPlanLimit` above (and the `requirePlanLimit`
+ * middleware built on it) is a fast, UX fail-fast pre-check that runs BEFORE
+ * any DB transaction is opened. Two requests racing at the quota boundary can
+ * both pass that pre-check and then both proceed to insert past the limit —
+ * a TOCTOU window. Call this function from inside `db.transaction`, passing
+ * that transaction as `executor`, immediately before the row(s) that count
+ * toward `resource` are inserted. The advisory lock serializes concurrent
+ * callers for the same organization+resource, and the usage re-read happens
+ * against the transaction (so it sees any not-yet-committed-but-locked-ahead
+ * writes only after they commit and the lock is released), closing the race.
+ *
+ * This mirrors the pattern `calibration-requests.ts`'s `POST /:id/convert`
+ * route has always used inline; `jobs.ts`'s `POST /` previously relied on the
+ * pre-check alone (issue #659 / REQ-DOM-QTA-001).
+ *
+ * Throws the same `HTTPException` shapes as `assertPlanLimit` (402 for an
+ * inactive subscription or an exceeded limit) so callers can handle it
+ * identically to the pre-check.
+ */
+export async function assertPlanLimitInTransaction(
+  executor: PlanLimitDbExecutor,
+  params: {
+    organizationId: string;
+    resource: LimitResource;
+    requested?: number;
+  },
+): Promise<void> {
+  const { organizationId, resource } = params;
+  const requestedCount = Math.max(0, params.requested ?? 1);
+
+  // Serialize concurrent callers for this organization+resource. Held for the
+  // remainder of the enclosing transaction (xact-scoped lock).
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`plan-limit:${resource}:${organizationId}`}))`,
+  );
+
+  const [activeSubscription] = await executor
+    .select({ planId: subscription.planId, status: subscription.status })
+    .from(subscription)
+    .where(eq(subscription.organizationId, organizationId))
+    .limit(1);
+
+  const planId = toPlanId(activeSubscription?.planId);
+  const status = toSubscriptionStatus(activeSubscription?.status);
+
+  if (
+    activeSubscription &&
+    !isSubscriptionActive(status) &&
+    status !== "PAST_DUE"
+  ) {
+    throw new HTTPException(402, {
+      message: "Assinatura inativa. Ative um plano para continuar.",
+      cause: { code: "SUBSCRIPTION_INACTIVE", planId, status },
+    });
+  }
+
+  const [currentOrganization] = await executor
+    .select({ createdAt: organization.createdAt })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+
+  const limit = getEffectivePlanLimits(planId, currentOrganization?.createdAt)[
+    resource
+  ];
+
+  const usage = await getResourceUsage(organizationId, resource, executor);
+  const projectedUsage = usage + requestedCount;
+
+  if (projectedUsage > limit) {
+    const plan = getPlan(planId);
+    const message =
+      requestedCount > 1
+        ? `Limite de ${getResourceLabel(resource)} seria excedido (${projectedUsage}/${limit}) nesta operacao. Faca upgrade para o proximo plano.`
+        : `Limite de ${getResourceLabel(resource)} atingido (${usage}/${limit}). Faca upgrade para o proximo plano.`;
+
+    throw new HTTPException(402, {
+      message,
+      cause: {
+        code: "LIMIT_EXCEEDED",
+        resource,
+        current: usage,
+        requested: requestedCount,
+        projected: projectedUsage,
+        limit,
+        planId,
+        planName: plan.name,
+      },
+    });
+  }
 }
 
 /**
@@ -209,19 +315,25 @@ async function getSubscription(
 // =============================================================================
 
 /**
- * Get current usage for a specific resource
+ * Get current usage for a specific resource.
+ *
+ * `executor` defaults to the shared `db` singleton (used by the
+ * non-transactional pre-check) but accepts a Drizzle transaction so the
+ * in-transaction re-check (`assertPlanLimitInTransaction`) sees the correct,
+ * lock-consistent count.
  */
 async function getResourceUsage(
   organizationId: string,
   resource: LimitResource,
+  executor: PlanLimitDbExecutor = db,
 ): Promise<number> {
   switch (resource) {
     case "certificates":
-      return getCertificateUsage(organizationId);
+      return getCertificateUsage(organizationId, executor);
     case "users":
-      return getUserUsage(organizationId);
+      return getUserUsage(organizationId, executor);
     case "storage":
-      return getStorageUsage(organizationId);
+      return getStorageUsage(organizationId, executor);
     default:
       return 0;
   }
@@ -230,12 +342,15 @@ async function getResourceUsage(
 /**
  * Get certificate usage (jobs created this month)
  */
-async function getCertificateUsage(organizationId: string): Promise<number> {
+async function getCertificateUsage(
+  organizationId: string,
+  executor: PlanLimitDbExecutor = db,
+): Promise<number> {
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [result] = await db
+  const [result] = await executor
     .select({ count: count() })
     .from(calibrationJob)
     .where(
@@ -251,8 +366,11 @@ async function getCertificateUsage(organizationId: string): Promise<number> {
 /**
  * Get user usage (member count)
  */
-async function getUserUsage(organizationId: string): Promise<number> {
-  const [result] = await db
+async function getUserUsage(
+  organizationId: string,
+  executor: PlanLimitDbExecutor = db,
+): Promise<number> {
+  const [result] = await executor
     .select({ count: count() })
     .from(member)
     .where(eq(member.organizationId, organizationId));
@@ -265,7 +383,13 @@ async function getUserUsage(organizationId: string): Promise<number> {
  * See `lib/storage-usage-db.ts` for the sources counted and the known limitation
  * (generated PDFs/XLSX are not yet size-tracked).
  */
-async function getStorageUsage(organizationId: string): Promise<number> {
+async function getStorageUsage(
+  organizationId: string,
+  // Storage metering reads live in lib/storage-usage-db (no executor variant);
+  // the param keeps the resource-dispatch signature uniform for the
+  // in-transaction re-check path (certificates is the advisory-locked one).
+  _executor: PlanLimitDbExecutor = db,
+): Promise<number> {
   return getOrganizationStorageBytes(organizationId);
 }
 

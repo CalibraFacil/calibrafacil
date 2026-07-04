@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@calibra-facil/db";
@@ -11,9 +12,7 @@ import {
   calibrationRequestItem,
   calibrationVisit,
   customer,
-  organization,
   service,
-  subscription,
   user,
 } from "@calibra-facil/db/schema";
 import {
@@ -23,13 +22,6 @@ import {
   RejectCalibrationRequestSchema,
   ReviewCalibrationRequestSchema,
 } from "@calibra-facil/schemas";
-import {
-  getEffectivePlanLimits,
-  getPlan,
-  isValidPlanId,
-  isSubscriptionActive,
-  type PlanId,
-} from "@calibra-facil/shared";
 import {
   and,
   count,
@@ -45,7 +37,10 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { assertPlanLimit } from "../middleware/tier-guard";
+import {
+  assertPlanLimit,
+  assertPlanLimitInTransaction,
+} from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import {
   notifyCalibrationRequestApproved,
@@ -786,70 +781,26 @@ export const calibrationRequestsRouter = new Hono<{
             };
           }
 
-          await tx.execute(
-            sql`select pg_advisory_xact_lock(hashtext(${`plan-limit:certificates:${member.organizationId}`}))`,
-          );
-
-          const [activeSubscription] = await tx
-            .select({
-              planId: subscription.planId,
-              status: subscription.status,
-            })
-            .from(subscription)
-            .where(eq(subscription.organizationId, member.organizationId))
-            .limit(1);
-
-          const planId: PlanId =
-            activeSubscription && isValidPlanId(activeSubscription.planId)
-              ? activeSubscription.planId
-              : "FREE";
-          const subscriptionStatus = activeSubscription?.status ?? "TRIAL";
-          const [currentOrganization] = await tx
-            .select({ createdAt: organization.createdAt })
-            .from(organization)
-            .where(eq(organization.id, member.organizationId))
-            .limit(1);
-
-          if (
-            activeSubscription &&
-            !isSubscriptionActive(subscriptionStatus) &&
-            subscriptionStatus !== "PAST_DUE"
-          ) {
-            return {
-              error: {
-                status: 402 as const,
-                body: "Assinatura inativa. Ative um plano para continuar.",
-              },
-            };
-          }
-
-          const limit = getEffectivePlanLimits(
-            planId,
-            currentOrganization?.createdAt,
-          ).certificates;
-          const plan = getPlan(planId);
-          const startOfMonth = new Date();
-          startOfMonth.setDate(1);
-          startOfMonth.setHours(0, 0, 0, 0);
-
-          const [usageResult] = await tx
-            .select({ count: count() })
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.organizationId, member.organizationId),
-                gte(calibrationJob.createdAt, startOfMonth),
-              ),
-            );
-
-          const projectedUsage = (usageResult?.count ?? 0) + input.items.length;
-          if (projectedUsage > limit) {
-            return {
-              error: {
-                status: 402 as const,
-                body: `Limite de certificados por mes seria excedido (${projectedUsage}/${limit}) nesta operacao. Faca upgrade para o plano ${plan.name}.`,
-              },
-            };
+          // Advisory-lock + in-transaction re-check (shared with jobs.ts's
+          // POST / — see assertPlanLimitInTransaction) closes the TOCTOU
+          // window left by the fast, non-transactional assertPlanLimit
+          // pre-check above.
+          try {
+            await assertPlanLimitInTransaction(tx, {
+              organizationId: member.organizationId,
+              resource: "certificates",
+              requested: input.items.length,
+            });
+          } catch (error) {
+            if (error instanceof HTTPException) {
+              return {
+                error: {
+                  status: 402 as const,
+                  body: error.message,
+                },
+              };
+            }
+            throw error;
           }
 
           const requestItems = await tx
