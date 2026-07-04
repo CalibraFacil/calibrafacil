@@ -10,6 +10,7 @@ import {
   organizationUnit,
   service,
   user,
+  type JobStatus,
 } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
 
@@ -71,12 +72,16 @@ async function seedVerifiableCert(params: {
   orgId: string;
   token: string;
   jobId: string;
-  status?: "APPROVED" | "SUPERSEDED" | "DRAFT";
+  status?: JobStatus;
   accreditationActive?: boolean;
   accreditationNumber?: string | null;
   methodAccreditedScope?: boolean;
   signatureMetadata?: typeof calibrationJob.$inferInsert.signatureMetadata;
   signatureVerdict?: typeof calibrationJob.$inferInsert.signatureVerdict;
+  // Amendment linkage (ISO 17025 7.8.4.1) — set to wire this job as an
+  // amendment that supersedes / is superseded by another seeded job's row id.
+  supersedesId?: number;
+  supersededById?: number;
 }): Promise<SeededCert> {
   const {
     orgId,
@@ -198,6 +203,8 @@ async function seedVerifiableCert(params: {
       approvedAt: status === "APPROVED" ? NOW : null,
       signatureMetadata: params.signatureMetadata,
       signatureVerdict: params.signatureVerdict,
+      supersedesId: params.supersedesId,
+      supersededById: params.supersededById,
     })
     .returning({ id: calibrationJob.id });
   if (!jobRow) throw new Error("seedVerifiableCert: job insert failed");
@@ -466,6 +473,98 @@ describe("verifyRouter — real DB, public certificate verification", () => {
       expect(body.signed).toBe(false);
       expect(body.verdict).toBeNull();
       expect(body.source).toBeNull();
+    },
+  );
+
+  // =========================================================================
+  // REQ-SEC-VER-001 (SEC-07)
+  // `supersedesInfo` (the "supersedes" field: the ORIGINAL job this amendment
+  // replaces) must apply the same terminal-status filter
+  // `inArray(status, ["APPROVED","SUPERSEDED"])` that `supersededByInfo` and
+  // every other query in this file already apply. Before the fix, the
+  // supersedesId lookup had NO status filter, so an original job stuck in a
+  // non-terminal state (DRAFT/IN_PROGRESS/REVIEW/GENERATING_PDF/REJECTED/
+  // CANCELED) would still leak its jobId/verificationToken to anyone holding
+  // the (already-terminal) amendment's public verify link.
+  //
+  // Mutation proof: reverting the fix (dropping the inArray filter from the
+  // supersedesId query) makes the REJECTED original resolve → `supersedes`
+  // becomes non-null → the first assertion below goes RED.
+  // =========================================================================
+  it(
+    "REQ-SEC-VER-001: supersedesInfo omits a non-terminal-status original",
+    async () => {
+      // The "original" certificate this amendment corrects — stuck in a
+      // non-terminal state (e.g. reopened for rework after the amendment was
+      // already approved). Its own token is irrelevant to this assertion; it
+      // must not be reachable via the amendment's `supersedes` field either.
+      const original = await seedVerifiableCert({
+        orgId: "org-orig",
+        token: VALID_UUID_B,
+        jobId: "CAL-A-ORIG-NONTERMINAL",
+        status: "REJECTED",
+      });
+
+      const amendment = await seedVerifiableCert({
+        orgId: "org-amend",
+        token: VALID_UUID_A,
+        jobId: "CAL-A-AMENDMENT",
+        status: "APPROVED",
+        supersedesId: original.jobRowId,
+      });
+
+      const res = await verifyRouter.request(`/${amendment.token}`);
+      expect(res.status).toBe(200);
+      const body: unknown = await res.json();
+      expect(isRecord(body)).toBe(true);
+      if (!isRecord(body)) throw new Error("unreachable");
+
+      // isAmendment reflects the raw supersedesId column (unfiltered) — only
+      // the *resolved* `supersedes` payload is status-gated.
+      expect(body.isAmendment).toBe(true);
+      expect(body.supersedes).toBeNull();
+
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toContain(original.jobId);
+      expect(serialized).not.toContain(original.token);
+    },
+  );
+
+  // =========================================================================
+  // REQ-SEC-VER-001 (positive control)
+  // A terminal-status (SUPERSEDED) original IS still surfaced in
+  // `supersedesInfo` — the fix must not over-filter and break the documented,
+  // legitimate amendment-chain-navigation case.
+  // =========================================================================
+  it(
+    "REQ-SEC-VER-001: supersedesInfo still includes a terminal-status original",
+    async () => {
+      const original = await seedVerifiableCert({
+        orgId: "org-orig",
+        token: VALID_UUID_B,
+        jobId: "CAL-A-ORIG-TERMINAL",
+        status: "SUPERSEDED",
+      });
+
+      const amendment = await seedVerifiableCert({
+        orgId: "org-amend",
+        token: VALID_UUID_A,
+        jobId: "CAL-A-AMENDMENT-2",
+        status: "APPROVED",
+        supersedesId: original.jobRowId,
+      });
+
+      const res = await verifyRouter.request(`/${amendment.token}`);
+      expect(res.status).toBe(200);
+      const body: unknown = await res.json();
+      expect(isRecord(body)).toBe(true);
+      if (!isRecord(body)) throw new Error("unreachable");
+
+      expect(body.isAmendment).toBe(true);
+      expect(isRecord(body.supersedes)).toBe(true);
+      if (!isRecord(body.supersedes)) throw new Error("unreachable");
+      expect(body.supersedes.jobId).toBe(original.jobId);
+      expect(body.supersedes.verificationToken).toBe(original.token);
     },
   );
 

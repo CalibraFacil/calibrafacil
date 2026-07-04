@@ -151,7 +151,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       }
     }
 
-    // If this is an amendment, get the original job info
+    // If this is an amendment, get the original job info — same terminal-status
+    // gate as supersededByInfo above, so a non-terminal original (e.g.
+    // reopened for rework) never leaks its jobId/verificationToken through an
+    // already-approved amendment's public verify page.
     let supersedesInfo = null;
     if (job.supersedesId) {
       const [original] = await db
@@ -161,7 +164,12 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
           verificationToken: calibrationJob.verificationToken,
         })
         .from(calibrationJob)
-        .where(eq(calibrationJob.id, job.supersedesId))
+        .where(
+          and(
+            eq(calibrationJob.id, job.supersedesId),
+            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          ),
+        )
         .limit(1);
 
       if (original) {
