@@ -249,11 +249,20 @@ vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: vi.fn().mockReturnValue(undefined),
 }));
 
-vi.mock("@calibra-facil/shared", () => ({
-  canApproveServiceOrderQuote: vi.fn().mockReturnValue(true),
-  canEditServiceOrderQuote: vi.fn().mockReturnValue(true),
-  canTransitionServiceOrderStatus: vi.fn().mockReturnValue(true),
-}));
+// REQ-TST-SO-002: do NOT stub canTransitionServiceOrderStatus to `true`. The
+// state-machine guard must be the REAL implementation so a regression in the
+// transition graph cannot pass silently. We still stub the two quote-lifecycle
+// predicates because the fixtures use a "sent" quote (getQuoteForAction mock),
+// which the real canEditServiceOrderQuote would reject — those are orthogonal to
+// the status graph under test here.
+vi.mock("@calibra-facil/shared", async (importActual) => {
+  const actual = await importActual<typeof import("@calibra-facil/shared")>();
+  return {
+    ...actual,
+    canApproveServiceOrderQuote: vi.fn().mockReturnValue(true),
+    canEditServiceOrderQuote: vi.fn().mockReturnValue(true),
+  };
+});
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),

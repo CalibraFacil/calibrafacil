@@ -1,5 +1,6 @@
 import { db } from "@calibra-facil/db";
 import { serviceOrder, serviceOrderExecution } from "@calibra-facil/db/schema";
+import { canTransitionServiceOrderStatus } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import {
@@ -20,6 +21,17 @@ export async function startServiceOrderExecution(input: {
 }) {
   const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
   if (!order) return { status: "not_found" as const };
+
+  // Consult the single source of truth (SERVICE_ORDER_ALLOWED_TRANSITIONS) before
+  // writing `status`, instead of forcing "repair_in_progress" unconditionally.
+  // Re-starting an order already in that status is a no-op (mirrors the generic
+  // updateServiceOrder guard), so idempotent re-invocation stays allowed.
+  if (
+    order.status !== "repair_in_progress" &&
+    !canTransitionServiceOrderStatus(order.status, "repair_in_progress")
+  ) {
+    return { status: "invalid_transition" as const };
+  }
 
   const [execution] = await db
     .insert(serviceOrderExecution)
@@ -142,6 +154,22 @@ export async function finishServiceOrderExecution(input: {
 
   if (!execution) return { status: "not_started" as const };
 
+  const nextStatus = input.values.calibrationRequiredAfterRepair
+    ? "awaiting_calibration"
+    : "awaiting_final_review";
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+
+  // Validate the target transition against the graph BEFORE any write (including
+  // the item replacement below), so a forbidden finish leaves the order — and its
+  // execution items — untouched. Same-status finishes stay a no-op.
+  if (
+    order.status !== nextStatus &&
+    !canTransitionServiceOrderStatus(order.status, nextStatus)
+  ) {
+    return { status: "invalid_transition" as const };
+  }
+
   if (input.values.items) {
     await replaceExecutionItems({
       organizationId: input.member.organizationId,
@@ -149,12 +177,6 @@ export async function finishServiceOrderExecution(input: {
       items: input.values.items,
     });
   }
-
-  const nextStatus = input.values.calibrationRequiredAfterRepair
-    ? "awaiting_calibration"
-    : "awaiting_final_review";
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
 
   await db.transaction(async (tx) => {
     await tx

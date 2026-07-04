@@ -627,6 +627,9 @@ export const serviceOrdersRouter = new Hono<{
       if (result.status === "not_found") {
         return c.json({ error: "OS nao encontrada" }, 404);
       }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
+      }
       return c.json({ data: result.data });
     },
   )
@@ -669,6 +672,9 @@ export const serviceOrdersRouter = new Hono<{
       }
       if (result.status === "not_found") {
         return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
       }
       return c.json({ ok: true });
     },

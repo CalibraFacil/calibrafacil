@@ -8,6 +8,7 @@ import {
   organization,
   organizationUnit,
   serviceOrder,
+  serviceOrderExecution,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -161,6 +162,15 @@ async function seedServiceOrder(params: {
     .returning({ id: serviceOrder.id });
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
+}
+
+/** Read just the current status of a service order (post-mutation assertions). */
+async function readServiceOrderStatus(orderId: number) {
+  const [row] = await db
+    .select({ status: serviceOrder.status })
+    .from(serviceOrder)
+    .where(eq(serviceOrder.id, orderId));
+  return row?.status;
 }
 
 // ---------------------------------------------------------------------------
@@ -601,4 +611,211 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
     });
     expect(res.status).toBe(401);
   });
+});
+
+// ===========================================================================
+// TST-01 — Service Order 15-state machine transition enforcement.
+//
+// These tests run the REAL transition guard (canTransitionServiceOrderStatus,
+// backed by SERVICE_ORDER_ALLOWED_TRANSITIONS in @calibra-facil/shared) against
+// the real Docker Postgres — nothing is mocked to `true`. They prove:
+//   REQ-TST-SO-001  a command attempting a graph-forbidden transition is
+//                   rejected with a named error (HTTP 400) and the DB row is
+//                   left untouched.
+//   REQ-TST-SO-002  the update path (PATCH /:id) is exercised with the REAL
+//                   guard (this suite mocks NOTHING).
+//   REQ-TST-SO-003  the domain execution commands (startServiceOrderExecution /
+//                   finishServiceOrderExecution) validate the target transition
+//                   against the graph BEFORE writing `status` — they no longer
+//                   bypass the table.
+// ===========================================================================
+describe("serviceOrdersRouter — state-machine transition enforcement (real graph)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  /**
+   * Seed a complete admin org + customer + asset + a single service order at the
+   * requested `status`. Returns everything a transition test needs.
+   */
+  async function setupOrderAt(
+    status: typeof serviceOrder.$inferInsert["status"],
+    tag: string,
+  ) {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType(`type-${tag}`);
+    const custId = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: `client-${tag}`,
+    });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: custId,
+      assetTypeId: typeId,
+      tag: `TAG-${tag}`,
+    });
+    const orderId = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: custId,
+      assetId,
+      openedByUserId: org.userId,
+      serviceOrderNumber: `OS-${tag}`,
+      status,
+    });
+    return { org, orderId };
+  }
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-003 — startServiceOrderExecution consults the graph.
+  // -------------------------------------------------------------------------
+  it(
+    "REQ-TST-SO-003: POST /:id/execution/start from a status that cannot reach repair_in_progress → 400, status unchanged",
+    async () => {
+      // "opened" → "repair_in_progress" is NOT in the graph. Before enforcement
+      // the command wrote the status directly (bypass); it must now be rejected.
+      const { org, orderId } = await setupOrderAt("opened", "tst-start-bad");
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(
+        `/${orderId}/execution/start`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ notes: "should be blocked" }),
+        },
+      );
+
+      expect(res.status).toBe(400);
+      expect(await readServiceOrderStatus(orderId)).toBe("opened");
+    },
+  );
+
+  it(
+    "REQ-TST-SO-003: POST /:id/execution/start from quote_approved (a permitted edge) → 200, status becomes repair_in_progress",
+    async () => {
+      const { org, orderId } = await setupOrderAt(
+        "quote_approved",
+        "tst-start-ok",
+      );
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(
+        `/${orderId}/execution/start`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ notes: "repair begins" }),
+        },
+      );
+
+      expect(res.status).toBe(200);
+      expect(await readServiceOrderStatus(orderId)).toBe("repair_in_progress");
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-003 — finishServiceOrderExecution consults the graph.
+  // -------------------------------------------------------------------------
+  it(
+    "REQ-TST-SO-003: POST /:id/execution/finish from a status that cannot reach awaiting_final_review → 400, status unchanged",
+    async () => {
+      // Seed an order already "delivered" (delivered → awaiting_final_review is
+      // NOT a permitted edge) plus its execution row so the command reaches the
+      // transition check rather than the "not started" guard.
+      const { org, orderId } = await setupOrderAt(
+        "delivered",
+        "tst-finish-bad",
+      );
+      await db.insert(serviceOrderExecution).values({
+        serviceOrderId: orderId,
+        startedByUserId: org.userId,
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(
+        `/${orderId}/execution/finish`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            servicePerformed: "done",
+            result: "repaired",
+            calibrationRequiredAfterRepair: false,
+          }),
+        },
+      );
+
+      expect(res.status).toBe(400);
+      expect(await readServiceOrderStatus(orderId)).toBe("delivered");
+    },
+  );
+
+  it(
+    "REQ-TST-SO-003: POST /:id/execution/finish from repair_in_progress (permitted edge) → 200, status becomes awaiting_final_review",
+    async () => {
+      const { org, orderId } = await setupOrderAt(
+        "repair_in_progress",
+        "tst-finish-ok",
+      );
+      await db.insert(serviceOrderExecution).values({
+        serviceOrderId: orderId,
+        startedByUserId: org.userId,
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(
+        `/${orderId}/execution/finish`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            servicePerformed: "done",
+            result: "repaired",
+            calibrationRequiredAfterRepair: false,
+          }),
+        },
+      );
+
+      expect(res.status).toBe(200);
+      expect(await readServiceOrderStatus(orderId)).toBe("awaiting_final_review");
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-001 / REQ-TST-SO-002 — the update path uses the REAL guard.
+  // -------------------------------------------------------------------------
+  it(
+    "REQ-TST-SO-001/002: PATCH /:id with a graph-forbidden status (opened → closed) → 400, status unchanged (real guard)",
+    async () => {
+      const { org, orderId } = await setupOrderAt("opened", "tst-patch-bad");
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(`/${orderId}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status: "closed" }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(await readServiceOrderStatus(orderId)).toBe("opened");
+    },
+  );
+
+  it(
+    "REQ-TST-SO-002: PATCH /:id with a permitted status edge (opened → awaiting_tech_evaluation) → 200 (real guard)",
+    async () => {
+      const { org, orderId } = await setupOrderAt("opened", "tst-patch-ok");
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await serviceOrdersRouter.request(`/${orderId}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status: "awaiting_tech_evaluation" }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await readServiceOrderStatus(orderId)).toBe("awaiting_tech_evaluation");
+    },
+  );
 });
