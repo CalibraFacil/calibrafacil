@@ -1323,8 +1323,10 @@ export const portalRouter = new Hono<{
   // GET /assets/:id/interval-insight - reliability-based suggestion (read-only)
   // =========================================================================
   // Computes the ILAC-G24 / NCSL RP-1 classification + suggestion from the asset's
-  // approved as-found history. Tenant-scoped; legal-metrology assets resolve to
-  // LEGAL_FIXED with no suggestion. This NEVER writes — the customer applies via PUT.
+  // approved as-found history. Tenant-scoped. Regime-agnostic (REQ-MLR-050): a
+  // legal-metrology asset is analyzed like any other — there is NO LEGAL_FIXED
+  // suppression; its mandatory legal-verification periodicity is a separate,
+  // independent Track-2. This NEVER writes — the customer applies via PUT.
   // =========================================================================
   .get(
     "/assets/:id/interval-insight",

@@ -137,8 +137,14 @@ the **config snapshot + engine version** used.
 - REQ-ENGINE-INSIGHT-001: WHEN a portal user opens an asset in their tenant,
   `GET /api/portal/assets/:id/interval-insight` SHALL return the classification, `R`,
   coverage, and the dated margin series. [HIGH RISK]
-- REQ-ENGINE-INSIGHT-002: IF the asset is `subjectToLegalMetrology`, THEN the endpoint SHALL
-  return classification `LEGAL_FIXED` and SHALL NOT compute an optimization suggestion. [HIGH RISK]
+- REQ-ENGINE-INSIGHT-002: **[DEPRECATED — superseded by `REQ-MLR-050`]** ~~IF the asset is
+  `subjectToLegalMetrology`, THEN the endpoint SHALL return classification `LEGAL_FIXED` and
+  SHALL NOT compute an optimization suggestion.~~ The engine is now **regime-agnostic**: a
+  legal-metrology asset is analyzed like any other and yields a real suggestion; its mandatory
+  legal-verification periodicity is a separate, independent Track-2 (see
+  `specs/legal-metrology-regime/`), never surfaced here as `LEGAL_FIXED`. Enforced by
+  `interval-insight.spec.ts` / `analyze.spec.ts` / `portal-interval-insight.int.spec.ts`
+  (all assert "no LEGAL_FIXED"). [HIGH RISK]
 - REQ-ENGINE-INSIGHT-003: The portal asset detail SHALL NOT write any interval from the
   insight surface (insight only). [HIGH RISK]
 - REQ-ENGINE-INSIGHT-004: The portal asset detail SHALL render the margin trend + the
