@@ -325,7 +325,19 @@ export const signingRouter = new Hono<{
         await tx
           .update(organizationSigningCertificate)
           .set({ isDefault: true })
-          .where(eq(organizationSigningCertificate.id, id));
+          // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+          // SELECT above so this custody UPDATE stays tenant-scoped even if the
+          // guarding read is refactored away. Reuses the in-scope member values.
+          .where(
+            and(
+              eq(organizationSigningCertificate.id, id),
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
+            ),
+          );
       });
 
       return c.json({ message: "Certificado definido como padrão" });
@@ -395,7 +407,19 @@ export const signingRouter = new Hono<{
           revokedBy: session.user.id,
           revokedReason: reason,
         })
-        .where(eq(organizationSigningCertificate.id, id));
+        // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+        // SELECT above so this custody UPDATE stays tenant-scoped even if the
+        // guarding read is refactored away. Reuses the in-scope member values.
+        .where(
+          and(
+            eq(organizationSigningCertificate.id, id),
+            eq(
+              organizationSigningCertificate.organizationId,
+              memberData.organizationId,
+            ),
+            eq(organizationSigningCertificate.unitId, unit.unitId),
+          ),
+        );
 
       return c.json({ message: "Certificado revogado com sucesso" });
     },

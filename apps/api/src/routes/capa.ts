@@ -568,7 +568,15 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       const [updated] = await db
         .update(correctiveAction)
         .set(updateData)
-        .where(eq(correctiveAction.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(correctiveAction.id, id),
+            eq(correctiveAction.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log
@@ -637,7 +645,15 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           implementedAt: new Date(),
           status: "IMPLEMENTATION",
         })
-        .where(eq(correctiveAction.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(correctiveAction.id, id),
+            eq(correctiveAction.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log
@@ -710,7 +726,15 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           effectivenessConfirmed: input.effectivenessConfirmed,
           status: "VERIFICATION",
         })
-        .where(eq(correctiveAction.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(correctiveAction.id, id),
+            eq(correctiveAction.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log
@@ -781,7 +805,15 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           closedAt: new Date(),
           closedBy: session.user.id,
         })
-        .where(eq(correctiveAction.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(correctiveAction.id, id),
+            eq(correctiveAction.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log

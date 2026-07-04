@@ -548,7 +548,15 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       const [updated] = await db
         .update(nonConformance)
         .set(updateData)
-        .where(eq(nonConformance.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log
@@ -622,7 +630,15 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           resolvedBy: session.user.id,
           status: "resolved",
         })
-        .where(eq(nonConformance.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
         .returning();
 
       // Audit log
@@ -744,7 +760,15 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       await db
         .update(nonConformance)
         .set({ capaId: newCapa.id })
-        .where(eq(nonConformance.id, id));
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope member.organizationId.
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        );
 
       // Audit log
       await db.insert(nonConformanceAuditLog).values({

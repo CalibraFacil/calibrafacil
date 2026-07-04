@@ -1672,7 +1672,14 @@ export const portalRouter = new Hono<{
             intervalRationale: rationale,
             nextCalibrationDate,
           })
-          .where(eq(asset.id, id));
+          // Defense-in-depth (SEC-08): the portal tenant boundary is the customer
+          // (asset has no organizationId; org is derived via unit). Repeat the
+          // exact scope `decidePortalIntervalWrite` already proved — the asset's
+          // customer must be in the caller's in-scope set — so the UPDATE stays
+          // customer-scoped even if that guard is refactored away.
+          .where(
+            and(eq(asset.id, id), inArray(asset.customerId, scopedCustomerIds)),
+          );
 
         await db.insert(assetAuditLog).values({
           assetId: id,

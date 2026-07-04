@@ -173,7 +173,15 @@ export const authorizedSignatoriesRouter = new Hono<{
           revokedBy: session.user.id,
           revokedAt: new Date(),
         })
-        .where(eq(authorizedSignatory.id, id))
+        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+        // above so the UPDATE stays org-scoped even if the guarding read is
+        // refactored away. Reuses the in-scope memberData.organizationId.
+        .where(
+          and(
+            eq(authorizedSignatory.id, id),
+            eq(authorizedSignatory.organizationId, memberData.organizationId),
+          ),
+        )
         .returning();
 
       await db.insert(authorizedSignatoryAuditLog).values({

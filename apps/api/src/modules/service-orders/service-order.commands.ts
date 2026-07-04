@@ -258,7 +258,16 @@ export async function updateServiceOrder(input: {
           : existing.serviceStartedAt,
       updatedAt: new Date(),
     })
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    // Defense-in-depth (SEC-08): repeat the tenant scope already proven by the
+    // SELECT above so the final UPDATE stays org/unit-scoped even if a future
+    // refactor drops the guarding read. Reuses the same in-scope member values.
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, input.member.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, input.member),
+      ),
+    )
     .returning();
 
   if (input.values.status && input.values.status !== existing.status) {
