@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { unitsRouter } from "./units";
 import { db } from "@calibra-facil/db";
 import {
+  member,
   organizationUnit,
   memberUnitAssignment,
   subscription,
+  user,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -27,6 +29,10 @@ import { seedOrg } from "../../test/integration/seed";
 //  REQ-UNIT-007  Unauthenticated requests -> 401
 //  REQ-UNIT-008  PUT /admin/members/:memberId/assignments as member -> 403
 //  REQ-UNIT-009  PUT /admin/members/:memberId/assignments as admin -> 200, persists assignment
+//  REQ-DOM-ADM-001 PATCH /admin/members/:memberId/role demoting the LAST calibration
+//                  approver -> rejected (named error) + role unchanged (separation of duties)
+//  REQ-DOM-ADM-002 The same PATCH is allowed when another approver remains, and the
+//                  existing last-owner protection is preserved (no regression)
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -72,6 +78,32 @@ async function seedUnit(params: {
 
   if (!row) throw new Error("seedUnit: insert failed");
   return row.id;
+}
+
+/** Seed an additional org member (user + member row) with a given global role. */
+async function seedMember(params: {
+  organizationId: string;
+  role: "owner" | "admin" | "technician" | "operator" | "member";
+  suffix: string;
+}): Promise<string> {
+  const now = new Date("2026-01-01T00:00:00.000Z");
+  const userId = `user-${params.organizationId}-${params.suffix}`;
+  const memberId = `member-${params.organizationId}-${params.suffix}`;
+
+  await db.insert(user).values({
+    id: userId,
+    name: `User ${params.suffix}`,
+    email: `${params.suffix}@${params.organizationId}.test`,
+  });
+  await db.insert(member).values({
+    id: memberId,
+    organizationId: params.organizationId,
+    userId,
+    role: params.role,
+    createdAt: now,
+  });
+
+  return memberId;
 }
 
 // ---------------------------------------------------------------------------
@@ -347,5 +379,109 @@ describe("unitsRouter — real DB + real middleware", () => {
     expect(assignments).toHaveLength(1);
     expect(assignments[0]?.unitId).toBe(extraUnitId);
     expect(assignments[0]?.role).toBe("technician");
+  });
+
+  // REQ-DOM-ADM-001: demoting the ONLY calibration approver is rejected + role unchanged.
+  // "Approver" is derived from the real ISO 17025 separation-of-duties matrix
+  // (calibrationWorkflowPermissions.canApprove -> {admin, owner}); this org's single
+  // member is a global admin, so demoting them would leave zero approvers.
+  it("REQ-DOM-ADM-001: demoting the only calibration approver is rejected with a named error and the role is unchanged", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await unitsRouter.request(
+      `/admin/members/${org.memberId}/role`,
+      {
+        method: "PATCH",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ role: "technician" }),
+      },
+    );
+
+    // Rejected with a NAMED error (the separation-of-duties invariant).
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("LAST_CALIBRATION_APPROVER");
+
+    // The role MUST be unchanged in the DB — still an approver.
+    const [row] = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(eq(member.id, org.memberId));
+    expect(row?.role).toBe("admin");
+  });
+
+  // REQ-DOM-ADM-002: allowed when another approver (a second admin) remains.
+  it("REQ-DOM-ADM-002: demoting an approver is allowed when another admin approver remains", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" }); // adminA (viewer)
+    const adminBId = await seedMember({
+      organizationId: org.orgId,
+      role: "admin",
+      suffix: "admin-b",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await unitsRouter.request(`/admin/members/${adminBId}/role`, {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ role: "technician" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+
+    const [row] = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(eq(member.id, adminBId));
+    expect(row?.role).toBe("technician");
+  });
+
+  // REQ-DOM-ADM-002: owner is ALSO an approver (derived from the mapping), so
+  // demoting the last admin is allowed while an owner remains.
+  it("REQ-DOM-ADM-002: demoting the last admin is allowed when an owner (also an approver) remains", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "owner" }); // owner (viewer)
+    const adminId = await seedMember({
+      organizationId: org.orgId,
+      role: "admin",
+      suffix: "admin-b",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await unitsRouter.request(`/admin/members/${adminId}/role`, {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ role: "member" }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(eq(member.id, adminId));
+    expect(row?.role).toBe("member");
+  });
+
+  // REQ-DOM-ADM-002: the pre-existing last-owner protection stays intact.
+  it("REQ-DOM-ADM-002: the existing last-owner protection is preserved (owner cannot be changed here)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "owner" });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await unitsRouter.request(
+      `/admin/members/${org.memberId}/role`,
+      {
+        method: "PATCH",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ role: "admin" }),
+      },
+    );
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ role: member.role })
+      .from(member)
+      .where(eq(member.id, org.memberId));
+    expect(row?.role).toBe("owner");
   });
 });

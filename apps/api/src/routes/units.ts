@@ -20,6 +20,30 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
+import { calibrationWorkflowPermissions } from "@calibra-facil/auth/access";
+import type { RoleName } from "@calibra-facil/auth/access";
+
+/**
+ * Roles capable of APPROVING a calibration, derived from the real ISO 17025
+ * separation-of-duties matrix (`calibrationWorkflowPermissions.canApprove`)
+ * rather than a hand-written "is admin" rule — so it stays in sync if the
+ * workflow authority ever changes. Today this resolves to `["admin", "owner"]`.
+ */
+const CALIBRATION_APPROVER_ROLES: RoleName[] = Array.from(
+  new Set(
+    Object.values(calibrationWorkflowPermissions).flatMap(
+      (permissions) => permissions.canApprove,
+    ),
+  ),
+);
+
+/**
+ * Whether a (possibly free-form) member role can approve calibrations. Uses a
+ * value comparison so an untyped DB `role` string narrows without an assertion.
+ */
+function isCalibrationApprover(role: string): boolean {
+  return CALIBRATION_APPROVER_ROLES.some((approver) => approver === role);
+}
 
 const CreateUnitSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
@@ -778,6 +802,37 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (targetMember.role === input.role) {
         return c.json({ success: true });
+      }
+
+      // Separation of duties (ISO/IEC 17025 6.2.4): the organization must always
+      // retain at least one member able to approve/reject calibrations. If this
+      // change would drop the target out of the approver set, ensure another
+      // approver remains — scoped to the organization.
+      if (
+        isCalibrationApprover(targetMember.role) &&
+        !isCalibrationApprover(input.role)
+      ) {
+        const [remainingApprovers] = await db
+          .select({ value: count() })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, memberData.organizationId),
+              ne(member.id, targetMemberId),
+              inArray(member.role, CALIBRATION_APPROVER_ROLES),
+            ),
+          );
+
+        if ((remainingApprovers?.value ?? 0) === 0) {
+          return c.json(
+            {
+              error:
+                "Não é possível rebaixar o último membro capaz de aprovar calibrações. A organização precisa manter ao menos um aprovador (separação de funções, ISO/IEC 17025 6.2.4).",
+              code: "LAST_CALIBRATION_APPROVER",
+            },
+            409,
+          );
+        }
       }
 
       await db
