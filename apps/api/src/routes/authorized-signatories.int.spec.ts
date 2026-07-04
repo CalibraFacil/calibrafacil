@@ -21,6 +21,13 @@
  *                  revokedBy = admin id (DB-verified) + "revoke" audit row.
  *   REQ-SGTRY-005  Unauthenticated GET / and POST / → 401.
  *
+ *   REQ-SEC-SIG-001 [HIGH RISK] Signatory membership (SEC-04, ISO 17025 §6.2.6):
+ *                  admin POST / with a userId that is a member of ANOTHER org →
+ *                  rejected with a client-error status (400/403) + named error,
+ *                  and ZERO authorized_signatory rows inserted (DB-verified).
+ *   REQ-SEC-SIG-002 POST / with a userId that IS an active member of the caller's
+ *                  org → 201 + exactly one row persisted (no regression).
+ *
  * ESCALATIONS: none — all oracle behaviours match stated spec.
  */
 
@@ -394,4 +401,103 @@ describe("authorizedSignatoriesRouter — real DB + real middleware", () => {
     });
     expect(postRes.status).toBe(401);
   });
+
+  // -------------------------------------------------------------------------
+  // REQ-SEC-SIG-001 — Signatory membership: cross-org userId is rejected
+  // -------------------------------------------------------------------------
+  it(
+    "REQ-SEC-SIG-001 POST / with a userId from another org → rejected (400/403), no row inserted",
+    async () => {
+      // org A (the caller) + org B (owns the foreign user). seedOrg creates a
+      // member for each org's user, so orgB.userId is a member of org B ONLY —
+      // it is NOT a member of org A.
+      const orgA = await seedOrg({
+        orgId: "org-a",
+        userId: "admin-a",
+        role: "admin",
+      });
+      const orgB = await seedOrg({
+        orgId: "org-b",
+        userId: "user-b",
+        role: "technician",
+      });
+
+      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+      const res = await authorizedSignatoriesRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ userId: orgB.userId, assetTypeId: null }),
+      });
+
+      // Named-error rejection with a client-error status (400 or 403).
+      expect([400, 403]).toContain(res.status);
+      const body = await res.json();
+      expect(typeof body.error).toBe("string");
+      expect(body.error.length).toBeGreaterThan(0);
+
+      // DB-verify: nothing was inserted for org A …
+      const orgARows = await db
+        .select()
+        .from(authorizedSignatory)
+        .where(eq(authorizedSignatory.organizationId, orgA.orgId));
+      expect(orgARows).toHaveLength(0);
+
+      // … and the foreign user was not recorded as a signatory anywhere.
+      const crossRows = await db
+        .select()
+        .from(authorizedSignatory)
+        .where(eq(authorizedSignatory.userId, orgB.userId));
+      expect(crossRows).toHaveLength(0);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // REQ-SEC-SIG-002 — Member userId still succeeds (no regression)
+  // -------------------------------------------------------------------------
+  it(
+    "REQ-SEC-SIG-002 POST / with a userId that IS a member of the org → 201, row inserted",
+    async () => {
+      const adminOrg = await seedOrg({
+        orgId: "org-a",
+        userId: "admin-a",
+        role: "admin",
+      });
+      await seedExtraMember({
+        userId: "grantee-a",
+        orgId: adminOrg.orgId,
+        role: "technician",
+      });
+
+      loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
+      const res = await authorizedSignatoriesRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ userId: "grantee-a", assetTypeId: null }),
+      });
+
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      const created: {
+        userId: string;
+        organizationId: string;
+        status: string;
+      } = body.signatory;
+      expect(created.userId).toBe("grantee-a");
+      expect(created.organizationId).toBe(adminOrg.orgId);
+      expect(created.status).toBe("ACTIVE");
+
+      // DB-verify: exactly one signatory row persisted for the member grantee.
+      const rows = await db
+        .select()
+        .from(authorizedSignatory)
+        .where(
+          and(
+            eq(authorizedSignatory.organizationId, adminOrg.orgId),
+            isNull(authorizedSignatory.deletedAt),
+          ),
+        );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.userId).toBe("grantee-a");
+    },
+  );
 });

@@ -5,6 +5,7 @@ import { db } from "@calibra-facil/db";
 import {
   authorizedSignatory,
   authorizedSignatoryAuditLog,
+  member,
   user,
   assetType,
 } from "@calibra-facil/db/schema";
@@ -82,6 +83,28 @@ export const authorizedSignatoriesRouter = new Hono<{
       const memberData = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
+
+      // ISO/IEC 17025:2017 §6.2.6 — a signatory record is a regulated roster
+      // entry; the granted user MUST be an active member of the caller's
+      // organization. Mirror the membership check in signatures.ts
+      // (GET /member/:memberId) so a record can never point at a foreign user.
+      const [targetMember] = await db
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.userId, input.userId),
+            eq(member.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!targetMember) {
+        return c.json(
+          { error: "Usuário não é membro da organização" },
+          400,
+        );
+      }
 
       const [created] = await db
         .insert(authorizedSignatory)
