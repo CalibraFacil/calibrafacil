@@ -1,8 +1,14 @@
+import { type ClipboardEvent } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
+import { toast } from 'sonner'
 
 import type { MethodInputField } from './types'
 
+import {
+  applyPastedReadings,
+  parsePastedReadings,
+} from '@/features/jobs/execution'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MassCompositionCell } from './mass-composition-cell'
@@ -627,6 +633,53 @@ export function TableInputRenderer({
     onChange(rows.filter((_, i) => i !== index))
   }
 
+  // Bulk paste (REQ-DOM-INP-001/002): parse a tab / pt-BR-CSV matrix from the
+  // clipboard against the method's column schema and fill rows/columns from the
+  // pasted cell. Rejected pastes are flagged (toast) and leave readings intact.
+  // All parsing lives in the pure `parsePastedReadings`/`applyPastedReadings`
+  // helpers (REQ-DOM-INP-003) — this handler only wires clipboard I/O.
+  const handleCellPaste = (
+    event: ClipboardEvent<HTMLElement>,
+    rowIndex: number,
+    colKey: string,
+  ) => {
+    if (disabled) return
+
+    const text = event.clipboardData.getData('text')
+    // Only intercept a genuine matrix paste; a single-cell value keeps the
+    // native input paste (with its own numeric parsing/validation).
+    if (!/[\t\n\r]/.test(text)) return
+
+    const startColumnIndex = columns.findIndex(
+      (column) => column.key === colKey,
+    )
+    if (startColumnIndex < 0) return
+
+    event.preventDefault()
+
+    const parsed = parsePastedReadings({ text, columns, startColumnIndex })
+    if (!parsed.ok) {
+      toast.error(parsed.error)
+      return
+    }
+
+    const merged = applyPastedReadings({
+      existingRows: rows,
+      parsedRows: parsed.rows,
+      startRowIndex: rowIndex,
+      columns,
+    })
+
+    onChange(
+      applyTableWeighingRangeResolvers(field, merged, assetSpecifications),
+    )
+    toast.success(
+      parsed.rowCount === 1
+        ? '1 linha colada.'
+        : `${parsed.rowCount} linhas coladas.`,
+    )
+  }
+
   const updateCell = (rowIndex: number, colKey: string, cellValue: unknown) => {
     const newRows = [...rows]
     newRows[rowIndex] = applyTableWeighingRangeResolvers(
@@ -961,6 +1014,7 @@ export function TableInputRenderer({
             ? 'min-w-0 space-y-1 md:col-span-2 xl:col-span-3'
             : 'min-w-0 space-y-1'
         }
+        onPaste={(event) => handleCellPaste(event, rowIndex, col.key)}
       >
         <label className="text-xs font-medium text-muted-foreground">
           {col.label}
@@ -1093,15 +1147,21 @@ export function TableInputRenderer({
         )}
 
         {!hasFixedLoadPoints && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={addRow}
-            disabled={disabled}
-          >
-            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-            Adicionar Linha
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addRow}
+              disabled={disabled}
+            >
+              <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+              Adicionar Linha
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Dica: cole (Ctrl+V) uma matriz da planilha para preencher varias
+              linhas de uma vez.
+            </span>
+          </div>
         )}
       </div>
     )
@@ -1148,7 +1208,13 @@ export function TableInputRenderer({
                     </TableCell>
                     {columns.map((col) => {
                       return (
-                        <TableCell key={col.key} className="min-w-32 p-1">
+                        <TableCell
+                          key={col.key}
+                          className="min-w-32 p-1"
+                          onPaste={(event) =>
+                            handleCellPaste(event, rowIndex, col.key)
+                          }
+                        >
                           {renderCellInput(
                             row,
                             rowIndex,
@@ -1182,15 +1248,21 @@ export function TableInputRenderer({
         </Table>
       </div>
       {!hasFixedLoadPoints && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={addRow}
-          disabled={disabled}
-        >
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Adicionar Linha
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addRow}
+            disabled={disabled}
+          >
+            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            Adicionar Linha
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Dica: cole (Ctrl+V) uma matriz da planilha para preencher varias
+            linhas de uma vez.
+          </span>
+        </div>
       )}
     </div>
   )
