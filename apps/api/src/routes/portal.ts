@@ -1748,7 +1748,7 @@ export const portalRouter = new Hono<{
   // Returns approved calibration jobs (certificates) for the authenticated
   // portal user's organizations.
   // =========================================================================
-  .get("/certificates", requirePortalAuth, async (c) => {
+  .get("/certificates", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
     if (portalLabScope.blocked) {
@@ -1878,7 +1878,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // GET /certificates/:id - Get single certificate details
   // =========================================================================
-  .get("/certificates/:id", requirePortalAuth, async (c) => {
+  .get("/certificates/:id", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
     if (portalLabScope.blocked) {
@@ -2016,7 +2016,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   // GET /certificates/:id/download - Get download URL for certificate
   // =========================================================================
-  .get("/certificates/:id/download", requirePortalAuth, async (c) => {
+  .get("/certificates/:id/download", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
     if (portalLabScope.blocked) {
@@ -2095,7 +2095,7 @@ export const portalRouter = new Hono<{
   // =========================================================================
   .get(
     "/certificates/:id/reference-standards/:standardId/certificate/download",
-    requirePortalAuth,
+    ...requirePortalProtected,
     async (c) => {
       const session = c.get("session");
       const portalLabScope = await getPortalLabScope(c);
