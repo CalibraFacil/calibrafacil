@@ -67,6 +67,7 @@ export async function linkServiceOrderCertificate(input: {
 export async function unlinkServiceOrderCertificate(input: {
   serviceOrderId: number;
   certificateJobId: number;
+  organizationId: string;
   actorUserId: string;
 }) {
   const [order] = await db
@@ -74,6 +75,13 @@ export async function unlinkServiceOrderCertificate(input: {
     .from(serviceOrder)
     .where(eq(serviceOrder.id, input.serviceOrderId))
     .limit(1);
+
+  // SEC-01: a cross-tenant :id must not delete another org's link. Validate the
+  // OS belongs to the caller's organization BEFORE the DELETE, mirroring the
+  // `order.organizationId !== input.organizationId` guard in the link sibling.
+  if (!order || order.organizationId !== input.organizationId) {
+    return { status: "not_found" as const };
+  }
 
   await db
     .delete(serviceOrderCertificateLink)
@@ -87,17 +95,15 @@ export async function unlinkServiceOrderCertificate(input: {
       ),
     );
 
-  if (order) {
-    await recordServiceOrderEvent({
-      organizationId: order.organizationId,
-      unitId: order.unitId,
-      serviceOrderId: input.serviceOrderId,
-      actorType: "lab_user",
-      actorId: input.actorUserId,
-      eventType: "service_order.certificate_unlinked",
-      metadata: { certificateJobId: input.certificateJobId },
-    });
-  }
+  await recordServiceOrderEvent({
+    organizationId: order.organizationId,
+    unitId: order.unitId,
+    serviceOrderId: input.serviceOrderId,
+    actorType: "lab_user",
+    actorId: input.actorUserId,
+    eventType: "service_order.certificate_unlinked",
+    metadata: { certificateJobId: input.certificateJobId },
+  });
 
-  return { ok: true };
+  return { status: "ok" as const };
 }

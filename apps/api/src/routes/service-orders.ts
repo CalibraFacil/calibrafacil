@@ -529,11 +529,17 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", ApproveServiceOrderQuoteManuallySchema),
     async (c) => {
       const session = c.get("session");
+      const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
+      // SEC-01: resolve the OS within the caller's org+unit scope first, so a
+      // cross-tenant :id is rejected with 404 (mirrors the .pdf route below).
+      const scoped = await getScopedServiceOrder(id, member);
+      if (!scoped) return c.json({ error: "OS nao encontrada" }, 404);
       const input = c.req.valid("json");
       const result = await approveServiceOrderQuoteManually({
         serviceOrderId: id,
         quoteId,
+        organizationId: member.organizationId,
         actorUserId: session.user.id,
         values: input,
       });
@@ -553,11 +559,17 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", RejectServiceOrderQuoteManuallySchema),
     async (c) => {
       const session = c.get("session");
+      const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
+      // SEC-01: resolve the OS within the caller's org+unit scope first, so a
+      // cross-tenant :id is rejected with 404 (mirrors the .pdf route below).
+      const scoped = await getScopedServiceOrder(id, member);
+      if (!scoped) return c.json({ error: "OS nao encontrada" }, 404);
       const input = c.req.valid("json");
       const result = await rejectServiceOrderQuoteManually({
         serviceOrderId: id,
         quoteId,
+        organizationId: member.organizationId,
         actorUserId: session.user.id,
         values: input,
       });
@@ -769,12 +781,17 @@ export const serviceOrdersRouter = new Hono<{
     ),
     async (c) => {
       const session = c.get("session");
+      const member = c.get("member");
       const { id, certificateJobId } = c.req.valid("param");
-      await unlinkServiceOrderCertificate({
+      const result = await unlinkServiceOrderCertificate({
         serviceOrderId: id,
         certificateJobId,
+        organizationId: member.organizationId,
         actorUserId: session.user.id,
       });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS ou certificado nao encontrado" }, 404);
+      }
       return c.json({ ok: true });
     },
   );

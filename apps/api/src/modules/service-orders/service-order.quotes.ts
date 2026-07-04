@@ -401,6 +401,7 @@ export async function sendServiceOrderQuote(input: {
 export async function approveServiceOrderQuoteManually(input: {
   serviceOrderId: number;
   quoteId: number;
+  organizationId: string;
   actorUserId: string;
   values: ApproveQuoteManuallyInput;
 }) {
@@ -409,10 +410,19 @@ export async function approveServiceOrderQuoteManually(input: {
     return { status: "conflict" as const };
   }
 
+  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+  // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
+  // route also resolves via getScopedServiceOrder before reaching this point;
+  // this is the module-level defense-in-depth.
   const [order] = await db
     .select()
     .from(serviceOrder)
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
   if (!order) return { status: "order_not_found" as const };
 
@@ -496,6 +506,7 @@ export async function approveServiceOrderQuoteManually(input: {
 export async function rejectServiceOrderQuoteManually(input: {
   serviceOrderId: number;
   quoteId: number;
+  organizationId: string;
   actorUserId: string;
   values: RejectQuoteManuallyInput;
 }) {
@@ -504,10 +515,19 @@ export async function rejectServiceOrderQuoteManually(input: {
     return { status: "conflict" as const };
   }
 
+  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+  // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
+  // route also resolves via getScopedServiceOrder before reaching this point;
+  // this is the module-level defense-in-depth.
   const [order] = await db
     .select()
     .from(serviceOrder)
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
   if (!order) return { status: "order_not_found" as const };
 
