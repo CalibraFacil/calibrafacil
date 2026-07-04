@@ -8,6 +8,7 @@ import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrat
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
+import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 
@@ -201,6 +202,21 @@ async function handleServiceOrderEmails(request: Request) {
   );
 }
 
+// REL-03 backstop (#652): reclaim expired app_queue_job leases and re-drive the
+// document-worker drain on a timer, so a render job stuck in GENERATING_PDF /
+// PENDING past its lease is recovered even when no new job is enqueued. Scheduled
+// at */30 (same window as the other reliability crons) so it piggybacks their
+// Neon wake instead of adding a new one.
+async function handleQueueBackstop(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("queue-backstop", { leaseSeconds: 120 }, () =>
+    runStaleJobBackstop(),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -212,6 +228,7 @@ export const JOB_HANDLERS: Record<
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,
+  "queue-backstop": handleQueueBackstop,
 };
 
 function resolveJob(request: Request) {

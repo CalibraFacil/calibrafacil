@@ -199,10 +199,16 @@ export async function failQueueJob(id: number, error: unknown) {
     .where(eq(appQueueJob.id, id));
 }
 
-export async function releaseStaleQueueJobs(staleAfterMs = 10 * 60_000) {
+// Reclaim rows whose PROCESSING lease has expired (a worker died mid-job, or a
+// drain crashed) back to PENDING so they can be claimed again. Returns the number
+// of rows reclaimed so a periodic backstop can decide whether to re-drive the
+// drain (see apps/api/src/lib/stale-job-backstop.ts / the queue-backstop cron).
+export async function releaseStaleQueueJobs(
+  staleAfterMs = 10 * 60_000,
+): Promise<number> {
   const staleBefore = new Date(Date.now() - staleAfterMs);
 
-  await db.execute(sql`
+  const result = await db.execute(sql`
     update app_queue_job
     set status = 'PENDING',
         locked_by = null,
@@ -210,5 +216,26 @@ export async function releaseStaleQueueJobs(staleAfterMs = 10 * 60_000) {
         updated_at = now()
     where status = 'PROCESSING'
       and locked_at < ${staleBefore.toISOString()}::timestamptz
+    returning id
   `);
+
+  return getExecuteRows(result).length;
+}
+
+// Count rows that are claimable right now — PENDING and past their availability.
+// This includes rows just reclaimed by releaseStaleQueueJobs AND rows stranded in
+// PENDING by a dropped wake ping (nothing re-claims them until a NEW enqueue
+// happens). The periodic backstop uses this to know whether a stuck job needs the
+// worker woken, independent of any new enqueue.
+export async function countRecoverableQueueJobs(): Promise<number> {
+  const result = await db.execute(sql`
+    select count(*)::int as count
+    from app_queue_job
+    where status = 'PENDING'
+      and available_at <= now()
+  `);
+
+  const [row] = getExecuteRows(result);
+  const count = toRecord(row).count;
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
 }

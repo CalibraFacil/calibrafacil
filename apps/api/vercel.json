@@ -50,6 +50,10 @@
     {
       "path": "/api/cron/service-order-emails",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/queue-backstop",
+      "schedule": "*/30 * * * *"
     }
   ],
   "rewrites": [
