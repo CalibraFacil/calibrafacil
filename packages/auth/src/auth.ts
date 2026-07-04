@@ -43,6 +43,12 @@ import {
   normalizeLabAccessEmail,
   validateLabAccountSetupToken,
 } from "./lab-access";
+import { assertOrganizationUserLimit } from "./plan-user-limit";
+
+export {
+  assertOrganizationUserLimit,
+  getOrganizationProvisionedUserCount,
+} from "./plan-user-limit";
 
 export type BetterAuthPasskeyPortableTypes =
   | AuthenticationResponseJSON
@@ -1175,6 +1181,19 @@ function createOrganizationPlugin() {
             });
           }
         }
+      },
+      // DOM-07: enforce the plan's `users` limit on BOTH provisioning paths —
+      // sending an invitation and directly adding a member. Throws a 402
+      // LIMIT_EXCEEDED (assertOrganizationUserLimit) when the org is at/over its
+      // limit. LAB-only; CLIENT (portal) orgs are exempt (see helper). Pending
+      // invitations count as provisioned seats, so acceptance never exceeds the
+      // limit (accept-invitation adds the member directly and does not run
+      // beforeAddMember, so there is no double count).
+      beforeCreateInvitation: async ({ invitation }) => {
+        await assertOrganizationUserLimit(invitation.organizationId);
+      },
+      beforeAddMember: async ({ member }) => {
+        await assertOrganizationUserLimit(member.organizationId);
       },
     },
     async sendInvitationEmail(data) {
