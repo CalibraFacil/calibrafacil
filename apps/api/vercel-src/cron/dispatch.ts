@@ -9,6 +9,10 @@ import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
 import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
+import {
+  createAsaasReconciliationPort,
+  reconcileProviderSubscriptions,
+} from "../../src/services/commercial/reconcile-subscriptions";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 
@@ -217,6 +221,18 @@ async function handleQueueBackstop(request: Request) {
   );
 }
 
+async function handleSubscriptionReconciliation(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  // Backstop for lost/never-retried ASAAS webhooks: reconcile local subscription
+  // state against the provider and correct/alert on divergence (REQ-REL-ASA-002).
+  return runCron("subscription-reconciliation", { leaseSeconds: 120 }, () =>
+    reconcileProviderSubscriptions(createAsaasReconciliationPort()),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -229,6 +245,7 @@ export const JOB_HANDLERS: Record<
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,
   "queue-backstop": handleQueueBackstop,
+  "subscription-reconciliation": handleSubscriptionReconciliation,
 };
 
 function resolveJob(request: Request) {

@@ -52,6 +52,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/subscription-reconciliation",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/queue-backstop",
       "schedule": "*/30 * * * *"
     }

@@ -20,6 +20,7 @@ import {
   insertPaymentStatusHistoryEntry,
   markOfferPaymentsDeleted,
 } from "./common";
+import { TransientWebhookError } from "./webhook-errors";
 
 function hasUniqueViolationCode(value: unknown): boolean {
   return Boolean(
@@ -247,7 +248,9 @@ async function upsertPaymentFromWebhook(
 
   const [created] = await tx.insert(paymentRecord).values(values).returning();
   if (!created) {
-    throw new Error("Falha ao registrar pagamento do webhook");
+    // Infra-level failure (an insert that returned no row) — retryable, so surface
+    // it as transient and let the handler ask ASAAS to re-send.
+    throw new TransientWebhookError("Falha ao registrar pagamento do webhook");
   }
 
   await insertPaymentStatusHistoryEntry(tx, {
@@ -275,9 +278,26 @@ export async function reconcileCommercialWebhook(
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      return { duplicate: true, organizationId: null };
+      // The event row already exists. Distinguish a real duplicate from a RETRY:
+      // if a prior delivery finished (processedAt set) this is a true duplicate
+      // and we skip — the money state was applied exactly once. If the prior
+      // attempt inserted the row but never finished (processedAt IS NULL — its
+      // transaction rolled back on a transient failure, and the handler returned
+      // non-2xx so ASAAS re-sent it), we fall through and RE-PROCESS. Every money
+      // mutation below is inside a single transaction that re-derives from the
+      // current DB state, so re-processing an unfinished event is idempotent.
+      const existing = await db.query.providerWebhookEvent.findFirst({
+        where: and(
+          eq(providerWebhookEvent.provider, "ASAAS"),
+          eq(providerWebhookEvent.eventId, eventId),
+        ),
+      });
+      if (!existing || existing.processedAt) {
+        return { duplicate: true, organizationId: null };
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   const offer = await findOfferForPayload(payload);

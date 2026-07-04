@@ -9,6 +9,7 @@ import { suppressEmail } from "@calibra-facil/notifications";
 import { and, eq } from "drizzle-orm";
 import type { AsaasWebhookPayload } from "../services/asaas/types";
 import { reconcileCommercialWebhook } from "../services/commercial/reconcile-webhook";
+import { isTransientWebhookError } from "../services/commercial/webhook-errors";
 import {
   parseResendEvent,
   resendBounceIsHard,
@@ -82,6 +83,9 @@ export const webhooksRouter = new Hono().post("/asaas", async (c) => {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Record the failure for observability. The event stays UNPROCESSED
+    // (processedAt is only set on a successful reconcile), so a retry re-runs the
+    // work rather than being skipped as a duplicate (see reconcileCommercialWebhook).
     await db
       .update(providerWebhookEvent)
       .set({ processingError: message })
@@ -92,6 +96,14 @@ export const webhooksRouter = new Hono().post("/asaas", async (c) => {
         ),
       );
     console.error("Webhook processing error", error);
+
+    // A TRANSIENT failure (DB blip, network) → non-2xx so ASAAS retries the
+    // delivery. A PERMANENT failure → ack (200): ASAAS's queue is SEQUENTIAL and
+    // pauses after 15 consecutive non-2xx responses, so a poison event must not
+    // stall it; the reconciliation cron is the backstop for the divergence.
+    if (isTransientWebhookError(error)) {
+      return c.json({ received: false, retryable: true, error: message }, 503);
+    }
     return c.json({ received: true }, 200);
   }
 }).post("/resend", async (c) => {
