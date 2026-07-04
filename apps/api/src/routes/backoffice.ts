@@ -12,6 +12,8 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
+  isNull,
   like,
   lt,
   lte,
@@ -37,11 +39,13 @@ import {
   organizationSuccessProfile,
   organizationSupportRequest,
   platformEventLog,
+  serviceOrderEmailOutbox,
   session as authSession,
   subscription,
   user as userTable,
 } from "@calibra-facil/db/schema";
 import { recomputeOperatorAlerts } from "../lib/operator-alerts";
+import { shapeRecentQueueFailures } from "../lib/observability-alerts";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -807,12 +811,42 @@ export const backofficeRouter = new Hono<{
         ),
       );
 
+    // REQ-REL-OBS-002: surface the REAL last_error of failed queue jobs. The
+    // worker runtime now records the actual error (not a generic placeholder),
+    // so an operator can see WHY a job failed instead of just a count.
+    const recentFailedRows = await db
+      .select({
+        id: appQueueJob.id,
+        type: appQueueJob.type,
+        attempts: appQueueJob.attempts,
+        maxAttempts: appQueueJob.maxAttempts,
+        lastError: appQueueJob.lastError,
+        updatedAt: appQueueJob.updatedAt,
+      })
+      .from(appQueueJob)
+      .where(eq(appQueueJob.status, "FAILED"))
+      .orderBy(desc(appQueueJob.updatedAt))
+      .limit(20);
+
+    // REQ-REL-OBS-003: dead-lettered service-order emails — rows that exhausted
+    // maxAttempts and will never be drained again.
+    const deadLetterOutboxRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(serviceOrderEmailOutbox)
+      .where(
+        and(
+          isNull(serviceOrderEmailOutbox.processedAt),
+          isNotNull(serviceOrderEmailOutbox.deadLetterAt),
+        ),
+      );
+
     const queue = {
       pending: 0,
       processing: 0,
       failed: 0,
       completed: 0,
       stuck: queueStuckRows[0]?.count ?? 0,
+      recentFailures: shapeRecentQueueFailures(recentFailedRows),
     };
     for (const row of queueByStatus) {
       if (row.status === "PENDING") queue.pending = row.count;
@@ -820,6 +854,10 @@ export const backofficeRouter = new Hono<{
       else if (row.status === "FAILED") queue.failed = row.count;
       else if (row.status === "COMPLETED") queue.completed = row.count;
     }
+
+    const emailOutbox = {
+      deadLetter: deadLetterOutboxRows[0]?.count ?? 0,
+    };
 
     return c.json({
       subscriptions: {
@@ -833,6 +871,7 @@ export const backofficeRouter = new Hono<{
         byPlan,
       },
       queue,
+      emailOutbox,
     });
   })
   // Account tasks — first-class operator tasks per account (and a cross-account

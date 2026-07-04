@@ -119,16 +119,23 @@ export function createWorkerEnv(): WorkerEnv {
 
 function createBatch(jobs: ClaimedQueueJob[]) {
   const states = new Map<number, "acked" | "retry">();
+  // REQ-REL-OBS-002: capture the REAL error the worker's queue handler caught so
+  // it is written to app_queue_job.last_error instead of a generic placeholder.
+  const errors = new Map<number, unknown>();
 
   return {
     batch: {
       messages: jobs.map((job) => ({
         body: job.payload,
         ack: () => states.set(job.id, "acked"),
-        retry: () => states.set(job.id, "retry"),
+        retry: (error?: unknown) => {
+          states.set(job.id, "retry");
+          if (error !== undefined) errors.set(job.id, error);
+        },
       })),
     },
     states,
+    errors,
   };
 }
 
@@ -144,7 +151,7 @@ async function claimAndProcessBatch(
   if (jobs.length === 0) return 0;
 
   console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
-  const { batch, states } = createBatch(jobs);
+  const { batch, states, errors } = createBatch(jobs);
   const executionContext: ExecutionContext = {
     props: {},
     waitUntil(promise) {
@@ -168,7 +175,13 @@ async function claimAndProcessBatch(
     jobs.map((job) =>
       states.get(job.id) === "acked"
         ? completeQueueJob(job.id)
-        : failQueueJob(job.id, "Job was not acknowledged by worker"),
+        : failQueueJob(
+            job.id,
+            // Prefer the real error the handler retried with; the generic string
+            // is only a fallback for a job that was neither acked nor retried
+            // with an error (should not happen, but never lose the failure).
+            errors.get(job.id) ?? "Job was not acknowledged by worker",
+          ),
     ),
   );
 

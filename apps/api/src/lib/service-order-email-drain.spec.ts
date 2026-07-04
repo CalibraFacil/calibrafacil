@@ -919,4 +919,78 @@ describe("drainServiceOrderEmailOutbox", () => {
       expect(mockSendEmail).not.toHaveBeenCalled();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // REQ-REL-OBS-003 (issue #653): dead-letter on attempt exhaustion.
+  //
+  // The SELECT filters `attempts < maxAttempts`. A release increments attempts;
+  // once that reaches maxAttempts the row is never selected again. On THAT
+  // release the drain must stamp `dead_letter_at = now()` so the exhaustion is
+  // an explicit, queryable state (surfaced in backoffice + operator alert) —
+  // not the previous silent stop.
+  //
+  // The release UPDATE is still a SINGLE db.execute (call[2]) so the existing
+  // call-count assertions elsewhere are unaffected. We assert on the emitted
+  // SQL text (the mocked `sql` tag captures `_sqlText`).
+  // ---------------------------------------------------------------------------
+
+  describe("REQ-REL-OBS-003: exhausted rows are dead-lettered on release", () => {
+    function releaseSqlText(): string {
+      // call[0] = claim, call[1] = SO re-load, call[2] = release
+      const releaseArg: unknown = mockExecute.mock.calls[2]?.[0];
+      return String(
+        releaseArg !== null && typeof releaseArg === "object"
+          ? Reflect.get(releaseArg, "_sqlText")
+          : "",
+      ).toLowerCase();
+    }
+
+    it("REQ-REL-OBS-003: a failing send that exhausts maxAttempts stamps dead_letter_at = now()", async () => {
+      // attempts=2, maxAttempts=3 → release pushes attempts to 3 → dead-letter.
+      const row = makeOutboxRow("repair_in_progress", { attempts: 2 });
+      enqueueSelects([row], [SAMPLE_CUSTOMER]);
+      claimSucceeds(row.id);
+      soReloadSucceeds();
+      sendEmailCallingRender({ sent: false, error: "SMTP down" });
+      releaseSucceeds();
+
+      const result = await drainServiceOrderEmailOutbox({
+        batchSize: 10,
+        maxAttempts: 3,
+      });
+
+      expect(result.released).toBe(1);
+      // Still one release UPDATE (claim + SO re-load + release = 3 executes).
+      expect(mockExecute).toHaveBeenCalledTimes(3);
+      const text = releaseSqlText();
+      // MUTATION CHECK: drop the dead-letter branch (always take the plain
+      // release) → this goes RED because the exhausted row is never marked.
+      expect(text).toContain("dead_letter_at = now()");
+      // The lease is still cleared + attempts incremented (unchanged behaviour).
+      expect(text).toContain("claimed_at = null");
+      expect(text).toContain("attempts = attempts + 1");
+    });
+
+    it("REQ-REL-OBS-003: a failing send with retries left does NOT dead-letter the row", async () => {
+      // attempts=0, maxAttempts=3 → still two retries left → NOT dead-letter.
+      const row = makeOutboxRow("repair_in_progress", { attempts: 0 });
+      enqueueSelects([row], [SAMPLE_CUSTOMER]);
+      claimSucceeds(row.id);
+      soReloadSucceeds();
+      sendEmailCallingRender({ sent: false, error: "SMTP down" });
+      releaseSucceeds();
+
+      const result = await drainServiceOrderEmailOutbox({
+        batchSize: 10,
+        maxAttempts: 3,
+      });
+
+      expect(result.released).toBe(1);
+      const text = releaseSqlText();
+      // MUTATION CHECK: if the exhaustion decider over-fires (always dead-letter)
+      // this goes RED — a row with retries left must stay retryable.
+      expect(text).not.toContain("dead_letter_at");
+      expect(text).toContain("attempts = attempts + 1");
+    });
+  });
 });

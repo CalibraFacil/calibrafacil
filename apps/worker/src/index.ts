@@ -374,7 +374,10 @@ export interface MessageBatch<T> {
   messages: {
     body: T;
     ack: () => void;
-    retry: () => void;
+    // Optional error (REQ-REL-OBS-002): the DB-queue runtime records it as the
+    // job's real last_error. Cloudflare's native retry ignores extra args, so
+    // this stays compatible if the handler is ever bound to a real CF queue.
+    retry: (error?: unknown) => void;
   }[];
 }
 
@@ -3755,7 +3758,9 @@ export default {
           error,
           body: msg.body,
         });
-        msg.retry();
+        // Forward the real error so the DB-queue runtime records it as the job's
+        // last_error (REQ-REL-OBS-002) instead of a generic placeholder.
+        msg.retry(error);
       }
     }
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { backofficeRouter } from "./backoffice";
 import { db } from "@calibra-facil/db";
-import { organization } from "@calibra-facil/db/schema";
+import { appQueueJob, organization } from "@calibra-facil/db/schema";
 import { loginAsBackoffice, logoutBackoffice } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 
@@ -383,4 +383,59 @@ describe("backofficeRouter — real DB + real platform-role guards", () => {
       expect(body).toHaveProperty("queue");
     },
   );
+
+  // =========================================================================
+  // REQ-REL-OBS-002 (issue #653): /vitals exposes the REAL last_error of failed
+  // queue jobs — not a generic overwrite. This is the authoritative real-DB
+  // proof: a FAILED app_queue_job row carrying a real error must surface verbatim
+  // in queue.recentFailures.
+  // =========================================================================
+  it("REQ-REL-OBS-002: /vitals surfaces the real last_error of a failed queue job", async () => {
+    const realError =
+      "CERTIFICATE render failed: gotenberg 502 upstream timeout";
+    await db.insert(appQueueJob).values({
+      type: "CERTIFICATE",
+      payload: { type: "CERTIFICATE", jobId: "cal-2026-9001" },
+      status: "FAILED",
+      attempts: 3,
+      maxAttempts: 3,
+      lastError: realError,
+    });
+
+    loginAsBackoffice({
+      userId: PLATFORM_OPERATOR_USER,
+      role: "platform_operator",
+    });
+
+    const res = await backofficeRouter.request("/vitals");
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+
+    // Dig out queue.recentFailures[].lastError without `as` assertions.
+    const recentFailures =
+      typeof body === "object" &&
+      body !== null &&
+      "queue" in body &&
+      typeof body.queue === "object" &&
+      body.queue !== null &&
+      "recentFailures" in body.queue &&
+      Array.isArray(body.queue.recentFailures)
+        ? body.queue.recentFailures
+        : [];
+
+    const errors = recentFailures.flatMap((row) =>
+      typeof row === "object" &&
+      row !== null &&
+      "lastError" in row &&
+      typeof row.lastError === "string"
+        ? [row.lastError]
+        : [],
+    );
+
+    // The REAL error is surfaced verbatim — MUTATION CHECK: drop lastError from
+    // the /vitals projection (or overwrite it) and this goes RED.
+    expect(errors).toContain(realError);
+    // And the dead-letter outbox counter is exposed (REQ-REL-OBS-003 surface).
+    expect(body).toHaveProperty("emailOutbox");
+  });
 });

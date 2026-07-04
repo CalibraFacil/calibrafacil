@@ -73,6 +73,7 @@ import { dispatchNovaOsEmail } from "../modules/service-orders/nova-os-email-dis
 import { dispatchNovoOrcamentoEmail } from "../modules/service-orders/novo-orcamento-email-dispatch";
 import { dispatchOrcamentoAprovadoEmail } from "../modules/service-orders/orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "../modules/service-orders/orcamento-recusado-email-dispatch";
+import { isReleaseExhausting } from "./observability-alerts";
 
 // =============================================================================
 // CONSTANTS
@@ -200,11 +201,32 @@ async function claimOutboxRow(rowId: number): Promise<ClaimResult | undefined> {
  * Release a row back into the pending queue after a send failure.
  * Clears the lease (claimed_at), increments attempts, records the error. The
  * row stays pending (processed_at is still NULL) so the next drain retries it.
+ *
+ * REQ-REL-OBS-003: when this release EXHAUSTS the row (the incremented attempts
+ * reach maxAttempts, so the drain will never select it again), also stamp
+ * `dead_letter_at = now()`. That turns the previously-silent exhaustion into a
+ * queryable state the backoffice surfaces and the operator-alert engine pages
+ * on. The stamp is written in the SAME UPDATE (one statement) so nothing else in
+ * the drain's call sequence changes. Two SQL variants (rather than a CASE with a
+ * bound flag) keep the dead-letter write assertable in the drain's SQL-text unit
+ * tests.
  */
 async function releaseOutboxRow(
   rowId: number,
   errorMessage: string,
+  deadLetter: boolean,
 ): Promise<void> {
+  if (deadLetter) {
+    await db.execute(
+      sql`UPDATE service_order_email_outbox
+          SET claimed_at = NULL,
+              attempts = attempts + 1,
+              last_error = ${errorMessage},
+              dead_letter_at = now()
+          WHERE id = ${rowId}`,
+    );
+    return;
+  }
   await db.execute(
     sql`UPDATE service_order_email_outbox
         SET claimed_at = NULL,
@@ -629,11 +651,15 @@ export async function drainServiceOrderEmailOutbox(options?: {
             await markOutboxRowProcessed(row.id);
             result.sent++;
           } else {
-            // Dispatch failed — release for retry.
+            // Dispatch failed — release for retry (or dead-letter if exhausted).
             const releaseMsg =
               "B/C/D dispatch did not complete — released for retry";
             try {
-              await releaseOutboxRow(row.id, releaseMsg);
+              await releaseOutboxRow(
+                row.id,
+                releaseMsg,
+                isReleaseExhausting(row.attempts, maxAttempts),
+              );
             } catch (releaseError) {
               console.error(
                 `[ServiceOrderEmailDrain] Release failed for B/C/D outbox id=${row.id}:`,
@@ -739,9 +765,14 @@ export async function drainServiceOrderEmailOutbox(options?: {
           await markOutboxRowProcessed(row.id);
           result.sent++;
         } else {
-          // 5. On failure: release the lease back to pending for retry.
+          // 5. On failure: release the lease back to pending for retry (or
+          // dead-letter the row if this failure exhausts its attempts).
           const releaseMsg = "Send did not complete — released for retry";
-          await releaseOutboxRow(row.id, releaseMsg);
+          await releaseOutboxRow(
+            row.id,
+            releaseMsg,
+            isReleaseExhausting(row.attempts, maxAttempts),
+          );
           result.released++;
         }
       } catch (rowError) {

@@ -547,6 +547,13 @@
 			"when": 1783100000000,
 			"tag": "0077_calibration_job_source_service_order",
 			"breakpoints": true
+		},
+		{
+			"idx": 78,
+			"version": "7",
+			"when": 1783202400000,
+			"tag": "0078_outbox_dead_letter",
+			"breakpoints": true
 		}
 	]
 }

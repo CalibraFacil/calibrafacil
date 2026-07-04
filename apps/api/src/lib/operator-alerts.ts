@@ -1,12 +1,19 @@
-import { and, eq, gte, isNotNull, lt, lte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 
 import { db } from "@calibra-facil/db";
 import {
+  cronRun,
   entitlementOverride,
   operatorAlert,
   organization,
+  serviceOrderEmailOutbox,
 } from "@calibra-facil/db/schema";
-import type { OperatorAlertSeverity } from "@calibra-facil/db/schema";
+import {
+  CRON_CONSECUTIVE_FAILURE_ALERT_THRESHOLD,
+  buildCronFailureAlertSpecs,
+  buildOutboxDeadLetterAlertSpec,
+  type AlertSpec,
+} from "./observability-alerts";
 
 /**
  * Operator-addressed alerting engine (operations-console gap #5).
@@ -18,15 +25,6 @@ import type { OperatorAlertSeverity } from "@calibra-facil/db/schema";
  * persists while the condition still holds. Invoked by the `operator-alerts` cron
  * (the scheduler) and by a manual recompute endpoint.
  */
-
-type AlertSpec = {
-  dedupeKey: string;
-  organizationId: string | null;
-  kind: string;
-  severity: OperatorAlertSeverity;
-  title: string;
-  detail: string | null;
-};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -115,6 +113,43 @@ async function computeAlertSpecs(now: Date): Promise<AlertSpec[]> {
         ? `Expira em ${isoDay(override.expiresAt)}`
         : null,
     });
+  }
+
+  // 4. Failing crons — a cron whose consecutive-failure streak has reached the
+  // alert threshold (REQ-REL-OBS-001). The heartbeat is written by the cron
+  // dispatcher (`cron_run.consecutive_failures`) but had no consumer until now.
+  const failingCrons = await db
+    .select({
+      job: cronRun.job,
+      consecutiveFailures: cronRun.consecutiveFailures,
+      lastError: cronRun.lastError,
+    })
+    .from(cronRun)
+    .where(
+      gte(
+        cronRun.consecutiveFailures,
+        CRON_CONSECUTIVE_FAILURE_ALERT_THRESHOLD,
+      ),
+    );
+  specs.push(...buildCronFailureAlertSpecs(failingCrons));
+
+  // 5. Dead-letter service-order emails — rows that exhausted `maxAttempts`
+  // (REQ-REL-OBS-003). They stop being drained silently; surface them so a
+  // stuck lifecycle email is fixed, not discovered by a customer complaint.
+  const deadLetterRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(serviceOrderEmailOutbox)
+    .where(
+      and(
+        isNull(serviceOrderEmailOutbox.processedAt),
+        isNotNull(serviceOrderEmailOutbox.deadLetterAt),
+      ),
+    );
+  const deadLetterSpec = buildOutboxDeadLetterAlertSpec(
+    deadLetterRows[0]?.count ?? 0,
+  );
+  if (deadLetterSpec) {
+    specs.push(deadLetterSpec);
   }
 
   return specs;

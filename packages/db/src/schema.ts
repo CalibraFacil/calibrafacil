@@ -5803,6 +5803,12 @@ export const serviceOrderEmailOutbox = pgTable(
     // Terminal "done" marker — set only when the row is successfully sent (or
     // gracefully skipped). A NULL processedAt means the row is still owed.
     processedAt: timestamp("processed_at"),
+    // Explicit dead-letter marker (REQ-REL-OBS-003) — set when a release pushes
+    // `attempts` to `maxAttempts`, i.e. the row will never be drained again.
+    // Before this, an exhausted row simply stopped being selected (silently);
+    // now it is a queryable state the backoffice surfaces and the operator-alert
+    // engine pages on. Distinct from processedAt (which means "succeeded").
+    deadLetterAt: timestamp("dead_letter_at"),
     // Lease marker — set when a drain claims the row for in-flight processing.
     // The drain reclaims a row whose lease is older than the lease window, so a
     // run killed mid-send (claimedAt set, processedAt still NULL) auto-recovers
