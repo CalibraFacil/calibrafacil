@@ -23,7 +23,10 @@ export type SyncConflictFieldDiff = {
 }
 
 export function getSyncConflictEditTarget(
-  conflict: SyncConflictActionSource,
+  conflict: SyncConflictActionSource & {
+    localPayload?: unknown
+    remotePayload?: unknown
+  },
 ): SyncConflictEditTarget | null {
   if (!conflict.entityId) return null
 
@@ -36,9 +39,31 @@ export function getSyncConflictEditTarget(
       return { kind: 'customer', id: conflict.entityId }
     case 'service_order':
       return { kind: 'service_order', id: conflict.entityId }
+    case 'service_order_execution': {
+      // REL-01 slice 3 (REQ-REL-RES-003): execution notes are edited from the
+      // OWNING service order's detail page, so route the edit target to that
+      // service order. The conflict's own id is the execution id, so the owning
+      // service order id is read from the conflict payload.
+      const serviceOrderId =
+        getServiceOrderIdFromPayload(conflict.localPayload) ??
+        getServiceOrderIdFromPayload(conflict.remotePayload)
+      if (!serviceOrderId) return null
+      return { kind: 'service_order', id: serviceOrderId }
+    }
     default:
       return null
   }
+}
+
+function getServiceOrderIdFromPayload(payload: unknown): string | null {
+  const value = getPayloadValue(payload, [
+    ['serviceOrderId'],
+    ['data', 'serviceOrderId'],
+    ['payload', 'serviceOrderId'],
+  ])
+  if (typeof value === 'string') return value.trim() || null
+  if (typeof value === 'number') return String(value)
+  return null
 }
 
 export function buildSyncConflictFieldDiffs(
@@ -223,6 +248,16 @@ function getEntityConflictFields(entityType: string): ConflictField[] {
         field('customerName', 'Cliente'),
         field('assetTag', 'Ativo'),
         field('status', 'Status'),
+        field('updatedAt', 'Atualizado em'),
+      ]
+    case 'service_order_execution':
+      return [
+        field('operation', 'Operação'),
+        field('servicePerformed', 'Serviço executado'),
+        field('partsUsedSummary', 'Peças utilizadas'),
+        field('technicalNotes', 'Notas técnicas'),
+        field('calibrationRequiredAfterRepair', 'Requer calibração após reparo'),
+        field('result', 'Resultado'),
         field('updatedAt', 'Atualizado em'),
       ]
     case 'attachment':

@@ -908,6 +908,11 @@ function buildStaleDesktopBaseConflict(params: {
   id: number;
   serverUpdatedAtIso: string;
   baseUpdatedAt: string;
+  // REL-01 slice 3 (REQ-REL-RES-001): the CURRENT cloud row's diff-relevant
+  // fields, so the desktop conflicts UI renders real cloud values instead of
+  // "—" for every column. Read from the row already fetched under the caller's
+  // tenant WHERE clause; the fixed keys below always win over these.
+  remoteFields?: Record<string, unknown>;
 }): ApplyDesktopSyncEventResult {
   return {
     ok: false,
@@ -916,6 +921,7 @@ function buildStaleDesktopBaseConflict(params: {
     conflict: {
       conflictType: "concurrent_update",
       remotePayload: {
+        ...params.remoteFields,
         entity: params.entity,
         id: params.id,
         updatedAt: params.serverUpdatedAtIso,
@@ -2130,6 +2136,14 @@ async function applyUpdateLocalAsset(
       id: existingAsset.id,
       serverUpdatedAtIso: assetStaleBase.serverUpdatedAtIso,
       baseUpdatedAt: assetStaleBase.baseUpdatedAt,
+      remoteFields: {
+        tag: existingAsset.tag,
+        name: existingAsset.name,
+        serialNumber: existingAsset.serialNumber,
+        manufacturer: existingAsset.manufacturer,
+        model: existingAsset.model,
+        status: existingAsset.status,
+      },
     });
   }
 
@@ -2299,6 +2313,11 @@ async function applyUpdateLocalAsset(
       id: updatedAsset.id,
       tag: updatedAsset.tag,
       status: updatedAsset.status,
+      // REL-01 slice 3 (REQ-REL-RES-002): carry the persisted updatedAt so the
+      // desktop refreshes remote_base_updated_at on accept (no false self-
+      // conflict on the next same-device edit before the next pull).
+      updatedAt:
+        updatedAsset.updatedAt?.toISOString?.() ?? updatedAsset.updatedAt,
     },
   };
 }
@@ -2457,6 +2476,12 @@ async function applyUpdateLocalCustomer(
       id: existing.id,
       serverUpdatedAtIso: customerStaleBase.serverUpdatedAtIso,
       baseUpdatedAt: customerStaleBase.baseUpdatedAt,
+      remoteFields: {
+        name: existing.name,
+        taxId: existing.taxId,
+        email: existing.email,
+        phone: existing.phone,
+      },
     });
   }
 
@@ -2514,6 +2539,10 @@ async function applyUpdateLocalCustomer(
       taxId: updatedCustomer.taxId,
       email: updatedCustomer.email,
       authOrganizationId: updatedCustomer.authOrganizationId,
+      // REL-01 slice 3 (REQ-REL-RES-002): carry the persisted updatedAt so the
+      // desktop refreshes remote_base_updated_at on accept.
+      updatedAt:
+        updatedCustomer.updatedAt?.toISOString?.() ?? updatedCustomer.updatedAt,
     },
   };
 }
@@ -3293,6 +3322,12 @@ async function applyLocalServiceOrderExecutionNotes(
     .select({
       id: serviceOrderExecution.id,
       updatedAt: serviceOrderExecution.updatedAt,
+      servicePerformed: serviceOrderExecution.servicePerformed,
+      partsUsedSummary: serviceOrderExecution.partsUsedSummary,
+      technicalNotes: serviceOrderExecution.technicalNotes,
+      calibrationRequiredAfterRepair:
+        serviceOrderExecution.calibrationRequiredAfterRepair,
+      result: serviceOrderExecution.result,
     })
     .from(serviceOrderExecution)
     .where(eq(serviceOrderExecution.serviceOrderId, order.id))
@@ -3308,6 +3343,14 @@ async function applyLocalServiceOrderExecutionNotes(
         id: existingExecution.id,
         serverUpdatedAtIso: executionStaleBase.serverUpdatedAtIso,
         baseUpdatedAt: executionStaleBase.baseUpdatedAt,
+        remoteFields: {
+          servicePerformed: existingExecution.servicePerformed,
+          partsUsedSummary: existingExecution.partsUsedSummary,
+          technicalNotes: existingExecution.technicalNotes,
+          calibrationRequiredAfterRepair:
+            existingExecution.calibrationRequiredAfterRepair,
+          result: existingExecution.result,
+        },
       });
     }
   }

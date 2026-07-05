@@ -10,7 +10,7 @@ import {
   serviceOrder,
   serviceOrderExecution,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -95,6 +95,10 @@ async function seedAssetRow(params: {
     .values({
       unitId: params.unitId,
       customerId: params.customerId,
+      // SEC-03b (#638): lab_organization_id is NOT NULL — derive it from the
+      // owning customer (invariant asset.lab_org == customer.lab_org). This seed
+      // predates the denormalization; without it the insert violates NOT NULL.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: params.name,
       serialNumber: `SN-${params.tag}`,

@@ -35,6 +35,32 @@ describe('getSyncConflictEditTarget', () => {
       }),
     ).toBeNull()
   })
+
+  // REL-01 slice 3 (REQ-REL-RES-003): an execution conflict edits the OWNING
+  // service order (the desktop edits execution notes from the OS detail page),
+  // so the target routes to the service order the execution belongs to. The
+  // owning service order id is read from the conflict payload.
+  it('maps service_order_execution conflicts to the owning service order', () => {
+    expect(
+      getSyncConflictEditTarget({
+        entityType: 'service_order_execution',
+        entityId: 'service-order-execution:local-1',
+        localPayload: {
+          serviceOrderId: 'service-order:local-9',
+          servicePerformed: 'Troca da fonte',
+        },
+      }),
+    ).toEqual({ kind: 'service_order', id: 'service-order:local-9' })
+  })
+
+  it('returns null for an execution conflict with no resolvable service order', () => {
+    expect(
+      getSyncConflictEditTarget({
+        entityType: 'service_order_execution',
+        entityId: 'service-order-execution:local-1',
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('buildSyncConflictFieldDiffs', () => {
@@ -165,6 +191,44 @@ describe('buildSyncConflictFieldDiffs', () => {
         localValue: '—',
         remoteValue: 'missing_remote_dependency',
         state: 'remote_only',
+      },
+    ])
+  })
+
+  // REL-01 slice 3 (REQ-REL-RES-003): a service_order_execution conflict now
+  // renders an entity-specific diff over the execution fields the desktop edits,
+  // instead of the generic top-level fallback.
+  it('builds service_order_execution field diffs over the execution fields', () => {
+    expect(
+      buildSyncConflictFieldDiffs({
+        entityType: 'service_order_execution',
+        entityId: 'service-order-execution:local-1',
+        localPayload: {
+          serviceOrderId: 'service-order:local-9',
+          servicePerformed: 'Troca da fonte',
+          technicalNotes: 'Reparo concluído',
+        },
+        remotePayload: {
+          entity: 'service_order_execution',
+          id: 42,
+          servicePerformed: 'Diagnóstico',
+          technicalNotes: 'Notas Nuvem',
+        },
+      }),
+    ).toEqual([
+      {
+        key: 'servicePerformed',
+        label: 'Serviço executado',
+        localValue: 'Troca da fonte',
+        remoteValue: 'Diagnóstico',
+        state: 'changed',
+      },
+      {
+        key: 'technicalNotes',
+        label: 'Notas técnicas',
+        localValue: 'Reparo concluído',
+        remoteValue: 'Notas Nuvem',
+        state: 'changed',
       },
     ])
   })

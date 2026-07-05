@@ -427,17 +427,27 @@ WHERE id = @localId
     event.aggregate_kind === "asset" &&
     typeof accepted.remoteEntityId === "number"
   ) {
+    // REL-01 slice 3 (REQ-REL-RES-002): refresh the base-version anchor to the
+    // accepted server updatedAt. Without this a SECOND same-device edit before
+    // the next pull is compared against the stale pre-push base and the server
+    // reports a false self-conflict. COALESCE keeps the prior anchor when a
+    // (legacy) accept response omits updatedAt.
     database
       .prepare(
         `
 UPDATE assets
 SET remote_id = @remoteId,
-  sync_state = 'synced'
+  sync_state = 'synced',
+  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
 WHERE id = @localId
 `,
       )
       .run({
         remoteId: accepted.remoteEntityId,
+        remoteBaseUpdatedAt: getString(
+          asRecord(accepted.remoteEntity),
+          "updatedAt",
+        ),
         localId: event.aggregate_id,
       });
   }
@@ -446,17 +456,23 @@ WHERE id = @localId
     event.aggregate_kind === "customer" &&
     typeof accepted.remoteEntityId === "number"
   ) {
+    // REL-01 slice 3 (REQ-REL-RES-002): refresh the base-version anchor on accept.
     database
       .prepare(
         `
 UPDATE customers
 SET remote_id = @remoteId,
-  sync_state = 'synced'
+  sync_state = 'synced',
+  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
 WHERE id = @localId
 `,
       )
       .run({
         remoteId: accepted.remoteEntityId,
+        remoteBaseUpdatedAt: getString(
+          asRecord(accepted.remoteEntity),
+          "updatedAt",
+        ),
         localId: event.aggregate_id,
       });
   }
@@ -575,17 +591,23 @@ WHERE id = @localId
       asRecord(parseJson(event.payload_json)),
       "serviceOrderId",
     );
+    // REL-01 slice 3 (REQ-REL-RES-002/003): the execution row has no pull path,
+    // so the accept response is the ONLY place its base-version anchor gets set.
+    // Write the accepted server updatedAt so slice-2 divergence detection can
+    // fire on a genuinely stale second edit (and not on the device's own push).
     database
       .prepare(
         `
 UPDATE service_order_executions
 SET remote_id = @remoteId,
-  sync_state = 'synced'
+  sync_state = 'synced',
+  remote_base_updated_at = COALESCE(@remoteBaseUpdatedAt, remote_base_updated_at)
 WHERE id = @localId
 `,
       )
       .run({
         remoteId: accepted.remoteEntityId,
+        remoteBaseUpdatedAt: getString(remoteEntity, "updatedAt"),
         localId: event.aggregate_id,
       });
 
