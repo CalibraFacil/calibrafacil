@@ -18,11 +18,15 @@ import {
 import { listTemplates } from "@calibra-facil/method-templates";
 import {
   compileMethodDraft,
+  checkMethodRecordDimensions,
+  checkMethodDraftDimensions,
+  errorDiagnostic,
   fingerprintJson,
   canonicalJson,
   parseMethodDraft,
   type CalculationEngineLike,
   type CompiledMethod,
+  type DimensionalDiagnostic,
   type MethodDraft,
   type MethodDiagnostic,
   type MethodPreviewResult,
@@ -597,6 +601,17 @@ function isMassCompositionQuantityMode(
   return value === "linear_per_item_then_rss" || value === "profile_linear";
 }
 
+// BUGFIX (surfaced while writing DOM-10 deny tests, unrelated to the
+// dimensional gate itself — see slice-3 report): this function used to set
+// `outputUnit` / `reporting` / `scope` / `metadata` unconditionally, which put
+// an EXPLICIT `undefined` value on the returned object whenever a formula
+// lacked that optional field. `parseMethodDraft` → `assertSafeUnknown` rejects
+// any object key whose value is literally `undefined` (vs. the key being
+// absent), so `methodRecordToDraft` — used by request-approval, quality-approve
+// and publish — 500'd for ANY stored method with a formula missing
+// unit/reporting/scope/metadata (i.e. most real formulas). Conditional-spread
+// each optional field instead, mirroring `methodInputToDefinitionInput`'s
+// existing `...(metadata ? { metadata } : {})` convention above.
 function methodFormulaToDefinitionFormula(formula: unknown) {
   const record = recordFromUnknown(formula);
   const key =
@@ -605,22 +620,28 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
       : typeof record.key === "string"
         ? record.key
         : "formula";
+  const outputUnit =
+    typeof record.unit === "string"
+      ? record.unit
+      : typeof record.outputUnit === "string"
+        ? record.outputUnit
+        : undefined;
+  const reporting = methodFormulaReportingToDefinitionReporting(
+    record.reporting,
+  );
+  const scope = methodFormulaScopeToDefinitionScope(record.scope);
+  const metadata = safeDefinitionMetadata(record.metadata);
 
   return {
     key,
     label: typeof record.label === "string" ? record.label : key,
     expression: typeof record.expression === "string" ? record.expression : "0",
-    outputUnit:
-      typeof record.unit === "string"
-        ? record.unit
-        : typeof record.outputUnit === "string"
-          ? record.outputUnit
-          : undefined,
     outputKind: "derived_quantity" as const,
     required: true,
-    reporting: methodFormulaReportingToDefinitionReporting(record.reporting),
-    scope: methodFormulaScopeToDefinitionScope(record.scope),
-    metadata: safeDefinitionMetadata(record.metadata),
+    ...(outputUnit ? { outputUnit } : {}),
+    ...(reporting ? { reporting } : {}),
+    ...(scope ? { scope } : {}),
+    ...(metadata ? { metadata } : {}),
   };
 }
 
@@ -964,6 +985,80 @@ function diagnosticsMessage(diagnostics: MethodDiagnostic[]): string {
   );
 }
 
+/**
+ * DOM-10 dimensional publish gate. Runs the publish-time dimensional lint over a
+ * raw method shape (dataFields / formulas / measurementModels) and, when it
+ * finds a dimensional incoherence, returns a structured pt-BR error carrying the
+ * named `DIMENSIONAL_ERROR` code plus a per-formula diagnostics array. Returns
+ * `null` when the method is dimensionally coherent (or has nothing to check).
+ *
+ * The response mirrors the existing compile-failure shape ({ error, diagnostics }
+ * at HTTP 422) so the frontend handles a dimensional rejection identically — it
+ * only adds the `code` discriminator and the formatted-dimension messages.
+ */
+function formatDimensionalDiagnostic(d: DimensionalDiagnostic): string {
+  return `Erro dimensional na fórmula '${d.formulaId}': ${d.message}`;
+}
+
+function dimensionalErrorPayload(diagnostics: readonly DimensionalDiagnostic[]) {
+  const first = diagnostics[0];
+  return {
+    error: first
+      ? formatDimensionalDiagnostic(first)
+      : "Erro dimensional no método",
+    code: "DIMENSIONAL_ERROR" as const,
+    diagnostics: diagnostics.map((d) => ({
+      formulaId: d.formulaId,
+      code: d.code,
+      message: formatDimensionalDiagnostic(d),
+    })),
+  };
+}
+
+function dimensionalGateError(shape: {
+  dataFields?: unknown;
+  variableBindings?: unknown;
+  formulas?: unknown;
+  measurementModels?: unknown;
+}): ReturnType<typeof dimensionalErrorPayload> | null {
+  const diagnostics = checkMethodRecordDimensions(shape);
+  return diagnostics.length > 0 ? dimensionalErrorPayload(diagnostics) : null;
+}
+
+/**
+ * Map the dimensional diagnostics of a compiled draft to error-severity
+ * {@link MethodDiagnostic}s so the live Method Builder compile/preview panel
+ * (`compile-preview-panel.tsx`, which already lists `diagnostics[]` per formula)
+ * surfaces them — no new UI, and a no-op for dimensionally coherent drafts.
+ */
+function dimensionalMethodDiagnostics(draft: MethodDraft): MethodDiagnostic[] {
+  return checkMethodDraftDimensions(draft).map((d) =>
+    errorDiagnostic(
+      "DIMENSIONAL_ERROR",
+      formatDimensionalDiagnostic(d),
+      d.formulaId,
+    ),
+  );
+}
+
+/**
+ * Append dimensional diagnostics to a compile response (and force `ok: false`
+ * when present) so the editor treats a dimensional incoherence as a hard error
+ * BEFORE save. Byte-identical to the input response when the draft is coherent.
+ */
+function augmentCompileResponseWithDimensions(
+  response: ReturnType<typeof methodCompileResponse>,
+  draft: MethodDraft,
+): ReturnType<typeof methodCompileResponse> {
+  const dimensional = dimensionalMethodDiagnostics(draft);
+  if (dimensional.length === 0) return response;
+  return {
+    ...response,
+    ok: false,
+    diagnostics: [...response.diagnostics, ...dimensional],
+  };
+}
+
 function buildAdhocPreviewScenarios(
   sampleData: Record<string, unknown> | undefined,
 ): MethodDraft["previewScenarios"] | undefined {
@@ -1208,7 +1303,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       }
       const result = compileDraftWithEngine(draftResult.draft);
 
-      return c.json(methodCompileResponse(result), result.ok ? 200 : 422);
+      const response = augmentCompileResponseWithDimensions(
+        methodCompileResponse(result),
+        draftResult.draft,
+      );
+      return c.json(response, response.ok ? 200 : 422);
     } catch (error) {
       console.error("Error compiling method draft:", error);
       return c.json({ error: "Erro ao compilar rascunho do método" }, 500);
@@ -1249,13 +1348,24 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       if (!result.ok) {
-        return c.json(methodCompileResponse(result), 422);
+        return c.json(
+          augmentCompileResponseWithDimensions(
+            methodCompileResponse(result),
+            draftResult.draft,
+          ),
+          422,
+        );
       }
 
       const preview = result.previewResults[0];
+      const dimensional = dimensionalMethodDiagnostics(draftResult.draft);
       return c.json({
-        ok: preview?.passed ?? false,
-        diagnostics: [...result.diagnostics, ...(preview?.diagnostics ?? [])],
+        ok: (preview?.passed ?? false) && dimensional.length === 0,
+        diagnostics: [
+          ...result.diagnostics,
+          ...(preview?.diagnostics ?? []),
+          ...dimensional,
+        ],
         fingerprint: result.method.methodFingerprint,
         previewResults: result.previewResults,
         results: Object.fromEntries([
@@ -1513,6 +1623,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Ja existe um método com este nome" }, 400);
         }
 
+        // DOM-10 dimensional gate: reject an incoherent field/formula set before
+        // it is ever persisted (no method row escapes the check when written).
+        const dimensionalError = dimensionalGateError(input);
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
+        }
+
         // Create method
         const [newMethod] = await db
           .insert(calibrationMethod)
@@ -1631,6 +1748,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         if (existing) {
           return c.json({ error: "Ja existe um método com este nome" }, 400);
+        }
+
+        // DOM-10 dimensional gate on template instantiation: a curated template
+        // must be dimensionally coherent before it becomes a DRAFT method.
+        const dimensionalError = dimensionalGateError(def);
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
         }
 
         const [newMethod] = await db
@@ -1838,6 +1962,21 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         if (Object.keys(updateData).length === 0) {
           return c.json(existing);
         }
+
+        // DOM-10 dimensional gate on the EFFECTIVE post-update field/formula set
+        // (incoming edits overlaid on the stored draft). Reject before persisting
+        // so the row stays unchanged on a dimensional incoherence.
+        const dimensionalError = dimensionalGateError({
+          dataFields: input.dataFields ?? existing.dataFields,
+          variableBindings: input.variableBindings ?? existing.variableBindings,
+          formulas: input.formulas ?? existing.formulas,
+          measurementModels:
+            input.measurementModels ?? existing.measurementModels,
+        });
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
+        }
+
         updateData.compiledMethod = null;
         updateData.methodFingerprint = null;
         updateData.methodEngine = null;
@@ -1951,6 +2090,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             },
             422,
           );
+        }
+        // DOM-10 dimensional gate on the publish-transition recompile (the engine
+        // is dimension-blind by design, so this is the check that catches an
+        // incoherent unit set on submit-for-approval).
+        const dimensionalError = dimensionalGateError(existing);
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
         }
 
         const [updated] = await db
@@ -2173,6 +2319,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             },
             422,
           );
+        }
+        // DOM-10 dimensional gate on the publish recompile — no method row
+        // reaches PUBLISHED with a dimensional incoherence.
+        const dimensionalError = dimensionalGateError(existing);
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
         }
         const publicationEvidence = buildPublicationEvidence({
           methodId: existing.id,
@@ -2432,6 +2584,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             },
             422,
           );
+        }
+        // DOM-10 dimensional gate on the publish recompile — no method row
+        // reaches PUBLISHED with a dimensional incoherence.
+        const dimensionalError = dimensionalGateError(existing);
+        if (dimensionalError) {
+          return c.json(dimensionalError, 422);
         }
         const publicationEvidence = buildPublicationEvidence({
           methodId: existing.id,
