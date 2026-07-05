@@ -2,7 +2,8 @@
  * signing.int.spec.ts — Real-DB + real-RBAC integration tests for the
  * signingRouter (ICP-Brasil A1 certificate credential custody).
  *
- * Cut-line class: HIGH-SENSITIVITY (NIT-DICLA-083 custody surface).
+ * Cut-line class: HIGH-SENSITIVITY (ICP-Brasil A1 credential-custody surface;
+ * MP 2.200-2 / DOC-ICP-15.03 — NIT-DICLA-083 was a mis-citation, see #646).
  * Only the better-auth session is mocked (test/integration/setup.ts).
  * requireLabProtected → requireOrganization → requireOrgType("LAB") →
  * requireUnitOperationalSettingsManager + resolveAccessibleUnitContext

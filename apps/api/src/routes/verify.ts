@@ -341,6 +341,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         signerChainsToIcpRoot: false,
         certNotExpiredAtCheckDate: false,
         signaturePresent: true,
+        // Best-effort from the metadata recorded at issue (#646, PAdES-T) —
+        // the PDF itself couldn't be re-verified in this fallback path.
+        timestampPresent: job.signatureMetadata.timestamped === true,
+        timestamp: null,
         signer: {
           commonName: job.signatureMetadata.signerName,
           cpfCnpj: job.signatureMetadata.signerCpfCnpj,

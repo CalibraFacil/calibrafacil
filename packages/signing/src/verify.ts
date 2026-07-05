@@ -24,6 +24,13 @@ export interface VerifyPdfSigner {
   certificateSerial: string | null;
 }
 
+export interface VerifyPdfTimestamp {
+  /** RFC 3161 genTime (ISO string) parsed from the timestamp token, when parseable. */
+  time: string | null;
+  /** Common Name of the TSA signer certificate embedded in the token, when present. */
+  tsaCommonName: string | null;
+}
+
 export interface VerifyPdfResult {
   /** Whole-document SHA-256 matches the hash recorded at issue. `null` when no expected hash was supplied. */
   hashMatch: boolean | null;
@@ -37,6 +44,10 @@ export interface VerifyPdfResult {
   certNotExpiredAtCheckDate: boolean;
   /** A signature object was found and parsed in the PDF. */
   signaturePresent: boolean;
+  /** An RFC 3161 DocTimeStamp (SubFilter /ETSI.RFC3161) is embedded (#646, PAdES-T). */
+  timestampPresent: boolean;
+  /** Parsed timestamp details (best-effort; null when absent or unparseable). */
+  timestamp: VerifyPdfTimestamp | null;
   signer: VerifyPdfSigner;
   overall: VerifyOverall;
   /** pt-BR diagnostic lines for the UI / audit log. */
@@ -75,14 +86,11 @@ interface ExtractedSignature {
 }
 
 /**
- * Pull the PAdES signature out of a signed PDF using its `/ByteRange` and the
- * hex `/Contents` blob between the two byte-range segments. Returns `null` for
- * an unsigned PDF (no `/ByteRange`).
+ * Parse ONE signature candidate at a given `/ByteRange` offset: the byte-range
+ * segments and the hex `/Contents` blob between them. Returns `null` when the
+ * structure at that offset is not a well-formed signature.
  */
-function extractSignature(pdf: Buffer): ExtractedSignature | null {
-  const tag = pdf.lastIndexOf("/ByteRange");
-  if (tag === -1) return null;
-
+function extractSignatureAt(pdf: Buffer, tag: number): ExtractedSignature | null {
   const open = pdf.indexOf(0x5b /* [ */, tag);
   const close = pdf.indexOf(0x5d /* ] */, open);
   if (open === -1 || close === -1) return null;
@@ -124,6 +132,96 @@ function extractSignature(pdf: Buffer): ExtractedSignature | null {
   if (signature.length === 0) return null;
 
   return { signedContent, signature };
+}
+
+interface ExtractedSignatures {
+  /** The document (PAdES/CAdES) signature — the LAST non-timestamp candidate. */
+  document: ExtractedSignature | null;
+  /** Raw CMS bytes of any RFC 3161 DocTimeStamp tokens found. */
+  timestampTokens: Buffer[];
+}
+
+/**
+ * Walk EVERY `/ByteRange` in the PDF and split candidates into the document
+ * signature vs RFC 3161 DocTimeStamps. A timestamped PDF (#646, PAdES-T)
+ * carries the timestamp as a SECOND signature field appended by incremental
+ * update — a naive `lastIndexOf("/ByteRange")` would grab the timestamp and
+ * try to verify it as the document signature.
+ *
+ * A candidate is classified as a timestamp when its signature dictionary
+ * (the window from the nearest `<<` before `/ByteRange` up to the tag)
+ * mentions `ETSI.RFC3161` / `DocTimeStamp`. The window also extends a short
+ * distance AFTER the tag to catch writers that order `/SubFilter` after
+ * `/ByteRange`.
+ */
+function extractSignatures(pdf: Buffer): ExtractedSignatures {
+  const candidates: Array<{ extracted: ExtractedSignature; isTimestamp: boolean }> =
+    [];
+
+  let tag = pdf.indexOf("/ByteRange");
+  while (tag !== -1) {
+    const extracted = extractSignatureAt(pdf, tag);
+    if (extracted) {
+      const dictStart = pdf.lastIndexOf("<<", tag);
+      const windowStart = dictStart === -1 ? Math.max(0, tag - 2048) : dictStart;
+      const windowEnd = Math.min(pdf.length, tag + 512);
+      const window = pdf.toString("latin1", windowStart, windowEnd);
+      const isTimestamp =
+        window.includes("ETSI.RFC3161") || window.includes("DocTimeStamp");
+      candidates.push({ extracted, isTimestamp });
+    }
+    tag = pdf.indexOf("/ByteRange", tag + 1);
+  }
+
+  const documents = candidates.filter((c) => !c.isTimestamp);
+  const timestamps = candidates.filter((c) => c.isTimestamp);
+
+  return {
+    document: documents.at(-1)?.extracted ?? null,
+    timestampTokens: timestamps.map((c) => c.extracted.signature),
+  };
+}
+
+// id-ct-TSTInfo — the CMS eContentType of an RFC 3161 timestamp token.
+const OID_TST_INFO = "1.2.840.113549.1.9.16.1.4";
+
+/**
+ * Best-effort parse of an RFC 3161 token: genTime from the TSTInfo and the
+ * TSA certificate's CN. Returns nulls (never throws) on malformed input —
+ * the verdict must always render.
+ */
+function parseTimestampToken(token: Buffer): VerifyPdfTimestamp {
+  try {
+    const asn1 = asn1js.fromBER(toArrayBuffer(token));
+    if (asn1.offset === -1) return { time: null, tsaCommonName: null };
+
+    const contentInfo = new pkijs.ContentInfo({ schema: asn1.result });
+    const signedData = new pkijs.SignedData({ schema: contentInfo.content });
+
+    let time: string | null = null;
+    if (
+      signedData.encapContentInfo.eContentType === OID_TST_INFO &&
+      signedData.encapContentInfo.eContent
+    ) {
+      const inner = asn1js.fromBER(
+        signedData.encapContentInfo.eContent.valueBlock.valueHexView,
+      );
+      if (inner.offset !== -1) {
+        const tstInfo = new pkijs.TSTInfo({ schema: inner.result });
+        time = tstInfo.genTime.toISOString();
+      }
+    }
+
+    const tsaCert = (signedData.certificates ?? []).find(
+      (candidate): candidate is pkijs.Certificate =>
+        candidate instanceof pkijs.Certificate,
+    );
+    const tsaCommonName = tsaCert ? subjectAttribute(tsaCert, OID_CN) : null;
+
+    return { time, tsaCommonName };
+  } catch {
+    return { time: null, tsaCommonName: null };
+  }
 }
 
 /** Read pkijs/extendedMode verify output (which can be a boolean, a result object, or a rejection). */
@@ -191,9 +289,25 @@ export async function verifyPdf(
   let chainValid = false;
   let certNotExpiredAtCheckDate = false;
   let signer = emptySigner();
+  let timestampPresent = false;
+  let timestamp: VerifyPdfTimestamp | null = null;
 
   try {
-    const extracted = extractSignature(buffer);
+    const { document: extracted, timestampTokens } = extractSignatures(buffer);
+
+    if (timestampTokens.length > 0) {
+      timestampPresent = true;
+      const firstToken = timestampTokens[0];
+      timestamp = firstToken
+        ? parseTimestampToken(firstToken)
+        : { time: null, tsaCommonName: null };
+      details.push(
+        timestamp.time
+          ? `Carimbo do tempo RFC 3161 presente (${timestamp.time}${timestamp.tsaCommonName ? `, TSA: ${timestamp.tsaCommonName}` : ""}).`
+          : "Carimbo do tempo RFC 3161 presente.",
+      );
+    }
+
     if (extracted) {
       signaturePresent = true;
 
@@ -290,6 +404,8 @@ export async function verifyPdf(
     signerChainsToIcpRoot: chainValid,
     certNotExpiredAtCheckDate,
     signaturePresent,
+    timestampPresent,
+    timestamp,
     signer,
     overall,
     details,

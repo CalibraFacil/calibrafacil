@@ -110,6 +110,16 @@ const signatureVerdictSchema = z.object({
   signerChainsToIcpRoot: z.boolean(),
   certNotExpiredAtCheckDate: z.boolean(),
   signaturePresent: z.boolean(),
+  // #646 (PAdES-T): optional — verdicts stored before the carimbo do tempo
+  // feature (or from unstamped certificates) simply omit them.
+  timestampPresent: z.boolean().optional(),
+  timestamp: z
+    .object({
+      time: z.string().nullable(),
+      tsaCommonName: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
   signer: verdictSignerSchema,
   overall: z.enum(["VALID", "ALTERED", "UNSIGNED", "UNVERIFIABLE"]),
   details: z.array(z.string()),

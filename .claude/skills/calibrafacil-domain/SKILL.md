@@ -122,7 +122,11 @@ translate, expand, or reword them. (Codebase truth: see `packages/shared/src/acc
 - **Cgcre** — Coordenação Geral de Acreditação (the Brazilian accreditation body).
 - **CGCRE / RBC** — accreditation prefix `CAL`; number stored as digits only
   (`normalizeAccreditationNumber`), displayed `"CAL 0123"` (`formatAccreditationNumber`).
-- **NIT-DICLA-083** — digital-signature requirement driving `packages/signing`.
+- **MP 2.200-2** + **DOC-ICP-15.03** (perfis PAdES ICP-Brasil: AD-RB/AD-RT/AD-RC/AD-RA) —
+  the legal/technical basis for `packages/signing`. ⚠️ Do NOT cite **NIT-DICLA-083**
+  for digital signatures: its current revision (Rev.01) is about certified reference
+  materials (MRC), unrelated — a long-standing mis-citation corrected in #646
+  (pending Cgcre confirmation that no dedicated signature-form NIT exists).
 - **OIML R 76** — international recommendation for non-automatic weighing
   instruments (balances). ⚠️ **TODO / assumption:** supplied by the operator;
   **not found referenced anywhere in the codebase today.** Use the exact token

@@ -19,7 +19,7 @@ like? Plain language — the WHY. No solution detail here.>
 - Preserve `organizationId` + `unitId` tenant scoping.
 - Schema changes via forward-only Drizzle migration (`pnpm db:generate`); never
   hand-edit applied SQL.
-- Regulatory strings verbatim (NBR ISO/IEC 17025, Inmetro, Cgcre/RBC, NIT-DICLA-083).
+- Regulatory strings verbatim (NBR ISO/IEC 17025, Inmetro, Cgcre/RBC, MP 2.200-2, DOC-ICP-15.03).
 - No `useEffect` import; no `as` assertions.
 
 ## Acceptance Criteria (EARS)

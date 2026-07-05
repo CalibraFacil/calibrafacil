@@ -139,4 +139,68 @@ describe("verifyPdf", () => {
     });
     expect(result.overall).toBe("UNSIGNED");
   });
+
+  // ===========================================================================
+  // DocTimeStamp handling (#646 / CMP-03, PAdES-T). A timestamped PDF carries a
+  // SECOND signature field (SubFilter /ETSI.RFC3161) appended by incremental
+  // update. Verification must (a) still verify the ORIGINAL document signature
+  // — a naive lastIndexOf("/ByteRange") would grab the timestamp instead and
+  // report the certificate as invalid — and (b) surface the timestamp.
+  // ===========================================================================
+
+  /**
+   * Append a synthetic-but-well-formed DocTimeStamp increment to a signed PDF:
+   * a /ETSI.RFC3161 signature dictionary with its own /ByteRange + /Contents.
+   * The token bytes need not be a real TST for the selection tests — parsing
+   * degrades to nulls — but the structure matches what pdf-rfc3161 writes.
+   */
+  function appendDocTimeStamp(pdf: Uint8Array, token: Buffer): Buffer {
+    const base = Buffer.from(pdf);
+    const hex = token.toString("hex");
+    // Fixed-width ByteRange numbers so offsets are computable before writing:
+    // [0 P Q 1] must bracket exactly the `<hex>` blob for extraction to accept
+    // the candidate (a=0..P signed prefix, hex at [P, Q), one byte tail at Q).
+    const pad = (n: number) => String(n).padStart(10, "0");
+    const prefixFor = (p: number, q: number) =>
+      `\n999 0 obj\n<< /Type /DocTimeStamp /Filter /Adobe.PPKLite ` +
+      `/SubFilter /ETSI.RFC3161 /ByteRange [0 ${pad(p)} ${pad(q)} 1] /Contents `;
+    const contentsStart =
+      base.length + Buffer.byteLength(prefixFor(0, 0), "latin1");
+    const contentsEnd = contentsStart + 1 + hex.length + 1; // "<" + hex + ">"
+    const chunk =
+      prefixFor(contentsStart, contentsEnd) + `<${hex}> >>\nendobj\n`;
+    return Buffer.concat([base, Buffer.from(chunk, "latin1")]);
+  }
+
+  it("still verifies the ORIGINAL signature when a DocTimeStamp is appended (regression: lastIndexOf hazard)", async () => {
+    const stamped = appendDocTimeStamp(signedPdf, Buffer.from([0x30, 0x03, 0x02, 0x01, 0x01]));
+
+    const result = await verifyPdf(stamped, {
+      trustAnchors: trustAnchorsFrom(root.cert),
+    });
+
+    // The document signature (not the RFC 3161 token) must be the one verified.
+    expect(result.signaturePresent).toBe(true);
+    expect(result.signatureCryptographicallyValid).toBe(true);
+    expect(result.chainValid).toBe(true);
+    expect(result.timestampPresent).toBe(true);
+  });
+
+  it("reports timestampPresent=false for a plain signed PDF", async () => {
+    const result = await verifyPdf(signedPdf, {
+      expectedSha256: pdfHash,
+      trustAnchors: trustAnchorsFrom(root.cert),
+    });
+    expect(result.timestampPresent).toBe(false);
+    expect(result.timestamp).toBeNull();
+  });
+
+  it("degrades gracefully when the timestamp token is unparseable (no throw, null details)", async () => {
+    const stamped = appendDocTimeStamp(signedPdf, Buffer.from("garbage-token"));
+    const result = await verifyPdf(stamped, {
+      trustAnchors: trustAnchorsFrom(root.cert),
+    });
+    expect(result.timestampPresent).toBe(true);
+    expect(result.timestamp?.time ?? null).toBeNull();
+  });
 });

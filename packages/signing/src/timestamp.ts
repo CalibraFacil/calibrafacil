@@ -16,6 +16,14 @@ import { timestampPdf } from "pdf-rfc3161";
 export interface TimestampConfig {
   /** RFC-3161 TSA endpoint URL. ICP-Brasil conformance requires a contracted ACT. */
   tsaUrl: string;
+  /**
+   * Extra HTTP headers for the TSA request — how contracted ACTs authenticate
+   * (e.g. `{ Authorization: "Basic …" }` for BRy, `Bearer` for Serpro's OAuth2
+   * wrapper). Generic anonymous TSAs need none.
+   */
+  headers?: Record<string, string>;
+  /** TSA request timeout in milliseconds (pdf-rfc3161 default: 30000). */
+  timeoutMs?: number;
   /** Whether `tsaUrl` is a credentialed ICP-Brasil ACT (for honest labeling). */
   icpBrasilConformant?: boolean;
   reason?: string;
@@ -45,7 +53,11 @@ export async function addRfc3161Timestamp(
 
   const result = await timestampPdf({
     pdf,
-    tsa: { url: config.tsaUrl },
+    tsa: {
+      url: config.tsaUrl,
+      ...(config.headers ? { headers: config.headers } : {}),
+      ...(config.timeoutMs !== undefined ? { timeout: config.timeoutMs } : {}),
+    },
     reason: config.reason,
     location: config.location,
   });

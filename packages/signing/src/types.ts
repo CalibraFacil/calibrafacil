@@ -48,6 +48,14 @@ export interface SignatureMetadata {
   pdfHash: string;
   /** Whether LTV (Long-Term Validation) is enabled */
   ltvEnabled: boolean;
+  /** Whether an RFC 3161 timestamp (carimbo do tempo) was embedded (#646). */
+  timestamped?: boolean;
+  /**
+   * Whether the TSA that issued the timestamp is a credentialed ICP-Brasil ACT.
+   * Honest labeling: a generic RFC 3161 TSA yields a technically valid stamp
+   * that is NOT ICP-Brasil-conformant (see timestamp.ts).
+   */
+  timestampIcpBrasilConformant?: boolean;
 }
 
 /**
@@ -95,6 +103,7 @@ export type SigningErrorCode =
   | "CERTIFICATE_REVOKED"
   | "INVALID_CHAIN"
   | "SIGNING_FAILED"
+  | "TIMESTAMP_FAILED"
   | "PDF_ERROR";
 
 // Re-export node-forge types for internal use

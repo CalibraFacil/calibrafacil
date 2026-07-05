@@ -4279,6 +4279,9 @@ export const calibrationJob = pgTable(
       signerCpfCnpj: string | null;
       pdfHash: string; // SHA-256 hash of signed PDF
       ltvEnabled: boolean;
+      // #646 (PAdES-T): RFC 3161 carimbo do tempo, when a TSA was configured.
+      timestamped?: boolean;
+      timestampIcpBrasilConformant?: boolean;
     }>(),
     /**
      * At-issue signature-integrity verdict (`@calibra-facil/signing` verifyPdf),
@@ -4294,6 +4297,9 @@ export const calibrationJob = pgTable(
       signerChainsToIcpRoot: boolean;
       certNotExpiredAtCheckDate: boolean;
       signaturePresent: boolean;
+      // #646 (PAdES-T): optional for verdicts that predate the column.
+      timestampPresent?: boolean;
+      timestamp?: { time: string | null; tsaCommonName: string | null } | null;
       signer: {
         commonName: string | null;
         cpfCnpj: string | null;
@@ -7512,7 +7518,8 @@ export const appQueueJob = pgTable(
 /**
  * Stores ICP-Brasil A1 certificates (PKCS#12) per organization.
  * Password is encrypted with AES-256-GCM using a master key from Cloudflare secrets.
- * Enables PDF signing for calibration certificates per NIT-DICLA-083 requirements.
+ * Enables PDF signing for calibration certificates (ICP-Brasil, MP 2.200-2 /
+ * DOC-ICP-15.03 — the prior NIT-DICLA-083 citation was incorrect, see #646).
  */
 export const organizationSigningCertificate = pgTable(
   "organization_signing_certificate",

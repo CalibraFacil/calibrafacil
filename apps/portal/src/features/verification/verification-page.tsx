@@ -272,6 +272,15 @@ function SignatureIntegrity({ token }: { token: string }) {
           state={verdict.certNotExpiredAtCheckDate}
           falseTone="warning"
         />
+        {/* #646 (PAdES-T): shown only when present — certificates issued before
+            the carimbo do tempo feature must not render a failing tile. */}
+        {verdict.timestampPresent ? (
+          <VerdictTile
+            label="Carimbo do tempo"
+            state={true}
+            hint={verdict.timestamp?.time ?? undefined}
+          />
+        ) : null}
       </div>
     </div>
   );

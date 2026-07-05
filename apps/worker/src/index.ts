@@ -35,14 +35,16 @@ import {
 } from "./scheduled.js";
 import { formatNumberForXlsx } from "./xlsx-number-format.js";
 import {
-  signPdf,
+  signAndTimestampPdf,
   verifyPdf,
   getIcpBrasilTrustAnchors,
   decryptPassword,
   decryptBinary,
+  SigningError,
   type SignatureMetadata,
   type VerifyPdfResult,
 } from "@calibra-facil/signing";
+import { resolveTsaConfig } from "./tsa-config.js";
 
 /** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
 type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
@@ -99,6 +101,10 @@ export interface Env {
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
+  // RFC 3161 TSA (#646 / CMP-03, PAdES-T). Unset => plain AD-RB signing.
+  SIGNING_TSA_URL?: string;
+  SIGNING_TSA_AUTH?: string; // Full Authorization header value for a contracted ACT (secret)
+  SIGNING_TSA_ICP_CONFORMANT?: string; // "true" ONLY for a credentialed ICP-Brasil ACT
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
@@ -1470,12 +1476,16 @@ async function signPdfWithUnitCertificate(
       signingCert.encryptedP12,
       env.SIGNING_MASTER_KEY,
     );
-    const result = await signPdf(pdfBuffer, {
+    // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
+    // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
+    // byte-identical to the pre-#646 AD-RB signature.
+    const result = await signAndTimestampPdf(pdfBuffer, {
       p12Buffer,
       password,
       reason: "Certificado de Calibracao - CalibraFacil",
       location: "Brasil",
       enableLtv: false,
+      timestamp: resolveTsaConfig(env),
     });
 
     console.log(
@@ -1505,6 +1515,12 @@ async function signPdfWithUnitCertificate(
       signatureVerdict,
     };
   } catch (signError) {
+    // REQ-CMP-LTV-003 (#646): a configured TSA that fails must fail the JOB —
+    // never silently emit without the carimbo. Other signing failures keep the
+    // pre-existing continue-unsigned behavior (that policy is issue #644).
+    if (signError instanceof SigningError && signError.code === "TIMESTAMP_FAILED") {
+      throw signError;
+    }
     console.error(
       `[JOB ${jobId}] PDF signing failed (continuing without signature):`,
       signError,

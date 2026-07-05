@@ -71,9 +71,14 @@ export type {
   VerifyPdfResult,
   VerifyPdfOptions,
   VerifyPdfSigner,
+  VerifyPdfTimestamp,
   VerifyOverall,
 } from "./verify.js";
 
 // RFC-3161 timestamp (carimbo de tempo) — PAdES-T building block
 export { addRfc3161Timestamp } from "./timestamp.js";
 export type { TimestampConfig, TimestampOutcome } from "./timestamp.js";
+
+// PAdES-T orchestration (#646 / CMP-03): sign + RFC-3161 stamp, fail-closed.
+export { signAndTimestampPdf } from "./sign-and-timestamp.js";
+export type { SignAndTimestampOptions } from "./sign-and-timestamp.js";
