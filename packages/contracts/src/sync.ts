@@ -12,6 +12,11 @@ export const syncEventSchema = z.object({
   unitId: z.number().int().nullable(),
   idempotencyKey: z.string(),
   localVersion: z.number().int().nonnegative(),
+  // Base version the local edit was made against: the cloud row's `updatedAt`
+  // captured at pull time. Optional so pushes from older desktop builds (which
+  // never emit it) stay valid; nullable for rows that were never pulled. The
+  // server treats a missing/null base as "cannot check" (current behavior).
+  baseUpdatedAt: z.string().nullable().optional(),
 });
 
 export const syncPushRequestSchema = z.object({

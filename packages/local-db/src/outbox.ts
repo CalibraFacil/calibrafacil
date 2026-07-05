@@ -13,6 +13,9 @@ export type PendingOutboxEvent = {
   deviceId: string;
   idempotencyKey: string;
   localVersion: number;
+  // Base version the local edit was made against (the cloud row's `updatedAt`
+  // captured at pull time), or null when the row was never pulled / is legacy.
+  baseUpdatedAt: string | null;
 };
 
 export function countPendingOutbox(database: LocalDatabase) {
@@ -112,7 +115,22 @@ SELECT
   domain_events.actor_user_id,
   domain_events.device_id,
   domain_events.occurred_at,
-  outbox.idempotency_key
+  outbox.idempotency_key,
+  CASE domain_events.aggregate_kind
+    WHEN 'asset' THEN (
+      SELECT remote_base_updated_at FROM assets
+      WHERE assets.id = domain_events.aggregate_id
+    )
+    WHEN 'customer' THEN (
+      SELECT remote_base_updated_at FROM customers
+      WHERE customers.id = domain_events.aggregate_id
+    )
+    WHEN 'service_order_execution' THEN (
+      SELECT remote_base_updated_at FROM service_order_executions
+      WHERE service_order_executions.id = domain_events.aggregate_id
+    )
+    ELSE NULL
+  END AS remote_base_updated_at
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.status IN ('pending', 'failed')
@@ -142,6 +160,7 @@ LIMIT @limit
     deviceId: row.device_id,
     idempotencyKey: row.idempotency_key,
     localVersion: row.aggregate_version,
+    baseUpdatedAt: row.remote_base_updated_at,
   }));
 }
 
@@ -628,6 +647,7 @@ type PendingOutboxEventRow = {
   device_id: string;
   occurred_at: string;
   idempotency_key: string;
+  remote_base_updated_at: string | null;
 };
 
 type DomainEventRow = {
