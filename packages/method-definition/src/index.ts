@@ -1,5 +1,6 @@
 export * from "./compile";
 export * from "./criteria";
+export * from "./dimensional";
 export * from "./diagnostics";
 export * from "./execute";
 export * from "./fingerprint";

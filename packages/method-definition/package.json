@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@calibra-facil/math-engine": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "zod": "^4.4.3"
   },
   "devDependencies": {
