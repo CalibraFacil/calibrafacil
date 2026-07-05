@@ -554,6 +554,13 @@
 			"when": 1783202400000,
 			"tag": "0078_outbox_dead_letter",
 			"breakpoints": true
+		},
+		{
+			"idx": 79,
+			"version": "7",
+			"when": 1783300000000,
+			"tag": "0079_audit_log_survives_deletion",
+			"breakpoints": true
 		}
 	]
 }

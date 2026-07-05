@@ -2062,9 +2062,10 @@ export const customerAuditLog = pgTable(
   "customer_audit_log",
   {
     id: serial("id").primaryKey(),
-    customerId: serial("customer_id")
-      .notNull()
-      .references(() => customer.id, { onDelete: "cascade" }),
+    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // append-only (ISO/IEC 17025): the "delete" row must survive the deletion
+    // of the customer it documents, so it keeps the id as a plain integer.
+    customerId: serial("customer_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'compliance_change', 'user_invited', 'user_removed', etc.
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -3274,9 +3275,10 @@ export const methodAuditLog = pgTable(
   "method_audit_log",
   {
     id: serial("id").primaryKey(),
-    methodId: integer("method_id")
-      .notNull()
-      .references(() => calibrationMethod.id, { onDelete: "cascade" }),
+    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // append-only (ISO/IEC 17025 §7.2): the "delete" row must survive the
+    // deletion of the method it documents, so it keeps the id as a plain integer.
+    methodId: integer("method_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'request_approval', 'technical_review', 'quality_approve', 'return_to_draft', 'publish', 'archive', 'new_version'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")

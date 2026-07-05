@@ -49,6 +49,7 @@ import { db } from "@calibra-facil/db";
 import {
   assetType,
   calibrationMethod,
+  methodAuditLog,
   user,
   member,
   subscription,
@@ -791,6 +792,57 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
         },
       );
       expect(qaApproveRes.status).toBe(401);
+    },
+  );
+
+  // =========================================================================
+  // REQ-CMP-AUD-002/003 (#649): deleting a DRAFT method must WRITE a 'delete'
+  // audit row and that row must SURVIVE the deletion (ISO/IEC 17025 append-only
+  // trail). Before the fix there was no delete audit insert at all AND the
+  // method_id FK cascaded — the trail had no trace of the deletion.
+  // =========================================================================
+  it(
+    "REQ-CMP-AUD-002: DELETE /:id writes a 'delete' audit row that survives the deletion",
+    async () => {
+      const org = await seedOrg({ orgId: "org-aud", role: "admin" });
+      const methodId = await seedMethod({
+        orgId: org.orgId,
+        createdBy: org.userId,
+        status: "DRAFT",
+        nameSuffix: "auditável",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await methodsRouter.request(`/${methodId}`, {
+        method: "DELETE",
+        headers: JSON_HEADERS,
+      });
+      expect(res.status).toBe(200);
+
+      // The method row is gone…
+      const remaining = await db
+        .select()
+        .from(calibrationMethod)
+        .where(eq(calibrationMethod.id, methodId));
+      expect(remaining).toHaveLength(0);
+
+      // …but the deletion's audit row persists with enough data to be useful
+      // without the original row (REQ-CMP-AUD-003: id + name + actor + timestamp).
+      const logs = await db
+        .select()
+        .from(methodAuditLog)
+        .where(
+          and(
+            eq(methodAuditLog.methodId, methodId),
+            eq(methodAuditLog.action, "delete"),
+          ),
+        );
+      expect(logs).toHaveLength(1);
+      expect(logs[0]?.performedBy).toBe(org.userId);
+      expect(logs[0]?.performedAt).toBeInstanceOf(Date);
+      expect(logs[0]?.changes).toMatchObject({
+        method: { old: { name: "Método Teste auditável" }, new: null },
+      });
     },
   );
 });

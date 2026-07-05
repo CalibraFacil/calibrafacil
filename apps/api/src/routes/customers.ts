@@ -556,7 +556,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       // TODO: Check for active calibrations before deleting
       // For now, we allow deletion
 
-      // Log audit entry before deletion
+      // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
+      // longer cascades (soft reference), so this row survives the delete below.
       await db.insert(customerAuditLog).values({
         customerId: id,
         action: "delete",
@@ -566,7 +567,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
       });
 
-      // Delete the customer (cascade will handle audit logs)
+      // Delete the customer (the audit trail above intentionally survives)
       await db
         .delete(customer)
         .where(

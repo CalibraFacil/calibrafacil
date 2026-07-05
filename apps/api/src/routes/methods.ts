@@ -2709,6 +2709,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
   .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
+    const session = c.get("session");
     const member = c.get("member");
     const id = await resolveMethodRouteId(
       c.req.param("id"),
@@ -2745,7 +2746,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Delete (audit logs will cascade)
+      // CMP-06 (#649): record the deletion in the audit trail BEFORE deleting —
+      // mirrors customers.ts. The method_id FK no longer cascades (soft
+      // reference), so this row outlives the method it documents.
+      await db.insert(methodAuditLog).values({
+        methodId: id,
+        action: "delete",
+        changes: { method: { old: existing, new: null } },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
       await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
 
       return c.json({ success: true });
