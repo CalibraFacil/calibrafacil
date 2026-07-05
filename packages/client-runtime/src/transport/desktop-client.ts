@@ -648,6 +648,11 @@ export function createDesktopApiClient(
           "Certificado ICP-Brasil",
         );
       },
+      async setPolicy() {
+        throw desktopUnsupportedSigningCertificateAction(
+          "Política de assinatura",
+        );
+      },
       async revoke() {
         throw desktopUnsupportedSigningCertificateAction(
           "Certificado ICP-Brasil",

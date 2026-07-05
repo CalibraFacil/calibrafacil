@@ -447,6 +447,12 @@ export const organizationUnit = pgTable(
       .default("ACTIVE")
       .notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
+    /**
+     * #644 (CMP-01): when true, certificate emission REQUIRES an active signing
+     * certificate — a missing cert fails the job (REJECTED) instead of emitting
+     * unsigned. Signing FAILURES always fail regardless of this flag.
+     */
+    requireSignature: boolean("require_signature").default(false).notNull(),
     createdBy: text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),

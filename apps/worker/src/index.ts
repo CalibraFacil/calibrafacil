@@ -40,12 +40,15 @@ import {
   getIcpBrasilTrustAnchors,
   decryptPassword,
   decryptBinary,
-  SigningError,
   type SignatureMetadata,
   type VerifyPdfResult,
   createCrlFetcher,
 } from "@calibra-facil/signing";
 import { resolveTsaConfig } from "./tsa-config.js";
+import {
+  resolveSigningPolicy,
+  SigningPolicyError,
+} from "./signing-policy.js";
 
 /** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
 type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
@@ -1301,6 +1304,24 @@ interface SigningCertificateData {
   subjectCn: string;
 }
 
+/** #644: the unit's signing-policy flag (organization_unit.require_signature). */
+async function fetchUnitRequireSignature(
+  client: Client,
+  organizationId: string,
+  unitId: number,
+): Promise<boolean> {
+  const result = await client.query(
+    `
+        SELECT require_signature
+        FROM organization_unit
+        WHERE id = $1 AND organization_id = $2
+        LIMIT 1
+        `,
+    [unitId, organizationId],
+  );
+  return result.rows[0]?.require_signature === true;
+}
+
 /**
  * Fetch organization's default signing certificate
  */
@@ -1443,10 +1464,6 @@ async function signPdfWithUnitCertificate(
   signatureMetadata?: SignatureMetadata;
   signatureVerdict?: StoredSignatureVerdict;
 }> {
-  if (!env.SIGNING_MASTER_KEY) {
-    return { pdfBuffer };
-  }
-
   const signStart = performance.now();
   if (!organizationId) {
     console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
@@ -1455,15 +1472,44 @@ async function signPdfWithUnitCertificate(
     console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
   }
 
-  const signingCert =
+  // #644 (CMP-01): the unit's signing policy governs the missing-cert /
+  // missing-master-key paths. Unresolvable flag (legacy job without unit)
+  // keeps the pre-#644 permissive behavior.
+  const requireSignature =
     organizationId && unitId
+      ? await withDbClient(env, (client) =>
+          fetchUnitRequireSignature(client, organizationId, unitId),
+        )
+      : false;
+
+  const signingCert =
+    env.SIGNING_MASTER_KEY && organizationId && unitId
       ? await withDbClient(env, (client) =>
           fetchSigningCertificate(client, organizationId, unitId),
         )
       : null;
 
-  if (!signingCert) {
-    console.log(`[JOB ${jobId}] No signing certificate available`);
+  const policy = resolveSigningPolicy({
+    hasMasterKey: Boolean(env.SIGNING_MASTER_KEY),
+    hasCertificate: signingCert !== null,
+    requireSignature,
+  });
+  if (policy.action === "FAIL") {
+    throw new SigningPolicyError(policy.reason);
+  }
+  if (policy.action === "EMIT_UNSIGNED" || !signingCert) {
+    // Visible, not silent: signature_metadata stays NULL, so the portal and
+    // the public verification page render the UNSIGNED verdict.
+    console.warn(
+      `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
+    );
+    return { pdfBuffer };
+  }
+
+  // Narrowing only: the certificate fetch above is gated on the master key,
+  // so a non-null signingCert implies the key is present.
+  const masterKey = env.SIGNING_MASTER_KEY;
+  if (!masterKey) {
     return { pdfBuffer };
   }
 
@@ -1471,11 +1517,11 @@ async function signPdfWithUnitCertificate(
     const password = decryptPassword(
       signingCert.encryptedPassword,
       signingCert.passwordIv,
-      env.SIGNING_MASTER_KEY,
+      masterKey,
     );
     const p12Buffer = decryptBinary(
       signingCert.encryptedP12,
-      env.SIGNING_MASTER_KEY,
+      masterKey,
     );
     // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
     // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
@@ -1520,17 +1566,19 @@ async function signPdfWithUnitCertificate(
       signatureVerdict,
     };
   } catch (signError) {
-    // REQ-CMP-LTV-003 (#646): a configured TSA that fails must fail the JOB —
-    // never silently emit without the carimbo. Other signing failures keep the
-    // pre-existing continue-unsigned behavior (that policy is issue #644).
-    if (signError instanceof SigningError && signError.code === "TIMESTAMP_FAILED") {
+    // #644 (REQ-CMP-SIGN-001/002): a configured certificate that fails to sign
+    // ALWAYS fails the emission — the job goes REJECTED with a named reason and
+    // neither the R2 upload, the APPROVED transition nor notifyCertificateReady
+    // (all downstream of this call) can run. Includes #646's TIMESTAMP_FAILED.
+    console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
+    if (signError instanceof SigningPolicyError) {
       throw signError;
     }
-    console.error(
-      `[JOB ${jobId}] PDF signing failed (continuing without signature):`,
-      signError,
+    const detail =
+      signError instanceof Error ? signError.message : String(signError);
+    throw new SigningPolicyError(
+      `Falha na assinatura digital do certificado: ${detail}`,
     );
-    return { pdfBuffer };
   }
 }
 

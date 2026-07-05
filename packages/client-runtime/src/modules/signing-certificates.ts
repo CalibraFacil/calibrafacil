@@ -44,5 +44,13 @@ export function createSigningCertificatesApi(
         "Failed to revoke",
       );
     },
+    async setPolicy(requireSignature) {
+      return readJsonResponse<{ requireSignature: boolean }>(
+        await rawCloudClient.api.signing.policy.$patch({
+          json: { requireSignature },
+        }),
+        "Failed to update signing policy",
+      );
+    },
   };
 }

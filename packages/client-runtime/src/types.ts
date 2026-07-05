@@ -2634,6 +2634,8 @@ export type SigningCertificate = {
 export type SigningCertificatesListResponse = {
   certificates: SigningCertificate[];
   unit?: unknown;
+  /** #644: the unit's "assinatura obrigatória" policy flag. */
+  requireSignature?: boolean;
 };
 
 export type UploadSigningCertificateInput = {
@@ -2672,6 +2674,8 @@ export interface SigningCertificatesApi {
     id: string | number,
     reason: string,
   ): Promise<SigningCertificateActionResponse>;
+  /** #644: set the unit's "assinatura obrigatória" policy. */
+  setPolicy(requireSignature: boolean): Promise<{ requireSignature: boolean }>;
 }
 
 export interface PublicInvitationsApi {

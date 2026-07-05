@@ -58,6 +58,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
@@ -87,6 +88,24 @@ export function CertificatesSettingsPage() {
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
       })
       toast.success('Certificado definido como padrão')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const policyMutation = useMutation({
+    mutationFn: (requireSignature: boolean) =>
+      calibraApi.signingCertificates.setPolicy(requireSignature),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+      })
+      toast.success(
+        result.requireSignature
+          ? 'Assinatura digital agora é obrigatória nesta unidade'
+          : 'Emissão sem assinatura permitida nesta unidade',
+      )
     },
     onError: (error) => {
       toast.error(error.message)
@@ -168,6 +187,28 @@ export function CertificatesSettingsPage() {
         </Panel>
       ) : (
         <>
+          {/* Política de assinatura (#644) */}
+          <Panel className="p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-medium">Assinatura obrigatória</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Quando ativado, a emissão de certificados é bloqueada se não
+                  houver certificado digital ativo configurado — o job falha com
+                  o motivo registrado em vez de emitir sem assinatura. Falhas de
+                  assinatura com certificado configurado sempre bloqueiam a
+                  emissão.
+                </p>
+              </div>
+              <Switch
+                checked={data?.requireSignature ?? false}
+                onCheckedChange={(checked) => policyMutation.mutate(checked)}
+                disabled={policyMutation.isPending || isLoading}
+                aria-label="Assinatura obrigatória"
+              />
+            </div>
+          </Panel>
+
           {/* Certificates */}
           <Panel className="p-5 sm:p-6">
             <PanelHeader

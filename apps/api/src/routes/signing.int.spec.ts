@@ -48,7 +48,10 @@ vi.mock("@calibra-facil/signing", async (importOriginal) => {
 
 import { signingRouter } from "./signing";
 import { db } from "@calibra-facil/db";
-import { organizationSigningCertificate } from "@calibra-facil/db/schema";
+import {
+  organizationSigningCertificate,
+  organizationUnit,
+} from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -702,5 +705,64 @@ describe("signingRouter — real DB + real middleware", () => {
       },
     });
     expect(res.status).toBe(401);
+  });
+
+  // =========================================================================
+  // #644 (CMP-01): per-unit signing policy — "assinatura obrigatória"
+  // =========================================================================
+
+  it("REQ-CMP-SIGN-POL-001: PATCH /policy toggles organization_unit.require_signature (DB + GET round-trip)", async () => {
+    const org = await seedOrg({ orgId: "org-pol", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const patch = await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: true }),
+    });
+    expect(patch.status).toBe(200);
+    expect(await patch.json()).toEqual({ requireSignature: true });
+
+    // DB-verified
+    const [row] = await db
+      .select({ requireSignature: organizationUnit.requireSignature })
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, org.unitId));
+    expect(row?.requireSignature).toBe(true);
+
+    // Rides along on GET /certificates for the settings page
+    const list = await signingRouter.request("/certificates", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    expect(list.status).toBe(200);
+    const listBody = await list.json();
+    expect(listBody.requireSignature).toBe(true);
+
+    // And toggles back off
+    const revert = await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: false }),
+    });
+    expect(revert.status).toBe(200);
+    expect(await revert.json()).toEqual({ requireSignature: false });
+  });
+
+  it("REQ-CMP-SIGN-POL-002 [HIGH RISK]: technician cannot change the signing policy (403), flag unchanged (DB-verified)", async () => {
+    const org = await seedOrg({ orgId: "org-pol-rbac", role: "technician" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: true }),
+    });
+    expect(res.status).toBe(403);
+
+    const [row] = await db
+      .select({ requireSignature: organizationUnit.requireSignature })
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, org.unitId));
+    expect(row?.requireSignature).toBe(false);
   });
 });

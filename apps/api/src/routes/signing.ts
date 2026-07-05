@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { organizationSigningCertificate, user } from "@calibra-facil/db/schema";
+import {
+  organizationSigningCertificate,
+  organizationUnit,
+  user,
+} from "@calibra-facil/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
   requireLabProtected,
@@ -103,7 +107,57 @@ export const signingRouter = new Hono<{
               : "valid",
       }));
 
-      return c.json({ certificates: certificatesWithStatus, unit });
+      // #644: the unit's signing policy rides along so the settings page can
+      // render the "assinatura obrigatória" toggle without a second call.
+      const policyRow = await db
+        .select({ requireSignature: organizationUnit.requireSignature })
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.id, unit.unitId),
+            eq(organizationUnit.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      return c.json({
+        certificates: certificatesWithStatus,
+        unit,
+        requireSignature: policyRow[0]?.requireSignature ?? false,
+      });
+    },
+  )
+
+  // ===========================================================================
+  // PATCH /policy - Set the unit's "assinatura obrigatória" flag (#644)
+  // ===========================================================================
+  .patch(
+    "/policy",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    zValidator("json", z.object({ requireSignature: z.boolean() })),
+    async (c) => {
+      const memberData = c.get("member");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
+      const { requireSignature } = c.req.valid("json");
+
+      const updated = await db
+        .update(organizationUnit)
+        .set({ requireSignature })
+        .where(
+          and(
+            eq(organizationUnit.id, unit.unitId),
+            eq(organizationUnit.organizationId, memberData.organizationId),
+          ),
+        )
+        .returning();
+
+      const row = updated[0];
+      if (!row) {
+        return c.json({ error: "Unidade não encontrada" }, 404);
+      }
+      return c.json({ requireSignature: row.requireSignature });
     },
   )
 

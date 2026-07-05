@@ -277,6 +277,7 @@ type ApiRoutePath =
   | "/api/sessions/revoke"
   | "/api/signatures/my-signature"
   | "/api/signing/certificates"
+  | "/api/signing/policy"
   | "/api/signing/certificates/:id"
   | "/api/signing/certificates/:id/set-default"
   | "/api/sso/providers"
