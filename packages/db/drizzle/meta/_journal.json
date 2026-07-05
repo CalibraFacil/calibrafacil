@@ -568,6 +568,13 @@
 			"when": 1783305600000,
 			"tag": "0080_offer_cancel_dual_control",
 			"breakpoints": true
+		},
+		{
+			"idx": 81,
+			"version": "7",
+			"when": 1783306000000,
+			"tag": "0081_audit_log_cascade_batch",
+			"breakpoints": true
 		}
 	]
 }

@@ -904,13 +904,36 @@ publicApiV2Router
         };
       }
 
+      const ipAddress = getPublicApiRequestIp(c.req.raw.headers);
+
       await db.insert(customerAuditLog).values({
         customerId: existing.id,
         action: "delete",
         changes: { customer: { old: existing, new: null } },
         performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        ipAddress,
       });
+
+      // CMP-07 (#692): deleting the customer cascades its assets
+      // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+      // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+      // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+      const customerAssets = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.customerId, existing.id));
+      if (customerAssets.length > 0) {
+        await db.insert(assetAuditLog).values(
+          customerAssets.map((assetRow) => ({
+            assetId: assetRow.id,
+            action: "delete",
+            changes: { asset: { old: assetRow, new: null } },
+            performedBy: apiKey.createdBy,
+            ipAddress,
+            reason: "Cliente excluído",
+          })),
+        );
+      }
 
       await db.delete(customer).where(eq(customer.id, existing.id));
       await db
