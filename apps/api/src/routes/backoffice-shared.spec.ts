@@ -11,6 +11,7 @@
 // still dead (regression-proof of the bug), and (b) the new
 // `forwardBackofficeAuthResponse` helper — which `backoffice-users.ts` now
 // uses — reaches a live endpoint instead.
+import { readFile } from "node:fs/promises";
 import { describe, it, expect } from "vitest";
 
 process.env.DATABASE_URL =
@@ -81,5 +82,24 @@ describe("SEC-09 backoffice password-reset forwarding", () => {
     // A live endpoint does NOT short-circuit with the disabled contract; it
     // proceeds to a (failing, no reachable DB here) user lookup instead.
     expect(result.body).not.toContain(RESET_PASSWORD_DISABLED);
+  });
+
+  // The two tests above prove the MECHANISM (lab-forward dead, backoffice-forward
+  // live) but not which forwarder the operator provisioning/reset CALL SITES use —
+  // forwardLabAuthResponse legitimately still exists (impersonation-stop), so a
+  // future revert of backoffice-users.ts back to the lab path would stay green.
+  // This source tripwire pins the call sites (SEC-09 round-2 verifier follow-up).
+  it("REQ-PWDLESS-003 (call-site pin): backoffice-users.ts requests reset tokens from the BACKOFFICE auth instance only", async () => {
+    const source = await readFile(
+      new URL("./backoffice-users.ts", import.meta.url),
+      "utf8",
+    );
+    const occurrences =
+      source.match(/\/api\/auth\/backoffice\/request-password-reset/g) ?? [];
+    // Both call sites (new-operator provisioning + admin-triggered reset).
+    expect(occurrences.length).toBeGreaterThanOrEqual(2);
+    // No password-reset traffic may target the (passwordless) lab instance.
+    expect(source).not.toContain("/api/auth/lab/request-password-reset");
+    expect(source).not.toContain("forwardLabAuthResponse");
   });
 });

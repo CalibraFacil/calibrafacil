@@ -58,9 +58,6 @@ interface SettingsContextValue {
   revokeSession: (sessionId: string) => Promise<void>
   revokeOtherSessions: () => Promise<void>
   revokeAllSessions: () => Promise<void>
-
-  // Danger zone
-  deleteAccount: (password: string) => Promise<void>
 }
 
 // =============================================================================
@@ -218,30 +215,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const deleteAccount = useCallback(async (password: string) => {
-    setIsUpdating(true)
-    setError(null)
-    try {
-      const result = await authClient.deleteUser({ password })
-      if (result.error) {
-        throw new Error(
-          translateAuthErrorMessage(
-            result.error.message,
-            'Falha ao excluir conta',
-          ),
-        )
-      }
-      // Will redirect after deletion
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Falha ao excluir conta'
-      setError(message)
-      throw err
-    } finally {
-      setIsUpdating(false)
-    }
-  }, [])
-
   const value = useMemo<SettingsContextValue>(
     () => ({
       user: sessionData?.user
@@ -274,7 +247,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       revokeSession,
       revokeOtherSessions,
       revokeAllSessions,
-      deleteAccount,
     }),
     [
       sessionData,
@@ -289,7 +261,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       revokeSession,
       revokeOtherSessions,
       revokeAllSessions,
-      deleteAccount,
     ],
   )
 
