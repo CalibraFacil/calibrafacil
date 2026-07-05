@@ -410,6 +410,7 @@ async function pushOutboxEvents(
           unitId: context.unitId,
           idempotencyKey: event.idempotencyKey,
           localVersion: event.localVersion,
+          baseUpdatedAt: event.baseUpdatedAt ?? null,
         })),
       }),
     });

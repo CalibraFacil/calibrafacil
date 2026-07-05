@@ -173,6 +173,7 @@ INSERT INTO customers (
   address_json,
   compliance_json,
   updated_at,
+  remote_base_updated_at,
   sync_state
 ) VALUES (
   @id,
@@ -186,6 +187,7 @@ INSERT INTO customers (
   @addressJson,
   @complianceJson,
   @updatedAt,
+  @remoteBaseUpdatedAt,
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
@@ -196,6 +198,7 @@ ON CONFLICT(id) DO UPDATE SET
   address_json = excluded.address_json,
   compliance_json = excluded.compliance_json,
   updated_at = excluded.updated_at,
+  remote_base_updated_at = excluded.remote_base_updated_at,
   sync_state = excluded.sync_state
 `,
         )
@@ -211,6 +214,7 @@ ON CONFLICT(id) DO UPDATE SET
           addressJson: JSON.stringify(row.address ?? null),
           complianceJson: JSON.stringify(row.compliance ?? null),
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
+          remoteBaseUpdatedAt: getDateString(row, "updatedAt"),
         });
     }
 
@@ -245,6 +249,7 @@ INSERT INTO assets (
   installed_at,
   status,
   updated_at,
+  remote_base_updated_at,
   sync_state
 ) VALUES (
   @id,
@@ -269,6 +274,7 @@ INSERT INTO assets (
   @installedAt,
   @status,
   @updatedAt,
+  @remoteBaseUpdatedAt,
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
@@ -290,6 +296,7 @@ ON CONFLICT(id) DO UPDATE SET
   installed_at = excluded.installed_at,
   status = excluded.status,
   updated_at = excluded.updated_at,
+  remote_base_updated_at = excluded.remote_base_updated_at,
   sync_state = excluded.sync_state
 `,
         )
@@ -319,6 +326,7 @@ ON CONFLICT(id) DO UPDATE SET
           installedAt: getDateString(row, "installedAt"),
           status: getString(row, "status") ?? "ACTIVE",
           updatedAt: getDateString(row, "updatedAt") ?? pulledAt,
+          remoteBaseUpdatedAt: getDateString(row, "updatedAt"),
         });
     }
 
