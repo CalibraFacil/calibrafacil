@@ -74,6 +74,7 @@ import {
   getEffectiveCertificateTemplateSnapshot,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
+import { isUniqueViolation } from "../lib/db-errors";
 import {
   createR2Client,
   extractKeyFromUrl,
@@ -1192,9 +1193,20 @@ publicApiV2Router
           db.query.assetType.findFirst({
             where: eq(assetType.id, input.assetTypeId),
           }),
-          db.query.asset.findFirst({
-            where: eq(asset.tag, input.tag),
-          }),
+          // SEC-03a: scope the tag-collision check to the caller's org (join
+          // asset → customer) so it cannot read another tenant's assets. The
+          // residual GLOBAL DB unique is caught at the insert below.
+          db
+            .select({ id: asset.id })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.tag, input.tag),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1),
         ]);
 
         if (!foundCustomer) {
@@ -1217,7 +1229,7 @@ publicApiV2Router
           };
         }
 
-        if (existingTag) {
+        if (existingTag.length > 0) {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -1277,28 +1289,46 @@ publicApiV2Router
             }).date
           : null;
 
-        const [created] = await db
-          .insert(asset)
-          .values({
-            unitId,
-            customerId: foundCustomer.id,
-            assetTypeId: input.assetTypeId,
-            name: input.name,
-            manufacturer: input.manufacturer || null,
-            model: input.model || null,
-            serialNumber: input.serialNumber,
-            tag: input.tag,
-            status: input.status || "ACTIVE",
-            baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
-            lastCalibrationDate,
-            installedAt,
-            comments: input.comments || null,
-            specifications: normalizedSpecifications.specifications || null,
-            metrologyRegime: regimeWrite.metrologyRegime,
-            regulatedInterval: regimeWrite.regulatedInterval,
-            nextLegalVerificationDate,
-          })
-          .returning();
+        // SEC-03a: the org-scoped check above can no longer see another tenant's
+        // tag, but the GLOBAL DB unique (asset_tag_unique / asset_tag_uidx) is
+        // still enforced until the per-org migration lands. Catch that 23505 and
+        // return the SAME 409 asset_tag_conflict the app check returns (never 500).
+        let created: typeof asset.$inferSelect | undefined;
+        try {
+          [created] = await db
+            .insert(asset)
+            .values({
+              unitId,
+              customerId: foundCustomer.id,
+              assetTypeId: input.assetTypeId,
+              name: input.name,
+              manufacturer: input.manufacturer || null,
+              model: input.model || null,
+              serialNumber: input.serialNumber,
+              tag: input.tag,
+              status: input.status || "ACTIVE",
+              baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+              lastCalibrationDate,
+              installedAt,
+              comments: input.comments || null,
+              specifications: normalizedSpecifications.specifications || null,
+              metrologyRegime: regimeWrite.metrologyRegime,
+              regulatedInterval: regimeWrite.regulatedInterval,
+              nextLegalVerificationDate,
+            })
+            .returning();
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: "asset_tag_conflict",
+                message: "Tag já está em uso",
+              }),
+            };
+          }
+          throw error;
+        }
 
         await db.insert(assetAuditLog).values({
           assetId: created!.id,
@@ -1426,9 +1456,21 @@ publicApiV2Router
       }
 
       if (input.tag && input.tag !== existing.tag) {
-        const tagConflict = await db.query.asset.findFirst({
-          where: and(eq(asset.tag, input.tag), isNull(asset.deletedAt)),
-        });
+        // SEC-03a: scope the tag-collision check to the caller's org (join
+        // asset → customer) so it cannot read another tenant's assets. The
+        // residual GLOBAL DB unique is caught at the update below.
+        const [tagConflict] = await db
+          .select({ id: asset.id })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(asset.tag, input.tag),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
         if (tagConflict) {
           return c.json(
             buildPublicApiError({
@@ -1520,28 +1562,47 @@ publicApiV2Router
         };
       })();
 
-      const [updated] = await db
-        .update(asset)
-        .set({
-          name: input.name ?? existing.name,
-          manufacturer: input.manufacturer ?? existing.manufacturer,
-          model: input.model ?? existing.model,
-          serialNumber: input.serialNumber ?? existing.serialNumber,
-          tag: input.tag ?? existing.tag,
-          status: input.status ?? existing.status,
-          lastCalibrationDate:
-            lastCalibrationDate === undefined
-              ? existing.lastCalibrationDate
-              : lastCalibrationDate,
-          nextCalibrationDate,
-          ...(installedAt !== undefined ? { installedAt } : {}),
-          comments: input.comments ?? existing.comments,
-          specifications:
-            normalizedSpecifications?.specifications ?? existing.specifications,
-          ...regimeUpdate,
-        })
-        .where(eq(asset.id, existing.id))
-        .returning();
+      // SEC-03a: the org-scoped check above can no longer see another tenant's
+      // tag, but the GLOBAL DB unique (asset_tag_unique / asset_tag_uidx) is
+      // still enforced until the per-org migration lands. Catch that 23505 and
+      // return the SAME 409 asset_tag_conflict the app check returns (never 500).
+      let updated: typeof asset.$inferSelect | undefined;
+      try {
+        [updated] = await db
+          .update(asset)
+          .set({
+            name: input.name ?? existing.name,
+            manufacturer: input.manufacturer ?? existing.manufacturer,
+            model: input.model ?? existing.model,
+            serialNumber: input.serialNumber ?? existing.serialNumber,
+            tag: input.tag ?? existing.tag,
+            status: input.status ?? existing.status,
+            lastCalibrationDate:
+              lastCalibrationDate === undefined
+                ? existing.lastCalibrationDate
+                : lastCalibrationDate,
+            nextCalibrationDate,
+            ...(installedAt !== undefined ? { installedAt } : {}),
+            comments: input.comments ?? existing.comments,
+            specifications:
+              normalizedSpecifications?.specifications ??
+              existing.specifications,
+            ...regimeUpdate,
+          })
+          .where(eq(asset.id, existing.id))
+          .returning();
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return c.json(
+            buildPublicApiError({
+              code: "asset_tag_conflict",
+              message: "Tag já está em uso",
+            }),
+            409,
+          );
+        }
+        throw error;
+      }
 
       await db.insert(assetAuditLog).values({
         assetId: existing.id,

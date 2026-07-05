@@ -1658,9 +1658,14 @@ export function createLabAuth() {
     ...sharedConfig,
     basePath: "/api/auth/lab",
     baseURL,
+    // SEC-09 (#669): the lab surface is passwordless by principle — passwords
+    // are never accepted. Override the shared `enabled: true` so the lab auth
+    // instance does NOT mount /sign-in/email, /forget-password or
+    // /reset-password. Existing credential rows are left untouched (no schema
+    // migration); only password-based sign-in and reset are refused. The
+    // supported factors are passkey, magic-link and email-OTP (plugins below).
     emailAndPassword: {
-      ...sharedConfig.emailAndPassword,
-      disableSignUp: true,
+      enabled: false,
     },
     databaseHooks: {
       session: {

@@ -770,4 +770,179 @@ describe("assetsRouter — real DB + real middleware", () => {
       expect(res.status).toBe(403);
     },
   );
+
+  // =========================================================================
+  // SEC-03a — dashboard tag-collision checks are org-scoped, and the residual
+  // GLOBAL DB unique (asset_tag_unique / asset_tag_uidx, not yet migrated to
+  // per-org) is caught and mapped to the SAME response the app check returns.
+  //
+  // NOTE (response shape): the dashboard app check returns 400 { error } today
+  // (public-api-v2 returns 409 { error: { code } }). Per "preserve all response
+  // shapes", the catch mirrors that existing 400 shape; the maker flagged the
+  // EARS "409" wording as reconciled to the preserved dashboard shape.
+  // =========================================================================
+
+  // REQ-SEC-TAG-003a (dashboard POST) ---------------------------------------
+  it(
+    "REQ-SEC-TAG-003a: POST / with a tag already used in the SAME org → tag conflict (org-scoped check)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-sec-post-same");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "DASH-SAME",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request("/", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          customerId: cid,
+          assetTypeId: typeId,
+          name: "Dup Asset",
+          serialNumber: "SN-DUP",
+          tag: "DASH-SAME",
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Tag já está em uso");
+    },
+  );
+
+  // REQ-SEC-TAG-003a (dashboard PUT) ----------------------------------------
+  it(
+    "REQ-SEC-TAG-003a: PUT /:id changing to a tag already used in the SAME org → tag conflict (org-scoped check)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      const typeId = await seedAssetType("type-sec-put-same");
+      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+      const editableId = await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "DASH-T1",
+      });
+      await seedAsset({
+        unitId: org.unitId,
+        customerId: cid,
+        assetTypeId: typeId,
+        tag: "DASH-T2",
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await assetsRouter.request(`/${editableId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ tag: "DASH-T2" }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Tag ja esta em uso");
+    },
+  );
+
+  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (dashboard POST) --------------------
+  // Scoping proof: org A's check must NOT match org B's tag, so the create
+  // reaches the still-global DB unique and MUST be mapped to a tag conflict
+  // (never the generic 500 the outer catch returns for unexpected errors).
+  it(
+    "REQ-SEC-TAG-004a/005a: POST / with a tag used ONLY by another org → tag conflict, NOT 500",
+    async () => {
+      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+      const typeB = await seedAssetType("type-sec-post-xorg-b");
+      const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
+      await seedAsset({
+        unitId: orgB.unitId,
+        customerId: cidB,
+        assetTypeId: typeB,
+        tag: "DASH-SHARED-POST",
+      });
+
+      const typeA = await seedAssetType("type-sec-post-xorg-a");
+      const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
+
+      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+      const res = await assetsRouter.request("/", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+        body: JSON.stringify({
+          customerId: cidA,
+          assetTypeId: typeA,
+          name: "Org A Asset",
+          serialNumber: "SN-A-XORG",
+          tag: "DASH-SHARED-POST",
+        }),
+      });
+
+      // The org-scoped check did NOT see org B's row (else it would conflict via
+      // the check with no insert); the insert hit the global unique and the catch
+      // mapped 23505 → the same tag-conflict response. Never a 500.
+      expect(res.status).not.toBe(500);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Tag já está em uso");
+
+      // Org A created no row; org B's asset is the only holder of the tag.
+      const holders = await db
+        .select({ customerId: asset.customerId })
+        .from(asset)
+        .where(eq(asset.tag, "DASH-SHARED-POST"));
+      expect(holders).toHaveLength(1);
+      expect(holders[0]?.customerId).toBe(cidB);
+    },
+  );
+
+  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (dashboard PUT) ---------------------
+  it(
+    "REQ-SEC-TAG-004a/005a: PUT /:id changing to a tag used ONLY by another org → tag conflict, NOT 500",
+    async () => {
+      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+      const typeB = await seedAssetType("type-sec-put-xorg-b");
+      const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
+      await seedAsset({
+        unitId: orgB.unitId,
+        customerId: cidB,
+        assetTypeId: typeB,
+        tag: "DASH-SHARED-PUT",
+      });
+
+      const typeA = await seedAssetType("type-sec-put-xorg-a");
+      const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
+      const editableId = await seedAsset({
+        unitId: orgA.unitId,
+        customerId: cidA,
+        assetTypeId: typeA,
+        tag: "DASH-A-PUT",
+      });
+
+      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+      const res = await assetsRouter.request(`/${editableId}`, {
+        method: "PUT",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+        body: JSON.stringify({ tag: "DASH-SHARED-PUT" }),
+      });
+
+      expect(res.status).not.toBe(500);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Tag ja esta em uso");
+
+      // Org A's asset kept its own tag; org B still owns DASH-SHARED-PUT.
+      const [orgARow] = await db
+        .select({ tag: asset.tag })
+        .from(asset)
+        .where(eq(asset.id, editableId))
+        .limit(1);
+      expect(orgARow?.tag).toBe("DASH-A-PUT");
+    },
+  );
 });

@@ -76,14 +76,6 @@ export function AuthenticationSettingsPage() {
         />
         <div className="mt-4 space-y-3">
           <AuthStatusRow
-            icon={CheckmarkBadge01Icon}
-            title="Senha"
-            description="Faça login com email e senha"
-            statusLabel="Ativo"
-            statusVariant="default"
-          />
-
-          <AuthStatusRow
             icon={user?.emailVerified ? CheckmarkBadge01Icon : Cancel01Icon}
             title="Verificação de Email"
             description={user?.email ?? 'Email não disponível'}
@@ -827,7 +819,7 @@ function AuthenticationSkeleton() {
       <Skeleton className="h-10 w-56" />
       <Panel className="space-y-4 p-5 sm:p-6">
         <Skeleton className="h-5 w-44" />
-        {[1, 2].map((item) => (
+        {[1].map((item) => (
           <div
             key={item}
             className="flex items-center justify-between rounded-lg border p-4"

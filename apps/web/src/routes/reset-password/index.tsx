@@ -13,8 +13,18 @@ import {
 } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { requestPasswordReset, resetPassword } from '@calibra-facil/auth/client'
+import {
+  requestBackofficePasswordReset,
+  resetBackofficePassword,
+} from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
+
+// SEC-09 (#669): the lab dashboard is passwordless by principle — password
+// sign-in and reset are disabled on the lab auth surface. This page is now
+// exclusively the BACKOFFICE operators' password-reset entry point (linked
+// from `apps/backoffice`'s sign-in form via `${getLabAppBaseUrl()}/reset-password`,
+// since the backoffice app has no reset page of its own); it binds to the
+// backoffice auth client, not the lab one.
 
 type ResetPasswordSearch = {
   token?: string
@@ -55,7 +65,7 @@ function ResetPasswordPage() {
     setMessage(null)
 
     try {
-      const { error } = await requestPasswordReset({
+      const { error } = await requestBackofficePasswordReset({
         email,
         redirectTo: `${window.location.origin}/reset-password`,
       })
@@ -86,7 +96,7 @@ function ResetPasswordPage() {
     setMessage(null)
 
     try {
-      const { error } = await resetPassword({
+      const { error } = await resetBackofficePassword({
         token,
         newPassword,
       })

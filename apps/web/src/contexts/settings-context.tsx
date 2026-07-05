@@ -51,13 +51,6 @@ interface SettingsContextValue {
   // Profile mutations
   updateProfile: (data: { name?: string; image?: string }) => Promise<void>
 
-  // Password mutations
-  changePassword: (data: {
-    currentPassword: string
-    newPassword: string
-    revokeOtherSessions?: boolean
-  }) => Promise<void>
-
   // Session management
   sessions: Array<SessionInfo>
   sessionsLoading: boolean
@@ -146,44 +139,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     },
     [],
-  )
-
-  const changePassword = useCallback(
-    async (data: {
-      currentPassword: string
-      newPassword: string
-      revokeOtherSessions?: boolean
-    }) => {
-      setIsUpdating(true)
-      setError(null)
-      try {
-        const result = await authClient.changePassword({
-          currentPassword: data.currentPassword,
-          newPassword: data.newPassword,
-          revokeOtherSessions: data.revokeOtherSessions,
-        })
-        if (result.error) {
-          throw new Error(
-            translateAuthErrorMessage(
-              result.error.message,
-              'Falha ao alterar senha',
-            ),
-          )
-        }
-        // Refresh sessions if other sessions were revoked
-        if (data.revokeOtherSessions) {
-          await refreshSessions()
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Falha ao alterar senha'
-        setError(message)
-        throw err
-      } finally {
-        setIsUpdating(false)
-      }
-    },
-    [refreshSessions],
   )
 
   const revokeSession = useCallback(
@@ -313,7 +268,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       error,
       clearError,
       updateProfile,
-      changePassword,
       sessions,
       sessionsLoading,
       refreshSessions,
@@ -329,7 +283,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       error,
       clearError,
       updateProfile,
-      changePassword,
       sessions,
       sessionsLoading,
       refreshSessions,

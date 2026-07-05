@@ -561,7 +561,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const ipAddress =
         c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 
-      // Log audit entry before deletion
+      // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
+      // longer cascades (soft reference), so this row survives the delete below.
       await db.insert(customerAuditLog).values({
         customerId: id,
         action: "delete",

@@ -1,6 +1,3 @@
-import { useState } from 'react'
-import { toast } from 'sonner'
-
 import { useSettings } from '@/contexts/settings-context'
 import {
   Card,
@@ -9,13 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
@@ -31,52 +21,10 @@ export function SecuritySettingsPage() {
     session,
     sessions,
     sessionsLoading,
-    changePassword,
     revokeSession,
     revokeOtherSessions,
     isUpdating,
   } = useSettings()
-
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPasswordError(null)
-
-    if (!currentPassword) {
-      setPasswordError('Digite sua senha atual')
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError('As senhas não coincidem')
-      return
-    }
-
-    if (newPassword.length < 8) {
-      setPasswordError('A senha deve ter pelo menos 8 carácteres')
-      return
-    }
-
-    setIsChangingPassword(true)
-    try {
-      await changePassword({ currentPassword, newPassword })
-      toast.success('Senha alterada com sucesso!')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Falha ao alterar senha'
-      toast.error(message)
-    } finally {
-      setIsChangingPassword(false)
-    }
-  }
 
   const formatDate = (date: Date) => {
     return SESSION_DATETIME_FORMAT.format(date)
@@ -94,73 +42,6 @@ export function SecuritySettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Password Change Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Alterar Senha</CardTitle>
-          <CardDescription>
-            Atualize sua senha para manter sua conta segura.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePasswordChange}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="current-password">Senha atual</FieldLabel>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => {
-                    setCurrentPassword(e.target.value)
-                    setPasswordError(null)
-                  }}
-                  disabled={isChangingPassword}
-                  placeholder="Digite sua senha atual"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="new-password">Nova senha</FieldLabel>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value)
-                    setPasswordError(null)
-                  }}
-                  disabled={isChangingPassword}
-                  placeholder="Digite sua nova senha"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="confirm-password">
-                  Confirmar nova senha
-                </FieldLabel>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => {
-                    setConfirmPassword(e.target.value)
-                    setPasswordError(null)
-                  }}
-                  disabled={isChangingPassword}
-                  placeholder="Confirme sua nova senha"
-                />
-                {passwordError && <FieldError>{passwordError}</FieldError>}
-              </Field>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isChangingPassword}>
-                  {isChangingPassword ? 'Alterando...' : 'Alterar senha'}
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-
       {/* Active Sessions Card */}
       <Card>
         <CardHeader>

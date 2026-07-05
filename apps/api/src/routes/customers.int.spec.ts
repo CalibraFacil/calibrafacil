@@ -400,6 +400,55 @@ describe("customersRouter — real DB + real middleware", () => {
   });
 
   // =========================================================================
+  // REQ-CMP-AUD-001 (#649): the deletion audit row must SURVIVE the deletion
+  // it documents (ISO/IEC 17025 append-only trail). Before the fix the
+  // customer_id FK cascaded and the row self-deleted.
+  // =========================================================================
+  it(
+    "REQ-CMP-AUD-001: DELETE /:id keeps the 'delete' audit row after the customer is gone",
+    async () => {
+      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+      const seeded = await seedCustomer({
+        labOrgId: orgA.orgId,
+        clientOrgId: "client-aud",
+        name: "Cliente Auditável",
+      });
+
+      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+      const res = await customersRouter.request(`/${seeded.customerId}`, {
+        method: "DELETE",
+        headers: JSON_HEADERS,
+      });
+      expect(res.status).toBe(200);
+
+      // The customer row is gone…
+      const remaining = await db
+        .select()
+        .from(customer)
+        .where(eq(customer.id, seeded.customerId));
+      expect(remaining).toHaveLength(0);
+
+      // …but the deletion's audit row persists, with enough data to be useful
+      // without the original row (REQ-CMP-AUD-003: id + name + actor + timestamp).
+      const logs = await db
+        .select()
+        .from(customerAuditLog)
+        .where(
+          and(
+            eq(customerAuditLog.customerId, seeded.customerId),
+            eq(customerAuditLog.action, "delete"),
+          ),
+        );
+      expect(logs).toHaveLength(1);
+      expect(logs[0]?.performedBy).toBe(orgA.userId);
+      expect(logs[0]?.performedAt).toBeInstanceOf(Date);
+      expect(logs[0]?.changes).toMatchObject({
+        customer: { old: { name: "Cliente Auditável" }, new: null },
+      });
+    },
+  );
+
+  // =========================================================================
   // REQ-CMP-AUD-010a [HIGH RISK] (#692 / CMP-07): deleting a customer cascades
   // its assets (asset.customer_id → customer, intentional). The asset audit
   // trail must SURVIVE that cascade — the append-only ISO/IEC 17025 trail must

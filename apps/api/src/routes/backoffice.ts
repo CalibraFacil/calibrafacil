@@ -46,6 +46,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { recomputeOperatorAlerts } from "../lib/operator-alerts";
 import { shapeRecentQueueFailures } from "../lib/observability-alerts";
+import { isSameDualControlIdentity } from "../lib/dual-control";
 import {
   canAccessBackoffice,
   parsePlatformRoles,
@@ -1620,7 +1621,10 @@ export const backofficeRouter = new Hono<{
         return c.json({ error: "Solicitação já decidida" }, 409);
       }
       // Dual-control: the approver must be a different person than the requester.
-      if (existing.requestedByUserId === session.user.id) {
+      // Reuses the shared identity rule (../lib/dual-control) so the same
+      // separation-of-duties check gates BOTH the decision here and the
+      // downstream financial execution (DOM-04 / #657).
+      if (isSameDualControlIdentity(existing.requestedByUserId, session.user.id)) {
         return c.json(
           {
             error:

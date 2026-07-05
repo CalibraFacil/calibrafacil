@@ -2061,9 +2061,10 @@ export const customerAuditLog = pgTable(
   "customer_audit_log",
   {
     id: serial("id").primaryKey(),
-    customerId: serial("customer_id")
-      .notNull()
-      .references(() => customer.id, { onDelete: "cascade" }),
+    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // append-only (ISO/IEC 17025): the "delete" row must survive the deletion
+    // of the customer it documents, so it keeps the id as a plain integer.
+    customerId: serial("customer_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'compliance_change', 'user_invited', 'user_removed', etc.
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -3275,9 +3276,10 @@ export const methodAuditLog = pgTable(
   "method_audit_log",
   {
     id: serial("id").primaryKey(),
-    methodId: integer("method_id")
-      .notNull()
-      .references(() => calibrationMethod.id, { onDelete: "cascade" }),
+    // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
+    // append-only (ISO/IEC 17025 §7.2): the "delete" row must survive the
+    // deletion of the method it documents, so it keeps the id as a plain integer.
+    methodId: integer("method_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'request_approval', 'technical_review', 'quality_approve', 'return_to_draft', 'publish', 'archive', 'new_version'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -6708,6 +6710,14 @@ export const commercialOffer = pgTable(
       onDelete: "set null",
     }),
     reissuedFromOfferId: text("reissued_from_offer_id"),
+    // Dual-control link (DOM-04, issue #657): the APPROVED maker-checker
+    // `approval_request` that authorized a money-touching cancel of this offer.
+    // Nullable — existing/non-canceled offers carry null. ON DELETE SET NULL so
+    // purging the approval row never erases the offer's cancel record.
+    approvalRequestId: integer("approval_request_id").references(
+      () => approvalRequest.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -6719,6 +6729,7 @@ export const commercialOffer = pgTable(
     index("commercial_offer_deal_idx").on(table.dealId),
     index("commercial_offer_status_idx").on(table.status),
     index("commercial_offer_kind_idx").on(table.kind),
+    index("commercial_offer_approval_request_idx").on(table.approvalRequestId),
     uniqueIndex("commercial_offer_provider_checkout_uidx").on(
       table.providerCheckoutId,
     ),
