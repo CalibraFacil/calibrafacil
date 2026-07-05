@@ -582,6 +582,13 @@
 			"when": 1783306800000,
 			"tag": "0082_asset_org_tag_unique",
 			"breakpoints": true
+		},
+		{
+			"idx": 83,
+			"version": "7",
+			"when": 1783393200000,
+			"tag": "0083_user_cascade_soft_delete",
+			"breakpoints": true
 		}
 	]
 }

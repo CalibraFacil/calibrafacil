@@ -2617,7 +2617,9 @@ export async function notifyCompetenceExpiring(
     )
     .limit(1);
 
-  if (!comp?.expiresAt) return;
+  // userId is nullable since migration 0083; skip when the competence has no
+  // owning user (deleted) — there is no technician to notify about.
+  if (!comp?.expiresAt || !comp.userId) return;
 
   const [userData] = await db
     .select({ name: user.name })
@@ -2683,7 +2685,10 @@ export async function notifyCompetenceExpired(
     )
     .limit(1);
 
-  if (!comp) return;
+  // userId is nullable since migration 0083 (a deleted user leaves the
+  // competence with user_id NULL). These notifications are about a specific
+  // technician, so skip when there is no owning user.
+  if (!comp?.userId) return;
 
   const [userData] = await db
     .select({ name: user.name })
@@ -2747,7 +2752,10 @@ export async function notifyCompetenceRequested(
     )
     .limit(1);
 
-  if (!comp) return;
+  // userId is nullable since migration 0083 (a deleted user leaves the
+  // competence with user_id NULL). These notifications are about a specific
+  // technician, so skip when there is no owning user.
+  if (!comp?.userId) return;
 
   const [requester] = await db
     .select({ name: user.name })
@@ -2819,7 +2827,10 @@ export async function notifyCompetenceApproved(
     )
     .limit(1);
 
-  if (!comp) return;
+  // userId is nullable since migration 0083 (a deleted user leaves the
+  // competence with user_id NULL). These notifications are about a specific
+  // technician, so skip when there is no owning user.
+  if (!comp?.userId) return;
 
   const [approver] = await db
     .select({ name: user.name })

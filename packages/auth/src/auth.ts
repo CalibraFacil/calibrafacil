@@ -4,7 +4,7 @@ import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
@@ -1387,6 +1387,21 @@ function createSharedConfig(surface: AuthSurface) {
     user: {
       deleteUser: {
         enabled: true,
+        // ISO/IEC 17025 §6.2 guard: Better Auth deletes the `user` row after
+        // this hook. The subject FKs (personnel_competence / training_record /
+        // authorized_signatory .user_id) are ON DELETE SET NULL (migration 0083),
+        // so the regulated rows survive — but we must first PRESERVE them with a
+        // trace: soft-delete competences/trainings, revoke signatory
+        // authorizations, and write audit rows carrying a name/email identity
+        // snapshot (the audit `performed_by` has no FK, so the trail outlives the
+        // user row). Runs BEFORE internalAdapter.deleteUser (update-user.mjs:309).
+        beforeDelete: async (deletedUser: {
+          id: string;
+          name?: string | null;
+          email?: string | null;
+        }) => {
+          await preserveRegulatedRecordsOnUserDeletion(deletedUser);
+        },
       },
     },
     trustedOrigins: createTrustedOrigins(isProduction, surface),
@@ -1428,6 +1443,134 @@ type CreatedAuthSessionRecord = {
   userAgent?: string | null;
   impersonatedBy?: string | null;
 };
+
+/**
+ * The subset of a Better Auth user the deletion hook needs: the id to locate
+ * owned regulated records, plus name/email to snapshot into the audit trail so
+ * the person stays identifiable after the `user` row is gone.
+ */
+export type DeletedUserIdentity = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+};
+
+/**
+ * ISO/IEC 17025 §6.2 preservation hook for Better Auth `deleteUser`.
+ *
+ * Runs in `user.deleteUser.beforeDelete`, i.e. BEFORE Better Auth deletes the
+ * `user` row (better-auth/dist/api/routes/update-user.mjs:309-311). The subject
+ * FKs (`personnel_competence`/`training_record`/`authorized_signatory`.user_id)
+ * are `ON DELETE SET NULL` (migration 0083) so the regulated rows are NOT
+ * cascade-wiped; this hook makes their survival deliberate and traceable:
+ *
+ *  (a) `personnel_competence`  → soft-delete (`deletedAt = now`), R2 key preserved.
+ *  (b) `training_record`       → soft-delete (`deletedAt = now`), R2 key preserved.
+ *  (c) `authorized_signatory`  → REVOKE (`status = REVOKED`, `revokedAt = now`) —
+ *      the §6.2.6 revoke semantics, not the dead `deletedAt` column. `revokedBy`
+ *      is left NULL: this is a self-service deletion and a FK to the dying user
+ *      would block the deletion.
+ *
+ * For each affected row we insert an audit row (`personnel_competence_audit_log`
+ * / `training_record_audit_log` / `authorized_signatory_audit_log`) whose
+ * `performed_by` = the dying user's id (these audit tables have NO FK on
+ * `performed_by`, so the row survives) and whose `changes` carries a full
+ * snapshot of the old row plus the user's name/email — the trail identifies the
+ * PERSON without the `user` row. All work runs in ONE transaction so the
+ * preservation + audit either both land or both roll back before deletion.
+ */
+export async function preserveRegulatedRecordsOnUserDeletion(
+  deletedUser: DeletedUserIdentity,
+): Promise<void> {
+  const db = getDb();
+  const now = new Date();
+  const reason = "Usuário excluído";
+  const identity = {
+    userId: deletedUser.id,
+    userName: deletedUser.name ?? null,
+    userEmail: deletedUser.email ?? null,
+  };
+
+  await db.transaction(async (tx) => {
+    // (a) personnel competence → soft-delete + audit (skip already soft-deleted).
+    const competences = await tx
+      .select()
+      .from(schema.personnelCompetence)
+      .where(
+        and(
+          eq(schema.personnelCompetence.userId, deletedUser.id),
+          isNull(schema.personnelCompetence.deletedAt),
+        ),
+      );
+    for (const row of competences) {
+      await tx
+        .update(schema.personnelCompetence)
+        .set({ deletedAt: now })
+        .where(eq(schema.personnelCompetence.id, row.id));
+      await tx.insert(schema.personnelCompetenceAuditLog).values({
+        competenceId: row.id,
+        action: "delete",
+        changes: {
+          personnelCompetence: { old: { ...row, ...identity }, new: null },
+        },
+        performedBy: deletedUser.id,
+        reason,
+      });
+    }
+
+    // (b) training record → soft-delete + audit (skip already soft-deleted).
+    const trainings = await tx
+      .select()
+      .from(schema.trainingRecord)
+      .where(
+        and(
+          eq(schema.trainingRecord.userId, deletedUser.id),
+          isNull(schema.trainingRecord.deletedAt),
+        ),
+      );
+    for (const row of trainings) {
+      await tx
+        .update(schema.trainingRecord)
+        .set({ deletedAt: now })
+        .where(eq(schema.trainingRecord.id, row.id));
+      await tx.insert(schema.trainingRecordAuditLog).values({
+        trainingRecordId: row.id,
+        action: "delete",
+        changes: {
+          trainingRecord: { old: { ...row, ...identity }, new: null },
+        },
+        performedBy: deletedUser.id,
+        reason,
+      });
+    }
+
+    // (c) authorized signatory → revoke + audit (skip already-revoked).
+    const signatories = await tx
+      .select()
+      .from(schema.authorizedSignatory)
+      .where(
+        and(
+          eq(schema.authorizedSignatory.userId, deletedUser.id),
+          ne(schema.authorizedSignatory.status, "REVOKED"),
+        ),
+      );
+    for (const row of signatories) {
+      await tx
+        .update(schema.authorizedSignatory)
+        .set({ status: "REVOKED", revokedAt: now })
+        .where(eq(schema.authorizedSignatory.id, row.id));
+      await tx.insert(schema.authorizedSignatoryAuditLog).values({
+        signatoryId: row.id,
+        action: "revoke",
+        changes: {
+          authorizedSignatory: { old: { ...row, ...identity }, new: null },
+        },
+        performedBy: deletedUser.id,
+        reason,
+      });
+    }
+  });
+}
 
 /**
  * Append a sign-in entry to the platform event log. Session creation is the

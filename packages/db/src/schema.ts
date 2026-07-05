@@ -8097,9 +8097,12 @@ export const personnelCompetence = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    // ISO/IEC 17025 §6.2 competence record. userId is nullable + ON DELETE SET
+    // NULL (migration 0083): a user self-deletion (Better Auth deleteUser) must
+    // NOT cascade-wipe this regulated record. The beforeDelete hook soft-deletes
+    // (deletedAt) + writes an audit row with an identity snapshot first, then the
+    // SET NULL lets the user row go while this row survives.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     assetTypeId: integer("asset_type_id").references(() => assetType.id, {
       onDelete: "set null",
     }),
@@ -8134,9 +8137,25 @@ export const personnelCompetence = pgTable(
     index("competence_asset_type_id_idx").on(table.assetTypeId),
     index("competence_status_idx").on(table.status),
     index("competence_expires_at_idx").on(table.expiresAt),
-    unique("competence_org_user_asset_type_uidx")
+    // CMP-07 rework (#692): true DDL is a PARTIAL unique index —
+    // `UNIQUE (organization_id, user_id, asset_type_id) NULLS NOT DISTINCT
+    // WHERE user_id IS NOT NULL` — so a tombstoned row (user_id NULL after a
+    // user's beforeDelete hook) never collides with another tombstone, while
+    // ACTIVE rows keep the "one org-wide (asset_type_id NULL) row per user"
+    // invariant. Confirmed (by reading the installed drizzle-orm@0.45.2
+    // IndexBuilder + drizzle-kit@0.31.7 SQL generator): `nullsNotDistinct()`
+    // exists ONLY on the `unique()` CONSTRAINT builder, and `.where()` exists
+    // ONLY on the `uniqueIndex()` builder — neither builder supports both, and
+    // drizzle-kit's DDL emitter never writes "NULLS NOT DISTINCT" for a
+    // `CREATE INDEX` statement (only for `ADD CONSTRAINT ... UNIQUE`). This
+    // declaration is therefore an APPROXIMATION for drizzle-kit's benefit
+    // (keeps the object named/documented); the real WHERE + NULLS NOT
+    // DISTINCT DDL is applied by migration 0083 (prod/dev) and by
+    // `apps/api/test/integration/extensions.sql` (test harness, run once
+    // after `drizzle-kit push` builds the per-run template DB).
+    uniqueIndex("competence_org_user_asset_type_uidx")
       .on(table.organizationId, table.userId, table.assetTypeId)
-      .nullsNotDistinct(),
+      .where(sql`${table.userId} is not null`),
   ],
 );
 
@@ -8155,9 +8174,11 @@ export const trainingRecord = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    // Nullable + ON DELETE SET NULL (migration 0083): a user self-deletion
+    // (Better Auth deleteUser) must NOT cascade-wipe this ISO/IEC 17025 §6.2.3
+    // training record (incl. the R2 certificate reference). The beforeDelete hook
+    // soft-deletes (deletedAt) + audits with an identity snapshot first.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     competenceId: integer("competence_id").references(
       () => personnelCompetence.id,
       { onDelete: "set null" },
@@ -8277,9 +8298,12 @@ export const authorizedSignatory = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    // Nullable + ON DELETE SET NULL (migration 0083): a user self-deletion
+    // (Better Auth deleteUser) must NOT cascade-wipe this ISO/IEC 17025 §6.2.6
+    // authorization history. The beforeDelete hook REVOKES the authorization
+    // (status REVOKED + revokedAt) + audits with an identity snapshot first, so
+    // the record survives with user_id NULL.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     assetTypeId: integer("asset_type_id").references(() => assetType.id, {
       onDelete: "set null",
     }),
@@ -8309,9 +8333,13 @@ export const authorizedSignatory = pgTable(
     index("authorized_signatory_asset_type_id_idx").on(table.assetTypeId),
     index("authorized_signatory_status_idx").on(table.status),
     index("authorized_signatory_expires_at_idx").on(table.expiresAt),
-    unique("authorized_signatory_org_user_asset_type_uidx")
+    // CMP-07 rework (#692): same partial-unique-index rationale as
+    // personnel_competence above — see that comment for the full explanation
+    // of why drizzle-orm/drizzle-kit cannot express `NULLS NOT DISTINCT` on a
+    // partial `uniqueIndex()`. Real DDL: migration 0083 + extensions.sql.
+    uniqueIndex("authorized_signatory_org_user_asset_type_uidx")
       .on(table.organizationId, table.userId, table.assetTypeId)
-      .nullsNotDistinct(),
+      .where(sql`${table.userId} is not null`),
   ],
 );
 

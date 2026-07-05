@@ -258,12 +258,15 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "Competência não encontrada" }, 404);
     }
 
-    // Get user details
-    const [userData] = await db
-      .select({ name: user.name, email: user.email })
-      .from(user)
-      .where(eq(user.id, comp.userId))
-      .limit(1);
+    // Get user details. userId is nullable since migration 0083 (the owning
+    // user may have been deleted, leaving user_id NULL); skip the lookup then.
+    const [userData] = comp.userId
+      ? await db
+          .select({ name: user.name, email: user.email })
+          .from(user)
+          .where(eq(user.id, comp.userId))
+          .limit(1)
+      : [];
 
     // Get asset type name
     let assetTypeName: string | null = null;
@@ -506,6 +509,18 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      // userId is nullable since migration 0083. A live (non-soft-deleted)
+      // competence always has an owning user, but guard the type: a competence
+      // whose user was deleted cannot receive training assignments.
+      if (!existing.userId) {
+        return c.json(
+          { error: "Competência sem usuário associado" },
+          400,
+        );
+      }
+
+      const existingUserId = existing.userId;
+
       // Link training records to this competence (must be same org + same user)
       for (const trId of input.trainingRecordIds) {
         const result = await db
@@ -515,7 +530,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(trainingRecord.id, trId),
               eq(trainingRecord.organizationId, memberData.organizationId),
-              eq(trainingRecord.userId, existing.userId),
+              eq(trainingRecord.userId, existingUserId),
               isNull(trainingRecord.deletedAt),
             ),
           )
