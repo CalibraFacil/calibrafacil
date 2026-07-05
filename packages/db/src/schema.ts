@@ -2719,6 +2719,16 @@ export const asset = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "cascade" }),
+    // Denormalized LAB organization owner (== customer.labOrganizationId). Lets
+    // tag uniqueness be enforced PER ORG — UNIQUE(lab_organization_id, tag) below
+    // — instead of globally, so two labs may reuse the same tag without a
+    // cross-tenant collision or existence oracle (SEC-03 / #638). Every asset
+    // write derives this from the in-scope customer's lab org; a customer's lab
+    // org never changes after creation, so the invariant holds. `onDelete:
+    // "cascade"` mirrors customer.labOrganizationId.
+    labOrganizationId: text("lab_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     // Dynamic Instrument Classification
     assetTypeId: integer("asset_type_id")
       .notNull()
@@ -2729,7 +2739,7 @@ export const asset = pgTable(
     manufacturer: text("manufacturer"), // e.g., "Mettler Toledo", "Fluke"
     model: text("model"), // e.g., "XPE205", "700G"
     serialNumber: text("serial_number").notNull(), // Manufacturer's serial number
-    tag: text("tag").notNull().unique(), // Internal Lab ID / Asset ID (unique across lab)
+    tag: text("tag").notNull(), // Internal Lab ID / Asset ID (unique per lab org — see asset_lab_org_tag_uidx)
     status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
     baseMeasurementUnit: text("base_measurement_unit").$type<MeasurementUnit>(),
     lastCalibrationDate: timestamp("last_calibration_date"),
@@ -2779,7 +2789,14 @@ export const asset = pgTable(
     index("asset_customer_id_idx").on(table.customerId),
     index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
-    uniqueIndex("asset_tag_uidx").on(table.tag),
+    // Tag is unique PER LAB ORG, not globally (SEC-03 / #638). This composite
+    // replaces the former global `asset_tag_unique` constraint + `asset_tag_uidx`
+    // index (both dropped in migration 0082). Its leftmost column also serves as
+    // the lab-org lookup index, so no separate lab_organization_id index is kept.
+    uniqueIndex("asset_lab_org_tag_uidx").on(
+      table.labOrganizationId,
+      table.tag,
+    ),
     // Partial index for the legal-verification recall sweep (migration 0075).
     index("asset_legal_verification_due_idx")
       .on(table.nextLegalVerificationDate)

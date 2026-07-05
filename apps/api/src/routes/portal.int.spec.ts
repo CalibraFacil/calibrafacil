@@ -6,6 +6,7 @@ import {
   assetType,
   calibrationRequest,
 } from "@calibra-facil/db/schema";
+import { sql } from "drizzle-orm";
 import {
   loginAsPortal,
   logoutPortal,
@@ -61,6 +62,8 @@ async function seedAsset(params: {
     .values({
       unitId: params.labUnitId,
       customerId: params.customerId,
+      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: params.name,
       serialNumber: `SN-${params.tag}`,

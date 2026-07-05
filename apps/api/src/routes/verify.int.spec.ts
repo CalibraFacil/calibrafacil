@@ -12,6 +12,7 @@ import {
   user,
   type JobStatus,
 } from "@calibra-facil/db/schema";
+import { sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +167,8 @@ async function seedVerifiableCert(params: {
     .values({
       unitId: unit.id,
       customerId: customerRow.id,
+      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
       assetTypeId: assetTypeRow.id,
       name: assetName,
       serialNumber: `SN-${orgId}`,

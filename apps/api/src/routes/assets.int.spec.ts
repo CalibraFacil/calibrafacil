@@ -8,7 +8,7 @@ import {
   organization,
   assetAuditLog,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -123,6 +123,10 @@ async function seedAsset(params: {
     .values({
       unitId: params.unitId,
       customerId: params.customerId,
+      // SEC-03b (#638): asset now carries its lab org (== the customer's) so
+      // UNIQUE(lab_organization_id, tag) is enforced per org. Derive it from the
+      // seeded customer to hold the invariant asset.lab_org == customer.lab_org.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: params.name ?? "Test Asset",
       serialNumber: `SN-${params.tag}`,
@@ -772,9 +776,10 @@ describe("assetsRouter — real DB + real middleware", () => {
   );
 
   // =========================================================================
-  // SEC-03a — dashboard tag-collision checks are org-scoped, and the residual
-  // GLOBAL DB unique (asset_tag_unique / asset_tag_uidx, not yet migrated to
-  // per-org) is caught and mapped to the SAME response the app check returns.
+  // SEC-03 — dashboard tag-collision checks are org-scoped. Same-org duplicates
+  // are rejected by the app check (with the per-org unique asset_lab_org_tag_uidx
+  // as a race backstop, mapped to the SAME response); cross-org duplicates now
+  // succeed (see the REQ-SEC-TAG-001 tests below).
   //
   // NOTE (response shape): the dashboard app check returns 400 { error } today
   // (public-api-v2 returns 409 { error: { code } }). Per "preserve all response
@@ -784,7 +789,7 @@ describe("assetsRouter — real DB + real middleware", () => {
 
   // REQ-SEC-TAG-003a (dashboard POST) ---------------------------------------
   it(
-    "REQ-SEC-TAG-003a: POST / with a tag already used in the SAME org → tag conflict (org-scoped check)",
+    "REQ-SEC-TAG-002/003a: POST / with a tag already used in the SAME org → tag conflict (org-scoped check)",
     async () => {
       const org = await seedOrg({ orgId: "org-a", role: "admin" });
       const typeId = await seedAssetType("type-sec-post-same");
@@ -817,7 +822,7 @@ describe("assetsRouter — real DB + real middleware", () => {
 
   // REQ-SEC-TAG-003a (dashboard PUT) ----------------------------------------
   it(
-    "REQ-SEC-TAG-003a: PUT /:id changing to a tag already used in the SAME org → tag conflict (org-scoped check)",
+    "REQ-SEC-TAG-002/003a: PUT /:id changing to a tag already used in the SAME org → tag conflict (org-scoped check)",
     async () => {
       const org = await seedOrg({ orgId: "org-a", role: "admin" });
       const typeId = await seedAssetType("type-sec-put-same");
@@ -848,12 +853,16 @@ describe("assetsRouter — real DB + real middleware", () => {
     },
   );
 
-  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (dashboard POST) --------------------
-  // Scoping proof: org A's check must NOT match org B's tag, so the create
-  // reaches the still-global DB unique and MUST be mapped to a tag conflict
-  // (never the generic 500 the outer catch returns for unexpected errors).
+  // REQ-SEC-TAG-001 (dashboard POST) — cross-org duplicate tag now SUCCEEDS --
+  // BEHAVIOR CHANGE (SEC-03b, #638): part (a) mapped a tag used only by another
+  // org to a 400 tag-conflict because the GLOBAL unique still fired. Now that
+  // uniqueness is per-org — UNIQUE(lab_organization_id, tag) — org A may reuse a
+  // tag org B already has: the create returns 201 and BOTH orgs hold the tag,
+  // each scoped to its own lab org. This closes the cross-tenant existence
+  // oracle (the 409-vs-201 signal that leaked another lab's tags). Intended flip
+  // of part (a)'s REQ-SEC-TAG-004a/005a assertion — not a test loosening.
   it(
-    "REQ-SEC-TAG-004a/005a: POST / with a tag used ONLY by another org → tag conflict, NOT 500",
+    "REQ-SEC-TAG-001: POST / with a tag used ONLY by another org → 201 (both orgs hold the tag)",
     async () => {
       const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
       const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
@@ -882,27 +891,29 @@ describe("assetsRouter — real DB + real middleware", () => {
         }),
       });
 
-      // The org-scoped check did NOT see org B's row (else it would conflict via
-      // the check with no insert); the insert hit the global unique and the catch
-      // mapped 23505 → the same tag-conflict response. Never a 500.
-      expect(res.status).not.toBe(500);
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toBe("Tag já está em uso");
+      expect(res.status).toBe(201);
 
-      // Org A created no row; org B's asset is the only holder of the tag.
+      // Both orgs now hold the tag, each scoped to its own lab org.
       const holders = await db
-        .select({ customerId: asset.customerId })
+        .select({
+          customerId: asset.customerId,
+          labOrganizationId: asset.labOrganizationId,
+        })
         .from(asset)
         .where(eq(asset.tag, "DASH-SHARED-POST"));
-      expect(holders).toHaveLength(1);
-      expect(holders[0]?.customerId).toBe(cidB);
+      expect(holders).toHaveLength(2);
+      expect(holders.map((h) => h.customerId).sort()).toEqual(
+        [cidA, cidB].sort(),
+      );
+      // REQ-SEC-TAG-006: the created row persists org A's lab org (== customer's).
+      const orgAHolder = holders.find((h) => h.customerId === cidA);
+      expect(orgAHolder?.labOrganizationId).toBe(orgA.orgId);
     },
   );
 
-  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (dashboard PUT) ---------------------
+  // REQ-SEC-TAG-001 (dashboard PUT) — cross-org tag change now SUCCEEDS ------
   it(
-    "REQ-SEC-TAG-004a/005a: PUT /:id changing to a tag used ONLY by another org → tag conflict, NOT 500",
+    "REQ-SEC-TAG-001: PUT /:id changing to a tag used ONLY by another org → 200 (per-org tag namespace)",
     async () => {
       const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
       const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
@@ -931,18 +942,20 @@ describe("assetsRouter — real DB + real middleware", () => {
         body: JSON.stringify({ tag: "DASH-SHARED-PUT" }),
       });
 
-      expect(res.status).not.toBe(500);
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toBe("Tag ja esta em uso");
+      expect(res.status).toBe(200);
 
-      // Org A's asset kept its own tag; org B still owns DASH-SHARED-PUT.
+      // Org A's asset took the tag; org B still owns its own row → both hold it.
       const [orgARow] = await db
         .select({ tag: asset.tag })
         .from(asset)
         .where(eq(asset.id, editableId))
         .limit(1);
-      expect(orgARow?.tag).toBe("DASH-A-PUT");
+      expect(orgARow?.tag).toBe("DASH-SHARED-PUT");
+      const holders = await db
+        .select({ id: asset.id })
+        .from(asset)
+        .where(eq(asset.tag, "DASH-SHARED-PUT"));
+      expect(holders).toHaveLength(2);
     },
   );
 });

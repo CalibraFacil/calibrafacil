@@ -1927,10 +1927,20 @@ async function applyCreateLocalAsset(
     }
   }
 
+  // SEC-03b (#638): tag uniqueness is per lab org — scope the collision check to
+  // the caller's org (join asset → customer) so a desktop-created asset whose tag
+  // is used only by ANOTHER lab is not falsely rejected (and cannot read/probe
+  // another tenant's tags). The DB now enforces UNIQUE(lab_organization_id, tag).
   const [existingAsset] = await db
     .select({ id: asset.id })
     .from(asset)
-    .where(eq(asset.tag, values.tag))
+    .innerJoin(customer, eq(asset.customerId, customer.id))
+    .where(
+      and(
+        eq(asset.tag, values.tag),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
     .limit(1);
   if (existingAsset) {
     return {
@@ -1973,6 +1983,11 @@ async function applyCreateLocalAsset(
       .values({
         unitId,
         customerId: values.customerId,
+        // SEC-03b (#638): denormalize the lab org from the (already org-scoped)
+        // customer so the desktop-synced asset satisfies UNIQUE(lab_org, tag).
+        // foundCustomer was fetched WHERE labOrganizationId =
+        // memberData.organizationId, so this is the device's own lab org.
+        labOrganizationId: foundCustomer.labOrganizationId,
         assetTypeId: values.assetTypeId,
         name: values.name,
         manufacturer: values.manufacturer || null,
@@ -2119,10 +2134,33 @@ async function applyUpdateLocalAsset(
   }
 
   if (values.tag && values.tag !== existingAsset.tag) {
+    // SEC-03b (#638): tag uniqueness is per lab org — scope this rename check to
+    // the caller's org (join asset -> customer), same pattern as
+    // applyCreateLocalAsset above. Unscoped, this both over-rejected a legitimate
+    // rename to a tag only ANOTHER lab holds (the DB composite unique would allow
+    // it) and re-exposed the cross-tenant existence oracle on the desktop-rename
+    // path.
+    //
+    // Race note: a same-org duplicate rename that slips past this check (a true
+    // concurrent race) would hit the DB composite unique (asset_lab_org_tag_uidx)
+    // and throw 23505 from the .update() below. That error propagates up to
+    // applyDesktopSyncEvent's outer try/catch, which already turns ANY thrown
+    // error into a structured `{ ok: false, code: "DESKTOP_SYNC_APPLY_FAILED",
+    // reason }` rejected-event result -- never a 500, never a crashed batch --
+    // so no additional isUniqueViolation mapping is added here. This mirrors
+    // applyCreateLocalAsset, which relies on the same generic catch for its own
+    // DB-level race and was not given an explicit 23505 mapping either.
     const [duplicateTag] = await db
       .select({ id: asset.id })
       .from(asset)
-      .where(and(eq(asset.tag, values.tag), isNull(asset.deletedAt)))
+      .innerJoin(customer, eq(asset.customerId, customer.id))
+      .where(
+        and(
+          eq(asset.tag, values.tag),
+          eq(customer.labOrganizationId, input.memberData.organizationId),
+          isNull(asset.deletedAt),
+        ),
+      )
       .limit(1);
 
     if (duplicateTag && duplicateTag.id !== existingAsset.id) {

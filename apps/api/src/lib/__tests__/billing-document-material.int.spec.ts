@@ -11,7 +11,7 @@ import {
   serviceOrderQuote,
   serviceOrderQuoteItem,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import { createBillingDocumentFromServiceOrder } from "../service-order-workflow";
@@ -67,6 +67,8 @@ async function seedBillingContext(tag: string) {
     .values({
       unitId: org.unitId,
       customerId: customerRow.id,
+      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
       assetTypeId: type.id,
       name: `Asset ${tag}`,
       serialNumber: `SN-${tag}`,

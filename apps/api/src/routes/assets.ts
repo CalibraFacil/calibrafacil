@@ -264,6 +264,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .values({
             unitId: member.activeUnitId,
             customerId: input.customerId,
+            // SEC-03b (#638): denormalize the lab org from the (already
+            // org-scoped) customer so UNIQUE(lab_organization_id, tag) is
+            // enforced per org. foundCustomer was fetched WHERE labOrganizationId
+            // = member.organizationId, so this is the caller's own lab org.
+            labOrganizationId: foundCustomer.labOrganizationId,
             assetTypeId: input.assetTypeId,
             name: input.name,
             manufacturer: input.manufacturer || null,
@@ -312,10 +317,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           201,
         );
       } catch (error) {
-        // SEC-03a: the org-scoped tag check above can no longer see another
-        // tenant's tag, but the GLOBAL DB unique (asset_tag_unique /
-        // asset_tag_uidx) still fires until the per-org migration lands. Map
-        // that 23505 to the SAME response the app check returns (never a 500).
+        // SEC-03b: the org-scoped tag check above ran first; this catch backstops
+        // a SAME-org race that slips past it and hits the per-org unique
+        // (asset_lab_org_tag_uidx → 23505). A cross-org duplicate no longer
+        // raises (different lab_organization_id). Map 23505 to the SAME response
+        // the app check returns (never a 500).
         if (isUniqueViolation(error)) {
           return c.json({ error: "Tag já está em uso" }, 400);
         }
@@ -898,10 +904,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           }),
         );
       } catch (error) {
-        // SEC-03a: the org-scoped tag check above can no longer see another
-        // tenant's tag, but the GLOBAL DB unique (asset_tag_unique /
-        // asset_tag_uidx) still fires until the per-org migration lands. Map
-        // that 23505 to the SAME response the app check returns (never a 500).
+        // SEC-03b: the org-scoped tag check above ran first; this catch backstops
+        // a SAME-org race that hits the per-org unique (asset_lab_org_tag_uidx →
+        // 23505). A cross-org duplicate no longer raises (different
+        // lab_organization_id). Map 23505 to the SAME response the app check
+        // returns (never a 500).
         if (isUniqueViolation(error)) {
           return c.json({ error: "Tag ja esta em uso" }, 400);
         }

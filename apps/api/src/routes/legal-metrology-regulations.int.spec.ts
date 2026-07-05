@@ -5,6 +5,7 @@ import {
   assetType,
   legalMetrologyRegulation,
 } from "@calibra-facil/db/schema";
+import { sql } from "drizzle-orm";
 import {
   LEGAL_METROLOGY_REGULATION_SEED,
   seedLegalMetrologyRegulations,
@@ -150,6 +151,8 @@ describe("legal-metrology regulation catalog — real DB", () => {
       .values({
         unitId: org.unitId,
         customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
         assetTypeId: type.id,
         name: "Hidrômetro do cliente",
         serialNumber: "SN-CATALOG-1",

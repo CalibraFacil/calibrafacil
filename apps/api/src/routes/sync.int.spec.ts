@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { syncRouter } from "./sync";
 import { db } from "@calibra-facil/db";
-import { customer, organization, user } from "@calibra-facil/db/schema";
+import {
+  asset,
+  assetType,
+  customer,
+  organization,
+  user,
+} from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -272,6 +278,271 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
       const body = await res.json();
       expect(body.accepted).toHaveLength(0);
       expect(body.rejected).toHaveLength(0);
+    },
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // REQ-SEC-TAG-006: the desktop sync CREATE path (create_local_asset) persists
+  // asset.lab_organization_id (denormalized from the device's own lab org), so a
+  // desktop-created asset satisfies the per-org UNIQUE(lab_organization_id, tag).
+  // Without setting it, the NOT NULL column would reject the insert (#638 / SEC-03b).
+  // ───────────────────────────────────────────────────────────────────────────
+  it(
+    "REQ-SEC-TAG-006: POST /push create_local_asset persists lab_organization_id (== the device's org)",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "operator" });
+      const customerId = await seedCustomerRow({
+        labOrgId: org.orgId,
+        clientOrgId: "client-a1",
+        name: "Acme",
+      });
+      const [type] = await db
+        .insert(assetType)
+        .values({ name: "Balança", slug: "balanca-sync", definition: [] })
+        .returning({ id: assetType.id });
+      if (!type) throw new Error("assetType insert failed");
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await syncRouter.request("/push", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: buildPushBody([
+          {
+            eventId: "evt-create-asset-006",
+            entityType: "asset",
+            entityId: "local-asset-1",
+            operation: "create_local_asset",
+            payload: {
+              customerId,
+              assetTypeId: type.id,
+              name: "Balança de Bancada",
+              serialNumber: "SN-SYNC-1",
+              tag: "SYNC-TAG-1",
+              // "Balança" trips the mass-asset heuristic → a base unit is required.
+              baseMeasurementUnit: "kg",
+            },
+            occurredAt: new Date().toISOString(),
+            actorUserId: org.userId,
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            idempotencyKey: "idem-create-asset-006",
+            localVersion: 0,
+          },
+        ]),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.rejected).toHaveLength(0);
+      expect(body.accepted).toHaveLength(1);
+
+      const [created] = await db
+        .select({
+          customerId: asset.customerId,
+          labOrganizationId: asset.labOrganizationId,
+        })
+        .from(asset)
+        .where(eq(asset.tag, "SYNC-TAG-1"))
+        .limit(1);
+      expect(created?.customerId).toBe(customerId);
+      expect(created?.labOrganizationId).toBe(org.orgId);
+    },
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // REQ-SEC-TAG-001 (desktop RENAME, cross-org): applyUpdateLocalAsset's tag
+  // collision check was still the GLOBAL, unscoped `WHERE tag=@tag` — the same
+  // bug class as the CREATE path above, on the rename path instead. Unscoped it
+  // over-rejected a rename to a tag only ANOTHER lab holds (the DB now only
+  // enforces UNIQUE(lab_organization_id, tag)) and re-exposed the cross-tenant
+  // existence oracle. RED today: the rename is rejected TAG_ALREADY_EXISTS even
+  // though org B, not org A, holds the tag.
+  // ───────────────────────────────────────────────────────────────────────────
+  it(
+    "REQ-SEC-TAG-001: POST /push update_local_asset rename to a tag used ONLY by another org → accepted, tag persisted",
+    async () => {
+      const orgA = await seedOrg({ orgId: "org-a", role: "operator" });
+      const orgB = await seedOrg({ orgId: "org-b", role: "operator" });
+
+      const customerA = await seedCustomerRow({
+        labOrgId: orgA.orgId,
+        clientOrgId: "client-a-rename-xorg",
+        name: "Acme",
+      });
+      const customerB = await seedCustomerRow({
+        labOrgId: orgB.orgId,
+        clientOrgId: "client-b-rename-xorg",
+        name: "Beta",
+      });
+      const [type] = await db
+        .insert(assetType)
+        .values({
+          name: "Instrumento",
+          slug: "instrumento-rename-xorg",
+          definition: [],
+        })
+        .returning({ id: assetType.id });
+      if (!type) throw new Error("assetType insert failed");
+
+      // Org B already holds the target tag.
+      await db.insert(asset).values({
+        unitId: orgB.unitId,
+        customerId: customerB,
+        labOrganizationId: orgB.orgId,
+        assetTypeId: type.id,
+        name: "Ativo Org B",
+        serialNumber: "SN-ORGB-RENAME",
+        tag: "XORG-RENAME-TARGET",
+        status: "ACTIVE",
+      });
+
+      // Org A's own asset, to be renamed.
+      const [ownAsset] = await db
+        .insert(asset)
+        .values({
+          unitId: orgA.unitId,
+          customerId: customerA,
+          labOrganizationId: orgA.orgId,
+          assetTypeId: type.id,
+          name: "Ativo Org A",
+          serialNumber: "SN-ORGA-RENAME",
+          tag: "ORGA-ORIGINAL-TAG",
+          status: "ACTIVE",
+        })
+        .returning({ id: asset.id });
+      if (!ownAsset) throw new Error("ownAsset insert failed");
+
+      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+      const res = await syncRouter.request("/push", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+        body: buildPushBody([
+          {
+            eventId: "evt-rename-xorg-001",
+            entityType: "asset",
+            entityId: "local-asset-rename-xorg",
+            operation: "update_local_asset",
+            payload: {
+              remoteId: ownAsset.id,
+              tag: "XORG-RENAME-TARGET",
+            },
+            occurredAt: new Date().toISOString(),
+            actorUserId: orgA.userId,
+            organizationId: orgA.orgId,
+            unitId: orgA.unitId,
+            idempotencyKey: "idem-rename-xorg-001",
+            localVersion: 0,
+          },
+        ]),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.rejected).toHaveLength(0);
+      expect(body.accepted).toHaveLength(1);
+
+      const [renamed] = await db
+        .select({ tag: asset.tag })
+        .from(asset)
+        .where(eq(asset.id, ownAsset.id))
+        .limit(1);
+      expect(renamed?.tag).toBe("XORG-RENAME-TARGET");
+
+      // Both orgs now hold the tag, each scoped to its own lab org.
+      const holders = await db
+        .select({ id: asset.id })
+        .from(asset)
+        .where(eq(asset.tag, "XORG-RENAME-TARGET"));
+      expect(holders).toHaveLength(2);
+    },
+  );
+
+  // REQ-SEC-TAG-002 (desktop RENAME, same-org) ------------------------------
+  it(
+    "REQ-SEC-TAG-002: POST /push update_local_asset rename to a tag already used in the SAME org → rejected, tag unchanged",
+    async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "operator" });
+      const customerId = await seedCustomerRow({
+        labOrgId: org.orgId,
+        clientOrgId: "client-a-rename-same",
+        name: "Acme",
+      });
+      const [type] = await db
+        .insert(assetType)
+        .values({
+          name: "Instrumento",
+          slug: "instrumento-rename-same",
+          definition: [],
+        })
+        .returning({ id: assetType.id });
+      if (!type) throw new Error("assetType insert failed");
+
+      // Another asset in the SAME org already holds the target tag.
+      await db.insert(asset).values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: type.id,
+        name: "Outro Ativo",
+        serialNumber: "SN-SAME-RENAME-OTHER",
+        tag: "SAME-ORG-TAKEN",
+        status: "ACTIVE",
+      });
+
+      const [ownAsset] = await db
+        .insert(asset)
+        .values({
+          unitId: org.unitId,
+          customerId,
+          labOrganizationId: org.orgId,
+          assetTypeId: type.id,
+          name: "Ativo a renomear",
+          serialNumber: "SN-SAME-RENAME-SELF",
+          tag: "SAME-ORG-ORIGINAL",
+          status: "ACTIVE",
+        })
+        .returning({ id: asset.id });
+      if (!ownAsset) throw new Error("ownAsset insert failed");
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await syncRouter.request("/push", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: buildPushBody([
+          {
+            eventId: "evt-rename-same-002",
+            entityType: "asset",
+            entityId: "local-asset-rename-same",
+            operation: "update_local_asset",
+            payload: {
+              remoteId: ownAsset.id,
+              tag: "SAME-ORG-TAKEN",
+            },
+            occurredAt: new Date().toISOString(),
+            actorUserId: org.userId,
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            idempotencyKey: "idem-rename-same-002",
+            localVersion: 0,
+          },
+        ]),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.accepted).toHaveLength(0);
+      expect(body.rejected).toHaveLength(1);
+      expect(body.rejected[0].code).toBe("TAG_ALREADY_EXISTS");
+
+      const [unchanged] = await db
+        .select({ tag: asset.tag })
+        .from(asset)
+        .where(eq(asset.id, ownAsset.id))
+        .limit(1);
+      expect(unchanged?.tag).toBe("SAME-ORG-ORIGINAL");
     },
   );
 

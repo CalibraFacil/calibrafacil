@@ -12,7 +12,7 @@ import {
   serviceOrderQuote,
   serviceOrderQuoteItem,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import {
@@ -87,6 +87,8 @@ async function seedAssetRow(params: {
     .values({
       unitId: params.unitId,
       customerId: params.customerId,
+      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: type.id,
       name: `Asset ${params.tag}`,
       serialNumber: `SN-${params.tag}`,

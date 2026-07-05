@@ -1289,10 +1289,11 @@ publicApiV2Router
             }).date
           : null;
 
-        // SEC-03a: the org-scoped check above can no longer see another tenant's
-        // tag, but the GLOBAL DB unique (asset_tag_unique / asset_tag_uidx) is
-        // still enforced until the per-org migration lands. Catch that 23505 and
-        // return the SAME 409 asset_tag_conflict the app check returns (never 500).
+        // SEC-03b: the org-scoped check above ran first; this catch backstops a
+        // SAME-org race that hits the per-org unique (asset_lab_org_tag_uidx →
+        // 23505). A cross-org duplicate no longer raises (different
+        // lab_organization_id). Return the SAME 409 asset_tag_conflict the app
+        // check returns (never 500).
         let created: typeof asset.$inferSelect | undefined;
         try {
           [created] = await db
@@ -1300,6 +1301,11 @@ publicApiV2Router
             .values({
               unitId,
               customerId: foundCustomer.id,
+              // SEC-03b (#638): denormalize the lab org from the (already
+              // org-scoped) customer so UNIQUE(lab_organization_id, tag) is
+              // per org. foundCustomer was fetched WHERE labOrganizationId =
+              // apiKey.organizationId, so this is the caller's own lab org.
+              labOrganizationId: foundCustomer.labOrganizationId,
               assetTypeId: input.assetTypeId,
               name: input.name,
               manufacturer: input.manufacturer || null,
@@ -1562,10 +1568,11 @@ publicApiV2Router
         };
       })();
 
-      // SEC-03a: the org-scoped check above can no longer see another tenant's
-      // tag, but the GLOBAL DB unique (asset_tag_unique / asset_tag_uidx) is
-      // still enforced until the per-org migration lands. Catch that 23505 and
-      // return the SAME 409 asset_tag_conflict the app check returns (never 500).
+      // SEC-03b: the org-scoped check above ran first; this catch backstops a
+      // SAME-org race that hits the per-org unique (asset_lab_org_tag_uidx →
+      // 23505). A cross-org duplicate no longer raises (different
+      // lab_organization_id). Return the SAME 409 asset_tag_conflict the app
+      // check returns (never 500).
       let updated: typeof asset.$inferSelect | undefined;
       try {
         [updated] = await db

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationJob } from "@calibra-facil/db/schema";
+import { sql } from "drizzle-orm";
 
 type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 import { loginAsPortal, logoutPortal } from "../../test/integration/setup";
@@ -40,6 +41,8 @@ async function seedAsset(params: {
     .values({
       unitId: params.labUnitId,
       customerId: params.customerId,
+      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: `Ativo ${params.tag}`,
       serialNumber: `SN-${params.tag}`,

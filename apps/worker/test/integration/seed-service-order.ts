@@ -81,6 +81,8 @@ export async function seedServiceOrder(params: {
     .values({
       unitId: params.unitId,
       customerId: customerRow.id,
+      // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+      labOrganizationId: params.organizationId,
       assetTypeId: assetTypeRow.id,
       name: params.assetName,
       serialNumber: `SN-${params.serviceOrderNumber}`,

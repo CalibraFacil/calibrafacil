@@ -125,6 +125,8 @@ export async function seedIssuableJob(params: {
     .values({
       unitId: params.unitId,
       customerId: customerRow.id,
+      // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+      labOrganizationId: params.organizationId,
       assetTypeId: assetTypeRow.id,
       name: "Balança Analítica",
       serialNumber: `SN-${jobNumber}`,

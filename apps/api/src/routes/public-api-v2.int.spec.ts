@@ -10,7 +10,7 @@ import {
   organization,
   organizationApiKey,
 } from "@calibra-facil/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -124,6 +124,10 @@ async function seedAssetRow(params: {
     .values({
       unitId: params.unitId,
       customerId: params.customerId,
+      // SEC-03b (#638): derive the lab org from the seeded customer so
+      // UNIQUE(lab_organization_id, tag) is per org (invariant asset.lab_org ==
+      // customer.lab_org).
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: `Asset ${params.tag}`,
       serialNumber: `SN-${params.tag}`,
@@ -157,6 +161,9 @@ async function seedAsset(params: {
     .values({
       unitId: params.unitId,
       customerId: params.customerId,
+      // SEC-03b: lab_organization_id is NOT NULL — derive it from the owning
+      // customer (invariant asset.lab_org == customer.lab_org).
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       assetTypeId: params.assetTypeId,
       name: `Instrumento ${params.tag}`,
       serialNumber: `SN-${params.tag}`,
@@ -400,6 +407,7 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       .values({
         unitId: orgA.unitId,
         customerId,
+        labOrganizationId: orgA.orgId, // SEC-03b (#638): per-org tag uniqueness
         assetTypeId: type!.id,
         name: "Balança 01",
         serialNumber: "SN-01",
@@ -438,13 +446,14 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   });
 
   // =========================================================================
-  // SEC-03a — tag collision checks are org-scoped, and the residual GLOBAL DB
-  // unique (asset_tag_unique / asset_tag_uidx, not yet migrated to per-org) is
-  // caught and mapped to the SAME 409 asset_tag_conflict the app check returns.
+  // SEC-03 — tag collision checks are org-scoped. Same-org duplicates are
+  // rejected (app check, with the per-org unique asset_lab_org_tag_uidx as a race
+  // backstop mapped to 409 asset_tag_conflict); cross-org duplicates now succeed
+  // (see the REQ-SEC-TAG-001 tests below).
   // =========================================================================
 
   // REQ-SEC-TAG-003a (public API POST) --------------------------------------
-  it("REQ-SEC-TAG-003a: POST /assets with a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
+  it("REQ-SEC-TAG-002/003a: POST /assets with a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
@@ -489,7 +498,7 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   });
 
   // REQ-SEC-TAG-003a (public API PUT) ---------------------------------------
-  it("REQ-SEC-TAG-003a: PUT /assets/:id changing to a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
+  it("REQ-SEC-TAG-002/003a: PUT /assets/:id changing to a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
@@ -529,10 +538,14 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     expect(body.error.code).toBe("asset_tag_conflict");
   });
 
-  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (public API POST) -------------------
-  // Scoping proof: org A's check must NOT match org B's tag, so the create
-  // reaches the still-global DB unique and MUST be mapped to 409 (never 500).
-  it("REQ-SEC-TAG-004a/005a: POST /assets with a tag used ONLY by another org → 409 asset_tag_conflict, NOT 500", async () => {
+  // REQ-SEC-TAG-001 (public API POST) — cross-org duplicate tag now SUCCEEDS -
+  // BEHAVIOR CHANGE (SEC-03b, #638): part (a) returned 409 for a tag used only
+  // by another org because the GLOBAL unique still fired. Now uniqueness is
+  // per-org — UNIQUE(lab_organization_id, tag) — so org A may reuse org B's tag:
+  // the create returns 201 and BOTH orgs hold the tag. This closes the
+  // cross-tenant existence oracle. Intended flip of part (a)'s 004a/005a
+  // assertion — not a test loosening.
+  it("REQ-SEC-TAG-001: POST /assets with a tag used ONLY by another org → 201 (both orgs hold the tag)", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
     await seedApiEntitlement({ orgId: orgA.orgId });
@@ -580,25 +593,25 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       }),
     });
 
-    // The org-scoped check did NOT see org B's row (else it would 409 via the
-    // check with no insert); the insert hit the global unique and the catch
-    // mapped 23505 → the same conflict response. Never a 500.
-    expect(res.status).not.toBe(500);
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.error.code).toBe("asset_tag_conflict");
+    expect(body.data.tag).toBe("SHARED-POST");
+    // REQ-SEC-TAG-006: the created row carries the caller's lab org.
+    expect(body.data.labOrganizationId).toBe(orgA.orgId);
 
-    // Org A created no row; org B's asset is the only holder of the tag.
+    // Both orgs now hold the tag, each scoped to its own lab org.
     const holders = await db
       .select({ customerId: asset.customerId })
       .from(asset)
       .where(eq(asset.tag, "SHARED-POST"));
-    expect(holders).toHaveLength(1);
-    expect(holders[0]?.customerId).toBe(customerB);
+    expect(holders).toHaveLength(2);
+    expect(holders.map((h) => h.customerId).sort()).toEqual(
+      [customerA, customerB].sort(),
+    );
   });
 
-  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (public API PUT) --------------------
-  it("REQ-SEC-TAG-004a/005a: PUT /assets/:id changing to a tag used ONLY by another org → 409 asset_tag_conflict, NOT 500", async () => {
+  // REQ-SEC-TAG-001 (public API PUT) — cross-org tag change now SUCCEEDS -----
+  it("REQ-SEC-TAG-001: PUT /assets/:id changing to a tag used ONLY by another org → 200 (per-org tag namespace)", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
     await seedApiEntitlement({ orgId: orgA.orgId });
@@ -641,18 +654,20 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       body: JSON.stringify({ tag: "SHARED-PUT" }),
     });
 
-    expect(res.status).not.toBe(500);
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body.error.code).toBe("asset_tag_conflict");
+    expect(res.status).toBe(200);
 
-    // Org A's asset kept its own tag; org B still owns SHARED-PUT.
+    // Org A's asset took the tag; org B still owns its own row → both hold it.
     const [orgARow] = await db
       .select({ tag: asset.tag })
       .from(asset)
       .where(eq(asset.id, editableId))
       .limit(1);
-    expect(orgARow?.tag).toBe("ORG-A-PUT");
+    expect(orgARow?.tag).toBe("SHARED-PUT");
+    const holders = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(eq(asset.tag, "SHARED-PUT"));
+    expect(holders).toHaveLength(2);
   });
 
   // REQ-CMP-AUD-010a [HIGH RISK] (#692 / CMP-07, PUBLIC API surface): deleting
