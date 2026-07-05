@@ -94,6 +94,43 @@ async function seedCustomer(params: {
   return row.id;
 }
 
+/**
+ * Seed an asset type with no required spec fields. A NON-mass name/slug is used
+ * on purpose so POST /assets does not demand a mass base-measurement unit —
+ * these specs exercise the tag-collision path, not unit resolution.
+ */
+async function seedAssetTypeRow(slug: string): Promise<number> {
+  const [row] = await db
+    .insert(assetType)
+    .values({ name: "Test Instrument", slug, definition: [] })
+    .returning({ id: assetType.id });
+  if (!row) throw new Error("seedAssetTypeRow: insert failed");
+  return row.id;
+}
+
+/** Seed an asset owned by a unit + customer with a given tag. Returns the id. */
+async function seedAssetRow(params: {
+  unitId: number;
+  customerId: number;
+  assetTypeId: number;
+  tag: string;
+}): Promise<number> {
+  const [row] = await db
+    .insert(asset)
+    .values({
+      unitId: params.unitId,
+      customerId: params.customerId,
+      assetTypeId: params.assetTypeId,
+      name: `Asset ${params.tag}`,
+      serialNumber: `SN-${params.tag}`,
+      tag: params.tag,
+      status: "ACTIVE",
+    })
+    .returning({ id: asset.id });
+  if (!row) throw new Error("seedAssetRow: insert failed");
+  return row.id;
+}
+
 // ---------------------------------------------------------------------------
 
 describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () => {
@@ -362,5 +399,223 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     expect(row?.nextCalibrationDate?.toISOString()).toBe(
       "2027-06-01T00:00:00.000Z",
     );
+  });
+
+  // =========================================================================
+  // SEC-03a — tag collision checks are org-scoped, and the residual GLOBAL DB
+  // unique (asset_tag_unique / asset_tag_uidx, not yet migrated to per-org) is
+  // caught and mapped to the SAME 409 asset_tag_conflict the app check returns.
+  // =========================================================================
+
+  // REQ-SEC-TAG-003a (public API POST) --------------------------------------
+  it("REQ-SEC-TAG-003a: POST /assets with a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-a",
+      scopes: ["assets:write"],
+    });
+    const customerId = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+      name: "Acme",
+    });
+    const typeId = await seedAssetTypeRow("type-post-same-org");
+    // An existing asset in org A already owns the tag.
+    await seedAssetRow({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId: typeId,
+      tag: "DUP-SAME-ORG",
+    });
+
+    const res = await publicApiV2Router.request("/assets", {
+      method: "POST",
+      headers: {
+        "x-api-key": rawKey,
+        "content-type": "application/json",
+        "idempotency-key": "idem-post-same-org",
+      },
+      body: JSON.stringify({
+        customerId,
+        assetTypeId: typeId,
+        name: "New One",
+        serialNumber: "SN-NEW",
+        tag: "DUP-SAME-ORG",
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("asset_tag_conflict");
+  });
+
+  // REQ-SEC-TAG-003a (public API PUT) ---------------------------------------
+  it("REQ-SEC-TAG-003a: PUT /assets/:id changing to a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-a",
+      scopes: ["assets:write"],
+    });
+    const customerId = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+      name: "Acme",
+    });
+    const typeId = await seedAssetTypeRow("type-put-same-org");
+    // Two assets in org A: T1 (the one we edit) and T2 (the taken tag).
+    const editableId = await seedAssetRow({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId: typeId,
+      tag: "PUT-T1",
+    });
+    await seedAssetRow({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId: typeId,
+      tag: "PUT-T2",
+    });
+
+    const res = await publicApiV2Router.request(`/assets/${editableId}`, {
+      method: "PUT",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ tag: "PUT-T2" }),
+    });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("asset_tag_conflict");
+  });
+
+  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (public API POST) -------------------
+  // Scoping proof: org A's check must NOT match org B's tag, so the create
+  // reaches the still-global DB unique and MUST be mapped to 409 (never 500).
+  it("REQ-SEC-TAG-004a/005a: POST /assets with a tag used ONLY by another org → 409 asset_tag_conflict, NOT 500", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const orgB = await seedOrg({ orgId: "org-b" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-a",
+      scopes: ["assets:write"],
+    });
+
+    // Org B owns the tag. Org A has no asset with it.
+    const customerB = await seedCustomer({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b1",
+      name: "Beta",
+    });
+    const typeB = await seedAssetTypeRow("type-post-xorg-b");
+    await seedAssetRow({
+      unitId: orgB.unitId,
+      customerId: customerB,
+      assetTypeId: typeB,
+      tag: "SHARED-POST",
+    });
+
+    const customerA = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+      name: "Acme",
+    });
+    const typeA = await seedAssetTypeRow("type-post-xorg-a");
+
+    const res = await publicApiV2Router.request("/assets", {
+      method: "POST",
+      headers: {
+        "x-api-key": rawKey,
+        "content-type": "application/json",
+        "idempotency-key": "idem-post-xorg",
+      },
+      body: JSON.stringify({
+        customerId: customerA,
+        assetTypeId: typeA,
+        name: "Org A Asset",
+        serialNumber: "SN-A-XORG",
+        tag: "SHARED-POST",
+      }),
+    });
+
+    // The org-scoped check did NOT see org B's row (else it would 409 via the
+    // check with no insert); the insert hit the global unique and the catch
+    // mapped 23505 → the same conflict response. Never a 500.
+    expect(res.status).not.toBe(500);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("asset_tag_conflict");
+
+    // Org A created no row; org B's asset is the only holder of the tag.
+    const holders = await db
+      .select({ customerId: asset.customerId })
+      .from(asset)
+      .where(eq(asset.tag, "SHARED-POST"));
+    expect(holders).toHaveLength(1);
+    expect(holders[0]?.customerId).toBe(customerB);
+  });
+
+  // REQ-SEC-TAG-004a + REQ-SEC-TAG-005a (public API PUT) --------------------
+  it("REQ-SEC-TAG-004a/005a: PUT /assets/:id changing to a tag used ONLY by another org → 409 asset_tag_conflict, NOT 500", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const orgB = await seedOrg({ orgId: "org-b" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-a",
+      scopes: ["assets:write"],
+    });
+
+    const customerB = await seedCustomer({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b1",
+      name: "Beta",
+    });
+    const typeB = await seedAssetTypeRow("type-put-xorg-b");
+    await seedAssetRow({
+      unitId: orgB.unitId,
+      customerId: customerB,
+      assetTypeId: typeB,
+      tag: "SHARED-PUT",
+    });
+
+    const customerA = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+      name: "Acme",
+    });
+    const typeA = await seedAssetTypeRow("type-put-xorg-a");
+    const editableId = await seedAssetRow({
+      unitId: orgA.unitId,
+      customerId: customerA,
+      assetTypeId: typeA,
+      tag: "ORG-A-PUT",
+    });
+
+    const res = await publicApiV2Router.request(`/assets/${editableId}`, {
+      method: "PUT",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ tag: "SHARED-PUT" }),
+    });
+
+    expect(res.status).not.toBe(500);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("asset_tag_conflict");
+
+    // Org A's asset kept its own tag; org B still owns SHARED-PUT.
+    const [orgARow] = await db
+      .select({ tag: asset.tag })
+      .from(asset)
+      .where(eq(asset.id, editableId))
+      .limit(1);
+    expect(orgARow?.tag).toBe("ORG-A-PUT");
   });
 });

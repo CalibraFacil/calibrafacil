@@ -24,6 +24,7 @@ import {
   type MemberData,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { isUniqueViolation } from "../lib/db-errors";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
@@ -204,11 +205,19 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           }
         }
 
-        // Check if tag is unique
+        // Check if tag is unique. SEC-03a: scope to the caller's org (join
+        // asset → customer) so it cannot read another tenant's assets. The
+        // residual GLOBAL DB unique is caught by the outer catch below.
         const [existingAsset] = await db
-          .select()
+          .select({ id: asset.id })
           .from(asset)
-          .where(eq(asset.tag, input.tag))
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(asset.tag, input.tag),
+              eq(customer.labOrganizationId, member.organizationId),
+            ),
+          )
           .limit(1);
 
         if (existingAsset) {
@@ -303,6 +312,13 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           201,
         );
       } catch (error) {
+        // SEC-03a: the org-scoped tag check above can no longer see another
+        // tenant's tag, but the GLOBAL DB unique (asset_tag_unique /
+        // asset_tag_uidx) still fires until the per-org migration lands. Map
+        // that 23505 to the SAME response the app check returns (never a 500).
+        if (isUniqueViolation(error)) {
+          return c.json({ error: "Tag já está em uso" }, 400);
+        }
         console.error("Error creating asset:", error);
         return c.json({ error: "Erro ao criar ativo" }, 500);
       }
@@ -700,12 +716,21 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           linkedCustomerId = linkedCustomer.id;
         }
 
-        // Check if tag is being changed and if it's unique
+        // Check if tag is being changed and if it's unique. SEC-03a: scope to
+        // the caller's org (join asset → customer) so it cannot read another
+        // tenant's assets. The residual GLOBAL DB unique is caught by the outer
+        // catch below.
         if (input.tag && input.tag !== existingAsset.tag) {
           const [duplicateTag] = await db
-            .select()
+            .select({ id: asset.id })
             .from(asset)
-            .where(eq(asset.tag, input.tag))
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.tag, input.tag),
+                eq(customer.labOrganizationId, member.organizationId),
+              ),
+            )
             .limit(1);
 
           if (duplicateTag) {
@@ -873,6 +898,13 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           }),
         );
       } catch (error) {
+        // SEC-03a: the org-scoped tag check above can no longer see another
+        // tenant's tag, but the GLOBAL DB unique (asset_tag_unique /
+        // asset_tag_uidx) still fires until the per-org migration lands. Map
+        // that 23505 to the SAME response the app check returns (never a 500).
+        if (isUniqueViolation(error)) {
+          return c.json({ error: "Tag ja esta em uso" }, 400);
+        }
         console.error("Error updating asset:", error);
         return c.json({ error: "Erro ao atualizar ativo" }, 500);
       }
