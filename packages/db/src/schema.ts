@@ -6710,6 +6710,14 @@ export const commercialOffer = pgTable(
       onDelete: "set null",
     }),
     reissuedFromOfferId: text("reissued_from_offer_id"),
+    // Dual-control link (DOM-04, issue #657): the APPROVED maker-checker
+    // `approval_request` that authorized a money-touching cancel of this offer.
+    // Nullable — existing/non-canceled offers carry null. ON DELETE SET NULL so
+    // purging the approval row never erases the offer's cancel record.
+    approvalRequestId: integer("approval_request_id").references(
+      () => approvalRequest.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -6721,6 +6729,7 @@ export const commercialOffer = pgTable(
     index("commercial_offer_deal_idx").on(table.dealId),
     index("commercial_offer_status_idx").on(table.status),
     index("commercial_offer_kind_idx").on(table.kind),
+    index("commercial_offer_approval_request_idx").on(table.approvalRequestId),
     uniqueIndex("commercial_offer_provider_checkout_uidx").on(
       table.providerCheckoutId,
     ),

@@ -359,10 +359,15 @@ export const backofficeCommercialRouter = new Hono<{
       const session = c.get("session");
       const offerId = c.req.param("offerId");
       const input = c.req.valid("json");
+      // DOM-04 (#657): dual-control gate lives in the service — it rejects with a
+      // named 403 (changing nothing) unless a linked, APPROVED, distinct-identity
+      // approvalRequest authorizes this money-touching cancel, then persists the
+      // link on the offer.
       const offer = await cancelCommercialOffer(
         offerId,
         input.reason,
         session.user.id,
+        input.approvalRequestId,
       );
 
       await logCommercialEvent({
@@ -373,6 +378,7 @@ export const backofficeCommercialRouter = new Hono<{
         details: {
           reason: input.reason,
           organizationId: offer.organizationId,
+          approvalRequestId: offer.approvalRequestId,
         },
       });
 

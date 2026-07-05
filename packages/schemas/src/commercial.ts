@@ -131,6 +131,12 @@ export const SyncBillingCustomerSchema = z.object({
 
 export const CancelCommercialOfferSchema = z.object({
   reason: z.string().trim().min(3).max(500),
+  // DOM-04 (#657): the APPROVED maker-checker `approval_request` that authorizes
+  // this money-touching cancel. Optional at the schema layer so a request with no
+  // approval reaches the service and is rejected there with the named 403
+  // dual-control error (REQ-DOM-DC-001) rather than a generic 400 validation
+  // failure.
+  approvalRequestId: z.number().int().positive().optional(),
 });
 
 export const ReissueCommercialOfferSchema = z.object({
