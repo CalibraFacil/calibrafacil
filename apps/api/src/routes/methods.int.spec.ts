@@ -53,6 +53,8 @@ import {
   user,
   member,
   subscription,
+  type MethodInputField,
+  type MethodFormula,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -116,6 +118,14 @@ async function seedMethod(params: {
   version?: number;
   nameSuffix?: string;
   assetTypeId?: number | null;
+  // DOM-10: allow seeding a method with an ALREADY-STORED dimensional
+  // incoherence directly (bypassing POST/PUT), so the request-approval,
+  // quality-approve and publish gates can be exercised on a pre-existing bad
+  // row — the scenario those routes must catch that POST/PUT structurally
+  // cannot (they only ever see net-new/edited shapes, never a row that was
+  // incoherent before the gate existed).
+  dataFields?: MethodInputField[];
+  formulas?: MethodFormula[];
 }): Promise<number> {
   const name = `Método Teste ${params.nameSuffix ?? params.orgId}`;
   const [row] = await db
@@ -127,8 +137,8 @@ async function seedMethod(params: {
       description: "",
       version: params.version ?? 1,
       status: params.status,
-      dataFields: MINIMAL_DATA_FIELDS,
-      formulas: [],
+      dataFields: params.dataFields ?? MINIMAL_DATA_FIELDS,
+      formulas: params.formulas ?? [],
       validations: [],
       accreditedScope: false,
       createdBy: params.createdBy,
@@ -856,27 +866,36 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   // dimension-bearing constants (Magnus) — writes exactly as before.
   // =========================================================================
 
+  // Typed (not `as const`) so the SAME fixture can be spread into a POST/PUT
+  // JSON body AND passed straight to `seedMethod`'s typed dataFields/formulas
+  // (for the request-approval/quality-approve/publish deny tests, which need
+  // an ALREADY-STORED incoherent row rather than one submitted through
+  // POST/PUT).
+  const DIMENSIONALLY_BAD_DATA_FIELDS: MethodInputField[] = [
+    {
+      key: "massa",
+      label: "Massa",
+      type: "number",
+      required: true,
+      unit: "g",
+      defaultValue: 0.0,
+    },
+    {
+      key: "tensao",
+      label: "Tensão",
+      type: "number",
+      required: true,
+      unit: "V",
+      defaultValue: 0.0,
+    },
+  ];
+  const DIMENSIONALLY_BAD_FORMULAS: MethodFormula[] = [
+    { outputKey: "erro", expression: "massa + tensao", unit: "g" },
+  ];
   const DIMENSIONALLY_BAD_FORMULA = {
-    dataFields: [
-      {
-        key: "massa",
-        label: "Massa",
-        type: "number",
-        required: true,
-        unit: "g",
-        defaultValue: 0.0,
-      },
-      {
-        key: "tensao",
-        label: "Tensão",
-        type: "number",
-        required: true,
-        unit: "V",
-        defaultValue: 0.0,
-      },
-    ],
-    formulas: [{ outputKey: "erro", expression: "massa + tensao", unit: "g" }],
-  } as const;
+    dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+    formulas: DIMENSIONALLY_BAD_FORMULAS,
+  };
 
   // Magnus saturation-vapour-pressure: t[°C] → hPa. The constants are
   // dimension-bearing literals (wildcards unified by context), so a correct
@@ -1072,6 +1091,7 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       // Row unchanged: still the seeded MINIMAL_DATA_FIELDS + empty formulas.
       const [row] = await db
         .select({
+          dataFields: calibrationMethod.dataFields,
           formulas: calibrationMethod.formulas,
           status: calibrationMethod.status,
         })
@@ -1079,6 +1099,191 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
         .where(eq(calibrationMethod.id, methodId));
       expect(row?.status).toBe("DRAFT");
       expect(row?.formulas).toEqual([]);
+      expect(row?.dataFields).toEqual(MINIMAL_DATA_FIELDS);
     },
   );
+
+  // =========================================================================
+  // REQ-DIM-201 [HIGH RISK] — deny tests for the transition gates
+  // (request-approval / quality-approve / publish) against a PRE-EXISTING
+  // incoherent method row.
+  //
+  // The POST/PUT deny tests above can only ever exercise a NET-NEW or
+  // freshly-edited shape (they always go through the gated create/update
+  // handlers). They CANNOT exercise the scenario where a row was written
+  // BEFORE the gate existed (or slipped through some other path) and is later
+  // pushed through request-approval / quality-approve / publish — the exact
+  // regulatory invariant DOM-10 must hold: a stale incoherent method can never
+  // reach PUBLISHED. `seedMethod` here inserts the incoherent
+  // massa[g]+tensao[V] row DIRECTLY, bypassing POST/PUT entirely.
+  // =========================================================================
+
+  it(
+    "REQ-DIM-201: request-approval on a PRE-EXISTING incoherent DRAFT → 422 DIMENSIONAL_ERROR; stays DRAFT",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim-ra",
+        userId: "user-dim-ra",
+      });
+      // assetTypeId required: methodRecordToDraft maps a null assetTypeId to
+      // `undefined`, which assertSafeUnknown rejects.
+      const assetTypeId = await seedAssetType();
+      const methodId = await seedMethod({
+        orgId: org.orgId,
+        createdBy: org.userId,
+        status: "DRAFT",
+        nameSuffix: "ra-incoerente",
+        assetTypeId,
+        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+        formulas: DIMENSIONALLY_BAD_FORMULAS,
+      });
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await methodsRouter.request(
+        `/${methodId}/request-approval`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          // sampleData makes the (dimension-blind) engine compile/preview pass,
+          // so the DIMENSIONAL gate — not PREVIEW_FAILED — is what's exercised.
+          body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+        },
+      );
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.code).toBe("DIMENSIONAL_ERROR");
+      expect(body.diagnostics[0].formulaId).toBe("erro");
+
+      const [row] = await db
+        .select({ status: calibrationMethod.status })
+        .from(calibrationMethod)
+        .where(eq(calibrationMethod.id, methodId));
+      expect(row?.status).toBe("DRAFT");
+    },
+  );
+
+  it(
+    "REQ-DIM-201: quality-approve on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422; status unchanged",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim-qa",
+        userId: "user-admin-dim-qa",
+        role: "admin",
+      });
+      const ownerId = "user-owner-dim-qa";
+      await seedExtraMember({
+        userId: ownerId,
+        orgId: "org-dim-qa",
+        role: "owner",
+      });
+      const assetTypeId = await seedAssetType();
+
+      const methodId = await seedMethod({
+        orgId: "org-dim-qa",
+        createdBy: org.userId,
+        status: "TECHNICAL_REVIEWED",
+        technicalReviewedBy: org.userId, // admin reviewed; owner approves (four-eyes)
+        assetTypeId,
+        nameSuffix: "qa-incoerente",
+        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+        formulas: DIMENSIONALLY_BAD_FORMULAS,
+      });
+
+      loginAs({ userId: ownerId, organizationId: "org-dim-qa" });
+      const res = await methodsRouter.request(
+        `/${methodId}/quality-approve`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+        },
+      );
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.code).toBe("DIMENSIONAL_ERROR");
+      expect(body.diagnostics[0].formulaId).toBe("erro");
+
+      const [row] = await db
+        .select({ status: calibrationMethod.status })
+        .from(calibrationMethod)
+        .where(eq(calibrationMethod.id, methodId));
+      expect(row?.status).toBe("TECHNICAL_REVIEWED");
+    },
+  );
+
+  it(
+    "REQ-DIM-201 [MANDATORY]: POST /:id/publish on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422 DIMENSIONAL_ERROR; status NEVER reaches PUBLISHED",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim-pub",
+        userId: "user-admin-dim-pub",
+        role: "admin",
+      });
+      const publisherId = "user-owner-dim-pub";
+      await seedExtraMember({
+        userId: publisherId,
+        orgId: "org-dim-pub",
+        role: "owner",
+      });
+      const assetTypeId = await seedAssetType();
+
+      const methodId = await seedMethod({
+        orgId: "org-dim-pub",
+        createdBy: org.userId,
+        status: "TECHNICAL_REVIEWED",
+        technicalReviewedBy: org.userId, // admin reviewed; owner publishes (four-eyes)
+        assetTypeId,
+        nameSuffix: "pub-incoerente",
+        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+        formulas: DIMENSIONALLY_BAD_FORMULAS,
+      });
+
+      loginAs({ userId: publisherId, organizationId: "org-dim-pub" });
+      const res = await methodsRouter.request(`/${methodId}/publish`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.code).toBe("DIMENSIONAL_ERROR");
+      expect(body.diagnostics[0].formulaId).toBe("erro");
+      expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
+
+      // The regulatory invariant: this method NEVER reaches PUBLISHED.
+      const [row] = await db
+        .select({
+          status: calibrationMethod.status,
+          publishedAt: calibrationMethod.publishedAt,
+        })
+        .from(calibrationMethod)
+        .where(eq(calibrationMethod.id, methodId));
+      expect(row?.status).toBe("TECHNICAL_REVIEWED");
+      expect(row?.status).not.toBe("PUBLISHED");
+      expect(row?.publishedAt).toBeNull();
+    },
+  );
+
+  // =========================================================================
+  // REQ-DIM-201 — POST /from-template: DOCUMENTED UNREACHABLE (not a deny test)
+  //
+  // `FromTemplateSchema` (packages/schemas) accepts ONLY `templateKey`,
+  // `assetTypeId`, `name` and the adoption `acknowledgements` — it has NO
+  // `dataFields`/`formulas`/`measurementModels` fields, and the handler always
+  // builds the new method from `template.productDefinition` (the CURATED
+  // registry entry), never from client-supplied field/formula data. There is
+  // therefore no payload an attacker/caller can send through THIS route to
+  // instantiate a dimensionally-incoherent method — the only way an
+  // incoherent method could reach this route is if a REGISTERED TEMPLATE
+  // itself were incoherent, and that is exactly what
+  // packages/method-templates/src/dimensional-templates.test.ts
+  // ("every platform template in the registry produces zero diagnostics")
+  // already asserts, over every `TEMPLATE_REGISTRY` entry, on every test run.
+  // The from-template gate (dimensionalGateError(def) in methods.ts) is
+  // therefore defence-in-depth for a future incoherent template, not something
+  // reachable — hence no deny test here.
+  // =========================================================================
 });

@@ -601,6 +601,17 @@ function isMassCompositionQuantityMode(
   return value === "linear_per_item_then_rss" || value === "profile_linear";
 }
 
+// BUGFIX (surfaced while writing DOM-10 deny tests, unrelated to the
+// dimensional gate itself — see slice-3 report): this function used to set
+// `outputUnit` / `reporting` / `scope` / `metadata` unconditionally, which put
+// an EXPLICIT `undefined` value on the returned object whenever a formula
+// lacked that optional field. `parseMethodDraft` → `assertSafeUnknown` rejects
+// any object key whose value is literally `undefined` (vs. the key being
+// absent), so `methodRecordToDraft` — used by request-approval, quality-approve
+// and publish — 500'd for ANY stored method with a formula missing
+// unit/reporting/scope/metadata (i.e. most real formulas). Conditional-spread
+// each optional field instead, mirroring `methodInputToDefinitionInput`'s
+// existing `...(metadata ? { metadata } : {})` convention above.
 function methodFormulaToDefinitionFormula(formula: unknown) {
   const record = recordFromUnknown(formula);
   const key =
@@ -609,22 +620,28 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
       : typeof record.key === "string"
         ? record.key
         : "formula";
+  const outputUnit =
+    typeof record.unit === "string"
+      ? record.unit
+      : typeof record.outputUnit === "string"
+        ? record.outputUnit
+        : undefined;
+  const reporting = methodFormulaReportingToDefinitionReporting(
+    record.reporting,
+  );
+  const scope = methodFormulaScopeToDefinitionScope(record.scope);
+  const metadata = safeDefinitionMetadata(record.metadata);
 
   return {
     key,
     label: typeof record.label === "string" ? record.label : key,
     expression: typeof record.expression === "string" ? record.expression : "0",
-    outputUnit:
-      typeof record.unit === "string"
-        ? record.unit
-        : typeof record.outputUnit === "string"
-          ? record.outputUnit
-          : undefined,
     outputKind: "derived_quantity" as const,
     required: true,
-    reporting: methodFormulaReportingToDefinitionReporting(record.reporting),
-    scope: methodFormulaScopeToDefinitionScope(record.scope),
-    metadata: safeDefinitionMetadata(record.metadata),
+    ...(outputUnit ? { outputUnit } : {}),
+    ...(reporting ? { reporting } : {}),
+    ...(scope ? { scope } : {}),
+    ...(metadata ? { metadata } : {}),
   };
 }
 
