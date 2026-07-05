@@ -22,6 +22,7 @@
     "db:seed:calibrafacil-conta-azul-demo": "node ./scripts/seed-calibrafacil-conta-azul-demo.mjs",
     "db:seed:legal-metrology-regulations": "tsx ./src/seed-legal-metrology-regulations.ts",
     "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs",
+    "db:audit:method-dimensions": "tsx ./scripts/audit-method-dimensions.mjs",
     "lint": "oxlint",
     "check-types": "tsgo --noEmit"
   },

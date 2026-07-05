@@ -845,4 +845,240 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       });
     },
   );
+
+  // =========================================================================
+  // REQ-DIM-201 [HIGH RISK] / REQ-DIM-202: dimensional publish gate (DOM-10)
+  //
+  // A method WRITE that (re)defines fields/formulas with a dimensional
+  // incoherence (e.g. massa[g] + tensao[V]) must be rejected with the named
+  // DIMENSIONAL_ERROR + per-formula diagnostics, and the row must be unchanged.
+  // A dimensionally coherent method — including empirical formulas with
+  // dimension-bearing constants (Magnus) — writes exactly as before.
+  // =========================================================================
+
+  const DIMENSIONALLY_BAD_FORMULA = {
+    dataFields: [
+      {
+        key: "massa",
+        label: "Massa",
+        type: "number",
+        required: true,
+        unit: "g",
+        defaultValue: 0.0,
+      },
+      {
+        key: "tensao",
+        label: "Tensão",
+        type: "number",
+        required: true,
+        unit: "V",
+        defaultValue: 0.0,
+      },
+    ],
+    formulas: [{ outputKey: "erro", expression: "massa + tensao", unit: "g" }],
+  } as const;
+
+  // Magnus saturation-vapour-pressure: t[°C] → hPa. The constants are
+  // dimension-bearing literals (wildcards unified by context), so a correct
+  // empirical formula must NOT be flagged.
+  const MAGNUS_METHOD = {
+    dataFields: [
+      {
+        key: "t",
+        label: "Temperatura",
+        type: "number",
+        required: true,
+        unit: "°C",
+        defaultValue: 20.0,
+      },
+    ],
+    formulas: [
+      {
+        outputKey: "es",
+        expression: "6.112 * exp(17.62 * t / (243.12 + t))",
+        unit: "hPa",
+      },
+    ],
+  } as const;
+
+  it(
+    "REQ-DIM-201: POST / with massa[g] + tensao[V] → 422 DIMENSIONAL_ERROR; no row persisted",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim",
+        userId: "user-dim",
+      });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await methodsRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          name: "Método Dimensional Ruim",
+          ...DIMENSIONALLY_BAD_FORMULA,
+        }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.code).toBe("DIMENSIONAL_ERROR");
+      expect(Array.isArray(body.diagnostics)).toBe(true);
+      expect(body.diagnostics.length).toBeGreaterThan(0);
+      expect(body.diagnostics[0].formulaId).toBe("erro");
+      expect(typeof body.diagnostics[0].message).toBe("string");
+      // The formatted dimensions must appear (mass M vs voltage M·L^2·T^-3·I^-1).
+      expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
+
+      // Row NOT persisted.
+      const rows = await db
+        .select()
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.organizationId, org.orgId),
+            eq(calibrationMethod.name, "Método Dimensional Ruim"),
+          ),
+        );
+      expect(rows).toHaveLength(0);
+    },
+  );
+
+  it(
+    "REQ-DIM-202: POST / with a Magnus-style empirical formula → 201 (no false positive)",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-magnus",
+        userId: "user-magnus",
+      });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await methodsRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ name: "Método Magnus", ...MAGNUS_METHOD }),
+      });
+
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.status).toBe("DRAFT");
+
+      const rows = await db
+        .select({ id: calibrationMethod.id })
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.organizationId, org.orgId),
+            eq(calibrationMethod.name, "Método Magnus"),
+          ),
+        );
+      expect(rows).toHaveLength(1);
+    },
+  );
+
+  it(
+    "REQ-DIM-201: POST /compile surfaces a DIMENSIONAL_ERROR diagnostic (editor affordance) and ok:false",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim-compile",
+        userId: "user-dim-compile",
+      });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      // A fully-shaped MethodDraft (the /compile "already a draft" branch).
+      const res = await methodsRouter.request("/compile", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          id: "compile_dim",
+          version: 1,
+          status: "draft",
+          name: "Compile Dimensional",
+          inputs: [
+            {
+              kind: "scalar",
+              key: "massa",
+              label: "Massa",
+              unit: "g",
+              required: true,
+            },
+            {
+              kind: "scalar",
+              key: "tensao",
+              label: "Tensão",
+              unit: "V",
+              required: true,
+            },
+          ],
+          formulas: [
+            {
+              key: "erro",
+              label: "Erro",
+              expression: "massa + tensao",
+              outputUnit: "g",
+              outputKind: "error",
+              required: true,
+            },
+          ],
+          measurementModels: [],
+          acceptanceCriteria: [],
+          previewScenarios: [],
+          metadata: { validationStatus: "pending_revalidation" },
+        }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      // The existing compile-preview panel lists these per-formula error entries.
+      const dimensional = body.diagnostics.filter(
+        (d: { code?: string }) => d.code === "DIMENSIONAL_ERROR",
+      );
+      expect(dimensional.length).toBeGreaterThan(0);
+      expect(dimensional[0].severity).toBe("error");
+      expect(dimensional[0].path).toBe("erro");
+      expect(dimensional[0].message).toContain("M·L^2·T^-3·I^-1");
+    },
+  );
+
+  it(
+    "REQ-DIM-201: PUT /:id introducing a dimensional incoherence → 422; row unchanged",
+    async () => {
+      const org = await seedOrgWithPro({
+        orgId: "org-dim-upd",
+        userId: "user-dim-upd",
+      });
+      const methodId = await seedMethod({
+        orgId: org.orgId,
+        createdBy: org.userId,
+        status: "DRAFT",
+        nameSuffix: "atualizável",
+      });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await methodsRouter.request(`/${methodId}`, {
+        method: "PUT",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          name: "Método Teste atualizável",
+          ...DIMENSIONALLY_BAD_FORMULA,
+        }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.code).toBe("DIMENSIONAL_ERROR");
+      expect(body.diagnostics[0].formulaId).toBe("erro");
+
+      // Row unchanged: still the seeded MINIMAL_DATA_FIELDS + empty formulas.
+      const [row] = await db
+        .select({
+          formulas: calibrationMethod.formulas,
+          status: calibrationMethod.status,
+        })
+        .from(calibrationMethod)
+        .where(eq(calibrationMethod.id, methodId));
+      expect(row?.status).toBe("DRAFT");
+      expect(row?.formulas).toEqual([]);
+    },
+  );
 });
