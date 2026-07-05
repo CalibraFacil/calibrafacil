@@ -2199,7 +2199,7 @@ export interface BackofficeApi {
     issueOffer<TResponse = unknown>(input: unknown): Promise<TResponse>;
     cancelOffer<TResponse = unknown>(
       offerId: string,
-      input: { reason: string },
+      input: { reason: string; approvalRequestId?: number },
     ): Promise<TResponse>;
     reissueOffer<TResponse = unknown>(
       offerId: string,

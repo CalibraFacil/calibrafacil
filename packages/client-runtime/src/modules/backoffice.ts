@@ -387,7 +387,7 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
       },
       async cancelOffer<TResponse = unknown>(
         offerId: string,
-        input: { reason: string },
+        input: { reason: string; approvalRequestId?: number },
       ) {
         return readJsonResponse<TResponse>(
           await rawCloudClient.api.backoffice.commercial.offers[
