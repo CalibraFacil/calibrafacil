@@ -856,6 +856,75 @@ type ApplyDesktopSyncEventResult =
       };
     };
 
+// ============================================================================
+// Optimistic-concurrency guard for the blind desktop applies (REL-01 slice 2)
+// ============================================================================
+// The desktop emits `baseUpdatedAt` — the cloud row's `updatedAt` captured at
+// PULL time (slice 1). If the server row's current `updatedAt` is STRICTLY after
+// that base, the cloud advanced since the desktop last pulled, so the desktop
+// edit was made against a stale base and a blind UPDATE would silently lose the
+// cloud change (last-write-wins). Equal timestamps = unchanged since pull = safe
+// to apply (no false conflict). A null / absent / unparseable base means "cannot
+// check" → apply exactly as today (backward compatible with older desktop builds
+// that never emit it, and with rows that were never pulled).
+type StaleDesktopBase =
+  | { diverged: false }
+  | { diverged: true; serverUpdatedAtIso: string; baseUpdatedAt: string };
+
+export function detectStaleDesktopBase(params: {
+  baseUpdatedAt: string | null | undefined;
+  serverUpdatedAt: Date | string | null | undefined;
+}): StaleDesktopBase {
+  const base = params.baseUpdatedAt;
+  if (base === null || base === undefined) return { diverged: false };
+  const baseMs = Date.parse(base);
+  if (Number.isNaN(baseMs)) return { diverged: false };
+
+  const server = params.serverUpdatedAt;
+  if (server === null || server === undefined) return { diverged: false };
+  const serverDate = server instanceof Date ? server : new Date(server);
+  const serverMs = serverDate.getTime();
+  if (Number.isNaN(serverMs)) return { diverged: false };
+
+  // Strictly after: equal means the row is still at the pulled version.
+  if (serverMs > baseMs) {
+    return {
+      diverged: true,
+      serverUpdatedAtIso: serverDate.toISOString(),
+      baseUpdatedAt: base,
+    };
+  }
+  return { diverged: false };
+}
+
+// Build the conflict result the push handler turns into a `sync_conflicts` row
+// (`conflictType` + `remotePayload`) — the SAME shape the job-execution guard
+// already uses. `concurrent_update` is the version-based conflict type the
+// desktop conflicts UI already labels ("Atualização concorrente"). The remote
+// payload carries enough to resolve: the entity, its cloud id, the server's
+// current `updatedAt`, and the base the desktop edited against.
+function buildStaleDesktopBaseConflict(params: {
+  entity: string;
+  id: number;
+  serverUpdatedAtIso: string;
+  baseUpdatedAt: string;
+}): ApplyDesktopSyncEventResult {
+  return {
+    ok: false,
+    code: "STALE_BASE_VERSION",
+    reason: `Cloud ${params.entity} advanced since the desktop pulled (base ${params.baseUpdatedAt}, server ${params.serverUpdatedAtIso}).`,
+    conflict: {
+      conflictType: "concurrent_update",
+      remotePayload: {
+        entity: params.entity,
+        id: params.id,
+        updatedAt: params.serverUpdatedAtIso,
+        baseUpdatedAt: params.baseUpdatedAt,
+      },
+    },
+  };
+}
+
 async function loadCloudSyncEventsSince(
   memberData: MemberData,
   since: Date,
@@ -2010,6 +2079,7 @@ async function applyUpdateLocalAsset(
       metrologyRegime: asset.metrologyRegime,
       regulatedInterval: asset.regulatedInterval,
       installedAt: asset.installedAt,
+      updatedAt: asset.updatedAt,
       assetTypeDefinition: assetType.definition,
     })
     .from(asset)
@@ -2030,6 +2100,22 @@ async function applyUpdateLocalAsset(
       code: "DOMAIN_VALIDATION_FAILED",
       reason: "Ativo nao encontrado para atualizacao desktop.",
     };
+  }
+
+  // REL-01 slice 2: refuse to blind-overwrite a cloud asset that advanced since
+  // the desktop pulled its base (REQ-REL-SYNC-201). Legacy/null base applies as
+  // today (REQ-REL-SYNC-203); equal/unchanged applies (REQ-REL-SYNC-202).
+  const assetStaleBase = detectStaleDesktopBase({
+    baseUpdatedAt: input.event.baseUpdatedAt,
+    serverUpdatedAt: existingAsset.updatedAt,
+  });
+  if (assetStaleBase.diverged) {
+    return buildStaleDesktopBaseConflict({
+      entity: "asset",
+      id: existingAsset.id,
+      serverUpdatedAtIso: assetStaleBase.serverUpdatedAtIso,
+      baseUpdatedAt: assetStaleBase.baseUpdatedAt,
+    });
   }
 
   if (values.tag && values.tag !== existingAsset.tag) {
@@ -2317,6 +2403,23 @@ async function applyUpdateLocalCustomer(
       code: "DOMAIN_VALIDATION_FAILED",
       reason: "Cliente nao encontrado para atualizacao desktop.",
     };
+  }
+
+  // REL-01 slice 2: refuse to blind-overwrite a cloud customer that advanced
+  // since the desktop pulled its base (REQ-REL-SYNC-201). Legacy/null base
+  // applies as today (REQ-REL-SYNC-203); equal/unchanged applies
+  // (REQ-REL-SYNC-202).
+  const customerStaleBase = detectStaleDesktopBase({
+    baseUpdatedAt: input.event.baseUpdatedAt,
+    serverUpdatedAt: existing.updatedAt,
+  });
+  if (customerStaleBase.diverged) {
+    return buildStaleDesktopBaseConflict({
+      entity: "customer",
+      id: existing.id,
+      serverUpdatedAtIso: customerStaleBase.serverUpdatedAtIso,
+      baseUpdatedAt: customerStaleBase.baseUpdatedAt,
+    });
   }
 
   const changes: Record<string, { old: unknown; new: unknown }> = {};
@@ -3139,6 +3242,36 @@ async function applyLocalServiceOrderExecutionNotes(
       code: "REMOTE_ENTITY_NOT_FOUND",
       reason: "Cloud service order for desktop execution was not found.",
     };
+  }
+
+  // REL-01 slice 2: refuse to blind-overwrite an execution row that advanced
+  // since the desktop pulled its base (REQ-REL-SYNC-201). When no execution row
+  // exists yet there is nothing to diverge from (this apply creates it). The
+  // base is anchored to the `service_order_executions` row; legacy/null base
+  // applies as today (REQ-REL-SYNC-203), equal/unchanged applies
+  // (REQ-REL-SYNC-202). Checked before the write transaction so a conflict
+  // leaves the row byte-unchanged.
+  const [existingExecution] = await db
+    .select({
+      id: serviceOrderExecution.id,
+      updatedAt: serviceOrderExecution.updatedAt,
+    })
+    .from(serviceOrderExecution)
+    .where(eq(serviceOrderExecution.serviceOrderId, order.id))
+    .limit(1);
+  if (existingExecution) {
+    const executionStaleBase = detectStaleDesktopBase({
+      baseUpdatedAt: input.event.baseUpdatedAt,
+      serverUpdatedAt: existingExecution.updatedAt,
+    });
+    if (executionStaleBase.diverged) {
+      return buildStaleDesktopBaseConflict({
+        entity: "service_order_execution",
+        id: existingExecution.id,
+        serverUpdatedAtIso: executionStaleBase.serverUpdatedAtIso,
+        baseUpdatedAt: executionStaleBase.baseUpdatedAt,
+      });
+    }
   }
 
   const values = parseResult.data;
