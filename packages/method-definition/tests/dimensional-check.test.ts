@@ -222,4 +222,23 @@ describe("formula chaining", () => {
     });
     expect(diags).toEqual([]);
   });
+
+  test("a later formula mixing an earlier formula's dimension incompatibly is diagnosed", () => {
+    // Negative chaining direction (verifier-suggested): f1 is declared in grams;
+    // f2 adds it to a voltage — the mismatch must surface ON f2 via the chained
+    // dimension, proving formula results really flow forward as fixed dimensions.
+    const diags = checkMethodDimensions({
+      fields: [
+        { symbol: "massa", unit: "g" },
+        { symbol: "tensao", unit: "V" },
+      ],
+      formulas: [
+        { id: "f1", expression: "massa * 2", resultUnit: "g" },
+        { id: "f2", expression: "f1 + tensao" },
+      ],
+    });
+    expect(diags).toHaveLength(1);
+    expect(diags[0]?.code).toBe("DIMENSIONAL_MISMATCH");
+    expect(diags[0]?.formulaId).toBe("f2");
+  });
 });
