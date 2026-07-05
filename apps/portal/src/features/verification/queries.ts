@@ -120,8 +120,11 @@ const signatureVerdictSchema = z.object({
     })
     .nullable()
     .optional(),
+  revocationChecked: z.boolean().optional(),
+  certificateRevoked: z.boolean().nullable().optional(),
+  revocationTime: z.string().nullable().optional(),
   signer: verdictSignerSchema,
-  overall: z.enum(["VALID", "ALTERED", "UNSIGNED", "UNVERIFIABLE"]),
+  overall: z.enum(["VALID", "ALTERED", "UNSIGNED", "REVOKED", "UNVERIFIABLE"]),
   details: z.array(z.string()),
 });
 

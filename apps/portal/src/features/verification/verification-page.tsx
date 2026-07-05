@@ -179,6 +179,7 @@ const OVERALL_TONE: Record<SignatureVerdictOverall, SignalTone> = {
   VALID: "ok",
   ALTERED: "critical",
   UNSIGNED: "neutral",
+  REVOKED: "critical",
   UNVERIFIABLE: "warning",
 };
 
@@ -186,6 +187,7 @@ const OVERALL_LABEL: Record<SignatureVerdictOverall, string> = {
   VALID: "Assinatura íntegra e confiável",
   ALTERED: "Documento alterado",
   UNSIGNED: "Sem assinatura digital",
+  REVOKED: "Certificado do assinante revogado",
   UNVERIFIABLE: "Não foi possível confirmar",
 };
 
@@ -279,6 +281,14 @@ function SignatureIntegrity({ token }: { token: string }) {
             label="Carimbo do tempo"
             state={true}
             hint={verdict.timestamp?.time ?? undefined}
+          />
+        ) : null}
+        {/* #646 fase b: revocation tile only when a verified LCR was consulted. */}
+        {verdict.revocationChecked ? (
+          <VerdictTile
+            label="Revogação (LCR)"
+            state={verdict.certificateRevoked === false}
+            hint={verdict.revocationTime ?? undefined}
           />
         ) : null}
       </div>

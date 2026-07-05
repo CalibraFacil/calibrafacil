@@ -129,6 +129,7 @@ const OVERALL_TONE: Record<SignatureVerdictOverall, SignalTone> = {
   VALID: "ok",
   ALTERED: "critical",
   UNSIGNED: "neutral",
+  REVOKED: "critical",
   UNVERIFIABLE: "warning",
 };
 
@@ -136,6 +137,7 @@ const OVERALL_STRIP_LABEL: Record<SignatureVerdictOverall, string> = {
   VALID: "Assinatura íntegra",
   ALTERED: "Documento alterado",
   UNSIGNED: "Sem assinatura",
+  REVOKED: "Certificado revogado",
   UNVERIFIABLE: "Não confirmada",
 };
 

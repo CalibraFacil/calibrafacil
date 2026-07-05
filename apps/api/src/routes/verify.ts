@@ -19,6 +19,7 @@ import {
   verifyPdf,
   getIcpBrasilTrustAnchors,
   type VerifyPdfResult,
+  createCrlFetcher,
 } from "@calibra-facil/signing";
 import {
   createR2Client,
@@ -35,6 +36,10 @@ const UUID_REGEX =
 // deterministic per signed-PDF hash, so caching by pdfHash keeps the public
 // endpoint cheap and bounds the R2-download + crypto cost under repeated scans.
 const LIVE_VERDICT_TTL_MS = 10 * 60 * 1000;
+// #646 fase b: shared CRL fetcher (TTL-cached) for revocation checking on the
+// public verification paths. Failures degrade the verdict, never error it.
+const crlFetcher = createCrlFetcher();
+
 const liveVerdictCache = new Map<
   string,
   { verdict: VerifyPdfResult; expiresAt: number }
@@ -312,6 +317,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         expectedSha256: pdfHash,
         trustAnchors: getIcpBrasilTrustAnchors(),
         checkDate: new Date(),
+        fetchCrl: crlFetcher,
       });
 
       if (liveVerdictCache.size > 1000) liveVerdictCache.clear();
@@ -345,6 +351,9 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         // the PDF itself couldn't be re-verified in this fallback path.
         timestampPresent: job.signatureMetadata.timestamped === true,
         timestamp: null,
+        revocationChecked: false,
+        certificateRevoked: null,
+        revocationTime: null,
         signer: {
           commonName: job.signatureMetadata.signerName,
           cpfCnpj: job.signatureMetadata.signerCpfCnpj,
@@ -426,6 +435,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       expectedSha256,
       trustAnchors: getIcpBrasilTrustAnchors(),
       checkDate: new Date(),
+      fetchCrl: crlFetcher,
     });
 
     return c.json({ match, expectedSha256, uploadedSha256, uploadedVerdict });

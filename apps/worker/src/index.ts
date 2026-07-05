@@ -43,6 +43,7 @@ import {
   SigningError,
   type SignatureMetadata,
   type VerifyPdfResult,
+  createCrlFetcher,
 } from "@calibra-facil/signing";
 import { resolveTsaConfig } from "./tsa-config.js";
 
@@ -1501,6 +1502,10 @@ async function signPdfWithUnitCertificate(
       const verdict = await verifyPdf(result.signedPdf, {
         expectedSha256: result.metadata.pdfHash,
         trustAnchors: getIcpBrasilTrustAnchors(),
+        // #646 fase b: best-effort revocation at issue time (verdict degrades
+        // to revocationChecked=false on network trouble; never blocks issuance
+        // since this whole precompute is already best-effort).
+        fetchCrl: createCrlFetcher(),
         checkDate: new Date(result.metadata.signedAt),
       });
       signatureVerdict = { ...verdict, computedAt: result.metadata.signedAt };

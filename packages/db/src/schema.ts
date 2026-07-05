@@ -4300,12 +4300,16 @@ export const calibrationJob = pgTable(
       // #646 (PAdES-T): optional for verdicts that predate the column.
       timestampPresent?: boolean;
       timestamp?: { time: string | null; tsaCommonName: string | null } | null;
+      // #646 fase b: optional for verdicts computed before revocation checking.
+      revocationChecked?: boolean;
+      certificateRevoked?: boolean | null;
+      revocationTime?: string | null;
       signer: {
         commonName: string | null;
         cpfCnpj: string | null;
         certificateSerial: string | null;
       };
-      overall: "VALID" | "ALTERED" | "UNSIGNED" | "UNVERIFIABLE";
+      overall: "VALID" | "ALTERED" | "UNSIGNED" | "REVOKED" | "UNVERIFIABLE";
       details: string[];
       computedAt: string; // ISO timestamp
     }>(),

@@ -15,8 +15,19 @@ import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
 
 import { validatePkijsChain } from "./chain-validation.js";
+import {
+  adjudicateRevocation,
+  checkRevocation,
+  extractCrlDistributionUrls,
+  parseCrl,
+} from "./revocation.js";
 
-export type VerifyOverall = "VALID" | "ALTERED" | "UNSIGNED" | "UNVERIFIABLE";
+export type VerifyOverall =
+  | "VALID"
+  | "ALTERED"
+  | "UNSIGNED"
+  | "REVOKED"
+  | "UNVERIFIABLE";
 
 export interface VerifyPdfSigner {
   commonName: string | null;
@@ -46,6 +57,12 @@ export interface VerifyPdfResult {
   signaturePresent: boolean;
   /** An RFC 3161 DocTimeStamp (SubFilter /ETSI.RFC3161) is embedded (#646, PAdES-T). */
   timestampPresent: boolean;
+  /** A signed, issuer-verified CRL covering the signer cert was consulted (#646 fase b). */
+  revocationChecked: boolean;
+  /** Signer certificate revoked per the verified CRL. Null when unchecked. */
+  certificateRevoked: boolean | null;
+  /** RFC 5280 revocationDate (ISO) when revoked. */
+  revocationTime: string | null;
   /** Parsed timestamp details (best-effort; null when absent or unparseable). */
   timestamp: VerifyPdfTimestamp | null;
   signer: VerifyPdfSigner;
@@ -61,6 +78,12 @@ export interface VerifyPdfOptions {
   trustAnchors?: pkijs.Certificate[];
   /** Reference time for validity / chain checks (default: now). */
   checkDate?: Date;
+  /**
+   * Injected CRL fetcher (#646 fase b) — verifyPdf itself performs no network
+   * I/O. Given a CRL Distribution Point URL from the signer chain, return the
+   * DER bytes or null. Fetch failures degrade to `revocationChecked: false`.
+   */
+  fetchCrl?: (url: string) => Promise<Uint8Array | null>;
 }
 
 // ICP-Brasil subject OIDs for CPF / CNPJ (see signer.ts).
@@ -291,6 +314,10 @@ export async function verifyPdf(
   let signer = emptySigner();
   let timestampPresent = false;
   let timestamp: VerifyPdfTimestamp | null = null;
+  let revocationChecked = false;
+  let certificateRevoked: boolean | null = null;
+  let revocationTime: string | null = null;
+  let revocationOverride: "REVOKED" | null = null;
 
   try {
     const { document: extracted, timestampTokens } = extractSignatures(buffer);
@@ -371,6 +398,63 @@ export async function verifyPdf(
               );
             }
           }
+
+          // #646 fase b (REQ-CMP-LTV-002): consult revocation material via the
+          // injected fetcher. Only a CRL whose issuer matches AND whose
+          // signature verifies against the chain counts; anything else
+          // degrades to revocationChecked=false (never a false REVOKED).
+          //
+          // Gated on chainValid deliberately: CDP URLs come from inside the
+          // (possibly attacker-uploaded) PDF, so fetching them is only safe
+          // once the cert provably chains to an ICP-Brasil anchor — then the
+          // URLs are CA-controlled. It also makes revocation of an unchained
+          // cert (already UNVERIFIABLE) a non-question. SSRF guard.
+          if (options.fetchCrl && chainValid) {
+            try {
+              const urls = extractCrlDistributionUrls(signerCert);
+              const fetched: Awaited<ReturnType<typeof parseCrl>>[] = [];
+              for (const url of urls) {
+                const der = await options.fetchCrl(url);
+                if (der) fetched.push(parseCrl(der));
+              }
+              const crls = fetched.filter(
+                (crl): crl is NonNullable<typeof crl> => crl !== null,
+              );
+              if (crls.length > 0) {
+                const issuerCandidates = [...certs, ...anchors];
+                const status = await checkRevocation(
+                  signerCert,
+                  crls,
+                  issuerCandidates,
+                );
+                revocationChecked = status.checked;
+                if (status.checked) {
+                  certificateRevoked = status.revoked;
+                  revocationTime = status.revocationTime;
+                }
+              }
+              if (!revocationChecked) {
+                details.push(
+                  "Não foi possível consultar a lista de certificados revogados (LCR).",
+                );
+              } else if (certificateRevoked) {
+                const adjudication = adjudicateRevocation({
+                  revocationTime,
+                  timestampTime: timestamp?.time ?? null,
+                });
+                revocationOverride = adjudication.overallOverride;
+                details.push(adjudication.detail);
+              } else {
+                details.push(
+                  "Certificado do assinante não consta na LCR consultada.",
+                );
+              }
+            } catch {
+              details.push(
+                "Não foi possível consultar a lista de certificados revogados (LCR).",
+              );
+            }
+          }
         }
       } else {
         details.push("Não foi possível interpretar a assinatura embutida.");
@@ -389,6 +473,11 @@ export async function verifyPdf(
     overall = "UNSIGNED";
   } else if (hashMatch === false || !signatureCryptographicallyValid) {
     overall = "ALTERED";
+  } else if (revocationOverride) {
+    // #646 fase b: revoked without a timestamp proving the signature predates
+    // the revocation. Takes precedence over VALID/UNVERIFIABLE — integrity
+    // failures (ALTERED/UNSIGNED) above remain the stronger signal.
+    overall = "REVOKED";
   } else if (anchors.length === 0) {
     overall = "UNVERIFIABLE";
   } else if (chainValid) {
@@ -406,6 +495,9 @@ export async function verifyPdf(
     signaturePresent,
     timestampPresent,
     timestamp,
+    revocationChecked,
+    certificateRevoked,
+    revocationTime,
     signer,
     overall,
     details,

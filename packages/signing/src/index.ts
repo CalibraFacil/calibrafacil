@@ -82,3 +82,13 @@ export type { TimestampConfig, TimestampOutcome } from "./timestamp.js";
 // PAdES-T orchestration (#646 / CMP-03): sign + RFC-3161 stamp, fail-closed.
 export { signAndTimestampPdf } from "./sign-and-timestamp.js";
 export type { SignAndTimestampOptions } from "./sign-and-timestamp.js";
+
+// CRL revocation (#646 / CMP-03 fase b): pure check + injectable HTTP fetcher.
+export {
+  extractCrlDistributionUrls,
+  parseCrl,
+  checkRevocation,
+  adjudicateRevocation,
+} from "./revocation.js";
+export type { RevocationStatus, RevocationAdjudication } from "./revocation.js";
+export { createCrlFetcher } from "./crl-fetcher.js";
