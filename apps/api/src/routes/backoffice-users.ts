@@ -31,7 +31,7 @@ import {
 import { logPlatformEvent } from "./backoffice-platform-log";
 import {
   extractErrorMessage,
-  forwardLabAuthResponse,
+  forwardBackofficeAuthResponse,
   platformUserFromUnknown,
   resolveTrustedAppUrl,
   responseStatus,
@@ -308,7 +308,10 @@ export const backofficeUsersRouter = new Hono<{
       const input = c.req.valid("json");
       const temporaryPassword = randomBytes(24).toString("base64url");
       // Password setup/reset pages live in the lab app, not the request origin
-      // (the backoffice has no /reset-password route).
+      // (the backoffice has no /reset-password route). SEC-09 (#669): the lab
+      // AUTH SURFACE is passwordless — request the reset token from the
+      // BACKOFFICE auth instance (which still accepts password + TOTP), even
+      // though the page itself is served from the lab app.
       const appUrl = resolveTrustedAppUrl(c);
 
       const createdUser = await auth.api.createUser({
@@ -322,9 +325,9 @@ export const backofficeUsersRouter = new Hono<{
       });
       const createdUserRecord = platformUserFromUnknown(createdUser);
 
-      const resetResponse = await forwardLabAuthResponse({
+      const resetResponse = await forwardBackofficeAuthResponse({
         c,
-        path: "/api/auth/lab/request-password-reset",
+        path: "/api/auth/backoffice/request-password-reset",
         body: {
           email: input.email,
           redirectTo: `${appUrl}/reset-password`,
@@ -428,11 +431,14 @@ export const backofficeUsersRouter = new Hono<{
     }
 
     // Password reset pages live in the lab app, not the request origin
-    // (the backoffice has no /reset-password route).
+    // (the backoffice has no /reset-password route). SEC-09 (#669): the lab
+    // AUTH SURFACE is passwordless — request the reset token from the
+    // BACKOFFICE auth instance, even though the page itself is served from
+    // the lab app.
     const appUrl = resolveTrustedAppUrl(c);
-    const response = await forwardLabAuthResponse({
+    const response = await forwardBackofficeAuthResponse({
       c,
-      path: "/api/auth/lab/request-password-reset",
+      path: "/api/auth/backoffice/request-password-reset",
       body: {
         email: user.email,
         redirectTo: `${appUrl}/reset-password`,

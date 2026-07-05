@@ -200,9 +200,6 @@ export const {
   organization,
   // Settings page methods
   updateUser,
-  changePassword,
-  requestPasswordReset,
-  resetPassword,
   listSessions,
   revokeSession,
   revokeOtherSessions,
@@ -238,6 +235,15 @@ export const labEmailOtp = labAuthClient.emailOtp;
 export const backofficeSignIn = backofficeAuthClient.signIn;
 export const backofficeSignOut = backofficeAuthClient.signOut;
 export const useBackofficeSession = backofficeAuthClient.useSession;
+// SEC-09 (#669): the lab surface is passwordless — password/reset methods are
+// no longer exposed from labAuthClient. The backoffice operations surface
+// keeps password + mandatory TOTP, so its own password-reset request/consume
+// methods live here. The shared `apps/web/src/routes/reset-password` page
+// (linked from the backoffice sign-in form) binds to these, not to the lab
+// client.
+export const requestBackofficePasswordReset =
+  backofficeAuthClient.requestPasswordReset;
+export const resetBackofficePassword = backofficeAuthClient.resetPassword;
 let inflightBackofficeSession: ReturnType<
   typeof backofficeAuthClient.getSession
 > | null = null;

@@ -1,5 +1,5 @@
 import { HTTPException } from "hono/http-exception";
-import { createLabAuth } from "@calibra-facil/auth";
+import { createBackofficeAuth, createLabAuth } from "@calibra-facil/auth";
 
 // Shared backoffice helpers used by the backoffice parent router AND its
 // extracted sub-routers (organizations, users). Lifted here verbatim — zero
@@ -80,6 +80,38 @@ export async function forwardLabAuthResponse(params: {
   body?: Record<string, unknown>;
 }) {
   const auth = createLabAuth();
+  const url = new URL(params.c.req.raw.url);
+  url.pathname = params.path;
+  url.search = "";
+
+  const headers = new Headers(params.c.req.raw.headers);
+
+  if (params.body) {
+    headers.set("content-type", "application/json");
+  }
+
+  return auth.handler(
+    new Request(url.toString(), {
+      method: "POST",
+      headers,
+      body: params.body ? JSON.stringify(params.body) : undefined,
+    }),
+  );
+}
+
+// SEC-09 (#669): the lab surface is passwordless — its emailAndPassword
+// endpoints (including /request-password-reset) are disabled. Backoffice
+// operator password-setup/reset flows (new-user provisioning, admin-triggered
+// reset) must forward to the BACKOFFICE auth instance instead, which still
+// accepts password + mandatory TOTP.
+export async function forwardBackofficeAuthResponse(params: {
+  c: {
+    req: { raw: Request };
+  };
+  path: string;
+  body?: Record<string, unknown>;
+}) {
+  const auth = createBackofficeAuth();
   const url = new URL(params.c.req.raw.url);
   url.pathname = params.path;
   url.search = "";
