@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { customersRouter } from "./customers";
 import { db } from "@calibra-facil/db";
 import {
+  asset,
+  assetAuditLog,
+  assetType,
   customer,
   customerAuditLog,
   organization,
 } from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -58,6 +61,38 @@ async function seedCustomer(params: {
 
   if (!row) throw new Error("seedCustomer: insert failed");
   return { customerId: row.id, authOrgId: params.clientOrgId };
+}
+
+/** Seed an asset owned by a customer (unit-scoped to the lab). Returns asset id. */
+async function seedAsset(params: {
+  unitId: number;
+  customerId: number;
+  assetTypeId: number;
+  tag: string;
+}): Promise<number> {
+  const [row] = await db
+    .insert(asset)
+    .values({
+      unitId: params.unitId,
+      customerId: params.customerId,
+      assetTypeId: params.assetTypeId,
+      name: `Instrumento ${params.tag}`,
+      serialNumber: `SN-${params.tag}`,
+      tag: params.tag,
+    })
+    .returning({ id: asset.id });
+  if (!row) throw new Error("seedAsset: insert failed");
+  return row.id;
+}
+
+/** Seed an asset_type (blueprint). Returns asset_type id. */
+async function seedAssetType(slug: string): Promise<number> {
+  const [row] = await db
+    .insert(assetType)
+    .values({ name: `AT ${slug}`, slug, definition: [] })
+    .returning({ id: assetType.id });
+  if (!row) throw new Error("seedAssetType: insert failed");
+  return row.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,4 +398,94 @@ describe("customersRouter — real DB + real middleware", () => {
     });
     expect(res.status).toBe(401);
   });
+
+  // =========================================================================
+  // REQ-CMP-AUD-010a [HIGH RISK] (#692 / CMP-07): deleting a customer cascades
+  // its assets (asset.customer_id → customer, intentional). The asset audit
+  // trail must SURVIVE that cascade — the append-only ISO/IEC 17025 trail must
+  // keep both the pre-existing history AND a fresh 'delete' row per asset.
+  //
+  // Before the fix: (1) the route wrote NO 'delete' audit row for the cascaded
+  // assets, and (2) asset_audit_log.asset_id → asset ON DELETE CASCADE erased
+  // the pre-existing rows too, so the deletion left no trace.
+  // =========================================================================
+  it(
+    "REQ-CMP-AUD-010a: DELETE /:id keeps each asset's audit trail (+ fresh 'delete' row) after the cascade",
+    async () => {
+      const org = await seedOrg({ orgId: "org-aud-asset", role: "admin" });
+      const { customerId } = await seedCustomer({
+        labOrgId: org.orgId,
+        clientOrgId: "client-aud-asset",
+        name: "Cliente com Ativos",
+      });
+
+      const assetTypeId = await seedAssetType("balanca-aud");
+      const assetA = await seedAsset({
+        unitId: org.unitId,
+        customerId,
+        assetTypeId,
+        tag: "AUD-A",
+      });
+      const assetB = await seedAsset({
+        unitId: org.unitId,
+        customerId,
+        assetTypeId,
+        tag: "AUD-B",
+      });
+
+      // Pre-existing history for each asset (would be cascade-erased today).
+      await db.insert(assetAuditLog).values([
+        {
+          assetId: assetA,
+          action: "create",
+          changes: { asset: { old: null, new: { tag: "AUD-A" } } },
+          performedBy: org.userId,
+        },
+        {
+          assetId: assetB,
+          action: "create",
+          changes: { asset: { old: null, new: { tag: "AUD-B" } } },
+          performedBy: org.userId,
+        },
+      ]);
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await customersRouter.request(`/${customerId}`, {
+        method: "DELETE",
+        headers: JSON_HEADERS,
+      });
+      expect(res.status).toBe(200);
+
+      // The customer and its cascaded assets are gone…
+      const remainingCustomer = await db
+        .select()
+        .from(customer)
+        .where(eq(customer.id, customerId));
+      expect(remainingCustomer).toHaveLength(0);
+      const remainingAssets = await db
+        .select()
+        .from(asset)
+        .where(inArray(asset.id, [assetA, assetB]));
+      expect(remainingAssets).toHaveLength(0);
+
+      // …but each asset's audit trail SURVIVES: the pre-existing 'create' row
+      // AND a fresh 'delete' row inserted by the route before the cascade.
+      for (const assetId of [assetA, assetB]) {
+        const logs = await db
+          .select()
+          .from(assetAuditLog)
+          .where(eq(assetAuditLog.assetId, assetId));
+        const actions = logs.map((l) => l.action).toSorted();
+        expect(actions).toEqual(["create", "delete"]);
+
+        const deleteRow = logs.find((l) => l.action === "delete");
+        expect(deleteRow?.performedBy).toBe(org.userId);
+        expect(deleteRow?.performedAt).toBeInstanceOf(Date);
+        // The 'delete' row captures the full pre-delete asset row (old) → null.
+        expect(deleteRow?.changes).toMatchObject({
+          asset: { old: { id: assetId }, new: null },
+        });
+      }
+    },
+  );
 });

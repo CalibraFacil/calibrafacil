@@ -1380,12 +1380,11 @@ export const organizationApiKeyAuditLog = pgTable(
   "organization_api_key_audit_log",
   {
     id: serial("id").primaryKey(),
-    apiKeyId: text("api_key_id")
-      .notNull()
-      .references(() => organizationApiKey.id, { onDelete: "cascade" }),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft references on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): a row must survive deletion of the api key OR organization
+    // it documents, so the ids stay as plain values.
+    apiKeyId: text("api_key_id").notNull(),
+    organizationId: text("organization_id").notNull(),
     action: text("action").notNull(),
     performedBy: text("performed_by").references(() => user.id, {
       onDelete: "set null",
@@ -2799,9 +2798,11 @@ export const assetAuditLog = pgTable(
   "asset_audit_log",
   {
     id: serial("id").primaryKey(),
-    assetId: integer("asset_id")
-      .notNull()
-      .references(() => asset.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the "delete" row must survive the deletion of the asset it
+    // documents (assets cascade when their customer is deleted), so it keeps the
+    // id as a plain integer.
+    assetId: integer("asset_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete', 'status_change', etc.
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -3421,9 +3422,9 @@ export const serviceAuditLog = pgTable(
   "service_audit_log",
   {
     id: serial("id").primaryKey(),
-    serviceId: integer("service_id")
-      .notNull()
-      .references(() => service.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the service it documents.
+    serviceId: integer("service_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'deactivate', 'reactivate'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -3855,9 +3856,9 @@ export const referenceStandardAuditLog = pgTable(
   "reference_standard_audit_log",
   {
     id: serial("id").primaryKey(),
-    standardId: integer("standard_id")
-      .notNull()
-      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the reference standard.
+    standardId: integer("standard_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'renew', 'status_change', 'delete'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -4333,9 +4334,9 @@ export const jobAuditLog = pgTable(
   "job_audit_log",
   {
     id: serial("id").primaryKey(),
-    jobId: integer("job_id")
-      .notNull()
-      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the calibration job.
+    jobId: integer("job_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'submit', 'approve', 'reject', 'cancel', 'assign', 'execute'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -5015,12 +5016,11 @@ export const certificateReleaseAuditLog = pgTable(
   "certificate_release_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    certificateReleaseId: integer("certificate_release_id")
-      .notNull()
-      .references(() => certificateRelease.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft references on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): a row must survive deletion of the certificate release OR
+    // organization it documents, so the ids stay as plain values.
+    organizationId: text("organization_id").notNull(),
+    certificateReleaseId: integer("certificate_release_id").notNull(),
     actorUserId: text("actor_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -5969,9 +5969,9 @@ export const calibrationRequestAuditLog = pgTable(
   "calibration_request_audit_log",
   {
     id: serial("id").primaryKey(),
-    requestId: integer("request_id")
-      .notNull()
-      .references(() => calibrationRequest.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the calibration request.
+    requestId: integer("request_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by")
@@ -7783,9 +7783,9 @@ export const correctiveActionAuditLog = pgTable(
   "corrective_action_audit_log",
   {
     id: serial("id").primaryKey(),
-    capaId: integer("capa_id")
-      .notNull()
-      .references(() => correctiveAction.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the corrective action.
+    capaId: integer("capa_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'investigate', 'implement', 'verify', 'close'
     changes: jsonb("changes"),
     performedBy: text("performed_by")
@@ -7903,9 +7903,9 @@ export const nonConformanceAuditLog = pgTable(
   "non_conformance_audit_log",
   {
     id: serial("id").primaryKey(),
-    ncId: integer("nc_id")
-      .notNull()
-      .references(() => nonConformance.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the non-conformance.
+    ncId: integer("nc_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'disposition', 'resolve', 'escalate_to_capa'
     changes: jsonb("changes"),
     performedBy: text("performed_by")
@@ -8174,9 +8174,10 @@ export const personnelCompetenceAuditLog = pgTable(
   "personnel_competence_audit_log",
   {
     id: serial("id").primaryKey(),
-    competenceId: integer("competence_id")
-      .notNull()
-      .references(() => personnelCompetence.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the competence record
+    // (which itself cascades from user self-delete), so it keeps a plain integer.
+    competenceId: integer("competence_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by").notNull(),
@@ -8198,9 +8199,10 @@ export const trainingRecordAuditLog = pgTable(
   "training_record_audit_log",
   {
     id: serial("id").primaryKey(),
-    trainingRecordId: integer("training_record_id")
-      .notNull()
-      .references(() => trainingRecord.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the training record
+    // (which itself cascades from user self-delete), so it keeps a plain integer.
+    trainingRecordId: integer("training_record_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by").notNull(),
@@ -8293,9 +8295,10 @@ export const authorizedSignatoryAuditLog = pgTable(
   "authorized_signatory_audit_log",
   {
     id: serial("id").primaryKey(),
-    signatoryId: integer("signatory_id")
-      .notNull()
-      .references(() => authorizedSignatory.id, { onDelete: "cascade" }),
+    // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025 §6.2.6): the record of who was an authorized signatory must
+    // survive deletion of the authorization row, so it keeps a plain integer.
+    signatoryId: integer("signatory_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by").notNull(),

@@ -10,6 +10,8 @@ import {
   invitation,
   user,
   customerAuditLog,
+  asset,
+  assetAuditLog,
 } from "@calibra-facil/db/schema";
 import {
   CreateCustomerSchema,
@@ -556,17 +558,40 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       // TODO: Check for active calibrations before deleting
       // For now, we allow deletion
 
+      const ipAddress =
+        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
+
       // Log audit entry before deletion
       await db.insert(customerAuditLog).values({
         customerId: id,
         action: "delete",
         changes: { customer: { old: existingCustomer, new: null } },
         performedBy: session.user.id,
-        ipAddress:
-          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress,
       });
 
-      // Delete the customer (cascade will handle audit logs)
+      // CMP-07 (#692): deleting the customer cascades its assets
+      // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+      // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+      // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+      const customerAssets = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.customerId, id));
+      if (customerAssets.length > 0) {
+        await db.insert(assetAuditLog).values(
+          customerAssets.map((assetRow) => ({
+            assetId: assetRow.id,
+            action: "delete",
+            changes: { asset: { old: assetRow, new: null } },
+            performedBy: session.user.id,
+            ipAddress,
+            reason: "Cliente excluído",
+          })),
+        );
+      }
+
+      // Delete the customer (the asset/customer audit trail above survives)
       await db
         .delete(customer)
         .where(
