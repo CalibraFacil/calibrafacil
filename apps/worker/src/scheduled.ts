@@ -11,6 +11,7 @@
 import { Client } from "pg";
 import {
   decideSigningCertificateExpiryAlert,
+  notifyAccreditationExpiring,
   notifyAssetDueForLegalVerification,
   notifyAssetDueForRecalibration,
   notifyCompetenceExpired,
@@ -590,6 +591,53 @@ async function checkSigningCertificatesExpiring(
   return result.rows;
 }
 
+interface AccreditationExpiringRow {
+  organization_id: string;
+  valid_until: Date;
+  alerted_lead_days: number[];
+}
+
+/**
+ * Accreditation vigência nearing its end (#647). Reuses the signing-cert
+ * escalating-window decider (30/15/7) — same shape of problem: one validity
+ * end date per entity + idempotency-per-window via scheduled_notification.
+ * Only active accreditations with a filled validUntil are candidates.
+ */
+async function checkAccreditationsExpiring(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<AccreditationExpiringRow[]> {
+  const result = await client.query<AccreditationExpiringRow>(
+    `
+    SELECT
+      o.id as organization_id,
+      o.accreditation_valid_until as valid_until,
+      COALESCE(
+        ARRAY(
+          SELECT sn.lead_time_days
+          FROM scheduled_notification sn
+          WHERE sn.type = 'ACCREDITATION_EXPIRING'
+            AND sn.entity_type = 'organization_accreditation'
+            AND sn.organization_id = o.id
+            AND sn.sent_at IS NOT NULL
+        ),
+        ARRAY[]::int[]
+      ) AS alerted_lead_days
+    FROM organization o
+    WHERE o.accreditation_active = true
+      AND o.accreditation_valid_until IS NOT NULL
+      AND o.accreditation_valid_until > NOW()
+      AND o.accreditation_valid_until <= NOW() + INTERVAL '30 days'
+    ORDER BY o.accreditation_valid_until ASC, o.id ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
 const BATCH_SIZE = 100;
 
 /**
@@ -607,6 +655,7 @@ export async function processScheduledNotifications(
   competencesExpiredProcessed: number;
   visitsProcessed: number;
   signingCertsProcessed: number;
+  accreditationsProcessed: number;
 }> {
   let assetsProcessed = 0;
   let legalVerificationsProcessed = 0;
@@ -617,6 +666,7 @@ export async function processScheduledNotifications(
   let competencesExpiredProcessed = 0;
   let visitsProcessed = 0;
   let signingCertsProcessed = 0;
+  let accreditationsProcessed = 0;
 
   await withDbClient(env, async (client) => {
     // 1. Process assets due for recalibration (with pagination)
@@ -1069,6 +1119,64 @@ export async function processScheduledNotifications(
       // progress (a suppressed "already-alerted" row stays in the set).
       signingCertOffset += signingCertBatch.length;
     } while (signingCertBatch.length === BATCH_SIZE);
+
+    // 9. Warn admins/owners that the Cgcre/RBC accreditation vigência nears
+    // its end (#647). Same escalating-window decider as the signing certs —
+    // one validity end per org, idempotency-per-window via
+    // scheduled_notification (entity_type organization_accreditation, id 0).
+    let accreditationOffset = 0;
+    let accreditationBatch: AccreditationExpiringRow[];
+
+    do {
+      accreditationBatch = await checkAccreditationsExpiring(
+        client,
+        accreditationOffset,
+        BATCH_SIZE,
+      );
+      if (accreditationBatch.length > 0) {
+        console.log(
+          `[Scheduled] Evaluating ${accreditationBatch.length} accreditations (offset ${accreditationOffset})`,
+        );
+      }
+
+      const accreditationNow = new Date();
+      for (const row of accreditationBatch) {
+        try {
+          const decision = decideSigningCertificateExpiryAlert({
+            validUntil: row.valid_until,
+            now: accreditationNow,
+            alreadyAlertedLeadDays: row.alerted_lead_days,
+          });
+
+          if (!decision.shouldAlert || decision.leadTimeDays === null) {
+            continue;
+          }
+
+          await notifyAccreditationExpiring(row.organization_id, {
+            daysRemaining: decision.daysUntilExpiry,
+            validUntil: row.valid_until,
+          });
+
+          await recordScheduledNotification(client, {
+            organizationId: row.organization_id,
+            type: "ACCREDITATION_EXPIRING",
+            entityType: "organization_accreditation",
+            entityId: 0,
+            scheduledFor: row.valid_until,
+            leadTimeDays: decision.leadTimeDays,
+          });
+
+          accreditationsProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing accreditation for org ${row.organization_id}:`,
+            error,
+          );
+        }
+      }
+
+      accreditationOffset += accreditationBatch.length;
+    } while (accreditationBatch.length === BATCH_SIZE);
   });
 
   return {
@@ -1081,6 +1189,7 @@ export async function processScheduledNotifications(
     competencesExpiredProcessed,
     visitsProcessed,
     signingCertsProcessed,
+    accreditationsProcessed,
   };
 }
 

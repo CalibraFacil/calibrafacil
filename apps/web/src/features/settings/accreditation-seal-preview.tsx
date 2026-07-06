@@ -12,6 +12,8 @@ const STATUS_HINTS: Record<AccreditationStatus, string> = {
     'Informe o número de acreditação para concluir a ativação do selo.',
   active:
     'Acreditação ativa. O selo será emitido nos certificados de métodos com escopo acreditado.',
+  expired:
+    'Vigência da acreditação expirada (ou ainda não iniciada). Certificados são emitidos SEM o selo até a janela ser atualizada.',
 }
 
 /**

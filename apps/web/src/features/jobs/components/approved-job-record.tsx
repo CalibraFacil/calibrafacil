@@ -140,16 +140,23 @@ export function ApprovedJobRecord({
   const orgAccreditation: {
     accreditationActive?: boolean | null
     accreditationNumber?: string | null
+    accreditationValidFrom?: Date | string | null
+    accreditationValidUntil?: Date | string | null
   } = activeOrg ?? {}
   const accreditationNumber = normalizeAccreditationNumber(
     orgAccreditation.accreditationNumber ?? '',
   )
+  // #647: vigência evaluated at the job's approval (emission) date.
+  const approvedAtDate = job.approvedAt ? new Date(job.approvedAt) : undefined
   const certificateAccredited = shouldRenderAccreditationSeal({
     lab: {
       accreditationActive: orgAccreditation.accreditationActive,
       accreditationNumber,
+      accreditationValidFrom: orgAccreditation.accreditationValidFrom,
+      accreditationValidUntil: orgAccreditation.accreditationValidUntil,
     },
     methodAccreditedScope: methodSnapshot.accreditedScope ?? false,
+    ...(approvedAtDate ? { atDate: approvedAtDate } : {}),
   })
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)

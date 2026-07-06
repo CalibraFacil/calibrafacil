@@ -1934,6 +1934,8 @@ export const portalRouter = new Hono<{
           serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
           labAccreditationActive: organization.accreditationActive,
           labAccreditationNumber: organization.accreditationNumber,
+          labAccreditationValidFrom: organization.accreditationValidFrom,
+          labAccreditationValidUntil: organization.accreditationValidUntil,
         })
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -1967,15 +1969,19 @@ export const portalRouter = new Hono<{
       );
       const releaseStatus = gated?.releaseStatus ?? "RELEASED";
 
+      // #647: vigência evaluated at the certificate's EMISSION date.
       const accredited = shouldRenderAccreditationSeal({
         lab: {
           accreditationActive: certificate.labAccreditationActive,
           accreditationNumber: certificate.labAccreditationNumber,
+          accreditationValidFrom: certificate.labAccreditationValidFrom,
+          accreditationValidUntil: certificate.labAccreditationValidUntil,
         },
         methodAccreditedScope:
           certificate.methodSnapshot?.accreditedScope ??
           certificate.serviceMethodAccreditedScope ??
           false,
+        ...(certificate.approvedAt ? { atDate: certificate.approvedAt } : {}),
       });
 
       const verdict = buildPortalCertificateVerdict({
@@ -2013,6 +2019,8 @@ export const portalRouter = new Hono<{
         serviceMethodAccreditedScope: undefined,
         labAccreditationActive: undefined,
         labAccreditationNumber: undefined,
+        labAccreditationValidFrom: undefined,
+        labAccreditationValidUntil: undefined,
       });
     } catch (error) {
       console.error("Error fetching portal certificate:", error);

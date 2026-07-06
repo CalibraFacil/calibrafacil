@@ -1130,6 +1130,17 @@ function createOrganizationPlugin() {
             required: false,
             defaultValue: false,
           },
+          // #647: vigência window (nullable)
+          accreditationValidFrom: {
+            type: "date",
+            input: true,
+            required: false,
+          },
+          accreditationValidUntil: {
+            type: "date",
+            input: true,
+            required: false,
+          },
           // Legal-metrology repair authorization (RBMLQ-I oficina permissionária).
           // Optional: existing createOrganization/createUser call sites (backoffice,
           // portal-service-account) must not be forced to pass these.

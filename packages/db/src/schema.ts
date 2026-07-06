@@ -269,6 +269,10 @@ export const organization = pgTable(
     accreditationActive: boolean("accreditation_active")
       .default(false)
       .notNull(),
+    // #647: vigência window. The seal only renders when the emission date
+    // falls inside [validFrom, validUntil]; null bounds impose no constraint.
+    accreditationValidFrom: timestamp("accreditation_valid_from"),
+    accreditationValidUntil: timestamp("accreditation_valid_until"),
     // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
     // Distinct from the RBC/CGCRE accreditation above: required on repair OS
     // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),
@@ -7232,6 +7236,7 @@ export type NotificationType =
   | "STANDARD_EXPIRING"
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
   | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission degrades to unsigned once expired)
+  | "ACCREDITATION_EXPIRING" // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
   | "JOB_OVERDUE"
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED"
@@ -7393,7 +7398,8 @@ export type ScheduledNotificationEntityType =
   | "job"
   | "competence"
   | "visit"
-  | "signing_certificate"; // CMP-02 - ICP-Brasil A1 signing-certificate expiry alert
+  | "signing_certificate" // CMP-02 - ICP-Brasil A1 signing-certificate expiry alert
+  | "organization_accreditation"; // #647 - entity_id is the constant 0 (one accreditation per org)
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.

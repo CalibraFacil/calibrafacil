@@ -317,6 +317,8 @@ type JobData = {
     accreditationNumber?: string | null;
     accreditationBody?: string | null;
     accreditationActive?: boolean | null;
+    accreditationValidFrom?: Date | string | null;
+    accreditationValidUntil?: Date | string | null;
     street?: string | null;
     number?: string | null;
     complement?: string | null;
@@ -937,6 +939,8 @@ async function fetchJobData(
       o.accreditation_number as lab_accreditation_number,
       o.accreditation_body as lab_accreditation_body,
       o.accreditation_active as lab_accreditation_active,
+      o.accreditation_valid_from as lab_accreditation_valid_from,
+      o.accreditation_valid_until as lab_accreditation_valid_until,
       o.street as lab_street,
       o.number as lab_number,
       o.complement as lab_complement,
@@ -1098,6 +1102,8 @@ async function fetchJobData(
       accreditationNumber: row.lab_accreditation_number,
       accreditationBody: row.lab_accreditation_body,
       accreditationActive: row.lab_accreditation_active,
+      accreditationValidFrom: row.lab_accreditation_valid_from,
+      accreditationValidUntil: row.lab_accreditation_valid_until,
       street: row.lab_street,
       number: row.lab_number,
       complement: row.lab_complement,
@@ -3289,9 +3295,12 @@ function buildXlsxCertificateData(job: JobData): Record<string, unknown> {
   const calibrationResults = resultRows.filter(
     (row) => row.group === "calibration_result",
   );
+  // #647: vigência is evaluated at the EMISSION instant — outside the window
+  // the certificate is generated without the Cgcre seal (decided 2026-07-05).
   const certificateAccredited = shouldRenderAccreditationSeal({
     lab: job.lab,
     methodAccreditedScope: job.methodSnapshot?.accreditedScope,
+    atDate: new Date(),
   });
   const accreditationNumberFormatted = formatAccreditationNumber(
     job.lab.accreditationNumber,

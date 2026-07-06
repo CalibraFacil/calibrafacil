@@ -61,6 +61,8 @@ export type OrganizationIsoInput = {
   accreditationNumber?: string | null
   accreditationBody?: string | null
   accreditationActive?: boolean | null
+  accreditationValidFrom?: Date | string | null
+  accreditationValidUntil?: Date | string | null
   permissionariaAuthorizationNumber?: string | null
   permissionariaAuthorizationState?: string | null
   street?: string | null
@@ -87,6 +89,8 @@ export type OrganizationIsoDraft = {
   accreditationNumber: string
   accreditationBody: string
   accreditationActive: boolean
+  accreditationValidFrom: string
+  accreditationValidUntil: string
   permissionariaAuthorizationNumber: string
   permissionariaAuthorizationState: string
   street: string
@@ -174,6 +178,31 @@ export function buildOrganizationIdentityPayload(
   }
 }
 
+/** #647: hydrate a stored timestamp into the <input type="date"> value (UTC date part). */
+function toDateInputValue(value: Date | string | null | undefined): string {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
+/**
+ * #647: form date ("2027-03-01") → ISO instant for the Better Auth payload;
+ * empty clears. `validFrom` anchors at start-of-day and `validUntil` at
+ * END-of-day so the final vigência day is inclusive (a certificate emitted at
+ * noon on the validUntil date is still inside the window).
+ */
+function dateInputToIso(
+  value: string,
+  bound: 'start' | 'end',
+): Date | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const time = bound === 'start' ? 'T00:00:00.000Z' : 'T23:59:59.999Z'
+  const date = new Date(`${trimmed}${time}`)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
 export function createOrganizationIsoDraft(
   organization: OrganizationIsoInput,
 ): OrganizationIsoDraft {
@@ -185,6 +214,12 @@ export function createOrganizationIsoDraft(
     ),
     accreditationBody: organization.accreditationBody ?? '',
     accreditationActive: organization.accreditationActive ?? false,
+    accreditationValidFrom: toDateInputValue(
+      organization.accreditationValidFrom,
+    ),
+    accreditationValidUntil: toDateInputValue(
+      organization.accreditationValidUntil,
+    ),
     permissionariaAuthorizationNumber:
       organization.permissionariaAuthorizationNumber ?? '',
     permissionariaAuthorizationState:
@@ -211,11 +246,20 @@ export function buildOrganizationIsoPayload(draft: OrganizationIsoDraft) {
       normalizeAccreditationNumber(draft.accreditationNumber) || undefined,
     accreditationBody: optionalTrimmed(draft.accreditationBody),
     accreditationActive: draft.accreditationActive,
+    accreditationValidFrom: dateInputToIso(
+      draft.accreditationValidFrom,
+      'start',
+    ),
+    accreditationValidUntil: dateInputToIso(
+      draft.accreditationValidUntil,
+      'end',
+    ),
     permissionariaAuthorizationNumber: optionalTrimmed(
       draft.permissionariaAuthorizationNumber,
     ),
-    permissionariaAuthorizationState:
-      optionalTrimmed(draft.permissionariaAuthorizationState.toUpperCase()),
+    permissionariaAuthorizationState: optionalTrimmed(
+      draft.permissionariaAuthorizationState.toUpperCase(),
+    ),
     street: optionalTrimmed(draft.street),
     number: optionalTrimmed(draft.number),
     complement: optionalTrimmed(draft.complement),

@@ -96,6 +96,9 @@ const organizationPluginConfig = organizationClient({
           required: false,
           defaultValue: false,
         },
+        // #647: vigência window (nullable)
+        accreditationValidFrom: { type: "date", input: true, required: false },
+        accreditationValidUntil: { type: "date", input: true, required: false },
         street: { type: "string", input: true },
         number: { type: "string", input: true },
         complement: { type: "string", input: true },

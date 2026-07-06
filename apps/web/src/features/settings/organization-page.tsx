@@ -219,6 +219,12 @@ function OrganizationSettingsPage({
   const [accreditationActive, setAccreditationActive] = useState(
     isoDraft.accreditationActive,
   )
+  const [accreditationValidFrom, setAccreditationValidFrom] = useState(
+    isoDraft.accreditationValidFrom,
+  )
+  const [accreditationValidUntil, setAccreditationValidUntil] = useState(
+    isoDraft.accreditationValidUntil,
+  )
   const [
     permissionariaAuthorizationNumber,
     setPermissionariaAuthorizationNumber,
@@ -511,6 +517,8 @@ function OrganizationSettingsPage({
           accreditationNumber,
           accreditationBody,
           accreditationActive,
+          accreditationValidFrom,
+          accreditationValidUntil,
           permissionariaAuthorizationNumber,
           permissionariaAuthorizationState,
           street,
@@ -1086,12 +1094,50 @@ function OrganizationSettingsPage({
                                 placeholder="CGCRE/Inmetro"
                               />
                             </Field>
+                            <Field>
+                              <FieldLabel htmlFor="org-accreditation-valid-from">
+                                Início da vigência
+                              </FieldLabel>
+                              <Input
+                                id="org-accreditation-valid-from"
+                                type="date"
+                                value={accreditationValidFrom}
+                                onChange={(e) =>
+                                  setAccreditationValidFrom(e.target.value)
+                                }
+                                disabled={isUpdatingIso}
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="org-accreditation-valid-until">
+                                Fim da vigência
+                              </FieldLabel>
+                              <Input
+                                id="org-accreditation-valid-until"
+                                type="date"
+                                value={accreditationValidUntil}
+                                onChange={(e) =>
+                                  setAccreditationValidUntil(e.target.value)
+                                }
+                                disabled={isUpdatingIso}
+                              />
+                              <FieldDescription>
+                                Fora da vigência os certificados saem sem o
+                                selo. Vazio = sem controle de vigência.
+                              </FieldDescription>
+                            </Field>
                           </div>
                         </FieldGroup>
                         <AccreditationSealPreview
                           status={getAccreditationStatus({
                             accreditationActive,
                             accreditationNumber,
+                            accreditationValidFrom: accreditationValidFrom
+                              ? `${accreditationValidFrom}T00:00:00.000Z`
+                              : null,
+                            accreditationValidUntil: accreditationValidUntil
+                              ? `${accreditationValidUntil}T23:59:59.999Z`
+                              : null,
                           })}
                           accreditationNumber={accreditationNumber}
                         />

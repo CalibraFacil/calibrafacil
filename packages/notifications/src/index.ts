@@ -19,6 +19,7 @@ export {
   notifyStandardExpiring,
   notifyStandardExpired,
   notifySigningCertificateExpiring,
+  notifyAccreditationExpiring,
   notifyJobOverdue,
   notifyPaymentReceived,
   notifyPaymentFailed,

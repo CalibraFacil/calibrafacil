@@ -95,6 +95,8 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         methodSnapshot: calibrationJob.methodSnapshot,
         serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
         labAccreditationActive: organization.accreditationActive,
+        labAccreditationValidFrom: organization.accreditationValidFrom,
+        labAccreditationValidUntil: organization.accreditationValidUntil,
         labAccreditationNumber: organization.accreditationNumber,
       })
       .from(calibrationJob)
@@ -186,15 +188,20 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       }
     }
 
+    // #647: the seal reflects the accreditation vigência AT EMISSION — a
+    // window that expires later must not strip the seal from old certificates.
     const accredited = shouldRenderAccreditationSeal({
       lab: {
         accreditationActive: job.labAccreditationActive,
         accreditationNumber: job.labAccreditationNumber,
+        accreditationValidFrom: job.labAccreditationValidFrom,
+        accreditationValidUntil: job.labAccreditationValidUntil,
       },
       methodAccreditedScope:
         job.methodSnapshot?.accreditedScope ??
         job.serviceMethodAccreditedScope ??
         false,
+      ...(job.approvedAt ? { atDate: job.approvedAt } : {}),
     });
 
     return c.json({

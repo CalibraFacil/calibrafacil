@@ -36,37 +36,77 @@ export function formatAccreditationNumber(
 export type AccreditationProfile = {
   accreditationActive?: boolean | null;
   accreditationNumber?: string | null;
+  /** Vigência window (#647). Null bounds impose no constraint (REQ-CMP-VIG-004). */
+  accreditationValidFrom?: Date | string | null;
+  accreditationValidUntil?: Date | string | null;
 };
 
-export type AccreditationStatus = "inactive" | "incomplete" | "active";
+export type AccreditationStatus =
+  | "inactive"
+  | "incomplete"
+  | "active"
+  | "expired";
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Whether `atDate` falls inside the accreditation vigência window. Bounds are
+ * independent: a missing side imposes no constraint, so orgs that never filled
+ * the window keep the pre-#647 behavior (REQ-CMP-VIG-004).
+ */
+export function isWithinAccreditationWindow(
+  profile: AccreditationProfile,
+  atDate: Date,
+): boolean {
+  const from = toDate(profile.accreditationValidFrom);
+  const until = toDate(profile.accreditationValidUntil);
+  if (from && atDate < from) return false;
+  if (until && atDate > until) return false;
+  return true;
+}
 
 /**
  * Single source of truth for "the lab is accredited": the explicit toggle is
- * on AND an accreditation number is present. Drives both the holographic
- * state of the settings seal and seal emission on issued certificates.
+ * on, an accreditation number is present AND `atDate` (default: now) falls
+ * inside the vigência window (#647). Drives both the holographic state of the
+ * settings seal and seal emission on issued certificates — callers evaluating
+ * a stored certificate should pass its EMISSION date, not the viewing time.
  */
 export function getAccreditationStatus(
   profile: AccreditationProfile,
+  atDate: Date = /* @__PURE__ */ new Date(),
 ): AccreditationStatus {
   if (!profile.accreditationActive) return "inactive";
-  return formatAccreditationNumber(profile.accreditationNumber)
-    ? "active"
-    : "incomplete";
+  if (!formatAccreditationNumber(profile.accreditationNumber)) {
+    return "incomplete";
+  }
+  if (!isWithinAccreditationWindow(profile, atDate)) return "expired";
+  return "active";
 }
 
-export function isAccreditationActive(profile: AccreditationProfile): boolean {
-  return getAccreditationStatus(profile) === "active";
+export function isAccreditationActive(
+  profile: AccreditationProfile,
+  atDate?: Date,
+): boolean {
+  return getAccreditationStatus(profile, atDate) === "active";
 }
 
 /**
- * A certificate carries the accreditation seal only when the lab is
- * accredited AND the method that produced it is inside the accredited scope.
+ * A certificate carries the accreditation seal only when the lab is accredited
+ * (within vigência at `atDate` — the emission date for stored certificates)
+ * AND the method that produced it is inside the accredited scope.
  */
 export function shouldRenderAccreditationSeal(params: {
   lab: AccreditationProfile;
   methodAccreditedScope: boolean | null | undefined;
+  atDate?: Date;
 }): boolean {
   return (
-    isAccreditationActive(params.lab) && params.methodAccreditedScope === true
+    isAccreditationActive(params.lab, params.atDate) &&
+    params.methodAccreditedScope === true
   );
 }

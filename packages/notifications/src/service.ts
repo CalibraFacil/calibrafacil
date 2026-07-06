@@ -774,8 +774,14 @@ function renderEmailTemplate(
       "VISIT_REMINDER",
     ].includes(type)
   ) {
-    const { customerName, scheduledDate, technicianName, addressText, labName, reason } =
-      emailContext.data;
+    const {
+      customerName,
+      scheduledDate,
+      technicianName,
+      addressText,
+      labName,
+      reason,
+    } = emailContext.data;
     return VisitNotificationEmail({
       recipientName,
       variant: getVisitEmailType(type),
@@ -2254,6 +2260,45 @@ export async function notifySigningCertificateExpiring(
         type: "compliance",
         data: {
           itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Warn lab admins/owners that the Cgcre/RBC accreditation vigência is nearing
+ * its end (#647). Once expired, certificates of accredited-scope methods are
+ * emitted WITHOUT the accreditation seal (decided 2026-07-05) — so the lab
+ * must renew (or update the window) ahead of time.
+ */
+export async function notifyAccreditationExpiring(
+  organizationId: string,
+  context: { daysRemaining: number; validUntil: Date },
+): Promise<void> {
+  const dueDate = formatDateBR(context.validUntil);
+  const daysRemaining = context.daysRemaining;
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "ACCREDITATION_EXPIRING",
+      priority: daysRemaining <= 7 ? "HIGH" : "MEDIUM",
+      title: "Acreditação com vigência expirando",
+      message: `A vigência da acreditação Cgcre/RBC do laboratório termina em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} (${dueDate}). Após o vencimento, certificados de métodos com escopo acreditado passam a ser emitidos SEM o selo da acreditação. Atualize a janela de vigência nas configurações após a renovação.`,
+      actionUrl: "/dashboard/settings/organization",
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName: "Acreditação Cgcre/RBC",
           dueDate,
           daysRemaining,
         },
