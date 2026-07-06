@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
 import {
@@ -61,6 +61,8 @@ async function seedAsset(params: {
   const [row] = await db
     .insert(asset)
     .values({
+      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       unitId: params.labUnitId,
       customerId: params.customerId,
       assetTypeId: params.assetTypeId,
@@ -126,68 +128,63 @@ describe("portalRouter certificate routes — SUSPENDED org gate (SEC-05)", () =
   // "suspensa" body text pins the rejection to requireOrganization's gate
   // rather than any other 403 (getPortalLabScope / requirePortalAccess).
   // =========================================================================
-  it(
-    "REQ-SEC-PORT-001: SUSPENDED client org is rejected (403) on all 4 certificate routes",
-    async () => {
-      const ctx = await seedPortalContext({
-        labOrgId: "portal-lab-1",
-        clientOrgId: "portal-client-a",
-        portalUserId: "portal-user-a",
-        customerName: "Customer A",
-      });
-      const assetTypeId = await seedAssetType();
-      const assetId = await seedAsset({
-        labUnitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetTypeId,
-        tag: "EQ-A1",
-      });
-      const serviceId = await seedService({
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        name: "Calibração",
-      });
-      const certId = await seedApprovedCertificate({
-        labOrgId: ctx.labOrgId,
-        labUnitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetId,
-        serviceId,
-        createdBy: ctx.portalUserId,
-        jobId: "CAL-SUSP-1",
-      });
+  it("REQ-SEC-PORT-001: SUSPENDED client org is rejected (403) on all 4 certificate routes", async () => {
+    const ctx = await seedPortalContext({
+      labOrgId: "portal-lab-1",
+      clientOrgId: "portal-client-a",
+      portalUserId: "portal-user-a",
+      customerName: "Customer A",
+    });
+    const assetTypeId = await seedAssetType();
+    const assetId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-A1",
+    });
+    const serviceId = await seedService({
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      name: "Calibração",
+    });
+    const certId = await seedApprovedCertificate({
+      labOrgId: ctx.labOrgId,
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      jobId: "CAL-SUSP-1",
+    });
 
-      // Backoffice-suspend the portal session's active (CLIENT) organization.
-      await db
-        .update(organization)
-        .set({ status: "SUSPENDED" })
-        .where(eq(organization.id, ctx.clientOrgId));
+    // Backoffice-suspend the portal session's active (CLIENT) organization.
+    await db
+      .update(organization)
+      .set({ status: "SUSPENDED" })
+      .where(eq(organization.id, ctx.clientOrgId));
 
-      loginAsPortal({
-        userId: ctx.portalUserId,
-        organizationId: ctx.clientOrgId,
-      });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
 
-      const paths = [
-        "/certificates",
-        `/certificates/${certId}`,
-        `/certificates/${certId}/download`,
-        `/certificates/${certId}/reference-standards/1/certificate/download`,
-      ];
+    const paths = [
+      "/certificates",
+      `/certificates/${certId}`,
+      `/certificates/${certId}/download`,
+      `/certificates/${certId}/reference-standards/1/certificate/download`,
+    ];
 
-      for (const path of paths) {
-        const res = await portalRouter.request(path, { headers: LOCAL_ORIGIN });
-        expect(res.status, `suspended org must be blocked on ${path}`).toBe(
-          403,
-        );
-        const bodyText = await res.text();
-        expect(
-          bodyText,
-          `403 on ${path} must come from the suspension gate`,
-        ).toContain("suspensa");
-      }
-    },
-  );
+    for (const path of paths) {
+      const res = await portalRouter.request(path, { headers: LOCAL_ORIGIN });
+      expect(res.status, `suspended org must be blocked on ${path}`).toBe(403);
+      const bodyText = await res.text();
+      expect(
+        bodyText,
+        `403 on ${path} must come from the suspension gate`,
+      ).toContain("suspensa");
+    }
+  });
 
   // =========================================================================
   // REQ-SEC-PORT-002: WHILE the org is ACTIVE, all four routes SHALL continue
@@ -195,108 +192,104 @@ describe("portalRouter certificate routes — SUSPENDED org gate (SEC-05)", () =
   // is seeded so a scope regression would surface B's cert in A's list or make
   // B's cert resolvable to A — the suite asserts it does NOT.
   // =========================================================================
-  it(
-    "REQ-SEC-PORT-002: ACTIVE client org still served on all 4 routes, tenant scope intact",
-    async () => {
-      const ctx = await seedPortalContext({
-        labOrgId: "portal-lab-1",
-        clientOrgId: "portal-client-a",
-        portalUserId: "portal-user-a",
-        customerName: "Customer A",
-      });
-      const customerBId = await seedPortalCustomer({
-        labOrgId: ctx.labOrgId,
-        clientOrgId: "portal-client-b",
-        portalUserId: "portal-user-b",
-        customerName: "Customer B",
-      });
-      const assetTypeId = await seedAssetType();
-      const serviceId = await seedService({
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        name: "Calibração",
-      });
+  it("REQ-SEC-PORT-002: ACTIVE client org still served on all 4 routes, tenant scope intact", async () => {
+    const ctx = await seedPortalContext({
+      labOrgId: "portal-lab-1",
+      clientOrgId: "portal-client-a",
+      portalUserId: "portal-user-a",
+      customerName: "Customer A",
+    });
+    const customerBId = await seedPortalCustomer({
+      labOrgId: ctx.labOrgId,
+      clientOrgId: "portal-client-b",
+      portalUserId: "portal-user-b",
+      customerName: "Customer B",
+    });
+    const assetTypeId = await seedAssetType();
+    const serviceId = await seedService({
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      name: "Calibração",
+    });
 
-      const assetAId = await seedAsset({
-        labUnitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetTypeId,
-        tag: "EQ-A1",
-      });
-      const certAId = await seedApprovedCertificate({
-        labOrgId: ctx.labOrgId,
-        labUnitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetId: assetAId,
-        serviceId,
-        createdBy: ctx.portalUserId,
-        jobId: "CAL-A-1",
-      });
+    const assetAId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetTypeId,
+      tag: "EQ-A1",
+    });
+    const certAId = await seedApprovedCertificate({
+      labOrgId: ctx.labOrgId,
+      labUnitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId: assetAId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      jobId: "CAL-A-1",
+    });
 
-      const assetBId = await seedAsset({
-        labUnitId: ctx.labUnitId,
-        customerId: customerBId,
-        assetTypeId,
-        tag: "EQ-B1",
-      });
-      const certBId = await seedApprovedCertificate({
-        labOrgId: ctx.labOrgId,
-        labUnitId: ctx.labUnitId,
-        customerId: customerBId,
-        assetId: assetBId,
-        serviceId,
-        createdBy: ctx.portalUserId,
-        jobId: "CAL-B-1",
-      });
+    const assetBId = await seedAsset({
+      labUnitId: ctx.labUnitId,
+      customerId: customerBId,
+      assetTypeId,
+      tag: "EQ-B1",
+    });
+    const certBId = await seedApprovedCertificate({
+      labOrgId: ctx.labOrgId,
+      labUnitId: ctx.labUnitId,
+      customerId: customerBId,
+      assetId: assetBId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      jobId: "CAL-B-1",
+    });
 
-      loginAsPortal({
-        userId: ctx.portalUserId,
-        organizationId: ctx.clientOrgId,
-      });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
 
-      // GET /certificates → 200; only A's cert is listed (B's is scoped out).
-      const listRes = await portalRouter.request("/certificates", {
-        headers: LOCAL_ORIGIN,
-      });
-      expect(listRes.status).toBe(200);
-      const listBody = await listRes.json();
-      const listedJobIds = listBody.data.map(
-        (row: { jobId: string }) => row.jobId,
-      );
-      expect(listedJobIds).toContain("CAL-A-1");
-      expect(listedJobIds).not.toContain("CAL-B-1");
+    // GET /certificates → 200; only A's cert is listed (B's is scoped out).
+    const listRes = await portalRouter.request("/certificates", {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    const listedJobIds = listBody.data.map(
+      (row: { jobId: string }) => row.jobId,
+    );
+    expect(listedJobIds).toContain("CAL-A-1");
+    expect(listedJobIds).not.toContain("CAL-B-1");
 
-      // GET /certificates/:id → 200 for A's own cert.
-      const detailRes = await portalRouter.request(`/certificates/${certAId}`, {
-        headers: LOCAL_ORIGIN,
-      });
-      expect(detailRes.status).toBe(200);
+    // GET /certificates/:id → 200 for A's own cert.
+    const detailRes = await portalRouter.request(`/certificates/${certAId}`, {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(detailRes.status).toBe(200);
 
-      // GET /certificates/:id → 404 for B's cert (tenant scope intact, NOT 403).
-      const detailBRes = await portalRouter.request(
-        `/certificates/${certBId}`,
-        { headers: LOCAL_ORIGIN },
-      );
-      expect(detailBRes.status).not.toBe(403);
-      expect(detailBRes.status).toBe(404);
+    // GET /certificates/:id → 404 for B's cert (tenant scope intact, NOT 403).
+    const detailBRes = await portalRouter.request(`/certificates/${certBId}`, {
+      headers: LOCAL_ORIGIN,
+    });
+    expect(detailBRes.status).not.toBe(403);
+    expect(detailBRes.status).toBe(404);
 
-      // GET /certificates/:id/download → handler reached (cert found, no
-      // document yet → 400), NOT blocked by the suspension gate.
-      const downloadRes = await portalRouter.request(
-        `/certificates/${certAId}/download`,
-        { headers: LOCAL_ORIGIN },
-      );
-      expect(downloadRes.status).not.toBe(403);
-      expect(downloadRes.status).toBe(400);
+    // GET /certificates/:id/download → handler reached (cert found, no
+    // document yet → 400), NOT blocked by the suspension gate.
+    const downloadRes = await portalRouter.request(
+      `/certificates/${certAId}/download`,
+      { headers: LOCAL_ORIGIN },
+    );
+    expect(downloadRes.status).not.toBe(403);
+    expect(downloadRes.status).toBe(400);
 
-      // GET .../reference-standards/:standardId/certificate/download →
-      // handler reached (cert found, no standards snapshot → 404), NOT 403.
-      const standardRes = await portalRouter.request(
-        `/certificates/${certAId}/reference-standards/1/certificate/download`,
-        { headers: LOCAL_ORIGIN },
-      );
-      expect(standardRes.status).not.toBe(403);
-      expect(standardRes.status).toBe(404);
-    },
-  );
+    // GET .../reference-standards/:standardId/certificate/download →
+    // handler reached (cert found, no standards snapshot → 404), NOT 403.
+    const standardRes = await portalRouter.request(
+      `/certificates/${certAId}/reference-standards/1/certificate/download`,
+      { headers: LOCAL_ORIGIN },
+    );
+    expect(standardRes.status).not.toBe(403);
+    expect(standardRes.status).toBe(404);
+  });
 });

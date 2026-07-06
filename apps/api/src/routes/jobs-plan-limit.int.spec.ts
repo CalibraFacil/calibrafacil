@@ -37,7 +37,7 @@ import {
   organization,
   service,
 } from "@calibra-facil/db/schema";
-import { and, eq, gte, count } from "drizzle-orm";
+import { and, eq, gte, count, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -113,6 +113,8 @@ async function seedAsset(params: {
   const [row] = await db
     .insert(asset)
     .values({
+      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       unitId: params.unitId,
       customerId: params.customerId,
       assetTypeId: params.assetTypeId,
@@ -263,103 +265,97 @@ describe("jobsRouter — POST / certificate plan-limit quota (REQ-DOM-QTA-001)",
     await truncateAll();
   });
 
-  it(
-    "REQ-DOM-QTA-001: two concurrent POST / at the quota boundary resolve to exactly one 201 + one 402; DB count never exceeds the plan limit",
-    async () => {
-      const org = await seedOrg({
-        orgId: "org-quota",
-        userId: "user-quota",
-        role: "admin",
-      });
+  it("REQ-DOM-QTA-001: two concurrent POST / at the quota boundary resolve to exactly one 201 + one 402; DB count never exceeds the plan limit", async () => {
+    const org = await seedOrg({
+      orgId: "org-quota",
+      userId: "user-quota",
+      role: "admin",
+    });
 
-      const customerId = await seedCustomer({
-        labOrgId: org.orgId,
-        clientOrgId: `client-${org.orgId}`,
-      });
+    const customerId = await seedCustomer({
+      labOrgId: org.orgId,
+      clientOrgId: `client-${org.orgId}`,
+    });
 
-      const assetTypeId = await seedAssetType("at-quota");
+    const assetTypeId = await seedAssetType("at-quota");
 
-      const assetOneId = await seedAsset({
-        unitId: org.unitId,
-        customerId,
-        assetTypeId,
-        tag: "TAG-QUOTA-1",
-      });
-      const assetTwoId = await seedAsset({
-        unitId: org.unitId,
-        customerId,
-        assetTypeId,
-        tag: "TAG-QUOTA-2",
-      });
+    const assetOneId = await seedAsset({
+      unitId: org.unitId,
+      customerId,
+      assetTypeId,
+      tag: "TAG-QUOTA-1",
+    });
+    const assetTwoId = await seedAsset({
+      unitId: org.unitId,
+      customerId,
+      assetTypeId,
+      tag: "TAG-QUOTA-2",
+    });
 
-      const methodId = await seedPublishedMethod({
-        organizationId: org.orgId,
-        assetTypeId,
-        createdBy: org.userId,
-      });
+    const methodId = await seedPublishedMethod({
+      organizationId: org.orgId,
+      assetTypeId,
+      createdBy: org.userId,
+    });
 
-      const serviceId = await seedService({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        methodId,
-      });
+    const serviceId = await seedService({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      methodId,
+    });
 
-      // Seed usage = limit - 1 (9 of 10 for FREE) so exactly one slot remains —
-      // the boundary where a TOCTOU race is exploitable.
-      const preExistingUsage = FREE_PLAN_CERTIFICATE_LIMIT - 1;
-      await Promise.all(
-        Array.from({ length: preExistingUsage }, (_, i) =>
-          seedUsageJob({
-            jobId: `SEED-QUOTA-${i}`,
-            organizationId: org.orgId,
-            unitId: org.unitId,
-            customerId,
-            assetId: assetOneId,
-            serviceId,
-            createdBy: org.userId,
-          }),
-        ),
-      );
-
-      expect(await countCertificatesThisMonth(org.orgId)).toBe(
-        preExistingUsage,
-      );
-
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-
-      // Fire two concurrent creates for the SAME org against the ONE
-      // remaining slot, using two different assets so nothing besides the
-      // quota check itself could distinguish/serialize them.
-      const [resA, resB] = await Promise.all([
-        jobsRouter.request("/", {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ assetId: assetOneId, serviceId }),
+    // Seed usage = limit - 1 (9 of 10 for FREE) so exactly one slot remains —
+    // the boundary where a TOCTOU race is exploitable.
+    const preExistingUsage = FREE_PLAN_CERTIFICATE_LIMIT - 1;
+    await Promise.all(
+      Array.from({ length: preExistingUsage }, (_, i) =>
+        seedUsageJob({
+          jobId: `SEED-QUOTA-${i}`,
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          customerId,
+          assetId: assetOneId,
+          serviceId,
+          createdBy: org.userId,
         }),
-        jobsRouter.request("/", {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ assetId: assetTwoId, serviceId }),
-        }),
-      ]);
+      ),
+    );
 
-      const statuses = [resA.status, resB.status].toSorted();
+    expect(await countCertificatesThisMonth(org.orgId)).toBe(preExistingUsage);
 
-      // Exactly one request must win the last slot (201) and the other must
-      // be rejected by the in-transaction re-check (402) — never both 201
-      // (quota exceeded, the pre-fix bug) and never both 402 (would mean the
-      // lock starved a legitimate create).
-      expect(statuses).toEqual([201, 402]);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const rejected = resA.status === 402 ? resA : resB;
-      const rejectedBody = await rejected.text();
-      expect(rejectedBody).toContain("certificados");
+    // Fire two concurrent creates for the SAME org against the ONE
+    // remaining slot, using two different assets so nothing besides the
+    // quota check itself could distinguish/serialize them.
+    const [resA, resB] = await Promise.all([
+      jobsRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ assetId: assetOneId, serviceId }),
+      }),
+      jobsRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ assetId: assetTwoId, serviceId }),
+      }),
+    ]);
 
-      // DB-verified: the organization's certificate count this month never
-      // exceeds the FREE plan limit, regardless of which request won the race.
-      const finalUsage = await countCertificatesThisMonth(org.orgId);
-      expect(finalUsage).toBe(FREE_PLAN_CERTIFICATE_LIMIT);
-    },
-    30_000,
-  );
+    const statuses = [resA.status, resB.status].toSorted();
+
+    // Exactly one request must win the last slot (201) and the other must
+    // be rejected by the in-transaction re-check (402) — never both 201
+    // (quota exceeded, the pre-fix bug) and never both 402 (would mean the
+    // lock starved a legitimate create).
+    expect(statuses).toEqual([201, 402]);
+
+    const rejected = resA.status === 402 ? resA : resB;
+    const rejectedBody = await rejected.text();
+    expect(rejectedBody).toContain("certificados");
+
+    // DB-verified: the organization's certificate count this month never
+    // exceeds the FREE plan limit, regardless of which request won the race.
+    const finalUsage = await countCertificatesThisMonth(org.orgId);
+    expect(finalUsage).toBe(FREE_PLAN_CERTIFICATE_LIMIT);
+  }, 30_000);
 });

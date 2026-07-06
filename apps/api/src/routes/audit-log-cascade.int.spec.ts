@@ -44,7 +44,7 @@ import {
   personnelCompetenceAuditLog,
   service,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../test/integration/seed";
 
@@ -98,6 +98,8 @@ async function seedAsset(params: {
   const [row] = await db
     .insert(asset)
     .values({
+      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       unitId: params.unitId,
       customerId: params.customerId,
       assetTypeId: params.assetTypeId,
@@ -234,75 +236,69 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
   // REQ-CMP-AUD-010b: certificate_release_audit_log (DOUBLE-FK table) survives
   // deletion of its subject (the certificate_release row).
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010b: certificateReleaseAuditLog survives deletion of the release subject",
-    async () => {
-      const org = await seedOrg({ orgId: "org-crel", role: "admin" });
-      const { releaseId, auditId } = await seedCertificateReleaseWithAudit(org);
+  it("REQ-CMP-AUD-010b: certificateReleaseAuditLog survives deletion of the release subject", async () => {
+    const org = await seedOrg({ orgId: "org-crel", role: "admin" });
+    const { releaseId, auditId } = await seedCertificateReleaseWithAudit(org);
 
-      await db
-        .delete(certificateRelease)
-        .where(eq(certificateRelease.id, releaseId));
+    await db
+      .delete(certificateRelease)
+      .where(eq(certificateRelease.id, releaseId));
 
-      const gone = await db
-        .select()
-        .from(certificateRelease)
-        .where(eq(certificateRelease.id, releaseId));
-      expect(gone).toHaveLength(0);
+    const gone = await db
+      .select()
+      .from(certificateRelease)
+      .where(eq(certificateRelease.id, releaseId));
+    expect(gone).toHaveLength(0);
 
-      const survived = await db
-        .select()
-        .from(certificateReleaseAuditLog)
-        .where(eq(certificateReleaseAuditLog.id, auditId));
-      expect(survived).toHaveLength(1);
-      expect(survived[0]?.certificateReleaseId).toBe(releaseId);
-    },
-  );
+    const survived = await db
+      .select()
+      .from(certificateReleaseAuditLog)
+      .where(eq(certificateReleaseAuditLog.id, auditId));
+    expect(survived).toHaveLength(1);
+    expect(survived[0]?.certificateReleaseId).toBe(releaseId);
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-010b: organization_api_key_audit_log (DOUBLE-FK table) survives
   // deletion of its api-key subject.
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010b: organizationApiKeyAuditLog survives deletion of the api-key subject",
-    async () => {
-      const org = await seedOrg({ orgId: "org-apikey-sub", role: "admin" });
-      const key = await seedApiKey({
+  it("REQ-CMP-AUD-010b: organizationApiKeyAuditLog survives deletion of the api-key subject", async () => {
+    const org = await seedOrg({ orgId: "org-apikey-sub", role: "admin" });
+    const key = await seedApiKey({
+      organizationId: org.orgId,
+      createdBy: org.userId,
+      scopes: ["customers:write"],
+      keyId: "apikey-sub",
+    });
+
+    const [auditRow] = await db
+      .insert(organizationApiKeyAuditLog)
+      .values({
+        apiKeyId: key.keyId,
         organizationId: org.orgId,
-        createdBy: org.userId,
-        scopes: ["customers:write"],
-        keyId: "apikey-sub",
-      });
+        action: "revoke",
+        performedBy: org.userId,
+      })
+      .returning({ id: organizationApiKeyAuditLog.id });
+    if (!auditRow) throw new Error("seed apiKey audit: insert failed");
 
-      const [auditRow] = await db
-        .insert(organizationApiKeyAuditLog)
-        .values({
-          apiKeyId: key.keyId,
-          organizationId: org.orgId,
-          action: "revoke",
-          performedBy: org.userId,
-        })
-        .returning({ id: organizationApiKeyAuditLog.id });
-      if (!auditRow) throw new Error("seed apiKey audit: insert failed");
+    await db
+      .delete(organizationApiKey)
+      .where(eq(organizationApiKey.id, key.keyId));
 
-      await db
-        .delete(organizationApiKey)
-        .where(eq(organizationApiKey.id, key.keyId));
+    const gone = await db
+      .select()
+      .from(organizationApiKey)
+      .where(eq(organizationApiKey.id, key.keyId));
+    expect(gone).toHaveLength(0);
 
-      const gone = await db
-        .select()
-        .from(organizationApiKey)
-        .where(eq(organizationApiKey.id, key.keyId));
-      expect(gone).toHaveLength(0);
-
-      const survived = await db
-        .select()
-        .from(organizationApiKeyAuditLog)
-        .where(eq(organizationApiKeyAuditLog.id, auditRow.id));
-      expect(survived).toHaveLength(1);
-      expect(survived[0]?.apiKeyId).toBe(key.keyId);
-    },
-  );
+    const survived = await db
+      .select()
+      .from(organizationApiKeyAuditLog)
+      .where(eq(organizationApiKeyAuditLog.id, auditRow.id));
+    expect(survived).toHaveLength(1);
+    expect(survived[0]?.apiKeyId).toBe(key.keyId);
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-010b: organization_api_key_audit_log survives deletion of the
@@ -310,142 +306,133 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
   // audit table is also broken. Deleting the org cascades member/unit/api-key;
   // the audit row must remain.
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010b: organizationApiKeyAuditLog survives deletion of the organization (2nd FK)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-apikey-org", role: "admin" });
-      const key = await seedApiKey({
+  it("REQ-CMP-AUD-010b: organizationApiKeyAuditLog survives deletion of the organization (2nd FK)", async () => {
+    const org = await seedOrg({ orgId: "org-apikey-org", role: "admin" });
+    const key = await seedApiKey({
+      organizationId: org.orgId,
+      createdBy: org.userId,
+      scopes: ["customers:write"],
+      keyId: "apikey-org",
+    });
+
+    const [auditRow] = await db
+      .insert(organizationApiKeyAuditLog)
+      .values({
+        apiKeyId: key.keyId,
         organizationId: org.orgId,
-        createdBy: org.userId,
-        scopes: ["customers:write"],
-        keyId: "apikey-org",
-      });
+        action: "create",
+        performedBy: org.userId,
+      })
+      .returning({ id: organizationApiKeyAuditLog.id });
+    if (!auditRow) throw new Error("seed apiKey audit: insert failed");
 
-      const [auditRow] = await db
-        .insert(organizationApiKeyAuditLog)
-        .values({
-          apiKeyId: key.keyId,
-          organizationId: org.orgId,
-          action: "create",
-          performedBy: org.userId,
-        })
-        .returning({ id: organizationApiKeyAuditLog.id });
-      if (!auditRow) throw new Error("seed apiKey audit: insert failed");
+    await db.delete(organization).where(eq(organization.id, org.orgId));
 
-      await db.delete(organization).where(eq(organization.id, org.orgId));
+    const goneOrg = await db
+      .select()
+      .from(organization)
+      .where(eq(organization.id, org.orgId));
+    expect(goneOrg).toHaveLength(0);
 
-      const goneOrg = await db
-        .select()
-        .from(organization)
-        .where(eq(organization.id, org.orgId));
-      expect(goneOrg).toHaveLength(0);
-
-      const survived = await db
-        .select()
-        .from(organizationApiKeyAuditLog)
-        .where(eq(organizationApiKeyAuditLog.id, auditRow.id));
-      expect(survived).toHaveLength(1);
-      expect(survived[0]?.organizationId).toBe(org.orgId);
-    },
-  );
+    const survived = await db
+      .select()
+      .from(organizationApiKeyAuditLog)
+      .where(eq(organizationApiKeyAuditLog.id, auditRow.id));
+    expect(survived).toHaveLength(1);
+    expect(survived[0]?.organizationId).toBe(org.orgId);
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-010b: personnel_competence_audit_log survives deletion of its
   // competence subject — this is the real user-self-delete risk (competence
   // rows cascade from user; the trail must not vanish with them).
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010b: personnelCompetenceAuditLog survives deletion of the competence subject",
-    async () => {
-      const org = await seedOrg({ orgId: "org-comp", role: "admin" });
+  it("REQ-CMP-AUD-010b: personnelCompetenceAuditLog survives deletion of the competence subject", async () => {
+    const org = await seedOrg({ orgId: "org-comp", role: "admin" });
 
-      const [pc] = await db
-        .insert(personnelCompetence)
-        .values({
-          organizationId: org.orgId,
-          userId: org.userId,
-          scopeDescription: "Calibração de massa",
-          requestedBy: org.userId,
-          createdBy: org.userId,
-        })
-        .returning({ id: personnelCompetence.id });
-      if (!pc) throw new Error("seed personnelCompetence: insert failed");
+    const [pc] = await db
+      .insert(personnelCompetence)
+      .values({
+        organizationId: org.orgId,
+        userId: org.userId,
+        scopeDescription: "Calibração de massa",
+        requestedBy: org.userId,
+        createdBy: org.userId,
+      })
+      .returning({ id: personnelCompetence.id });
+    if (!pc) throw new Error("seed personnelCompetence: insert failed");
 
-      const [auditRow] = await db
-        .insert(personnelCompetenceAuditLog)
-        .values({
-          competenceId: pc.id,
-          action: "qualify",
-          performedBy: org.userId,
-        })
-        .returning({ id: personnelCompetenceAuditLog.id });
-      if (!auditRow) throw new Error("seed competence audit: insert failed");
+    const [auditRow] = await db
+      .insert(personnelCompetenceAuditLog)
+      .values({
+        competenceId: pc.id,
+        action: "qualify",
+        performedBy: org.userId,
+      })
+      .returning({ id: personnelCompetenceAuditLog.id });
+    if (!auditRow) throw new Error("seed competence audit: insert failed");
 
-      await db
-        .delete(personnelCompetence)
-        .where(eq(personnelCompetence.id, pc.id));
+    await db
+      .delete(personnelCompetence)
+      .where(eq(personnelCompetence.id, pc.id));
 
-      const gone = await db
-        .select()
-        .from(personnelCompetence)
-        .where(eq(personnelCompetence.id, pc.id));
-      expect(gone).toHaveLength(0);
+    const gone = await db
+      .select()
+      .from(personnelCompetence)
+      .where(eq(personnelCompetence.id, pc.id));
+    expect(gone).toHaveLength(0);
 
-      const survived = await db
-        .select()
-        .from(personnelCompetenceAuditLog)
-        .where(eq(personnelCompetenceAuditLog.id, auditRow.id));
-      expect(survived).toHaveLength(1);
-      expect(survived[0]?.competenceId).toBe(pc.id);
-    },
-  );
+    const survived = await db
+      .select()
+      .from(personnelCompetenceAuditLog)
+      .where(eq(personnelCompetenceAuditLog.id, auditRow.id));
+    expect(survived).toHaveLength(1);
+    expect(survived[0]?.competenceId).toBe(pc.id);
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-010b: authorized_signatory_audit_log survives deletion of its
   // signatory subject — ISO/IEC 17025 §6.2.6: the record of who was authorized
   // to sign must persist even after the authorization row is removed.
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010b: authorizedSignatoryAuditLog survives deletion of the signatory subject",
-    async () => {
-      const org = await seedOrg({ orgId: "org-sig", role: "admin" });
+  it("REQ-CMP-AUD-010b: authorizedSignatoryAuditLog survives deletion of the signatory subject", async () => {
+    const org = await seedOrg({ orgId: "org-sig", role: "admin" });
 
-      const [sig] = await db
-        .insert(authorizedSignatory)
-        .values({
-          organizationId: org.orgId,
-          userId: org.userId,
-          authorizedBy: org.userId,
-        })
-        .returning({ id: authorizedSignatory.id });
-      if (!sig) throw new Error("seed authorizedSignatory: insert failed");
+    const [sig] = await db
+      .insert(authorizedSignatory)
+      .values({
+        organizationId: org.orgId,
+        userId: org.userId,
+        authorizedBy: org.userId,
+      })
+      .returning({ id: authorizedSignatory.id });
+    if (!sig) throw new Error("seed authorizedSignatory: insert failed");
 
-      const [auditRow] = await db
-        .insert(authorizedSignatoryAuditLog)
-        .values({
-          signatoryId: sig.id,
-          action: "authorize",
-          performedBy: org.userId,
-        })
-        .returning({ id: authorizedSignatoryAuditLog.id });
-      if (!auditRow) throw new Error("seed signatory audit: insert failed");
+    const [auditRow] = await db
+      .insert(authorizedSignatoryAuditLog)
+      .values({
+        signatoryId: sig.id,
+        action: "authorize",
+        performedBy: org.userId,
+      })
+      .returning({ id: authorizedSignatoryAuditLog.id });
+    if (!auditRow) throw new Error("seed signatory audit: insert failed");
 
-      await db
-        .delete(authorizedSignatory)
-        .where(eq(authorizedSignatory.id, sig.id));
+    await db
+      .delete(authorizedSignatory)
+      .where(eq(authorizedSignatory.id, sig.id));
 
-      const gone = await db
-        .select()
-        .from(authorizedSignatory)
-        .where(eq(authorizedSignatory.id, sig.id));
-      expect(gone).toHaveLength(0);
+    const gone = await db
+      .select()
+      .from(authorizedSignatory)
+      .where(eq(authorizedSignatory.id, sig.id));
+    expect(gone).toHaveLength(0);
 
-      const survived = await db
-        .select()
-        .from(authorizedSignatoryAuditLog)
-        .where(eq(authorizedSignatoryAuditLog.id, auditRow.id));
-      expect(survived).toHaveLength(1);
-      expect(survived[0]?.signatoryId).toBe(sig.id);
-    },
-  );
+    const survived = await db
+      .select()
+      .from(authorizedSignatoryAuditLog)
+      .where(eq(authorizedSignatoryAuditLog.id, auditRow.id));
+    expect(survived).toHaveLength(1);
+    expect(survived[0]?.signatoryId).toBe(sig.id);
+  });
 });

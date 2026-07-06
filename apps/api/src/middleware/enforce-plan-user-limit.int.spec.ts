@@ -1,13 +1,14 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@calibra-facil/db";
 import {
-  account,
   invitation,
   member,
   organization,
+  session,
   subscription,
   user,
 } from "@calibra-facil/db/schema";
+import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { PlanId } from "@calibra-facil/shared";
 import { truncateAll } from "../../test/integration/db";
@@ -40,7 +41,6 @@ type LabAuth = ReturnType<AuthModule["createLabAuth"]>;
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 const FUTURE = new Date("2099-01-01T00:00:00.000Z");
 const PAST = new Date("2020-01-01T00:00:00.000Z");
-const OWNER_PASSWORD = "Dom07-SuperSecret-123!";
 
 // A direct `auth.api.*` call has no incoming request, so the dev dynamic
 // baseURL (allowedHosts) needs a Host header to resolve. "localhost:5173" is an
@@ -142,17 +142,10 @@ async function seedInvitation(params: {
 }
 
 /**
- * Seed a real owner account (verified email + hashed credential account), the
- * owner member row, sign in through the REAL Better Auth password endpoint, and
- * return the session cookie header for driving the invite endpoint as an
- * authenticated owner. The owner counts as one member.
- *
- * We seed the credential account directly (hashing via the real
- * `password.hash`) instead of the admin `createUser` endpoint: `createUser`
- * requires an admin session when called with a request/headers, but the dev
- * dynamic baseURL needs a Host header to resolve — the two are mutually
- * exclusive. Direct seeding sidesteps that while still exercising the real
- * sign-in + invite endpoints.
+ * Seed a real owner (verified email + member row) and mint a REAL session for
+ * driving Better Auth endpoints. The lab surface is passwordless (#694), so
+ * there is no credential account and no sign-in call — the session row + a
+ * correctly signed session cookie is exactly what magic-link sign-in yields.
  */
 async function createOwnerAndSignIn(orgId: string): Promise<{
   ownerId: string;
@@ -161,23 +154,11 @@ async function createOwnerAndSignIn(orgId: string): Promise<{
   const ownerId = `owner-${orgId}`;
   const email = `${ownerId}@lab.test`;
 
-  const ctx = await labAuth.$context;
-  const hashedPassword = await ctx.password.hash(OWNER_PASSWORD);
-
   await db.insert(user).values({
     id: ownerId,
     name: "Owner",
     email,
     emailVerified: true,
-  });
-  await db.insert(account).values({
-    id: `acc-${ownerId}`,
-    accountId: ownerId,
-    providerId: "credential",
-    userId: ownerId,
-    password: hashedPassword,
-    createdAt: NOW,
-    updatedAt: NOW,
   });
   await db.insert(member).values({
     id: `m-${orgId}-owner`,
@@ -187,19 +168,29 @@ async function createOwnerAndSignIn(orgId: string): Promise<{
     createdAt: NOW,
   });
 
-  const res = await labAuth.api.signInEmail({
-    body: { email, password: OWNER_PASSWORD },
-    headers: new Headers({ host: HOST }),
-    asResponse: true,
+  // #694 (SEC-09): the lab surface is passwordless — signInEmail returns 400
+  // BY DESIGN, so mint a REAL session instead: a `session` row plus the cookie
+  // signed exactly as Better Auth verifies it (token + HMAC via the public
+  // better-auth/crypto makeSignature). This is what production magic-link
+  // sign-in produces; the invite endpoint's hook chain runs unchanged.
+  const token = `it-session-${orgId}`;
+  await db.insert(session).values({
+    id: `sess-${orgId}`,
+    token,
+    userId: ownerId,
+    activeOrganizationId: orgId,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   });
-  if (res.status !== 200) {
-    throw new Error(`createOwnerAndSignIn: sign-in failed (${res.status})`);
-  }
-  const cookie = res.headers
-    .getSetCookie()
-    .map((c) => c.split(";")[0])
-    .join("; ");
-  if (!cookie) throw new Error("createOwnerAndSignIn: no session cookie");
+  // Same HMAC better-auth's makeSignature produces (HMAC-SHA256, standard
+  // base64); the value is URL-encoded exactly like setSignedCookie writes it.
+  const ctx = await labAuth.$context;
+  const cookieName = ctx.authCookies.sessionToken.name;
+  const signature = createHmac("sha256", ctx.secret)
+    .update(token)
+    .digest("base64");
+  const cookie = `${cookieName}=${encodeURIComponent(`${token}.${signature}`)}`;
 
   return { ownerId, cookie };
 }
@@ -229,10 +220,7 @@ async function seedUser(userId: string): Promise<void> {
  * (session optional when a userId is provided — no invite email). Exercises the
  * `beforeAddMember` hook.
  */
-function addMember(params: {
-  orgId: string;
-  userId: string;
-}) {
+function addMember(params: { orgId: string; userId: string }) {
   return labAuth.api.addMember({
     body: {
       userId: params.userId,

@@ -36,7 +36,7 @@ import {
   organization,
   serviceOrder,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -97,6 +97,8 @@ async function seedAsset(params: {
   const [row] = await db
     .insert(asset)
     .values({
+      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
       unitId: params.unitId,
       customerId: params.customerId,
       assetTypeId: params.assetTypeId,
