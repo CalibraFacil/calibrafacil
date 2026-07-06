@@ -43,6 +43,7 @@ const JSON_HEADERS = { "content-type": "application/json" };
 const VALID_TOKEN = "test-asaas-webhook-secret-1234567890";
 
 const previousToken = process.env.ASAAS_WEBHOOK_TOKEN;
+const previousAllowedIps = process.env.ASAAS_WEBHOOK_ALLOWED_IPS;
 
 function buildPayload(overrides?: { id?: string; event?: string }) {
   return {
@@ -78,6 +79,11 @@ afterEach(() => {
     delete process.env.ASAAS_WEBHOOK_TOKEN;
   } else {
     process.env.ASAAS_WEBHOOK_TOKEN = previousToken;
+  }
+  if (previousAllowedIps === undefined) {
+    delete process.env.ASAAS_WEBHOOK_ALLOWED_IPS;
+  } else {
+    process.env.ASAAS_WEBHOOK_ALLOWED_IPS = previousAllowedIps;
   }
 });
 
@@ -232,6 +238,62 @@ describe("POST /webhooks/asaas (real DB, shared-secret gated)", () => {
         .from(providerWebhookEvent)
         .where(eq(providerWebhookEvent.eventId, "evt_int_dup_001"));
       expect(rows).toHaveLength(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // #641 (SEC-06): source-IP allowlist — Asaas has no HMAC, so once the
+  // operator sets ASAAS_WEBHOOK_ALLOWED_IPS the request must ALSO arrive from
+  // a published Asaas IP. Rejection happens before the token check and before
+  // any persistence (REQ-SEC-ASA-002).
+  // -------------------------------------------------------------------------
+  describe("REQ-SEC-ASA-IP: source-IP allowlist (when configured)", () => {
+    it("rejects a valid-token request from a non-listed IP (401, no row)", async () => {
+      process.env.ASAAS_WEBHOOK_ALLOWED_IPS = "52.67.12.206,18.230.8.159";
+      const res = await webhooksRouter.request("/asaas", {
+        method: "POST",
+        headers: {
+          ...JSON_HEADERS,
+          "asaas-access-token": VALID_TOKEN,
+          "x-real-ip": "203.0.113.7",
+        },
+        body: JSON.stringify(buildPayload()),
+      });
+
+      expect(res.status).toBe(401);
+      expect(await eventRowCount()).toBe(0);
+    });
+
+    it("accepts a valid-token request from a listed IP (processed, row written)", async () => {
+      process.env.ASAAS_WEBHOOK_ALLOWED_IPS = "52.67.12.206,18.230.8.159";
+      const res = await webhooksRouter.request("/asaas", {
+        method: "POST",
+        headers: {
+          ...JSON_HEADERS,
+          "asaas-access-token": VALID_TOKEN,
+          "x-real-ip": "18.230.8.159",
+        },
+        body: JSON.stringify(buildPayload()),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await eventRowCount()).toBe(1);
+    });
+
+    it("unset allowlist preserves the token-only behavior (no regression)", async () => {
+      delete process.env.ASAAS_WEBHOOK_ALLOWED_IPS;
+      const res = await webhooksRouter.request("/asaas", {
+        method: "POST",
+        headers: {
+          ...JSON_HEADERS,
+          "asaas-access-token": VALID_TOKEN,
+          "x-real-ip": "203.0.113.7",
+        },
+        body: JSON.stringify(buildPayload()),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await eventRowCount()).toBe(1);
     });
   });
 });
