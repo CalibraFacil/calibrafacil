@@ -60,6 +60,7 @@ import {
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
 import { backofficeCommercialRouter } from "./backoffice-commercial";
 import { backofficeOrganizationsRouter } from "./backoffice-organizations";
+import { backofficeAssetTypesRouter } from "./backoffice-asset-types";
 import { backofficeUsersRouter } from "./backoffice-users";
 import { logPlatformEvent } from "./backoffice-platform-log";
 import {
@@ -1440,6 +1441,7 @@ export const backofficeRouter = new Hono<{
   // guard with them into the sub-router; errors propagate to this router's
   // onError (sub-router defines none), preserving the { error } response shape.
   .route("/organizations", backofficeOrganizationsRouter)
+  .route("/asset-types", backofficeAssetTypesRouter)
   .post(
     "/entitlement-overrides/:id/revoke",
     requirePlatformAdmin,
