@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { applyCors } from "./server/cors";
+import { applyErrorHandling } from "./server/error-handling";
 import { applyRuntimeEnv } from "./server/runtime-env";
 import { applySecurityHeaders } from "./server/security-headers";
 import { mountAuthRoutes } from "./server/auth-routes";
@@ -12,6 +13,7 @@ export function createApiApp() {
   applyCors(app);
   applySecurityHeaders(app);
   applyRuntimeEnv(app);
+  applyErrorHandling(app);
   mountAuthRoutes(app);
 
   return mountApiRoutes(app);

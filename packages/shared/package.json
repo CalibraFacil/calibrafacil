@@ -14,6 +14,7 @@
     "./mass-units": "./src/mass-units.ts",
     "./plans": "./src/plans.ts",
     "./storage-keys": "./src/storage-keys.ts",
+    "./telemetry": "./src/telemetry/index.ts",
     "./units": "./src/units/index.ts"
   },
   "scripts": {

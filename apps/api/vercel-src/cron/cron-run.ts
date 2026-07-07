@@ -1,5 +1,9 @@
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import {
+  flushErrorReporter,
+  reportServerError,
+} from "../../src/lib/observability";
 
 // Wraps every cron handler so the whole cron system fails loudly and safely:
 //
@@ -140,6 +144,10 @@ export async function runCron(
   } catch (error) {
     const message = getErrorMessage(error);
     console.error("[Cron] task failed", { job, message });
+    // surface cron failures in error tracking, not just the
+    // heartbeat table. Flush before returning: the function freezes after.
+    reportServerError(error, { surface: "cron", tags: { job } });
+    await flushErrorReporter();
     if (leased) {
       await recordOutcome(job, "error", message);
     }

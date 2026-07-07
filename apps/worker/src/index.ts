@@ -1,4 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  flushWorkerErrorReporter,
+  reportWorkerError,
+} from "./observability";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
@@ -3705,7 +3709,25 @@ async function processXlsxIssuedCertificate(
   }
 }
 
+// one capture site covering every run mode (Vercel Queue
+// consumer, container drain, local poller, inline/local dev): a failing job is
+// reported with structural tags before the error continues into the caller's
+// retry path. Flush is bounded so a serverless caller doesn't freeze with the
+// event still in flight.
 export async function processBackgroundJob(
+  env: Env,
+  message: BackgroundJobMessage,
+) {
+  try {
+    await processBackgroundJobUnreported(env, message);
+  } catch (error) {
+    reportWorkerError(error, { jobType: message.type ?? "CERTIFICATE" });
+    await flushWorkerErrorReporter();
+    throw error;
+  }
+}
+
+async function processBackgroundJobUnreported(
   env: Env,
   message: BackgroundJobMessage,
 ) {
