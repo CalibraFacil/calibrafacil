@@ -29,6 +29,7 @@ function makeDeps(
     countRecoverableJobs: vi.fn(async () => 0),
     resolveDocumentWorkerUrl: () => "https://worker.example.test",
     wake: vi.fn(async () => {}),
+    pruneReceipts: vi.fn(async () => 0),
     staleAfterMs: 10 * 60_000,
     ...overrides,
   };
@@ -64,7 +65,12 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     // enqueue at all, so a duplicate job row is impossible here.
     expect(deps.wake).toHaveBeenCalledTimes(1);
     expect(deps.wake).toHaveBeenCalledWith("https://worker.example.test");
-    expect(result).toEqual({ released: 2, pending: 2, woke: true });
+    expect(result).toEqual({
+      released: 2,
+      pending: 2,
+      woke: true,
+      prunedReceipts: 0,
+    });
   });
 
   it("REQ-REL-PDF-001 re-drives a job stranded in PENDING by a dropped wake ping (released 0, pending > 0)", async () => {
@@ -80,7 +86,12 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     const result = await runStaleJobBackstop(deps);
 
     expect(deps.wake).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ released: 0, pending: 1, woke: true });
+    expect(result).toEqual({
+      released: 0,
+      pending: 1,
+      woke: true,
+      prunedReceipts: 0,
+    });
   });
 
   it("REQ-REL-PDF-001 does not wake the worker when nothing is recoverable (respects Neon-suspend / avoids a needless container boot)", async () => {
@@ -93,7 +104,12 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     const result = await runStaleJobBackstop(deps);
 
     expect(deps.wake).not.toHaveBeenCalled();
-    expect(result).toEqual({ released: 0, pending: 0, woke: false });
+    expect(result).toEqual({
+      released: 0,
+      pending: 0,
+      woke: false,
+      prunedReceipts: 0,
+    });
   });
 
   it("REQ-REL-PDF-002 re-drives the EXISTING rows only (wake = idempotent drain trigger); it has no enqueue path", async () => {
@@ -134,7 +150,12 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
 
     expect(deps.releaseStaleJobs).toHaveBeenCalledTimes(1);
     expect(deps.wake).not.toHaveBeenCalled();
-    expect(result).toEqual({ released: 1, pending: 3, woke: false });
+    expect(result).toEqual({
+      released: 1,
+      pending: 3,
+      woke: false,
+      prunedReceipts: 0,
+    });
   });
 
   it("defaults the stale-after window to QUEUE_STALE_AFTER_MS when not overridden", async () => {
@@ -148,6 +169,7 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
       countRecoverableJobs: vi.fn(async () => 0),
       resolveDocumentWorkerUrl: () => null,
       wake: vi.fn(async () => {}),
+      pruneReceipts: vi.fn(async () => 0),
     });
 
     expect(releaseStaleJobs).toHaveBeenCalledWith(900_000);

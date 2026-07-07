@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/db.ts",
     "./queue": "./src/queue.ts",
+    "./queue-receipts": "./src/queue-receipts.ts",
     "./schema": "./src/schema.ts",
     "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"
   },

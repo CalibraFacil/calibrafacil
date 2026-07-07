@@ -22,12 +22,20 @@ const {
   failQueueJob,
   releaseStaleQueueJobs,
   workerQueue,
+  claimQueueReceipt,
+  completeQueueReceipt,
+  releaseQueueReceipt,
+  readQueueReceiptsMode,
 } = vi.hoisted(() => ({
   claimQueueJobs: vi.fn(),
   completeQueueJob: vi.fn(),
   failQueueJob: vi.fn(),
   releaseStaleQueueJobs: vi.fn(),
   workerQueue: vi.fn(),
+  claimQueueReceipt: vi.fn(),
+  completeQueueReceipt: vi.fn(),
+  releaseQueueReceipt: vi.fn(),
+  readQueueReceiptsMode: vi.fn(),
 }));
 
 vi.mock("@calibra-facil/db/queue", () => ({
@@ -35,6 +43,17 @@ vi.mock("@calibra-facil/db/queue", () => ({
   completeQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
+}));
+
+// The idempotency ledger is mocked so the unit tier never touches
+// a real DB; the ON CONFLICT claim semantics are proven by the real-DB tier
+// (queue-receipts.int.spec.ts).
+vi.mock("@calibra-facil/db/queue-receipts", () => ({
+  appQueueJobReceiptKey: (id: number) => `app-queue-${id}`,
+  claimQueueReceipt,
+  completeQueueReceipt,
+  releaseQueueReceipt,
+  readQueueReceiptsMode,
 }));
 
 vi.mock("./index.js", () => ({
@@ -78,6 +97,12 @@ beforeEach(() => {
   releaseStaleQueueJobs.mockResolvedValue(undefined);
   completeQueueJob.mockResolvedValue(undefined);
   failQueueJob.mockResolvedValue(undefined);
+  // The failure-recording suite predates the receipt ledger — run it with the
+  // ledger off; the receipt suite below drives shadow/enforce explicitly.
+  readQueueReceiptsMode.mockReturnValue("off");
+  claimQueueReceipt.mockResolvedValue({ outcome: "claimed", attempts: 1 });
+  completeQueueReceipt.mockResolvedValue(undefined);
+  releaseQueueReceipt.mockResolvedValue(undefined);
 });
 
 describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
@@ -140,6 +165,151 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
     await drainQueue(fakeEnv, CONFIG);
 
     expect(failQueueJob).toHaveBeenCalledWith(4, batchError);
+  });
+});
+
+describe("queue-runtime idempotency receipts", () => {
+  it("off mode never touches the ledger", async () => {
+    const job = makeJob(10);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("off");
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(claimQueueReceipt).not.toHaveBeenCalled();
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(completeQueueJob).toHaveBeenCalledWith(10);
+  });
+
+  it("claims a receipt per job (key = app_queue_job row id) and completes it on ack", async () => {
+    const job = makeJob(11);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(claimQueueReceipt).toHaveBeenCalledWith({
+      jobType: "CERTIFICATE",
+      idempotencyKey: "app-queue-11",
+    });
+    expect(completeQueueReceipt).toHaveBeenCalledWith({
+      jobType: "CERTIFICATE",
+      idempotencyKey: "app-queue-11",
+    });
+    expect(completeQueueJob).toHaveBeenCalledWith(11);
+    expect(releaseQueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it("releases (not completes) the receipt when the job fails, so retry backoff is not blocked", async () => {
+    const job = makeJob(12);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    const realError = new Error("render failed");
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.retry(realError);
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(releaseQueueReceipt).toHaveBeenCalledWith({
+      jobType: "CERTIFICATE",
+      idempotencyKey: "app-queue-12",
+    });
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(failQueueJob).toHaveBeenCalledWith(12, realError);
+  });
+
+  it("enforce: a duplicate-completed delivery settles the row WITHOUT re-running the work", async () => {
+    const job = makeJob(13);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    claimQueueReceipt.mockResolvedValueOnce({
+      outcome: "duplicate-completed",
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).not.toHaveBeenCalled();
+    expect(completeQueueJob).toHaveBeenCalledWith(13);
+    expect(failQueueJob).not.toHaveBeenCalled();
+    // Not the claim owner: the receipt must not be settled by this worker.
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(releaseQueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it("enforce: a held lease defers through the normal retry path instead of running twice", async () => {
+    const job = makeJob(14);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    claimQueueReceipt.mockResolvedValueOnce({ outcome: "duplicate-running" });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).not.toHaveBeenCalled();
+    expect(completeQueueJob).not.toHaveBeenCalled();
+    expect(failQueueJob).toHaveBeenCalledWith(
+      14,
+      "queue receipt lease held by another worker",
+    );
+  });
+
+  it("shadow: a duplicate is logged but still runs, and the unowned receipt is never settled", async () => {
+    const job = makeJob(15);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("shadow");
+    claimQueueReceipt.mockResolvedValueOnce({
+      outcome: "duplicate-completed",
+    });
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(15);
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(releaseQueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it("fails open: a ledger error never blocks the job", async () => {
+    const job = makeJob(16);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    claimQueueReceipt.mockRejectedValueOnce(
+      new Error('relation "queue_job_receipt" does not exist'),
+    );
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(16);
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it("whole-batch failure releases every owned receipt before failing the rows", async () => {
+    const job = makeJob(17);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    const batchError = new Error("worker.queue exploded");
+    workerQueue.mockRejectedValueOnce(batchError);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(releaseQueueReceipt).toHaveBeenCalledWith({
+      jobType: "CERTIFICATE",
+      idempotencyKey: "app-queue-17",
+    });
+    expect(failQueueJob).toHaveBeenCalledWith(17, batchError);
   });
 });
 

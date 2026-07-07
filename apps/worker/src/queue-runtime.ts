@@ -20,6 +20,15 @@ import {
   releaseStaleQueueJobs,
   type ClaimedQueueJob,
 } from "@calibra-facil/db/queue";
+import {
+  appQueueJobReceiptKey,
+  claimQueueReceipt,
+  completeQueueReceipt,
+  readQueueReceiptsMode,
+  releaseQueueReceipt,
+  type QueueReceiptClaim,
+  type QueueReceiptsMode,
+} from "@calibra-facil/db/queue-receipts";
 import worker from "./index.js";
 
 export type WorkerEnv = Parameters<typeof worker.queue>[1];
@@ -139,6 +148,75 @@ function createBatch(jobs: ClaimedQueueJob[]) {
   };
 }
 
+// Idempotency-ledger gate for one claimed row. The receipt key is
+// the app_queue_job row id, stable across stale-lease reclaims of the SAME row
+// — a new enqueue for the same business id is a new row and always runs.
+// `owned: true` means this worker holds the receipt lease and must settle it
+// (complete on ack, release on failure). Fail open: a ledger error never
+// blocks a job.
+type ReceiptDecision = {
+  job: ClaimedQueueJob;
+  run: boolean;
+  owned: boolean;
+};
+
+async function decideWithReceipt(
+  job: ClaimedQueueJob,
+  mode: QueueReceiptsMode,
+): Promise<ReceiptDecision> {
+  if (mode === "off") return { job, run: true, owned: false };
+
+  const key = appQueueJobReceiptKey(job.id);
+  let claim: QueueReceiptClaim;
+  try {
+    claim = await claimQueueReceipt({ jobType: job.type, idempotencyKey: key });
+  } catch (error) {
+    console.error(
+      `[QueueReceipt] ledger unavailable — running job ${job.id} without receipt`,
+      error,
+    );
+    return { job, run: true, owned: false };
+  }
+
+  if (claim.outcome === "claimed") return { job, run: true, owned: true };
+
+  console.warn(
+    `[QueueReceipt] duplicate delivery (${mode}): type=${job.type} key=${key} state=${claim.outcome}`,
+  );
+  if (mode === "shadow") return { job, run: true, owned: false };
+
+  // Enforce mode: settle the row without re-running the work.
+  if (claim.outcome === "duplicate-completed") {
+    await completeQueueJob(job.id);
+  } else {
+    // Another worker holds a live lease (stale reclaim raced a slow run):
+    // back off through the normal retry path instead of running twice.
+    await failQueueJob(job.id, "queue receipt lease held by another worker");
+  }
+  return { job, run: false, owned: false };
+}
+
+async function settleReceipt(
+  decision: ReceiptDecision,
+  succeeded: boolean,
+): Promise<void> {
+  if (!decision.owned) return;
+  const params = {
+    jobType: decision.job.type,
+    idempotencyKey: appQueueJobReceiptKey(decision.job.id),
+  };
+  try {
+    // Release on failure expires the lease immediately so the queue's own
+    // 5s·2^n retry backoff is not blocked behind the full receipt lease.
+    await (succeeded ? completeQueueReceipt(params) : releaseQueueReceipt(params));
+  } catch (error) {
+    console.error(
+      `[QueueReceipt] failed to settle receipt for job ${decision.job.id}`,
+      error,
+    );
+  }
+}
+
 // Claim and process a single batch. Returns the number of jobs claimed so
 // callers can loop (drain) or schedule the next poll. Does NOT release stale
 // jobs — callers decide when to do that (once per poll tick / once per drain).
@@ -147,8 +225,18 @@ async function claimAndProcessBatch(
   workerId: string,
   batchSize: number,
 ): Promise<number> {
-  const jobs = await claimQueueJobs(workerId, batchSize);
-  if (jobs.length === 0) return 0;
+  const claimed = await claimQueueJobs(workerId, batchSize);
+  if (claimed.length === 0) return 0;
+
+  const mode = readQueueReceiptsMode();
+  const decisions: ReceiptDecision[] = [];
+  for (const job of claimed) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts; sequential keeps log ordering deterministic.
+    decisions.push(await decideWithReceipt(job, mode));
+  }
+  const runnable = decisions.filter((decision) => decision.run);
+  const jobs = runnable.map((decision) => decision.job);
+  if (jobs.length === 0) return claimed.length;
 
   console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
   const { batch, states, errors } = createBatch(jobs);
@@ -167,25 +255,34 @@ async function claimAndProcessBatch(
   try {
     await worker.queue(batch, env, executionContext);
   } catch (error) {
-    await Promise.all(jobs.map((job) => failQueueJob(job.id, error)));
-    return jobs.length;
+    await Promise.all(
+      runnable.map(async (decision) => {
+        await settleReceipt(decision, false);
+        await failQueueJob(decision.job.id, error);
+      }),
+    );
+    return claimed.length;
   }
 
   await Promise.all(
-    jobs.map((job) =>
-      states.get(job.id) === "acked"
-        ? completeQueueJob(job.id)
-        : failQueueJob(
-            job.id,
-            // Prefer the real error the handler retried with; the generic string
-            // is only a fallback for a job that was neither acked nor retried
-            // with an error (should not happen, but never lose the failure).
-            errors.get(job.id) ?? "Job was not acknowledged by worker",
-          ),
-    ),
+    runnable.map(async (decision) => {
+      const acked = states.get(decision.job.id) === "acked";
+      await settleReceipt(decision, acked);
+      if (acked) {
+        await completeQueueJob(decision.job.id);
+        return;
+      }
+      await failQueueJob(
+        decision.job.id,
+        // Prefer the real error the handler retried with; the generic string
+        // is only a fallback for a job that was neither acked nor retried
+        // with an error (should not happen, but never lose the failure).
+        errors.get(decision.job.id) ?? "Job was not acknowledged by worker",
+      );
+    }),
   );
 
-  return jobs.length;
+  return claimed.length;
 }
 
 // Release stale jobs, then claim + process one batch. Used by the legacy

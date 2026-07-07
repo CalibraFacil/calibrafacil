@@ -2,6 +2,7 @@ import {
   countRecoverableQueueJobs,
   releaseStaleQueueJobs,
 } from "@calibra-facil/db/queue";
+import { pruneQueueReceipts } from "@calibra-facil/db/queue-receipts";
 import { wakeDocumentWorker } from "./background-jobs";
 
 // REL-03 — periodic orphan-job backstop (#652).
@@ -33,6 +34,8 @@ export type StaleJobBackstopResult = {
   pending: number;
   /** Whether the document worker was pinged to drain them. */
   woke: boolean;
+  /** How many aged idempotency receipts were pruned. */
+  prunedReceipts: number;
 };
 
 export type StaleJobBackstopDeps = {
@@ -40,6 +43,7 @@ export type StaleJobBackstopDeps = {
   countRecoverableJobs: () => Promise<number>;
   resolveDocumentWorkerUrl: () => string | null;
   wake: (baseUrl: string) => Promise<void>;
+  pruneReceipts: () => Promise<number>;
   staleAfterMs: number;
 };
 
@@ -59,6 +63,7 @@ function defaultDeps(): StaleJobBackstopDeps {
     countRecoverableJobs: countRecoverableQueueJobs,
     resolveDocumentWorkerUrl,
     wake: wakeDocumentWorker,
+    pruneReceipts: pruneQueueReceipts,
     staleAfterMs: readStaleAfterMs(),
   };
 }
@@ -86,5 +91,12 @@ export async function runStaleJobBackstop(
     woke = true;
   }
 
-  return { released, pending, woke };
+  // 4. Prune aged idempotency receipts so the ledger stays
+  //    bounded. Hygiene only — a prune failure must never break the reclaim.
+  const prunedReceipts = await deps.pruneReceipts().catch((error) => {
+    console.error("[QueueReceipt] failed to prune receipts", error);
+    return 0;
+  });
+
+  return { released, pending, woke, prunedReceipts };
 }

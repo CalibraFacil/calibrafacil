@@ -101,8 +101,9 @@ function getDocumentWorkerJobTypes(): ReadonlySet<string> {
 
 // Mirror packages/db/src/queue.ts:getMessageType so a CERTIFICATE/LABEL job
 // dispatched with `type` omitted (the optional-type variant) still resolves to
-// its canonical app_queue_job type name for the allowlist check.
-function resolveQueueJobType(message: BackgroundJobMessage): string {
+// its canonical app_queue_job type name for the allowlist check. Exported for
+// the Vercel Queue consumer's receipt ledger (vercel-src/queues/background.ts).
+export function resolveQueueJobType(message: BackgroundJobMessage): string {
   switch (message.type) {
     case "LABEL":
     case "SERVICE_ORDER_INTAKE_DOCUMENT":

@@ -7527,6 +7527,49 @@ export const appQueueJob = pgTable(
   ],
 );
 
+export type QueueJobReceiptStatus = "RUNNING" | "COMPLETED";
+
+/**
+ * Idempotency ledger for queue consumers.
+ *
+ * Both delivery channels are at-least-once (Vercel Queue redelivers messages;
+ * the app_queue_job stale-lease reclaim re-runs rows), so a consumer can see
+ * the same DELIVERY UNIT twice. Each unit claims a receipt keyed by
+ * (job_type, idempotency_key) before running: `app-queue-<rowId>` for DB-queue
+ * rows, `vq:<messageId>` for Vercel Queue messages. A COMPLETED receipt means
+ * the work already ran to success and the duplicate is skipped (enforce mode).
+ *
+ * Deliberately keyed by delivery unit and NOT by business ids (jobId /
+ * serviceOrderId): a user re-requesting the same certificate is a NEW logical
+ * dispatch and must run — a business-id key would wrongly skip it.
+ */
+export const queueJobReceipt = pgTable(
+  "queue_job_receipt",
+  {
+    id: serial("id").primaryKey(),
+    jobType: text("job_type").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status")
+      .$type<QueueJobReceiptStatus>()
+      .default("RUNNING")
+      .notNull(),
+    /** Claim attempts observed for this delivery unit (1 = first run). */
+    attempts: integer("attempts").default(1).notNull(),
+    /** Claim lease: an unexpired RUNNING receipt means another worker owns it. */
+    lockedUntil: timestamp("locked_until").notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("queue_job_receipt_type_key_unique").on(
+      table.jobType,
+      table.idempotencyKey,
+    ),
+    index("queue_job_receipt_completed_at_idx").on(table.completedAt),
+  ],
+);
+
 // =============================================================================
 // ORGANIZATION SIGNING CERTIFICATE - ICP-Brasil Digital Signature (ISO 7.8.2.1)
 // =============================================================================
