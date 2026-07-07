@@ -14,6 +14,7 @@ Turborepo + pnpm monorepo. Run these from the repo root unless noted.
 
 ```bash
 pnpm dev              # all apps except email/worker (web :5173, portal :5174, api :3000)
+pnpm dev:isolated     # web+api+portal on this worktree's own port slot (parallel-safe)
 pnpm dev:all          # everything incl. email + worker
 pnpm dev:desktop      # web + Electron desktop shell
 pnpm build            # build all apps/packages

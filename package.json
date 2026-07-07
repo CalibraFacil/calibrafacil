@@ -24,6 +24,8 @@
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
     "ci:local": "node scripts/ci-local.mjs",
     "dev": "turbo run dev --filter=!@calibra-facil/email --filter=!@calibra-facil/worker",
+    "dev:isolated": "node scripts/dev-runner.mjs",
+    "test:dev-runner": "node scripts/dev-runner.test.mjs",
     "dev:all": "turbo run dev",
     "dev:desktop": "turbo run dev --filter=@calibra-facil/web --filter=@calibra-facil/desktop",
     "dev:email": "pnpm --dir packages/email run dev",

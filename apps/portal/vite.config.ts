@@ -22,12 +22,14 @@ const httpsConfig =
 export default defineConfig({
   server: {
     host: true,
-    port: 5174,
+    // Overridable so scripts/dev-runner.mjs can give each git
+    // worktree its own port slot; defaults keep the tunnel workflow intact.
+    port: Number(process.env.PORTAL_DEV_PORT ?? 5174),
     allowedHosts: ["dev-portal.calibrafacil.com"],
     https: httpsConfig,
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: process.env.DEV_API_ORIGIN ?? "http://localhost:3000",
         secure: false,
       },
     },

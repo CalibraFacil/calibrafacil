@@ -19,7 +19,17 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "PORT",
+        "API_PORT",
+        "WEB_DEV_PORT",
+        "PORTAL_DEV_PORT",
+        "DEV_API_ORIGIN",
+        "API_URL",
+        "APP_URL",
+        "PORTAL_APP_URL"
+      ]
     }
   }
 }

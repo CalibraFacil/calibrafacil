@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 5174 --host",
+    "dev": "vite dev --host",
     "dev:bun": "bun node_modules/vite/bin/vite.js dev --port 5174 --host",
     "build": "vite build",
     "preview": "vite preview",
