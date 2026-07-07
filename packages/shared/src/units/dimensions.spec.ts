@@ -39,26 +39,34 @@ describe("Rational (REQ-DIM-001)", () => {
     expect(ratMul(rational(2, 3), rational(3, 4))).toEqual({ n: 1, d: 2 });
   });
 
-  it("holds the associativity + additive-inverse properties over many rationals", () => {
-    const rats: Rational[] = [];
-    for (let n = -4; n <= 4; n++) {
-      for (let d = 1; d <= 5; d++) {
-        rats.push(rational(n, d));
-      }
-    }
-    for (const a of rats) {
-      // additive inverse
-      expect(ratAdd(a, rational(-a.n, a.d))).toEqual(rational(0));
-      for (const b of rats) {
-        for (const c of rats) {
-          // associativity of addition
-          expect(ratAdd(ratAdd(a, b), c)).toEqual(ratAdd(a, ratAdd(b, c)));
+  // ~91k triples -> ~273k assertions: exhaustive by design. Runs in ~1s on a
+  // dev machine but has been measured at 6.6s on shared CI runners, past
+  // vitest's 5s default — the explicit timeout accommodates slow hardware
+  // without weakening the property being proven.
+  it(
+    "holds the associativity + additive-inverse properties over many rationals",
+    { timeout: 30_000 },
+    () => {
+      const rats: Rational[] = [];
+      for (let n = -4; n <= 4; n++) {
+        for (let d = 1; d <= 5; d++) {
+          rats.push(rational(n, d));
         }
-        // commutativity of multiplication
-        expect(ratMul(a, b)).toEqual(ratMul(b, a));
       }
-    }
-  });
+      for (const a of rats) {
+        // additive inverse
+        expect(ratAdd(a, rational(-a.n, a.d))).toEqual(rational(0));
+        for (const b of rats) {
+          for (const c of rats) {
+            // associativity of addition
+            expect(ratAdd(ratAdd(a, b), c)).toEqual(ratAdd(a, ratAdd(b, c)));
+          }
+          // commutativity of multiplication
+          expect(ratMul(a, b)).toEqual(ratMul(b, a));
+        }
+      }
+    },
+  );
 });
 
 describe("Dimension algebra (REQ-DIM-001)", () => {
@@ -128,9 +136,7 @@ describe("Registry → dimension mapping (REQ-DIM-002)", () => {
     expect(KIND_DIMENSIONS.mass).toEqual(dimension({ M: rational(1) }));
     expect(KIND_DIMENSIONS.length).toEqual(dimension({ L: rational(1) }));
     expect(KIND_DIMENSIONS.time).toEqual(dimension({ T: rational(1) }));
-    expect(KIND_DIMENSIONS.temperature).toEqual(
-      dimension({ "Θ": rational(1) }),
-    );
+    expect(KIND_DIMENSIONS.temperature).toEqual(dimension({ Θ: rational(1) }));
     expect(KIND_DIMENSIONS.current).toEqual(dimension({ I: rational(1) }));
     expect(KIND_DIMENSIONS.force).toEqual(
       dimension({ M: rational(1), L: rational(1), T: rational(-2) }),

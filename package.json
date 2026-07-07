@@ -15,6 +15,7 @@
     "bench:api": "node scripts/bench-api.mjs",
     "bench:api:bun": "bun scripts/bench-api.mjs",
     "check:offline-release-signoff": "node scripts/check-offline-release-signoff.mjs",
+    "test:cut-line-review": "node scripts/cut-line-review.test.mjs",
     "test:offline-release-signoff": "node scripts/check-offline-release-signoff.test.mjs",
     "test:desktop-release-gate": "node scripts/build-desktop-artifact.test.mjs",
     "test:desktop-cloud-release-smoke": "node scripts/smoke-desktop-cloud-release.test.mjs",
@@ -54,6 +55,7 @@
     "sync-repos": "node scripts/sync-reference-repos.mjs"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@typescript/native-preview": "beta",
     "better-sqlite3": "^12.11.1",
     "oxlint": "^1.68.0",
