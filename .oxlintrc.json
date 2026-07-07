@@ -45,6 +45,7 @@
   ],
   "ignorePatterns": [
     "node_modules",
+    ".repos",
     "dist",
     ".next",
     "out",

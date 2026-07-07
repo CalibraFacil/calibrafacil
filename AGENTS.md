@@ -66,6 +66,12 @@
 - Local secrets live in `.env` files under `apps/api` and `apps/worker`.
 - API and worker run locally with Bun; keep secrets out of git.
 
+## Reference Repos for Agents (`.repos/`)
+
+- `.repos/` holds the upstream source of selected fast-moving dependencies (Better Auth, Hono, drizzle-orm), pinned to the exact installed version. Sync with `pnpm sync-repos` (registry: `scripts/sync-reference-repos.mjs`).
+- Before coding against one of these dependencies' APIs, read the real implementation in `.repos/<name>` first instead of guessing from training data — the installed versions are often ahead of public docs.
+- `.repos/` is read-only reference material: never import from it, never edit it, never add it to a build/lint/test path. It is gitignored.
+
 ## Agent Workflow
 
 - Claude owns planning, implementation (backend/API/worker + UI/frontend), repair, and self-review for product-spec work.

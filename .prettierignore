@@ -10,3 +10,6 @@ apps/cms/src/app/(payload)/admin/importMap.js
 # Committed raw so regeneration stays byte-stable; formatting the ~430KB PEM
 # string would create a perpetual working-tree diff.
 packages/signing/src/trust-store.generated.ts
+
+# Read-only reference sources synced by scripts/sync-reference-repos.mjs — never format.
+.repos/

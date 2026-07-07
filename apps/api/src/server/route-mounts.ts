@@ -22,6 +22,7 @@ import { internalCustomerSuccessRouter } from "../routes/internal-customer-succe
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
 import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regulations";
+import { runApiHealthCheck } from "../lib/health";
 import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
 import { notificationsRouter } from "../routes/notifications";
@@ -76,6 +77,13 @@ export function mountApiRoutes(
       }),
     )
     .get("/hello", (c) => c.json({ message: "Hello!" }))
+    // Readiness probe: checks Postgres, R2 and the job-queue
+    // backlog; 503 when a dependency is down. `GET /api` above stays the
+    // static liveness response.
+    .get("/api/health", async (c) => {
+      const report = await runApiHealthCheck(c.env);
+      return c.json(report, report.status === "ok" ? 200 : 503);
+    })
     .route("/api/customers", customersRouter)
     .route("/api/customer-groups", customerGroupsRouter)
     .route("/api/invitations", invitationsRouter)

@@ -222,6 +222,38 @@ export async function releaseStaleQueueJobs(
   return getExecuteRows(result).length;
 }
 
+export type QueueDepth = {
+  pending: number;
+  processing: number;
+  failed: number;
+};
+
+// Backlog snapshot by status for the /api/health readiness probe.
+// Cheap aggregate over the (small, pruned) queue table — informational only;
+// alerting on FAILED rows stays in the operator-alerts engine.
+export async function countQueueJobsByStatus(): Promise<QueueDepth> {
+  const result = await db.execute(sql`
+    select status, count(*)::int as count
+    from app_queue_job
+    where status in ('PENDING', 'PROCESSING', 'FAILED')
+    group by status
+  `);
+
+  const depth: QueueDepth = { pending: 0, processing: 0, failed: 0 };
+  for (const row of getExecuteRows(result)) {
+    const record = toRecord(row);
+    const count =
+      typeof record.count === "number" && Number.isFinite(record.count)
+        ? record.count
+        : 0;
+    if (record.status === "PENDING") depth.pending = count;
+    else if (record.status === "PROCESSING") depth.processing = count;
+    else if (record.status === "FAILED") depth.failed = count;
+  }
+
+  return depth;
+}
+
 // Count rows that are claimable right now — PENDING and past their availability.
 // This includes rows just reclaimed by releaseStaleQueueJobs AND rows stranded in
 // PENDING by a dropped wake ping (nothing re-claims them until a NEW enqueue

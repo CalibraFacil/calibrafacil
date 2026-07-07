@@ -54,5 +54,15 @@ jobs:
       - name: Type Check
         run: bun run check-types
 
+      # build the real Vercel function bundles and assert their
+      # structural shape (shim default-export form, cron dispatch table, every
+      # mounted route surviving into the built artifact). Guards the class of
+      # failure behind the 2026-06-24 cron-routing 404 outage and the
+      # 2026-06-04/05 Bun default-export boot crashes.
+      - name: Assert Vercel function bundle shape (apps/api)
+        run: |
+          bun apps/api/scripts/build-vercel-functions.mjs
+          bun apps/api/scripts/assert-vercel-fn-shape.mjs
+
       - name: Test
         run: bunx turbo test --filter="[origin/main...HEAD]"
