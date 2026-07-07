@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "import", "unicorn"],
+  "jsPlugins": ["./packages/oxlint-plugin-calibra/src/index.ts"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
@@ -33,7 +34,10 @@
           }
         ]
       }
-    ]
+    ],
+    "calibra/no-api-import-in-frontend": "error",
+    "calibra/no-hono-client-outside-client-runtime": "error",
+    "calibra/no-router-coupling-in-features": "error"
   },
   "overrides": [
     {

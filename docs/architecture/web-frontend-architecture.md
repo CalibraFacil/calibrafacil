@@ -242,11 +242,23 @@ pnpm --dir packages/client-runtime test
 pnpm turbo test
 ```
 
-Before opening a PR, scan for boundary regressions:
+The core boundary rules are enforced deterministically by `pnpm lint` via the
+custom oxlint plugin (`packages/oxlint-plugin-calibra`, prefix `calibra/`):
+
+- `calibra/no-api-import-in-frontend` — no `@calibra-facil/api` / `apps/api/*`
+  imports from `apps/web` or `apps/portal`;
+- `calibra/no-hono-client-outside-client-runtime` — raw `hono/client` only in
+  `packages/client-runtime` (type-level use allowed in `packages/contracts`);
+- `calibra/no-router-coupling-in-features` — no `createFileRoute` / `useParams`
+  / `useSearch` imports inside `apps/web/src/features` (test files exempt).
+
+Each rule has a `LEGACY_BASELINE` ratchet for grandfathering (all empty today).
+For the residual patterns the lint rules do not cover (route-local
+`-components` imports, `Route.use*` member access), a pre-PR scan still helps:
 
 ```bash
-rg -n -g '*.ts' -g '*.tsx' -- "from './-components|from '../-components|routes/dashboard/.*/-components|\\bapi\\.api\\.|apiFetch\\(|from ['\\\"]@calibra-facil/api|from ['\\\"]apps/api|@calibra-facil/api" apps/web packages/contracts
-rg -n -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -- "createFileRoute|Route\\.use|useParams|useSearch|from ['\\\"]\\.\\/route['\\\"]|from ['\\\"]\\.\\.\\/route['\\\"]" apps/web/src/features
+rg -n -g '*.ts' -g '*.tsx' -- "from './-components|from '../-components|routes/dashboard/.*/-components|\\bapi\\.api\\.|apiFetch\\(" apps/web packages/contracts
+rg -n -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -- "Route\\.use|from ['\\"]\\.\\/route['\\"]|from ['\\"]\\.\\.\\/route['\\"]" apps/web/src/features
 ```
 
 Both scans should be empty unless the match is intentional and documented.

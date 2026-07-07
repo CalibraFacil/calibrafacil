@@ -68,3 +68,9 @@ When changing API/client boundaries:
    surface changes.
 6. Run `pnpm --filter @calibra-facil/contracts check-types`.
 7. Run `pnpm check-types` before pushing.
+
+Rules 1 and 2 are enforced deterministically by `pnpm lint` via the custom
+oxlint plugin (`packages/oxlint-plugin-calibra`):
+`calibra/no-api-import-in-frontend` and
+`calibra/no-hono-client-outside-client-runtime`. Each rule carries a
+`LEGACY_BASELINE` ratchet for grandfathering existing violations (empty today).

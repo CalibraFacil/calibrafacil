@@ -52,6 +52,9 @@ pnpm db:studio        # Drizzle Studio on :4000
 ## Tooling notes (non-obvious)
 
 - **Linter is oxlint, not ESLint.** Config in `.oxlintrc.json`. `correctness` is an error.
+  Architectural boundaries are lint rules too: the custom `calibra/*` plugin
+  (`packages/oxlint-plugin-calibra`) blocks `@calibra-facil/api` imports in frontends,
+  `hono/client` outside `client-runtime`, and router coupling inside `apps/web/src/features`.
 - **`as` type assertions are banned** (`consistent-type-assertions: never`). Use type guards,
   `satisfies`, or schema parsing instead.
 - **`check-types` runs `tsgo`** (`@typescript/native-preview`), not `tsc`. The API `dev`/`start`
