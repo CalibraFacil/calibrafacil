@@ -15,7 +15,7 @@
     "dev": "pnpm run build && electron .",
     "start": "electron .",
     "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
-    "check-types": "tsgo --noEmit",
+    "check-types": "tsc --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests",
     "package": "node ../../scripts/build-desktop-artifact.mjs --dir",
@@ -33,7 +33,7 @@
     "@types/node": "^24.13.0",
     "electron": "^42.3.0",
     "electron-builder": "^26.0.12",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^7.1.7",
     "vitest": "^4.0.17"
   }

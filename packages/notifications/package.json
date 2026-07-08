@@ -8,9 +8,9 @@
   },
   "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
-    "build": "tsgo",
-    "typecheck": "tsgo",
-    "check-types": "tsgo --noEmit",
+    "build": "tsc",
+    "typecheck": "tsc",
+    "check-types": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "oxlint"
@@ -42,7 +42,7 @@
     "@vitejs/plugin-react": "6.0.2",
     "drizzle-orm": "^0.45.2",
     "react": "^19.2.7",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }
 }

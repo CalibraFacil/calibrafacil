@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "lint": "oxlint",
-    "check-types": "tsgo --noEmit",
+    "check-types": "tsc --noEmit",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"
   },
@@ -97,7 +97,7 @@
     "prettier": "^3.8.3",
     "react-is": "19.2.7",
     "shadcn": "^4.10.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.0.16",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.8",

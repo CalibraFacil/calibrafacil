@@ -10,7 +10,7 @@
     "export": "email export",
     "test": "vitest",
     "test:run": "vitest run",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@calibra-facil/shared": "workspace:*",

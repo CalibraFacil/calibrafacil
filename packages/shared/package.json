@@ -19,7 +19,7 @@
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -27,7 +27,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }
 }

@@ -16,6 +16,6 @@
     "@types/react-dom": "^19.0.1"
   },
   "scripts": {
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   }
 }

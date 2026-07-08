@@ -11,8 +11,8 @@
   },
   "description": "",
   "scripts": {
-    "build": "tsgo",
-    "check-types": "tsgo --noEmit",
+    "build": "tsc",
+    "check-types": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run"
   },

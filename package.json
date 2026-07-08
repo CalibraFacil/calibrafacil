@@ -56,12 +56,11 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
-    "@typescript/native-preview": "beta",
     "better-sqlite3": "^12.11.1",
     "oxlint": "^1.68.0",
     "prettier": "^3.8.3",
     "turbo": "^2.9.16",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
   "engines": {

@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     // oxlint's plugin loader wants explicit .ts specifiers; noEmit makes that
-    // legal for tsgo too.
+    // legal for the native tsc too.
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"]

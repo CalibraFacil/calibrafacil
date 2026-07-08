@@ -9,11 +9,11 @@
     ".": "./src/server.ts"
   },
   "scripts": {
-    "build": "tsgo --noEmit",
+    "build": "tsc --noEmit",
     "dev": "tsx --watch src/bin.ts",
     "start": "tsx src/bin.ts",
     "bundle": "vite build --config vite.config.ts",
-    "check-types": "tsgo --noEmit",
+    "check-types": "tsc --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests"
   },
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.0.16",
     "vitest": "^4.0.17"
   }

@@ -12,6 +12,6 @@
     "jsxImportSource": "react",
     "types": ["node"]
   },
-  "include": ["src", "*.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

@@ -11,7 +11,7 @@
     "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs",
     "test:xlsx-format": "bun src/xlsx-number-format.test.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

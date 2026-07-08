@@ -23,7 +23,7 @@ regulated boundaries.
 | --- | --- |
 | Install / runtime | `pnpm@11`, Node `>=24`. API + worker run under **Bun**; web/portal/local-server under Node+Vite/tsx. |
 | Lint | `pnpm lint` → `turbo run lint` → **oxlint** (NOT ESLint; config `.oxlintrc.json`) |
-| Typecheck | `pnpm check-types` → per-package **`tsgo`** (`@typescript/native-preview`), NOT `tsc` |
+| Typecheck | `pnpm check-types` → per-package **native `tsc`** (`typescript@7`, the Go compiler; replaced `tsgo`). The Next/Payload apps (`site`/`docs`/`cms`) stay on `typescript@6.0.3` JS for the compiler API |
 | Format | `pnpm format` → `prettier --write "**/*.{ts,tsx,md}"` |
 | All tests | `pnpm turbo test` (Vitest, per package; there is no root `test` script) |
 | One package, no watch | `pnpm --dir apps/api test:run` |

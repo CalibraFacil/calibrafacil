@@ -10,8 +10,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsgo -p tsconfig.json",
-    "check-types": "tsgo -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }
 }

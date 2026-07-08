@@ -8,8 +8,8 @@
     "./migrations": "./src/migrations/index.ts"
   },
   "scripts": {
-    "build": "tsgo --noEmit",
-    "check-types": "tsgo --noEmit",
+    "build": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests"
   },
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/better-sqlite3": "^7.6.13",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }
 }

@@ -57,8 +57,13 @@ pnpm db:studio        # Drizzle Studio on :4000
   `hono/client` outside `client-runtime`, and router coupling inside `apps/web/src/features`.
 - **`as` type assertions are banned** (`consistent-type-assertions: never`). Use type guards,
   `satisfies`, or schema parsing instead.
-- **`check-types` runs `tsgo`** (`@typescript/native-preview`), not `tsc`. The API `dev`/`start`
-  and worker run under **Bun**; the web/portal/local-server run under Node + Vite/tsx.
+- **`check-types` runs the native Go compiler** — `tsc` from `typescript@7` (TypeScript 7.0, the
+  10x native port; GA'd, replaced the old `@typescript/native-preview`/`tsgo` beta). Exception:
+  the Next.js/Payload apps (`apps/site`, `apps/docs`, `apps/cms`) stay pinned to `typescript@6.0.3`
+  — the classic JS build — because their tooling (`next typegen`, `payload generate:types`) imports
+  the TypeScript compiler *API*, which the native `typescript@7` package does not ship (it exposes
+  only the `tsc` binary plus an `unstable/*` API). The API `dev`/`start` and worker run under
+  **Bun**; the web/portal/local-server run under Node + Vite/tsx.
 - `pnpm.overrides` and `scripts/check-blocked-deps.mjs` pin/forbid specific dependency versions
   after supply-chain incidents (TanStack, axios). Don't loosen these; `check-blocked-deps`
   fails the build if a blocked version reappears in the lockfile.

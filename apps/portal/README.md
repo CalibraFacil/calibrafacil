@@ -76,7 +76,7 @@ pnpm dev          # Dev server (:5174)
 pnpm build        # Production build
 pnpm preview      # Preview production build
 pnpm lint         # oxlint
-pnpm check-types  # tsgo type-check
+pnpm check-types  # native tsc (typescript@7) type-check
 pnpm test         # Vitest
 ```
 

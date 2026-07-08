@@ -17,7 +17,7 @@
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
