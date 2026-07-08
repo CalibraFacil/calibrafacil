@@ -95,10 +95,10 @@ export default defineConfig({
         // the external CMS / docs / marketing apps — the SPA navigation fallback
         // must never swallow any of them.
         navigateFallbackDenylist: [
+          /^\/$/,
           /^\/api\//,
           /^\/blog(\/|$)/,
           /^\/docs(\/|$)/,
-          /^\/precos(\/|$)/,
           /^\/recursos(\/|$)/,
           /^\/solucoes(\/|$)/,
         ],

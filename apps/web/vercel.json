@@ -23,10 +23,6 @@
       "destination": "https://docs.calibrafacil.com/docs/:path*"
     },
     {
-      "source": "/precos",
-      "destination": "https://calibra-facil-site.vercel.app/precos"
-    },
-    {
       "source": "/recursos",
       "destination": "https://calibra-facil-site.vercel.app/recursos"
     },
@@ -45,6 +41,10 @@
     {
       "source": "/_next/:path*",
       "destination": "https://calibra-facil-site.vercel.app/_next/:path*"
+    },
+    {
+      "source": "/",
+      "destination": "https://calibra-facil-site.vercel.app/"
     },
     {
       "source": "/(.*)",

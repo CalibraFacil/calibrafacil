@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Marketing pages served on calibrafacil.com: the Vite landing ("/") plus the
-     apps/site pages (/precos, /recursos*, /solucoes*). Keep the apps/site URLs
-     in sync with apps/site/src/lib/{features,segments}.ts. apps/site also emits
-     its own sitemap; this apex copy ensures discovery from the root host. -->
+<!-- Marketing pages on calibrafacil.com, all served by apps/site (Next): the
+     home ("/"), /recursos* and /solucoes*. Keep the URLs in sync with
+     apps/site/src/lib/{features,segments}.ts. apps/site also emits its own
+     sitemap; this apex copy ensures discovery from the root host. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://calibrafacil.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://calibrafacil.com/precos</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
   </url>
   <url>
     <loc>https://calibrafacil.com/recursos</loc>
