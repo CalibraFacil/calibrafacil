@@ -30,6 +30,14 @@
       "dest": "https://calibra-facil-site.vercel.app/solucoes/$1"
     },
     {
+      "src": "/calibracao",
+      "dest": "https://calibra-facil-site.vercel.app/calibracao"
+    },
+    {
+      "src": "/calibracao/(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/calibracao/$1"
+    },
+    {
       "src": "/_next/(.*)",
       "dest": "https://calibra-facil-site.vercel.app/_next/$1"
     },

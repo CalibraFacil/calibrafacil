@@ -108,6 +108,7 @@ export default defineConfig({
           /^\/docs(\/|$)/,
           /^\/recursos(\/|$)/,
           /^\/solucoes(\/|$)/,
+          /^\/calibracao(\/|$)/,
         ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
