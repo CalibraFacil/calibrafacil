@@ -976,6 +976,632 @@ export const GRANDEZAS: Grandeza[] = [
       },
     ],
   },
+  {
+    slug: "durometro",
+    metaTitle: "Software para calibração de durômetro (dureza)",
+    description:
+      "Sistema para laboratórios que calibram durômetros: calibração indireta com blocos-padrão de dureza por escala, erro e repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de durômetro",
+    intro:
+      "Para o laboratório que calibra durômetros: o CalibraFácil conduz a calibração indireta com blocos-padrão de dureza — do registro das indentações por escala ao certificado assinado — com o orçamento de incerteza montado conforme o GUM.",
+    body: [
+      "A calibração indireta de um durômetro compara as indicações do equipamento contra blocos-padrão de dureza certificados, em pontos de cada escala utilizada (Rockwell, Brinell, Vickers, Shore). A incerteza reúne o bloco-padrão, a repetibilidade das indentações, a resolução e a deriva.",
+      "O CalibraFácil registra cada indentação, a escala, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo Excel do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Escalas a calibrar, limpeza e assentamento dos blocos-padrão registrados com a calibração.",
+      },
+      {
+        title: "Indentações por escala",
+        body: "O laboratório define os pontos em cada escala; o sistema registra a indicação e o erro em cada bloco-padrão.",
+      },
+      {
+        title: "Comparação com o bloco-padrão",
+        body: "Cada indentação compara a indicação contra o valor certificado do bloco, rastreável ao seu certificado.",
+      },
+      {
+        title: "Repetibilidade",
+        body: "Repetições no bloco-padrão; a dispersão entra no orçamento como componente da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Bloco-padrão, repetibilidade, resolução e deriva compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Escalas registradas",
+        body: "Rockwell, Brinell, Vickers ou Shore — cada escala com seus pontos, erro e incerteza.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Blocos-padrão de dureza cadastrados com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Dureza" },
+      {
+        label: "Faixa típica",
+        value: "Por escala (Rockwell, Brinell, Vickers, Shore), conforme os blocos",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Blocos-padrão de dureza certificados, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro de indicação e repetibilidade nos blocos-padrão por escala",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Séries ISO 6506 / 6507 / 6508 (Brinell / Vickers / Rockwell) — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "A calibração de durômetro é direta ou indireta?",
+        a: "A calibração de rotina normalmente é indireta: o equipamento é verificado contra blocos-padrão de dureza certificados, em pontos de cada escala. O CalibraFácil registra cada indentação, a escala e o bloco usado, e calcula o erro e a incerteza por ponto. A verificação direta (força, penetrador, profundidade) segue o procedimento específico do laboratório quando aplicável.",
+      },
+      {
+        q: "Dá para cobrir várias escalas no mesmo certificado?",
+        a: "Sim. O laboratório define quais escalas calibrar (Rockwell, Brinell, Vickers, Shore) e o sistema registra os pontos e a incerteza de cada uma, emitindo o certificado com todas.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de célula de carga", href: "/calibracao/celula-de-carga" },
+      { label: "Calibração de torquímetro", href: "/calibracao/torquimetro" },
+      { label: "Calibração de micrômetro", href: "/calibracao/micrometro" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "medidor-de-vazao",
+    metaTitle: "Software para calibração de medidor de vazão",
+    description:
+      "Sistema para laboratórios que calibram medidores de vazão: comparação contra padrão em pontos de vazão, repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de medidor de vazão",
+    intro:
+      "Para o laboratório que calibra medidores de vazão de líquidos ou gases: o CalibraFácil conduz a calibração por comparação contra o padrão — do registro dos pontos de vazão ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um medidor de vazão compara a indicação do instrumento contra um padrão de vazão, em pontos ao longo da faixa, com o fluido e as condições registrados. A incerteza reúne o padrão, a estabilidade da vazão, a repetibilidade, a resolução e o efeito da temperatura e da pressão do fluido.",
+      "O CalibraFácil registra cada ponto, o padrão utilizado e as condições do fluido, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Fluido, temperatura, pressão e estabilização do escoamento registrados com a calibração.",
+      },
+      {
+        title: "Pontos de vazão",
+        body: "O laboratório define os pontos ao longo da faixa; o sistema registra a indicação e o erro em cada um.",
+      },
+      {
+        title: "Comparação com o padrão",
+        body: "Cada ponto compara a indicação contra o padrão de vazão, rastreável ao seu certificado.",
+      },
+      {
+        title: "Repetibilidade e estabilidade",
+        body: "Repetições e a estabilidade da vazão entram no orçamento como componentes da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Padrão, estabilidade, repetibilidade, resolução e efeito de temperatura/pressão compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Líquido ou gás",
+        body: "Pontos de vazão com o fluido e as condições registrados, cada ponto com seu erro e incerteza.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Padrão de vazão (medidor padrão, provador ou método gravimétrico/volumétrico) cadastrado com certificado e validade.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Vazão" },
+      {
+        label: "Faixa típica",
+        value: "Por faixa e fluido, conforme o padrão de vazão",
+      },
+      {
+        label: "Padrões de referência",
+        value:
+          "Medidor padrão, provador ou método gravimétrico/volumétrico, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro de indicação em pontos, repetibilidade, estabilidade da vazão",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Normas e guias aplicáveis ao fluido e ao princípio de medição — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "Dá para calibrar medidores de vazão de líquido e de gás?",
+        a: "Sim, conforme o padrão e a bancada do laboratório. O CalibraFácil registra o fluido, as condições e os pontos de vazão, e calcula o erro e a incerteza por ponto — o método e o padrão são definidos pelo laboratório de acordo com o princípio do medidor.",
+      },
+      {
+        q: "A temperatura e a pressão do fluido entram na incerteza?",
+        a: "Quando o método considera, sim. As condições do fluido no momento da medição podem afetar a vazão de referência e entram no orçamento de incerteza junto com o padrão, a estabilidade, a repetibilidade e a resolução — todos compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de manômetro", href: "/calibracao/manometro" },
+      { label: "Calibração de termômetro", href: "/calibracao/termometro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "tacometro",
+    metaTitle: "Software para calibração de tacômetro (rotação)",
+    description:
+      "Sistema para laboratórios que calibram tacômetros: pontos de rotação por comparação, repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de tacômetro",
+    intro:
+      "Para o laboratório que calibra tacômetros de contato e ópticos: o CalibraFácil conduz a calibração por comparação contra o padrão de rotação — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um tacômetro compara a indicação de rotação do instrumento contra um padrão rastreável a tempo e frequência, em pontos ao longo da faixa. A incerteza reúne o padrão, a resolução, a repetibilidade e a deriva.",
+      "O CalibraFácil registra cada ponto, o modo de medição (contato ou óptico) e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Modo de medição (contato ou óptico) e montagem registrados com a calibração.",
+      },
+      {
+        title: "Pontos de rotação",
+        body: "O laboratório define os pontos de rpm; o sistema registra a indicação e o erro em cada um.",
+      },
+      {
+        title: "Comparação com o padrão",
+        body: "Cada ponto compara a indicação contra o padrão de rotação, rastreável a tempo/frequência.",
+      },
+      {
+        title: "Repetibilidade",
+        body: "Repetições nos pontos; a dispersão entra no orçamento como componente da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Padrão, resolução, repetibilidade e deriva compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Contato e óptico",
+        body: "Registro do modo de medição em cada ponto, com o erro e a incerteza associados.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Padrão de rotação rastreável a tempo/frequência cadastrado com certificado e validade.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Velocidade de rotação (rpm)" },
+      {
+        label: "Faixa típica",
+        value: "Por faixa de rotação, conforme o padrão",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Padrão de rotação rastreável a tempo e frequência, rastreável à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro de indicação em pontos (contato e óptico), repetibilidade",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value: "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "Calibra tacômetro de contato e óptico?",
+        a: "Sim. O laboratório define os pontos de rotação e o modo de medição, e o CalibraFácil registra a indicação, o erro e a incerteza de cada ponto, com o padrão utilizado ligado à evidência.",
+      },
+      {
+        q: "A que a rotação é rastreada?",
+        a: "A tempo e frequência. O padrão de rotação é rastreável às referências de tempo/frequência, e a incerteza reúne o padrão, a resolução, a repetibilidade e a deriva — compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de cronômetro", href: "/calibracao/cronometro" },
+      { label: "Calibração de multímetro", href: "/calibracao/multimetro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "cronometro",
+    metaTitle: "Software para calibração de cronômetro (tempo)",
+    description:
+      "Sistema para laboratórios que calibram cronômetros e timers: comparação contra base de tempo padrão, erro de marcha, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de cronômetro",
+    intro:
+      "Para o laboratório que calibra cronômetros e temporizadores: o CalibraFácil conduz a calibração por comparação contra uma base de tempo rastreável — do registro dos intervalos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um cronômetro compara a marcação do instrumento contra uma base de tempo padrão, rastreável às referências de tempo e frequência, em intervalos definidos. A incerteza reúne a base de tempo, a resolução, a repetibilidade do acionamento e a deriva (erro de marcha).",
+      "O CalibraFácil registra cada intervalo, a base de tempo utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Base de tempo de referência e método de acionamento registrados com a calibração.",
+      },
+      {
+        title: "Intervalos definidos",
+        body: "O laboratório define os intervalos a verificar; o sistema registra a marcação e o erro em cada um.",
+      },
+      {
+        title: "Comparação com a base de tempo",
+        body: "Cada intervalo compara a marcação contra a base de tempo padrão, rastreável a tempo/frequência.",
+      },
+      {
+        title: "Repetibilidade e erro de marcha",
+        body: "Repetições e a deriva (erro por dia) entram no orçamento como componentes da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Base de tempo, resolução, repetibilidade do acionamento e deriva compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Erro de marcha",
+        body: "Deriva por dia registrada, além do erro por intervalo, cada um com sua incerteza.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Base de tempo rastreável a tempo/frequência cadastrada com certificado e validade.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Tempo" },
+      {
+        label: "Faixa típica",
+        value: "Intervalos de segundos a horas, conforme o uso",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Base de tempo rastreável a tempo e frequência, rastreável à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro por intervalo, erro de marcha (deriva), repetibilidade do acionamento",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value: "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "O que é o erro de marcha do cronômetro?",
+        a: "É a deriva do cronômetro por unidade de tempo (tipicamente por dia): o quanto ele adianta ou atrasa. O CalibraFácil registra o erro por intervalo e permite expressar essa deriva, com a incerteza associada, no certificado.",
+      },
+      {
+        q: "A reação humana ao acionar o cronômetro entra na incerteza?",
+        a: "Quando o método prevê acionamento manual, sim: a repetibilidade do acionamento (que inclui o tempo de reação) entra no orçamento de incerteza junto com a base de tempo, a resolução e a deriva — compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de tacômetro", href: "/calibracao/tacometro" },
+      { label: "Calibração de multímetro", href: "/calibracao/multimetro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "trena",
+    metaTitle: "Software para calibração de trena (comprimento)",
+    description:
+      "Sistema para laboratórios que calibram trenas e instrumentos de comprimento: erro de indicação contra escala padrão a 20 °C, repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de trena",
+    intro:
+      "Para o laboratório que calibra trenas, fitas e réguas: o CalibraFácil conduz a calibração contra uma escala padrão — do erro de indicação em pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de uma trena verifica o erro de indicação contra uma escala padrão em pontos ao longo do comprimento, a 20 °C e, para fitas, sob a tensão de referência. A incerteza reúne a escala padrão, a resolução, a repetibilidade, o efeito da temperatura e, nas fitas, a tensão e a catenária.",
+      "O CalibraFácil registra cada ponto, a escala padrão utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Estabilização a 20 °C",
+        body: "Estabilização térmica na temperatura de referência (20 °C) e tensão de tracionamento (para fitas) registradas.",
+      },
+      {
+        title: "Pontos ao longo do comprimento",
+        body: "O laboratório define os pontos contra a escala padrão; o sistema registra a indicação e o erro.",
+      },
+      {
+        title: "Comparação com a escala padrão",
+        body: "Cada ponto compara a indicação contra a escala padrão, rastreável ao seu certificado.",
+      },
+      {
+        title: "Repetibilidade",
+        body: "Repetições nos pontos; a dispersão entra no orçamento como componente da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Escala padrão, resolução, repetibilidade, temperatura e tensão/catenária compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Condições registradas",
+        body: "Temperatura e tensão de tracionamento (para fitas) registradas, porque afetam o comprimento medido.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Escala padrão (régua, banco ou fita padrão) cadastrada com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Dimensional (comprimento)" },
+      {
+        label: "Faixa típica",
+        value: "Trenas e fitas de alguns metros a dezenas de metros",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Escala padrão, banco de medição ou fita padrão, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro de indicação em pontos, repetibilidade",
+      },
+      {
+        label: "Incerteza",
+        value:
+          "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2, referida a 20 °C",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Boas práticas de metrologia dimensional a 20 °C — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "Por que a tensão importa na calibração de fita/trena?",
+        a: "Fitas de aço esticam sob tração e formam catenária pelo próprio peso. A tensão de referência é aplicada e registrada, e o efeito da tensão e da catenária entra no orçamento de incerteza junto com a escala padrão, a resolução, a repetibilidade e a temperatura — compostos conforme o GUM.",
+      },
+      {
+        q: "A calibração é feita a 20 °C?",
+        a: "A metrologia dimensional é referida a 20 °C. A estabilização térmica é registrada e o desvio de temperatura, com o coeficiente de expansão, entra no orçamento de incerteza.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de paquímetro", href: "/calibracao/paquimetro" },
+      { label: "Calibração de micrômetro", href: "/calibracao/micrometro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "celula-de-carga",
+    metaTitle: "Software para calibração de célula de carga e dinamômetro (força)",
+    description:
+      "Sistema para laboratórios que calibram células de carga e dinamômetros: pontos em tração e compressão, histerese e repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de célula de carga",
+    intro:
+      "Para o laboratório que calibra células de carga e dinamômetros: o CalibraFácil conduz a calibração contra o padrão de força — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de uma célula de carga compara a indicação do instrumento contra um padrão de força, em pontos crescentes e decrescentes na faixa, em tração ou compressão. A incerteza reúne o padrão, a resolução, a repetibilidade, a reprodutibilidade entre montagens, a histerese e o retorno ao zero.",
+      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Montagem, pré-carregamento e estabilização registrados com a calibração.",
+      },
+      {
+        title: "Pontos na faixa",
+        body: "O laboratório define os pontos de força; o sistema registra a indicação e o erro em cada um.",
+      },
+      {
+        title: "Carregamento e descarregamento",
+        body: "Séries crescentes e decrescentes para avaliar a histerese, cada ponto registrado.",
+      },
+      {
+        title: "Repetibilidade e reprodutibilidade",
+        body: "Repetições e o efeito da remontagem entram no orçamento como componentes da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Padrão, resolução, repetibilidade, reprodutibilidade, histerese e zero compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Tração e compressão",
+        body: "Pontos crescentes e decrescentes por sentido, com histerese e zero registrados.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Máquina ou padrão de força cadastrado com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Força" },
+      {
+        label: "Faixa típica",
+        value: "De N a kN e MN, conforme o padrão de força",
+      },
+      {
+        label: "Padrões de referência",
+        value:
+          "Máquina de calibração de força ou instrumento padrão de força, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value:
+          "Erro de indicação (carregamento e descarregamento), histerese, repetibilidade, reprodutibilidade, zero",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "ISO 376 (instrumentos de medição de força) — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "Calibra célula de carga e dinamômetro?",
+        a: "Sim. Ambos medem força e seguem o mesmo princípio de calibração: comparação contra um padrão de força em pontos, com carregamento e descarregamento. O CalibraFácil registra cada ponto, sentido e o padrão, e calcula o erro e a incerteza — usualmente conforme a ISO 376.",
+      },
+      {
+        q: "A histerese é avaliada?",
+        a: "Sim, quando o método prevê. As séries de carregamento e descarregamento revelam a histerese, que entra no orçamento de incerteza junto com o padrão, a repetibilidade, a reprodutibilidade e o retorno ao zero — compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de torquímetro", href: "/calibracao/torquimetro" },
+      { label: "Calibração de durômetro", href: "/calibracao/durometro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
 ];
 
 export function getGrandeza(slug: string): Grandeza | undefined {
