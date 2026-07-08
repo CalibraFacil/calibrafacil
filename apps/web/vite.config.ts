@@ -90,10 +90,17 @@ export default defineConfig({
           'hero-preview*.png',
           'tanstack-*',
         ],
+        // The apex "/" is served by the Next marketing app (apps/site), not the
+        // SPA. Disabling the precache directoryIndex stops workbox from mapping
+        // "/" onto the precached index.html (which would otherwise serve the SPA
+        // shell — and redirect logged-in visitors to /dashboard — before the
+        // navigateFallbackDenylist below ever runs). With both in place, "/"
+        // falls through to the network and Vercel proxies it to apps/site.
+        directoryIndex: null,
         // /api is the same-origin backend (incl. Better-Auth and magic-link
-        // GETs); /blog, /docs, /precos and /recursos are rewritten by Vercel to
-        // the external CMS / docs / marketing apps — the SPA navigation fallback
-        // must never swallow any of them.
+        // GETs); /blog, /docs and /recursos are rewritten by Vercel to the
+        // external CMS / docs / marketing apps, and "/" is the Next landing —
+        // the SPA navigation fallback must never swallow any of them.
         navigateFallbackDenylist: [
           /^\/$/,
           /^\/api\//,
