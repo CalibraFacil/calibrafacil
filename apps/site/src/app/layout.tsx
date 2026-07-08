@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },
   icons: { icon: "/logo-mark-light.svg" },
+  // Google Search Console verification — the property is verified against the
+  // apex "/", which this app now serves (moved here from apps/web/index.html).
+  verification: {
+    google: "GOOGLE_SITE_VERIFICATION_TOKEN",
+  },
 };
 
 // Follows the OS color scheme (matches the SPA landing) — sets `.dark` before

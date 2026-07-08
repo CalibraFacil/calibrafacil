@@ -1,6 +1,5 @@
 export const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 export const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
-export const CONSENT_STORAGE_KEY = 'cf-cookie-consent'
 
 const DEFAULT_CLOUD_API_URL = 'https://api.calibrafacil.com'
 const DEFAULT_DESKTOP_LOCAL_API_URL = 'http://127.0.0.1:4317'
@@ -86,20 +85,6 @@ export function getSentryDsn() {
 
 export function shouldEnableTelemetry() {
   return import.meta.env.PROD
-}
-
-// Google Tag Manager container id. The full marketing stack (GA4, Meta Pixel,
-// LinkedIn Insight, Clarity) is configured as tags *inside* this container, so
-// the app only needs the container id — which is public (it ships in the
-// browser). Defaults to the production container in PROD builds and stays unset
-// in dev (so local traffic never hits GTM/GA); VITE_GTM_ID overrides in any env.
-const GTM_CONTAINER_ID = 'GTM-XXXXXXX'
-
-export function getGtmId() {
-  const configured = import.meta.env.VITE_GTM_ID?.trim()
-  if (configured) return configured
-
-  return import.meta.env.PROD ? GTM_CONTAINER_ID : null
 }
 
 export function shouldSendSentryPii() {

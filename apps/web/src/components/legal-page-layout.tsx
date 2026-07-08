@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Link } from '@tanstack/react-router'
 
 import { BrandLockup } from '@/components/brand'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -25,18 +24,18 @@ export function LegalPageLayout({
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_28%),linear-gradient(to_bottom,_hsl(var(--background)),_hsl(var(--background)))]">
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/92 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
-          <Link to="/" className="flex items-center gap-2.5 select-none">
+          <a href="/" className="flex items-center gap-2.5 select-none">
             <BrandLockup />
-          </Link>
+          </a>
 
           <div className="flex items-center gap-2">
-            <Link
-              to="/"
+            <a
+              href="/"
               className="inline-flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
               Voltar ao início
-            </Link>
+            </a>
             <ModeToggle />
           </div>
         </div>
