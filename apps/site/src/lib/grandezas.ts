@@ -450,6 +450,532 @@ export const GRANDEZAS: Grandeza[] = [
       },
     ],
   },
+  {
+    slug: "torquimetro",
+    metaTitle: "Software para calibração de torquímetro (torque)",
+    description:
+      "Sistema para laboratórios que calibram torquímetros: pontos na faixa, sentido horário e anti-horário, repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de torquímetro",
+    intro:
+      "Para o laboratório que calibra torquímetros e ferramentas de aperto: o CalibraFácil conduz a calibração contra o padrão de torque — do registro dos pontos ao certificado assinado — com o orçamento de incerteza montado conforme o GUM.",
+    body: [
+      "A calibração de um torquímetro compara o torque aplicado ou indicado pelo instrumento contra um padrão de torque, em pontos ao longo da faixa e, quando o instrumento exige, nos dois sentidos de aplicação. A incerteza reúne o padrão, a resolução, a repetibilidade e a reprodutibilidade entre montagens.",
+      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo Excel do próprio laboratório, congelado e assinado na aprovação — e, para ferramentas de aperto, a conformidade com a classe pode ser declarada.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Montagem, pré-carregamento e estabilização registrados com a calibração, conforme o procedimento do laboratório.",
+      },
+      {
+        title: "Pontos na faixa",
+        body: "O laboratório define os pontos de torque; o sistema registra a indicação e o erro em cada um.",
+      },
+      {
+        title: "Horário e anti-horário",
+        body: "Quando o instrumento opera nos dois sentidos, cada sentido é registrado separadamente.",
+      },
+      {
+        title: "Repetibilidade e reprodutibilidade",
+        body: "Repetições e o efeito da remontagem entram no orçamento como componentes da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Padrão, resolução, repetibilidade, reprodutibilidade e deriva compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Dois sentidos e classe",
+        body: "Registro por sentido de aplicação e, para ferramentas, declaração de conformidade com a classe da ISO 6789.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Transdutor ou máquina de torque padrão cadastrado com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Torque" },
+      {
+        label: "Faixa típica",
+        value: "De poucos N·cm a centenas de N·m, conforme o padrão",
+      },
+      {
+        label: "Padrões de referência",
+        value:
+          "Transdutor de torque ou máquina de calibração de torque, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value:
+          "Erro de indicação em pontos, sentido horário/anti-horário, repetibilidade, reprodutibilidade",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "ISO 6789 (ferramentas de aperto) / guias EURAMET de torque — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "Dá para calibrar chaves de torque (torquímetros de estalo) e declarar a classe?",
+        a: "Sim. O laboratório executa os pontos conforme a ISO 6789 para o tipo de ferramenta, e o CalibraFácil registra os resultados e permite declarar a conformidade com a classe. Para torquímetros indicadores, o registro é do erro de indicação por ponto, com a incerteza associada.",
+      },
+      {
+        q: "O sentido de aplicação é registrado?",
+        a: "Sim. Quando o instrumento opera no sentido horário e anti-horário, cada sentido é registrado separadamente, porque o erro e a repetibilidade podem diferir entre eles.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de manômetro", href: "/calibracao/manometro" },
+      { label: "Calibração de micrômetro", href: "/calibracao/micrometro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "micrometro",
+    metaTitle: "Software para calibração de micrômetro (dimensional)",
+    description:
+      "Sistema para laboratórios que calibram micrômetros: erro de indicação com blocos-padrão, planeza e paralelismo das faces, repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de micrômetro",
+    intro:
+      "Para o laboratório que calibra micrômetros externos, internos e de profundidade: o CalibraFácil conduz a calibração com blocos-padrão — do erro de indicação ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um micrômetro verifica o erro de indicação contra blocos-padrão em pontos ao longo da faixa, após estabilização térmica a 20 °C, e avalia a planeza e o paralelismo das faces de medição com planos ópticos. A incerteza reúne o bloco-padrão, a resolução, a repetibilidade, a força de medição e o efeito da temperatura.",
+      "O CalibraFácil registra cada ponto, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Estabilização a 20 °C",
+        body: "Limpeza e estabilização térmica na temperatura de referência (20 °C) registradas com a calibração.",
+      },
+      {
+        title: "Erro de indicação",
+        body: "Pontos com blocos-padrão ao longo da faixa; o sistema registra a indicação e o erro em cada um.",
+      },
+      {
+        title: "Planeza e paralelismo",
+        body: "Avaliação das faces de medição com planos ópticos (franjas de interferência), registrada com a calibração.",
+      },
+      {
+        title: "Repetibilidade",
+        body: "Repetições nos pontos; o desvio entra como contribuição Tipo A ligada à medição.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Bloco-padrão, resolução, repetibilidade, força de medição e temperatura compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Faces avaliadas",
+        body: "Planeza e paralelismo das faces registrados com planos ópticos, além do erro de indicação.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Blocos-padrão e planos ópticos cadastrados com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Dimensional (comprimento)" },
+      {
+        label: "Faixa típica",
+        value: "Micrômetros de 0–25 mm em diante, por faixa de 25 mm",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Blocos-padrão e planos ópticos, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro de indicação, planeza e paralelismo das faces, repetibilidade",
+      },
+      {
+        label: "Incerteza",
+        value:
+          "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2, referida a 20 °C",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Boas práticas de metrologia dimensional a 20 °C — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "A calibração de micrômetro avalia as faces de medição?",
+        a: "Sim. Além do erro de indicação contra blocos-padrão, a planeza e o paralelismo das faces são avaliados com planos ópticos (pela contagem de franjas de interferência) e registrados. Esses desvios afetam a medição e podem entrar na avaliação do instrumento.",
+      },
+      {
+        q: "Por que a temperatura importa?",
+        a: "A metrologia dimensional é referida a 20 °C. O desvio de temperatura e o coeficiente de expansão entram no orçamento de incerteza junto com o bloco-padrão, a resolução, a repetibilidade e a força de medição — todos compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de paquímetro", href: "/calibracao/paquimetro" },
+      { label: "Calibração de torquímetro", href: "/calibracao/torquimetro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "multimetro",
+    metaTitle: "Software para calibração de multímetro (grandezas elétricas)",
+    description:
+      "Sistema para laboratórios que calibram multímetros e instrumentos elétricos: tensão CC/CA, corrente e resistência em pontos, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de multímetro",
+    intro:
+      "Para o laboratório que calibra multímetros e instrumentos de grandezas elétricas: o CalibraFácil conduz a calibração contra o calibrador padrão — do registro dos pontos por função ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um multímetro compara a indicação do instrumento contra um calibrador multifunção padrão, em pontos por função — tensão contínua e alternada, corrente e resistência. A incerteza reúne o calibrador, a resolução, a repetibilidade, a deriva e, na CA, a dependência de frequência.",
+      "O CalibraFácil registra cada ponto, função e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação",
+        body: "Aquecimento do instrumento e do padrão e condições ambientais registrados com a calibração.",
+      },
+      {
+        title: "Pontos por função",
+        body: "O laboratório define os pontos em cada função (VCC, VCA, corrente, resistência); o sistema registra a indicação e o erro.",
+      },
+      {
+        title: "Comparação com o padrão",
+        body: "Cada ponto compara a indicação contra o calibrador padrão, com o erro rastreável ao certificado do padrão.",
+      },
+      {
+        title: "Repetibilidade",
+        body: "Repetições nos pontos; o desvio entra como contribuição Tipo A ligada à medição.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Calibrador, resolução, repetibilidade, deriva e dependência de frequência compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Todas as funções",
+        body: "Tensão CC/CA, corrente e resistência em pontos, cada função com seu erro e incerteza.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Calibrador multifunção padrão cadastrado com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Grandezas elétricas (tensão, corrente, resistência)" },
+      {
+        label: "Faixa típica",
+        value: "De mV a kV, de µA a A e de Ω a MΩ, conforme o calibrador",
+      },
+      {
+        label: "Padrões de referência",
+        value: "Calibrador multifunção / multiproduto padrão, rastreável à RBC",
+      },
+      {
+        label: "Ensaios",
+        value:
+          "Erro de indicação por função (VCC, VCA, corrente, resistência), repetibilidade",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Guias EURAMET de instrumentação elétrica — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "O sistema cobre todas as funções do multímetro?",
+        a: "Sim. O laboratório define os pontos em cada função — tensão contínua e alternada, corrente e resistência — e o CalibraFácil registra o erro de indicação e a incerteza por ponto, cada um ligado ao padrão utilizado.",
+      },
+      {
+        q: "A frequência entra na incerteza da tensão alternada?",
+        a: "Quando o método do laboratório considera, sim: a dependência de frequência do instrumento e do calibrador pode entrar no orçamento de incerteza das funções de corrente alternada, junto com o calibrador, a resolução, a repetibilidade e a deriva — todos compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de termo-higrômetro", href: "/calibracao/termo-higrometro" },
+      { label: "Calibração de manômetro", href: "/calibracao/manometro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "termo-higrometro",
+    metaTitle: "Software para calibração de termo-higrômetro (umidade)",
+    description:
+      "Sistema para laboratórios que calibram termo-higrômetros: pontos de umidade e temperatura em câmara, comparação, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de termo-higrômetro",
+    intro:
+      "Para o laboratório que calibra termo-higrômetros e sensores de umidade: o CalibraFácil conduz a calibração por comparação em câmara ou gerador de umidade — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
+    body: [
+      "A calibração de um termo-higrômetro compara a indicação de umidade relativa (e de temperatura) do instrumento contra um higrômetro padrão, em pontos dentro de um gerador ou câmara climática estável. A incerteza depende do padrão e, de forma marcante, da estabilidade e da homogeneidade da câmara no momento da leitura.",
+      "O CalibraFácil registra cada ponto de umidade e temperatura, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação e estabilização",
+        body: "Câmara ou gerador de umidade e estabilização registrados com a calibração.",
+      },
+      {
+        title: "Pontos de umidade e temperatura",
+        body: "O laboratório define os pontos de UR (e temperatura); o sistema registra a indicação do instrumento e do padrão.",
+      },
+      {
+        title: "Comparação com o padrão",
+        body: "Cada ponto compara a indicação contra o higrômetro padrão, com o erro rastreável ao certificado do padrão.",
+      },
+      {
+        title: "Estabilidade e homogeneidade",
+        body: "A estabilidade e a homogeneidade da câmara entram no orçamento como componentes da incerteza.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Padrão, estabilidade e homogeneidade da câmara, repetibilidade, resolução e histerese compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Umidade e temperatura juntas",
+        body: "Registro de UR e temperatura em cada ponto, cada grandeza com seu erro e incerteza.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Higrômetro padrão e o gerador/câmara de umidade cadastrados com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Umidade relativa (e temperatura)" },
+      {
+        label: "Faixa típica",
+        value: "Faixa de umidade relativa da câmara, em temperaturas definidas",
+      },
+      {
+        label: "Padrões de referência",
+        value:
+          "Higrômetro padrão + gerador ou câmara de umidade, rastreáveis à RBC",
+      },
+      {
+        label: "Ensaios",
+        value:
+          "Comparação em pontos, repetibilidade, estabilidade e homogeneidade da câmara",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value:
+          "Guias EURAMET de umidade — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "A calibração cobre umidade e temperatura no mesmo certificado?",
+        a: "Sim. Como o termo-higrômetro indica as duas grandezas, o laboratório registra os pontos de umidade relativa e de temperatura, cada um com seu erro e sua incerteza, e o CalibraFácil emite o certificado com ambos.",
+      },
+      {
+        q: "Por que a câmara pesa tanto na incerteza?",
+        a: "Porque a umidade dentro do volume varia no tempo e no espaço. A estabilidade e a homogeneidade da câmara no momento da leitura entram no orçamento de incerteza junto com o padrão, a repetibilidade, a resolução e a histerese — todos compostos conforme o GUM.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de termômetro", href: "/calibracao/termometro" },
+      { label: "Calibração de multímetro", href: "/calibracao/multimetro" },
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      {
+        label: "Cálculo de incerteza conforme o GUM",
+        href: "/recursos/calculo-de-incerteza-gum",
+      },
+    ],
+  },
+  {
+    slug: "pipeta",
+    metaTitle: "Software para calibração de pipeta (volume, método gravimétrico)",
+    description:
+      "Sistema para laboratórios que calibram pipetas e micropipetas: método gravimétrico conforme a ISO 8655, erro sistemático e repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
+    heading: "Calibração de pipeta",
+    intro:
+      "Para o laboratório que calibra pipetas e micropipetas: o CalibraFácil conduz a calibração gravimétrica — da pesagem da água dispensada ao certificado assinado — com o volume e o orçamento de incerteza montados conforme o GUM.",
+    body: [
+      "A calibração gravimétrica de uma pipeta pesa a água dispensada numa balança e converte a massa em volume usando a densidade da água e o fator Z, que dependem da temperatura e da pressão. Repetindo as dispensas, o laboratório obtém o erro sistemático e a repetibilidade em cada volume ensaiado.",
+      "O CalibraFácil registra as pesagens, as condições ambientais e o padrão (balança, termômetro, barômetro), e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+    ],
+    method: [
+      {
+        title: "Preparação e ambiente",
+        body: "Estabilização, temperatura da água, temperatura ambiente e pressão registradas — entram na conversão massa→volume.",
+      },
+      {
+        title: "Volumes ensaiados",
+        body: "O laboratório define os volumes (tipicamente nominal, intermediário e mínimo); o sistema registra cada dispensa.",
+      },
+      {
+        title: "Pesagem gravimétrica",
+        body: "Cada dispensa de água é pesada numa balança calibrada e convertida em volume pela densidade e pelo fator Z.",
+      },
+      {
+        title: "Erro e repetibilidade",
+        body: "Repetições em cada volume dão o erro sistemático e a repetibilidade, avaliados conforme a ISO 8655.",
+      },
+      {
+        title: "Orçamento de incerteza (GUM)",
+        body: "Balança, densidade/temperatura da água, fator Z, repetibilidade e evaporação compostos até a incerteza expandida (k=2).",
+      },
+      {
+        title: "Certificado assinado",
+        body: "A aprovação congela o PDF e o assina em ICP-Brasil (PAdES A1, carimbo de tempo).",
+      },
+    ],
+    points: [
+      {
+        title: "Método gravimétrico (ISO 8655)",
+        body: "Pesagem da água convertida em volume, com erro sistemático e repetibilidade por volume ensaiado.",
+      },
+      {
+        title: "Padrões rastreáveis",
+        body: "Balança, termômetro e barômetro cadastrados com certificado e validade controlados.",
+      },
+      {
+        title: "Portal do cliente",
+        body: "O cliente baixa o certificado, confere a validade e recebe aviso antes do vencimento.",
+      },
+      {
+        title: "Vencimentos e recall",
+        body: "Intervalo por instrumento e alerta automático antes do vencimento.",
+      },
+    ],
+    spec: [
+      { label: "Grandeza", value: "Volume" },
+      {
+        label: "Faixa típica",
+        value: "Micropipetas de µL a pipetas de mL, conforme o instrumento",
+      },
+      {
+        label: "Padrões de referência",
+        value:
+          "Balança calibrada + termômetro e barômetro, rastreáveis à RBC; água de referência",
+      },
+      {
+        label: "Ensaios",
+        value: "Erro sistemático e repetibilidade por volume (método gravimétrico)",
+      },
+      {
+        label: "Incerteza",
+        value: "Composta conforme o JCGM 100:2008 (GUM), expandida com k=2",
+      },
+      {
+        label: "Referências de método",
+        value: "ISO 8655 (aparelhos volumétricos de pistão) — o laboratório é dono do método",
+      },
+    ],
+    faq: [
+      {
+        q: "A calibração de pipeta é gravimétrica?",
+        a: "Na maioria dos laboratórios, sim: pesa-se a água dispensada e converte-se a massa em volume usando a densidade da água e o fator Z, conforme a ISO 8655. O CalibraFácil registra as pesagens, as condições e o padrão, e calcula o erro sistemático e a repetibilidade por volume.",
+      },
+      {
+        q: "O que é o fator Z e por que ele importa?",
+        a: "O fator Z converte massa em volume levando em conta a densidade da água e do ar na temperatura e pressão do ensaio, além do empuxo. Ele entra na conversão e no orçamento de incerteza — por isso a temperatura da água, a temperatura ambiente e a pressão são registradas com a calibração.",
+      },
+      {
+        q: "O certificado já sai assinado?",
+        a: "Sim. Na aprovação, o PDF é congelado e assinado com o certificado ICP-Brasil A1 do responsável técnico, em PAdES com carimbo de tempo (RFC-3161) e cadeia até a AC-Raiz.",
+      },
+    ],
+    related: [
+      { label: "Calibração de balança", href: "/calibracao/balanca" },
+      { label: "Calibração de termômetro", href: "/calibracao/termometro" },
+      { label: "Calibração de micrômetro", href: "/calibracao/micrometro" },
+      {
+        label: "Certificados ISO/IEC 17025",
+        href: "/recursos/certificados-iso-17025",
+      },
+    ],
+  },
 ];
 
 export function getGrandeza(slug: string): Grandeza | undefined {
