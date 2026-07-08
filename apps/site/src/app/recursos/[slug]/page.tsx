@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { FEATURES, getFeature } from "@/lib/features";
-import { DocPage } from "@/components/doc-page";
+import { ContentPage } from "@/components/content-page";
 import { absoluteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
@@ -40,7 +40,23 @@ export default async function FeaturePage({
   const feature = getFeature(slug);
   if (!feature) notFound();
 
+  const related = FEATURES.filter((item) => item.slug !== feature.slug)
+    .slice(0, 4)
+    .map((item) => ({
+      label: item.heading,
+      href: `/recursos/${item.slug}`,
+    }));
+
   return (
-    <DocPage eyebrow="Recursos" eyebrowHref="/recursos" content={feature} />
+    <ContentPage
+      model={{
+        parent: { label: "Recursos", href: "/recursos" },
+        current: feature.heading,
+        heading: feature.heading,
+        intro: feature.intro,
+        points: { label: "No detalhe", items: feature.highlights },
+        related: { label: "Outros recursos", items: related },
+      }}
+    />
   );
 }

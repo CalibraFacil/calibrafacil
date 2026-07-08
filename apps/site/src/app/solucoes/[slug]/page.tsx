@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { SEGMENTS, getSegment } from "@/lib/segments";
-import { DocPage } from "@/components/doc-page";
+import { ContentPage } from "@/components/content-page";
 import { absoluteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
@@ -40,7 +40,23 @@ export default async function SegmentPage({
   const segment = getSegment(slug);
   if (!segment) notFound();
 
+  const related = SEGMENTS.filter((item) => item.slug !== segment.slug).map(
+    (item) => ({ label: item.heading, href: `/solucoes/${item.slug}` }),
+  );
+
   return (
-    <DocPage eyebrow="Soluções" eyebrowHref="/solucoes" content={segment} />
+    <ContentPage
+      model={{
+        parent: { label: "Soluções", href: "/solucoes" },
+        current: segment.heading,
+        heading: segment.heading,
+        intro: segment.intro,
+        points: { label: "No detalhe", items: segment.highlights },
+        related:
+          related.length > 0
+            ? { label: "Outros perfis", items: related }
+            : undefined,
+      }}
+    />
   );
 }

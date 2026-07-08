@@ -1,9 +1,16 @@
-import type { DocContent } from "@/components/doc-page";
-
 // Audience/segment landing pages at /solucoes/[slug]. Distinct high-intent
 // searches: an accredited lab and an Inmetro-authorized workshop look for
-// different things. Same rendered shape as feature pages (DocContent).
-export const SEGMENTS: DocContent[] = [
+// different things.
+export interface Segment {
+  slug: string;
+  metaTitle: string;
+  description: string;
+  heading: string;
+  intro: string;
+  highlights: { title: string; body: string }[];
+}
+
+export const SEGMENTS: Segment[] = [
   {
     slug: "laboratorios-acreditados-cgcre",
     metaTitle:
@@ -54,6 +61,6 @@ export const SEGMENTS: DocContent[] = [
   },
 ];
 
-export function getSegment(slug: string): DocContent | undefined {
+export function getSegment(slug: string): Segment | undefined {
   return SEGMENTS.find((segment) => segment.slug === slug);
 }

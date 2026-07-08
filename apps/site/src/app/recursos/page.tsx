@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { FEATURES } from "@/lib/features";
+import { GRANDEZAS } from "@/lib/grandezas";
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -16,35 +18,67 @@ export const metadata: Metadata = {
   },
 };
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-6 font-mono text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+      {children}
+    </p>
+  );
+}
+
 export default function RecursosPage() {
   return (
-    <section className="mx-auto max-w-4xl px-6 py-20">
-      <div className="max-w-2xl">
-        <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-          Recursos da plataforma
-        </h1>
-        <p className="mt-4 text-lg text-muted-foreground text-pretty">
-          Da medição ao certificado assinado — o que sustenta a operação de um
-          laboratório de calibração alinhado à ISO/IEC 17025.
-        </p>
-      </div>
+    <div className="mx-auto max-w-3xl px-6 py-16 md:py-24">
+      <p className="font-mono text-xs tracking-[0.14em] text-muted-foreground uppercase">
+        Recursos
+      </p>
+      <h1 className="mt-6 max-w-[18ch] text-4xl font-semibold tracking-tight text-balance md:text-[2.75rem] md:leading-[1.08]">
+        Da medição ao certificado assinado
+      </h1>
+      <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-pretty text-muted-foreground">
+        O que sustenta a operação de um laboratório de calibração alinhado à
+        ISO/IEC 17025 — cada peça é uma página com o detalhe técnico.
+      </p>
 
-      <div className="mt-12 grid gap-4 sm:grid-cols-2">
-        {FEATURES.map((feature) => (
-          <a
-            key={feature.slug}
-            href={`/recursos/${feature.slug}`}
-            className="group rounded-2xl border border-border p-6 transition-colors hover:border-primary"
-          >
-            <h2 className="text-base font-semibold tracking-tight group-hover:text-primary">
-              {feature.heading}
-            </h2>
-            <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-              {feature.intro}
-            </p>
-          </a>
-        ))}
-      </div>
-    </section>
+      <section className="mt-16 border-t border-border/60 pt-14">
+        <SectionLabel>Plataforma</SectionLabel>
+        <ul className="grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 sm:grid-cols-2">
+          {FEATURES.map((feature) => (
+            <li key={feature.slug}>
+              <Link
+                href={`/recursos/${feature.slug}`}
+                className="group flex h-full flex-col bg-background px-5 py-5 transition-colors hover:bg-muted/40"
+              >
+                <span className="text-[0.95rem] font-medium text-foreground group-hover:text-primary">
+                  {feature.heading}
+                </span>
+                <span className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                  {feature.intro}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {GRANDEZAS.length > 0 ? (
+        <section className="mt-16 border-t border-border/60 pt-14">
+          <SectionLabel>Calibração por grandeza</SectionLabel>
+          <ul className="grid gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 sm:grid-cols-2">
+            {GRANDEZAS.map((grandeza) => (
+              <li key={grandeza.slug}>
+                <Link
+                  href={`/calibracao/${grandeza.slug}`}
+                  className="group flex h-full items-center justify-between gap-3 bg-background px-5 py-4 text-[0.95rem] text-foreground transition-colors hover:bg-muted/40 hover:text-primary"
+                >
+                  {grandeza.heading}
+                  <span className="font-mono text-muted-foreground">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
   );
 }
