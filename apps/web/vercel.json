@@ -5,50 +5,36 @@
   "buildCommand": "bun node_modules/vite/bin/vite.js build",
   "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs web",
   "outputDirectory": "dist",
-  "rewrites": [
+  "routes": [
+    { "src": "/blog", "dest": "https://calibra-facil-cms.vercel.app/blog" },
     {
-      "source": "/blog",
-      "destination": "https://calibra-facil-cms.vercel.app/blog"
+      "src": "/blog/(.*)",
+      "dest": "https://calibra-facil-cms.vercel.app/blog/$1"
+    },
+    { "src": "/docs", "dest": "https://docs.calibrafacil.com/docs" },
+    { "src": "/docs/(.*)", "dest": "https://docs.calibrafacil.com/docs/$1" },
+    {
+      "src": "/recursos",
+      "dest": "https://calibra-facil-site.vercel.app/recursos"
     },
     {
-      "source": "/blog/:path*",
-      "destination": "https://calibra-facil-cms.vercel.app/blog/:path*"
+      "src": "/recursos/(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/recursos/$1"
     },
     {
-      "source": "/docs",
-      "destination": "https://docs.calibrafacil.com/docs"
+      "src": "/solucoes",
+      "dest": "https://calibra-facil-site.vercel.app/solucoes"
     },
     {
-      "source": "/docs/:path*",
-      "destination": "https://docs.calibrafacil.com/docs/:path*"
+      "src": "/solucoes/(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/solucoes/$1"
     },
     {
-      "source": "/recursos",
-      "destination": "https://calibra-facil-site.vercel.app/recursos"
+      "src": "/_next/(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/_next/$1"
     },
-    {
-      "source": "/recursos/:path*",
-      "destination": "https://calibra-facil-site.vercel.app/recursos/:path*"
-    },
-    {
-      "source": "/solucoes",
-      "destination": "https://calibra-facil-site.vercel.app/solucoes"
-    },
-    {
-      "source": "/solucoes/:path*",
-      "destination": "https://calibra-facil-site.vercel.app/solucoes/:path*"
-    },
-    {
-      "source": "/_next/:path*",
-      "destination": "https://calibra-facil-site.vercel.app/_next/:path*"
-    },
-    {
-      "source": "/",
-      "destination": "https://calibra-facil-site.vercel.app/"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "src": "/", "dest": "https://calibra-facil-site.vercel.app/" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
