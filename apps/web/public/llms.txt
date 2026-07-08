@@ -1,0 +1,25 @@
+# CalibraFácil
+
+> Software de gestão para laboratórios de calibração acreditados (ISO/IEC 17025) e oficinas permissionárias do Inmetro. Cobre o fluxo da ordem de serviço ao certificado: cálculo de incerteza conforme o GUM (JCGM 100:2008), certificados assinados digitalmente com ICP-Brasil (PAdES), portal do cliente, trilha de auditoria e gestão de vencimentos/recall.
+
+CalibraFácil é um sistema web brasileiro para gestão metrológica. Diferenciais: segregação de funções (quem cria não aprova; quem aprova assina), certificado congelado como evidência imutável com layout em Excel editável pelo laboratório, isolamento de dados por organização (multi-tenant), e dados hospedados no Brasil em conformidade com a LGPD. O contato comercial é feito por formulário ("Falar com um especialista") — venda assistida, sem autoatendimento de preços.
+
+## Páginas principais
+- [Início](https://calibrafacil.com/): visão geral do produto, fluxo e público
+- [Cálculo de incerteza (GUM)](https://calibrafacil.com/recursos/calculo-de-incerteza-gum): motor de incerteza Tipo A/B, composição e fator de abrangência
+- [Certificados ISO/IEC 17025](https://calibrafacil.com/recursos/certificados-iso-17025): modelo em Excel, variáveis nomeadas, geração de PDF
+- [Assinatura digital ICP-Brasil](https://calibrafacil.com/recursos/assinatura-digital-icp-brasil): PAdES com certificado A1, carimbo de tempo e validação de cadeia
+- [Portal do cliente](https://calibrafacil.com/recursos/portal-do-cliente): acesso do cliente a certificados e status
+- [Gestão de vencimentos e recall](https://calibrafacil.com/recursos/gestao-de-vencimentos-e-recall): controle de intervalos e alertas
+- [Multiunidade e grupos](https://calibrafacil.com/recursos/multiunidade-e-grupos): organizações isoladas para grupos com mais de uma unidade
+
+## Soluções por perfil
+- [Laboratórios acreditados Cgcre](https://calibrafacil.com/solucoes/laboratorios-acreditados-cgcre): fluxo para laboratórios de calibração acreditados
+- [Oficinas permissionárias do Inmetro](https://calibrafacil.com/solucoes/oficinas-permissionarias-inmetro): fluxo para oficinas de metrologia legal
+
+## Conteúdo e documentação
+- [Blog](https://calibrafacil.com/blog): artigos sobre metrologia e gestão de laboratórios
+- [Documentação](https://calibrafacil.com/docs): guias de uso do sistema
+
+## Contato
+- [Falar com um especialista](https://calibrafacil.com/#contato): formulário de contato comercial

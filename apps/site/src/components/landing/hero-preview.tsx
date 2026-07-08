@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { Reveal } from "./reveal";
 
 /**
@@ -37,25 +39,29 @@ export function HeroPreview() {
                 />
               </div>
 
-              <img
+              {/* next/image serves resized WebP/AVIF (the source PNGs are
+                  3420px wide). Only the theme-visible one is fetched: the light
+                  image is the LCP so it is priority-preloaded; the dark one
+                  loads lazily and never downloads in light mode (display:none →
+                  no intersection). */}
+              <Image
                 src="/hero-preview.png"
                 alt="Painel do CalibraFácil com indicadores de calibração, fila de ordens de serviço e tendência de aprovações."
                 width={3420}
                 height={2146}
-                loading="eager"
-                decoding="async"
+                priority
+                sizes="(min-width: 1200px) 1136px, 100vw"
                 draggable={false}
-                className="block w-full select-none dark:hidden"
+                className="block h-auto w-full select-none dark:hidden"
               />
-              <img
+              <Image
                 src="/hero-preview-dark.png"
                 alt="Painel do CalibraFácil com indicadores de calibração, fila de ordens de serviço e tendência de aprovações."
                 width={3420}
                 height={2146}
-                loading="eager"
-                decoding="async"
+                sizes="(min-width: 1200px) 1136px, 100vw"
                 draggable={false}
-                className="hidden w-full select-none dark:block"
+                className="hidden h-auto w-full select-none dark:block"
               />
             </div>
           </div>

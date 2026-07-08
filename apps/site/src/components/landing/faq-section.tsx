@@ -99,11 +99,21 @@ export function FAQSection() {
                     />
                   </span>
                 </button>
-                {isOpen && (
-                  <div className="max-w-[70ch] pb-6 pl-8 text-sm leading-relaxed text-muted-foreground">
-                    {item.a}
+                {/* Every answer stays in the DOM (CSS-collapsed, not unmounted)
+                    so crawlers and AI fetchers read all of them, not just the
+                    expanded one. */}
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  )}
+                >
+                  <div className="overflow-hidden" aria-hidden={!isOpen}>
+                    <div className="max-w-[70ch] pb-6 pl-8 text-sm leading-relaxed text-muted-foreground">
+                      {item.a}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
