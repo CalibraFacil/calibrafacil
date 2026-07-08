@@ -79,6 +79,7 @@ import { createPortalDomainsApi } from "./modules/portal-domains";
 import { createProfileMediaApi } from "./modules/profile-media";
 import { createPublicCheckoutApi } from "./modules/public-checkout";
 import { createPublicInvitationsApi } from "./modules/public-invitations";
+import { createPublicLeadsApi } from "./modules/public-leads";
 import { createReportsApi } from "./modules/reports";
 import { createSessionsApi } from "./modules/sessions";
 import { createServiceOrdersApi } from "./modules/service-orders";
@@ -808,6 +809,7 @@ export function createCloudApiClient(
     reports: createReportsApi(rawCloudClient),
     publicCheckout: createPublicCheckoutApi(rawCloudClient),
     publicInvitations: createPublicInvitationsApi(rawCloudClient),
+    publicLeads: createPublicLeadsApi(rawCloudClient),
     labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),

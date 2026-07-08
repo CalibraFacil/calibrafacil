@@ -252,6 +252,7 @@ type ApiRoutePath =
   | "/api/public/commercial-checkout/:token"
   | "/api/public/commercial-checkout/:token/start"
   | "/api/public/commercial-checkout/:token/status"
+  | "/api/public/leads"
   | "/api/reports/consolidated/comparison"
   | "/api/reports/consolidated/executive-overview"
   | "/api/reports/consolidated/trend"

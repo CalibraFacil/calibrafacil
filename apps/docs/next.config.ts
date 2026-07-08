@@ -24,7 +24,10 @@ const legacyRedirects = [
   { source: "/portal", destination: "/plataforma/portal-do-cliente" },
   { source: "/motor-matematico", destination: "/incerteza/motor-matematico" },
   { source: "/rastreabilidade-iso17025", destination: "/conceitos/iso-17025" },
-  { source: "/validacao-motor-matematico", destination: "/incerteza/validacao" },
+  {
+    source: "/validacao-motor-matematico",
+    destination: "/incerteza/validacao",
+  },
   {
     source: "/referencias-normativas",
     destination: "/incerteza/referencias-normativas",
@@ -81,8 +84,14 @@ const legacyRedirects = [
   { source: "/metodos", destination: "/metodos/visao-geral" },
 
   // ─── First-IA renames (commercial/technical order split) ──────────────────
-  { source: "/calibracao/clientes", destination: "/operacao-comercial/clientes" },
-  { source: "/calibracao/servicos", destination: "/operacao-comercial/servicos" },
+  {
+    source: "/calibracao/clientes",
+    destination: "/operacao-comercial/clientes",
+  },
+  {
+    source: "/calibracao/servicos",
+    destination: "/operacao-comercial/servicos",
+  },
   {
     source: "/calibracao/ordens/visao-geral",
     destination: "/calibracao/ordens-de-calibracao/visao-geral",
@@ -103,6 +112,12 @@ const legacyRedirects = [
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Docs are served at calibrafacil.com/docs (proxied from apps/web via a Vercel
+  // rewrite), consolidating SEO authority onto one host. basePath prefixes every
+  // route, asset and Next <Link> (Fumadocs uses Next Link, so source.baseUrl
+  // stays "/"). The old docs.calibrafacil.com domain 301s to /docs at the Vercel
+  // domain level (operator step) — no app-level bare-origin redirect needed.
+  basePath: "/docs",
   // Allow the dev tunnel hostname to talk to `next dev` cross-origin.
   // Without this, Next blocks /_next/webpack-hmr (WS) and /_next/static
   // requests from non-localhost origins, which breaks hydration when

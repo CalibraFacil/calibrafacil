@@ -10,6 +10,8 @@ export interface Env {
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
   INTERNAL_OPERATOR_EMAILS?: string;
+  // Inbox that receives marketing-site lead notifications (SEO / lead-gen).
+  SALES_INBOX_EMAIL?: string;
   BACKOFFICE_BOOTSTRAP_TOKEN?: string;
   [key: string]: unknown;
 }

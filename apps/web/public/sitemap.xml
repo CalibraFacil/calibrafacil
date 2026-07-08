@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://calibrafacil.com/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>
+<!-- Apex sitemap INDEX. Each app on calibrafacil.com emits its own sitemap
+     (marketing, blog, docs); robots.txt points crawlers here so all of them are
+     discovered from one host. The blog/docs sitemaps are served by their apps
+     via the /blog and /docs rewrites. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://calibrafacil.com/sitemap-marketing.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://calibrafacil.com/blog/sitemap.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://calibrafacil.com/docs/sitemap.xml</loc>
+  </sitemap>
+</sitemapindex>

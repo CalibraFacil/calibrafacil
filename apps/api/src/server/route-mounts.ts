@@ -39,6 +39,7 @@ import {
   publicApiV2Router,
 } from "../routes/public-api-v2";
 import { publicCommercialCheckoutRouter } from "../routes/public-commercial-checkout";
+import { publicLeadsRouter } from "../routes/public-leads";
 import { reportsRouter } from "../routes/reports";
 import {
   portalServiceOrdersRouter,
@@ -63,80 +64,86 @@ import type { Env } from "./env";
 export function mountApiRoutes(
   app: Hono<{ Bindings: Env }>,
 ): Hono<{ Bindings: Env }> {
-  return app
-    .get("/", (c) =>
-      c.json({
-        name: "CalibraFácil API",
-        status: "ok",
-      }),
-    )
-    .get("/api", (c) =>
-      c.json({
-        name: "CalibraFácil API",
-        status: "ok",
-      }),
-    )
-    .get("/hello", (c) => c.json({ message: "Hello!" }))
-    // Readiness probe: checks Postgres, R2 and the job-queue
-    // backlog; 503 when a dependency is down. `GET /api` above stays the
-    // static liveness response.
-    .get("/api/health", async (c) => {
-      const report = await runApiHealthCheck(c.env);
-      return c.json(report, report.status === "ok" ? 200 : 503);
-    })
-    .route("/api/customers", customersRouter)
-    .route("/api/customer-groups", customerGroupsRouter)
-    .route("/api/invitations", invitationsRouter)
-    .route("/api/lab-setup", labSetupRouter)
-    .route("/api/portal", portalRouter)
-    .route("/api/portal/requests", portalRequestsRouter)
-    .route("/api/portal/visits", portalVisitsRouter)
-    .route("/api/portal/service-orders", portalServiceOrdersRouter)
-    .route("/api/assets", assetsRouter)
-    .route("/api/asset-types", assetTypesRouter)
-    .route("/api/legal-metrology-regulations", legalMetrologyRegulationsRouter)
-    .route("/api/methods", methodsRouter)
-    .route("/api/services", servicesRouter)
-    .route("/api/materials", materialsRouter)
-    .route("/api/standards", standardsRouter)
-    .route("/api/jobs", jobsRouter)
-    .route("/api/service-orders", serviceOrdersRouter)
-    .route("/api/calibration-requests", calibrationRequestsRouter)
-    .route("/api/visits", visitsRouter)
-    .route("/api/visits", visitJobsRouter)
-    .route("/api/verify", verifyRouter)
-    .route("/api/magic-link", magicLinkRouter)
-    .route("/api/dashboard", dashboardRouter)
-    .route("/api/reports", reportsRouter)
-    .route("/api/billing", billingRouter)
-    .route("/api/finance", financeRouter)
-    .route("/api/webhooks", webhooksRouter)
-    .route("/api/notifications", notificationsRouter)
-    .route("/api/signatures", signaturesRouter)
-    .route("/api/signing", signingRouter)
-    .route("/api/nc", nonConformancesRouter)
-    .route("/api/capa", capaRouter)
-    .route("/api/environmental-limits", environmentalLimitsRouter)
-    .route("/api/authorized-signatories", authorizedSignatoriesRouter)
-    .route("/api/competences", competencesRouter)
-    .route("/api/training-records", trainingRecordsRouter)
-    .route("/api/sessions", sessionsRouter)
-    .route("/api/sso", ssoRouter)
-    .route("/api/api-keys", apiKeysRouter)
-    .route("/api/portal-domains", portalDomainsRouter)
-    .route("/api/certificate-templates", certificateTemplatesRouter)
-    .route("/api/certificate-numbering", certificateNumberingRouter)
-    .route("/api/units", unitsRouter)
-    .route("/api/integrations", integrationsRouter)
-    .route("/api/sync", syncRouter)
-    .route("/api/customer-success", customerSuccessRouter)
-    .route("/api/backoffice", backofficeRouter)
-    .route("/api/internal/customer-success", internalCustomerSuccessRouter)
-    .route("/api/organization-media", organizationMediaRouter)
-    .route("/api/profile-media", profileMediaRouter)
-    .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
-    .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
-    .route("/api/public/v1", publicApiRouter)
-    .route("/api/public/v2", publicApiV2DocsRouter)
-    .route("/api/public/v2", publicApiV2Router);
+  return (
+    app
+      .get("/", (c) =>
+        c.json({
+          name: "CalibraFácil API",
+          status: "ok",
+        }),
+      )
+      .get("/api", (c) =>
+        c.json({
+          name: "CalibraFácil API",
+          status: "ok",
+        }),
+      )
+      .get("/hello", (c) => c.json({ message: "Hello!" }))
+      // Readiness probe: checks Postgres, R2 and the job-queue
+      // backlog; 503 when a dependency is down. `GET /api` above stays the
+      // static liveness response.
+      .get("/api/health", async (c) => {
+        const report = await runApiHealthCheck(c.env);
+        return c.json(report, report.status === "ok" ? 200 : 503);
+      })
+      .route("/api/customers", customersRouter)
+      .route("/api/customer-groups", customerGroupsRouter)
+      .route("/api/invitations", invitationsRouter)
+      .route("/api/lab-setup", labSetupRouter)
+      .route("/api/portal", portalRouter)
+      .route("/api/portal/requests", portalRequestsRouter)
+      .route("/api/portal/visits", portalVisitsRouter)
+      .route("/api/portal/service-orders", portalServiceOrdersRouter)
+      .route("/api/assets", assetsRouter)
+      .route("/api/asset-types", assetTypesRouter)
+      .route(
+        "/api/legal-metrology-regulations",
+        legalMetrologyRegulationsRouter,
+      )
+      .route("/api/methods", methodsRouter)
+      .route("/api/services", servicesRouter)
+      .route("/api/materials", materialsRouter)
+      .route("/api/standards", standardsRouter)
+      .route("/api/jobs", jobsRouter)
+      .route("/api/service-orders", serviceOrdersRouter)
+      .route("/api/calibration-requests", calibrationRequestsRouter)
+      .route("/api/visits", visitsRouter)
+      .route("/api/visits", visitJobsRouter)
+      .route("/api/verify", verifyRouter)
+      .route("/api/magic-link", magicLinkRouter)
+      .route("/api/dashboard", dashboardRouter)
+      .route("/api/reports", reportsRouter)
+      .route("/api/billing", billingRouter)
+      .route("/api/finance", financeRouter)
+      .route("/api/webhooks", webhooksRouter)
+      .route("/api/notifications", notificationsRouter)
+      .route("/api/signatures", signaturesRouter)
+      .route("/api/signing", signingRouter)
+      .route("/api/nc", nonConformancesRouter)
+      .route("/api/capa", capaRouter)
+      .route("/api/environmental-limits", environmentalLimitsRouter)
+      .route("/api/authorized-signatories", authorizedSignatoriesRouter)
+      .route("/api/competences", competencesRouter)
+      .route("/api/training-records", trainingRecordsRouter)
+      .route("/api/sessions", sessionsRouter)
+      .route("/api/sso", ssoRouter)
+      .route("/api/api-keys", apiKeysRouter)
+      .route("/api/portal-domains", portalDomainsRouter)
+      .route("/api/certificate-templates", certificateTemplatesRouter)
+      .route("/api/certificate-numbering", certificateNumberingRouter)
+      .route("/api/units", unitsRouter)
+      .route("/api/integrations", integrationsRouter)
+      .route("/api/sync", syncRouter)
+      .route("/api/customer-success", customerSuccessRouter)
+      .route("/api/backoffice", backofficeRouter)
+      .route("/api/internal/customer-success", internalCustomerSuccessRouter)
+      .route("/api/organization-media", organizationMediaRouter)
+      .route("/api/profile-media", profileMediaRouter)
+      .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
+      .route("/api/public/leads", publicLeadsRouter)
+      .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
+      .route("/api/public/v1", publicApiRouter)
+      .route("/api/public/v2", publicApiV2DocsRouter)
+      .route("/api/public/v2", publicApiV2Router)
+  );
 }

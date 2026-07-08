@@ -39,11 +39,27 @@ const faqItems = [
   },
 ]
 
+// Google reads FAQPage structured data (not the visual accordion) to award FAQ
+// rich results, so every answer is emitted here regardless of what's expanded.
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+}
+
 export function FAQSection() {
   const [open, setOpen] = useState(0)
 
   return (
     <section id="perguntas" className="border-t border-border/70 py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
           center

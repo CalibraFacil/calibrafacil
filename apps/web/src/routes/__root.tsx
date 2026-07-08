@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { OfflineBanner, SyncStatusProvider } from '@/runtime/sync-status'
+import { ConsentBanner } from '@/features/analytics/components/consent-banner'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -51,6 +52,7 @@ function RootComponent() {
             </NuqsAdapter>
           </SyncStatusProvider>
           {!runtime.isDesktop ? <Analytics /> : null}
+          {!runtime.isDesktop ? <ConsentBanner /> : null}
           <Toaster richColors position="top-center" />
         </MotionConfig>
       </ThemeProvider>

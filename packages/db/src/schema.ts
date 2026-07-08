@@ -38,6 +38,8 @@ import type {
   FinancialErpConnectionConfig,
   GoLiveStatus,
   IntegrationCredentialType,
+  LeadSegment,
+  LeadStatus,
   IntegrationEventLevel,
   IntegrationObjectLinkTarget,
   IntegrationProvider,
@@ -928,6 +930,41 @@ export const accountInteraction = pgTable(
   (table) => [
     index("account_interaction_org_idx").on(table.organizationId),
     index("account_interaction_occurred_idx").on(table.occurredAt),
+  ],
+);
+
+/**
+ * Marketing lead capture (SEO / lead-gen track B). A public, unauthenticated
+ * inbound form on the marketing site writes here. NOT org-scoped and outside
+ * the RBAC layer: these are prospects, not tenants. Sales triages `status`.
+ */
+export const leads = pgTable(
+  "leads",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    company: text("company"),
+    segment: text("segment").$type<LeadSegment>().default("outro").notNull(),
+    message: text("message"),
+    status: text("status").$type<LeadStatus>().default("new").notNull(),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    utmTerm: text("utm_term"),
+    utmContent: text("utm_content"),
+    referrer: text("referrer"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("leads_created_idx").on(table.createdAt),
+    index("leads_status_idx").on(table.status),
+    index("leads_email_idx").on(table.email),
   ],
 );
 

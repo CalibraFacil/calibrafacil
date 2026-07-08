@@ -10,16 +10,15 @@ import { useSession } from '@calibra-facil/auth/client'
 
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
+import { track } from '@/features/analytics/track'
 import { cn } from '@/lib/utils'
-
-const DEMO_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
 
 const navLinks = [
   { label: 'Fluxo', href: '#fluxo' },
   { label: 'Capacidades', href: '#capacidades' },
   { label: 'Para quem', href: '#audiencias' },
   { label: 'Perguntas', href: '#perguntas' },
-  { label: 'Blog', href: 'https://blog.calibrafacil.com' },
+  { label: 'Blog', href: '/blog' },
 ]
 
 export function LandingNav() {
@@ -37,6 +36,9 @@ export function LandingNav() {
             <a
               key={link.href}
               href={link.href}
+              onClick={() => {
+                if (link.href === '/blog') track('blog_click')
+              }}
               className="rounded-lg px-3 py-2 text-sm font-normal text-foreground/75 transition-colors hover:bg-foreground/5 hover:text-foreground"
             >
               {link.label}
@@ -49,10 +51,13 @@ export function LandingNav() {
           <Button
             size="sm"
             render={
-              <a href={DEMO_URL} target="_blank" rel="noopener noreferrer" />
+              <a
+                href="#contato"
+                onClick={() => track('lead_cta_click', { location: 'nav' })}
+              />
             }
           >
-            Agendar demonstração
+            Falar com especialista
             <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
           </Button>
         </div>
@@ -85,7 +90,10 @@ export function LandingNav() {
               key={link.href}
               href={link.href}
               className="rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              onClick={() => setMobileOpen(false)}
+              onClick={() => {
+                if (link.href === '/blog') track('blog_click')
+                setMobileOpen(false)
+              }}
             >
               {link.label}
             </a>
@@ -95,10 +103,16 @@ export function LandingNav() {
             <Button
               className="w-full"
               render={
-                <a href={DEMO_URL} target="_blank" rel="noopener noreferrer" />
+                <a
+                  href="#contato"
+                  onClick={() => {
+                    track('lead_cta_click', { location: 'nav_mobile' })
+                    setMobileOpen(false)
+                  }}
+                />
               }
             >
-              Agendar demonstração
+              Falar com especialista
               <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
             </Button>
           </div>
@@ -137,7 +151,15 @@ function AuthButton({
       variant={mobile ? 'outline' : 'ghost'}
       size={mobile ? 'default' : 'sm'}
       className={cn(mobile && 'w-full')}
-      render={<Link to="/sign-in" onClick={onNavigate} />}
+      render={
+        <Link
+          to="/sign-in"
+          onClick={() => {
+            track('signin_click')
+            onNavigate?.()
+          }}
+        />
+      }
     >
       Entrar
     </Button>

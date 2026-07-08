@@ -1119,6 +1119,11 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Convites");
       },
     },
+    publicLeads: {
+      async create() {
+        throw desktopUnsupportedAuthAction("Contato comercial");
+      },
+    },
     labSetup: {
       async get() {
         throw desktopUnsupportedAuthAction("Configuração de acesso");

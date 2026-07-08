@@ -1,6 +1,7 @@
 import { z } from "zod";
 export * from "./commercial";
 export * from "./imports";
+export * from "./leads";
 export * from "./printing";
 export * from "./quality";
 export * from "./reference-standard-kind-map";
@@ -1901,7 +1902,12 @@ export const CreateJobSchema = z.object({
   // flagged "calibration required after repair", record the source OS so the
   // pending-after-repair queue can tell the follow-up was opened. Server
   // re-validates the OS belongs to the caller's org before persisting the link.
-  sourceServiceOrderId: z.coerce.number().int().positive().optional().nullable(),
+  sourceServiceOrderId: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .nullable(),
 });
 
 export type CreateJobInput = z.infer<typeof CreateJobSchema>;

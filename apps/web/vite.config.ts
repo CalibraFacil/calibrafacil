@@ -91,9 +91,17 @@ export default defineConfig({
           'tanstack-*',
         ],
         // /api is the same-origin backend (incl. Better-Auth and magic-link
-        // GETs) and /blog is rewritten by Vercel to the external CMS — the SPA
-        // navigation fallback must never swallow either.
-        navigateFallbackDenylist: [/^\/api\//, /^\/blog(\/|$)/],
+        // GETs); /blog, /docs, /precos and /recursos are rewritten by Vercel to
+        // the external CMS / docs / marketing apps — the SPA navigation fallback
+        // must never swallow any of them.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/blog(\/|$)/,
+          /^\/docs(\/|$)/,
+          /^\/precos(\/|$)/,
+          /^\/recursos(\/|$)/,
+          /^\/solucoes(\/|$)/,
+        ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),

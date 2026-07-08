@@ -1,7 +1,6 @@
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
-  BookOpen01Icon,
   Certificate01Icon,
   DocumentValidationIcon,
   Link01Icon,
@@ -9,9 +8,9 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
+import { track } from '@/features/analytics/track'
 
 const DEMO_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
-const DOCS_URL = 'https://docs.calibrafacil.com'
 
 const heroMeta = [
   {
@@ -51,21 +50,28 @@ export function Hero() {
             <Button
               size="lg"
               render={
-                <a href={DEMO_URL} target="_blank" rel="noopener noreferrer" />
+                <a
+                  href="#contato"
+                  onClick={() => track('lead_cta_click', { location: 'hero' })}
+                />
               }
             >
-              Agendar demonstração
+              Falar com um especialista
               <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
             </Button>
             <Button
               variant="outline"
               size="lg"
               render={
-                <a href={DOCS_URL} target="_blank" rel="noopener noreferrer" />
+                <a
+                  href={DEMO_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track('demo_click', { location: 'hero' })}
+                />
               }
             >
-              <HugeiconsIcon icon={BookOpen01Icon} data-icon="inline-start" />
-              Ver documentação técnica
+              Agendar demonstração
             </Button>
           </div>
 

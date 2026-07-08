@@ -7,6 +7,8 @@ import {
   WhatsappIcon,
 } from '@hugeicons/core-free-icons'
 
+import { track } from '@/features/analytics/track'
+
 const footerColumns = [
   {
     heading: 'Produto',
@@ -30,8 +32,8 @@ const footerColumns = [
   {
     heading: 'Empresa',
     links: [
-      { label: 'Documentação', href: 'https://docs.calibrafacil.com' },
-      { label: 'Blog', href: 'https://blog.calibrafacil.com' },
+      { label: 'Documentação', href: '/docs' },
+      { label: 'Blog', href: '/blog' },
       { label: 'Status do sistema' },
       { label: 'Política de privacidade', href: '/privacidade' },
       { label: 'Termos de uso', href: '/termos-de-uso' },
@@ -133,6 +135,7 @@ export function LandingFooter() {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-dashed border-border/80 py-5 text-sm text-muted-foreground">
           <a
             href="mailto:contato@calibrafacil.com"
+            onClick={() => track('email_click', { location: 'footer' })}
             className="inline-flex items-center gap-2 font-mono text-foreground/85 transition-colors hover:text-foreground"
           >
             <HugeiconsIcon
@@ -145,6 +148,7 @@ export function LandingFooter() {
             href="https://wa.me/5551900000000"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => track('whatsapp_click', { location: 'footer' })}
             className="inline-flex items-center gap-2 font-mono text-foreground/85 transition-colors hover:text-foreground"
           >
             <HugeiconsIcon

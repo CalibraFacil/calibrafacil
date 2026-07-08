@@ -2,12 +2,13 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowRight01Icon, BookOpen01Icon } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
+import { track } from '@/features/analytics/track'
 
 import { Reveal } from './reveal'
 import { BlueprintGrid } from './hero'
 
 const DEMO_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
-const DOCS_URL = 'https://docs.calibrafacil.com'
+const DOCS_URL = '/docs'
 
 export function ClosingCTA() {
   return (
@@ -35,6 +36,9 @@ export function ClosingCTA() {
                       href={DEMO_URL}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() =>
+                        track('demo_click', { location: 'closing_cta' })
+                      }
                     />
                   }
                 >
@@ -52,6 +56,9 @@ export function ClosingCTA() {
                       href={DOCS_URL}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() =>
+                        track('docs_click', { location: 'closing_cta' })
+                      }
                     />
                   }
                 >

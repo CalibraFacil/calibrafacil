@@ -1217,6 +1217,12 @@ export interface PublicCheckoutApi {
   start<TResponse = unknown>(token: string): Promise<TResponse>;
 }
 
+export interface PublicLeadsApi {
+  create<TResponse = unknown, TInput = unknown>(
+    input: TInput,
+  ): Promise<TResponse>;
+}
+
 export type NonConformanceListInput = {
   page: number;
   limit: number;
@@ -2743,6 +2749,7 @@ export interface CalibraApi {
   reports: ReportsApi;
   publicCheckout: PublicCheckoutApi;
   publicInvitations: PublicInvitationsApi;
+  publicLeads: PublicLeadsApi;
   labSetup: LabSetupApi;
   nonConformances: NonConformancesApi;
   capas: CapasApi;

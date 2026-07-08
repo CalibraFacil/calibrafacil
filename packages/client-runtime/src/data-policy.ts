@@ -359,6 +359,9 @@ export const calibraApiPolicyRegistry = {
     getStatus: "cloud-only",
     start: "cloud-only",
   },
+  publicLeads: {
+    create: "cloud-only",
+  },
   publicInvitations: {
     get: "cloud-only",
     requestSetupLink: "cloud-only",

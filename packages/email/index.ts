@@ -9,6 +9,7 @@ export {
 
 // Email templates
 export { OrganizationInvitationEmail } from "./emails/organization-invitation-email";
+export { NewLeadEmail } from "./emails/new-lead-email";
 export { NotificationEmail } from "./emails/notification-email";
 export { CertificateReadyEmail } from "./emails/certificate-ready-email";
 export { CertificateAmendedEmail } from "./emails/certificate-amended-email";

@@ -1,0 +1,30 @@
+{
+  "name": "@calibra-facil/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "lint": "oxlint",
+    "check-types": "tsc --noEmit",
+    "deploy": "echo 'site deploys via Vercel git integration (apps/site/vercel.json)'"
+  },
+  "dependencies": {
+    "@calibra-facil/shared": "workspace:*",
+    "@fontsource-variable/figtree": "^5.2.10",
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@vercel/analytics": "2.0.1",
+    "next": "16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.6",
+    "@types/node": "^24.13.0",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "6.0.3"
+  }
+}

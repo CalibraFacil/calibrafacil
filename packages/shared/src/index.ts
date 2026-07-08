@@ -6,6 +6,7 @@ export * from "./commercial";
 export * from "./domain-utils";
 export * from "./finance";
 export * from "./integrations";
+export * from "./leads";
 export * from "./public-api";
 export * from "./calibration-format";
 // The kind-aware registry + value-conversion helpers are re-exported at the
