@@ -927,5 +927,12 @@ export function createDesktopHybridApiClient(
       saveExecution: local.serviceOrders.saveExecution,
       issueDeliveryDocument: local.serviceOrders.issueDeliveryDocument,
     },
+    nonConformances: {
+      // Reads stay cloud: cloud NCs are not mirrored locally, so a local-first
+      // list would hide everything captured online. Only the offline create
+      // path (issue #426 Phase 0) is routed to the local server + outbox.
+      ...cloud.nonConformances,
+      create: local.nonConformances.create,
+    },
   };
 }

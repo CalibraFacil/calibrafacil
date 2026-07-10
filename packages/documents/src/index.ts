@@ -28,3 +28,7 @@ export {
   type ServiceOrderQuoteData,
   type ServiceOrderTagData,
 } from "./ServiceOrderHtml.js";
+export {
+  OotNotificationHtml,
+  type OotNotificationDocumentData,
+} from "./OotNotificationHtml.js";

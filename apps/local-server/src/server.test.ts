@@ -104,6 +104,64 @@ function formDataFromBody(body: BodyInit | null | undefined) {
 }
 
 describe("local server", () => {
+  it("captures a non-conformance offline and rejects the cloud-only job link", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const app = createLocalServer(createConfig(dbPath), database);
+
+    // Phase 0 (issue #426): linking an NC to a calibration stays cloud-only.
+    const rejected = await app.request("/api/nc", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "equipment",
+        description: "Instrumento apresentou desvio acima do criterio",
+        detectedAt: "2026-07-01T12:00:00.000Z",
+        jobId: 77,
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(rejected.status).toBe(409);
+    await expect(rejected.json()).resolves.toMatchObject({
+      error: "Vínculo com calibração não está disponível no desktop",
+    });
+
+    const created = await app.request("/api/nc", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "equipment",
+        description: "Instrumento apresentou desvio acima do criterio",
+        detectedAt: "2026-07-01T12:00:00.000Z",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(created.status).toBe(201);
+    const createdBody = recordFromUnknown(await created.json());
+    expect(stringFromRecord(createdBody, "ncNumber")).toMatch(/^LOCAL-NC-/);
+    expect(stringFromRecord(createdBody, "status")).toBe("open");
+    expect(stringFromRecord(createdBody, "syncState")).toBe("local");
+
+    const list = await app.request("/api/nc?page=1&limit=20");
+    expect(list.status).toBe(200);
+    const listBody = recordFromUnknown(await list.json());
+    expect(listBody.data).toHaveLength(1);
+    expect(listBody.pagination).toMatchObject({ page: 1, total: 1 });
+
+    const outboxRow = recordFromUnknown(
+      database
+        .prepare(
+          `
+SELECT aggregate_kind, event_type
+FROM domain_events
+WHERE aggregate_kind = 'non_conformance'
+`,
+        )
+        .get(),
+    );
+    expect(outboxRow.event_type).toBe("create_local_non_conformance");
+
+    database.close();
+  });
+
   it("uses synced tenant context for local writes after packaged startup", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });

@@ -44,6 +44,8 @@ function getTypeBadge(type: NonConformanceType) {
       return { variant: 'outline' as const, label: 'Equipamento' }
     case 'documentation':
       return { variant: 'outline' as const, label: 'Documentação' }
+    case 'out_of_tolerance':
+      return { variant: 'destructive' as const, label: 'Fora de tolerância' }
     default:
       return { variant: 'secondary' as const, label: type }
   }

@@ -1159,6 +1159,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "flagOutOfTolerance",
+          "namespace": "jobs",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "serviceOrders",
           "policy": "local-first-read-through-sync",
@@ -1366,7 +1371,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "create",
           "namespace": "nonConformances",
-          "policy": "cloud-only",
+          "policy": "local-command-sync",
         },
         {
           "method": "setDisposition",
@@ -1380,6 +1385,16 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "escalateToCapa",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getOotNotification",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "registerOotAcknowledgement",
           "namespace": "nonConformances",
           "policy": "cloud-only",
         },

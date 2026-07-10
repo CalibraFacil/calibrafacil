@@ -109,7 +109,7 @@ export interface PaymentEmailContext {
 /** Context for NC email templates */
 export interface NCEmailContext {
   ncNumber: string;
-  ncType?: "work" | "equipment" | "documentation";
+  ncType?: "work" | "equipment" | "documentation" | "out_of_tolerance";
   description?: string;
   capaNumber?: string;
   actorName?: string;
@@ -199,6 +199,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   PAYMENT_FAILED: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
+  OOT_NOTIFICATION_ACKNOWLEDGED: { inApp: true, email: true },
   COMPETENCE_EXPIRING: { inApp: true, email: true },
   COMPETENCE_EXPIRED: { inApp: true, email: true },
   COMPETENCE_REQUESTED: { inApp: true, email: true },
@@ -2630,7 +2631,7 @@ export async function notifyPaymentFailed(
 export async function notifyNCCreated(
   ncId: number,
   ncNumber: string,
-  ncType: "work" | "equipment" | "documentation",
+  ncType: "work" | "equipment" | "documentation" | "out_of_tolerance",
   description: string,
   organizationId: string,
   createdByUserId: string,
@@ -2648,7 +2649,9 @@ export async function notifyNCCreated(
       ? "trabalho"
       : ncType === "equipment"
         ? "equipamento"
-        : "documentação";
+        : ncType === "out_of_tolerance"
+          ? "fora de tolerância"
+          : "documentação";
 
   // Notify admins and owners
   const recipients = await getRecipientsByRole(organizationId, [
@@ -2681,6 +2684,39 @@ export async function notifyNCCreated(
           actorName: creatorName,
         },
       },
+    });
+  }
+}
+
+/**
+ * Notify admins/owners when a customer acknowledges a §7.10 out-of-tolerance
+ * notification (#426 Phase 0). Called from the public ack route and recorded
+ * against the owning NC.
+ */
+export async function notifyOotAcknowledged(
+  notificationId: number,
+  ncId: number,
+  ncNumber: string,
+  organizationId: string,
+): Promise<void> {
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "OOT_NOTIFICATION_ACKNOWLEDGED",
+      priority: "MEDIUM",
+      title: "Notificação 7.10 confirmada pelo cliente",
+      message: `O cliente confirmou o recebimento da notificação de fora de tolerância da ${ncNumber} (notificação #${notificationId}).`,
+      relatedEntity: {
+        entityType: "nc",
+        entityId: ncId,
+      },
+      actionUrl: `/dashboard/nc/${ncId}`,
     });
   }
 }

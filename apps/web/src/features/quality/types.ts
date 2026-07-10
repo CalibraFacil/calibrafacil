@@ -8,6 +8,7 @@ export const NON_CONFORMANCE_TYPES = [
   'work',
   'equipment',
   'documentation',
+  'out_of_tolerance',
 ] as const
 
 export type NonConformanceStatus = (typeof NON_CONFORMANCE_STATUSES)[number]

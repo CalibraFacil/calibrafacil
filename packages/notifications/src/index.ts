@@ -14,6 +14,7 @@ export {
   notifyAuditPackReady,
   notifyNCCreated,
   notifyNCEscalatedToCapa,
+  notifyOotAcknowledged,
   notifyCompetenceApproved,
   notifyCompetenceRequested,
   notifyCompetenceExpiring,
@@ -67,6 +68,13 @@ export {
   type EmailSuppressionReason,
   type EmailSuppressionSource,
 } from "./suppression";
+
+// §7.10 out-of-tolerance customer-facing email dispatcher (#426 Phase 0)
+export {
+  sendOotCustomerEmail,
+  type OotCustomerEmailInput,
+  type OotCustomerEmailResult,
+} from "./oot-customer-email";
 
 // Service-order customer-facing email dispatcher (mini-spec A)
 export {

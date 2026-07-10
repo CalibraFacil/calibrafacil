@@ -61,6 +61,7 @@ import {
 import {
   CreateAssetSchema,
   CreateCustomerSchema,
+  CreateNonConformanceSchema,
   CreateServiceOrderQuoteSchema,
   CreateServiceOrderSchema,
   IssueServiceOrderDeliveryDocumentSchema,
@@ -108,6 +109,8 @@ import {
   tryDecodeSyncAttachmentId,
 } from "../modules/sync/helpers";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { createNonConformanceRecord } from "../lib/non-conformances";
+import { ensureOotNotificationForNc } from "../lib/oot-notifications";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
@@ -1739,6 +1742,13 @@ async function applyDesktopSyncEvent(
     }
 
     if (
+      input.event.entityType === "non_conformance" &&
+      input.event.operation === "create_local_non_conformance"
+    ) {
+      return await applyCreateLocalNonConformance(input, actorUserId);
+    }
+
+    if (
       input.event.entityType === "service_order_quote" &&
       input.event.operation === "create_local_service_order_quote_draft"
     ) {
@@ -3118,6 +3128,102 @@ async function applyCreateLocalServiceOrderIntake(
       serviceOrderNumber: created.serviceOrderNumber,
       status: created.status,
       openedAt: created.openedAt?.toISOString?.() ?? created.openedAt,
+    },
+  };
+}
+
+// #426 Phase 0: NC captured offline on the desktop. Reuses the shared cloud
+// creator so the synced NC gets the same number sequence, audit-log entry and
+// admin/owner notification as an online creation. When the NC is
+// out-of-tolerance-typed with a job link, the §7.10 customer notification is
+// created SERVER-SIDE here (outbox row + PDF job) — the desktop outbox carries
+// only the data mutation, and the email dispatches on reconnect.
+async function applyCreateLocalNonConformance(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const parseResult = CreateNonConformanceSchema.safeParse(
+    stripDesktopNullEntries(payload, ["jobId"]),
+  );
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop non-conformance event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const detectedAt = new Date(values.detectedAt);
+  if (Number.isNaN(detectedAt.getTime())) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason: "Desktop non-conformance event has an invalid detectedAt.",
+    };
+  }
+
+  if (values.jobId) {
+    const [job] = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, values.jobId),
+          eq(calibrationJob.organizationId, input.memberData.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!job) {
+      return {
+        ok: false,
+        code: "DOMAIN_VALIDATION_FAILED",
+        reason: "Calibracao invalida para esta nao conformidade",
+      };
+    }
+  }
+
+  const created = await createNonConformanceRecord({
+    organizationId: input.memberData.organizationId,
+    actorUserId,
+    type: values.type,
+    description: values.description,
+    detectedAt,
+    jobId: values.jobId ?? null,
+    triggerSource: "manual",
+    auditChanges: { initial: values, source: "desktop_sync" },
+  });
+
+  await ensureOotNotificationForNc({
+    nc: created,
+    organizationId: input.memberData.organizationId,
+    actorUserId,
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: created.id,
+    remoteNcNumber: created.ncNumber,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: created.id,
+    remoteEntity: {
+      id: created.id,
+      ncNumber: created.ncNumber,
+      status: created.status,
+      detectedAt: created.detectedAt.toISOString(),
     },
   };
 }

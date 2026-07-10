@@ -21,6 +21,15 @@ export type DocumentBackgroundJobMessage =
       tagId?: number;
       quoteId?: number;
       userId: string;
+    }
+  | {
+      /**
+       * §7.10 out-of-tolerance customer notification PDF (#426 Phase 0).
+       * All context lives on the `oot_notification` row; the message points at it.
+       */
+      type: "OOT_NOTIFICATION";
+      notificationId: number;
+      userId: string;
     };
 
 export type IntegrationSyncBackgroundJobMessage = {
@@ -121,6 +130,13 @@ export function isBackgroundJobMessage(
       typeof message.target === "string" &&
       typeof message.limit === "number" &&
       typeof message.trigger === "string"
+    );
+  }
+
+  if (type === "OOT_NOTIFICATION") {
+    return (
+      typeof message.notificationId === "number" &&
+      typeof message.userId === "string"
     );
   }
 

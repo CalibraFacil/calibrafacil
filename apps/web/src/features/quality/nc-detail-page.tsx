@@ -3,10 +3,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+import type { OotNotificationData } from '@calibra-facil/client-runtime'
+
 import { calibraApi } from '@/utils/api'
 import {
   useNonConformanceAuditLogData,
   useNonConformanceDetailData,
+  useNonConformanceOotNotificationData,
 } from '@/features/quality/queries'
 import { Button } from '@/components/ui/button'
 import {
@@ -59,8 +62,38 @@ function getTypeLabel(type: string): string {
       return 'Equipamento'
     case 'documentation':
       return 'Documentacao'
+    case 'out_of_tolerance':
+      return 'Fora de tolerância'
     default:
       return type
+  }
+}
+
+function getOotStatusBadge(status: OotNotificationData['status']) {
+  switch (status) {
+    case 'ACKNOWLEDGED':
+      return { variant: 'default' as const, label: 'Confirmada' }
+    case 'SENT':
+      return { variant: 'secondary' as const, label: 'Enviada' }
+    case 'GENERATED':
+    case 'PENDING':
+    default:
+      return { variant: 'outline' as const, label: 'Gerada' }
+  }
+}
+
+function getAcknowledgedViaLabel(
+  via: NonNullable<OotNotificationData['acknowledgedVia']>,
+): string {
+  switch (via) {
+    case 'email_link':
+      return 'link do e-mail'
+    case 'portal_link':
+      return 'portal'
+    case 'manual':
+      return 'registro manual'
+    default:
+      return via
   }
 }
 
@@ -99,6 +132,7 @@ export function NCDetailPage({ id }: { id: string }) {
   const [dispositionDialogOpen, setDispositionDialogOpen] = useState(false)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [capaDialogOpen, setCapaDialogOpen] = useState(false)
+  const [ootAckDialogOpen, setOotAckDialogOpen] = useState(false)
 
   const {
     data: nc,
@@ -113,6 +147,13 @@ export function NCDetailPage({ id }: { id: string }) {
     id,
     enabled: !cloudOnlyUnavailable,
   })
+
+  const { data: ootNotificationResponse } =
+    useNonConformanceOotNotificationData({
+      id,
+      enabled: !cloudOnlyUnavailable && nc?.type === 'out_of_tolerance',
+    })
+  const ootNotification = ootNotificationResponse?.data ?? null
 
   // Disposition mutation
   const dispositionMutation = useMutation({
@@ -145,6 +186,21 @@ export function NCDetailPage({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: ['non-conformances'] })
       toast.success('NC resolvida com sucesso')
       setResolveDialogOpen(false)
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  // §7.10 acknowledgement mutation
+  const ootAckMutation = useMutation({
+    mutationFn: async (data: { note: string }) =>
+      calibraApi.nonConformances.registerOotAcknowledgement(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['non-conformance-oot-notification', id],
+      })
+      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
+      toast.success('Confirmação de recebimento registrada')
+      setOotAckDialogOpen(false)
     },
     onError: (error) => toast.error(error.message),
   })
@@ -405,6 +461,149 @@ export function NCDetailPage({ id }: { id: string }) {
         </Card>
       </div>
 
+      {/* §7.10 out-of-tolerance customer notification */}
+      {nc.type === 'out_of_tolerance' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notificação 7.10</CardTitle>
+            <CardDescription>
+              Notificação ao cliente sobre resultado fora de tolerância (ISO/IEC
+              17025 §7.10)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {ootNotification ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground">Status</Label>
+                    <p className="mt-1">
+                      <Badge
+                        variant={
+                          getOotStatusBadge(ootNotification.status).variant
+                        }
+                      >
+                        {getOotStatusBadge(ootNotification.status).label}
+                      </Badge>
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">
+                      Destinatário
+                    </Label>
+                    <p className="font-medium">
+                      {ootNotification.recipientName || '-'}
+                    </p>
+                    {ootNotification.recipientEmail ? (
+                      <p className="text-sm text-muted-foreground">
+                        {ootNotification.recipientEmail}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-destructive">
+                        — sem e-mail cadastrado
+                      </p>
+                    )}
+                  </div>
+                  {ootNotification.certificateNumber && (
+                    <div>
+                      <Label className="text-muted-foreground">
+                        Certificado
+                      </Label>
+                      <p className="font-mono font-medium">
+                        {ootNotification.certificateNumber}
+                      </p>
+                    </div>
+                  )}
+                  {ootNotification.sentAt && (
+                    <div>
+                      <Label className="text-muted-foreground">
+                        Enviada em
+                      </Label>
+                      <p className="font-medium">
+                        {formatDate(ootNotification.sentAt)}
+                      </p>
+                    </div>
+                  )}
+                  {ootNotification.acknowledgedAt && (
+                    <div>
+                      <Label className="text-muted-foreground">
+                        Confirmada em
+                      </Label>
+                      <p className="font-medium">
+                        {formatDate(ootNotification.acknowledgedAt)}
+                        {ootNotification.acknowledgedVia && (
+                          <span className="ml-1 text-sm text-muted-foreground">
+                            via{' '}
+                            {getAcknowledgedViaLabel(
+                              ootNotification.acknowledgedVia,
+                            )}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {ootNotification.affectedScope && (
+                  <div>
+                    <Label className="text-muted-foreground">
+                      Escopo potencialmente afetado
+                    </Label>
+                    <p className="whitespace-pre-wrap">
+                      {ootNotification.affectedScope}
+                    </p>
+                  </div>
+                )}
+                {ootNotification.acknowledgedNote && (
+                  <div>
+                    <Label className="text-muted-foreground">
+                      Nota da confirmação
+                    </Label>
+                    <p className="whitespace-pre-wrap">
+                      {ootNotification.acknowledgedNote}
+                    </p>
+                  </div>
+                )}
+                {ootNotification.status !== 'ACKNOWLEDGED' && (
+                  <div className="border-t pt-4">
+                    <Dialog
+                      open={ootAckDialogOpen}
+                      onOpenChange={setOotAckDialogOpen}
+                    >
+                      <DialogTrigger
+                        render={
+                          <Button variant="outline">
+                            Registrar confirmação
+                          </Button>
+                        }
+                      />
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>
+                            Registrar confirmação de recebimento
+                          </DialogTitle>
+                          <DialogDescription>
+                            Registre manualmente que o cliente confirmou o
+                            recebimento da notificação 7.10.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <OotAcknowledgementForm
+                          onSubmit={(data) => ootAckMutation.mutate(data)}
+                          isLoading={ootAckMutation.isPending}
+                        />
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma notificação ao cliente foi gerada para esta NC.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* CAPA Info */}
       {nc.capa && (
         <Card>
@@ -595,6 +794,37 @@ function ResolveForm({
         className="w-full"
       >
         {isLoading ? 'Salvando...' : 'Resolver NC'}
+      </Button>
+    </div>
+  )
+}
+
+function OotAcknowledgementForm({
+  onSubmit,
+  isLoading,
+}: {
+  onSubmit: (data: { note: string }) => void
+  isLoading: boolean
+}) {
+  const [note, setNote] = useState('')
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Nota (obrigatória)</Label>
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Como o recebimento foi confirmado? (ex.: telefone, e-mail)"
+          rows={3}
+        />
+      </div>
+      <Button
+        onClick={() => onSubmit({ note })}
+        disabled={note.trim().length === 0 || isLoading}
+        className="w-full"
+      >
+        {isLoading ? 'Registrando...' : 'Registrar confirmação'}
       </Button>
     </div>
   )

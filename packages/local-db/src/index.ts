@@ -136,6 +136,16 @@ export {
   type SaveLocalServiceOrderExecutionNotesInput,
 } from "./service-orders";
 export {
+  createLocalNonConformance,
+  listLocalNonConformances,
+  type CreateLocalNonConformanceInput,
+  type LocalNonConformance,
+  type LocalNonConformanceStatus,
+  type LocalNonConformanceType,
+  type LocalNonConformancesListData,
+  type LocalNonConformancesListInput,
+} from "./non-conformances";
+export {
   currentLocalDbSchemaVersion,
   localDbMigrations,
   type LocalDbMigration,

@@ -22,6 +22,7 @@ describe('isCloudOnlyDashboardPath', () => {
 
   it.each([
     '/dashboard',
+    '/dashboard/nc/new',
     '/dashboard/jobs',
     '/dashboard/jobs/123/execute',
     '/dashboard/standards',

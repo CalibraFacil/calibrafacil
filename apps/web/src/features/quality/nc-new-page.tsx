@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  Alert02Icon,
   DashboardSpeed02Icon,
   LegalDocument01Icon,
   ToolsIcon,
@@ -31,10 +32,7 @@ import {
 } from '@/components/ui/select'
 import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
-import {
-  CloudOnlyOfflineState,
-  useDesktopCloudOnlyUnavailable,
-} from '@/runtime/sync-status'
+import { useDesktopCloudOnlyUnavailable } from '@/runtime/sync-status'
 
 const NC_TYPES: ReadonlyArray<{
   value: NonConformanceFormData['type']
@@ -59,6 +57,12 @@ const NC_TYPES: ReadonlyArray<{
     label: 'Documentação',
     hint: 'Erro em documento, certificado ou registro',
     icon: LegalDocument01Icon,
+  },
+  {
+    value: 'out_of_tolerance',
+    label: 'Fora de tolerância',
+    hint: 'Resultado "como encontrado" fora de tolerância (§7.10)',
+    icon: Alert02Icon,
   },
 ]
 
@@ -115,6 +119,16 @@ export function NewNCPage() {
     mutationFn: async (payload: CreateNonConformanceInput) =>
       calibraApi.nonConformances.create(payload),
     onSuccess: (result) => {
+      if (cloudOnlyUnavailable) {
+        // O detalhe da NC é cloud-only; no desktop offline a NC fica no
+        // outbox local até a próxima sincronização.
+        toast.success(
+          'NC registrada localmente — será sincronizada quando houver conexão.',
+        )
+        navigate({ to: '/dashboard' })
+        return
+      }
+
       toast.success(`NC ${result.ncNumber} registrada com sucesso`)
       navigate({ to: '/dashboard/nc/$id', params: { id: String(result.id) } })
     },
@@ -135,12 +149,6 @@ export function NewNCPage() {
     }
 
     createMutation.mutate(parsed.data)
-  }
-
-  if (cloudOnlyUnavailable) {
-    return (
-      <CloudOnlyOfflineState title="Registro de não conformidade indisponível offline" />
-    )
   }
 
   return (
@@ -167,7 +175,7 @@ export function NewNCPage() {
               <div
                 role="radiogroup"
                 aria-label="Tipo de não conformidade"
-                className="grid gap-2 sm:grid-cols-3"
+                className="grid gap-2 sm:grid-cols-2"
               >
                 {NC_TYPES.map((option) => {
                   const selected = typeValue === option.value
@@ -229,36 +237,44 @@ export function NewNCPage() {
               </Field>
             </FieldGroup>
 
-            {/* Job Link (optional) */}
+            {/* Job Link (optional; requires the cloud API) */}
             <div className="space-y-2">
               <Label htmlFor="jobId">Ordem de Serviço (opcional)</Label>
-              <Select
-                value={jobIdValue || ''}
-                onValueChange={(v) => setValue('jobId', v ?? '')}
-              >
-                <SelectTrigger>
-                  <span
-                    className="flex flex-1 text-left line-clamp-1"
-                    data-slot="select-value"
+              {cloudOnlyUnavailable ? (
+                <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Vínculo com calibração disponível apenas no modo online.
+                </p>
+              ) : (
+                <>
+                  <Select
+                    value={jobIdValue || ''}
+                    onValueChange={(v) => setValue('jobId', v ?? '')}
                   >
-                    {selectedJob
-                      ? `${selectedJob.jobId} (${selectedJob.status})`
-                      : 'Nenhuma OS vinculada'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent className="min-w-[280px]">
-                  <SelectItem value="">Nenhuma</SelectItem>
-                  {jobsData?.data.map((job) => (
-                    <SelectItem key={job.id} value={String(job.id)}>
-                      {job.jobId} ({job.status})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Vincule a uma ordem de serviço se a NC estiver relacionada a um
-                trabalho específico.
-              </p>
+                    <SelectTrigger>
+                      <span
+                        className="flex flex-1 text-left line-clamp-1"
+                        data-slot="select-value"
+                      >
+                        {selectedJob
+                          ? `${selectedJob.jobId} (${selectedJob.status})`
+                          : 'Nenhuma OS vinculada'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="min-w-[280px]">
+                      <SelectItem value="">Nenhuma</SelectItem>
+                      {jobsData?.data.map((job) => (
+                        <SelectItem key={job.id} value={String(job.id)}>
+                          {job.jobId} ({job.status})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Vincule a uma ordem de serviço se a NC estiver relacionada a
+                    um trabalho específico.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Description */}
@@ -287,7 +303,11 @@ export function NewNCPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate({ to: '/dashboard/nc' })}
+                onClick={() =>
+                  navigate({
+                    to: cloudOnlyUnavailable ? '/dashboard' : '/dashboard/nc',
+                  })
+                }
               >
                 Cancelar
               </Button>

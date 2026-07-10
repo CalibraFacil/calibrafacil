@@ -21,7 +21,7 @@ export interface NCNotificationEmailProps {
   recipientName: string;
   type: NCNotificationType;
   ncNumber: string;
-  ncType?: "work" | "equipment" | "documentation";
+  ncType?: "work" | "equipment" | "documentation" | "out_of_tolerance";
   description?: string;
   capaNumber?: string;
   actorName?: string;
@@ -59,6 +59,8 @@ const getNCTypeLabel = (ncType: string | undefined): string => {
       return "Equipamento";
     case "documentation":
       return "Documentação";
+    case "out_of_tolerance":
+      return "Fora de tolerância";
     default:
       return "";
   }

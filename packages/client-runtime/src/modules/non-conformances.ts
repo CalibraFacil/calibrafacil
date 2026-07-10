@@ -6,6 +6,7 @@ import type {
   NonConformanceListInput,
   NonConformanceResolveInput,
   NonConformancesApi,
+  RegisterOotAcknowledgementInput,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
 
@@ -92,6 +93,26 @@ export function createNonConformancesApi(
           json: input,
         }),
         "Erro ao escalar para CAPA",
+      );
+    },
+    async getOotNotification<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.nc[":id"]["oot-notification"].$get({
+          param: { id: String(id) },
+        }),
+        "Falha ao carregar notificação 7.10",
+      );
+    },
+    async registerOotAcknowledgement<TResponse = unknown>(
+      id: string | number,
+      input: RegisterOotAcknowledgementInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.nc[":id"]["oot-ack"].$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao registrar confirmação de recebimento",
       );
     },
   };

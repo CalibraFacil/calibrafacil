@@ -67,7 +67,9 @@ function parseNonConformanceStatus(
   }
 }
 
-function parseNonConformanceType(value: string | null): NonConformanceType | '' {
+function parseNonConformanceType(
+  value: string | null,
+): NonConformanceType | '' {
   switch (value) {
     case 'work':
     case 'equipment':
@@ -257,7 +259,9 @@ export function NCListPage() {
                       ? 'Equipamento'
                       : typeFilter === 'documentation'
                         ? 'Documentação'
-                        : 'Todos os Tipos'}
+                        : typeFilter === 'out_of_tolerance'
+                          ? 'Fora de tolerância'
+                          : 'Todos os Tipos'}
                 </span>
               </SelectTrigger>
               <SelectContent>
@@ -265,6 +269,9 @@ export function NCListPage() {
                 <SelectItem value="work">Trabalho</SelectItem>
                 <SelectItem value="equipment">Equipamento</SelectItem>
                 <SelectItem value="documentation">Documentação</SelectItem>
+                <SelectItem value="out_of_tolerance">
+                  Fora de tolerância
+                </SelectItem>
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">

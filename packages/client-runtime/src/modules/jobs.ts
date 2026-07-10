@@ -74,6 +74,22 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         "Erro ao rejeitar",
       );
     },
+    async flagOutOfTolerance(
+      jobId: string | number,
+      input: {
+        description?: string;
+        affectedScope?: string;
+        notifyCustomer: boolean;
+      },
+    ) {
+      return readJsonResponse<unknown>(
+        await rawCloudClient.api.jobs[":id"]["flag-oot"].$post({
+          param: { id: apiRouteParam(jobId) },
+          json: input,
+        }),
+        "Erro ao registrar fora de tolerância",
+      );
+    },
     async cancel(jobId: string | number, reason: string) {
       return readJsonResponse<unknown>(
         await rawCloudClient.api.jobs[":id"].$delete({

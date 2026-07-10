@@ -1,4 +1,5 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import type { OotNotificationData } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -108,6 +109,16 @@ export function nonConformanceAuditLogQueryOptions(id: string) {
     queryKey: ['non-conformance-audit', id],
     queryFn: () =>
       calibraApi.nonConformances.auditLog<NonConformanceAuditLogData>(id),
+  })
+}
+
+export function ootNotificationQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['non-conformance-oot-notification', id],
+    queryFn: () =>
+      calibraApi.nonConformances.getOotNotification<{
+        data: OotNotificationData | null
+      }>(id),
   })
 }
 
@@ -312,6 +323,19 @@ export function useNonConformanceAuditLogData({
 }) {
   return useQuery({
     ...nonConformanceAuditLogQueryOptions(id),
+    enabled,
+  })
+}
+
+export function useNonConformanceOotNotificationData({
+  id,
+  enabled,
+}: {
+  id: string
+  enabled: boolean
+}) {
+  return useQuery({
+    ...ootNotificationQueryOptions(id),
     enabled,
   })
 }

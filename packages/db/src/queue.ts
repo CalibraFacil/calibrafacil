@@ -64,6 +64,7 @@ function getMessageType(message: QueueMessage): AppQueueJobType {
     case "INTEGRATION_SYNC":
     case "CERTIFICATE_XLSX_PREVIEW":
     case "AUDIT_PACK":
+    case "OOT_NOTIFICATION":
       return message.type;
     default:
       return "CERTIFICATE";

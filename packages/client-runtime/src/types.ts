@@ -146,6 +146,19 @@ export interface JobsApi {
     options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
   ): Promise<string>;
   amend(jobId: string | number, reason: string): Promise<JobAmendResult>;
+  /**
+   * §7.10 (#426): flags an approved job as out-of-tolerance (as found) —
+   * opens a typed NC and, when notifyCustomer, generates the customer
+   * notification (PDF + email via outbox).
+   */
+  flagOutOfTolerance(
+    jobId: string | number,
+    input: {
+      description?: string;
+      affectedScope?: string;
+      notifyCustomer: boolean;
+    },
+  ): Promise<unknown>;
 }
 
 export interface SyncApi {
@@ -1235,7 +1248,7 @@ export type NonConformanceListInput = {
 };
 
 export type CreateNonConformanceInput = {
-  type: "work" | "equipment" | "documentation";
+  type: "work" | "equipment" | "documentation" | "out_of_tolerance";
   description: string;
   detectedAt: string;
   jobId?: number;
@@ -1262,6 +1275,28 @@ export type NonConformanceEscalateInput = {
   dueDate?: string;
 };
 
+export type RegisterOotAcknowledgementInput = {
+  note: string;
+};
+
+/** §7.10 out-of-tolerance customer-notification record (#426 Phase 0). */
+export type OotNotificationData = {
+  id: number;
+  ncId: number;
+  jobId: number;
+  certificateNumber: string | null;
+  recipientName: string | null;
+  recipientEmail: string | null;
+  affectedScope: string | null;
+  status: "PENDING" | "GENERATED" | "SENT" | "ACKNOWLEDGED";
+  pdfR2Key: string | null;
+  sentAt: string | null;
+  acknowledgedAt: string | null;
+  acknowledgedVia: "email_link" | "portal_link" | "manual" | null;
+  acknowledgedNote: string | null;
+  createdAt: string;
+};
+
 export interface NonConformancesApi {
   list<TResponse = unknown>(input: NonConformanceListInput): Promise<TResponse>;
   summary<TResponse = unknown>(): Promise<TResponse>;
@@ -1279,6 +1314,13 @@ export interface NonConformancesApi {
   escalateToCapa<TResponse = unknown>(
     id: string | number,
     input: NonConformanceEscalateInput,
+  ): Promise<TResponse>;
+  getOotNotification<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  registerOotAcknowledgement<TResponse = unknown>(
+    id: string | number,
+    input: RegisterOotAcknowledgementInput,
   ): Promise<TResponse>;
 }
 

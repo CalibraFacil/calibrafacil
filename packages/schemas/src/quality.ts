@@ -4,6 +4,13 @@ export const NonConformanceTypeSchema = z.enum([
   "work",
   "equipment",
   "documentation",
+  "out_of_tolerance",
+]);
+
+export const NonConformanceTriggerSourceSchema = z.enum([
+  "manual",
+  "as_found_verdict",
+  "standard_recall",
 ]);
 
 export const CreateNonConformanceSchema = z.object({
@@ -22,6 +29,41 @@ export const CreateNonConformanceSchema = z.object({
 
 export type CreateNonConformanceInput = z.infer<
   typeof CreateNonConformanceSchema
+>;
+
+/**
+ * Payload for flagging an approved job as out-of-tolerance (as found).
+ * Opens a typed NC and generates the §7.10 customer notification (#426).
+ */
+export const FlagJobOutOfToleranceSchema = z.object({
+  description: z
+    .string()
+    .trim()
+    .min(10, "Descrição deve ter pelo menos 10 caracteres")
+    .optional(),
+  // Manual scope entry: the customer's affected measurement window/context.
+  affectedScope: z.string().trim().max(2000).optional(),
+  notifyCustomer: z.boolean().default(true),
+});
+
+export type FlagJobOutOfToleranceInput = z.infer<
+  typeof FlagJobOutOfToleranceSchema
+>;
+
+/**
+ * Manual registration of a customer's acknowledgement of a §7.10 notification
+ * (phone / e-mail confirmation collected outside the ack link).
+ */
+export const RegisterOotAcknowledgementSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(3, "Descreva como o recebimento foi confirmado")
+    .max(2000),
+});
+
+export type RegisterOotAcknowledgementInput = z.infer<
+  typeof RegisterOotAcknowledgementSchema
 >;
 
 export const CapaSourceSchema = z.enum([

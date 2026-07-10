@@ -2148,6 +2148,7 @@ export const NotificationTypeSchema = z.enum([
   "PAYMENT_FAILED",
   "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
   "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  "OOT_NOTIFICATION_ACKNOWLEDGED", // ISO 17025 Clause 7.10 - Customer acknowledged an OOT notification
   "COMPETENCE_EXPIRING", // ISO 17025 Clause 6.2.3
   "COMPETENCE_EXPIRED", // ISO 17025 Clause 6.2.3
   "COMPETENCE_REQUESTED", // ISO 17025 Clause 6.2.3
@@ -2268,10 +2269,12 @@ export type UpdateNotificationPreferencesInput = z.infer<
 /**
  * NC type values
  */
+// NOTE: shadows the copy star-exported from ./quality — keep both in sync.
 export const NonConformanceTypeSchema = z.enum([
   "work",
   "equipment",
   "documentation",
+  "out_of_tolerance",
 ]);
 
 export type NonConformanceType = z.infer<typeof NonConformanceTypeSchema>;

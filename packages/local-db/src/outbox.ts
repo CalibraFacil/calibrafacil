@@ -626,6 +626,29 @@ WHERE id = @localServiceOrderId
   }
 
   if (
+    event.aggregate_kind === "non_conformance" &&
+    typeof accepted.remoteEntityId === "number"
+  ) {
+    const remoteEntity = asRecord(accepted.remoteEntity);
+    const officialNcNumber = getString(remoteEntity, "ncNumber");
+    database
+      .prepare(
+        `
+UPDATE non_conformances
+SET remote_id = @remoteId,
+  nc_number = COALESCE(@officialNcNumber, nc_number),
+  sync_state = 'synced'
+WHERE id = @localId
+`,
+      )
+      .run({
+        remoteId: accepted.remoteEntityId,
+        officialNcNumber,
+        localId: event.aggregate_id,
+      });
+  }
+
+  if (
     event.aggregate_kind === "service_order_delivery_document" &&
     typeof accepted.remoteEntityId === "number"
   ) {

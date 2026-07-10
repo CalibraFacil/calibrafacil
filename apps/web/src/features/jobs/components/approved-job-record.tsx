@@ -57,6 +57,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -109,12 +110,15 @@ import { PrintLabelButton } from '@/features/printing/print-label-button'
 
 interface ApprovedJobRecordProps {
   job: ApprovedJobRecordData
+  /** Flagging §7.10 requires the cloud API; the action is hidden on desktop. */
+  isDesktop?: boolean
   onBack: () => void
   onRefresh: () => void
 }
 
 export function ApprovedJobRecord({
   job,
+  isDesktop = false,
   onBack,
   onRefresh,
 }: ApprovedJobRecordProps) {
@@ -166,6 +170,14 @@ export function ApprovedJobRecord({
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
   const [isAmending, setIsAmending] = useState(false)
+  // §7.10 out-of-tolerance NC state (#426)
+  const isOutOfToleranceAsFound = job.asFoundConformity === 'NON_CONFORMING'
+  const canFlagOutOfTolerance = isOutOfToleranceAsFound && !isDesktop
+  const [isOotDialogOpen, setIsOotDialogOpen] = useState(false)
+  const [ootDescription, setOotDescription] = useState('')
+  const [ootAffectedScope, setOotAffectedScope] = useState('')
+  const [ootNotifyCustomer, setOotNotifyCustomer] = useState(true)
+  const [isFlaggingOot, setIsFlaggingOot] = useState(false)
   const fetchCertificateDownloadUrl = useCallback(async () => {
     return getJobCertificateDownloadUrl(job.id)
   }, [job.id])
@@ -249,6 +261,34 @@ export function ApprovedJobRecord({
       )
     } finally {
       setIsAmending(false)
+    }
+  }
+
+  // §7.10 (#426): open a typed NC (and optional customer notification) for an
+  // as-found out-of-tolerance result. Cloud-only — the button is hidden on desktop.
+  const handleFlagOutOfTolerance = async () => {
+    setIsFlaggingOot(true)
+    try {
+      await calibraApi.jobs.flagOutOfTolerance(job.id, {
+        description: ootDescription.trim() || undefined,
+        affectedScope: ootAffectedScope.trim() || undefined,
+        notifyCustomer: ootNotifyCustomer,
+      })
+      toast.success('Não conformidade registrada')
+      toast.info('Acompanhe na área de Qualidade (NC)')
+      setIsOotDialogOpen(false)
+      setOotDescription('')
+      setOotAffectedScope('')
+      setOotNotifyCustomer(true)
+      onRefresh()
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao registrar não conformidade',
+      )
+    } finally {
+      setIsFlaggingOot(false)
     }
   }
 
@@ -516,6 +556,11 @@ export function ApprovedJobRecord({
                 />
                 {isSuperseded ? 'Retificado' : 'Aprovado'}
               </Badge>
+              {isOutOfToleranceAsFound && (
+                <Badge variant="destructive">
+                  Fora de tolerância (como encontrado)
+                </Badge>
+              )}
               <CertificateReleaseControl
                 calibrationJobId={job.id}
                 jobStatus={job.status}
@@ -632,6 +677,88 @@ export function ApprovedJobRecord({
                 </>
               ) : (
                 'Criar Retificação'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* §7.10 Out-of-tolerance NC Dialog (#426) */}
+      <Dialog open={isOotDialogOpen} onOpenChange={setIsOotDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HugeiconsIcon
+                icon={Alert02Icon}
+                className="h-5 w-5 text-destructive"
+              />
+              Registrar NC 7.10
+            </DialogTitle>
+            <DialogDescription>
+              Abre uma não conformidade do tipo &quot;fora de tolerância&quot;
+              para este resultado como encontrado e, se marcado, notifica o
+              cliente conforme a ISO/IEC 17025 §7.10.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="oot-description">Descrição (opcional)</Label>
+              <Textarea
+                id="oot-description"
+                placeholder="Deixe em branco para gerar uma descrição padrão com os dados do job..."
+                value={ootDescription}
+                onChange={(e) => setOotDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="oot-affected-scope">
+                Escopo potencialmente afetado (opcional)
+              </Label>
+              <Textarea
+                id="oot-affected-scope"
+                placeholder="Ex.: medições realizadas com o instrumento desde a última calibração..."
+                value={ootAffectedScope}
+                onChange={(e) => setOotAffectedScope(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="oot-notify-customer"
+                checked={ootNotifyCustomer}
+                onCheckedChange={(checked) =>
+                  setOotNotifyCustomer(checked === true)
+                }
+              />
+              <Label
+                htmlFor="oot-notify-customer"
+                className="text-sm font-normal"
+              >
+                Notificar cliente (e-mail + PDF §7.10)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsOotDialogOpen(false)}
+              disabled={isFlaggingOot}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleFlagOutOfTolerance}
+              disabled={isFlaggingOot}
+            >
+              {isFlaggingOot ? (
+                <>
+                  <Spinner className="mr-2 h-4 w-4" />
+                  Registrando...
+                </>
+              ) : (
+                'Registrar NC'
               )}
             </Button>
           </DialogFooter>
@@ -1025,6 +1152,19 @@ export function ApprovedJobRecord({
                   >
                     <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                     Retificar Certificado
+                  </Button>
+                )}
+                {canFlagOutOfTolerance && (
+                  <Button
+                    variant="outline"
+                    className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive`}
+                    onClick={() => setIsOotDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={Alert02Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Registrar NC 7.10
                   </Button>
                 )}
               </div>

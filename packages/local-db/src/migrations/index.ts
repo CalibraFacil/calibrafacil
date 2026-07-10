@@ -12,6 +12,7 @@ import { migration0011AssetLegalMetrologyRegime } from "./0011_asset_legal_metro
 import { migration0012ServiceOrderItemMaterial } from "./0012_service_order_item_material";
 import { migration0013OfficialSealingMarkTerminology } from "./0013_official_sealing_mark_terminology";
 import { migration0014SyncBaseVersionAnchor } from "./0014_sync_base_version_anchor";
+import { migration0015NonConformances } from "./0015_non_conformances";
 
 export type LocalDbMigration = {
   id: number;
@@ -34,6 +35,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0012ServiceOrderItemMaterial,
   migration0013OfficialSealingMarkTerminology,
   migration0014SyncBaseVersionAnchor,
+  migration0015NonConformances,
 ];
 
 export const currentLocalDbSchemaVersion =

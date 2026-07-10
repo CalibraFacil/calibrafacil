@@ -45,6 +45,7 @@ export type StorageCategory =
   | "STANDARD_DOC"
   | "SYNC_ATTACHMENT"
   | "PORTAL_EXPORT"
+  | "OOT_NOTIFICATION"
   | "TEMPLATE_XLSX"
   | "ORG_LOGO"
   | "SIGNATURE"
@@ -72,6 +73,7 @@ export function bucketFor(category: StorageCategory): StorageBucket {
     case "STANDARD_DOC":
     case "SYNC_ATTACHMENT":
     case "PORTAL_EXPORT":
+    case "OOT_NOTIFICATION":
       return "documents";
   }
 }
@@ -347,6 +349,29 @@ export function portalAuditPackKey(
   return {
     bucket: bucketFor("PORTAL_EXPORT"),
     key: `org/${part}/portal-exports/${params.exportId}/pacote-auditoria-${date}.zip`,
+  };
+}
+
+export interface OotNotificationKeyParams {
+  org: OrgRef;
+  notificationId: number;
+  /** NC number for the descriptive filename (e.g. "NC-2026-0012"). */
+  ncNumber: string;
+  year: number;
+}
+
+/**
+ * §7.10 out-of-tolerance customer-notification letter (#426 Phase 0). Lives
+ * with the other regulated documents — this is retained quality evidence, so
+ * it must NOT sit under a lifecycle-expired prefix like portal-exports/.
+ */
+export function ootNotificationKey(
+  params: OotNotificationKeyParams,
+): StorageObject {
+  const part = orgPartition(params.org);
+  return {
+    bucket: bucketFor("OOT_NOTIFICATION"),
+    key: `org/${part}/${params.year}/oot-notifications/${params.notificationId}/notificacao-7-10-${slugify(params.ncNumber)}.pdf`,
   };
 }
 

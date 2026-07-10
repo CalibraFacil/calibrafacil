@@ -8,6 +8,8 @@ import type {
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   CreateJobResult,
+  CreateNonConformanceInput,
+  CreateNonConformanceResult,
   CreateServiceOrderResult,
   CustomerAuditLogData,
   CustomerDetailData,
@@ -28,6 +30,7 @@ import type {
   MethodDetailData,
   MethodWriteInput,
   MethodsListData,
+  NonConformanceListInput,
   NotificationPreferencesResponse,
   PlanAccessResponse,
   PortalDomainResponse,
@@ -1139,8 +1142,33 @@ export function createDesktopApiClient(
       },
     },
     nonConformances: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
+      async list<TResponse = unknown>(input: NonConformanceListInput) {
+        const url = new URL("/api/nc", options.baseUrl);
+        url.searchParams.set("page", String(input.page));
+        url.searchParams.set("limit", String(input.limit));
+
+        if (input.query) {
+          url.searchParams.set("query", input.query);
+        }
+
+        if (input.status) {
+          url.searchParams.set("status", input.status);
+        }
+
+        if (input.type) {
+          url.searchParams.set("type", input.type);
+        }
+
+        const response = await fetchImpl(url, {
+          credentials: "include",
+          headers: await createDesktopHeaders(options.tokenProvider),
+        });
+
+        if (!response.ok) {
+          throw new Error("Falha ao carregar não conformidades");
+        }
+
+        return readDesktopJson<TResponse>(response);
       },
       async summary() {
         throw desktopUnsupportedAuthAction("Não conformidades");
@@ -1151,8 +1179,21 @@ export function createDesktopApiClient(
       async auditLog() {
         throw desktopUnsupportedAuthAction("Não conformidades");
       },
-      async create() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
+      async create(input: CreateNonConformanceInput) {
+        const response = await fetchImpl(new URL("/api/nc", options.baseUrl), {
+          method: "POST",
+          credentials: "include",
+          headers: await createDesktopHeaders(options.tokenProvider, {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(input),
+        });
+
+        if (!response.ok) {
+          throw new Error(await readApiError(response, "Erro ao registrar NC"));
+        }
+
+        return readDesktopJson<CreateNonConformanceResult>(response);
       },
       async setDisposition() {
         throw desktopUnsupportedAuthAction("Não conformidades");
@@ -1161,6 +1202,12 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("Não conformidades");
       },
       async escalateToCapa() {
+        throw desktopUnsupportedAuthAction("Não conformidades");
+      },
+      async getOotNotification() {
+        throw desktopUnsupportedAuthAction("Não conformidades");
+      },
+      async registerOotAcknowledgement() {
         throw desktopUnsupportedAuthAction("Não conformidades");
       },
     },
@@ -2196,6 +2243,9 @@ export function createDesktopApiClient(
       },
       async amend() {
         throw desktopUnsupportedJobAction("Retificação de certificado");
+      },
+      async flagOutOfTolerance() {
+        throw desktopUnsupportedJobAction("Sinalização de fora de tolerância");
       },
     },
     serviceOrders: {

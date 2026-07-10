@@ -710,6 +710,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     return (
       <ApprovedJobRecord
         job={job}
+        isDesktop={runtime.isDesktop}
         onBack={() => navigate({ to: '/dashboard/jobs' })}
         onRefresh={refreshJob}
       />
@@ -787,6 +788,12 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 </Badge>
               )}
               {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
+              {(job.status === 'APPROVED' || job.status === 'SUPERSEDED') &&
+                job.asFoundConformity === 'NON_CONFORMING' && (
+                  <Badge variant="destructive">
+                    Fora de tolerância (como encontrado)
+                  </Badge>
+                )}
               <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
                 {getFinancialStatusLabel(normalizedFinancialStatus)}
               </Badge>

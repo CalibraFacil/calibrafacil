@@ -7,6 +7,7 @@ import {
   createLocalAsset,
   createLocalAttachment,
   createLocalCustomer,
+  createLocalNonConformance,
   createLocalServiceOrderDeliveryDocumentDraft,
   createLocalJobDraft,
   createLocalServiceOrderIntake,
@@ -32,6 +33,7 @@ import {
   listLocalJobs,
   listLocalMethods,
   listLocalCompositionProfiles,
+  listLocalNonConformances,
   listLocalServices,
   listLocalServiceOrders,
   listLocalStandards,
@@ -48,6 +50,7 @@ import {
 import {
   CreateAssetSchema,
   CreateCustomerSchema,
+  CreateNonConformanceSchema,
   CreateServiceOrderQuoteSchema,
   CreateServiceOrderSchema,
   IssueServiceOrderDeliveryDocumentSchema,
@@ -1104,6 +1107,57 @@ export function createLocalServer(
     }
   });
 
+  app.get("/api/nc", (c) => {
+    return c.json({
+      ...listLocalNonConformances(database, {
+        page: Number(c.req.query("page") ?? "1"),
+        limit: Number(c.req.query("limit") ?? "20"),
+        query: c.req.query("query") || undefined,
+        status: parseNonConformanceStatus(c.req.query("status")),
+        type: parseNonConformanceType(c.req.query("type")),
+      }),
+    });
+  });
+
+  app.post("/api/nc", async (c) => {
+    const parsed = CreateNonConformanceSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: "Dados invalidos para NC local",
+          issues: parsed.error.issues,
+        },
+        400,
+      );
+    }
+
+    // Phase 0 (issue #426): the offline create path deliberately excludes the
+    // calibration link — `jobId` is never part of the sync payload.
+    if (parsed.data.jobId !== undefined && parsed.data.jobId !== null) {
+      return c.json(
+        { error: "Vínculo com calibração não está disponível no desktop" },
+        409,
+      );
+    }
+
+    const context = getLocalRequestContext(config, database);
+    try {
+      const nonConformance = createLocalNonConformance(database, {
+        type: parsed.data.type,
+        description: parsed.data.description,
+        detectedAt: parsed.data.detectedAt,
+        organizationId: context.organizationId,
+        unitId: context.unitId,
+        actorUserId: context.userId,
+        deviceId: config.deviceId,
+      });
+
+      return c.json(nonConformance, 201);
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
   app.get("/api/standards", (c) => {
     return c.json(
       listLocalStandards(database, {
@@ -1503,6 +1557,27 @@ function parseServiceOrderStatus(status: string | undefined) {
     status === "warranty_return"
   ) {
     return status;
+  }
+
+  return undefined;
+}
+
+function parseNonConformanceStatus(status: string | undefined) {
+  if (status === "open" || status === "under_review" || status === "resolved") {
+    return status;
+  }
+
+  return undefined;
+}
+
+function parseNonConformanceType(type: string | undefined) {
+  if (
+    type === "work" ||
+    type === "equipment" ||
+    type === "documentation" ||
+    type === "out_of_tolerance"
+  ) {
+    return type;
   }
 
   return undefined;

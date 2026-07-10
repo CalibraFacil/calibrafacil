@@ -14,6 +14,13 @@ describe('dashboard route metadata', () => {
     expect(isDashboardCloudOnlyPath('/dashboard/jobs/42/execute')).toBe(false)
   })
 
+  it('keeps NC list/detail cloud-only but allows offline NC capture (§7.10)', () => {
+    expect(isDashboardCloudOnlyPath('/dashboard/nc')).toBe(true)
+    expect(isDashboardCloudOnlyPath('/dashboard/nc/42')).toBe(true)
+    expect(isDashboardCloudOnlyPath('/dashboard/nc/new')).toBe(false)
+    expect(isDashboardCloudOnlyPath('/dashboard/nc/new/')).toBe(false)
+  })
+
   it('registers the materials catalog as a cloud-only route (REQ-MATUI-005)', () => {
     expect(isDashboardCloudOnlyPath('/dashboard/materials')).toBe(true)
     expect(isDashboardCloudOnlyPath('/dashboard/materials/new')).toBe(true)

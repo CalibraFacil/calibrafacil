@@ -7280,6 +7280,7 @@ export type NotificationType =
   | "PAYMENT_FAILED"
   | "NC_CREATED" // ISO 17025 Clause 8.7 - New non-conformance registered
   | "NC_ESCALATED_TO_CAPA" // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  | "OOT_NOTIFICATION_ACKNOWLEDGED" // ISO 17025 Clause 7.10 - Customer acknowledged an out-of-tolerance notification
   | "COMPETENCE_EXPIRING" // ISO 17025 Clause 6.2.3 - Competence expiring soon
   | "COMPETENCE_EXPIRED" // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
   | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
@@ -7530,7 +7531,8 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
   | "INTEGRATION_SYNC"
   | "CERTIFICATE_XLSX_PREVIEW"
-  | "AUDIT_PACK";
+  | "AUDIT_PACK"
+  | "OOT_NOTIFICATION";
 
 export type AppQueueJobStatus =
   | "PENDING"
@@ -8031,7 +8033,21 @@ export const correctiveActionAuditLog = pgTable(
 /**
  * NC type values
  */
-export type NonConformanceType = "work" | "equipment" | "documentation";
+export type NonConformanceType =
+  | "work"
+  | "equipment"
+  | "documentation"
+  | "out_of_tolerance";
+
+/**
+ * What opened the NC. Distinguishes manually filed NCs from ones opened by the
+ * as-found OOT verdict on a job (§7.10 customer notification, #426 Phase 0) and,
+ * later, from a reference-standard recall (#426 Phase 1).
+ */
+export type NonConformanceTriggerSource =
+  | "manual"
+  | "as_found_verdict"
+  | "standard_recall";
 
 /**
  * NC disposition values
@@ -8069,6 +8085,8 @@ export const nonConformance = pgTable(
     jobId: integer("job_id").references(() => calibrationJob.id),
     // NC classification
     type: text("type").$type<NonConformanceType>().notNull(),
+    // What opened this NC (nullable — legacy rows are implicitly "manual").
+    triggerSource: text("trigger_source").$type<NonConformanceTriggerSource>(),
     description: text("description").notNull(),
     // Detection
     detectedBy: text("detected_by")
@@ -8246,6 +8264,169 @@ export const nonConformanceAuditLogRelations = relations(
     }),
   }),
 );
+
+// =============================================================================
+// OUT-OF-TOLERANCE NOTIFICATION - ISO 17025:2017 Clause 7.10 (#426 Phase 0)
+// =============================================================================
+
+/**
+ * Lifecycle of a §7.10 customer notification.
+ * PENDING → GENERATED (PDF on R2) → SENT (email dispatched) → ACKNOWLEDGED.
+ */
+export type OotNotificationStatus =
+  | "PENDING"
+  | "GENERATED"
+  | "SENT"
+  | "ACKNOWLEDGED";
+
+/**
+ * How the customer's acknowledgement was registered. `portal_link` is reserved
+ * for the Phase 2 portal surface.
+ */
+export type OotAcknowledgedVia = "email_link" | "portal_link" | "manual";
+
+/**
+ * §7.10.2 evidence record: one row per customer notification about an
+ * out-of-tolerance as-found result. Written in the same transaction as the
+ * triggering NC; the PDF/email pipeline updates it as the notification
+ * progresses. FKs are deliberately non-cascading — this is a retained
+ * quality record and must block deletion of what it evidences.
+ */
+export const ootNotification = pgTable(
+  "oot_notification",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ncId: integer("nc_id")
+      .notNull()
+      .references(() => nonConformance.id, { onDelete: "restrict" }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    // Context snapshot frozen at flag time (the certificate/customer may change
+    // later; the notification must evidence what was communicated).
+    certificateNumber: text("certificate_number"),
+    recipientName: text("recipient_name"),
+    recipientEmail: text("recipient_email"),
+    // Manual affected-scope entry (the customer's measurement window/context),
+    // frozen here for the generated PDF.
+    affectedScope: text("affected_scope"),
+    status: text("status")
+      .$type<OotNotificationStatus>()
+      .default("PENDING")
+      .notNull(),
+    // Generated §7.10 notification PDF.
+    pdfR2Key: text("pdf_r2_key"),
+    pdfSha256: text("pdf_sha256"),
+    sentAt: timestamp("sent_at"),
+    // Unguessable token embedded in the email's "confirmo o recebimento" link.
+    ackToken: text("ack_token")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    acknowledgedVia: text("acknowledged_via").$type<OotAcknowledgedVia>(),
+    acknowledgedNote: text("acknowledged_note"),
+    // Who triggered/approved sending the notification (§7.10.1 defined
+    // responsibilities; legal-sensitivity mitigation from #426).
+    approvedBy: text("approved_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("oot_notification_organization_id_idx").on(table.organizationId),
+    index("oot_notification_nc_id_idx").on(table.ncId),
+    index("oot_notification_job_id_idx").on(table.jobId),
+    index("oot_notification_status_idx").on(table.status),
+  ],
+);
+
+// =============================================================================
+// OOT EMAIL OUTBOX - Transactional outbox for §7.10 notification emails
+// =============================================================================
+// Same contract as service_order_email_outbox: rows are written in the SAME
+// transaction as the oot_notification they dispatch, and a cron drain sends
+// the actual email with claim-lease / retry / dead-letter semantics.
+
+export const ootEmailOutbox = pgTable(
+  "oot_email_outbox",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    notificationId: integer("notification_id")
+      .notNull()
+      .references(() => ootNotification.id, { onDelete: "cascade" }),
+    // Stable dedup key, e.g. "oot_notification". One logical email per
+    // (notification, event); INSERT with onConflictDoNothing.
+    eventKey: text("event_key").notNull(),
+    // Minimal snapshot needed to send later; the drain re-loads the
+    // notification row for current state.
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Terminal "done" marker — NULL means the row is still owed.
+    processedAt: timestamp("processed_at"),
+    // Dead-letter marker — set when attempts reach maxAttempts.
+    deadLetterAt: timestamp("dead_letter_at"),
+    // Lease marker — see service_order_email_outbox for the recovery contract.
+    claimedAt: timestamp("claimed_at"),
+  },
+  (table) => [
+    unique("oot_email_outbox_notification_event_uidx").on(
+      table.notificationId,
+      table.eventKey,
+    ),
+    index("oot_email_outbox_pending_idx").on(
+      table.createdAt,
+      table.processedAt,
+    ),
+  ],
+);
+
+export const ootNotificationRelations = relations(
+  ootNotification,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [ootNotification.organizationId],
+      references: [organization.id],
+    }),
+    nonConformance: one(nonConformance, {
+      fields: [ootNotification.ncId],
+      references: [nonConformance.id],
+    }),
+    job: one(calibrationJob, {
+      fields: [ootNotification.jobId],
+      references: [calibrationJob.id],
+    }),
+    approvedByUser: one(user, {
+      fields: [ootNotification.approvedBy],
+      references: [user.id],
+      relationName: "ootNotificationApprover",
+    }),
+    outboxEntries: many(ootEmailOutbox),
+  }),
+);
+
+export const ootEmailOutboxRelations = relations(ootEmailOutbox, ({ one }) => ({
+  notification: one(ootNotification, {
+    fields: [ootEmailOutbox.notificationId],
+    references: [ootNotification.id],
+  }),
+  organization: one(organization, {
+    fields: [ootEmailOutbox.organizationId],
+    references: [organization.id],
+  }),
+}));
 
 // =============================================================================
 // PERSONNEL COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)

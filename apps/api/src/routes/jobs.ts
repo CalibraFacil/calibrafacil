@@ -59,7 +59,9 @@ import {
   CancelJobSchema,
   ExecuteJobSchema,
   AmendJobSchema,
+  FlagJobOutOfToleranceSchema,
 } from "@calibra-facil/schemas";
+import { flagJobOutOfTolerance } from "../lib/oot-notifications";
 import {
   addServerTiming,
   withLabPermission,
@@ -1278,10 +1280,7 @@ export const jobsRouter = new Hono<{
               session.user.id,
             );
           } catch (error) {
-            console.error(
-              "Error sending job assignment notification:",
-              error,
-            );
+            console.error("Error sending job assignment notification:", error);
           }
         }
 
@@ -2487,6 +2486,77 @@ export const jobsRouter = new Hono<{
         message: "Job rejeitado",
         data: updated,
       });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/flag-oot - Flag an approved job as out-of-tolerance (as found):
+  // opens a typed NC and generates the §7.10 customer notification (#426).
+  // Never gates certificate issuance — it opens a quality workflow only.
+  // =========================================================================
+  .post(
+    "/:id/flag-oot",
+    ...withLabPermission({ non_conformance: ["create"] }),
+    zValidator("json", FlagJobOutOfToleranceSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const input = c.req.valid("json");
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Unit scope check here — the shared creator (also used by the desktop
+      // sync ingest) only scopes by organization.
+      const [scoped] = await db
+        .select({
+          id: calibrationJob.id,
+          asFoundConformity: calibrationJob.asFoundConformity,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!scoped) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const result = await flagJobOutOfTolerance({
+        organizationId: memberData.organizationId,
+        actorUserId: session.user.id,
+        jobId: id,
+        description: input.description,
+        affectedScope: input.affectedScope,
+        notifyCustomer: input.notifyCustomer,
+        triggerSource:
+          scoped.asFoundConformity === "NON_CONFORMING"
+            ? "as_found_verdict"
+            : "manual",
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      if (!result.ok) {
+        return c.json(
+          { error: result.message, code: result.code },
+          result.status,
+        );
+      }
+
+      return c.json(
+        {
+          message: "Nao conformidade registrada",
+          data: { nc: result.nc, notification: result.notification },
+        },
+        201,
+      );
     },
   )
 

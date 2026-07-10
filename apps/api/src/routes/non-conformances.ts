@@ -6,6 +6,7 @@ import {
   nonConformanceAuditLog,
   correctiveAction,
   calibrationJob,
+  ootNotification,
   user,
 } from "@calibra-facil/db/schema";
 import {
@@ -14,27 +15,21 @@ import {
   ResolveNonConformanceSchema,
   EscalateToCapaSchema,
   ListNonConformancesQuerySchema,
+  RegisterOotAcknowledgementSchema,
 } from "@calibra-facil/schemas";
-import {
-  notifyNCCreated,
-  notifyNCEscalatedToCapa,
-} from "@calibra-facil/notifications";
+import { notifyNCEscalatedToCapa } from "@calibra-facil/notifications";
 import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import {
+  createNonConformanceRecord,
+  isUniqueViolation,
+} from "../lib/non-conformances";
 import { eq, and, or, ilike, desc, count, gte, lte, sql } from "drizzle-orm";
 
+// Retry budget for the sequential CAPA-number generation below.
 const MAX_SEQ_RETRIES = 3;
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.message.includes("unique") ||
-      err.message.includes("duplicate") ||
-      err.message.includes("23505"))
-  );
-}
 
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
@@ -404,74 +399,20 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
-      // Generate NC number with retry on unique constraint violation
-      let newNc: typeof nonConformance.$inferSelect | null = null;
-      for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-        const year = new Date().getFullYear();
-        const [lastNc] = await db
-          .select({ ncNumber: nonConformance.ncNumber })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.organizationId, member.organizationId),
-              ilike(nonConformance.ncNumber, `NC-${year}-%`),
-            ),
-          )
-          .orderBy(desc(nonConformance.ncNumber))
-          .limit(1);
-
-        let nextSeq = 1;
-        if (lastNc) {
-          const parts = lastNc.ncNumber.split("-");
-          nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
-        }
-        const ncNumber = `NC-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-        try {
-          const [inserted] = await db
-            .insert(nonConformance)
-            .values({
-              ncNumber,
-              organizationId: member.organizationId,
-              jobId: input.jobId ?? null,
-              type: input.type,
-              description: input.description,
-              detectedBy: session.user.id,
-              detectedAt: new Date(input.detectedAt),
-              status: "open",
-              createdBy: session.user.id,
-            })
-            .returning();
-          newNc = inserted ?? null;
-          break;
-        } catch (err) {
-          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1)
-            throw err;
-        }
-      }
-
-      if (!newNc) {
-        return c.json({ error: "Falha ao criar nao conformidade" }, 500);
-      }
-
-      // Audit log
-      await db.insert(nonConformanceAuditLog).values({
-        ncId: newNc.id,
-        action: "create",
-        changes: { initial: input },
-        performedBy: session.user.id,
+      // Shared creator: NC number sequence + audit log + admin/owner
+      // notification (also used by the OOT flag flow and the desktop sync
+      // ingest, so all entry points stay identical).
+      const newNc = await createNonConformanceRecord({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        type: input.type,
+        description: input.description,
+        detectedAt: new Date(input.detectedAt),
+        jobId: input.jobId ?? null,
+        triggerSource: "manual",
         ipAddress: c.req.header("x-forwarded-for") || null,
+        auditChanges: { initial: input },
       });
-
-      // Notify admins/owners of new NC (fire-and-forget)
-      notifyNCCreated(
-        newNc.id,
-        newNc.ncNumber,
-        newNc.type,
-        newNc.description,
-        member.organizationId,
-        session.user.id,
-      ).catch((err) => console.error("[NC] Failed to send notification:", err));
 
       return c.json(newNc, 201);
     },
@@ -845,5 +786,145 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         .orderBy(desc(nonConformanceAuditLog.performedAt));
 
       return c.json({ data: logs });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/oot-notification - §7.10 customer-notification record for an
+  // out-of-tolerance NC (#426 Phase 0). Null when the NC has none.
+  // =========================================================================
+  .get(
+    "/:id/oot-notification",
+    ...withLabPermission({ non_conformance: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [existing] = await db
+        .select({ id: nonConformance.id })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      const [notification] = await db
+        .select({
+          id: ootNotification.id,
+          ncId: ootNotification.ncId,
+          jobId: ootNotification.jobId,
+          certificateNumber: ootNotification.certificateNumber,
+          recipientName: ootNotification.recipientName,
+          recipientEmail: ootNotification.recipientEmail,
+          affectedScope: ootNotification.affectedScope,
+          status: ootNotification.status,
+          pdfR2Key: ootNotification.pdfR2Key,
+          sentAt: ootNotification.sentAt,
+          acknowledgedAt: ootNotification.acknowledgedAt,
+          acknowledgedVia: ootNotification.acknowledgedVia,
+          acknowledgedNote: ootNotification.acknowledgedNote,
+          createdAt: ootNotification.createdAt,
+          // Deliberately NOT selected: ackToken (the unguessable public link
+          // must not leak through the authenticated read surface).
+        })
+        .from(ootNotification)
+        .where(eq(ootNotification.ncId, id))
+        .limit(1);
+
+      return c.json({ data: notification ?? null });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/oot-ack - Manually register the customer's acknowledgement of
+  // the §7.10 notification (phone / e-mail confirmation collected offline).
+  // =========================================================================
+  .post(
+    "/:id/oot-ack",
+    ...withLabPermission({ non_conformance: ["update"] }),
+    zValidator("json", RegisterOotAcknowledgementSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [existing] = await db
+        .select({ id: nonConformance.id })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      const [notification] = await db
+        .select()
+        .from(ootNotification)
+        .where(eq(ootNotification.ncId, id))
+        .limit(1);
+
+      if (!notification) {
+        return c.json(
+          { error: "Esta nao conformidade nao possui notificacao 7.10" },
+          404,
+        );
+      }
+
+      if (notification.acknowledgedAt) {
+        return c.json(
+          { error: "Recebimento ja confirmado", code: "ALREADY_ACKNOWLEDGED" },
+          409,
+        );
+      }
+
+      // Defense-in-depth (SEC-08): org predicate repeated in the WHERE.
+      const [updated] = await db
+        .update(ootNotification)
+        .set({
+          status: "ACKNOWLEDGED",
+          acknowledgedAt: new Date(),
+          acknowledgedVia: "manual",
+          acknowledgedNote: input.note,
+        })
+        .where(
+          and(
+            eq(ootNotification.id, notification.id),
+            eq(ootNotification.organizationId, member.organizationId),
+          ),
+        )
+        .returning();
+
+      await db.insert(nonConformanceAuditLog).values({
+        ncId: id,
+        action: "oot_acknowledged",
+        changes: { acknowledgedVia: "manual" },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: input.note,
+      });
+
+      return c.json({ message: "Recebimento registrado", data: updated });
     },
   );

@@ -50,6 +50,13 @@ export const JOB_STATUS_VARIANTS: Record<
   SUPERSEDED: 'outline',
 }
 
+/**
+ * §7.10 (#426): as-found conformity computed from the pre-adjustment margins.
+ * NON_CONFORMING means the instrument arrived out of tolerance and the
+ * customer may need to be notified.
+ */
+export type AsFoundConformity = 'CONFORMING' | 'NON_CONFORMING' | 'UNKNOWN'
+
 export type ReviewMethodColumn = {
   key: string
   label: string
@@ -160,6 +167,8 @@ export type ApprovedJobRecordData = {
   amendmentNumber?: number | null
   amendmentReason?: string | null
   supersededAt?: string | null
+  asFoundConformity?: AsFoundConformity | null
+  asFoundMargins?: number[] | null
 }
 
 export type ReviewValidation = {
@@ -248,6 +257,8 @@ export type JobDetailData = {
   supersedesId?: number | null
   amendmentNumber?: number | null
   amendmentReason?: string | null
+  asFoundConformity?: AsFoundConformity | null
+  asFoundMargins?: number[] | null
 }
 
 export type ReviewContextItem = {

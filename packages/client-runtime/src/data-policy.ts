@@ -316,6 +316,7 @@ export const calibraApiPolicyRegistry = {
     getLabelDownloadUrl: "cloud-only",
     getLabelCommands: "cloud-only",
     amend: "cloud-only",
+    flagOutOfTolerance: "cloud-only",
   },
   serviceOrders: {
     list: "local-first-read-through-sync",
@@ -377,10 +378,15 @@ export const calibraApiPolicyRegistry = {
     summary: "cloud-only",
     get: "cloud-only",
     auditLog: "cloud-only",
-    create: "cloud-only",
+    // #426 Phase 0: offline NC capture — create writes the local row + outbox
+    // event and syncs on reconnect. Reads stay cloud (no local mirror of
+    // cloud NCs).
+    create: "local-command-sync",
     setDisposition: "cloud-only",
     resolve: "cloud-only",
     escalateToCapa: "cloud-only",
+    getOotNotification: "cloud-only",
+    registerOotAcknowledgement: "cloud-only",
   },
   capas: {
     list: "cloud-only",

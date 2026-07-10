@@ -27,6 +27,7 @@ import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
 import { notificationsRouter } from "../routes/notifications";
 import { nonConformancesRouter } from "../routes/non-conformances";
+import { ootAckRouter } from "../routes/oot-ack";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { portalDomainsRouter } from "../routes/portal-domains";
 import { portalRequestsRouter } from "../routes/portal-requests";
@@ -141,6 +142,7 @@ export function mountApiRoutes(
       .route("/api/profile-media", profileMediaRouter)
       .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
       .route("/api/public/leads", publicLeadsRouter)
+      .route("/api/public/oot-ack", ootAckRouter)
       .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
       .route("/api/public/v1", publicApiRouter)
       .route("/api/public/v2", publicApiV2DocsRouter)

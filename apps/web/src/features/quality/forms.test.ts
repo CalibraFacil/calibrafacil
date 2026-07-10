@@ -29,6 +29,26 @@ describe('quality feature forms', () => {
     expect(result.success && result.data.detectedAt).toContain('2026-05-20T')
   })
 
+  it('accepts the §7.10 out_of_tolerance non-conformance type', () => {
+    const result = parseNonConformanceForm(
+      {
+        type: 'out_of_tolerance',
+        description: 'Resultado como encontrado fora de tolerância',
+        jobId: '',
+      },
+      new Date('2026-05-20T00:00:00.000Z'),
+      '10:00',
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        type: 'out_of_tolerance',
+        description: 'Resultado como encontrado fora de tolerância',
+      },
+    })
+  })
+
   it('maps non-conformance schema issues to route form fields', () => {
     const result = parseNonConformanceForm(
       {

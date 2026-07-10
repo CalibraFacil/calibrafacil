@@ -36,6 +36,11 @@ export type DashboardNavItem = {
 export type DashboardRouteMeta = {
   path: string
   cloudOnly?: boolean | 'prefix'
+  /**
+   * Exact paths inside a `cloudOnly: 'prefix'` subtree that stay available on
+   * desktop/offline (e.g. offline NC capture at /dashboard/nc/new).
+   */
+  cloudOnlyExceptions?: string[]
 }
 
 export type DashboardRedirectRouteMeta = {
@@ -48,7 +53,13 @@ export const dashboardRouteMeta = [
   { path: '/dashboard/reports', cloudOnly: true },
   { path: '/dashboard/requests', cloudOnly: 'prefix' },
   { path: '/dashboard/visits', cloudOnly: 'prefix' },
-  { path: '/dashboard/nc', cloudOnly: 'prefix' },
+  {
+    // NC list/detail need the cloud API, but registering an NC works offline
+    // through the desktop local server (§7.10 offline capture).
+    path: '/dashboard/nc',
+    cloudOnly: 'prefix',
+    cloudOnlyExceptions: ['/dashboard/nc/new'],
+  },
   { path: '/dashboard/capa', cloudOnly: 'prefix' },
   { path: '/dashboard/certificate-templates', cloudOnly: true },
   { path: '/dashboard/finance', cloudOnly: 'prefix' },
@@ -267,6 +278,14 @@ export const dashboardSecondaryNavItems = [
 export function isDashboardCloudOnlyPath(pathname: string) {
   return dashboardRouteMeta.some((route) => {
     if (!route.cloudOnly) return false
+
+    if (
+      route.cloudOnlyExceptions?.some(
+        (exception) => pathname === exception || pathname === `${exception}/`,
+      )
+    ) {
+      return false
+    }
 
     if (route.cloudOnly === 'prefix') {
       return pathname === route.path || pathname.startsWith(`${route.path}/`)

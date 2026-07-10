@@ -7,6 +7,7 @@ import {
 import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrations";
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
+import { drainOotEmailOutbox } from "../../src/lib/oot-email-drain";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
 import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
 import {
@@ -206,6 +207,18 @@ async function handleServiceOrderEmails(request: Request) {
   );
 }
 
+// §7.10 out-of-tolerance notification emails (#426 Phase 0): drains
+// oot_email_outbox, attaching the generated notification PDF.
+async function handleOotEmails(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("oot-emails", { leaseSeconds: 120 }, () =>
+    drainOotEmailOutbox(),
+  );
+}
+
 // REL-03 backstop (#652): reclaim expired app_queue_job leases and re-drive the
 // document-worker drain on a timer, so a render job stuck in GENERATING_PDF /
 // PENDING past its lease is recovered even when no new job is enqueued. Scheduled
@@ -244,6 +257,7 @@ export const JOB_HANDLERS: Record<
   "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,
+  "oot-emails": handleOotEmails,
   "queue-backstop": handleQueueBackstop,
   "subscription-reconciliation": handleSubscriptionReconciliation,
 };
