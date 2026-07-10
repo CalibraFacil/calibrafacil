@@ -19,6 +19,7 @@ import {
   insertOfferHistory,
   insertPaymentStatusHistoryEntry,
   markOfferPaymentsDeleted,
+  type DbTx,
 } from "./common";
 import { TransientWebhookError } from "./webhook-errors";
 
@@ -164,7 +165,7 @@ async function findOfferForPayload(payload: AsaasWebhookPayload) {
 }
 
 async function upsertPaymentFromWebhook(
-  tx: any,
+  tx: DbTx,
   offer: typeof commercialOffer.$inferSelect,
   payment: AsaasPayment,
   eventId: string,

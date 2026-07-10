@@ -82,6 +82,7 @@ import {
   JOB_STATUS_VARIANTS,
   REVIEW_SURFACE_CLASS,
   type ApprovedJobRecordData,
+  type JobDetailData,
   type JobStatus,
   type JobVerdict,
   type JobVerdictLevel,
@@ -362,7 +363,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     data: job,
     isLoading,
     error,
-  } = useJobDetailData<Record<string, any>>({
+  } = useJobDetailData<JobDetailData>({
     id,
     apiJobId,
     refetchWhileGeneratingPdf: true,
@@ -1458,7 +1459,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                   </label>
                   <p className="mt-1 font-mono text-sm tabular-nums">
                     {formatDate(job.dueDate)}
-                    {job.daysUntilDue !== null && job.daysUntilDue > 0 && (
+                    {job.daysUntilDue != null && job.daysUntilDue > 0 && (
                       <Badge variant="outline" className="ml-2 text-xs">
                         {job.daysUntilDue} dias
                       </Badge>

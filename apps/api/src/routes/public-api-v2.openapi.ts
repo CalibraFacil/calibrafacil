@@ -7,7 +7,18 @@
 // definition; `buildPublicApiV2OpenApiDocument(origin)` interpolates the request
 // origin into `servers[0].url` exactly as before.
 
-function buildPathParameter(name: string, description: string) {
+type OpenApiParameter = {
+  name: string;
+  in: "path" | "query" | "header";
+  required?: boolean;
+  description?: string;
+  schema: Record<string, unknown>;
+};
+
+function buildPathParameter(
+  name: string,
+  description: string,
+): OpenApiParameter {
   return {
     name,
     in: "path",
@@ -20,7 +31,7 @@ function buildPathParameter(name: string, description: string) {
 function buildListOperation(
   summary: string,
   tag: string,
-  extraParameters: any[] = [],
+  extraParameters: OpenApiParameter[] = [],
 ) {
   return {
     tags: [tag],
@@ -100,7 +111,7 @@ function buildMutationOperation(params: {
   tag: string;
   requestBodyDescription: string;
   responseStatus?: 200 | 201;
-  pathParameters?: any[];
+  pathParameters?: OpenApiParameter[];
   idempotent?: boolean;
 }) {
   const responseStatus = params.responseStatus ?? 200;

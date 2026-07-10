@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { Scalar } from "@scalar/hono-api-reference";
@@ -435,11 +436,13 @@ async function resolveAssetId(params: {
   });
 }
 
-async function withIdempotentMutation(
-  c: any,
+async function withIdempotentMutation<
+  E extends { Variables: ApiKeyAuthVariables },
+>(
+  c: Context<E>,
   body: unknown,
   handler: () => Promise<{
-    status: number;
+    status: ContentfulStatusCode;
     body: Record<string, unknown>;
     resourceType?: "customer" | "asset" | "request" | "job";
     resourceId?: string | number | null;
@@ -480,10 +483,12 @@ async function withIdempotentMutation(
       );
     }
 
-    return c.json(
-      toRecord(existing.responseBody),
-      toIdempotencyResponseStatus(existing.responseStatus),
-    );
+    const replayStatus = toIdempotencyResponseStatus(existing.responseStatus);
+    if (replayStatus === 204) {
+      // 204 responses have no body — replay them without one.
+      return c.body(null, 204);
+    }
+    return c.json(toRecord(existing.responseBody), replayStatus);
   }
 
   const result = await handler();
@@ -1313,7 +1318,8 @@ publicApiV2Router
               serialNumber: input.serialNumber,
               tag: input.tag,
               status: input.status || "ACTIVE",
-              baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+              baseMeasurementUnit:
+                baseMeasurementUnitResult.baseMeasurementUnit,
               lastCalibrationDate,
               installedAt,
               comments: input.comments || null,

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
@@ -43,7 +43,7 @@ const CreateApiKeySchema = z.object({
   scopes: z.array(ScopeSchema).min(1).max(12).optional(),
 });
 
-function getRequestIp(c: any) {
+function getRequestIp(c: Context<{ Variables: AuthVariables }>) {
   return (
     c.req.header("cf-connecting-ip") ??
     c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??

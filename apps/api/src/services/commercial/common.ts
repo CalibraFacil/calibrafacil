@@ -31,7 +31,10 @@ import {
 import type { CommercialOfferPreviewInput } from "@calibra-facil/schemas";
 import type { CommercialOfferPreviewResult } from "./preview";
 
-export type DbTx = any;
+// The Drizzle transaction handle passed to `db.transaction(async (tx) => ...)`
+// callbacks. Derived from the runtime `db` instance so it tracks the driver
+// union (postgres-js / neon-serverless) without importing driver types here.
+export type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

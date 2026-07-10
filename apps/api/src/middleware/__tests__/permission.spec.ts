@@ -1,4 +1,6 @@
+import type { Context } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AuthVariables } from "../permission";
 
 const labHasPermission = vi.fn();
 const portalHasPermission = vi.fn();
@@ -16,14 +18,15 @@ vi.mock("@calibra-facil/auth", () => ({
   }),
 }));
 
-function createMockContext(authSource?: "lab" | "portal") {
+function createMockContext(
+  authSource?: "lab" | "portal",
+): Context<{ Variables: AuthVariables }> {
   const store = new Map<string, unknown>();
   if (authSource) {
     store.set("authSource", authSource);
   }
 
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- Hono middleware tests only need this minimal Context surface.
-  return {
+  const context: unknown = {
     req: {
       raw: {
         headers: new Headers(),
@@ -33,7 +36,10 @@ function createMockContext(authSource?: "lab" | "portal") {
     set: (key: string, value: unknown) => {
       store.set(key, value);
     },
-  } as any;
+  };
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- Hono middleware tests only need this minimal Context surface.
+  return context as Context<{ Variables: AuthVariables }>;
 }
 
 describe("requirePermission auth source isolation", () => {
