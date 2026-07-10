@@ -8266,6 +8266,109 @@ export const nonConformanceAuditLogRelations = relations(
 );
 
 // =============================================================================
+// JOB ↔ REFERENCE STANDARD LINK - reverse traceability (#426 Phase 1)
+// =============================================================================
+
+/**
+ * First-class, indexed projection of `calibration_job.standards_snapshot`
+ * (which stays the frozen source of truth). Enables the reverse-traceability
+ * query "which certificates relied on standard X between dates" without an
+ * unindexed JSONB containment scan. Rows are derived data: rewritten whenever
+ * the snapshot is persisted and backfilled from existing snapshots by
+ * migration 0090 — hence plain cascades (always rebuildable).
+ */
+export const jobStandard = pgTable(
+  "job_standard",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    // When the standard was used (execution time; falls back to job creation
+    // for backfilled rows without performed_at).
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("job_standard_job_standard_uidx").on(table.jobId, table.standardId),
+    index("job_standard_job_id_idx").on(table.jobId),
+    index("job_standard_standard_id_idx").on(table.standardId),
+  ],
+);
+
+export const jobStandardRelations = relations(jobStandard, ({ one }) => ({
+  job: one(calibrationJob, {
+    fields: [jobStandard.jobId],
+    references: [calibrationJob.id],
+  }),
+  standard: one(referenceStandard, {
+    fields: [jobStandard.standardId],
+    references: [referenceStandard.id],
+  }),
+}));
+
+// =============================================================================
+// STANDARD RECALL - ISO 17025:2017 Clause 7.10 recall of work (#426 Phase 1)
+// =============================================================================
+
+/**
+ * DRAFT → SENT. A recall stays DRAFT while the quality manager reviews the
+ * impacted-certificate list; SENT is stamped by the approval-gated batch send.
+ */
+export type StandardRecallStatus = "DRAFT" | "SENT";
+
+/**
+ * One recall campaign for a reference standard found out-of-tolerance.
+ * Created (with its NC) when the standard transitions to OUT_OF_TOLERANCE;
+ * the batch send requires an admin/owner approver, recorded here (§7.10.1
+ * defined responsibilities + the legal-sensitivity mitigation from #426).
+ */
+export const standardRecall = pgTable(
+  "standard_recall",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "restrict" }),
+    ncId: integer("nc_id")
+      .notNull()
+      .references(() => nonConformance.id, { onDelete: "restrict" }),
+    status: text("status")
+      .$type<StandardRecallStatus>()
+      .default("DRAFT")
+      .notNull(),
+    // Reviewed notification window (defaults to the standard's last good
+    // calibrationDate → now; both bounds editable — over-notification
+    // mitigation from #426).
+    fromDate: timestamp("from_date"),
+    toDate: timestamp("to_date"),
+    approvedBy: text("approved_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    approvedAt: timestamp("approved_at"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("standard_recall_organization_id_idx").on(table.organizationId),
+    index("standard_recall_standard_id_idx").on(table.standardId),
+    uniqueIndex("standard_recall_nc_uidx").on(table.ncId),
+  ],
+);
+
+// =============================================================================
 // OUT-OF-TOLERANCE NOTIFICATION - ISO 17025:2017 Clause 7.10 (#426 Phase 0)
 // =============================================================================
 
@@ -8305,6 +8408,12 @@ export const ootNotification = pgTable(
     jobId: integer("job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    // #426 Phase 1: set when this notification belongs to a standard-recall
+    // batch (one row per impacted certificate). Null for Phase 0 as-found
+    // notifications. Changes the letter/email copy to the recall variant.
+    recallId: integer("recall_id").references(() => standardRecall.id, {
+      onDelete: "set null",
+    }),
     // Context snapshot frozen at flag time (the certificate/customer may change
     // later; the notification must evidence what was communicated).
     certificateNumber: text("certificate_number"),
@@ -8345,6 +8454,10 @@ export const ootNotification = pgTable(
     index("oot_notification_nc_id_idx").on(table.ncId),
     index("oot_notification_job_id_idx").on(table.jobId),
     index("oot_notification_status_idx").on(table.status),
+    index("oot_notification_recall_id_idx").on(table.recallId),
+    // Batch-send idempotency: one notification per certificate per recall
+    // (NULL recall_id — the Phase 0 as-found path — never collides).
+    unique("oot_notification_recall_job_uidx").on(table.recallId, table.jobId),
   ],
 );
 
@@ -8413,7 +8526,40 @@ export const ootNotificationRelations = relations(
       references: [user.id],
       relationName: "ootNotificationApprover",
     }),
+    recall: one(standardRecall, {
+      fields: [ootNotification.recallId],
+      references: [standardRecall.id],
+    }),
     outboxEntries: many(ootEmailOutbox),
+  }),
+);
+
+export const standardRecallRelations = relations(
+  standardRecall,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [standardRecall.organizationId],
+      references: [organization.id],
+    }),
+    standard: one(referenceStandard, {
+      fields: [standardRecall.standardId],
+      references: [referenceStandard.id],
+    }),
+    nonConformance: one(nonConformance, {
+      fields: [standardRecall.ncId],
+      references: [nonConformance.id],
+    }),
+    approvedByUser: one(user, {
+      fields: [standardRecall.approvedBy],
+      references: [user.id],
+      relationName: "standardRecallApprover",
+    }),
+    createdByUser: one(user, {
+      fields: [standardRecall.createdBy],
+      references: [user.id],
+      relationName: "standardRecallCreator",
+    }),
+    notifications: many(ootNotification),
   }),
 );
 

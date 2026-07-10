@@ -631,6 +631,13 @@
       "when": 1783393200006,
       "tag": "0089_oot_notification",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1783393200007,
+      "tag": "0090_job_standards_recall",
+      "breakpoints": true
     }
   ]
 }

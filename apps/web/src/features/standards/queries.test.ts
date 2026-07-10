@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  impactedCertificatesQueryOptions,
   standardAuditLogQueryOptions,
   standardDetailQueryOptions,
+  standardRecallQueryOptions,
   standardsListQueryInputFromUrl,
   standardsListQueryOptions,
 } from './queries'
@@ -69,6 +71,40 @@ describe('standards feature queries', () => {
       'standards',
       'std-1',
       'audit-log',
+    ])
+  })
+
+  it('keys the recall campaign by standard id', () => {
+    expect(standardRecallQueryOptions('std-1').queryKey).toEqual([
+      'standards',
+      'std-1',
+      'recall',
+    ])
+  })
+
+  it('keys impacted certificates by standard id and review window', () => {
+    expect(
+      impactedCertificatesQueryOptions(
+        'std-1',
+        '2026-01-01T00:00:00.000Z',
+        '2026-02-01T23:59:59.999Z',
+      ).queryKey,
+    ).toEqual([
+      'standards',
+      'std-1',
+      'impacted-certificates',
+      '2026-01-01T00:00:00.000Z',
+      '2026-02-01T23:59:59.999Z',
+    ])
+  })
+
+  it('keys impacted certificates with empty strings for the default window', () => {
+    expect(impactedCertificatesQueryOptions('std-1').queryKey).toEqual([
+      'standards',
+      'std-1',
+      'impacted-certificates',
+      '',
+      '',
     ])
   })
 })

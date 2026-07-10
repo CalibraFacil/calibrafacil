@@ -775,6 +775,18 @@ export interface StandardsApi {
   update(id: string | number, input: StandardWriteInput): Promise<StandardData>;
   delete(id: string | number): Promise<unknown>;
   renew(id: string | number, input: StandardWriteInput): Promise<unknown>;
+  /** #426 Phase 1: certificates issued using this standard, date-bounded. */
+  getImpactedCertificates<TResponse = unknown>(
+    id: string | number,
+    input?: { from?: string; to?: string },
+  ): Promise<TResponse>;
+  /** #426 Phase 1: latest recall campaign + per-certificate ack status. */
+  getRecall<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  /** #426 Phase 1: approval-gated batch send of the recall notifications. */
+  sendRecall<TResponse = unknown>(
+    id: string | number,
+    input: { jobIds: number[]; from?: string; to?: string },
+  ): Promise<TResponse>;
   uploadCertificateDocument(
     id: string | number,
     file: Blob,

@@ -19,6 +19,8 @@ import {
   ootEmailOutbox,
   ootNotification,
   organization,
+  referenceStandard,
+  standardRecall,
 } from "@calibra-facil/db/schema";
 import { OotNotificationEmail } from "@calibra-facil/email";
 import {
@@ -195,9 +197,11 @@ export async function drainOotEmailOutbox(options?: {
             pdfR2Key: ootNotification.pdfR2Key,
             ackToken: ootNotification.ackToken,
             acknowledgedAt: ootNotification.acknowledgedAt,
+            recallId: ootNotification.recallId,
             ncNumber: nonConformance.ncNumber,
             labName: organization.name,
             assetName: asset.name,
+            standardName: referenceStandard.name,
           })
           .from(ootNotification)
           .innerJoin(
@@ -213,6 +217,15 @@ export async function drainOotEmailOutbox(options?: {
             eq(ootNotification.jobId, calibrationJob.id),
           )
           .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          // #426 Phase 1: recall context (null for as-found notifications).
+          .leftJoin(
+            standardRecall,
+            eq(ootNotification.recallId, standardRecall.id),
+          )
+          .leftJoin(
+            referenceStandard,
+            eq(standardRecall.standardId, referenceStandard.id),
+          )
           .where(
             and(
               eq(ootNotification.id, row.notificationId),
@@ -284,6 +297,8 @@ export async function drainOotEmailOutbox(options?: {
             ncNumber: notification.ncNumber,
             instrumentDescription: notification.assetName,
             certificateNumber: notification.certificateNumber ?? undefined,
+            kind: notification.recallId ? "standard_recall" : "as_found",
+            standardName: notification.standardName ?? undefined,
             ackUrl,
             logoSrc: brand?.logoSrc,
             brand,

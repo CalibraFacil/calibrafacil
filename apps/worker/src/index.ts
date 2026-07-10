@@ -2631,6 +2631,13 @@ type OotNotificationRow = {
   asset_name: string | null;
   asset_tag: string | null;
   asset_serial: string | null;
+  // #426 Phase 1: set when the notification belongs to a standard recall —
+  // switches the letter to the recall variant.
+  recall_id: number | null;
+  std_name: string | null;
+  std_serial: string | null;
+  std_certificate: string | null;
+  std_calibration_date: Date | string | null;
 };
 
 function toDateOrNull(value: Date | string | null | undefined): Date | null {
@@ -2676,13 +2683,20 @@ async function processOotNotification(
           c.email as customer_email,
           a.name as asset_name,
           a.tag as asset_tag,
-          a.serial_number as asset_serial
+          a.serial_number as asset_serial,
+          n.recall_id,
+          rs.name as std_name,
+          rs.serial_number as std_serial,
+          rs.certificate_number as std_certificate,
+          rs.calibration_date as std_calibration_date
         FROM oot_notification n
         INNER JOIN non_conformance nc ON nc.id = n.nc_id
         INNER JOIN calibration_job j ON j.id = n.job_id
         INNER JOIN organization o ON o.id = n.organization_id
         INNER JOIN customer c ON c.id = j.customer_id
         INNER JOIN asset a ON a.id = j.asset_id
+        LEFT JOIN standard_recall sr ON sr.id = n.recall_id
+        LEFT JOIN reference_standard rs ON rs.id = sr.standard_id
         WHERE n.id = $1
         `,
         [notificationId],
@@ -2718,7 +2732,17 @@ async function processOotNotification(
     );
 
     const margins = toNumberArray(row.as_found_margins);
+    const isStandardRecall = row.recall_id !== null && row.std_name !== null;
     const data: OotNotificationDocumentData = {
+      kind: isStandardRecall ? "standard_recall" : "as_found",
+      standard: isStandardRecall
+        ? {
+            name: row.std_name ?? "Padrão de referência",
+            serialNumber: row.std_serial,
+            certificateNumber: row.std_certificate,
+            calibrationDate: toDateOrNull(row.std_calibration_date),
+          }
+        : null,
       ncNumber: row.nc_number,
       issuedAt: new Date(),
       lab: {

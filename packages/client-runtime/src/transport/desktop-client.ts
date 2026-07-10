@@ -2031,6 +2031,15 @@ export function createDesktopApiClient(
 
         return readDesktopJson<unknown>(response);
       },
+      async getImpactedCertificates() {
+        throw desktopUnsupportedAuthAction("Recall de padrão");
+      },
+      async getRecall() {
+        throw desktopUnsupportedAuthAction("Recall de padrão");
+      },
+      async sendRecall() {
+        throw desktopUnsupportedAuthAction("Recall de padrão");
+      },
       async uploadCertificateDocument() {
         throw desktopUnsupportedAuthAction("Certificado de padrão");
       },

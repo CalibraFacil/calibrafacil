@@ -23,11 +23,22 @@ const {
   mockEnqueue,
 } = vi.hoisted(() => {
   function makeSelectChain(rows: unknown[]) {
-    return {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
+    // Thenable chain so queries without .limit() (batch loads) also resolve.
+    const chain = {
+      from: vi.fn(),
+      where: vi.fn(),
+      orderBy: vi.fn(),
       limit: vi.fn().mockResolvedValue(rows),
+      // oxlint-disable-next-line unicorn/no-thenable -- Drizzle's query builder is itself thenable; the mock must await like the real one.
+      then: (
+        resolve: (rows: unknown[]) => unknown,
+        reject?: (reason: unknown) => unknown,
+      ) => Promise.resolve(rows).then(resolve, reject),
     };
+    chain.from.mockReturnValue(chain);
+    chain.where.mockReturnValue(chain);
+    chain.orderBy.mockReturnValue(chain);
+    return chain;
   }
 
   const selectQueue: Array<unknown[]> = [];
@@ -53,13 +64,15 @@ const {
   const txInsertFn = vi.fn((table: unknown) => ({
     values: vi.fn((values: unknown) => {
       txValuesCalls.push({ table, values });
+      const returning = vi
+        .fn()
+        .mockResolvedValue([
+          { id: 900, ...(typeof values === "object" ? values : {}) },
+        ]);
+      const conflictChain = Object.assign(Promise.resolve([]), { returning });
       return {
-        returning: vi
-          .fn()
-          .mockResolvedValue([
-            { id: 900, ...(typeof values === "object" ? values : {}) },
-          ]),
-        onConflictDoNothing: vi.fn().mockResolvedValue([]),
+        returning,
+        onConflictDoNothing: vi.fn().mockReturnValue(conflictChain),
       };
     }),
   }));
@@ -83,6 +96,8 @@ vi.mock("@calibra-facil/db", () => ({
   db: {
     select: mockDbSelectFn,
     transaction: mockTransaction,
+    // Direct inserts (standard_recall) share the recording tx-insert mock.
+    insert: mockTxInsertFn,
   },
 }));
 
@@ -104,7 +119,20 @@ vi.mock("@calibra-facil/db/schema", () => ({
     status: "nc_status",
   },
   ootEmailOutbox: { _table: "oot_email_outbox" },
-  ootNotification: { _table: "oot_notification", ncId: "n_ncId" },
+  ootNotification: {
+    _table: "oot_notification",
+    ncId: "n_ncId",
+    jobId: "n_jobId",
+    recallId: "n_recallId",
+  },
+  standardRecall: {
+    _table: "standard_recall",
+    id: "sr_id",
+    organizationId: "sr_orgId",
+    standardId: "sr_standardId",
+    status: "sr_status",
+    createdAt: "sr_createdAt",
+  },
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
@@ -114,6 +142,8 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     eq: (_c: unknown, _v: unknown) => ({ _op: "eq" }),
     ne: (_c: unknown, _v: unknown) => ({ _op: "ne" }),
     and: (..._a: unknown[]) => ({ _op: "and" }),
+    desc: (_c: unknown) => ({ _op: "desc" }),
+    inArray: (_c: unknown, _v: unknown) => ({ _op: "inArray" }),
   };
 });
 
@@ -125,7 +155,11 @@ vi.mock("./non-conformances", () => ({
   createNonConformanceRecord: mockCreateNcRecord,
 }));
 
-import { flagJobOutOfTolerance } from "./oot-notifications";
+import {
+  createStandardRecallNotifications,
+  ensureStandardRecall,
+  flagJobOutOfTolerance,
+} from "./oot-notifications";
 
 function enqueueSelects(...rows: unknown[][]) {
   mockDbSelectFn._reset();
@@ -254,11 +288,7 @@ describe("flagJobOutOfTolerance", () => {
   });
 
   it("skips the outbox row (but still renders the PDF) when the customer has no e-mail", async () => {
-    enqueueSelects(
-      [JOB_ROW],
-      [],
-      [{ name: "Cliente X", email: null }],
-    );
+    enqueueSelects([JOB_ROW], [], [{ name: "Cliente X", email: null }]);
 
     const result = await flagJobOutOfTolerance(BASE_PARAMS);
 
@@ -299,5 +329,135 @@ describe("flagJobOutOfTolerance", () => {
     const call = mockCreateNcRecord.mock.calls[0]?.[0];
     expect(call.description).toContain("CAL-2026-0100");
     expect(call.description).toContain("1 de 3");
+  });
+});
+
+describe("ensureStandardRecall", () => {
+  const STANDARD = {
+    id: 8,
+    name: "Conjunto de Pesos E2",
+    serialNumber: "SN-123",
+    certificateNumber: "RBC-555",
+    calibrationDate: new Date("2026-01-15T00:00:00Z"),
+  };
+
+  it("returns the existing DRAFT recall without creating a new NC", async () => {
+    const draft = { id: 70, standardId: 8, ncId: 501, status: "DRAFT" };
+    enqueueSelects([draft]);
+
+    const result = await ensureStandardRecall({
+      organizationId: "org-1",
+      actorUserId: "user-1",
+      standard: STANDARD,
+    });
+
+    expect(result).toEqual({ recall: draft, created: false });
+    expect(mockCreateNcRecord).not.toHaveBeenCalled();
+  });
+
+  it("creates the NC (triggerSource standard_recall) and the DRAFT recall", async () => {
+    enqueueSelects([]); // no existing draft
+
+    const result = await ensureStandardRecall({
+      organizationId: "org-1",
+      actorUserId: "user-1",
+      standard: STANDARD,
+    });
+
+    expect(result.created).toBe(true);
+    expect(mockCreateNcRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "out_of_tolerance",
+        triggerSource: "standard_recall",
+        organizationId: "org-1",
+      }),
+    );
+    const ncDescription = mockCreateNcRecord.mock.calls[0]?.[0]?.description;
+    expect(ncDescription).toContain("Conjunto de Pesos E2");
+    expect(ncDescription).toContain("15/01/2026");
+
+    const recallInsert = mockTxValuesCalls.find(
+      (call) =>
+        typeof call.values === "object" &&
+        call.values !== null &&
+        "standardId" in call.values,
+    );
+    expect(recallInsert?.values).toMatchObject({
+      standardId: 8,
+      ncId: 501,
+      status: "DRAFT",
+      fromDate: STANDARD.calibrationDate,
+      createdBy: "user-1",
+    });
+  });
+});
+
+describe("createStandardRecallNotifications", () => {
+  const RECALL = {
+    id: 70,
+    organizationId: "org-1",
+    standardId: 8,
+    ncId: 501,
+    status: "SENT",
+  };
+
+  function recallJob(id: number, jobId: string) {
+    return {
+      id,
+      jobId,
+      status: "APPROVED",
+      customerId: 12,
+      asFoundMargins: null,
+    };
+  }
+
+  it("creates one notification per job and skips already-notified certificates", async () => {
+    enqueueSelects(
+      [CREATED_NC], // recall NC load
+      [recallJob(1, "CAL-1"), recallJob(2, "CAL-2")], // org-scoped jobs
+      [{ jobId: 2 }], // job 2 already notified in this recall
+      [{ name: "Cliente X", email: "x@cliente.com" }], // recipient for job 1
+    );
+
+    const result = await createStandardRecallNotifications({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
+      recall: RECALL as never,
+      jobIds: [1, 2],
+      organizationId: "org-1",
+      actorUserId: "user-9",
+    });
+
+    expect(result).toEqual({ created: 1, skipped: 1 });
+    const notificationInsert = mockTxValuesCalls.find(
+      (call) =>
+        typeof call.values === "object" &&
+        call.values !== null &&
+        "recallId" in call.values,
+    );
+    expect(notificationInsert?.values).toMatchObject({
+      recallId: 70,
+      jobId: 1,
+      certificateNumber: "CAL-1",
+    });
+    expect(mockEnqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts jobs outside the organization as skipped", async () => {
+    enqueueSelects(
+      [CREATED_NC],
+      [recallJob(1, "CAL-1")], // only job 1 is in-org
+      [], // none notified yet
+      [{ name: "Cliente X", email: "x@cliente.com" }],
+    );
+
+    const result = await createStandardRecallNotifications({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- test double narrowed to the fields the function reads
+      recall: RECALL as never,
+      jobIds: [1, 999],
+      organizationId: "org-1",
+      actorUserId: "user-9",
+    });
+
+    expect(result).toEqual({ created: 1, skipped: 1 });
   });
 });

@@ -24,6 +24,15 @@ export interface OotNotificationEmailProps {
   ackUrl: string;
   logoSrc?: string;
   brand?: EmailBrand;
+  /**
+   * "as_found" (default when absent): the customer's instrument was found
+   * out of tolerance during its calibration. "standard_recall": the lab's
+   * reference standard used in the calibration was later found out of
+   * tolerance, so the issued certificate may be affected.
+   */
+  kind?: "as_found" | "standard_recall";
+  /** Reference standard name (standard_recall variant). */
+  standardName?: string;
 }
 
 export function OotNotificationEmail({
@@ -35,7 +44,10 @@ export function OotNotificationEmail({
   ackUrl = "#",
   logoSrc,
   brand,
+  kind,
+  standardName,
 }: OotNotificationEmailProps) {
+  const isStandardRecall = kind === "standard_recall";
   return (
     <EmailLayout
       previewText={`Notificação de resultado fora de tolerância - ${ncNumber}`}
@@ -47,15 +59,28 @@ export function OotNotificationEmail({
         <Title>Notificação de resultado fora de tolerância</Title>
 
         <Paragraph>Olá, {recipientName},</Paragraph>
-        <Paragraph>
-          Durante a calibração do instrumento identificado abaixo, a condição
-          &quot;como encontrado&quot; (as found) apresentou resultado fora da
-          tolerância especificada. Em atendimento à ABNT NBR ISO/IEC 17025, item
-          7.10, o laboratório {labName} comunica formalmente esta ocorrência
-          para que você possa avaliar o impacto sobre as medições realizadas
-          desde a última calibração válida. Segue anexa a notificação formal em
-          PDF.
-        </Paragraph>
+        {isStandardRecall ? (
+          <Paragraph>
+            O padrão de referência{standardName ? ` ${standardName}` : ""}{" "}
+            utilizado na calibração do instrumento identificado abaixo foi
+            posteriormente encontrado fora de tolerância durante a sua
+            verificação/recalibração periódica. Em atendimento à ABNT NBR
+            ISO/IEC 17025, item 7.10, o laboratório {labName} comunica
+            formalmente esta ocorrência para que você possa avaliar o impacto
+            sobre as medições realizadas com base no certificado emitido. Segue
+            anexa a notificação formal em PDF.
+          </Paragraph>
+        ) : (
+          <Paragraph>
+            Durante a calibração do instrumento identificado abaixo, a condição
+            &quot;como encontrado&quot; (as found) apresentou resultado fora da
+            tolerância especificada. Em atendimento à ABNT NBR ISO/IEC 17025,
+            item 7.10, o laboratório {labName} comunica formalmente esta
+            ocorrência para que você possa avaliar o impacto sobre as medições
+            realizadas desde a última calibração válida. Segue anexa a
+            notificação formal em PDF.
+          </Paragraph>
+        )}
 
         <DetailBox tone="warning">
           <DetailRow
@@ -63,6 +88,9 @@ export function OotNotificationEmail({
             value={<HighlightValue tone="warning">{ncNumber}</HighlightValue>}
           />
           <DetailRow label="Instrumento" value={instrumentDescription} />
+          {isStandardRecall && standardName && (
+            <DetailRow label="Padrão de referência" value={standardName} />
+          )}
           {certificateNumber && (
             <DetailRow label="Certificado" value={certificateNumber} />
           )}

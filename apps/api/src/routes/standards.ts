@@ -4,11 +4,17 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
+  calibrationJob,
+  emailSuppression,
+  jobStandard,
   massCompositionProfile,
+  nonConformance,
+  ootNotification,
   organization,
   referenceStandard,
   referenceStandardAuditLog,
   referenceStandardCertificateDocument,
+  standardRecall,
   user,
 } from "@calibra-facil/db/schema";
 import {
@@ -18,7 +24,14 @@ import {
   RenewCertificateSchema,
   MassCompositionProfileCreateSchema,
   MassCompositionProfileUpdateSchema,
+  ImpactedCertificatesQuerySchema,
+  SendStandardRecallSchema,
 } from "@calibra-facil/schemas";
+import {
+  ensureStandardRecall,
+  createStandardRecallNotifications,
+} from "../lib/oot-notifications";
+import { findImpactedCertificates } from "../lib/job-standards";
 import {
   withLabPermission,
   type AuthVariables,
@@ -1246,7 +1259,351 @@ export const standardsRouter = new Hono<{
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
+      // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort — the
+      // status change itself must not fail if the hook does; the wizard's
+      // send endpoint re-ensures the recall exists.
+      if (
+        changes.status &&
+        updated &&
+        updated.status === "OUT_OF_TOLERANCE" &&
+        existing.status !== "OUT_OF_TOLERANCE"
+      ) {
+        await ensureStandardRecall({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          standard: {
+            id: updated.id,
+            name: updated.name,
+            serialNumber: updated.serialNumber,
+            certificateNumber: updated.certificateNumber,
+            calibrationDate: updated.calibrationDate,
+          },
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        }).catch((err) =>
+          console.error(
+            `[Standards] Failed to open recall for standard ${id}:`,
+            err,
+          ),
+        );
+      }
+
       return c.json(updated);
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/impacted-certificates - Reverse traceability (#426 Phase 1):
+  // approved certificates that relied on this standard in a date window.
+  // =========================================================================
+  .get(
+    "/:id/impacted-certificates",
+    ...withLabPermission({ standard: ["read"] }),
+    zValidator("query", ImpactedCertificatesQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      const query = c.req.valid("query");
+
+      if (id === null) {
+        return c.json({ error: "Padrao nao encontrado" }, 404);
+      }
+
+      const [standard] = await db
+        .select({
+          id: referenceStandard.id,
+          calibrationDate: referenceStandard.calibrationDate,
+        })
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!standard) {
+        return c.json({ error: "Padrao nao encontrado" }, 404);
+      }
+
+      // Default window: the standard's (now suspect) certificate validity
+      // start → now. Both bounds editable (over-notification mitigation).
+      const from = query.from ? new Date(query.from) : standard.calibrationDate;
+      const to = query.to ? new Date(query.to) : new Date();
+
+      const impacted = await findImpactedCertificates({
+        standardId: id,
+        organizationId: member.organizationId,
+        from,
+        to,
+      });
+
+      return c.json({
+        data: impacted,
+        window: { from: from.toISOString(), to: to.toISOString() },
+      });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/recall - Current recall campaign + per-certificate notification
+  // status and sent/acknowledged/bounced counts (#426 Phase 1).
+  // =========================================================================
+  .get(
+    "/:id/recall",
+    ...withLabPermission({ standard: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
+
+      if (id === null) {
+        return c.json({ error: "Padrao nao encontrado" }, 404);
+      }
+
+      const [recall] = await db
+        .select({
+          id: standardRecall.id,
+          standardId: standardRecall.standardId,
+          ncId: standardRecall.ncId,
+          ncNumber: nonConformance.ncNumber,
+          status: standardRecall.status,
+          fromDate: standardRecall.fromDate,
+          toDate: standardRecall.toDate,
+          approvedBy: standardRecall.approvedBy,
+          approvedAt: standardRecall.approvedAt,
+          createdAt: standardRecall.createdAt,
+        })
+        .from(standardRecall)
+        .innerJoin(nonConformance, eq(standardRecall.ncId, nonConformance.id))
+        .where(
+          and(
+            eq(standardRecall.standardId, id),
+            eq(standardRecall.organizationId, member.organizationId),
+          ),
+        )
+        .orderBy(desc(standardRecall.createdAt))
+        .limit(1);
+
+      if (!recall) {
+        return c.json({ data: null });
+      }
+
+      const notifications = await db
+        .select({
+          id: ootNotification.id,
+          jobId: ootNotification.jobId,
+          certificateNumber: ootNotification.certificateNumber,
+          recipientName: ootNotification.recipientName,
+          recipientEmail: ootNotification.recipientEmail,
+          status: ootNotification.status,
+          sentAt: ootNotification.sentAt,
+          acknowledgedAt: ootNotification.acknowledgedAt,
+          acknowledgedVia: ootNotification.acknowledgedVia,
+        })
+        .from(ootNotification)
+        .where(
+          and(
+            eq(ootNotification.recallId, recall.id),
+            eq(ootNotification.organizationId, member.organizationId),
+          ),
+        )
+        .orderBy(desc(ootNotification.createdAt));
+
+      // Bounce/complaint signal from the Resend suppression webhook: an
+      // address on the "all" suppression list with a delivery-failure reason.
+      const recipientEmails = [
+        ...new Set(
+          notifications
+            .map((n) => n.recipientEmail?.trim().toLowerCase())
+            .filter((email): email is string => Boolean(email)),
+        ),
+      ];
+      const suppressedRows = recipientEmails.length
+        ? await db
+            .select({ email: emailSuppression.email })
+            .from(emailSuppression)
+            .where(
+              and(
+                inArray(emailSuppression.email, recipientEmails),
+                inArray(emailSuppression.reason, ["hard_bounce", "complaint"]),
+              ),
+            )
+        : [];
+      const suppressedEmails = new Set(suppressedRows.map((row) => row.email));
+
+      const rows = notifications.map((n) => ({
+        ...n,
+        bounced: n.recipientEmail
+          ? suppressedEmails.has(n.recipientEmail.trim().toLowerCase())
+          : false,
+      }));
+
+      return c.json({
+        data: {
+          ...recall,
+          notifications: rows,
+          counts: {
+            total: rows.length,
+            sent: rows.filter((n) => n.sentAt !== null).length,
+            acknowledged: rows.filter((n) => n.acknowledgedAt !== null).length,
+            bounced: rows.filter((n) => n.bounced).length,
+            missingEmail: rows.filter((n) => !n.recipientEmail).length,
+          },
+        },
+      });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/recall/send - Approval-gated batch send (#426 Phase 1).
+  // Requires an org-level admin/owner (§7.10.1 defined responsibilities);
+  // approver + timestamp are recorded on the recall.
+  // =========================================================================
+  .post(
+    "/:id/recall/send",
+    ...withLabPermission({ standard: ["update"] }),
+    zValidator("json", SendStandardRecallSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      const input = c.req.valid("json");
+
+      if (id === null) {
+        return c.json({ error: "Padrao nao encontrado" }, 404);
+      }
+
+      // Elevated approval gate: same pattern as NC use_as_is/concession
+      // dispositions — org-level admin/owner only (a unit_admin elevation is
+      // not enough to approve a customer-facing batch recall).
+      if (member.role !== "admin" && member.role !== "owner") {
+        return c.json(
+          {
+            error:
+              "O envio de recall em lote requer aprovacao de um administrador ou responsavel",
+          },
+          403,
+        );
+      }
+
+      const [standard] = await db
+        .select()
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!standard) {
+        return c.json({ error: "Padrao nao encontrado" }, 404);
+      }
+
+      if (standard.status !== "OUT_OF_TOLERANCE") {
+        return c.json(
+          {
+            error:
+              "Apenas padroes com status fora de tolerancia podem originar um recall",
+            code: "STANDARD_NOT_OUT_OF_TOLERANCE",
+          },
+          409,
+        );
+      }
+
+      // Re-ensure the recall exists (covers a failed status-change hook).
+      const { recall } = await ensureStandardRecall({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        standard: {
+          id: standard.id,
+          name: standard.name,
+          serialNumber: standard.serialNumber,
+          certificateNumber: standard.certificateNumber,
+          calibrationDate: standard.calibrationDate,
+        },
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      // Every selected job must actually be linked to this standard — the
+      // reviewed list from the wizard is re-validated, never trusted.
+      const linkedRows = await db
+        .select({ jobId: jobStandard.jobId })
+        .from(jobStandard)
+        .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
+        .where(
+          and(
+            eq(jobStandard.standardId, id),
+            inArray(jobStandard.jobId, input.jobIds),
+            eq(calibrationJob.organizationId, member.organizationId),
+          ),
+        );
+      const linkedJobIds = new Set(linkedRows.map((row) => row.jobId));
+      const invalidIds = input.jobIds.filter(
+        (jobId) => !linkedJobIds.has(jobId),
+      );
+      if (invalidIds.length > 0) {
+        return c.json(
+          {
+            error: `Certificados fora do escopo deste padrao: ${invalidIds.join(", ")}`,
+            code: "JOBS_NOT_LINKED_TO_STANDARD",
+          },
+          400,
+        );
+      }
+
+      // Stamp the approval + reviewed window before dispatching (§7.10.2
+      // evidence: who approved the batch and what window was reviewed).
+      const [approvedRecall] = await db
+        .update(standardRecall)
+        .set({
+          status: "SENT",
+          fromDate: input.from ? new Date(input.from) : recall.fromDate,
+          toDate: input.to ? new Date(input.to) : new Date(),
+          approvedBy: session.user.id,
+          approvedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(standardRecall.id, recall.id),
+            eq(standardRecall.organizationId, member.organizationId),
+          ),
+        )
+        .returning();
+
+      await db.insert(referenceStandardAuditLog).values({
+        standardId: id,
+        action: "recall_send",
+        changes: {
+          recallId: recall.id,
+          jobIds: input.jobIds,
+          from: input.from ?? recall.fromDate?.toISOString() ?? null,
+          to: input.to ?? null,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
+      });
+
+      const result = await createStandardRecallNotifications({
+        recall: approvedRecall ?? recall,
+        jobIds: input.jobIds,
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+      });
+
+      return c.json({
+        message: "Recall aprovado e notificacoes em envio",
+        data: {
+          recallId: recall.id,
+          created: result.created,
+          skipped: result.skipped,
+        },
+      });
     },
   )
 

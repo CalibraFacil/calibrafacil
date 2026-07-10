@@ -1059,6 +1059,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getImpactedCertificates",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getRecall",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "sendRecall",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
           "method": "uploadCertificateDocument",
           "namespace": "standards",
           "policy": "cloud-only",

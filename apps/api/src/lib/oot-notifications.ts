@@ -5,9 +5,10 @@ import {
   nonConformance,
   ootEmailOutbox,
   ootNotification,
+  standardRecall,
   type NonConformanceTriggerSource,
 } from "@calibra-facil/db/schema";
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { enqueueBackgroundJob } from "./background-jobs";
 import { createNonConformanceRecord } from "./non-conformances";
 
@@ -84,6 +85,8 @@ async function createNotificationForNc(input: {
   organizationId: string;
   actorUserId: string;
   affectedScope?: string;
+  /** #426 Phase 1: set when the notification belongs to a recall batch. */
+  recallId?: number | null;
 }): Promise<typeof ootNotification.$inferSelect | null> {
   const [customerRow] = await db
     .select({ name: customer.name, email: customer.email })
@@ -100,6 +103,7 @@ async function createNotificationForNc(input: {
         organizationId: input.organizationId,
         ncId: input.nc.id,
         jobId: input.job.id,
+        recallId: input.recallId ?? null,
         certificateNumber: input.job.jobId,
         recipientName: customerRow?.name ?? null,
         recipientEmail,
@@ -107,6 +111,9 @@ async function createNotificationForNc(input: {
         status: "PENDING",
         approvedBy: input.actorUserId,
       })
+      // (recall_id, job_id) is unique — a concurrent batch send loses the
+      // race gracefully instead of duplicating a customer notification.
+      .onConflictDoNothing()
       .returning();
 
     if (!inserted) return null;
@@ -319,4 +326,170 @@ export async function ensureOotNotificationForNc(input: {
     actorUserId: input.actorUserId,
     affectedScope: input.affectedScope,
   });
+}
+
+// =============================================================================
+// STANDARD RECALL - reverse traceability (#426 Phase 1)
+// =============================================================================
+
+export type RecallStandardIdentity = {
+  id: number;
+  name: string;
+  serialNumber: string;
+  certificateNumber: string;
+  calibrationDate: Date;
+};
+
+function formatDatePtBr(date: Date): string {
+  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(
+    date.getUTCMonth() + 1,
+  ).padStart(2, "0")}/${date.getUTCFullYear()}`;
+}
+
+/**
+ * Called when a reference standard transitions to OUT_OF_TOLERANCE: opens the
+ * typed NC (triggerSource standard_recall) and its DRAFT recall record.
+ * Idempotent — an existing DRAFT recall for the standard is returned as-is,
+ * so re-flagging (or a retried request) never duplicates the campaign. A new
+ * OOT event after a previous recall was SENT starts a fresh campaign.
+ */
+export async function ensureStandardRecall(input: {
+  organizationId: string;
+  actorUserId: string;
+  standard: RecallStandardIdentity;
+  ipAddress?: string | null;
+}): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
+  const [existingDraft] = await db
+    .select()
+    .from(standardRecall)
+    .where(
+      and(
+        eq(standardRecall.organizationId, input.organizationId),
+        eq(standardRecall.standardId, input.standard.id),
+        eq(standardRecall.status, "DRAFT"),
+      ),
+    )
+    .orderBy(desc(standardRecall.createdAt))
+    .limit(1);
+  if (existingDraft) return { recall: existingDraft, created: false };
+
+  const nc = await createNonConformanceRecord({
+    organizationId: input.organizationId,
+    actorUserId: input.actorUserId,
+    type: "out_of_tolerance",
+    description:
+      `Padrão de referência ${input.standard.name} (nº de série ${input.standard.serialNumber}, ` +
+      `certificado ${input.standard.certificateNumber}) encontrado fora de tolerância. ` +
+      `Recall §7.10: avaliar os certificados emitidos com este padrão desde ${formatDatePtBr(
+        input.standard.calibrationDate,
+      )} e notificar os clientes afetados.`,
+    detectedAt: new Date(),
+    triggerSource: "standard_recall",
+    ipAddress: input.ipAddress,
+    auditChanges: {
+      initial: {
+        type: "out_of_tolerance",
+        triggerSource: "standard_recall",
+        standardId: input.standard.id,
+      },
+    },
+  });
+
+  const [recall] = await db
+    .insert(standardRecall)
+    .values({
+      organizationId: input.organizationId,
+      standardId: input.standard.id,
+      ncId: nc.id,
+      status: "DRAFT",
+      // Default notification window start: the standard's (now suspect)
+      // certificate validity start. Editable in the recall wizard.
+      fromDate: input.standard.calibrationDate,
+      createdBy: input.actorUserId,
+    })
+    .returning();
+  if (!recall) {
+    throw new Error("Falha ao criar o recall do padrão");
+  }
+
+  return { recall, created: true };
+}
+
+export type StandardRecallSendResult = {
+  created: number;
+  skipped: number;
+};
+
+/**
+ * Batch-creates one §7.10 notification (+ outbox row + PDF job) per impacted
+ * certificate for an approved recall. Jobs are re-validated org-scoped;
+ * already-notified certificates (unique recall_id+job_id) are skipped, so the
+ * send is safely retryable.
+ */
+export async function createStandardRecallNotifications(input: {
+  recall: typeof standardRecall.$inferSelect;
+  jobIds: number[];
+  organizationId: string;
+  actorUserId: string;
+}): Promise<StandardRecallSendResult> {
+  if (input.jobIds.length === 0) return { created: 0, skipped: 0 };
+
+  const [nc] = await db
+    .select()
+    .from(nonConformance)
+    .where(eq(nonConformance.id, input.recall.ncId))
+    .limit(1);
+  if (!nc) {
+    throw new Error("Não conformidade do recall não encontrada");
+  }
+
+  const jobs = await db
+    .select({
+      id: calibrationJob.id,
+      jobId: calibrationJob.jobId,
+      status: calibrationJob.status,
+      customerId: calibrationJob.customerId,
+      asFoundMargins: calibrationJob.asFoundMargins,
+    })
+    .from(calibrationJob)
+    .where(
+      and(
+        inArray(calibrationJob.id, input.jobIds),
+        eq(calibrationJob.organizationId, input.organizationId),
+      ),
+    );
+
+  const existingRows = await db
+    .select({ jobId: ootNotification.jobId })
+    .from(ootNotification)
+    .where(
+      and(
+        eq(ootNotification.recallId, input.recall.id),
+        inArray(ootNotification.jobId, input.jobIds),
+      ),
+    );
+  const alreadyNotified = new Set(existingRows.map((row) => row.jobId));
+
+  let created = 0;
+  let skipped = input.jobIds.length - jobs.length;
+  for (const job of jobs) {
+    if (alreadyNotified.has(job.id)) {
+      skipped++;
+      continue;
+    }
+    const notification = await createNotificationForNc({
+      nc,
+      job,
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      recallId: input.recall.id,
+    });
+    if (notification) {
+      created++;
+    } else {
+      skipped++;
+    }
+  }
+
+  return { created, skipped };
 }

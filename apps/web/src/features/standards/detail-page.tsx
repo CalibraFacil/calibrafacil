@@ -37,6 +37,7 @@ import {
 } from '@/components/instrument-panel'
 import { metrologyKindDefinition } from '@/features/standards/metrology-kinds'
 import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
+import { StandardRecallPanel } from '@/features/standards/components/standard-recall-panel'
 
 interface CertifiedValue {
   nominal: string
@@ -366,6 +367,8 @@ export function StandardDetailPage({ id }: { id: string }) {
               </BlueprintGrid>
             </div>
           </Panel>
+
+          <StandardRecallPanel id={id} standardStatus={standard.status} />
         </main>
 
         <aside className="min-w-0 space-y-6">

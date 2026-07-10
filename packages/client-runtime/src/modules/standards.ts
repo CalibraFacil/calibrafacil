@@ -138,6 +138,40 @@ export function createStandardsApi(
         "Erro ao renovar certificado",
       );
     },
+    async getImpactedCertificates<TResponse = unknown>(
+      id: string | number,
+      input: { from?: string; to?: string } = {},
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.standards[":id"]["impacted-certificates"].$get(
+          {
+            param: { id: String(id) },
+            query: { from: input.from, to: input.to },
+          },
+        ),
+        "Falha ao carregar certificados afetados",
+      );
+    },
+    async getRecall<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.standards[":id"].recall.$get({
+          param: { id: String(id) },
+        }),
+        "Falha ao carregar recall",
+      );
+    },
+    async sendRecall<TResponse = unknown>(
+      id: string | number,
+      input: { jobIds: number[]; from?: string; to?: string },
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.standards[":id"].recall.send.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao enviar recall",
+      );
+    },
     async uploadCertificateDocument(id, file, input) {
       const formData = new FormData();
       appendNamedBlob(formData, "certificate", file, input?.fileName);

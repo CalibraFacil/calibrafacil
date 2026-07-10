@@ -16,9 +16,13 @@ import {
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   STANDARD_STATUSES,
+  type ImpactedCertificatesData,
+  type SendStandardRecallRequest,
+  type SendStandardRecallResult,
   type StandardAuditLogData,
   type StandardAuditLogRecord,
   type StandardDetail,
+  type StandardRecallData,
   type StandardsListData,
   type StandardsListQueryInput,
   type StandardStatus,
@@ -74,6 +78,34 @@ export function standardAuditLogQueryOptions(id: string) {
     queryKey: ['standards', id, 'audit-log'],
     queryFn: (): Promise<StandardAuditLogData> =>
       calibraApi.standards.auditLog<StandardAuditLogRecord>(id),
+  })
+}
+
+// §7.10 recall workflow (#426 Phase 1): current recall campaign (NC link,
+// per-certificate notification status) for a reference standard.
+export function standardRecallQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['standards', id, 'recall'],
+    queryFn: (): Promise<StandardRecallData> =>
+      calibraApi.standards.getRecall<StandardRecallData>(id),
+  })
+}
+
+// Reverse traceability: approved certificates that relied on this standard in
+// a date window. `from`/`to` are ISO strings; when omitted the API defaults to
+// the standard's calibrationDate → now (the response echoes the window used).
+export function impactedCertificatesQueryOptions(
+  id: string,
+  from?: string,
+  to?: string,
+) {
+  return queryOptions({
+    queryKey: ['standards', id, 'impacted-certificates', from ?? '', to ?? ''],
+    queryFn: (): Promise<ImpactedCertificatesData> =>
+      calibraApi.standards.getImpactedCertificates<ImpactedCertificatesData>(
+        id,
+        { from, to },
+      ),
   })
 }
 
@@ -177,6 +209,39 @@ export function useStandardDetailData(id: string) {
 
 export function useStandardAuditLogData(id: string) {
   return useQuery(standardAuditLogQueryOptions(id))
+}
+
+export function useStandardRecallData(id: string) {
+  return useQuery(standardRecallQueryOptions(id))
+}
+
+export function useImpactedCertificatesData(
+  id: string,
+  {
+    from,
+    to,
+    enabled = true,
+  }: { from?: string; to?: string; enabled?: boolean },
+) {
+  return useQuery({
+    ...impactedCertificatesQueryOptions(id, from, to),
+    enabled,
+    placeholderData: (previousData) => previousData,
+  })
+}
+
+export function useSendStandardRecall(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: SendStandardRecallRequest) =>
+      calibraApi.standards.sendRecall<SendStandardRecallResult>(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['standards', id, 'recall'] })
+      queryClient.invalidateQueries({
+        queryKey: ['standards', id, 'impacted-certificates'],
+      })
+    },
+  })
 }
 
 export function useCompositionProfilesCatalog() {

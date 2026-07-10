@@ -33,6 +33,7 @@ const {
     const chain = {
       from: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue(rows),
@@ -87,6 +88,8 @@ vi.mock("@calibra-facil/db/schema", () => ({
   asset: { id: "a_id", name: "a_name" },
   calibrationJob: { id: "j_id", assetId: "j_assetId" },
   nonConformance: { id: "nc_id", ncNumber: "nc_number" },
+  referenceStandard: { id: "rs_id", name: "rs_name" },
+  standardRecall: { id: "sr_id", standardId: "sr_standardId" },
   ootEmailOutbox: {
     id: "ob_id",
     organizationId: "ob_orgId",
@@ -109,6 +112,7 @@ vi.mock("@calibra-facil/db/schema", () => ({
     ackToken: "n_ackToken",
     acknowledgedAt: "n_ackAt",
     sentAt: "n_sentAt",
+    recallId: "n_recallId",
   },
   organization: { id: "o_id", name: "o_name" },
 }));
@@ -209,9 +213,9 @@ describe("drainOotEmailOutbox", () => {
     expect(claimSql).toContain("claimed_at IS NULL OR claimed_at <");
 
     // Terminal success marker.
-    expect(
-      sqlTexts.some((t) => t.includes("SET processed_at = now()")),
-    ).toBe(true);
+    expect(sqlTexts.some((t) => t.includes("SET processed_at = now()"))).toBe(
+      true,
+    );
 
     // Email got the ack link + context.
     expect(mockOotEmailTemplate).toHaveBeenCalledWith(
@@ -243,9 +247,7 @@ describe("drainOotEmailOutbox", () => {
     expect(mockSendOotEmail).not.toHaveBeenCalled();
 
     const sqlTexts = getExecuteSqlTexts();
-    const deferSql = sqlTexts.find((t) =>
-      t.includes("PDF nao gerado ainda"),
-    );
+    const deferSql = sqlTexts.find((t) => t.includes("PDF nao gerado ainda"));
     expect(deferSql).toBeDefined();
     expect(deferSql).not.toContain("attempts = attempts + 1");
     expect(deferSql).toContain("SET claimed_at = NULL");
@@ -267,10 +269,7 @@ describe("drainOotEmailOutbox", () => {
   });
 
   it("stamps dead_letter_at when the failing release exhausts the retry budget", async () => {
-    enqueueSelects(
-      [{ ...OUTBOX_ROW, attempts: 2 }],
-      [NOTIFICATION_ROW],
-    );
+    enqueueSelects([{ ...OUTBOX_ROW, attempts: 2 }], [NOTIFICATION_ROW]);
     mockSendOotEmail.mockResolvedValue({ sent: false, error: "boom" });
 
     const result = await drainOotEmailOutbox({ maxAttempts: 3 });

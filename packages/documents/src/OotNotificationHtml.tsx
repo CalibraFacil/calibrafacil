@@ -5,7 +5,10 @@
  * Trabalho não conforme). Formal pt-BR compliance letter sent to the customer
  * when a calibration finds the as-found condition outside the acceptance
  * tolerance, so the customer can evaluate the impact on measurements performed
- * since the last valid calibration. Rendered to PDF via Gotenberg.
+ * since the last valid calibration. The "standard_recall" variant instead
+ * notifies that a lab reference standard used in the customer's calibration
+ * was later found out of tolerance, so the issued certificate may be affected.
+ * Rendered to PDF via Gotenberg.
  *
  * It is DELIBERATELY NOT a calibration certificate: it references the
  * certificate and NC record, and carries a §7.10.1 disclaimer instead.
@@ -14,6 +17,21 @@
 export type OotNotificationDocumentData = {
   ncNumber: string;
   issuedAt: Date;
+  /**
+   * Notification variant. "as_found": the customer's instrument was found
+   * out of tolerance during its calibration (Phase 0 behavior; default when
+   * absent). "standard_recall": the lab's reference standard used in the
+   * customer's calibration was later found out of tolerance, so the issued
+   * certificate may be affected.
+   */
+  kind?: "as_found" | "standard_recall";
+  /** Reference standard details (standard_recall variant). */
+  standard?: {
+    name: string;
+    serialNumber?: string | null;
+    certificateNumber?: string | null;
+    calibrationDate?: Date | null;
+  } | null;
   lab: {
     name: string;
     taxId?: string | null;
@@ -143,6 +161,7 @@ export function OotNotificationHtml({
 }: {
   data: OotNotificationDocumentData;
 }) {
+  const isStandardRecall = data.kind === "standard_recall";
   const worstMargin =
     data.asFound.worstMargin === null || data.asFound.worstMargin === undefined
       ? null
@@ -164,7 +183,8 @@ export function OotNotificationHtml({
             Notificação de Resultado Fora de Tolerância
           </h1>
           <p className="doc-subtitle">
-            ABNT NBR ISO/IEC 17025:2017 — §7.10 Trabalho não conforme · Não
+            ABNT NBR ISO/IEC 17025:2017 — §7.10 Trabalho não conforme
+            {isStandardRecall ? " · Recall de padrão de referência" : ""} · Não
             conformidade {data.ncNumber} · Emitida em{" "}
             {formatDate(data.issuedAt)}
           </p>
@@ -174,15 +194,29 @@ export function OotNotificationHtml({
             <div className="addressee-name">{data.customer.name}</div>
           </div>
 
-          <p className="body-paragraph">
-            Prezado(a) cliente, durante a calibração do instrumento abaixo
-            identificado, a condição como encontrada (&quot;as found&quot;) foi
-            constatada fora da tolerância de aceitação aplicável. Em atendimento
-            ao requisito §7.10 da ABNT NBR ISO/IEC 17025:2017, este laboratório
-            notifica formalmente o cliente, de modo que possa ser avaliado o
-            impacto potencial sobre as medições realizadas com este instrumento
-            desde a sua última calibração válida.
-          </p>
+          {isStandardRecall ? (
+            <p className="body-paragraph">
+              Prezado(a) cliente, durante a verificação/recalibração periódica
+              de nossos padrões, o padrão de referência utilizado na calibração
+              do instrumento abaixo identificado foi encontrado fora da
+              tolerância aplicável. Os resultados reportados no certificado de
+              calibração emitido podem, portanto, ter sido afetados. Em
+              atendimento ao requisito §7.10 da ABNT NBR ISO/IEC 17025:2017,
+              este laboratório notifica formalmente o cliente, de modo que possa
+              ser avaliado o impacto sobre as medições realizadas com base no
+              referido certificado.
+            </p>
+          ) : (
+            <p className="body-paragraph">
+              Prezado(a) cliente, durante a calibração do instrumento abaixo
+              identificado, a condição como encontrada (&quot;as found&quot;)
+              foi constatada fora da tolerância de aceitação aplicável. Em
+              atendimento ao requisito §7.10 da ABNT NBR ISO/IEC 17025:2017,
+              este laboratório notifica formalmente o cliente, de modo que possa
+              ser avaliado o impacto potencial sobre as medições realizadas com
+              este instrumento desde a sua última calibração válida.
+            </p>
+          )}
 
           <div className="section-title">Identificação e contexto</div>
           <table className="context-table">
@@ -215,19 +249,51 @@ export function OotNotificationHtml({
                 </th>
                 <td>{formatDate(data.previousCalibrationDate)}</td>
               </tr>
-              <tr>
-                <th>Pontos avaliados</th>
-                <td>
-                  {data.asFound.pointsWithin}/{data.asFound.pointsTotal} dentro
-                  da tolerância
-                </td>
-              </tr>
-              {worstMargin !== null ? (
-                <tr>
-                  <th>Pior margem de conformidade</th>
-                  <td className="mono-id">{worstMargin}</td>
-                </tr>
-              ) : null}
+              {isStandardRecall ? (
+                <>
+                  <tr>
+                    <th>Padrão de referência</th>
+                    <td>
+                      {text(data.standard?.name)}
+                      {data.standard?.serialNumber ? (
+                        <>
+                          {" "}
+                          — nº de série{" "}
+                          <span className="mono-id">
+                            {data.standard.serialNumber}
+                          </span>
+                        </>
+                      ) : null}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Certificado do padrão</th>
+                    <td className="mono-id">
+                      {text(data.standard?.certificateNumber)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Calibração do padrão</th>
+                    <td>{formatDate(data.standard?.calibrationDate)}</td>
+                  </tr>
+                </>
+              ) : (
+                <>
+                  <tr>
+                    <th>Pontos avaliados</th>
+                    <td>
+                      {data.asFound.pointsWithin}/{data.asFound.pointsTotal}{" "}
+                      dentro da tolerância
+                    </td>
+                  </tr>
+                  {worstMargin !== null ? (
+                    <tr>
+                      <th>Pior margem de conformidade</th>
+                      <td className="mono-id">{worstMargin}</td>
+                    </tr>
+                  ) : null}
+                </>
+              )}
             </tbody>
           </table>
 
@@ -243,10 +309,17 @@ export function OotNotificationHtml({
 
           <div className="section-title">Ações recomendadas</div>
           <ol className="actions-list">
-            <li>
-              Avaliar o impacto do desvio nas medições realizadas com o
-              instrumento desde a última calibração válida.
-            </li>
+            {isStandardRecall ? (
+              <li>
+                Avaliar o impacto do desvio nas medições realizadas com base no
+                certificado de calibração desde a data da calibração.
+              </li>
+            ) : (
+              <li>
+                Avaliar o impacto do desvio nas medições realizadas com o
+                instrumento desde a última calibração válida.
+              </li>
+            )}
             <li>
               Identificar os itens, produtos ou processos medidos com o
               instrumento no período potencialmente afetado.

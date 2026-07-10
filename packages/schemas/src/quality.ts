@@ -51,6 +51,55 @@ export type FlagJobOutOfToleranceInput = z.infer<
 >;
 
 /**
+ * Reverse-traceability impact query (#426 Phase 1): certificates issued using
+ * a reference standard between dates. Both bounds optional — the API defaults
+ * `from` to the standard's calibrationDate and `to` to now.
+ */
+export const ImpactedCertificatesQuerySchema = z.object({
+  from: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial inválida",
+    })
+    .optional(),
+  to: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final inválida",
+    })
+    .optional(),
+});
+
+export type ImpactedCertificatesQuery = z.infer<
+  typeof ImpactedCertificatesQuerySchema
+>;
+
+/**
+ * Approval-gated batch send of a standard recall (#426 Phase 1). The reviewed
+ * job list is explicit — deselected certificates are simply not sent.
+ */
+export const SendStandardRecallSchema = z.object({
+  jobIds: z
+    .array(z.coerce.number().int().positive())
+    .min(1, "Selecione ao menos um certificado")
+    .max(500, "Máximo de 500 certificados por envio"),
+  from: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial inválida",
+    })
+    .optional(),
+  to: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final inválida",
+    })
+    .optional(),
+});
+
+export type SendStandardRecallInput = z.infer<typeof SendStandardRecallSchema>;
+
+/**
  * Manual registration of a customer's acknowledgement of a §7.10 notification
  * (phone / e-mail confirmation collected outside the ack link).
  */

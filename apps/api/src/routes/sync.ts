@@ -111,6 +111,7 @@ import {
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { createNonConformanceRecord } from "../lib/non-conformances";
 import { ensureOotNotificationForNc } from "../lib/oot-notifications";
+import { syncJobStandardLinks } from "../lib/job-standards";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
@@ -2827,6 +2828,14 @@ async function applyLocalJobExecution(
     })
     .where(eq(calibrationJob.id, existing.id))
     .returning();
+
+  // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
+  // indexed job_standard projection.
+  await syncJobStandardLinks(
+    existing.id,
+    nextStandardsSnapshot,
+    updated?.performedAt ?? existing.performedAt,
+  );
 
   await db.insert(jobAuditLog).values({
     jobId: existing.id,

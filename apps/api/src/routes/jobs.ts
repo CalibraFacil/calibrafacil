@@ -62,6 +62,7 @@ import {
   FlagJobOutOfToleranceSchema,
 } from "@calibra-facil/schemas";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
+import { syncJobStandardLinks } from "../lib/job-standards";
 import {
   addServerTiming,
   withLabPermission,
@@ -1831,6 +1832,10 @@ export const jobsRouter = new Hono<{
         .where(eq(calibrationJob.id, id))
         .returning();
 
+      // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
+      // the indexed job_standard projection.
+      await syncJobStandardLinks(id, nextStandardsSnapshot, performedAt);
+
       // Audit log
       await db.insert(jobAuditLog).values({
         jobId: id,
@@ -2061,6 +2066,10 @@ export const jobsRouter = new Hono<{
         })
         .where(eq(calibrationJob.id, id))
         .returning();
+
+      // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
+      // the indexed job_standard projection.
+      await syncJobStandardLinks(id, nextStandardsSnapshot, nextPerformedAt);
 
       // Audit log
       await db.insert(jobAuditLog).values({
@@ -2747,6 +2756,14 @@ export const jobsRouter = new Hono<{
       if (!amendedJob) {
         return c.json({ error: "Falha ao criar retificacao" }, 500);
       }
+
+      // Reverse traceability (#426 Phase 1): the amendment clones the frozen
+      // standards snapshot verbatim, so mirror the links for the new job too.
+      await syncJobStandardLinks(
+        amendedJob.id,
+        originalJob.standardsSnapshot,
+        originalJob.performedAt,
+      );
 
       // Update original job to SUPERSEDED
       // Store the reason on the original job so it's visible when viewing the superseded certificate
