@@ -44,6 +44,7 @@ export type StorageCategory =
   | "TEMPLATE_PREVIEW"
   | "STANDARD_DOC"
   | "SYNC_ATTACHMENT"
+  | "PORTAL_EXPORT"
   | "TEMPLATE_XLSX"
   | "ORG_LOGO"
   | "SIGNATURE"
@@ -70,6 +71,7 @@ export function bucketFor(category: StorageCategory): StorageBucket {
     case "TEMPLATE_PREVIEW":
     case "STANDARD_DOC":
     case "SYNC_ATTACHMENT":
+    case "PORTAL_EXPORT":
       return "documents";
   }
 }
@@ -322,6 +324,29 @@ export function templatePreviewKey(
   return {
     bucket: bucketFor("TEMPLATE_PREVIEW"),
     key: `org/${part}/certificate-template-previews/${params.previewId}/preview.${params.extension}`,
+  };
+}
+
+export interface PortalAuditPackKeyParams {
+  org: OrgRef;
+  exportId: number;
+  /** Enqueue date, used only for the descriptive filename. */
+  generatedAt: Date;
+}
+
+/**
+ * Customer-requested audit-pack ZIP (issue #738). Lives under a dedicated
+ * `portal-exports/` org sub-prefix so a bucket lifecycle rule can expire these
+ * short-lived, regenerate-on-demand objects without touching regulated records.
+ */
+export function portalAuditPackKey(
+  params: PortalAuditPackKeyParams,
+): StorageObject {
+  const part = orgPartition(params.org);
+  const date = params.generatedAt.toISOString().slice(0, 10);
+  return {
+    bucket: bucketFor("PORTAL_EXPORT"),
+    key: `org/${part}/portal-exports/${params.exportId}/pacote-auditoria-${date}.zip`,
   };
 }
 

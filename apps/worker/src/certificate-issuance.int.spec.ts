@@ -39,6 +39,7 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 // JSX templates into the worker's node-only (no JSX transform) integration config.
 vi.mock("@calibra-facil/notifications", () => ({
   notifyCertificateReady: vi.fn(async () => {}),
+  notifyAuditPackReady: vi.fn(async () => {}),
 }));
 
 vi.mock("@calibra-facil/certificate-xlsx-template", async (importOriginal) => {
@@ -191,12 +192,16 @@ async function seedOrgAndJob(overrides?: {
 
 /** Put a fake source XLSX into the env MEDIA bucket so getStoredObject finds it. */
 async function putSourceXlsx(env: Env, xlsxR2Key: string) {
-  await env.MEDIA_BUCKET.put(xlsxR2Key, new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
-    httpMetadata: {
-      contentType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  await env.MEDIA_BUCKET.put(
+    xlsxR2Key,
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    {
+      httpMetadata: {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
     },
-  });
+  );
 }
 
 beforeEach(async () => {
@@ -242,9 +247,9 @@ describe("processXlsxIssuedCertificate / updateJobWithCertificate (worker real-D
       changes && typeof changes === "object"
         ? Reflect.get(changes, "status")
         : undefined;
-    expect(status && typeof status === "object" ? Reflect.get(status, "new") : null).toBe(
-      "APPROVED",
-    );
+    expect(
+      status && typeof status === "object" ? Reflect.get(status, "new") : null,
+    ).toBe("APPROVED");
   });
 
   it("happy-path: issuance persists the issued_certificate_snapshot (ISSUED) + writes filled-xlsx and pdf to R2", async () => {
@@ -272,7 +277,9 @@ describe("processXlsxIssuedCertificate / updateJobWithCertificate (worker real-D
 
     // The certificate_url stored on the job points at the snapshot's pdf key.
     const after = await jobRow(job.jobId);
-    expect(asString(after.certificate_url)).toContain(snapshot?.pdf_r2_key ?? "");
+    expect(asString(after.certificate_url)).toContain(
+      snapshot?.pdf_r2_key ?? "",
+    );
 
     // Both the filled XLSX and the PDF were written to the certificates bucket.
     expect(putKeys).toContain(snapshot?.pdf_r2_key);

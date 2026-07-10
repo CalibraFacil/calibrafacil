@@ -40,6 +40,7 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 // here it is purely to keep the import graph node-parseable).
 vi.mock("@calibra-facil/notifications", () => ({
   notifyCertificateReady: vi.fn(async () => {}),
+  notifyAuditPackReady: vi.fn(async () => {}),
 }));
 
 vi.mock("@calibra-facil/certificate-xlsx-template", async (importOriginal) => {
@@ -149,12 +150,16 @@ function makeRecordingEnv(): { env: Env; putKeys: string[] } {
 
 /** Put a fake source XLSX into the env MEDIA bucket so getStoredObject finds it. */
 async function putSourceXlsx(env: Env, xlsxR2Key: string) {
-  await env.MEDIA_BUCKET.put(xlsxR2Key, new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
-    httpMetadata: {
-      contentType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  await env.MEDIA_BUCKET.put(
+    xlsxR2Key,
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    {
+      httpMetadata: {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
     },
-  });
+  );
 }
 
 beforeEach(async () => {

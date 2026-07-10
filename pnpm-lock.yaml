@@ -1021,12 +1021,18 @@ importers:
       '@calibra-facil/signing':
         specifier: workspace:^
         version: link:../../packages/signing
+      '@cj-tech-master/excelts':
+        specifier: ^9.6.0
+        version: 9.6.0
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -1259,6 +1265,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.1
         version: 19.2.3(@types/react@19.2.16)
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(terser@5.48.0)(tsx@4.22.4))
 
   packages/email:
     dependencies:

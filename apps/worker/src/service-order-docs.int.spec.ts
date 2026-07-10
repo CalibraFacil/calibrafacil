@@ -58,6 +58,7 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 // transform the React-Email JSX templates that package transitively imports.
 vi.mock("@calibra-facil/notifications", () => ({
   notifyCertificateReady: vi.fn(async () => {}),
+  notifyAuditPackReady: vi.fn(async () => {}),
 }));
 
 // vitest hoists vi.mock above the imports. processBackgroundJob is the PUBLIC

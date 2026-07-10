@@ -11,6 +11,7 @@ export {
   notifyJobAssigned,
   notifyCertificateReady,
   notifyCertificateAmended,
+  notifyAuditPackReady,
   notifyNCCreated,
   notifyNCEscalatedToCapa,
   notifyCompetenceApproved,

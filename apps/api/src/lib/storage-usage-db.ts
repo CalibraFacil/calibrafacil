@@ -1,6 +1,7 @@
 import { db } from "@calibra-facil/db";
 import {
   memberVisualSignature,
+  portalExportJob,
   referenceStandardCertificateDocument,
   serviceOrder,
   serviceOrderAttachment,
@@ -19,6 +20,7 @@ import { sumStorageUsageForOrganization } from "./storage-usage";
 //   - reference_standard_certificate_document.file_size  (org-scoped column)
 //   - service_order_attachment.size_bytes                (org via service_order)
 //   - member_visual_signature.file_size                  (org-scoped column)
+//   - portal_export_job.file_size_bytes                  (lab-org-scoped column)
 //
 // KNOWN LIMITATION: generated certificate/document PDFs and XLSX workbooks store
 // only an `r2_key` (no byte-size column), so they are NOT yet counted. This is a
@@ -37,7 +39,7 @@ import { sumStorageUsageForOrganization } from "./storage-usage";
 export async function getOrganizationStorageBytes(
   organizationId: string,
 ): Promise<number> {
-  const [certificateDocuments, attachments, visualSignatures] =
+  const [certificateDocuments, attachments, visualSignatures, portalExports] =
     await Promise.all([
       db
         .select({
@@ -69,11 +71,20 @@ export async function getOrganizationStorageBytes(
         })
         .from(memberVisualSignature)
         .where(eq(memberVisualSignature.organizationId, organizationId)),
+      db
+        .select({
+          organizationId: portalExportJob.labOrganizationId,
+          bytes: portalExportJob.fileSizeBytes,
+        })
+        .from(portalExportJob)
+        .where(eq(portalExportJob.labOrganizationId, organizationId)),
     ]);
 
   return sumStorageUsageForOrganization(organizationId, [
     ...certificateDocuments,
     ...attachments,
     ...visualSignatures,
+    // Size is null until the worker finishes the pack; count it as 0 bytes.
+    ...portalExports.map((row) => ({ ...row, bytes: row.bytes ?? 0 })),
   ]);
 }

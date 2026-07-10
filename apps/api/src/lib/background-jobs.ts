@@ -112,6 +112,7 @@ export function resolveQueueJobType(message: BackgroundJobMessage): string {
     case "SERVICE_ORDER_DELIVERY_RECEIPT":
     case "INTEGRATION_SYNC":
     case "CERTIFICATE_XLSX_PREVIEW":
+    case "AUDIT_PACK":
     case "SCHEDULED_NOTIFICATIONS":
     case "PORTAL_DIGEST":
     case "MARKETING_CONTACT_SYNC":

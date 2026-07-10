@@ -4,6 +4,15 @@ export {
   type IntervalReportData,
 } from "./IntervalReportHtml.js";
 export {
+  renderFleetStatusReportHtml,
+  classifyFleetDueStatus,
+  FLEET_DUE_SOON_DAYS,
+  type FleetStatusReportData,
+  type FleetStatusAsset,
+  type FleetDueStatus,
+  type FleetStatusClassification,
+} from "./FleetStatusReportHtml.js";
+export {
   AccreditationSealSvg,
   ACCREDITATION_SEAL_VIEWBOX,
   type AccreditationSealEffect,

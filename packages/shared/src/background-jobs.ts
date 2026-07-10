@@ -63,13 +63,25 @@ export type CertificateXlsxPreviewBackgroundJobMessage = {
   userId: string;
 };
 
+/**
+ * Portal audit pack (issue #738): bulk export of released certificates +
+ * fleet-status report requested by a portal user. All request parameters live
+ * on the `portal_export_job` row; the message only points at it.
+ */
+export type AuditPackBackgroundJobMessage = {
+  type: "AUDIT_PACK";
+  exportId: number;
+  userId: string;
+};
+
 export type BackgroundJobMessage =
   | DocumentBackgroundJobMessage
   | IntegrationSyncBackgroundJobMessage
   | ScheduledNotificationsBackgroundJobMessage
   | PortalDigestBackgroundJobMessage
   | MarketingContactSyncBackgroundJobMessage
-  | CertificateXlsxPreviewBackgroundJobMessage;
+  | CertificateXlsxPreviewBackgroundJobMessage
+  | AuditPackBackgroundJobMessage;
 
 export function isBackgroundJobMessage(
   value: unknown,
@@ -92,6 +104,12 @@ export function isBackgroundJobMessage(
       typeof message.previewId === "number" &&
       typeof message.templateVersionId === "number" &&
       typeof message.userId === "string"
+    );
+  }
+
+  if (type === "AUDIT_PACK") {
+    return (
+      typeof message.exportId === "number" && typeof message.userId === "string"
     );
   }
 

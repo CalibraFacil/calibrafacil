@@ -32,6 +32,7 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyCertificateReady: vi.fn(async () => {}),
+  notifyAuditPackReady: vi.fn(async () => {}),
 }));
 
 vi.mock("@calibra-facil/certificate-xlsx-template", async (importOriginal) => {
@@ -118,7 +119,9 @@ async function snapshotNumbers(jobId: number): Promise<string[]> {
     sql`SELECT certificate_number FROM issued_certificate_snapshot
         WHERE job_id = ${jobId} ORDER BY id`,
   );
-  return toRows(result).map((row) => asString(field(row, "certificate_number")));
+  return toRows(result).map((row) =>
+    asString(field(row, "certificate_number")),
+  );
 }
 
 async function queueRows(): Promise<
@@ -146,12 +149,16 @@ async function ageToOrphanedProcessing(queueJobId: number): Promise<void> {
 }
 
 async function putSourceXlsx(env: WorkerEnv, xlsxR2Key: string): Promise<void> {
-  await env.MEDIA_BUCKET.put(xlsxR2Key, new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
-    httpMetadata: {
-      contentType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  await env.MEDIA_BUCKET.put(
+    xlsxR2Key,
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    {
+      httpMetadata: {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
     },
-  });
+  );
 }
 
 const USER_ID = "user-org-1";

@@ -34,6 +34,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getApiBaseUrl } from "@/lib/utils";
+import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 
 type CertificatesSearch = {
   /** Per-instrument archive: deep-link the list scoped to one asset. */
@@ -44,8 +45,7 @@ export const Route = createFileRoute("/_authenticated/certificates/")({
   validateSearch: (search: Record<string, unknown>): CertificatesSearch => {
     const assetId = Number(search.assetId);
     return {
-      assetId:
-        Number.isInteger(assetId) && assetId > 0 ? assetId : undefined,
+      assetId: Number.isInteger(assetId) && assetId > 0 ? assetId : undefined,
     };
   },
   component: CertificatesPage,
@@ -421,6 +421,8 @@ function CertificatesPage() {
           )}
         </CardContent>
       </Card>
+
+      <AuditPacksPanel />
     </div>
   );
 }

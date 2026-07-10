@@ -7268,6 +7268,7 @@ export type NotificationType =
   | "JOB_ASSIGNED"
   | "CERTIFICATE_READY"
   | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
+  | "AUDIT_PACK_READY" // Portal audit pack (bulk certificate + fleet-status export) ready for download
   | "ASSET_DUE_FOR_RECALIBRATION"
   | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   | "STANDARD_EXPIRING"
@@ -7330,7 +7331,8 @@ export type NotificationRelatedEntity = {
     | "visit"
     | "nc"
     | "capa"
-    | "competence";
+    | "competence"
+    | "audit_pack";
   entityId: number | string;
   jobId?: string; // Human-readable job ID for display
 };
@@ -7527,7 +7529,8 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_QUOTE"
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
   | "INTEGRATION_SYNC"
-  | "CERTIFICATE_XLSX_PREVIEW";
+  | "CERTIFICATE_XLSX_PREVIEW"
+  | "AUDIT_PACK";
 
 export type AppQueueJobStatus =
   | "PENDING"
@@ -7604,6 +7607,95 @@ export const queueJobReceipt = pgTable(
       table.idempotencyKey,
     ),
     index("queue_job_receipt_completed_at_idx").on(table.completedAt),
+  ],
+);
+
+// =============================================================================
+// PORTAL EXPORT JOBS - customer-requested bulk exports (audit packs)
+// =============================================================================
+
+export type PortalExportJobStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED";
+
+export type PortalExportJobKind = "AUDIT_PACK";
+
+/**
+ * Audit-pack request parameters, frozen at enqueue time. `customerIds` is the
+ * resolved portal scope (branch customer ids, already unit-filtered) so the
+ * worker never re-derives tenant scope from mutable membership state; the
+ * certificate release gate, by contrast, IS re-evaluated inside the worker at
+ * generation time (statuses can change between enqueue and run).
+ */
+export type PortalAuditPackParams = {
+  /** Inclusive approval-date window (YYYY-MM-DD, America/Sao_Paulo). */
+  dateFrom: string;
+  dateTo: string;
+  /** Branch customer id when the group cockpit narrowed to one unit. */
+  unitId: number | null;
+  include: {
+    certificates: boolean;
+    fleetReport: boolean;
+    verificationIndex: boolean;
+  };
+  customerIds: number[];
+};
+
+/**
+ * A customer-facing export produced asynchronously by the worker (issue #738).
+ * Rows are listed in the portal by the requesting CLIENT org
+ * (`authOrganizationId`), so every portal user of that branch/group sees and
+ * can re-download the pack until `expiresAt`.
+ */
+export const portalExportJob = pgTable(
+  "portal_export_job",
+  {
+    id: serial("id").primaryKey(),
+    kind: text("kind")
+      .$type<PortalExportJobKind>()
+      .default("AUDIT_PACK")
+      .notNull(),
+    /** The lab whose documents are exported (tenant / host-domain scope). */
+    labOrganizationId: text("lab_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** The CLIENT org (branch customer or customer group) that requested it. */
+    authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedByUserId: text("requested_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    params: jsonb("params").$type<PortalAuditPackParams>().notNull(),
+    status: text("status")
+      .$type<PortalExportJobStatus>()
+      .default("PENDING")
+      .notNull(),
+    /** Released certificates included in the pack (set by the worker). */
+    certificateCount: integer("certificate_count"),
+    /** calibration_job ids in the pack — re-gated on every download. */
+    includedJobIds: jsonb("included_job_ids").$type<number[]>(),
+    r2Key: text("r2_key"),
+    fileSizeBytes: integer("file_size_bytes"),
+    failureReason: text("failure_reason"),
+    /** Download availability window; the pack is regenerate-on-demand after. */
+    expiresAt: timestamp("expires_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("portal_export_job_auth_org_idx").on(
+      table.authOrganizationId,
+      table.createdAt,
+    ),
+    index("portal_export_job_lab_org_idx").on(table.labOrganizationId),
+    index("portal_export_job_status_idx").on(table.status),
   ],
 );
 

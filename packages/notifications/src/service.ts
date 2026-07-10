@@ -18,6 +18,7 @@ import {
   organizationSigningCertificate,
   organizationUnit,
   customerGroup,
+  portalExportJob,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
@@ -42,6 +43,7 @@ import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
   NotificationEmail,
+  AuditPackReadyEmail,
   CertificateAmendedEmail,
   JobNotificationEmail,
   CertificateReadyEmail,
@@ -79,6 +81,15 @@ export interface CertificateEmailContext {
   assetName?: string;
   customerName?: string;
   reason?: string;
+  portalUrl: string;
+}
+
+/** Context for the audit-pack ready email template (#738) */
+export interface AuditPackEmailContext {
+  customerName?: string;
+  periodLabel: string;
+  certificateCount: number;
+  expiresAtLabel?: string;
   portalUrl: string;
 }
 
@@ -139,6 +150,7 @@ export interface VisitEmailContext {
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
+  | { type: "auditPack"; data: AuditPackEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
   | { type: "payment"; data: PaymentEmailContext }
   | { type: "nc"; data: NCEmailContext }
@@ -176,6 +188,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   JOB_ASSIGNED: { inApp: true, email: false },
   CERTIFICATE_READY: { inApp: true, email: true },
   CERTIFICATE_AMENDED: { inApp: true, email: true },
+  AUDIT_PACK_READY: { inApp: true, email: true },
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   ASSET_DUE_FOR_LEGAL_VERIFICATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
@@ -612,6 +625,27 @@ function renderEmailTemplate(
       jobId,
       assetName,
       customerName,
+      portalUrl,
+      logoSrc,
+      brand: emailBrand,
+    });
+  }
+
+  // Audit pack ready notification (#738)
+  if (emailContext?.type === "auditPack" && type === "AUDIT_PACK_READY") {
+    const {
+      customerName,
+      periodLabel,
+      certificateCount,
+      expiresAtLabel,
+      portalUrl,
+    } = emailContext.data;
+    return AuditPackReadyEmail({
+      recipientName,
+      customerName,
+      periodLabel,
+      certificateCount,
+      expiresAtLabel,
       portalUrl,
       logoSrc,
       brand: emailBrand,
@@ -1782,6 +1816,80 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
           jobId: job.jobIdentifier,
           assetName: assetData?.name,
           customerName: customerData.name,
+          portalUrl,
+        },
+      },
+      emailBrand,
+    });
+  }
+}
+
+/**
+ * Notify client portal users when an audit pack finished generating (#738).
+ * Recipients are every member of the requesting CLIENT org (branch customer
+ * or customer group) — the same audience that can see and download the pack
+ * on the portal certificates page.
+ */
+export async function notifyAuditPackReady(exportId: number): Promise<void> {
+  const [exportRow] = await db
+    .select({
+      id: portalExportJob.id,
+      labOrganizationId: portalExportJob.labOrganizationId,
+      authOrganizationId: portalExportJob.authOrganizationId,
+      params: portalExportJob.params,
+      certificateCount: portalExportJob.certificateCount,
+      expiresAt: portalExportJob.expiresAt,
+    })
+    .from(portalExportJob)
+    .where(eq(portalExportJob.id, exportId))
+    .limit(1);
+
+  if (!exportRow) return;
+
+  const [authOrganization] = await db
+    .select({ name: organization.name })
+    .from(organization)
+    .where(eq(organization.id, exportRow.authOrganizationId))
+    .limit(1);
+
+  const portalUsers = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.organizationId, exportRow.authOrganizationId));
+
+  const formatBr = (isoDate: string) => {
+    const [year, month, day] = isoDate.split("-");
+    return year && month && day ? `${day}/${month}/${year}` : isoDate;
+  };
+  const periodLabel = `${formatBr(exportRow.params.dateFrom)} a ${formatBr(exportRow.params.dateTo)}`;
+  const expiresAtLabel = exportRow.expiresAt
+    ? exportRow.expiresAt.toLocaleDateString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+      })
+    : undefined;
+  const portalUrl = `${getPortalBaseUrl()}/certificates`;
+  const emailBrand = await getLabEmailBrand(exportRow.labOrganizationId);
+
+  for (const portalUser of portalUsers) {
+    await sendNotification({
+      recipientUserId: portalUser.userId,
+      organizationId: exportRow.authOrganizationId,
+      type: "AUDIT_PACK_READY",
+      priority: "HIGH",
+      title: "Pacote de auditoria disponível",
+      message: `O pacote de auditoria do período ${periodLabel} está pronto para download no portal.`,
+      relatedEntity: {
+        entityType: "audit_pack",
+        entityId: exportId,
+      },
+      actionUrl: `/portal/certificates`,
+      emailContext: {
+        type: "auditPack",
+        data: {
+          customerName: authOrganization?.name,
+          periodLabel,
+          certificateCount: exportRow.certificateCount ?? 0,
+          expiresAtLabel,
           portalUrl,
         },
       },

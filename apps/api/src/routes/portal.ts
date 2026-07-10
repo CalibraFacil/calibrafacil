@@ -18,7 +18,9 @@ import {
   service,
   referenceStandardCertificateDocument,
   notificationPreference,
+  portalExportJob,
 } from "@calibra-facil/db/schema";
+import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
@@ -105,6 +107,36 @@ const PortalCalendarQuerySchema = z.object({
 const PortalNotificationPreferencesSchema = z.object({
   digestFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
 });
+
+// Audit pack (#738): bulk export of released certificates + fleet status for
+// customer audits. Hard cap so a single request can never fan out into an
+// unbounded ZIP; the worker re-checks the same cap at generation time.
+const AUDIT_PACK_MAX_CERTIFICATES = 500;
+const AUDIT_PACK_EXPIRY_DAYS = 7;
+
+const PortalAuditPackRequestSchema = z
+  .object({
+    dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    // Group cockpit: narrow to one unit (= branch customer id). Ignored in
+    // single mode (only that customer is ever in scope).
+    unitId: z.number().int().positive().optional(),
+    include: z.object({
+      certificates: z.boolean(),
+      fleetReport: z.boolean(),
+      verificationIndex: z.boolean(),
+    }),
+  })
+  .refine((value) => value.dateFrom <= value.dateTo, {
+    message: "Período inválido",
+  })
+  .refine(
+    (value) =>
+      value.include.certificates ||
+      value.include.fleetReport ||
+      value.include.verificationIndex,
+    { message: "Selecione ao menos um conteúdo para o pacote" },
+  );
 
 // An instrument is "in lab" while it has an open calibration job or an open
 // service order — i.e. it is physically at the laboratory right now. Open job
@@ -2101,6 +2133,289 @@ export const portalRouter = new Hono<{
       return c.json({ url, filename });
     } catch (error) {
       console.error("Error generating certificate download URL:", error);
+      return c.json({ error: "Erro ao gerar link de download" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // POST /audit-packs - Request an audit pack (async bulk export, #738)
+  // =========================================================================
+  // Enqueues an AUDIT_PACK background job that builds a ZIP with every
+  // RELEASED certificate in the period + a fleet-status report + a
+  // verification-links index. The certificate release gate is applied here
+  // (fail fast on an empty/oversized selection) AND again inside the worker
+  // at generation time, since release statuses can change in between.
+  // =========================================================================
+  .post(
+    "/audit-packs",
+    ...requirePortalProtected,
+    requirePermission({ certificate: ["read"] }),
+    zValidator("json", PortalAuditPackRequestSchema),
+    async (c) => {
+      const session = c.get("session");
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const body = c.req.valid("json");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Nenhum cliente vinculado" }, 400);
+        }
+
+        const customerIds = applyUnitFilter(scope, body.unitId);
+        if (customerIds.length === 0) {
+          return c.json({ error: "Unidade inválida" }, 400);
+        }
+
+        // Candidate set: latest (non-superseded) approved certificates whose
+        // approval date falls in the requested window. Same timezone
+        // semantics as the /certificates list.
+        const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
+        const candidates = await db
+          .select({ id: calibrationJob.id })
+          .from(calibrationJob)
+          .where(
+            and(
+              inArray(calibrationJob.customerId, customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+              isNull(calibrationJob.supersededById),
+              isNotNull(calibrationJob.certificateUrl),
+              sql`${approvedAtPortalDate} >= ${body.dateFrom}`,
+              sql`${approvedAtPortalDate} <= ${body.dateTo}`,
+            ),
+          )
+          .limit(AUDIT_PACK_MAX_CERTIFICATES + 1);
+
+        if (candidates.length > AUDIT_PACK_MAX_CERTIFICATES) {
+          return c.json(
+            {
+              error: `O período selecionado tem mais de ${AUDIT_PACK_MAX_CERTIFICATES} certificados. Reduza o período e gere pacotes menores.`,
+            },
+            400,
+          );
+        }
+
+        const releaseStatuses = await loadPortalReleaseStatuses({
+          organizationId: scope.labOrganizationId,
+          calibrationJobIds: candidates.map((row) => row.id),
+        });
+        const releasedCount = candidates.filter(
+          (row) => (releaseStatuses.get(row.id) ?? "RELEASED") === "RELEASED",
+        ).length;
+
+        if (body.include.certificates && releasedCount === 0) {
+          return c.json(
+            {
+              error: "Nenhum certificado disponível no período selecionado.",
+            },
+            400,
+          );
+        }
+
+        const [exportRow] = await db
+          .insert(portalExportJob)
+          .values({
+            kind: "AUDIT_PACK",
+            labOrganizationId: scope.labOrganizationId,
+            authOrganizationId: portalMember.organizationId,
+            requestedByUserId: session.user.id,
+            params: {
+              dateFrom: body.dateFrom,
+              dateTo: body.dateTo,
+              unitId: body.unitId ?? null,
+              include: body.include,
+              customerIds,
+            },
+            status: "PENDING",
+          })
+          // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
+          .returning();
+
+        if (!exportRow) {
+          return c.json({ error: "Erro ao solicitar o pacote" }, 500);
+        }
+
+        await enqueueBackgroundJob(
+          {
+            type: "AUDIT_PACK",
+            exportId: exportRow.id,
+            userId: session.user.id,
+          },
+          { idempotencyKey: `audit-pack-${exportRow.id}` },
+        );
+
+        return c.json({ id: exportRow.id, status: "PENDING" }, 201);
+      } catch (error) {
+        console.error("Error requesting portal audit pack:", error);
+        return c.json({ error: "Erro ao solicitar o pacote" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /audit-packs - List audit packs requested by the active portal org
+  // =========================================================================
+  .get("/audit-packs", ...requirePortalProtected, async (c) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: portalMember.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
+      if (!scope) {
+        return c.json({ data: [] });
+      }
+
+      const rows = await db
+        .select({
+          id: portalExportJob.id,
+          status: portalExportJob.status,
+          params: portalExportJob.params,
+          certificateCount: portalExportJob.certificateCount,
+          fileSizeBytes: portalExportJob.fileSizeBytes,
+          expiresAt: portalExportJob.expiresAt,
+          completedAt: portalExportJob.completedAt,
+          createdAt: portalExportJob.createdAt,
+        })
+        .from(portalExportJob)
+        .where(
+          and(
+            eq(portalExportJob.authOrganizationId, portalMember.organizationId),
+            eq(portalExportJob.labOrganizationId, scope.labOrganizationId),
+          ),
+        )
+        .orderBy(desc(portalExportJob.createdAt))
+        .limit(20);
+
+      const now = Date.now();
+      const data = rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        dateFrom: row.params.dateFrom,
+        dateTo: row.params.dateTo,
+        unitId: row.params.unitId,
+        unitName: row.params.unitId
+          ? (scope.customerById.get(row.params.unitId)?.name ?? null)
+          : null,
+        include: row.params.include,
+        certificateCount: row.certificateCount,
+        fileSizeBytes: row.fileSizeBytes,
+        expiresAt: row.expiresAt,
+        expired: row.expiresAt !== null && row.expiresAt.getTime() < now,
+        completedAt: row.completedAt,
+        createdAt: row.createdAt,
+      }));
+
+      return c.json({ data });
+    } catch (error) {
+      console.error("Error listing portal audit packs:", error);
+      return c.json({ error: "Erro ao listar pacotes de auditoria" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // GET /audit-packs/:id/download - Presigned download URL for a ready pack
+  // =========================================================================
+  .get("/audit-packs/:id/download", ...requirePortalProtected, async (c) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (Number.isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    try {
+      const [row] = await db
+        .select({
+          id: portalExportJob.id,
+          status: portalExportJob.status,
+          labOrganizationId: portalExportJob.labOrganizationId,
+          params: portalExportJob.params,
+          includedJobIds: portalExportJob.includedJobIds,
+          r2Key: portalExportJob.r2Key,
+          expiresAt: portalExportJob.expiresAt,
+        })
+        .from(portalExportJob)
+        .where(
+          and(
+            eq(portalExportJob.id, id),
+            eq(portalExportJob.authOrganizationId, portalMember.organizationId),
+            portalLabScope.labOrganizationId
+              ? eq(
+                  portalExportJob.labOrganizationId,
+                  portalLabScope.labOrganizationId,
+                )
+              : undefined,
+          ),
+        )
+        .limit(1);
+
+      if (!row) {
+        return c.json({ error: "Pacote nao encontrado" }, 404);
+      }
+      if (row.status !== "COMPLETED" || !row.r2Key) {
+        return c.json({ error: "Pacote ainda nao disponivel" }, 400);
+      }
+      if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
+        return c.json(
+          { error: "Pacote expirado. Gere um novo pacote de auditoria." },
+          410,
+        );
+      }
+
+      // Re-check the release gate at download time: a certificate released
+      // when the pack was generated may have been held since.
+      const includedJobIds = row.includedJobIds ?? [];
+      if (includedJobIds.length > 0) {
+        const releaseStatuses = await loadPortalReleaseStatuses({
+          organizationId: row.labOrganizationId,
+          calibrationJobIds: includedJobIds,
+        });
+        const anyHeld = includedJobIds.some(
+          (jobId) =>
+            (releaseStatuses.get(jobId) ?? "RELEASED") === "PAYMENT_PENDING",
+        );
+        if (anyHeld) {
+          return c.json(
+            {
+              error:
+                "Um ou mais certificados deste pacote aguardam confirmação financeira. Gere um novo pacote.",
+            },
+            409,
+          );
+        }
+      }
+
+      const env = c.env;
+      const client = createR2Client(env);
+      const filename = `pacote-auditoria-${row.params.dateFrom}-a-${row.params.dateTo}.zip`;
+      const url = await generatePresignedUrl(
+        client,
+        env.R2_BUCKET_NAME,
+        row.r2Key,
+        {
+          responseContentDisposition: attachmentDisposition(filename),
+        },
+      );
+
+      return c.json({ url, filename });
+    } catch (error) {
+      console.error("Error generating audit pack download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
     }
   })
