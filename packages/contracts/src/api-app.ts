@@ -240,6 +240,8 @@ type ApiRoutePath =
   | "/api/nc/:id/escalate-to-capa"
   | "/api/nc/:id/label"
   | "/api/nc/:id/oot-ack"
+  | "/api/nc/:id/oot-impact-assessment"
+  | "/api/nc/:id/oot-impact-assessment/sign"
   | "/api/nc/:id/oot-notification"
   | "/api/nc/:id/resolve"
   | "/api/nc/summary"

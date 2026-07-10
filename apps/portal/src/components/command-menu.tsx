@@ -9,6 +9,7 @@ import {
   File01Icon,
   Home01Icon,
   Notebook01Icon,
+  Notification03Icon,
   Search01Icon,
   ToolsIcon,
   Wrench01Icon,
@@ -145,6 +146,13 @@ export function CommandMenu({
                     label="Manutenção"
                     onSelect={() =>
                       run(() => navigate({ to: "/service-orders" }))
+                    }
+                  />
+                  <Item
+                    icon={Notification03Icon}
+                    label="Notificações"
+                    onSelect={() =>
+                      run(() => navigate({ to: "/notifications" }))
                     }
                   />
                 </Group>

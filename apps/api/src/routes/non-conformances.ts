@@ -6,6 +6,7 @@ import {
   nonConformanceAuditLog,
   correctiveAction,
   calibrationJob,
+  ootImpactAssessment,
   ootNotification,
   user,
 } from "@calibra-facil/db/schema";
@@ -16,6 +17,7 @@ import {
   EscalateToCapaSchema,
   ListNonConformancesQuerySchema,
   RegisterOotAcknowledgementSchema,
+  SaveOotImpactAssessmentSchema,
 } from "@calibra-facil/schemas";
 import { notifyNCEscalatedToCapa } from "@calibra-facil/notifications";
 import {
@@ -675,7 +677,17 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               title: `CAPA originada da ${existing.ncNumber}`,
               description: existing.description,
               source: "nc_detection",
-              sourceReference: existing.ncNumber,
+              // #426 Phase 2: OOT provenance — assessors can trace a CAPA
+              // back to the out-of-tolerance event (and its trigger) from
+              // the reference alone.
+              sourceReference:
+                existing.type === "out_of_tolerance"
+                  ? `${existing.ncNumber} (fora de tolerância${
+                      existing.triggerSource === "standard_recall"
+                        ? " — recall de padrão"
+                        : ""
+                    })`
+                  : existing.ncNumber,
               detectionDate: existing.detectedAt,
               rootCauseAnalysis: input.rootCauseAnalysis || null,
               actionPlan: input.actionPlan || null,
@@ -926,5 +938,250 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       return c.json({ message: "Recebimento registrado", data: updated });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/oot-impact-assessment - Guided §7.10 impact-assessment record
+  // for an out-of-tolerance NC (#426 Phase 2). Null while none exists.
+  // =========================================================================
+  .get(
+    "/:id/oot-impact-assessment",
+    ...withLabPermission({ non_conformance: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [existing] = await db
+        .select({ id: nonConformance.id })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      const [assessment] = await db
+        .select()
+        .from(ootImpactAssessment)
+        .where(eq(ootImpactAssessment.ncId, id))
+        .limit(1);
+
+      return c.json({ data: assessment ?? null });
+    },
+  )
+
+  // =========================================================================
+  // PUT /:id/oot-impact-assessment - Create/update the draft assessment.
+  // Immutable once signed (§7.10.2 retained evidence).
+  // =========================================================================
+  .put(
+    "/:id/oot-impact-assessment",
+    ...withLabPermission({ non_conformance: ["update"] }),
+    zValidator("json", SaveOotImpactAssessmentSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [nc] = await db
+        .select({ id: nonConformance.id, type: nonConformance.type })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!nc) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      if (nc.type !== "out_of_tolerance") {
+        return c.json(
+          {
+            error:
+              "Avaliacao de impacto aplica-se apenas a NCs de fora de tolerancia",
+          },
+          409,
+        );
+      }
+
+      const [existing] = await db
+        .select()
+        .from(ootImpactAssessment)
+        .where(eq(ootImpactAssessment.ncId, id))
+        .limit(1);
+
+      if (existing?.signedAt) {
+        return c.json(
+          {
+            error: "Avaliacao de impacto ja assinada — registro imutavel",
+            code: "ASSESSMENT_SIGNED",
+          },
+          409,
+        );
+      }
+
+      const values = {
+        deviationSummary: input.deviationSummary,
+        deviationMagnitude: input.deviationMagnitude ?? null,
+        customerTolerance: input.customerTolerance ?? null,
+        toleranceUnit: input.toleranceUnit ?? null,
+        affectedFrom: input.affectedFrom ? new Date(input.affectedFrom) : null,
+        affectedTo: input.affectedTo ? new Date(input.affectedTo) : null,
+        items: input.items,
+        conclusion: input.conclusion ?? null,
+        correctiveActionNote: input.correctiveActionNote ?? null,
+      };
+
+      const [saved] = existing
+        ? await db
+            .update(ootImpactAssessment)
+            .set(values)
+            .where(
+              and(
+                eq(ootImpactAssessment.id, existing.id),
+                eq(ootImpactAssessment.organizationId, member.organizationId),
+              ),
+            )
+            .returning()
+        : await db
+            .insert(ootImpactAssessment)
+            .values({
+              ...values,
+              organizationId: member.organizationId,
+              ncId: id,
+              createdBy: session.user.id,
+            })
+            .returning();
+
+      await db.insert(nonConformanceAuditLog).values({
+        ncId: id,
+        action: "impact_assessment_saved",
+        changes: { conclusion: input.conclusion ?? null },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      return c.json({ message: "Avaliacao de impacto salva", data: saved });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/oot-impact-assessment/sign - Sign-off freezes the record.
+  // Org-level admin/owner only (§7.10.1 defined responsibilities).
+  // =========================================================================
+  .post(
+    "/:id/oot-impact-assessment/sign",
+    ...withLabPermission({ non_conformance: ["update"] }),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      if (member.role !== "admin" && member.role !== "owner") {
+        return c.json(
+          {
+            error:
+              "A assinatura da avaliacao de impacto requer um administrador ou responsavel",
+          },
+          403,
+        );
+      }
+
+      const [nc] = await db
+        .select({ id: nonConformance.id })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!nc) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      const [assessment] = await db
+        .select()
+        .from(ootImpactAssessment)
+        .where(eq(ootImpactAssessment.ncId, id))
+        .limit(1);
+
+      if (!assessment) {
+        return c.json(
+          { error: "Nenhuma avaliacao de impacto para assinar" },
+          404,
+        );
+      }
+      if (assessment.signedAt) {
+        return c.json(
+          { error: "Avaliacao ja assinada", code: "ASSESSMENT_SIGNED" },
+          409,
+        );
+      }
+      if (!assessment.conclusion) {
+        return c.json(
+          {
+            error: "Defina a conclusao antes de assinar a avaliacao",
+            code: "CONCLUSION_REQUIRED",
+          },
+          409,
+        );
+      }
+
+      const [signed] = await db
+        .update(ootImpactAssessment)
+        .set({ signedBy: session.user.id, signedAt: new Date() })
+        .where(
+          and(
+            eq(ootImpactAssessment.id, assessment.id),
+            eq(ootImpactAssessment.organizationId, member.organizationId),
+            // Guard against a concurrent sign racing this one.
+            sql`${ootImpactAssessment.signedAt} IS NULL`,
+          ),
+        )
+        .returning();
+
+      if (!signed) {
+        return c.json(
+          { error: "Avaliacao ja assinada", code: "ASSESSMENT_SIGNED" },
+          409,
+        );
+      }
+
+      await db.insert(nonConformanceAuditLog).values({
+        ncId: id,
+        action: "impact_assessment_signed",
+        changes: { conclusion: signed.conclusion },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      return c.json({ message: "Avaliacao de impacto assinada", data: signed });
     },
   );

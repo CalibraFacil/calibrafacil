@@ -23,6 +23,7 @@ import { Route as AuthenticatedAssetsRouteRouteImport } from './routes/_authenti
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedServiceOrdersIndexRouteImport } from './routes/_authenticated/service-orders/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
+import { Route as AuthenticatedNotificationsIndexRouteImport } from './routes/_authenticated/notifications/index'
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
 import { Route as AuthenticatedCalendarIndexRouteImport } from './routes/_authenticated/calendar/index'
 import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
@@ -110,6 +111,12 @@ const AuthenticatedRequestsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedRequestsRouteRoute,
   } as any)
+const AuthenticatedNotificationsIndexRoute =
+  AuthenticatedNotificationsIndexRouteImport.update({
+    id: '/notifications/',
+    path: '/notifications/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCertificatesIndexRoute =
   AuthenticatedCertificatesIndexRouteImport.update({
     id: '/certificates/',
@@ -190,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/assets/': typeof AuthenticatedAssetsIndexRoute
   '/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/certificates/': typeof AuthenticatedCertificatesIndexRoute
+  '/notifications/': typeof AuthenticatedNotificationsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -211,6 +219,7 @@ export interface FileRoutesByTo {
   '/assets': typeof AuthenticatedAssetsIndexRoute
   '/calendar': typeof AuthenticatedCalendarIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
+  '/notifications': typeof AuthenticatedNotificationsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/service-orders': typeof AuthenticatedServiceOrdersIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
@@ -238,6 +247,7 @@ export interface FileRoutesById {
   '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
   '/_authenticated/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
+  '/_authenticated/notifications/': typeof AuthenticatedNotificationsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -265,6 +275,7 @@ export interface FileRouteTypes {
     | '/assets/'
     | '/calendar/'
     | '/certificates/'
+    | '/notifications/'
     | '/requests/'
     | '/service-orders/'
     | '/settings/'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/assets'
     | '/calendar'
     | '/certificates'
+    | '/notifications'
     | '/requests'
     | '/service-orders'
     | '/settings'
@@ -312,6 +324,7 @@ export interface FileRouteTypes {
     | '/_authenticated/assets/'
     | '/_authenticated/calendar/'
     | '/_authenticated/certificates/'
+    | '/_authenticated/notifications/'
     | '/_authenticated/requests/'
     | '/_authenticated/service-orders/'
     | '/_authenticated/settings/'
@@ -425,6 +438,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/requests/'
       preLoaderRoute: typeof AuthenticatedRequestsIndexRouteImport
       parentRoute: typeof AuthenticatedRequestsRouteRoute
+    }
+    '/_authenticated/notifications/': {
+      id: '/_authenticated/notifications/'
+      path: '/notifications'
+      fullPath: '/notifications/'
+      preLoaderRoute: typeof AuthenticatedNotificationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/certificates/': {
       id: '/_authenticated/certificates/'
@@ -577,6 +597,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCertificatesIdRoute: typeof AuthenticatedCertificatesIdRoute
   AuthenticatedCalendarIndexRoute: typeof AuthenticatedCalendarIndexRoute
   AuthenticatedCertificatesIndexRoute: typeof AuthenticatedCertificatesIndexRoute
+  AuthenticatedNotificationsIndexRoute: typeof AuthenticatedNotificationsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -589,6 +610,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCertificatesIdRoute: AuthenticatedCertificatesIdRoute,
   AuthenticatedCalendarIndexRoute: AuthenticatedCalendarIndexRoute,
   AuthenticatedCertificatesIndexRoute: AuthenticatedCertificatesIndexRoute,
+  AuthenticatedNotificationsIndexRoute: AuthenticatedNotificationsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

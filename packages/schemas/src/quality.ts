@@ -100,6 +100,66 @@ export const SendStandardRecallSchema = z.object({
 export type SendStandardRecallInput = z.infer<typeof SendStandardRecallSchema>;
 
 /**
+ * Guided §7.10 impact assessment (#426 Phase 2): structured evaluation of an
+ * out-of-tolerance event's effect on the customer's measurements. Regulated
+ * workflow → schema-first; the web form parses through this schema.
+ */
+export const OotImpactItemDispositionSchema = z.enum([
+  "no_impact",
+  "recheck",
+  "notify_downstream",
+  "other",
+]);
+
+export const OotImpactAssessmentItemSchema = z.object({
+  description: z
+    .string()
+    .trim()
+    .min(3, "Descreva o item/medição afetada")
+    .max(500),
+  disposition: OotImpactItemDispositionSchema,
+  note: z.string().trim().max(1000).optional(),
+});
+
+export const OotImpactConclusionSchema = z.enum([
+  "no_significant_impact",
+  "impact_confirmed",
+  "inconclusive",
+]);
+
+export const SaveOotImpactAssessmentSchema = z.object({
+  deviationSummary: z
+    .string()
+    .trim()
+    .min(10, "Descreva a natureza e magnitude do desvio")
+    .max(4000),
+  // Magnitude vs. the customer's tolerance band (same unit). Feeds the
+  // ~10%-of-tolerance triage HINT in the UI — never an automatic dismissal.
+  deviationMagnitude: z.coerce.number().positive().optional(),
+  customerTolerance: z.coerce.number().positive().optional(),
+  toleranceUnit: z.string().trim().max(50).optional(),
+  affectedFrom: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial inválida",
+    })
+    .optional(),
+  affectedTo: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final inválida",
+    })
+    .optional(),
+  items: z.array(OotImpactAssessmentItemSchema).max(100).default([]),
+  conclusion: OotImpactConclusionSchema.optional(),
+  correctiveActionNote: z.string().trim().max(4000).optional(),
+});
+
+export type SaveOotImpactAssessmentInput = z.infer<
+  typeof SaveOotImpactAssessmentSchema
+>;
+
+/**
  * Manual registration of a customer's acknowledgement of a §7.10 notification
  * (phone / e-mail confirmation collected outside the ack link).
  */

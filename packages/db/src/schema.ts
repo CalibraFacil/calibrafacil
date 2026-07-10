@@ -8369,6 +8369,106 @@ export const standardRecall = pgTable(
 );
 
 // =============================================================================
+// OOT IMPACT ASSESSMENT - ISO 17025:2017 Clause 7.10.1 (#426 Phase 2)
+// =============================================================================
+
+/** Outcome of the customer-impact evaluation of an OOT event. */
+export type OotImpactAssessmentConclusion =
+  | "no_significant_impact"
+  | "impact_confirmed"
+  | "inconclusive";
+
+/** Disposition per affected measurement/item. */
+export type OotImpactAssessmentItemDisposition =
+  | "no_impact"
+  | "recheck"
+  | "notify_downstream"
+  | "other";
+
+export type OotImpactAssessmentItem = {
+  description: string;
+  disposition: OotImpactAssessmentItemDisposition;
+  note?: string | null;
+};
+
+/**
+ * Guided §7.10 impact-assessment record — one per out-of-tolerance NC.
+ * Structured after common OOT practice guidance: deviation nature/magnitude
+ * vs. the customer's tolerance, affected period, per-measurement disposition,
+ * conclusion and sign-off. Editable while unsigned; signing (admin/owner)
+ * freezes it as retained §7.10.2 evidence. The magnitude/tolerance pair
+ * feeds the UI's ~10%-of-tolerance triage hint (never an automatic
+ * dismissal).
+ */
+export const ootImpactAssessment = pgTable(
+  "oot_impact_assessment",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ncId: integer("nc_id")
+      .notNull()
+      .references(() => nonConformance.id, { onDelete: "restrict" }),
+    // Nature + magnitude of the deviation.
+    deviationSummary: text("deviation_summary").notNull(),
+    /** |worst deviation| in the measurement's units. */
+    deviationMagnitude: real("deviation_magnitude"),
+    /** The customer's tolerance band, same units. */
+    customerTolerance: real("customer_tolerance"),
+    toleranceUnit: text("tolerance_unit"),
+    // Affected period (defaults suggested from the notification context).
+    affectedFrom: timestamp("affected_from"),
+    affectedTo: timestamp("affected_to"),
+    // Per-measurement/item dispositions.
+    items: jsonb("items").$type<OotImpactAssessmentItem[]>(),
+    conclusion: text("conclusion").$type<OotImpactAssessmentConclusion>(),
+    correctiveActionNote: text("corrective_action_note"),
+    // Sign-off freezes the record (§7.10.1 defined responsibilities).
+    signedBy: text("signed_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    signedAt: timestamp("signed_at"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("oot_impact_assessment_organization_id_idx").on(table.organizationId),
+    uniqueIndex("oot_impact_assessment_nc_uidx").on(table.ncId),
+  ],
+);
+
+export const ootImpactAssessmentRelations = relations(
+  ootImpactAssessment,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [ootImpactAssessment.organizationId],
+      references: [organization.id],
+    }),
+    nonConformance: one(nonConformance, {
+      fields: [ootImpactAssessment.ncId],
+      references: [nonConformance.id],
+    }),
+    signedByUser: one(user, {
+      fields: [ootImpactAssessment.signedBy],
+      references: [user.id],
+      relationName: "ootImpactAssessmentSigner",
+    }),
+    createdByUser: one(user, {
+      fields: [ootImpactAssessment.createdBy],
+      references: [user.id],
+      relationName: "ootImpactAssessmentCreator",
+    }),
+  }),
+);
+
+// =============================================================================
 // OUT-OF-TOLERANCE NOTIFICATION - ISO 17025:2017 Clause 7.10 (#426 Phase 0)
 // =============================================================================
 

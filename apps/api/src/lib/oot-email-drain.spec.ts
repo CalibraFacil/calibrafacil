@@ -235,6 +235,34 @@ describe("drainOotEmailOutbox", () => {
 
     // Notification advanced to SENT.
     expect(mockDbUpdateFn).toHaveBeenCalled();
+
+    // Phase 0 as-found notification → as_found email variant.
+    expect(mockOotEmailTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "as_found" }),
+    );
+  });
+
+  it("renders the standard-recall email variant for recall-batch notifications (#426 Phase 1)", async () => {
+    enqueueSelects(
+      [OUTBOX_ROW],
+      [
+        {
+          ...NOTIFICATION_ROW,
+          recallId: 70,
+          standardName: "Conjunto de Pesos E2",
+        },
+      ],
+    );
+
+    const result = await drainOotEmailOutbox();
+
+    expect(result.sent).toBe(1);
+    expect(mockOotEmailTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "standard_recall",
+        standardName: "Conjunto de Pesos E2",
+      }),
+    );
   });
 
   it("defers (lease cleared, attempts NOT incremented) when the PDF is not rendered yet", async () => {

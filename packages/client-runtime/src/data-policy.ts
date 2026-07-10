@@ -390,6 +390,9 @@ export const calibraApiPolicyRegistry = {
     escalateToCapa: "cloud-only",
     getOotNotification: "cloud-only",
     registerOotAcknowledgement: "cloud-only",
+    getImpactAssessment: "cloud-only",
+    saveImpactAssessment: "cloud-only",
+    signImpactAssessment: "cloud-only",
   },
   capas: {
     list: "cloud-only",

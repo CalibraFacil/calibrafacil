@@ -7,6 +7,7 @@ import type {
   NonConformanceResolveInput,
   NonConformancesApi,
   RegisterOotAcknowledgementInput,
+  SaveOotImpactAssessmentInput,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
 
@@ -113,6 +114,34 @@ export function createNonConformancesApi(
           json: input,
         }),
         "Erro ao registrar confirmação de recebimento",
+      );
+    },
+    async getImpactAssessment<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.nc[":id"]["oot-impact-assessment"].$get({
+          param: { id: String(id) },
+        }),
+        "Falha ao carregar avaliação de impacto",
+      );
+    },
+    async saveImpactAssessment<TResponse = unknown>(
+      id: string | number,
+      input: SaveOotImpactAssessmentInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.nc[":id"]["oot-impact-assessment"].$put({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao salvar avaliação de impacto",
+      );
+    },
+    async signImpactAssessment<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.nc[":id"]["oot-impact-assessment"].sign.$post({
+          param: { id: String(id) },
+        }),
+        "Erro ao assinar avaliação de impacto",
       );
     },
   };

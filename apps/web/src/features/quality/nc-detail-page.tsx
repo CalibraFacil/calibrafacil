@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -9,8 +9,11 @@ import { calibraApi } from '@/utils/api'
 import {
   useNonConformanceAuditLogData,
   useNonConformanceDetailData,
+  useNonConformanceImpactAssessmentData,
   useNonConformanceOotNotificationData,
 } from '@/features/quality/queries'
+import { ImpactAssessmentCard } from '@/features/quality/components/impact-assessment-card'
+import { ShowForRole } from '@/components/permission-gate'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -154,6 +157,15 @@ export function NCDetailPage({ id }: { id: string }) {
       enabled: !cloudOnlyUnavailable && nc?.type === 'out_of_tolerance',
     })
   const ootNotification = ootNotificationResponse?.data ?? null
+
+  const {
+    data: impactAssessmentResponse,
+    isLoading: isImpactAssessmentLoading,
+  } = useNonConformanceImpactAssessmentData({
+    id,
+    enabled: !cloudOnlyUnavailable && nc?.type === 'out_of_tolerance',
+  })
+  const impactAssessment = impactAssessmentResponse?.data ?? null
 
   // Disposition mutation
   const dispositionMutation = useMutation({
@@ -463,145 +475,168 @@ export function NCDetailPage({ id }: { id: string }) {
 
       {/* §7.10 out-of-tolerance customer notification */}
       {nc.type === 'out_of_tolerance' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notificação 7.10</CardTitle>
-            <CardDescription>
-              Notificação ao cliente sobre resultado fora de tolerância (ISO/IEC
-              17025 §7.10)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {ootNotification ? (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-muted-foreground">Status</Label>
-                    <p className="mt-1">
-                      <Badge
-                        variant={
-                          getOotStatusBadge(ootNotification.status).variant
-                        }
-                      >
-                        {getOotStatusBadge(ootNotification.status).label}
-                      </Badge>
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">
-                      Destinatário
-                    </Label>
-                    <p className="font-medium">
-                      {ootNotification.recipientName || '-'}
-                    </p>
-                    {ootNotification.recipientEmail ? (
-                      <p className="text-sm text-muted-foreground">
-                        {ootNotification.recipientEmail}
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Notificação 7.10</CardTitle>
+              <CardDescription>
+                Notificação ao cliente sobre resultado fora de tolerância
+                (ISO/IEC 17025 §7.10)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {ootNotification ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground">Status</Label>
+                      <p className="mt-1">
+                        <Badge
+                          variant={
+                            getOotStatusBadge(ootNotification.status).variant
+                          }
+                        >
+                          {getOotStatusBadge(ootNotification.status).label}
+                        </Badge>
                       </p>
-                    ) : (
-                      <p className="text-sm text-destructive">
-                        — sem e-mail cadastrado
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">
+                        Destinatário
+                      </Label>
+                      <p className="font-medium">
+                        {ootNotification.recipientName || '-'}
                       </p>
+                      {ootNotification.recipientEmail ? (
+                        <p className="text-sm text-muted-foreground">
+                          {ootNotification.recipientEmail}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-destructive">
+                          — sem e-mail cadastrado
+                        </p>
+                      )}
+                    </div>
+                    {ootNotification.certificateNumber && (
+                      <div>
+                        <Label className="text-muted-foreground">
+                          Certificado
+                        </Label>
+                        <p className="font-mono font-medium">
+                          {ootNotification.certificateNumber}
+                        </p>
+                      </div>
+                    )}
+                    {ootNotification.sentAt && (
+                      <div>
+                        <Label className="text-muted-foreground">
+                          Enviada em
+                        </Label>
+                        <p className="font-medium">
+                          {formatDate(ootNotification.sentAt)}
+                        </p>
+                      </div>
+                    )}
+                    {ootNotification.acknowledgedAt && (
+                      <div>
+                        <Label className="text-muted-foreground">
+                          Confirmada em
+                        </Label>
+                        <p className="font-medium">
+                          {formatDate(ootNotification.acknowledgedAt)}
+                          {ootNotification.acknowledgedVia && (
+                            <span className="ml-1 text-sm text-muted-foreground">
+                              via{' '}
+                              {getAcknowledgedViaLabel(
+                                ootNotification.acknowledgedVia,
+                              )}
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     )}
                   </div>
-                  {ootNotification.certificateNumber && (
+                  {ootNotification.affectedScope && (
                     <div>
                       <Label className="text-muted-foreground">
-                        Certificado
+                        Escopo potencialmente afetado
                       </Label>
-                      <p className="font-mono font-medium">
-                        {ootNotification.certificateNumber}
+                      <p className="whitespace-pre-wrap">
+                        {ootNotification.affectedScope}
                       </p>
                     </div>
                   )}
-                  {ootNotification.sentAt && (
+                  {ootNotification.acknowledgedNote && (
                     <div>
                       <Label className="text-muted-foreground">
-                        Enviada em
+                        Nota da confirmação
                       </Label>
-                      <p className="font-medium">
-                        {formatDate(ootNotification.sentAt)}
+                      <p className="whitespace-pre-wrap">
+                        {ootNotification.acknowledgedNote}
                       </p>
                     </div>
                   )}
-                  {ootNotification.acknowledgedAt && (
-                    <div>
-                      <Label className="text-muted-foreground">
-                        Confirmada em
-                      </Label>
-                      <p className="font-medium">
-                        {formatDate(ootNotification.acknowledgedAt)}
-                        {ootNotification.acknowledgedVia && (
-                          <span className="ml-1 text-sm text-muted-foreground">
-                            via{' '}
-                            {getAcknowledgedViaLabel(
-                              ootNotification.acknowledgedVia,
-                            )}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {ootNotification.affectedScope && (
-                  <div>
-                    <Label className="text-muted-foreground">
-                      Escopo potencialmente afetado
-                    </Label>
-                    <p className="whitespace-pre-wrap">
-                      {ootNotification.affectedScope}
-                    </p>
-                  </div>
-                )}
-                {ootNotification.acknowledgedNote && (
-                  <div>
-                    <Label className="text-muted-foreground">
-                      Nota da confirmação
-                    </Label>
-                    <p className="whitespace-pre-wrap">
-                      {ootNotification.acknowledgedNote}
-                    </p>
-                  </div>
-                )}
-                {ootNotification.status !== 'ACKNOWLEDGED' && (
-                  <div className="border-t pt-4">
-                    <Dialog
-                      open={ootAckDialogOpen}
-                      onOpenChange={setOotAckDialogOpen}
-                    >
-                      <DialogTrigger
-                        render={
-                          <Button variant="outline">
-                            Registrar confirmação
-                          </Button>
-                        }
-                      />
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>
-                            Registrar confirmação de recebimento
-                          </DialogTitle>
-                          <DialogDescription>
-                            Registre manualmente que o cliente confirmou o
-                            recebimento da notificação 7.10.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <OotAcknowledgementForm
-                          onSubmit={(data) => ootAckMutation.mutate(data)}
-                          isLoading={ootAckMutation.isPending}
+                  {ootNotification.status !== 'ACKNOWLEDGED' && (
+                    <div className="border-t pt-4">
+                      <Dialog
+                        open={ootAckDialogOpen}
+                        onOpenChange={setOotAckDialogOpen}
+                      >
+                        <DialogTrigger
+                          render={
+                            <Button variant="outline">
+                              Registrar confirmação
+                            </Button>
+                          }
                         />
-                      </DialogContent>
-                    </Dialog>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>
+                              Registrar confirmação de recebimento
+                            </DialogTitle>
+                            <DialogDescription>
+                              Registre manualmente que o cliente confirmou o
+                              recebimento da notificação 7.10.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <OotAcknowledgementForm
+                            onSubmit={(data) => ootAckMutation.mutate(data)}
+                            isLoading={ootAckMutation.isPending}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma notificação ao cliente foi gerada para esta NC.
+                </p>
+              )}
+              {nc.job && nc.job.status === 'APPROVED' && (
+                <ShowForRole role={['owner', 'admin']}>
+                  <div className="border-t pt-4">
+                    <OotAmendCertificateDialog
+                      job={nc.job}
+                      ncNumber={nc.ncNumber}
+                    />
                   </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma notificação ao cliente foi gerada para esta NC.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                </ShowForRole>
+              )}
+              {nc.job && nc.job.status === 'SUPERSEDED' && (
+                <p className="border-t pt-4 text-sm text-muted-foreground">
+                  Certificado já retificado.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <ImpactAssessmentCard
+            ncId={id}
+            assessment={impactAssessment}
+            isLoading={isImpactAssessmentLoading}
+          />
+        </>
       )}
 
       {/* CAPA Info */}
@@ -827,6 +862,69 @@ function OotAcknowledgementForm({
         {isLoading ? 'Registrando...' : 'Registrar confirmação'}
       </Button>
     </div>
+  )
+}
+
+// §7.8.8 amended-certificate tie-in for out-of-tolerance NCs (#426 Phase 2).
+function OotAmendCertificateDialog({
+  job,
+  ncNumber,
+}: {
+  job: { id: number; jobId: string; status: string }
+  ncNumber: string
+}) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState(
+    `Resultado fora de tolerância — ${ncNumber}. Retificação do certificado após avaliação de impacto (ISO/IEC 17025 §7.8.8).`,
+  )
+
+  const amendMutation = useMutation({
+    mutationFn: () => calibraApi.jobs.amend(job.id, reason),
+    onSuccess: (result) => {
+      toast.success(`Retificação criada: ${result.amendedJob.jobId}`)
+      setOpen(false)
+      navigate({
+        to: '/dashboard/jobs/$id',
+        params: { id: result.amendedJob.jobId },
+      })
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<Button variant="outline">Retificar certificado</Button>}
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Retificar certificado</DialogTitle>
+          <DialogDescription>
+            Emite um certificado retificado para a ordem {job.jobId} (ISO/IEC
+            17025 §7.8.8). O certificado original passa a constar como
+            substituído.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Motivo da retificação</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <Button
+            onClick={() => amendMutation.mutate()}
+            disabled={reason.trim().length < 10 || amendMutation.isPending}
+            className="w-full"
+          >
+            {amendMutation.isPending ? 'Criando...' : 'Criar retificação'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

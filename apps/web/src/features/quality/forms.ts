@@ -1,8 +1,10 @@
 import {
   CreateCapaSchema,
   CreateNonConformanceSchema,
+  SaveOotImpactAssessmentSchema,
   type CreateCapaInput,
   type CreateNonConformanceInput,
+  type SaveOotImpactAssessmentInput,
 } from '@calibra-facil/schemas/quality'
 
 import {
@@ -31,8 +33,27 @@ export type CapaFormData = {
   preventiveMeasures: string
 }
 
+export type ImpactAssessmentItemFormData = {
+  description: string
+  disposition: string
+  note: string
+}
+
+export type ImpactAssessmentFormData = {
+  deviationSummary: string
+  deviationMagnitude: string
+  customerTolerance: string
+  toleranceUnit: string
+  affectedFrom: string
+  affectedTo: string
+  items: Array<ImpactAssessmentItemFormData>
+  conclusion: string
+  correctiveActionNote: string
+}
+
 export type NonConformanceFormField = keyof NonConformanceFormData
 export type CapaFormField = keyof CapaFormData
+export type ImpactAssessmentFormField = keyof ImpactAssessmentFormData
 
 export function parseNonConformanceForm(
   data: NonConformanceFormData,
@@ -118,6 +139,46 @@ export function parseCapaForm(
       'rootCauseAnalysis',
       'rootCauseAnalysisMethod',
       'preventiveMeasures',
+    ])
+  }
+
+  return { success: true, data: parsed.data }
+}
+
+export function parseImpactAssessmentForm(
+  data: ImpactAssessmentFormData,
+): FeatureFormValidationResult<
+  SaveOotImpactAssessmentInput,
+  ImpactAssessmentFormField
+> {
+  const payload = {
+    deviationSummary: data.deviationSummary,
+    deviationMagnitude: data.deviationMagnitude.trim() || undefined,
+    customerTolerance: data.customerTolerance.trim() || undefined,
+    toleranceUnit: data.toleranceUnit.trim() || undefined,
+    affectedFrom: data.affectedFrom || undefined,
+    affectedTo: data.affectedTo || undefined,
+    items: data.items.map((item) => ({
+      description: item.description,
+      disposition: item.disposition,
+      note: item.note.trim() || undefined,
+    })),
+    conclusion: data.conclusion || undefined,
+    correctiveActionNote: data.correctiveActionNote.trim() || undefined,
+  }
+
+  const parsed = SaveOotImpactAssessmentSchema.safeParse(payload)
+  if (!parsed.success) {
+    return zodFormError(parsed.error.issues, [
+      'deviationSummary',
+      'deviationMagnitude',
+      'customerTolerance',
+      'toleranceUnit',
+      'affectedFrom',
+      'affectedTo',
+      'items',
+      'conclusion',
+      'correctiveActionNote',
     ])
   }
 

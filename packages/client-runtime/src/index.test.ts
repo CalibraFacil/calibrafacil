@@ -1414,6 +1414,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getImpactAssessment",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "saveImpactAssessment",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "signImpactAssessment",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "capas",
           "policy": "cloud-only",

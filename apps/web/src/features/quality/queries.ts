@@ -1,5 +1,8 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
-import type { OotNotificationData } from '@calibra-facil/client-runtime'
+import type {
+  OotImpactAssessmentData,
+  OotNotificationData,
+} from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -118,6 +121,16 @@ export function ootNotificationQueryOptions(id: string) {
     queryFn: () =>
       calibraApi.nonConformances.getOotNotification<{
         data: OotNotificationData | null
+      }>(id),
+  })
+}
+
+export function ootImpactAssessmentQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['non-conformance-impact-assessment', id],
+    queryFn: () =>
+      calibraApi.nonConformances.getImpactAssessment<{
+        data: OotImpactAssessmentData | null
       }>(id),
   })
 }
@@ -336,6 +349,19 @@ export function useNonConformanceOotNotificationData({
 }) {
   return useQuery({
     ...ootNotificationQueryOptions(id),
+    enabled,
+  })
+}
+
+export function useNonConformanceImpactAssessmentData({
+  id,
+  enabled,
+}: {
+  id: string
+  enabled: boolean
+}) {
+  return useQuery({
+    ...ootImpactAssessmentQueryOptions(id),
     enabled,
   })
 }

@@ -1291,6 +1291,49 @@ export type RegisterOotAcknowledgementInput = {
   note: string;
 };
 
+/** #426 Phase 2: guided §7.10 impact-assessment payload. */
+export type SaveOotImpactAssessmentInput = {
+  deviationSummary: string;
+  deviationMagnitude?: number;
+  customerTolerance?: number;
+  toleranceUnit?: string;
+  affectedFrom?: string;
+  affectedTo?: string;
+  items: Array<{
+    description: string;
+    disposition: "no_impact" | "recheck" | "notify_downstream" | "other";
+    note?: string;
+  }>;
+  conclusion?: "no_significant_impact" | "impact_confirmed" | "inconclusive";
+  correctiveActionNote?: string;
+};
+
+export type OotImpactAssessmentData = {
+  id: number;
+  ncId: number;
+  deviationSummary: string;
+  deviationMagnitude: number | null;
+  customerTolerance: number | null;
+  toleranceUnit: string | null;
+  affectedFrom: string | null;
+  affectedTo: string | null;
+  items: Array<{
+    description: string;
+    disposition: "no_impact" | "recheck" | "notify_downstream" | "other";
+    note?: string | null;
+  }> | null;
+  conclusion:
+    | "no_significant_impact"
+    | "impact_confirmed"
+    | "inconclusive"
+    | null;
+  correctiveActionNote: string | null;
+  signedBy: string | null;
+  signedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** §7.10 out-of-tolerance customer-notification record (#426 Phase 0). */
 export type OotNotificationData = {
   id: number;
@@ -1333,6 +1376,16 @@ export interface NonConformancesApi {
   registerOotAcknowledgement<TResponse = unknown>(
     id: string | number,
     input: RegisterOotAcknowledgementInput,
+  ): Promise<TResponse>;
+  getImpactAssessment<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  saveImpactAssessment<TResponse = unknown>(
+    id: string | number,
+    input: SaveOotImpactAssessmentInput,
+  ): Promise<TResponse>;
+  signImpactAssessment<TResponse = unknown>(
+    id: string | number,
   ): Promise<TResponse>;
 }
 

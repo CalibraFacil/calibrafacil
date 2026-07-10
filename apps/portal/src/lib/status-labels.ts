@@ -94,3 +94,30 @@ export function getServiceOrderStatus(status: string): {
   };
   return { label, tone: statusToneToSignal(tone) };
 }
+
+/**
+ * ISO/IEC 17025 §7.10 out-of-tolerance notifications, read from the customer's
+ * perspective: SENT means the ball is in their court (confirm receipt →
+ * warning), ACKNOWLEDGED means done (success), and the lab-internal pre-send
+ * stages (PENDING/GENERATED) are neutral processing.
+ */
+const OOT_NOTIFICATION_STATUS: Record<
+  string,
+  { label: string; tone: StatusTone }
+> = {
+  PENDING: { label: "Em processamento", tone: "muted" },
+  GENERATED: { label: "Em processamento", tone: "muted" },
+  SENT: { label: "Aguardando confirmação", tone: "warning" },
+  ACKNOWLEDGED: { label: "Recebimento confirmado", tone: "success" },
+};
+
+export function getOotNotificationStatus(status: string): {
+  label: string;
+  tone: SignalTone;
+} {
+  const { label, tone } = OOT_NOTIFICATION_STATUS[status] ?? {
+    label: "Em processamento",
+    tone: "muted",
+  };
+  return { label, tone: statusToneToSignal(tone) };
+}

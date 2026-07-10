@@ -1210,6 +1210,15 @@ export function createDesktopApiClient(
       async registerOotAcknowledgement() {
         throw desktopUnsupportedAuthAction("Não conformidades");
       },
+      async getImpactAssessment() {
+        throw desktopUnsupportedAuthAction("Não conformidades");
+      },
+      async saveImpactAssessment() {
+        throw desktopUnsupportedAuthAction("Não conformidades");
+      },
+      async signImpactAssessment() {
+        throw desktopUnsupportedAuthAction("Não conformidades");
+      },
     },
     capas: {
       async list() {

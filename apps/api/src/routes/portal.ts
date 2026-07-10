@@ -18,8 +18,11 @@ import {
   service,
   referenceStandardCertificateDocument,
   notificationPreference,
+  nonConformance,
+  ootNotification,
   portalExportJob,
 } from "@calibra-facil/db/schema";
+import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
@@ -2419,6 +2422,177 @@ export const portalRouter = new Hono<{
       return c.json({ error: "Erro ao gerar link de download" }, 500);
     }
   })
+
+  // =========================================================================
+  // GET /notifications - §7.10 out-of-tolerance notifications addressed to
+  // this portal customer (#426 Phase 2). Opaque id = the notification's
+  // ackToken (already the customer's ack credential in the e-mail link).
+  // =========================================================================
+  .get("/notifications", ...requirePortalProtected, async (c) => {
+    const portalMember = c.get("member");
+    const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
+
+    try {
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: portalMember.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
+      if (!scope || scope.customerIds.length === 0) {
+        return c.json({ data: [], counts: { total: 0, pending: 0 } });
+      }
+
+      const rows = await db
+        .select({
+          token: ootNotification.ackToken,
+          ncNumber: nonConformance.ncNumber,
+          certificateNumber: ootNotification.certificateNumber,
+          affectedScope: ootNotification.affectedScope,
+          status: ootNotification.status,
+          sentAt: ootNotification.sentAt,
+          acknowledgedAt: ootNotification.acknowledgedAt,
+          acknowledgedVia: ootNotification.acknowledgedVia,
+          createdAt: ootNotification.createdAt,
+          assetName: asset.name,
+          assetTag: asset.tag,
+          customerId: calibrationJob.customerId,
+        })
+        .from(ootNotification)
+        .innerJoin(calibrationJob, eq(ootNotification.jobId, calibrationJob.id))
+        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .innerJoin(nonConformance, eq(ootNotification.ncId, nonConformance.id))
+        .where(
+          and(
+            eq(ootNotification.organizationId, scope.labOrganizationId),
+            inArray(calibrationJob.customerId, scope.customerIds),
+          ),
+        )
+        .orderBy(desc(ootNotification.createdAt))
+        .limit(100);
+
+      const data = rows.map((row) => ({
+        id: row.token,
+        ncNumber: row.ncNumber,
+        certificateNumber: row.certificateNumber,
+        affectedScope: row.affectedScope,
+        status: row.status,
+        sentAt: row.sentAt,
+        acknowledgedAt: row.acknowledgedAt,
+        acknowledgedVia: row.acknowledgedVia,
+        createdAt: row.createdAt,
+        assetName: row.assetName,
+        assetTag: row.assetTag,
+        unitName: scope.customerById.get(row.customerId)?.name ?? null,
+      }));
+
+      return c.json({
+        data,
+        counts: {
+          total: data.length,
+          pending: data.filter((row) => row.acknowledgedAt === null).length,
+        },
+      });
+    } catch (error) {
+      console.error("Error listing portal OOT notifications:", error);
+      return c.json({ error: "Erro ao listar notificações" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // POST /notifications/:token/acknowledge - Registers receipt from the
+  // authenticated portal (acknowledgedVia portal_link). Idempotent; the WHERE
+  // re-checks customer scope so a token from another org can never be stamped.
+  // =========================================================================
+  .post(
+    "/notifications/:token/acknowledge",
+    ...requirePortalProtected,
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const token = c.req.param("token");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Notificação não encontrada" }, 404);
+        }
+
+        const [notification] = await db
+          .select({
+            id: ootNotification.id,
+            ncId: ootNotification.ncId,
+            organizationId: ootNotification.organizationId,
+            acknowledgedAt: ootNotification.acknowledgedAt,
+            ncNumber: nonConformance.ncNumber,
+          })
+          .from(ootNotification)
+          .innerJoin(
+            calibrationJob,
+            eq(ootNotification.jobId, calibrationJob.id),
+          )
+          .innerJoin(
+            nonConformance,
+            eq(ootNotification.ncId, nonConformance.id),
+          )
+          .where(
+            and(
+              eq(ootNotification.ackToken, token),
+              eq(ootNotification.organizationId, scope.labOrganizationId),
+              inArray(calibrationJob.customerId, scope.customerIds),
+            ),
+          )
+          .limit(1);
+
+        if (!notification) {
+          return c.json({ error: "Notificação não encontrada" }, 404);
+        }
+
+        if (!notification.acknowledgedAt) {
+          const [updated] = await db
+            .update(ootNotification)
+            .set({
+              status: "ACKNOWLEDGED",
+              acknowledgedAt: new Date(),
+              acknowledgedVia: "portal_link",
+            })
+            .where(
+              and(
+                eq(ootNotification.id, notification.id),
+                isNull(ootNotification.acknowledgedAt),
+              ),
+            )
+            .returning();
+
+          if (updated) {
+            notifyOotAcknowledged(
+              notification.id,
+              notification.ncId,
+              notification.ncNumber,
+              notification.organizationId,
+            ).catch((err) =>
+              console.error(
+                "[Portal] Failed to notify OOT acknowledgement:",
+                err,
+              ),
+            );
+          }
+        }
+
+        return c.json({ message: "Recebimento confirmado" });
+      } catch (error) {
+        console.error("Error acknowledging portal OOT notification:", error);
+        return c.json({ error: "Erro ao confirmar recebimento" }, 500);
+      }
+    },
+  )
 
   // =========================================================================
   // GET /certificates/:id/reference-standards/:standardId/certificate/download

@@ -5,6 +5,7 @@ import {
   File01Icon,
   Home01Icon,
   Notebook01Icon,
+  Notification03Icon,
   ToolsIcon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
@@ -61,6 +62,19 @@ const sections: Array<NavSection> = [
         url: "/service-orders",
         icon: ToolsIcon,
         badgeKey: "awaitingQuote",
+      },
+    ],
+  },
+  {
+    label: "Qualidade",
+    items: [
+      // No badgeKey: nav badges are driven by `useOverview()` counts, and the
+      // overview endpoint has no §7.10 notifications count yet (adding one is
+      // an API change). Revisit when the overview exposes `notifications`.
+      {
+        title: "Notificações",
+        url: "/notifications",
+        icon: Notification03Icon,
       },
     ],
   },
