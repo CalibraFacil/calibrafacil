@@ -554,7 +554,7 @@ export function MethodBuilder({
             >
               {draft.variables.map((variable, index) => (
                 <VariableEditor
-                  key={`${variable.key}-${index}`}
+                  key={index}
                   variable={variable}
                   inputs={draft.inputs}
                   onChange={(binding) => updateVariable(index, binding)}
@@ -579,7 +579,7 @@ export function MethodBuilder({
             >
               {draft.formulas.map((formula, index) => (
                 <FormulaEditor
-                  key={`${formula.outputKey}-${index}`}
+                  key={index}
                   formula={formula}
                   inputs={draft.inputs}
                   onChange={(patch) => updateFormula(index, patch)}
@@ -603,10 +603,7 @@ export function MethodBuilder({
               count={draft.validations.length}
             >
               {draft.validations.map((validation, index) => (
-                <div
-                  key={`${validation.message}-${index}`}
-                  className={INSET_ROW}
-                >
+                <div key={index} className={INSET_ROW}>
                   <div className="grid gap-3 md:grid-cols-[1fr_90px_1fr_120px_auto]">
                     <Field label="Esquerda">
                       <Input
@@ -703,7 +700,7 @@ export function MethodBuilder({
             >
               {draft.measurementModels.map((model, index) => (
                 <MeasurementModelEditor
-                  key={`${model.key}-${index}`}
+                  key={index}
                   model={model}
                   inputs={draft.inputs}
                   formulas={draft.formulas}
@@ -735,7 +732,7 @@ export function MethodBuilder({
               ) : null}
               {draft.uncertainty.map((component, index) => (
                 <div
-                  key={`${component.name}-${index}`}
+                  key={index}
                   className={cn(
                     'grid gap-3 md:grid-cols-[1fr_120px_160px_120px_auto]',
                     INSET_ROW,

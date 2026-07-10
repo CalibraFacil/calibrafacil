@@ -105,7 +105,7 @@ export function CertificateContentSection({
         <div className="space-y-3">
           {(certificate?.sections ?? []).map((section, index) => (
             <CertificateSectionEditor
-              key={`${section.kind}-${index}`}
+              key={index}
               section={section}
               onChange={(nextSection) => onSectionChange(index, nextSection)}
               onRemove={() => onSectionRemove(index)}

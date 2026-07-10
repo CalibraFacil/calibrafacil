@@ -244,7 +244,7 @@ export function MeasurementModelEditor({
         </div>
         {model.quantities.map((quantity, index) => (
           <MeasurementQuantityEditor
-            key={`${quantity.symbol}-${index}`}
+            key={index}
             quantity={quantity}
             inputs={inputs}
             formulas={formulas}

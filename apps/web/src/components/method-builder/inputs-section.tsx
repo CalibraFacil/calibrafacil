@@ -127,7 +127,7 @@ export function InputsSection({
     >
       {inputs.map((input, index) => (
         <InputEditor
-          key={`${input.key}-${index}`}
+          key={index}
           input={input}
           onChange={(patch) => onInputChange(index, patch)}
           onTypeChange={(type) => onInputTypeChange(index, type)}
@@ -585,10 +585,7 @@ function TableColumnsEditor({
         </Button>
       </div>
       {columns.map((column, index) => (
-        <div
-          key={`${column.key}-${index}`}
-          className="space-y-2 rounded-md border p-2"
-        >
+        <div key={index} className="space-y-2 rounded-md border p-2">
           <div className="grid gap-2 md:grid-cols-[1fr_1fr_110px_100px_180px_auto]">
             <Input
               value={column.key}
