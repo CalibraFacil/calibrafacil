@@ -65,6 +65,15 @@ export type MarketingContactSyncBackgroundJobMessage = {
   type: "MARKETING_CONTACT_SYNC";
 };
 
+/**
+ * Nightly timer that re-evaluates every SPC control chart against its stored
+ * check-standard readings (ISO/IEC 17025 §7.7.1, issue #60). No payload — the
+ * worker sweeps all charts.
+ */
+export type SpcRecomputeBackgroundJobMessage = {
+  type: "SPC_RECOMPUTE";
+};
+
 export type CertificateXlsxPreviewBackgroundJobMessage = {
   type: "CERTIFICATE_XLSX_PREVIEW";
   previewId: number;
@@ -89,6 +98,7 @@ export type BackgroundJobMessage =
   | ScheduledNotificationsBackgroundJobMessage
   | PortalDigestBackgroundJobMessage
   | MarketingContactSyncBackgroundJobMessage
+  | SpcRecomputeBackgroundJobMessage
   | CertificateXlsxPreviewBackgroundJobMessage
   | AuditPackBackgroundJobMessage;
 
@@ -103,7 +113,8 @@ export function isBackgroundJobMessage(
   if (
     type === "SCHEDULED_NOTIFICATIONS" ||
     type === "PORTAL_DIGEST" ||
-    type === "MARKETING_CONTACT_SYNC"
+    type === "MARKETING_CONTACT_SYNC" ||
+    type === "SPC_RECOMPUTE"
   ) {
     return true;
   }

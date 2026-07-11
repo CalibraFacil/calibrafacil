@@ -62,6 +62,10 @@
     {
       "path": "/api/cron/queue-backstop",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/spc-recompute",
+      "schedule": "0 3 * * *"
     }
   ],
   "rewrites": [

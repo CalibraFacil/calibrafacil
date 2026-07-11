@@ -279,6 +279,41 @@ export const statements = {
   capa: ["create", "read", "update", "implement", "verify", "close"],
 
   // ---------------------------------------------------------------------------
+  // PROFICIENCY TEST - ISO 17025:2017 Clause 7.7.2 (PT / interlab comparisons)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Register a PT round or plan item
+   * - read: View PT rounds, results and the participation plan
+   * - update: Update PT round / plan details
+   * - delete: Remove a PT round or plan item
+   * - record_results: Enter the provider's final report (scores computed)
+   * - close: Close a PT round after review
+   */
+  proficiency_test: [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "record_results",
+    "close",
+  ],
+
+  // ---------------------------------------------------------------------------
+  // SPC - ISO 17025:2017 Clause 7.7.1 (check-standard control charts)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Create control charts / record check-standard readings
+   * - read: View charts, readings and evaluations
+   * - update: Change chart type/parameters
+   * - delete: Remove readings or charts
+   * - recalculate: Re-run the SPC evaluation
+   * - escalate: Open an NC/CAPA from an SPC signal
+   */
+  spc: ["create", "read", "update", "delete", "recalculate", "escalate"],
+
+  // ---------------------------------------------------------------------------
   // COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel competence tracking)
   // ---------------------------------------------------------------------------
   /**
@@ -341,6 +376,9 @@ export const member = ac.newRole({
   non_conformance: ["read"],
   // Read-only access to CAPAs
   capa: ["read"],
+  // Read-only access to proficiency tests and SPC charts
+  proficiency_test: ["read"],
+  spc: ["read"],
   // Read-only access to competence records
   competence: ["read"],
 });
@@ -378,6 +416,8 @@ export const operator = ac.newRole({
   ],
   non_conformance: ["read"],
   capa: ["read"],
+  proficiency_test: ["read"],
+  spc: ["read"],
   competence: ["read"],
 });
 
@@ -449,6 +489,10 @@ export const technician = ac.newRole({
 
   // CAPA: can create, update, and implement (cannot verify/close - requires admin/owner)
   capa: ["create", "read", "update", "implement"],
+  // PT: can register rounds and enter results (cannot delete/close - requires admin/owner)
+  proficiency_test: ["create", "read", "update", "record_results"],
+  // SPC: can record readings, manage charts and recalculate (escalation requires admin/owner)
+  spc: ["create", "read", "update", "recalculate"],
   // Competence: can request qualifications and view
   competence: ["create", "read"],
 });
@@ -552,6 +596,16 @@ export const admin = ac.newRole({
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full proficiency-test and SPC management
+  proficiency_test: [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "record_results",
+    "close",
+  ],
+  spc: ["create", "read", "update", "delete", "recalculate", "escalate"],
   // Full competence management
   competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });
@@ -654,6 +708,16 @@ export const owner = ac.newRole({
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full proficiency-test and SPC management
+  proficiency_test: [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "record_results",
+    "close",
+  ],
+  spc: ["create", "read", "update", "delete", "recalculate", "escalate"],
   // Full competence management
   competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });

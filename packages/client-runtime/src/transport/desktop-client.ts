@@ -1249,6 +1249,76 @@ export function createDesktopApiClient(
         throw desktopUnsupportedAuthAction("CAPA");
       },
     },
+    proficiencyTests: {
+      async list() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async summary() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async get() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async auditLog() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async create() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async update() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async recordResults() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async remove() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async listPlan() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async createPlanItem() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async updatePlanItem() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+      async removePlanItem() {
+        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
+      },
+    },
+    spc: {
+      async listCharts() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async getChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async createChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async updateChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async removeChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async recalculateChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async escalateChart() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async listReadings() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async createReading() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+      async removeReading() {
+        throw desktopUnsupportedAuthAction("Cartas de controle");
+      },
+    },
     certificateTemplates: {
       async list() {
         throw desktopUnsupportedAuthAction("Templates de certificado");

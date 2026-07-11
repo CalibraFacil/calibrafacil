@@ -1469,6 +1469,167 @@ export interface CapasApi {
   ): Promise<TResponse>;
 }
 
+export type ProficiencyTestListInput = {
+  page: number;
+  limit: number;
+  query?: string;
+  status?: string;
+  activityType?: string;
+  scopePart?: string;
+};
+
+export type ProficiencyTestCreateInput = {
+  activityType?: "proficiency_test" | "interlab_comparison";
+  provider: string;
+  providerAccreditation?: string;
+  ptRound: string;
+  scopePart: string;
+  metrologyKind?: string;
+  standardId?: number;
+  unitId?: number;
+  registrationDate?: string;
+  participationDate?: string;
+  notes?: string;
+};
+
+export type ProficiencyTestUpdateInput = Partial<ProficiencyTestCreateInput>;
+
+export type PtResultPointInput = {
+  label: string;
+  unit?: string;
+  labValue: number;
+  labUncertainty?: number;
+  refValue: number;
+  refUncertainty?: number;
+  sigmaPt?: number;
+  scoreType?: "en" | "z" | "z_prime" | "zeta";
+};
+
+export type ProficiencyTestRecordResultsInput = {
+  resultReportedAt: string;
+  results: PtResultPointInput[];
+};
+
+export type PtPlanItemCreateInput = {
+  scopePart: string;
+  riskJustification?: string;
+  frequencyMonths?: number;
+  unitId?: number;
+  lastSatisfactoryAt?: string;
+};
+
+export type PtPlanItemUpdateInput = Partial<PtPlanItemCreateInput>;
+
+export interface ProficiencyTestsApi {
+  list<TResponse = unknown>(
+    input: ProficiencyTestListInput,
+  ): Promise<TResponse>;
+  summary<TResponse = unknown>(): Promise<TResponse>;
+  get<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  create<TResponse = unknown>(
+    input: ProficiencyTestCreateInput,
+  ): Promise<TResponse>;
+  update<TResponse = unknown>(
+    id: string | number,
+    input: ProficiencyTestUpdateInput,
+  ): Promise<TResponse>;
+  recordResults<TResponse = unknown>(
+    id: string | number,
+    input: ProficiencyTestRecordResultsInput,
+  ): Promise<TResponse>;
+  remove<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  listPlan<TResponse = unknown>(): Promise<TResponse>;
+  createPlanItem<TResponse = unknown>(
+    input: PtPlanItemCreateInput,
+  ): Promise<TResponse>;
+  updatePlanItem<TResponse = unknown>(
+    id: string | number,
+    input: PtPlanItemUpdateInput,
+  ): Promise<TResponse>;
+  removePlanItem<TResponse = unknown>(id: string | number): Promise<TResponse>;
+}
+
+export type SpcChartListInput = {
+  standardId?: number;
+  status?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type SpcChartParamsInput = {
+  baselineWindow?: number;
+  centerline?: number;
+  sigma?: number;
+  subgroupSize?: number;
+  cusumK?: number;
+  cusumH?: number;
+  ewmaLambda?: number;
+  ewmaK?: number;
+  enabledRules?: string[];
+};
+
+export type SpcChartCreateInput = {
+  standardId: number;
+  parameter: string;
+  chartType?: "i_mr" | "xbar_r" | "cusum" | "ewma";
+  params?: SpcChartParamsInput;
+  unitId?: number;
+};
+
+export type SpcChartUpdateInput = {
+  chartType?: "i_mr" | "xbar_r" | "cusum" | "ewma";
+  params?: SpcChartParamsInput;
+};
+
+export type SpcEscalateInput = {
+  description?: string;
+};
+
+export type SpcReadingListInput = {
+  standardId: number;
+  parameter?: string;
+  limit?: number;
+};
+
+export type SpcReadingCreateInput = {
+  standardId: number;
+  parameter: string;
+  value: number;
+  uncertainty?: number;
+  measuredAt: string;
+  sourceJobId?: number;
+};
+
+export interface SpcApi {
+  listCharts<TResponse = unknown>(
+    input?: SpcChartListInput,
+  ): Promise<TResponse>;
+  getChart<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  createChart<TResponse = unknown>(
+    input: SpcChartCreateInput,
+  ): Promise<TResponse>;
+  updateChart<TResponse = unknown>(
+    id: string | number,
+    input: SpcChartUpdateInput,
+  ): Promise<TResponse>;
+  removeChart<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  recalculateChart<TResponse = unknown>(
+    id: string | number,
+  ): Promise<TResponse>;
+  escalateChart<TResponse = unknown>(
+    id: string | number,
+    input?: SpcEscalateInput,
+  ): Promise<TResponse>;
+  listReadings<TResponse = unknown>(
+    input: SpcReadingListInput,
+  ): Promise<TResponse>;
+  createReading<TResponse = unknown>(
+    input: SpcReadingCreateInput,
+  ): Promise<TResponse>;
+  removeReading<TResponse = unknown>(id: string | number): Promise<TResponse>;
+}
+
 export type CertificateTemplateCreateInput = {
   name: string;
 };
@@ -1928,6 +2089,9 @@ export type DashboardStats = {
   serviceOrdersInProgress: number;
   competencesExpiring: number;
   competencesPendingEvaluation: number;
+  ptPlanOverdue: number;
+  ptRoundsPending: number;
+  spcChartsWithSignals: number;
   dueSoonJobs: DashboardJob[];
 };
 
@@ -2860,6 +3024,8 @@ export interface CalibraApi {
   labSetup: LabSetupApi;
   nonConformances: NonConformancesApi;
   capas: CapasApi;
+  proficiencyTests: ProficiencyTestsApi;
+  spc: SpcApi;
   certificateTemplates: CertificateTemplatesApi;
   competences: CompetencesApi;
   trainingRecords: TrainingRecordsApi;

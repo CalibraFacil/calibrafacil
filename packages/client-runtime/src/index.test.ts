@@ -1475,6 +1475,116 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "list",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "summary",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "auditLog",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "update",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "recordResults",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "remove",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listPlan",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createPlanItem",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updatePlanItem",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removePlanItem",
+          "namespace": "proficiencyTests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listCharts",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removeChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "recalculateChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "escalateChart",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listReadings",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createReading",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removeReading",
+          "namespace": "spc",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
           "namespace": "certificateTemplates",
           "policy": "cloud-only",
         },

@@ -23,6 +23,7 @@ export {
   notifyAssetDueForLegalVerification,
   notifyStandardExpiring,
   notifyStandardExpired,
+  notifyPtPlanDue,
   notifySigningCertificateExpiring,
   notifyAccreditationExpiring,
   notifyJobOverdue,

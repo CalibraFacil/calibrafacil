@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { flushWorkerErrorReporter, reportWorkerError } from "./observability";
+import { processSpcRecompute } from "./spc-recompute";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
@@ -4605,6 +4606,11 @@ async function processBackgroundJobUnreported(
     return;
   }
 
+  if (message.type === "SPC_RECOMPUTE") {
+    await processSpcRecompute(env);
+    return;
+  }
+
   if (await processXlsxCertificateMessageIfSelected(env, message)) {
     return;
   }
@@ -4645,6 +4651,9 @@ export async function processBackgroundJobBatch(
   const marketingContactSyncMessages = messages.filter(
     (message) => message.type === "MARKETING_CONTACT_SYNC",
   );
+  const spcRecomputeMessages = messages.filter(
+    (message) => message.type === "SPC_RECOMPUTE",
+  );
   const xlsxPreviewMessages = messages.filter(
     (message): message is CertificateXlsxPreviewBackgroundJobMessage =>
       message.type === "CERTIFICATE_XLSX_PREVIEW",
@@ -4669,6 +4678,10 @@ export async function processBackgroundJobBatch(
 
   for (const _message of marketingContactSyncMessages) {
     await processMarketingContactSync(env);
+  }
+
+  for (const _message of spcRecomputeMessages) {
+    await processSpcRecompute(env);
   }
 
   for (const message of xlsxPreviewMessages) {

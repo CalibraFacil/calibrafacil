@@ -8,6 +8,8 @@ import { calibrationRequestsRouter } from "../routes/calibration-requests";
 import { visitJobsRouter, visitsRouter } from "../routes/visits";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
+import { proficiencyTestsRouter } from "../routes/proficiency-tests";
+import { spcRouter } from "../routes/spc";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { certificateTemplatesRouter } from "../routes/certificate-templates";
 import { competencesRouter } from "../routes/competences";
@@ -122,6 +124,8 @@ export function mountApiRoutes(
       .route("/api/signing", signingRouter)
       .route("/api/nc", nonConformancesRouter)
       .route("/api/capa", capaRouter)
+      .route("/api/proficiency-tests", proficiencyTestsRouter)
+      .route("/api/spc", spcRouter)
       .route("/api/environmental-limits", environmentalLimitsRouter)
       .route("/api/authorized-signatories", authorizedSignatoriesRouter)
       .route("/api/competences", competencesRouter)

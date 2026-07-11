@@ -19,18 +19,8 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
-
-const MAX_SEQ_RETRIES = 3;
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.message.includes("unique") ||
-      err.message.includes("duplicate") ||
-      err.message.includes("23505"))
-  );
-}
 
 /**
  * CAPA Router - ISO 17025:2017 Clause 8.2 (Corrective Actions)
@@ -427,72 +417,25 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      // Generate CAPA number with retry on unique constraint violation
-      let newCapa: typeof correctiveAction.$inferSelect | null = null;
-      for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-        const year = new Date().getFullYear();
-        const [lastCapa] = await db
-          .select({ capaNumber: correctiveAction.capaNumber })
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.organizationId, member.organizationId),
-              ilike(correctiveAction.capaNumber, `CAPA-${year}-%`),
-            ),
-          )
-          .orderBy(desc(correctiveAction.capaNumber))
-          .limit(1);
-
-        let nextSeq = 1;
-        if (lastCapa) {
-          const parts = lastCapa.capaNumber.split("-");
-          nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
-        }
-        const capaNumber = `CAPA-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-        try {
-          const [inserted] = await db
-            .insert(correctiveAction)
-            .values({
-              capaNumber,
-              organizationId: member.organizationId,
-              source: input.source,
-              sourceReference: input.sourceReference || null,
-              title: input.title,
-              description: input.description,
-              detectionDate: new Date(input.detectionDate),
-              type: input.type,
-              severity: input.severity,
-              category: input.category,
-              rootCauseAnalysis: input.rootCauseAnalysis ?? null,
-              rootCauseAnalysisMethod: input.rootCauseAnalysisMethod ?? null,
-              actionPlan: input.actionPlan,
-              preventiveMeasures: input.preventiveMeasures ?? null,
-              responsibleId: input.responsibleId,
-              dueDate: new Date(input.dueDate),
-              status: "OPEN",
-              createdBy: session.user.id,
-            })
-            .returning();
-          newCapa = inserted ?? null;
-          break;
-        } catch (err) {
-          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1)
-            throw err;
-        }
-      }
-
-      if (!newCapa) {
-        return c.json({ error: "Falha ao criar CAPA" }, 500);
-      }
-
-      // Audit log
-      await db.insert(correctiveActionAuditLog).values({
-        capaId: newCapa.id,
-        action: "create",
-        changes: { initial: input },
-        performedBy: session.user.id,
+      const newCapa = await createCorrectiveActionRecord({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        source: input.source,
+        sourceReference: input.sourceReference || null,
+        title: input.title,
+        description: input.description,
+        detectionDate: new Date(input.detectionDate),
+        type: input.type,
+        severity: input.severity,
+        category: input.category,
+        rootCauseAnalysis: input.rootCauseAnalysis ?? null,
+        rootCauseAnalysisMethod: input.rootCauseAnalysisMethod ?? null,
+        actionPlan: input.actionPlan,
+        preventiveMeasures: input.preventiveMeasures ?? null,
+        responsibleId: input.responsibleId,
+        dueDate: new Date(input.dueDate),
         ipAddress: c.req.header("x-forwarded-for") || null,
+        auditChanges: { initial: input },
       });
 
       return c.json(newCapa, 201);

@@ -234,6 +234,22 @@ async function handleQueueBackstop(request: Request) {
   );
 }
 
+// §7.7.1 SPC nightly sweep (issue #60): re-evaluates every control chart
+// against its stored check-standard readings so trend/out-of-control statuses
+// stay current even when no new reading is recorded.
+async function handleSpcRecompute(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("spc-recompute", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "SPC_RECOMPUTE" },
+      { idempotencyKey: `spc-recompute-${todayKey()}` },
+    ),
+  );
+}
+
 async function handleSubscriptionReconciliation(request: Request) {
   if (!isCronAuthorized(request)) {
     return cronAuthFailureResponse();
@@ -260,6 +276,7 @@ export const JOB_HANDLERS: Record<
   "oot-emails": handleOotEmails,
   "queue-backstop": handleQueueBackstop,
   "subscription-reconciliation": handleSubscriptionReconciliation,
+  "spc-recompute": handleSpcRecompute,
 };
 
 function resolveJob(request: Request) {

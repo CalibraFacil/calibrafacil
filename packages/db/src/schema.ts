@@ -7285,6 +7285,7 @@ export type NotificationType =
   | "COMPETENCE_EXPIRED" // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
   | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
   | "COMPETENCE_APPROVED" // ISO 17025 Clause 6.2.3 - Qualification approved
+  | "PT_PLAN_DUE" // ISO 17025 Clause 7.7.2 - Proficiency-test participation due for a scope part (#60)
   | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
   | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
   | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
@@ -7333,7 +7334,8 @@ export type NotificationRelatedEntity = {
     | "nc"
     | "capa"
     | "competence"
-    | "audit_pack";
+    | "audit_pack"
+    | "pt_plan_item";
   entityId: number | string;
   jobId?: string; // Human-readable job ID for display
 };
@@ -7860,7 +7862,9 @@ export type CorrectiveActionSource =
   | "customer_complaint"
   | "nc_detection"
   | "external_audit"
-  | "management_review";
+  | "management_review"
+  | "proficiency_test"
+  | "spc_signal";
 
 /**
  * CAPA type - corrective vs preventive
@@ -9108,3 +9112,466 @@ export const cronRun = pgTable("cron_run", {
   lastError: text("last_error"),
   consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
 });
+
+// ============================================================================
+// Proficiency Testing & SPC — ISO/IEC 17025 §7.7 "Ensuring the validity of
+// results" (#60). PT register (7.7.2) + check-standard control charts (7.7.1).
+// ============================================================================
+
+/**
+ * 17025 §7.7.2: (a) proficiency testing, (b) other interlaboratory comparisons.
+ */
+export type PtActivityType = "proficiency_test" | "interlab_comparison";
+
+/**
+ * Performance-score statistic per ISO 13528:2022 §9. En is the default for
+ * calibration PT rounds; z/z'/zeta apply the ±2 warning / ±3 action bands.
+ */
+export type PtScoreType = "en" | "z" | "z_prime" | "zeta";
+
+export type PtScoreVerdict = "satisfactory" | "questionable" | "unsatisfactory";
+
+export type PtOverallStatus =
+  | "pending"
+  | "satisfactory"
+  | "questionable"
+  | "unsatisfactory";
+
+/**
+ * One measured point of a PT round: the lab's reported value against the
+ * provider's assigned value, with the computed performance score.
+ */
+export type PtResultPoint = {
+  /** Measured point label, e.g. "100 g" or "10 V @ 1 kHz". */
+  label: string;
+  unit?: string | null;
+  labValue: number;
+  /** Lab expanded uncertainty (k=2) for En / zeta. */
+  labUncertainty?: number | null;
+  refValue: number;
+  /** Provider expanded uncertainty (En) or sigma_pt (z-family). */
+  refUncertainty?: number | null;
+  sigmaPt?: number | null;
+  scoreType: PtScoreType;
+  score?: number | null;
+  verdict?: PtScoreVerdict | null;
+};
+
+export const proficiencyTest = pgTable(
+  "proficiency_test",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "restrict",
+    }),
+
+    activityType: text("activity_type")
+      .$type<PtActivityType>()
+      .default("proficiency_test")
+      .notNull(),
+
+    // Provider (ISO/IEC 17043; NIT-DICLA-026 §10 accreditation evidence)
+    provider: text("provider").notNull(),
+    providerAccreditation: text("provider_accreditation"),
+
+    ptRound: text("pt_round").notNull(), // e.g. "PT-2026-01"
+    /** "Significant part of scope" covered (NIT-DICLA-026 §9.3). */
+    scopePart: text("scope_part").notNull(),
+    metrologyKind: text("metrology_kind"),
+    standardId: integer("standard_id").references(() => referenceStandard.id, {
+      onDelete: "restrict",
+    }),
+
+    registrationDate: timestamp("registration_date"),
+    participationDate: timestamp("participation_date"),
+    resultReportedAt: timestamp("result_reported_at"),
+
+    results: jsonb("results").$type<PtResultPoint[]>(),
+    overallStatus: text("overall_status")
+      .$type<PtOverallStatus>()
+      .default("pending")
+      .notNull(),
+
+    // Set when an unsatisfactory result auto-opens a CAPA (§7.7.3)
+    capaId: integer("capa_id").references(() => correctiveAction.id),
+
+    notes: text("notes"),
+
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("proficiency_test_organization_id_idx").on(table.organizationId),
+    index("proficiency_test_unit_id_idx").on(table.unitId),
+    index("proficiency_test_status_idx").on(table.overallStatus),
+    index("proficiency_test_scope_part_idx").on(table.scopePart),
+    index("proficiency_test_standard_id_idx").on(table.standardId),
+  ],
+);
+
+/**
+ * Risk-based PT participation plan per significant scope part
+ * (NIT-DICLA-026 §9.4; default cycle 4 years per §9.2.2).
+ */
+export const ptPlanItem = pgTable(
+  "pt_plan_item",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "restrict",
+    }),
+
+    scopePart: text("scope_part").notNull(),
+    riskJustification: text("risk_justification"),
+    frequencyMonths: integer("frequency_months").default(48).notNull(),
+
+    // Denormalized from satisfactory rounds; drives due-date alerts
+    lastSatisfactoryAt: timestamp("last_satisfactory_at"),
+    nextDueAt: timestamp("next_due_at"),
+
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("pt_plan_item_organization_id_idx").on(table.organizationId),
+    index("pt_plan_item_next_due_at_idx").on(table.nextDueAt),
+  ],
+);
+
+export const proficiencyTestAuditLog = pgTable(
+  "proficiency_test_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    // Soft reference on purpose — NO FK. Append-only audit trail
+    // (ISO/IEC 17025): the row must survive deletion of the PT round.
+    proficiencyTestId: integer("proficiency_test_id").notNull(),
+    action: text("action").notNull(), // 'create', 'update', 'record_results', 'escalate', 'close'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("pt_audit_log_pt_id_idx").on(table.proficiencyTestId),
+    index("pt_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+/**
+ * Raw check/working-standard readings (17025 §7.7.1). First-class rows —
+ * not a jsonb array — so trends stay queryable and each point carries
+ * provenance (who, when, optionally which calibration job).
+ */
+export const checkStandardReading = pgTable(
+  "check_standard_reading",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "restrict",
+    }),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+
+    /** Measured point/parameter key, e.g. "100 g" — one chart per parameter. */
+    parameter: text("parameter").notNull(),
+    value: doublePrecision("value").notNull(),
+    uncertainty: doublePrecision("uncertainty"),
+    measuredAt: timestamp("measured_at").notNull(),
+    /** Set when the reading was captured during a calibration job. */
+    sourceJobId: integer("source_job_id"),
+
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("check_standard_reading_org_idx").on(table.organizationId),
+    index("check_standard_reading_standard_idx").on(
+      table.standardId,
+      table.parameter,
+      table.measuredAt,
+    ),
+  ],
+);
+
+/**
+ * I-MR is the default: check-standard monitoring usually yields one reading
+ * per run (n=1), which X-bar/R cannot chart (NIST/SEMATECH §6.3.2).
+ */
+export type SpcChartType = "i_mr" | "xbar_r" | "cusum" | "ewma";
+
+export type SpcStatus =
+  | "insufficient_data"
+  | "in_control"
+  | "trending"
+  | "out_of_control";
+
+/**
+ * Chart configuration. Limits are recomputed from the baseline window unless
+ * frozen values are provided.
+ */
+export type SpcChartParams = {
+  /** Number of initial in-control points used to estimate limits. */
+  baselineWindow?: number | null;
+  /** Frozen centerline/sigma — when set, recompute keeps them fixed. */
+  centerline?: number | null;
+  sigma?: number | null;
+  /** Subgroup size (X-bar/R only). */
+  subgroupSize?: number | null;
+  /** CUSUM reference value k and decision interval h, in sigma units. */
+  cusumK?: number | null;
+  cusumH?: number | null;
+  /** EWMA smoothing constant lambda and limit width in sigmas. */
+  ewmaLambda?: number | null;
+  ewmaK?: number | null;
+  /** Individually toggleable detection rules (see interval-analysis/spc). */
+  enabledRules?: string[] | null;
+};
+
+export type SpcRuleHit = {
+  rule: string;
+  severity: "trending" | "out_of_control";
+  /** Indices into the evaluated reading sequence (chronological). */
+  pointIndices: number[];
+  description: string;
+};
+
+export type SpcEvaluationLimits = {
+  centerline: number;
+  sigma: number;
+  ucl: number;
+  lcl: number;
+  /** Secondary (MR / R) chart limits when applicable. */
+  secondaryUcl?: number | null;
+  secondaryLcl?: number | null;
+};
+
+export type SpcEvaluation = {
+  engineVersion: string;
+  fingerprint: string;
+  status: SpcStatus;
+  sampleSize: number;
+  limits?: SpcEvaluationLimits | null;
+  ruleHits: SpcRuleHit[];
+  evaluatedAt?: string | null;
+};
+
+export const controlChart = pgTable(
+  "control_chart",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "restrict",
+    }),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    parameter: text("parameter").notNull(),
+
+    chartType: text("chart_type")
+      .$type<SpcChartType>()
+      .default("i_mr")
+      .notNull(),
+    params: jsonb("params").$type<SpcChartParams>(),
+
+    status: text("status")
+      .$type<SpcStatus>()
+      .default("insufficient_data")
+      .notNull(),
+    lastEvaluation: jsonb("last_evaluation").$type<SpcEvaluation>(),
+    lastEvaluatedAt: timestamp("last_evaluated_at"),
+
+    // Set when a signal is escalated to the quality workflow
+    ncId: integer("nc_id").references(() => nonConformance.id),
+    capaId: integer("capa_id").references(() => correctiveAction.id),
+
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("control_chart_organization_id_idx").on(table.organizationId),
+    index("control_chart_status_idx").on(table.status),
+    uniqueIndex("control_chart_standard_parameter_uidx").on(
+      table.standardId,
+      table.parameter,
+    ),
+  ],
+);
+
+export const controlChartAuditLog = pgTable(
+  "control_chart_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    // Soft reference on purpose — NO FK (append-only audit trail).
+    controlChartId: integer("control_chart_id").notNull(),
+    action: text("action").notNull(), // 'create', 'update', 'recalculate', 'escalate'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("control_chart_audit_log_chart_id_idx").on(table.controlChartId),
+    index("control_chart_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+export const proficiencyTestRelations = relations(
+  proficiencyTest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [proficiencyTest.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [proficiencyTest.unitId],
+      references: [organizationUnit.id],
+    }),
+    standard: one(referenceStandard, {
+      fields: [proficiencyTest.standardId],
+      references: [referenceStandard.id],
+    }),
+    capa: one(correctiveAction, {
+      fields: [proficiencyTest.capaId],
+      references: [correctiveAction.id],
+    }),
+    createdByUser: one(user, {
+      fields: [proficiencyTest.createdBy],
+      references: [user.id],
+      relationName: "proficiencyTestCreator",
+    }),
+    auditLogs: many(proficiencyTestAuditLog),
+  }),
+);
+
+export const proficiencyTestAuditLogRelations = relations(
+  proficiencyTestAuditLog,
+  ({ one }) => ({
+    proficiencyTest: one(proficiencyTest, {
+      fields: [proficiencyTestAuditLog.proficiencyTestId],
+      references: [proficiencyTest.id],
+    }),
+    performedByUser: one(user, {
+      fields: [proficiencyTestAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const ptPlanItemRelations = relations(ptPlanItem, ({ one }) => ({
+  organization: one(organization, {
+    fields: [ptPlanItem.organizationId],
+    references: [organization.id],
+  }),
+  unit: one(organizationUnit, {
+    fields: [ptPlanItem.unitId],
+    references: [organizationUnit.id],
+  }),
+  createdByUser: one(user, {
+    fields: [ptPlanItem.createdBy],
+    references: [user.id],
+    relationName: "ptPlanItemCreator",
+  }),
+}));
+
+export const checkStandardReadingRelations = relations(
+  checkStandardReading,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [checkStandardReading.organizationId],
+      references: [organization.id],
+    }),
+    standard: one(referenceStandard, {
+      fields: [checkStandardReading.standardId],
+      references: [referenceStandard.id],
+    }),
+    createdByUser: one(user, {
+      fields: [checkStandardReading.createdBy],
+      references: [user.id],
+      relationName: "checkStandardReadingCreator",
+    }),
+  }),
+);
+
+export const controlChartRelations = relations(
+  controlChart,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [controlChart.organizationId],
+      references: [organization.id],
+    }),
+    standard: one(referenceStandard, {
+      fields: [controlChart.standardId],
+      references: [referenceStandard.id],
+    }),
+    nonConformance: one(nonConformance, {
+      fields: [controlChart.ncId],
+      references: [nonConformance.id],
+    }),
+    capa: one(correctiveAction, {
+      fields: [controlChart.capaId],
+      references: [correctiveAction.id],
+    }),
+    createdByUser: one(user, {
+      fields: [controlChart.createdBy],
+      references: [user.id],
+      relationName: "controlChartCreator",
+    }),
+    auditLogs: many(controlChartAuditLog),
+  }),
+);
+
+export const controlChartAuditLogRelations = relations(
+  controlChartAuditLog,
+  ({ one }) => ({
+    controlChart: one(controlChart, {
+      fields: [controlChartAuditLog.controlChartId],
+      references: [controlChart.id],
+    }),
+    performedByUser: one(user, {
+      fields: [controlChartAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);

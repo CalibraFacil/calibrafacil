@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Shield01Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
-import type { CreateCapaInput } from '@calibra-facil/schemas/quality'
+import type { CapaCreateInput } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import { parseCapaForm, type CapaFormData } from '@/features/quality/forms'
@@ -168,7 +168,7 @@ export function NewCAPAPage() {
   )
 
   const createMutation = useMutation({
-    mutationFn: async (payload: CreateCapaInput) =>
+    mutationFn: async (payload: CapaCreateInput) =>
       calibraApi.capas.create<{ id: number; capaNumber: string }>(payload),
     onSuccess: (result) => {
       toast.success(`${result.capaNumber} criada com sucesso`)
@@ -193,7 +193,15 @@ export function NewCAPAPage() {
       return
     }
 
-    createMutation.mutate(parsed.data)
+    // proficiency_test / spc_signal CAPAs are opened automatically by the
+    // §7.7 escalation flows — they are not valid manual-creation sources.
+    const { source } = parsed.data
+    if (source === 'proficiency_test' || source === 'spc_signal') {
+      toast.error('Origem inválida para criação manual de CAPA')
+      return
+    }
+
+    createMutation.mutate({ ...parsed.data, source })
   }
 
   if (cloudOnlyUnavailable) {

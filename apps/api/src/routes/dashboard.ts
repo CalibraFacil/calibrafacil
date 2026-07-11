@@ -12,6 +12,9 @@ import {
   personnelCompetence,
   serviceOrder,
   calibrationRequest,
+  ptPlanItem,
+  proficiencyTest,
+  controlChart,
 } from "@calibra-facil/db/schema";
 import {
   withLabPermission,
@@ -106,6 +109,9 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
         competencesExpiringResult,
         competencesPendingEvaluationResult,
         dueSoonJobsResult,
+        ptPlanOverdueResult,
+        ptRoundsPendingResult,
+        spcSignalsResult,
       ] = await Promise.all([
         // 1. Pending calibrations (DRAFT + IN_PROGRESS + REVIEW)
         db
@@ -466,6 +472,39 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           )
           .orderBy(asc(calibrationJob.dueDate), desc(calibrationJob.createdAt))
           .limit(6),
+
+        // 22. PT participation-plan items past their §7.7.2 cycle (issue #60)
+        db
+          .select({ count: count() })
+          .from(ptPlanItem)
+          .where(
+            and(
+              eq(ptPlanItem.organizationId, memberData.organizationId),
+              lte(ptPlanItem.nextDueAt, now),
+            ),
+          ),
+
+        // 23. PT rounds awaiting the provider's final report
+        db
+          .select({ count: count() })
+          .from(proficiencyTest)
+          .where(
+            and(
+              eq(proficiencyTest.organizationId, memberData.organizationId),
+              eq(proficiencyTest.overallStatus, "pending"),
+            ),
+          ),
+
+        // 24. Control charts signalling (trending or out of control, §7.7.1)
+        db
+          .select({ count: count() })
+          .from(controlChart)
+          .where(
+            and(
+              eq(controlChart.organizationId, memberData.organizationId),
+              inArray(controlChart.status, ["trending", "out_of_control"]),
+            ),
+          ),
       ]);
       addServerTiming(c, "dashboard_db", dbStartedAt);
 
@@ -545,6 +584,10 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
         competencesExpiring: competencesExpiringResult[0]?.count ?? 0,
         competencesPendingEvaluation:
           competencesPendingEvaluationResult[0]?.count ?? 0,
+        // §7.7 validity-of-results signals (issue #60)
+        ptPlanOverdue: ptPlanOverdueResult[0]?.count ?? 0,
+        ptRoundsPending: ptRoundsPendingResult[0]?.count ?? 0,
+        spcChartsWithSignals: spcSignalsResult[0]?.count ?? 0,
         dueSoonJobs,
       });
     } catch (error) {

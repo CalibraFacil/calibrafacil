@@ -3,6 +3,7 @@ export * from "./commercial";
 export * from "./imports";
 export * from "./leads";
 export * from "./printing";
+export * from "./proficiency-tests";
 export * from "./quality";
 export * from "./reference-standard-kind-map";
 export * from "./service-orders";
@@ -2419,6 +2420,8 @@ export const CorrectiveActionSourceSchema = z.enum([
   "nc_detection",
   "external_audit",
   "management_review",
+  "proficiency_test",
+  "spc_signal",
 ]);
 
 export type CorrectiveActionSource = z.infer<

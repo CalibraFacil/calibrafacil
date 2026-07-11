@@ -58,6 +58,10 @@ import { createBillingApi } from "./modules/billing";
 import { createCalibrationRequestsApi } from "./modules/calibration-requests";
 import { createVisitsApi } from "./modules/visits";
 import { createCapasApi } from "./modules/capa";
+import {
+  createProficiencyTestsApi,
+  createSpcApi,
+} from "./modules/proficiency-tests";
 import { createCertificateNumberingApi } from "./modules/certificate-numbering";
 import { createCertificateTemplatesApi } from "./modules/certificate-templates";
 import { createCompetencesApi } from "./modules/competences";
@@ -813,6 +817,8 @@ export function createCloudApiClient(
     labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),
+    proficiencyTests: createProficiencyTestsApi(rawCloudClient),
+    spc: createSpcApi(rawCloudClient),
     certificateTemplates: createCertificateTemplatesApi(
       rawCloudClient,
       options,

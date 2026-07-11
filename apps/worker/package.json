@@ -25,6 +25,7 @@
     "@calibra-facil/certificate-xlsx-template": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
+    "@calibra-facil/interval-analysis": "workspace:^",
     "@calibra-facil/notifications": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",

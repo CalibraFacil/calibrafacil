@@ -181,6 +181,8 @@ export const CapaSourceSchema = z.enum([
   "nc_detection",
   "external_audit",
   "management_review",
+  "proficiency_test",
+  "spc_signal",
 ]);
 
 export const CapaTypeSchema = z.enum(["corrective", "preventive"]);

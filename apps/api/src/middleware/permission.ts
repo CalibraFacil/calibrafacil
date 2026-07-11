@@ -354,6 +354,8 @@ const UNIT_SCOPED_RESOURCES = new Set([
   "service_order",
   "non_conformance",
   "capa",
+  "proficiency_test",
+  "spc",
   "competence",
 ]);
 

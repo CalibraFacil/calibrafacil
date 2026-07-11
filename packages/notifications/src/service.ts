@@ -19,6 +19,7 @@ import {
   organizationUnit,
   customerGroup,
   portalExportJob,
+  ptPlanItem,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
@@ -2240,6 +2241,64 @@ export async function notifyStandardExpiring(
         type: "compliance",
         data: {
           itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify lab admins/owners when a proficiency-test participation-plan item is
+ * due (or overdue) for its scope part — ISO/IEC 17025 §7.7.2 / issue #60.
+ * Called by the scheduled sweep off ptPlanItem.nextDueAt.
+ */
+export async function notifyPtPlanDue(
+  planItemId: number,
+  organizationId: string,
+): Promise<void> {
+  const [planItem] = await db
+    .select({
+      scopePart: ptPlanItem.scopePart,
+      nextDueAt: ptPlanItem.nextDueAt,
+    })
+    .from(ptPlanItem)
+    .where(eq(ptPlanItem.id, planItemId))
+    .limit(1);
+
+  if (!planItem?.nextDueAt) return;
+
+  const daysRemaining = getDaysRemaining(planItem.nextDueAt);
+  const dueDate = formatDateBR(planItem.nextDueAt);
+  const overdue = daysRemaining < 0;
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "PT_PLAN_DUE",
+      priority: overdue ? "HIGH" : "MEDIUM",
+      title: overdue
+        ? "Participação em ensaio de proficiência vencida"
+        : "Participação em ensaio de proficiência vencendo",
+      message: overdue
+        ? `O escopo "${planItem.scopePart}" está com a participação em ensaio de proficiência vencida desde ${dueDate} (ISO 17025 §7.7.2).`
+        : `O escopo "${planItem.scopePart}" precisa de participação em ensaio de proficiência até ${dueDate} (${daysRemaining} dias).`,
+      relatedEntity: {
+        entityType: "pt_plan_item",
+        entityId: planItemId,
+      },
+      actionUrl: `/dashboard/proficiency-tests/plan`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName: `Ensaio de proficiência — ${planItem.scopePart}`,
           dueDate,
           daysRemaining,
         },

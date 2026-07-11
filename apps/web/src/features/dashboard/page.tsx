@@ -280,7 +280,10 @@ export function DashboardIndex() {
                   </Link>
                   {index < PIPELINE.length - 1 && (
                     <span className="hidden shrink-0 self-center text-muted-foreground/40 sm:block">
-                      <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+                      <HugeiconsIcon
+                        icon={ArrowRight02Icon}
+                        className="size-4"
+                      />
                     </span>
                   )}
                 </div>
@@ -324,6 +327,25 @@ export function DashboardIndex() {
                   tone: 'info',
                   to: '/dashboard/capa',
                   search: { status: 'OPEN' },
+                },
+                {
+                  label: 'Plano EP vencido',
+                  value: data.ptPlanOverdue,
+                  tone: 'critical',
+                  to: '/dashboard/proficiency-tests/plan',
+                },
+                {
+                  label: 'Ensaios EP pendentes',
+                  value: data.ptRoundsPending,
+                  tone: 'info',
+                  to: '/dashboard/proficiency-tests',
+                  search: { status: 'pending' },
+                },
+                {
+                  label: 'Sinais CEP',
+                  value: data.spcChartsWithSignals,
+                  tone: 'warning',
+                  to: '/dashboard/spc',
                 },
               ]}
             />
@@ -691,11 +713,7 @@ function formatDueDate(dateString: string | null): string {
   if (!dateString) return '—'
   const due = new Date(dateString)
   const today = new Date()
-  const startOfDue = new Date(
-    due.getFullYear(),
-    due.getMonth(),
-    due.getDate(),
-  )
+  const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate())
   const startOfToday = new Date(
     today.getFullYear(),
     today.getMonth(),

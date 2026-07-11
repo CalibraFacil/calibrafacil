@@ -25,10 +25,12 @@ import { Route as DashboardCertificateTemplatesRouteImport } from './routes/dash
 import { Route as CheckoutTokenRouteImport } from './routes/checkout/$token'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
+import { Route as DashboardSpcRouteRouteImport } from './routes/dashboard/spc/route'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
 import { Route as DashboardServicesRouteRouteImport } from './routes/dashboard/services/route'
 import { Route as DashboardServiceOrdersRouteRouteImport } from './routes/dashboard/service-orders/route'
 import { Route as DashboardRequestsRouteRouteImport } from './routes/dashboard/requests/route'
+import { Route as DashboardProficiencyTestsRouteRouteImport } from './routes/dashboard/proficiency-tests/route'
 import { Route as DashboardPersonnelRouteRouteImport } from './routes/dashboard/personnel/route'
 import { Route as DashboardNcRouteRouteImport } from './routes/dashboard/nc/route'
 import { Route as DashboardMethodsRouteRouteImport } from './routes/dashboard/methods/route'
@@ -41,9 +43,11 @@ import { Route as DashboardCapaRouteRouteImport } from './routes/dashboard/capa/
 import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
 import { Route as DashboardVisitsIndexRouteImport } from './routes/dashboard/visits/index'
 import { Route as DashboardStandardsIndexRouteImport } from './routes/dashboard/standards/index'
+import { Route as DashboardSpcIndexRouteImport } from './routes/dashboard/spc/index'
 import { Route as DashboardServicesIndexRouteImport } from './routes/dashboard/services/index'
 import { Route as DashboardServiceOrdersIndexRouteImport } from './routes/dashboard/service-orders/index'
 import { Route as DashboardRequestsIndexRouteImport } from './routes/dashboard/requests/index'
+import { Route as DashboardProficiencyTestsIndexRouteImport } from './routes/dashboard/proficiency-tests/index'
 import { Route as DashboardPersonnelIndexRouteImport } from './routes/dashboard/personnel/index'
 import { Route as DashboardNcIndexRouteImport } from './routes/dashboard/nc/index'
 import { Route as DashboardMethodsIndexRouteImport } from './routes/dashboard/methods/index'
@@ -80,6 +84,8 @@ import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashbo
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
 import { Route as DashboardServiceOrdersNewRouteImport } from './routes/dashboard/service-orders/new'
 import { Route as DashboardServiceOrdersIdRouteImport } from './routes/dashboard/service-orders/$id'
+import { Route as DashboardProficiencyTestsPlanRouteImport } from './routes/dashboard/proficiency-tests/plan'
+import { Route as DashboardProficiencyTestsNewRouteImport } from './routes/dashboard/proficiency-tests/new'
 import { Route as DashboardPersonnelNewRouteImport } from './routes/dashboard/personnel/new'
 import { Route as DashboardNcNewRouteImport } from './routes/dashboard/nc/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
@@ -106,8 +112,10 @@ import { Route as DashboardClientsIdRouteRouteImport } from './routes/dashboard/
 import { Route as DashboardAssetsIdRouteRouteImport } from './routes/dashboard/assets/$id/route'
 import { Route as DashboardVisitsIdIndexRouteImport } from './routes/dashboard/visits/$id/index'
 import { Route as DashboardStandardsIdIndexRouteImport } from './routes/dashboard/standards/$id/index'
+import { Route as DashboardSpcIdIndexRouteImport } from './routes/dashboard/spc/$id/index'
 import { Route as DashboardServicesIdIndexRouteImport } from './routes/dashboard/services/$id/index'
 import { Route as DashboardRequestsIdIndexRouteImport } from './routes/dashboard/requests/$id/index'
+import { Route as DashboardProficiencyTestsIdIndexRouteImport } from './routes/dashboard/proficiency-tests/$id/index'
 import { Route as DashboardPersonnelIdIndexRouteImport } from './routes/dashboard/personnel/$id/index'
 import { Route as DashboardNcIdIndexRouteImport } from './routes/dashboard/nc/$id/index'
 import { Route as DashboardMethodsIdIndexRouteImport } from './routes/dashboard/methods/$id/index'
@@ -226,6 +234,11 @@ const DashboardStandardsRouteRoute = DashboardStandardsRouteRouteImport.update({
   path: '/standards',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardSpcRouteRoute = DashboardSpcRouteRouteImport.update({
+  id: '/spc',
+  path: '/spc',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -247,6 +260,12 @@ const DashboardRequestsRouteRoute = DashboardRequestsRouteRouteImport.update({
   path: '/requests',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardProficiencyTestsRouteRoute =
+  DashboardProficiencyTestsRouteRouteImport.update({
+    id: '/proficiency-tests',
+    path: '/proficiency-tests',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 const DashboardPersonnelRouteRoute = DashboardPersonnelRouteRouteImport.update({
   id: '/personnel',
   path: '/personnel',
@@ -307,6 +326,11 @@ const DashboardStandardsIndexRoute = DashboardStandardsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardStandardsRouteRoute,
 } as any)
+const DashboardSpcIndexRoute = DashboardSpcIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardSpcRouteRoute,
+} as any)
 const DashboardServicesIndexRoute = DashboardServicesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -323,6 +347,12 @@ const DashboardRequestsIndexRoute = DashboardRequestsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRequestsRouteRoute,
 } as any)
+const DashboardProficiencyTestsIndexRoute =
+  DashboardProficiencyTestsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardProficiencyTestsRouteRoute,
+  } as any)
 const DashboardPersonnelIndexRoute = DashboardPersonnelIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -525,6 +555,18 @@ const DashboardServiceOrdersIdRoute =
     path: '/$id',
     getParentRoute: () => DashboardServiceOrdersRouteRoute,
   } as any)
+const DashboardProficiencyTestsPlanRoute =
+  DashboardProficiencyTestsPlanRouteImport.update({
+    id: '/plan',
+    path: '/plan',
+    getParentRoute: () => DashboardProficiencyTestsRouteRoute,
+  } as any)
+const DashboardProficiencyTestsNewRoute =
+  DashboardProficiencyTestsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => DashboardProficiencyTestsRouteRoute,
+  } as any)
 const DashboardPersonnelNewRoute = DashboardPersonnelNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -669,6 +711,11 @@ const DashboardStandardsIdIndexRoute =
     path: '/$id/',
     getParentRoute: () => DashboardStandardsRouteRoute,
   } as any)
+const DashboardSpcIdIndexRoute = DashboardSpcIdIndexRouteImport.update({
+  id: '/$id/',
+  path: '/$id/',
+  getParentRoute: () => DashboardSpcRouteRoute,
+} as any)
 const DashboardServicesIdIndexRoute =
   DashboardServicesIdIndexRouteImport.update({
     id: '/$id/',
@@ -680,6 +727,12 @@ const DashboardRequestsIdIndexRoute =
     id: '/$id/',
     path: '/$id/',
     getParentRoute: () => DashboardRequestsRouteRoute,
+  } as any)
+const DashboardProficiencyTestsIdIndexRoute =
+  DashboardProficiencyTestsIdIndexRouteImport.update({
+    id: '/$id/',
+    path: '/$id/',
+    getParentRoute: () => DashboardProficiencyTestsRouteRoute,
   } as any)
 const DashboardPersonnelIdIndexRoute =
   DashboardPersonnelIdIndexRouteImport.update({
@@ -897,10 +950,12 @@ export interface FileRoutesByFullPath {
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
   '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/personnel': typeof DashboardPersonnelRouteRouteWithChildren
+  '/dashboard/proficiency-tests': typeof DashboardProficiencyTestsRouteRouteWithChildren
   '/dashboard/requests': typeof DashboardRequestsRouteRouteWithChildren
   '/dashboard/service-orders': typeof DashboardServiceOrdersRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
+  '/dashboard/spc': typeof DashboardSpcRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/checkout/$token': typeof CheckoutTokenRoute
@@ -935,6 +990,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
+  '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
@@ -971,9 +1028,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/methods/': typeof DashboardMethodsIndexRoute
   '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/personnel/': typeof DashboardPersonnelIndexRoute
+  '/dashboard/proficiency-tests/': typeof DashboardProficiencyTestsIndexRoute
   '/dashboard/requests/': typeof DashboardRequestsIndexRoute
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
+  '/dashboard/spc/': typeof DashboardSpcIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
@@ -1007,8 +1066,10 @@ export interface FileRoutesByFullPath {
   '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
   '/dashboard/personnel/$id/': typeof DashboardPersonnelIdIndexRoute
+  '/dashboard/proficiency-tests/$id/': typeof DashboardProficiencyTestsIdIndexRoute
   '/dashboard/requests/$id/': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
+  '/dashboard/spc/$id/': typeof DashboardSpcIdIndexRoute
   '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
   '/dashboard/visits/$id/': typeof DashboardVisitsIdIndexRoute
   '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
@@ -1052,6 +1113,8 @@ export interface FileRoutesByTo {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
+  '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
@@ -1088,9 +1151,11 @@ export interface FileRoutesByTo {
   '/dashboard/methods': typeof DashboardMethodsIndexRoute
   '/dashboard/nc': typeof DashboardNcIndexRoute
   '/dashboard/personnel': typeof DashboardPersonnelIndexRoute
+  '/dashboard/proficiency-tests': typeof DashboardProficiencyTestsIndexRoute
   '/dashboard/requests': typeof DashboardRequestsIndexRoute
   '/dashboard/service-orders': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services': typeof DashboardServicesIndexRoute
+  '/dashboard/spc': typeof DashboardSpcIndexRoute
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
   '/dashboard/visits': typeof DashboardVisitsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
@@ -1123,8 +1188,10 @@ export interface FileRoutesByTo {
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdIndexRoute
+  '/dashboard/proficiency-tests/$id': typeof DashboardProficiencyTestsIdIndexRoute
   '/dashboard/requests/$id': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id': typeof DashboardServicesIdIndexRoute
+  '/dashboard/spc/$id': typeof DashboardSpcIdIndexRoute
   '/dashboard/standards/$id': typeof DashboardStandardsIdIndexRoute
   '/dashboard/visits/$id': typeof DashboardVisitsIdIndexRoute
   '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
@@ -1150,10 +1217,12 @@ export interface FileRoutesById {
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
   '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/personnel': typeof DashboardPersonnelRouteRouteWithChildren
+  '/dashboard/proficiency-tests': typeof DashboardProficiencyTestsRouteRouteWithChildren
   '/dashboard/requests': typeof DashboardRequestsRouteRouteWithChildren
   '/dashboard/service-orders': typeof DashboardServiceOrdersRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
+  '/dashboard/spc': typeof DashboardSpcRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/checkout/$token': typeof CheckoutTokenRoute
@@ -1188,6 +1257,8 @@ export interface FileRoutesById {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
+  '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
@@ -1224,9 +1295,11 @@ export interface FileRoutesById {
   '/dashboard/methods/': typeof DashboardMethodsIndexRoute
   '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/personnel/': typeof DashboardPersonnelIndexRoute
+  '/dashboard/proficiency-tests/': typeof DashboardProficiencyTestsIndexRoute
   '/dashboard/requests/': typeof DashboardRequestsIndexRoute
   '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
+  '/dashboard/spc/': typeof DashboardSpcIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
@@ -1260,8 +1333,10 @@ export interface FileRoutesById {
   '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
   '/dashboard/personnel/$id/': typeof DashboardPersonnelIdIndexRoute
+  '/dashboard/proficiency-tests/$id/': typeof DashboardProficiencyTestsIdIndexRoute
   '/dashboard/requests/$id/': typeof DashboardRequestsIdIndexRoute
   '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
+  '/dashboard/spc/$id/': typeof DashboardSpcIdIndexRoute
   '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
   '/dashboard/visits/$id/': typeof DashboardVisitsIdIndexRoute
   '/dashboard/clients/groups/$groupId/gestor': typeof DashboardClientsGroupsGroupIdGestorRoute
@@ -1288,10 +1363,12 @@ export interface FileRouteTypes {
     | '/dashboard/methods'
     | '/dashboard/nc'
     | '/dashboard/personnel'
+    | '/dashboard/proficiency-tests'
     | '/dashboard/requests'
     | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/settings'
+    | '/dashboard/spc'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/checkout/$token'
@@ -1326,6 +1403,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/proficiency-tests/new'
+    | '/dashboard/proficiency-tests/plan'
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
@@ -1362,9 +1441,11 @@ export interface FileRouteTypes {
     | '/dashboard/methods/'
     | '/dashboard/nc/'
     | '/dashboard/personnel/'
+    | '/dashboard/proficiency-tests/'
     | '/dashboard/requests/'
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
+    | '/dashboard/spc/'
     | '/dashboard/standards/'
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
@@ -1398,8 +1479,10 @@ export interface FileRouteTypes {
     | '/dashboard/methods/$id/'
     | '/dashboard/nc/$id/'
     | '/dashboard/personnel/$id/'
+    | '/dashboard/proficiency-tests/$id/'
     | '/dashboard/requests/$id/'
     | '/dashboard/services/$id/'
+    | '/dashboard/spc/$id/'
     | '/dashboard/standards/$id/'
     | '/dashboard/visits/$id/'
     | '/dashboard/clients/groups/$groupId/gestor'
@@ -1443,6 +1526,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/proficiency-tests/new'
+    | '/dashboard/proficiency-tests/plan'
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
@@ -1479,9 +1564,11 @@ export interface FileRouteTypes {
     | '/dashboard/methods'
     | '/dashboard/nc'
     | '/dashboard/personnel'
+    | '/dashboard/proficiency-tests'
     | '/dashboard/requests'
     | '/dashboard/service-orders'
     | '/dashboard/services'
+    | '/dashboard/spc'
     | '/dashboard/standards'
     | '/dashboard/visits'
     | '/dashboard/assets/$id/edit'
@@ -1514,8 +1601,10 @@ export interface FileRouteTypes {
     | '/dashboard/methods/$id'
     | '/dashboard/nc/$id'
     | '/dashboard/personnel/$id'
+    | '/dashboard/proficiency-tests/$id'
     | '/dashboard/requests/$id'
     | '/dashboard/services/$id'
+    | '/dashboard/spc/$id'
     | '/dashboard/standards/$id'
     | '/dashboard/visits/$id'
     | '/dashboard/clients/groups/$groupId/gestor'
@@ -1540,10 +1629,12 @@ export interface FileRouteTypes {
     | '/dashboard/methods'
     | '/dashboard/nc'
     | '/dashboard/personnel'
+    | '/dashboard/proficiency-tests'
     | '/dashboard/requests'
     | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/settings'
+    | '/dashboard/spc'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/checkout/$token'
@@ -1578,6 +1669,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/proficiency-tests/new'
+    | '/dashboard/proficiency-tests/plan'
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
@@ -1614,9 +1707,11 @@ export interface FileRouteTypes {
     | '/dashboard/methods/'
     | '/dashboard/nc/'
     | '/dashboard/personnel/'
+    | '/dashboard/proficiency-tests/'
     | '/dashboard/requests/'
     | '/dashboard/service-orders/'
     | '/dashboard/services/'
+    | '/dashboard/spc/'
     | '/dashboard/standards/'
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
@@ -1650,8 +1745,10 @@ export interface FileRouteTypes {
     | '/dashboard/methods/$id/'
     | '/dashboard/nc/$id/'
     | '/dashboard/personnel/$id/'
+    | '/dashboard/proficiency-tests/$id/'
     | '/dashboard/requests/$id/'
     | '/dashboard/services/$id/'
+    | '/dashboard/spc/$id/'
     | '/dashboard/standards/$id/'
     | '/dashboard/visits/$id/'
     | '/dashboard/clients/groups/$groupId/gestor'
@@ -1788,6 +1885,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardStandardsRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/spc': {
+      id: '/dashboard/spc'
+      path: '/spc'
+      fullPath: '/dashboard/spc'
+      preLoaderRoute: typeof DashboardSpcRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/settings': {
       id: '/dashboard/settings'
       path: '/settings'
@@ -1814,6 +1918,13 @@ declare module '@tanstack/react-router' {
       path: '/requests'
       fullPath: '/dashboard/requests'
       preLoaderRoute: typeof DashboardRequestsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/proficiency-tests': {
+      id: '/dashboard/proficiency-tests'
+      path: '/proficiency-tests'
+      fullPath: '/dashboard/proficiency-tests'
+      preLoaderRoute: typeof DashboardProficiencyTestsRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/personnel': {
@@ -1900,6 +2011,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardStandardsIndexRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
     }
+    '/dashboard/spc/': {
+      id: '/dashboard/spc/'
+      path: '/'
+      fullPath: '/dashboard/spc/'
+      preLoaderRoute: typeof DashboardSpcIndexRouteImport
+      parentRoute: typeof DashboardSpcRouteRoute
+    }
     '/dashboard/services/': {
       id: '/dashboard/services/'
       path: '/'
@@ -1920,6 +2038,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/requests/'
       preLoaderRoute: typeof DashboardRequestsIndexRouteImport
       parentRoute: typeof DashboardRequestsRouteRoute
+    }
+    '/dashboard/proficiency-tests/': {
+      id: '/dashboard/proficiency-tests/'
+      path: '/'
+      fullPath: '/dashboard/proficiency-tests/'
+      preLoaderRoute: typeof DashboardProficiencyTestsIndexRouteImport
+      parentRoute: typeof DashboardProficiencyTestsRouteRoute
     }
     '/dashboard/personnel/': {
       id: '/dashboard/personnel/'
@@ -2173,6 +2298,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServiceOrdersIdRouteImport
       parentRoute: typeof DashboardServiceOrdersRouteRoute
     }
+    '/dashboard/proficiency-tests/plan': {
+      id: '/dashboard/proficiency-tests/plan'
+      path: '/plan'
+      fullPath: '/dashboard/proficiency-tests/plan'
+      preLoaderRoute: typeof DashboardProficiencyTestsPlanRouteImport
+      parentRoute: typeof DashboardProficiencyTestsRouteRoute
+    }
+    '/dashboard/proficiency-tests/new': {
+      id: '/dashboard/proficiency-tests/new'
+      path: '/new'
+      fullPath: '/dashboard/proficiency-tests/new'
+      preLoaderRoute: typeof DashboardProficiencyTestsNewRouteImport
+      parentRoute: typeof DashboardProficiencyTestsRouteRoute
+    }
     '/dashboard/personnel/new': {
       id: '/dashboard/personnel/new'
       path: '/new'
@@ -2355,6 +2494,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardStandardsIdIndexRouteImport
       parentRoute: typeof DashboardStandardsRouteRoute
     }
+    '/dashboard/spc/$id/': {
+      id: '/dashboard/spc/$id/'
+      path: '/$id'
+      fullPath: '/dashboard/spc/$id/'
+      preLoaderRoute: typeof DashboardSpcIdIndexRouteImport
+      parentRoute: typeof DashboardSpcRouteRoute
+    }
     '/dashboard/services/$id/': {
       id: '/dashboard/services/$id/'
       path: '/$id'
@@ -2368,6 +2514,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/requests/$id/'
       preLoaderRoute: typeof DashboardRequestsIdIndexRouteImport
       parentRoute: typeof DashboardRequestsRouteRoute
+    }
+    '/dashboard/proficiency-tests/$id/': {
+      id: '/dashboard/proficiency-tests/$id/'
+      path: '/$id'
+      fullPath: '/dashboard/proficiency-tests/$id/'
+      preLoaderRoute: typeof DashboardProficiencyTestsIdIndexRouteImport
+      parentRoute: typeof DashboardProficiencyTestsRouteRoute
     }
     '/dashboard/personnel/$id/': {
       id: '/dashboard/personnel/$id/'
@@ -2932,6 +3085,27 @@ const DashboardPersonnelRouteRouteWithChildren =
     DashboardPersonnelRouteRouteChildren,
   )
 
+interface DashboardProficiencyTestsRouteRouteChildren {
+  DashboardProficiencyTestsNewRoute: typeof DashboardProficiencyTestsNewRoute
+  DashboardProficiencyTestsPlanRoute: typeof DashboardProficiencyTestsPlanRoute
+  DashboardProficiencyTestsIndexRoute: typeof DashboardProficiencyTestsIndexRoute
+  DashboardProficiencyTestsIdIndexRoute: typeof DashboardProficiencyTestsIdIndexRoute
+}
+
+const DashboardProficiencyTestsRouteRouteChildren: DashboardProficiencyTestsRouteRouteChildren =
+  {
+    DashboardProficiencyTestsNewRoute: DashboardProficiencyTestsNewRoute,
+    DashboardProficiencyTestsPlanRoute: DashboardProficiencyTestsPlanRoute,
+    DashboardProficiencyTestsIndexRoute: DashboardProficiencyTestsIndexRoute,
+    DashboardProficiencyTestsIdIndexRoute:
+      DashboardProficiencyTestsIdIndexRoute,
+  }
+
+const DashboardProficiencyTestsRouteRouteWithChildren =
+  DashboardProficiencyTestsRouteRoute._addFileChildren(
+    DashboardProficiencyTestsRouteRouteChildren,
+  )
+
 interface DashboardRequestsRouteRouteChildren {
   DashboardRequestsIndexRoute: typeof DashboardRequestsIndexRoute
   DashboardRequestsIdIndexRoute: typeof DashboardRequestsIdIndexRoute
@@ -3058,6 +3232,19 @@ const DashboardSettingsRouteRouteWithChildren =
     DashboardSettingsRouteRouteChildren,
   )
 
+interface DashboardSpcRouteRouteChildren {
+  DashboardSpcIndexRoute: typeof DashboardSpcIndexRoute
+  DashboardSpcIdIndexRoute: typeof DashboardSpcIdIndexRoute
+}
+
+const DashboardSpcRouteRouteChildren: DashboardSpcRouteRouteChildren = {
+  DashboardSpcIndexRoute: DashboardSpcIndexRoute,
+  DashboardSpcIdIndexRoute: DashboardSpcIdIndexRoute,
+}
+
+const DashboardSpcRouteRouteWithChildren =
+  DashboardSpcRouteRoute._addFileChildren(DashboardSpcRouteRouteChildren)
+
 interface DashboardStandardsRouteRouteChildren {
   DashboardStandardsCompositionProfilesRoute: typeof DashboardStandardsCompositionProfilesRoute
   DashboardStandardsNewRoute: typeof DashboardStandardsNewRoute
@@ -3092,10 +3279,12 @@ interface DashboardRouteRouteChildren {
   DashboardMethodsRouteRoute: typeof DashboardMethodsRouteRouteWithChildren
   DashboardNcRouteRoute: typeof DashboardNcRouteRouteWithChildren
   DashboardPersonnelRouteRoute: typeof DashboardPersonnelRouteRouteWithChildren
+  DashboardProficiencyTestsRouteRoute: typeof DashboardProficiencyTestsRouteRouteWithChildren
   DashboardRequestsRouteRoute: typeof DashboardRequestsRouteRouteWithChildren
   DashboardServiceOrdersRouteRoute: typeof DashboardServiceOrdersRouteRouteWithChildren
   DashboardServicesRouteRoute: typeof DashboardServicesRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
+  DashboardSpcRouteRoute: typeof DashboardSpcRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
   DashboardCertificateTemplatesRoute: typeof DashboardCertificateTemplatesRoute
   DashboardCustomerSuccessRoute: typeof DashboardCustomerSuccessRoute
@@ -3117,11 +3306,14 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardMethodsRouteRoute: DashboardMethodsRouteRouteWithChildren,
   DashboardNcRouteRoute: DashboardNcRouteRouteWithChildren,
   DashboardPersonnelRouteRoute: DashboardPersonnelRouteRouteWithChildren,
+  DashboardProficiencyTestsRouteRoute:
+    DashboardProficiencyTestsRouteRouteWithChildren,
   DashboardRequestsRouteRoute: DashboardRequestsRouteRouteWithChildren,
   DashboardServiceOrdersRouteRoute:
     DashboardServiceOrdersRouteRouteWithChildren,
   DashboardServicesRouteRoute: DashboardServicesRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
+  DashboardSpcRouteRoute: DashboardSpcRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,
   DashboardCertificateTemplatesRoute: DashboardCertificateTemplatesRoute,
   DashboardCustomerSuccessRoute: DashboardCustomerSuccessRoute,

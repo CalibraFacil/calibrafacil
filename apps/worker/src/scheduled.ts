@@ -18,6 +18,7 @@ import {
   notifyCompetenceExpiring,
   notifyJobOverdue,
   notifySigningCertificateExpiring,
+  notifyPtPlanDue,
   notifyStandardExpired,
   notifyStandardExpiring,
   notifyVisitReminder,
@@ -277,6 +278,53 @@ async function checkStandardsExpiring(
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
     ORDER BY rs.next_calibration_date ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+interface PtPlanDueRow {
+  id: number;
+  scope_part: string;
+  organization_id: string;
+  next_due_at: Date;
+}
+
+/**
+ * Check for proficiency-test participation-plan items due within 90 days or
+ * already overdue (ISO/IEC 17025 §7.7.2, issue #60).
+ *
+ * Duplicate prevention: plan items are notified once per 30-day window —
+ * the cycle is measured in years, so a monthly reminder is enough.
+ */
+async function checkPtPlanDue(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<PtPlanDueRow[]> {
+  const result = await client.query<PtPlanDueRow>(
+    `
+    SELECT
+      pp.id,
+      pp.scope_part,
+      pp.organization_id,
+      pp.next_due_at
+    FROM pt_plan_item pp
+    WHERE pp.next_due_at IS NOT NULL
+      AND pp.next_due_at <= CURRENT_DATE + INTERVAL '90 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'pt_plan_item'
+          AND sn.entity_id = pp.id
+          AND sn.type = 'PT_PLAN_DUE'
+          AND sn.lead_time_days = 90
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '30 days'
+      )
+    ORDER BY pp.next_due_at ASC
     LIMIT $1 OFFSET $2
     `,
     [batchSize, offset],
@@ -656,6 +704,7 @@ export async function processScheduledNotifications(
   visitsProcessed: number;
   signingCertsProcessed: number;
   accreditationsProcessed: number;
+  ptPlanItemsProcessed: number;
 }> {
   let assetsProcessed = 0;
   let legalVerificationsProcessed = 0;
@@ -667,6 +716,7 @@ export async function processScheduledNotifications(
   let visitsProcessed = 0;
   let signingCertsProcessed = 0;
   let accreditationsProcessed = 0;
+  let ptPlanItemsProcessed = 0;
 
   await withDbClient(env, async (client) => {
     // 1. Process assets due for recalibration (with pagination)
@@ -1177,6 +1227,44 @@ export async function processScheduledNotifications(
 
       accreditationOffset += accreditationBatch.length;
     } while (accreditationBatch.length === BATCH_SIZE);
+
+    // 11. Process proficiency-test participation-plan due dates (issue #60)
+    let ptPlanOffset = 0;
+    let ptPlanBatch: PtPlanDueRow[];
+
+    do {
+      ptPlanBatch = await checkPtPlanDue(client, ptPlanOffset, BATCH_SIZE);
+      if (ptPlanBatch.length > 0) {
+        console.log(
+          `[Scheduled] Processing ${ptPlanBatch.length} PT plan items (offset ${ptPlanOffset})`,
+        );
+      }
+
+      let batchFailures = 0;
+      for (const planItem of ptPlanBatch) {
+        try {
+          await notifyPtPlanDue(planItem.id, planItem.organization_id);
+
+          await recordScheduledNotification(client, {
+            organizationId: planItem.organization_id,
+            type: "PT_PLAN_DUE",
+            entityType: "pt_plan_item",
+            entityId: planItem.id,
+            scheduledFor: planItem.next_due_at,
+            leadTimeDays: 90,
+          });
+
+          ptPlanItemsProcessed++;
+        } catch (error) {
+          batchFailures++;
+          console.error(
+            `[Scheduled] Error processing PT plan item ${planItem.id}:`,
+            error,
+          );
+        }
+      }
+      ptPlanOffset += batchFailures;
+    } while (ptPlanBatch.length === BATCH_SIZE);
   });
 
   return {
@@ -1190,6 +1278,7 @@ export async function processScheduledNotifications(
     visitsProcessed,
     signingCertsProcessed,
     accreditationsProcessed,
+    ptPlanItemsProcessed,
   };
 }
 

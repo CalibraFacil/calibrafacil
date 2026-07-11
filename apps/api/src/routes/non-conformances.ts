@@ -24,14 +24,9 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import {
-  createNonConformanceRecord,
-  isUniqueViolation,
-} from "../lib/non-conformances";
+import { createNonConformanceRecord } from "../lib/non-conformances";
+import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { eq, and, or, ilike, desc, count, gte, lte, sql } from "drizzle-orm";
-
-// Retry budget for the sequential CAPA-number generation below.
-const MAX_SEQ_RETRIES = 3;
 
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
@@ -645,69 +640,30 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Generate CAPA number with retry on unique constraint violation
-      let newCapa: typeof correctiveAction.$inferSelect | null = null;
-      for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-        const year = new Date().getFullYear();
-        const [lastCapa] = await db
-          .select({ capaNumber: correctiveAction.capaNumber })
-          .from(correctiveAction)
-          .where(
-            and(
-              eq(correctiveAction.organizationId, member.organizationId),
-              ilike(correctiveAction.capaNumber, `CAPA-${year}-%`),
-            ),
-          )
-          .orderBy(desc(correctiveAction.capaNumber))
-          .limit(1);
-
-        let nextSeq = 1;
-        if (lastCapa) {
-          const parts = lastCapa.capaNumber.split("-");
-          nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
-        }
-        const capaNumber = `CAPA-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-        try {
-          const [inserted] = await db
-            .insert(correctiveAction)
-            .values({
-              capaNumber,
-              organizationId: member.organizationId,
-              title: `CAPA originada da ${existing.ncNumber}`,
-              description: existing.description,
-              source: "nc_detection",
-              // #426 Phase 2: OOT provenance — assessors can trace a CAPA
-              // back to the out-of-tolerance event (and its trigger) from
-              // the reference alone.
-              sourceReference:
-                existing.type === "out_of_tolerance"
-                  ? `${existing.ncNumber} (fora de tolerância${
-                      existing.triggerSource === "standard_recall"
-                        ? " — recall de padrão"
-                        : ""
-                    })`
-                  : existing.ncNumber,
-              detectionDate: existing.detectedAt,
-              rootCauseAnalysis: input.rootCauseAnalysis || null,
-              actionPlan: input.actionPlan || null,
-              responsibleId: input.responsibleId || null,
-              dueDate: input.dueDate ? new Date(input.dueDate) : null,
-              status: "OPEN",
-              createdBy: session.user.id,
-            })
-            .returning();
-          newCapa = inserted ?? null;
-          break;
-        } catch (err) {
-          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1)
-            throw err;
-        }
-      }
-
-      if (!newCapa) {
-        return c.json({ error: "Falha ao criar CAPA" }, 500);
-      }
+      const newCapa = await createCorrectiveActionRecord({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        title: `CAPA originada da ${existing.ncNumber}`,
+        description: existing.description,
+        source: "nc_detection",
+        // #426 Phase 2: OOT provenance — assessors can trace a CAPA
+        // back to the out-of-tolerance event (and its trigger) from
+        // the reference alone.
+        sourceReference:
+          existing.type === "out_of_tolerance"
+            ? `${existing.ncNumber} (fora de tolerância${
+                existing.triggerSource === "standard_recall"
+                  ? " — recall de padrão"
+                  : ""
+              })`
+            : existing.ncNumber,
+        detectionDate: existing.detectedAt,
+        rootCauseAnalysis: input.rootCauseAnalysis || null,
+        actionPlan: input.actionPlan || null,
+        responsibleId: input.responsibleId || null,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
 
       // Link NC to CAPA
       await db
