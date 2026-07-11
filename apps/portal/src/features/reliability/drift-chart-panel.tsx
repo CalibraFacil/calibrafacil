@@ -1,7 +1,21 @@
-import { cn } from "@/lib/utils";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import { formatDate } from "@/lib/format";
 import { Panel, PanelHeader } from "@/components/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { useDriftSeries } from "./queries";
 import type { AssetDriftSeries, DriftPointSeries } from "./types";
 
@@ -11,18 +25,12 @@ const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
 /** How many matched-point series the chart shows at most. */
 const MAX_SERIES = 3;
 
-const SERIES_STROKE = [
-  "stroke-foreground/70",
-  "stroke-primary/70",
-  "stroke-muted-foreground/70",
+const SERIES_COLORS = [
+  "var(--foreground)",
+  "var(--primary)",
+  "var(--muted-foreground)",
 ];
-const SERIES_FILL = [
-  "fill-foreground/70",
-  "fill-primary/70",
-  "fill-muted-foreground/70",
-];
-const DRIFTING_STROKE = "stroke-[var(--critical)]";
-const DRIFTING_FILL = "fill-[var(--critical)]";
+const DRIFTING_COLOR = "var(--critical)";
 
 /**
  * Per-point as-found margin over time toward the tolerance limit (margin 0),
@@ -61,7 +69,8 @@ export function DriftChartPanel({ assetId }: { assetId: number }) {
 
 type PlottedSeries = {
   entry: DriftPointSeries;
-  colorIndex: number;
+  color: string;
+  dataKey: string;
   points: Array<{ timeMs: number; margin: number }>;
 };
 
@@ -75,7 +84,11 @@ function DriftChart({ data }: { data: AssetDriftSeries }) {
     .slice(0, MAX_SERIES)
     .map((entry, colorIndex) => ({
       entry,
-      colorIndex,
+      color: entry.drifting
+        ? DRIFTING_COLOR
+        : (SERIES_COLORS[colorIndex % SERIES_COLORS.length] ??
+          "var(--foreground)"),
+      dataKey: `ponto${entry.pointIndex + 1}`,
       points: entry.series.map((point) => ({
         timeMs: new Date(point.approvedAt).getTime(),
         margin: point.margin,
@@ -98,150 +111,157 @@ function DriftChart({ data }: { data: AssetDriftSeries }) {
     return entry.regression.intercept + entry.regression.slope * t;
   };
 
-  const allTimes = plotted.flatMap((s) => s.points.map((p) => p.timeMs));
-  const allValues = plotted.flatMap((s) => {
-    const margins = s.points.map((p) => p.margin);
-    const first = s.points[0];
-    const last = s.points[s.points.length - 1];
-    const fittedFirst = first ? fittedAt(s.entry, first.timeMs) : null;
-    const fittedLast = last ? fittedAt(s.entry, last.timeMs) : null;
-    return [
-      ...margins,
-      ...(fittedFirst !== null ? [fittedFirst] : []),
-      ...(fittedLast !== null ? [fittedLast] : []),
-    ];
-  });
+  // Merge every series into one row set keyed by time, so recharts renders
+  // shared axes/tooltips: { timeMs, ponto1?, ponto2?, ponto3? }.
+  const rowByTime = new Map<number, Record<string, number>>();
+  for (const series of plotted) {
+    for (const point of series.points) {
+      const rowValues = rowByTime.get(point.timeMs) ?? { timeMs: point.timeMs };
+      rowValues[series.dataKey] = point.margin;
+      rowByTime.set(point.timeMs, rowValues);
+    }
+  }
+  // oxlint-disable-next-line unicorn/no-array-sort -- the spread above is already a fresh array; the portal's TS lib target predates toSorted.
+  const chartData = [...rowByTime.values()].sort(
+    (a, b) => (a.timeMs ?? 0) - (b.timeMs ?? 0),
+  );
 
-  const tMin = Math.min(...allTimes);
-  const tMax = Math.max(...allTimes);
-  const yMin = Math.min(...allValues, 0);
-  const yMax = Math.max(...allValues, 0);
+  const chartConfig: ChartConfig = Object.fromEntries(
+    plotted.map((series) => [
+      series.dataKey,
+      {
+        label: `Ponto ${series.entry.pointIndex + 1}`,
+        color: series.color,
+      },
+    ]),
+  );
 
-  const width = 320;
-  const height = 170;
-  const padX = 10;
-  const padTop = 18;
-  const padBottom = 24;
-  const innerWidth = width - padX * 2;
-  const innerHeight = height - padTop - padBottom;
-  const tRange = tMax - tMin || 1;
-  const yRange = yMax - yMin || 1;
-
-  const x = (timeMs: number) => padX + ((timeMs - tMin) / tRange) * innerWidth;
-  const y = (value: number) => padTop + ((yMax - value) / yRange) * innerHeight;
-
-  const hasDrifting = plotted.some((s) => s.entry.drifting);
+  const hasDrifting = plotted.some((series) => series.entry.drifting);
 
   return (
     <div className="space-y-2">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-44 w-full"
-        role="img"
-        aria-label="Deriva da margem de conformidade por ponto medido"
-      >
-        {/* Tolerance limit — margin 0 */}
-        <line
-          x1={padX}
-          x2={width - padX}
-          y1={y(0)}
-          y2={y(0)}
-          className="stroke-muted-foreground/50"
-          strokeDasharray="4 3"
-          strokeWidth={1}
-        />
-        <text
-          x={padX}
-          y={y(0) - 4}
-          className="fill-muted-foreground text-[9px]"
+      <ChartContainer config={chartConfig} className="h-52 w-full">
+        <LineChart
+          data={chartData}
+          margin={{ left: 0, right: 12, top: 12, bottom: 0 }}
         >
-          Limite de tolerância
-        </text>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            vertical={false}
+            className="stroke-muted"
+          />
+          <XAxis
+            dataKey="timeMs"
+            type="number"
+            scale="time"
+            domain={["dataMin", "dataMax"]}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tickFormatter={(value: number) => formatDate(new Date(value))}
+            className="font-mono text-[10px] tabular-nums text-muted-foreground"
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            width={44}
+            domain={[
+              (dataMin: number) => Math.min(dataMin, 0),
+              (dataMax: number) => Math.max(dataMax, 0),
+            ]}
+            tickFormatter={(value: number) =>
+              value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+            }
+            className="text-xs text-muted-foreground"
+          />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_label, payload) => {
+                  const timeMs = payload?.[0]?.payload?.timeMs;
+                  return typeof timeMs === "number"
+                    ? formatDate(new Date(timeMs))
+                    : "";
+                }}
+              />
+            }
+          />
 
-        {plotted.map((s) => {
-          const stroke = s.entry.drifting
-            ? DRIFTING_STROKE
-            : SERIES_STROKE[s.colorIndex % SERIES_STROKE.length];
-          const fill = s.entry.drifting
-            ? DRIFTING_FILL
-            : SERIES_FILL[s.colorIndex % SERIES_FILL.length];
-          const path = s.points
-            .map(
-              (p, i) =>
-                `${i === 0 ? "M" : "L"} ${x(p.timeMs).toFixed(1)} ${y(p.margin).toFixed(1)}`,
-            )
-            .join(" ");
-          const first = s.points[0];
-          const last = s.points[s.points.length - 1];
-          const fittedFirst = first ? fittedAt(s.entry, first.timeMs) : null;
-          const fittedLast = last ? fittedAt(s.entry, last.timeMs) : null;
+          {/* Tolerance limit — margin 0 */}
+          <ReferenceLine
+            y={0}
+            stroke="var(--muted-foreground)"
+            strokeDasharray="4 3"
+            label={{
+              value: "Limite de tolerância",
+              position: "insideTopLeft",
+              className: "fill-muted-foreground",
+              fontSize: 10,
+            }}
+          />
 
-          return (
-            <g key={s.entry.pointIndex}>
-              {first && last && fittedFirst !== null && fittedLast !== null ? (
-                <line
-                  x1={x(first.timeMs)}
-                  y1={y(fittedFirst)}
-                  x2={x(last.timeMs)}
-                  y2={y(fittedLast)}
-                  className={cn(stroke, "opacity-45")}
-                  strokeDasharray="6 4"
-                  strokeWidth={1.25}
-                />
-              ) : null}
-              <path d={path} fill="none" className={stroke} strokeWidth={1.5} />
-              {s.points.map((p) => (
-                <circle
-                  key={p.timeMs}
-                  cx={x(p.timeMs)}
-                  cy={y(p.margin)}
-                  r={2.4}
-                  className={fill}
-                />
-              ))}
-            </g>
-          );
-        })}
+          {/* OLS regression segments (ILAC-G24 Method 2) */}
+          {plotted.map((series) => {
+            const first = series.points[0];
+            const last = series.points[series.points.length - 1];
+            const fittedFirst = first
+              ? fittedAt(series.entry, first.timeMs)
+              : null;
+            const fittedLast = last
+              ? fittedAt(series.entry, last.timeMs)
+              : null;
+            if (
+              !first ||
+              !last ||
+              fittedFirst === null ||
+              fittedLast === null
+            ) {
+              return null;
+            }
+            return (
+              <ReferenceLine
+                key={`reg-${series.entry.pointIndex}`}
+                segment={[
+                  { x: first.timeMs, y: fittedFirst },
+                  { x: last.timeMs, y: fittedLast },
+                ]}
+                stroke={series.color}
+                strokeDasharray="6 4"
+                strokeOpacity={0.45}
+              />
+            );
+          })}
 
-        {/* Time extent labels */}
-        <text
-          x={padX}
-          y={height - 6}
-          className="fill-muted-foreground font-mono text-[9px] tabular-nums"
-        >
-          {formatDate(new Date(tMin))}
-        </text>
-        <text
-          x={width - padX}
-          y={height - 6}
-          textAnchor="end"
-          className="fill-muted-foreground font-mono text-[9px] tabular-nums"
-        >
-          {formatDate(new Date(tMax))}
-        </text>
-      </svg>
+          {plotted.map((series) => (
+            <Line
+              key={series.dataKey}
+              dataKey={series.dataKey}
+              type="linear"
+              stroke={series.color}
+              strokeWidth={1.5}
+              dot={{ r: 2.5, fill: series.color, strokeWidth: 0 }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ChartContainer>
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        {plotted.map((s) => (
+        {plotted.map((series) => (
           <span
-            key={s.entry.pointIndex}
+            key={series.entry.pointIndex}
             className="text-muted-foreground inline-flex items-center gap-1.5 text-xs"
           >
-            <svg viewBox="0 0 10 10" className="size-2.5" aria-hidden>
-              <circle
-                cx={5}
-                cy={5}
-                r={4}
-                className={
-                  s.entry.drifting
-                    ? DRIFTING_FILL
-                    : SERIES_FILL[s.colorIndex % SERIES_FILL.length]
-                }
-              />
-            </svg>
-            Ponto {s.entry.pointIndex + 1}
-            {s.entry.drifting ? (
+            <span
+              className="inline-block size-2.5 rounded-full"
+              style={{ backgroundColor: series.color }}
+              aria-hidden
+            />
+            Ponto {series.entry.pointIndex + 1}
+            {series.entry.drifting ? (
               <StatusPill tone="warning" size="sm" dot={false}>
                 deriva
               </StatusPill>

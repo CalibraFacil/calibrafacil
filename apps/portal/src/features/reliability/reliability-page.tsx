@@ -1,5 +1,14 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Analytics01Icon,
@@ -28,6 +37,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import {
   BlueprintOverlay,
   Panel,
@@ -427,14 +442,15 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Trend bar chart — hand-rolled SVG, theme-aware, no chart library            */
+/* Trend bar chart — recharts via the shared shadcn ChartContainer             */
 /* -------------------------------------------------------------------------- */
 
-const BAR_SLOT = 72;
-const BAR_WIDTH = 36;
-const CHART_HEIGHT = 190;
-const CHART_TOP = 26;
-const CHART_BOTTOM = 26;
+const trendChartConfig = {
+  ootRate: {
+    label: "Taxa fora de tolerância",
+    color: "var(--critical)",
+  },
+} satisfies ChartConfig;
 
 function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
   const hasKnown = trend.some((entry) => entry.known > 0);
@@ -449,75 +465,92 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
     );
   }
 
-  const width = trend.length * BAR_SLOT;
-  const innerHeight = CHART_HEIGHT - CHART_TOP - CHART_BOTTOM;
-  const maxRate = Math.max(
-    ...trend.map((entry) => entry.ootRatePct ?? 0),
-    1, // avoid a zero range when every bucket is 0%
-  );
-  const baseline = CHART_HEIGHT - CHART_BOTTOM;
+  const chartData = trend.map((entry) => ({
+    bucket: entry.bucket,
+    ootRate: entry.ootRatePct ?? 0,
+    hasSignal: entry.ootRatePct !== null,
+    known: entry.known,
+    jobs: entry.jobs,
+    topLabel:
+      entry.ootRatePct === null
+        ? "—"
+        : `${entry.ootRatePct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+  }));
 
   return (
-    <div className="overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
-        className="h-48 min-w-full"
-        style={{ width }}
-        role="img"
-        aria-label="Taxa fora de tolerância (como recebido) por período"
-      >
-        <line
-          x1={0}
-          x2={width}
-          y1={baseline}
-          y2={baseline}
-          className="stroke-muted-foreground/30"
-          strokeWidth={1}
-        />
-        {trend.map((entry, index) => {
-          const x = index * BAR_SLOT + (BAR_SLOT - BAR_WIDTH) / 2;
-          const center = index * BAR_SLOT + BAR_SLOT / 2;
-          const rate = entry.ootRatePct;
-          const barHeight =
-            rate === null ? 0 : Math.round((rate / maxRate) * innerHeight);
-          return (
-            <g key={entry.bucket}>
-              {rate !== null ? (
-                <rect
-                  x={x}
-                  y={baseline - Math.max(barHeight, 2)}
-                  width={BAR_WIDTH}
-                  height={Math.max(barHeight, 2)}
-                  rx={3}
-                  className={
-                    rate > 0
-                      ? "fill-[var(--critical)] opacity-80"
-                      : "fill-[var(--ok)] opacity-80"
-                  }
-                />
-              ) : null}
-              <text
-                x={center}
-                y={baseline - Math.max(barHeight, 2) - 8}
-                textAnchor="middle"
-                className="fill-foreground font-mono text-[11px] tabular-nums"
-              >
-                {rate === null
-                  ? "—"
-                  : `${rate.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
-              </text>
-              <text
-                x={center}
-                y={CHART_HEIGHT - 8}
-                textAnchor="middle"
-                className="fill-muted-foreground font-mono text-[10px] tabular-nums"
-              >
-                {entry.bucket}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+    <div>
+      <ChartContainer config={trendChartConfig} className="h-56 w-full">
+        <BarChart
+          data={chartData}
+          margin={{ left: 0, right: 0, top: 20, bottom: 0 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            vertical={false}
+            className="stroke-muted"
+          />
+          <XAxis
+            dataKey="bucket"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            className="font-mono text-[10px] tabular-nums text-muted-foreground"
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            width={40}
+            tickFormatter={(value: number) => `${value}%`}
+            className="text-xs text-muted-foreground"
+          />
+          <ChartTooltip
+            cursor={false}
+            content={
+              <ChartTooltipContent
+                formatter={(value, _name, item) => {
+                  const payload: unknown = item?.payload;
+                  const hasSignal =
+                    typeof payload === "object" &&
+                    payload !== null &&
+                    "hasSignal" in payload &&
+                    payload.hasSignal === true;
+                  const known =
+                    typeof payload === "object" &&
+                    payload !== null &&
+                    "known" in payload &&
+                    typeof payload.known === "number"
+                      ? payload.known
+                      : 0;
+                  return hasSignal
+                    ? `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de ${known} com parecer`
+                    : "sem sinal as-found";
+                }}
+              />
+            }
+          />
+          <Bar dataKey="ootRate" radius={[4, 4, 0, 0]} maxBarSize={40}>
+            {chartData.map((entry) => (
+              <Cell
+                key={entry.bucket}
+                fill={
+                  !entry.hasSignal
+                    ? "transparent"
+                    : entry.ootRate > 0
+                      ? "var(--critical)"
+                      : "var(--ok)"
+                }
+                fillOpacity={0.8}
+              />
+            ))}
+            <LabelList
+              dataKey="topLabel"
+              position="top"
+              className="fill-foreground font-mono text-[11px] tabular-nums"
+            />
+          </Bar>
+        </BarChart>
+      </ChartContainer>
       <p className="text-muted-foreground mt-2 text-xs">
         Barras sobre os ciclos com parecer conhecido; &ldquo;—&rdquo; indica
         período sem sinal as-found.
