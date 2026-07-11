@@ -48,6 +48,7 @@ import {
   CertificateAmendedEmail,
   JobNotificationEmail,
   CertificateReadyEmail,
+  AssetOotEmail,
   ComplianceAlertEmail,
   PaymentNotificationEmail,
   NCNotificationEmail,
@@ -76,6 +77,13 @@ export interface JobEmailContext {
 }
 
 /** Context for certificate ready email templates */
+export interface AssetOotEmailContext {
+  assetTag: string;
+  assetName?: string;
+  jobId: string;
+  portalUrl: string;
+}
+
 export interface CertificateEmailContext {
   jobId: string;
   originalJobId?: string;
@@ -151,6 +159,7 @@ export interface VisitEmailContext {
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
+  | { type: "assetOot"; data: AssetOotEmailContext }
   | { type: "auditPack"; data: AuditPackEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
   | { type: "payment"; data: PaymentEmailContext }
@@ -633,6 +642,23 @@ function renderEmailTemplate(
     });
   }
 
+  // Asset found out of tolerance as-found (#740, ISO 9001 7.1.5.2)
+  if (
+    emailContext?.type === "assetOot" &&
+    type === "ASSET_FOUND_OUT_OF_TOLERANCE"
+  ) {
+    const { assetTag, assetName, jobId, portalUrl } = emailContext.data;
+    return AssetOotEmail({
+      recipientName,
+      assetTag,
+      assetName,
+      jobId,
+      portalUrl,
+      logoSrc,
+      brand: emailBrand,
+    });
+  }
+
   // Audit pack ready notification (#738)
   if (emailContext?.type === "auditPack" && type === "AUDIT_PACK_READY") {
     const {
@@ -906,6 +932,12 @@ async function sendNotificationEmail(options: {
     return false;
   }
 
+  // Honor the suppression list (bounces/unsubscribes) on every send through
+  // this path — customer-facing notifications must never override it.
+  if (await isEmailSuppressed(userData.email, "all")) {
+    return false;
+  }
+
   try {
     const resend = new Resend(resendApiKey);
     const recipientName = userData.name ?? "Usuário";
@@ -997,12 +1029,14 @@ async function getJobDetails(jobId: number): Promise<{
  */
 async function getAssetDetails(assetId: number): Promise<{
   name: string;
+  tag: string;
   manufacturer: string | null;
   model: string | null;
 } | null> {
   const [assetData] = await db
     .select({
       name: asset.name,
+      tag: asset.tag,
       manufacturer: asset.manufacturer,
       model: asset.model,
     })
@@ -1818,6 +1852,68 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
           jobId: job.jobIdentifier,
           assetName: assetData?.name,
           customerName: customerData.name,
+          portalUrl,
+        },
+      },
+      emailBrand,
+    });
+  }
+}
+
+/**
+ * Notify client portal users when their instrument was reproved in the
+ * as-found ("como recebido") condition at certificate approval (#740 Track B).
+ * The impact assessment is the CUSTOMER'S obligation (ISO 9001:2015 §7.1.5.2);
+ * this only alerts and points at the portal workspace. Recipients mirror
+ * notifyCertificateReady: every member of the customer's CLIENT org.
+ */
+export async function notifyAssetFoundOutOfTolerance(
+  jobId: number,
+): Promise<void> {
+  const job = await getJobDetails(jobId);
+  if (!job) return;
+
+  const [customerData] = await db
+    .select({
+      authOrganizationId: customer.authOrganizationId,
+      name: customer.name,
+    })
+    .from(customer)
+    .where(eq(customer.id, job.customerId))
+    .limit(1);
+
+  if (!customerData?.authOrganizationId) return;
+
+  const assetData = await getAssetDetails(job.assetId);
+
+  const portalUsers = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.organizationId, customerData.authOrganizationId));
+
+  const portalUrl = `${getPortalBaseUrl()}/assets/${job.assetId}`;
+  const emailBrand = await getLabEmailBrand(job.organizationId);
+  const assetTag = assetData?.tag ?? String(job.assetId);
+
+  for (const portalUser of portalUsers) {
+    await sendNotification({
+      recipientUserId: portalUser.userId,
+      organizationId: customerData.authOrganizationId,
+      type: "ASSET_FOUND_OUT_OF_TOLERANCE",
+      priority: "HIGH",
+      title: "Ação requerida: avaliar impacto",
+      message: `O equipamento ${assetTag} foi reprovado na condição "como recebido" (as-found) na calibração ${job.jobIdentifier}. Avalie o impacto sobre medições anteriores (ISO 9001 7.1.5.2).`,
+      relatedEntity: {
+        entityType: "asset",
+        entityId: job.assetId,
+      },
+      actionUrl: `/portal/assets/${job.assetId}`,
+      emailContext: {
+        type: "assetOot",
+        data: {
+          assetTag,
+          assetName: assetData?.name,
+          jobId: job.jobIdentifier,
           portalUrl,
         },
       },

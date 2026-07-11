@@ -917,6 +917,7 @@ export interface CustomersApi {
     id: string | number,
     input?: { page?: number; limit?: number },
   ): Promise<CustomerAuditLogData<TRecord>>;
+  ootEvents<TResponse = unknown>(id: string | number): Promise<TResponse>;
   updateCompliance<TCustomer = CustomerDetailData>(
     id: string | number,
     input: UpdateCustomerComplianceInput,

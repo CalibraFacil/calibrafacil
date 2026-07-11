@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
   member,
+  user,
   organization,
   customer,
   customerGroup,
@@ -21,6 +22,9 @@ import {
   nonConformance,
   ootNotification,
   portalExportJob,
+  assetOotEvent,
+  assetOotImpactAssessment,
+  assetOotAuditLog,
 } from "@calibra-facil/db/schema";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
@@ -51,6 +55,8 @@ import {
 import {
   ListAssetsQuerySchema,
   SetCalibrationIntervalSchema,
+  FleetAnalyticsQuerySchema,
+  RecordOotImpactAssessmentSchema,
 } from "@calibra-facil/schemas";
 import {
   normalizeAccreditationNumber,
@@ -244,6 +250,10 @@ import {
   deriveNextCalibrationDate,
 } from "../lib/portal-asset-interval";
 import { buildIntervalInsight } from "../lib/interval-insight";
+import {
+  buildAssetDriftSeries,
+  buildFleetReliabilitySummary,
+} from "../lib/portal-fleet-reliability";
 import { renderIntervalReportHtml } from "@calibra-facil/documents";
 import { DEFAULT_INTERVAL_CONFIG } from "@calibra-facil/interval-analysis";
 import {
@@ -2692,6 +2702,384 @@ export const portalRouter = new Hono<{
       } catch (error) {
         console.error("Error generating standard certificate URL:", error);
         return c.json({ error: "Erro ao gerar link de download" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /analytics/fleet - fleet reliability analytics (#740 Track A)
+  // =========================================================================
+  // Aggregates the lab-computed as-found verdicts (never recomputed here —
+  // ISO/IEC 17025 §7.8.6 / ILAC-G8): OOT rate trend, per-type breakdown and
+  // worst offenders. Rates use KNOWN cycles only; the UNKNOWN share and the
+  // LEGAL-regime exclusion are always reported so nothing is overstated.
+  // =========================================================================
+  .get(
+    "/analytics/fleet",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    zValidator("query", FleetAnalyticsQuerySchema),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const { periodMonths, bucket, assetTypeId, unitId } =
+        c.req.valid("query");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+        const customerIds = applyUnitFilter(scope, unitId);
+        if (customerIds.length === 0) {
+          return c.json({ error: "Unidade nao encontrada" }, 404);
+        }
+
+        const to = new Date();
+        const from = new Date(to.getTime());
+        from.setMonth(from.getMonth() - periodMonths);
+
+        const conditions = [
+          inArray(calibrationJob.customerId, customerIds),
+          eq(calibrationJob.status, "APPROVED"),
+          gte(calibrationJob.approvedAt, from),
+          isNull(asset.deletedAt),
+        ];
+        if (assetTypeId) {
+          conditions.push(eq(asset.assetTypeId, assetTypeId));
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            assetId: calibrationJob.assetId,
+            assetTag: asset.tag,
+            assetName: asset.name,
+            assetTypeId: asset.assetTypeId,
+            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+            metrologyRegime: asset.metrologyRegime,
+          })
+          .from(calibrationJob)
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(and(...conditions));
+
+        const summary = buildFleetReliabilitySummary(rows, { bucket });
+
+        return c.json({
+          mode: scope.mode,
+          period: {
+            from: from.toISOString(),
+            to: to.toISOString(),
+            bucket,
+          },
+          ...summary,
+          attribution:
+            "Pareceres de conformidade conforme a regra de decisão aplicada pelo laboratório em cada certificado; o portal reproduz os pareceres sem reavaliação.",
+        });
+      } catch (error) {
+        console.error("Error building fleet analytics:", error);
+        return c.json({ error: "Erro ao calcular indicadores da frota" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /assets/:id/drift-series - matched-point as-found margin series (#740)
+  // =========================================================================
+  // The data drift.ts regresses, exposed for the portal drift chart: per
+  // positional point, the signed margin toward the 0 tolerance limit over
+  // time + OLS regression. Degrades honestly: cycles without margins are
+  // reported in coverage and simply absent from the series.
+  // =========================================================================
+  .get(
+    "/assets/:id/drift-series",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const [existing] = await db
+          .select({ id: asset.id })
+          .from(asset)
+          .where(
+            and(
+              eq(asset.id, id),
+              inArray(asset.customerId, scope.customerIds),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const rows = await db
+          .select({
+            approvedAt: calibrationJob.approvedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.assetId, id),
+              inArray(calibrationJob.customerId, scope.customerIds),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(asc(calibrationJob.approvedAt));
+
+        return c.json({
+          assetId: id,
+          ...buildAssetDriftSeries(rows),
+          attribution:
+            "Margens conforme os resultados as-found do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
+        });
+      } catch (error) {
+        console.error("Error building drift series:", error);
+        return c.json({ error: "Erro ao montar série de deriva" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /oot-events - customer's out-of-tolerance events (#740 Track B)
+  // =========================================================================
+  .get(
+    "/oot-events",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    zValidator(
+      "query",
+      z.object({
+        status: z.enum(["OPEN", "ASSESSED"]).optional(),
+        unitId: z.coerce.number().int().positive().optional(),
+      }),
+    ),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const { status, unitId } = c.req.valid("query");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ data: [] });
+        }
+        const customerIds = applyUnitFilter(scope, unitId);
+        if (customerIds.length === 0) {
+          return c.json({ data: [] });
+        }
+
+        const conditions = [inArray(assetOotEvent.customerId, customerIds)];
+        if (status) {
+          conditions.push(eq(assetOotEvent.status, status));
+        }
+
+        const events = await db
+          .select({
+            id: assetOotEvent.id,
+            status: assetOotEvent.status,
+            detectedAt: assetOotEvent.detectedAt,
+            customerId: assetOotEvent.customerId,
+            assetId: assetOotEvent.assetId,
+            assetTag: asset.tag,
+            assetName: asset.name,
+            jobId: assetOotEvent.jobId,
+            jobIdentifier: calibrationJob.jobId,
+            // Suspect-window default (ISO 9001 §7.1.5.2 guidance): last
+            // known-good as-found calibration before the failing one.
+            suggestedPeriodStart: sql<string | null>`(
+              select max(cj2.approved_at) from calibration_job cj2
+              where cj2.asset_id = ${assetOotEvent.assetId}
+                and cj2.approved_at < ${assetOotEvent.detectedAt}
+                and cj2.as_found_conformity = 'CONFORMING'
+                and cj2.status = 'APPROVED'
+            )`,
+            assessmentDecision: assetOotImpactAssessment.decision,
+            assessmentRationale: assetOotImpactAssessment.rationale,
+            assessmentPeriodStart: assetOotImpactAssessment.affectedPeriodStart,
+            assessmentPeriodEnd: assetOotImpactAssessment.affectedPeriodEnd,
+            assessmentSuspectShipped:
+              assetOotImpactAssessment.suspectProductShipped,
+            assessmentCustomerNotified:
+              assetOotImpactAssessment.customerNotified,
+            assessmentCreatedAt: assetOotImpactAssessment.createdAt,
+            assessmentBy: user.name,
+          })
+          .from(assetOotEvent)
+          .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
+          .innerJoin(
+            calibrationJob,
+            eq(assetOotEvent.jobId, calibrationJob.id),
+          )
+          .leftJoin(
+            assetOotImpactAssessment,
+            eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+          )
+          .leftJoin(user, eq(assetOotImpactAssessment.portalUserId, user.id))
+          .where(and(...conditions))
+          .orderBy(desc(assetOotEvent.detectedAt));
+
+        return c.json({ data: events });
+      } catch (error) {
+        console.error("Error listing OOT events:", error);
+        return c.json({ error: "Erro ao listar eventos" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /oot-events/:id/assessment - record the customer's impact assessment
+  // =========================================================================
+  // ISO 9001:2015 §7.1.5.2 / IATF 16949 §7.1.5.2.1. The record is the
+  // CUSTOMER'S own audit evidence — append-only with actor/ip/user-agent.
+  // =========================================================================
+  .post(
+    "/oot-events/:id/assessment",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["update"] }),
+    zValidator("json", RecordOotImpactAssessmentSchema),
+    async (c) => {
+      const portalMember = c.get("member");
+      const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+      const input = c.req.valid("json");
+
+      try {
+        const scope = await resolvePortalCustomerScope({
+          activeOrgId: portalMember.organizationId,
+          labScope: portalLabScope.labOrganizationId,
+        });
+        if (!scope || scope.customerIds.length === 0) {
+          return c.json({ error: "Evento nao encontrado" }, 404);
+        }
+
+        const [event] = await db
+          .select()
+          .from(assetOotEvent)
+          .where(
+            and(
+              eq(assetOotEvent.id, id),
+              inArray(assetOotEvent.customerId, scope.customerIds),
+            ),
+          )
+          .limit(1);
+        if (!event) {
+          return c.json({ error: "Evento nao encontrado" }, 404);
+        }
+
+        const [existingAssessment] = await db
+          .select({ id: assetOotImpactAssessment.id })
+          .from(assetOotImpactAssessment)
+          .where(eq(assetOotImpactAssessment.eventId, id))
+          .limit(1);
+        if (existingAssessment) {
+          return c.json(
+            { error: "Avaliação de impacto já registrada para este evento" },
+            400,
+          );
+        }
+
+        const ipAddress =
+          c.req.header("x-forwarded-for") ??
+          c.req.header("x-real-ip") ??
+          null;
+        const userAgent = c.req.header("user-agent") ?? null;
+
+        const [assessment] = await db
+          .insert(assetOotImpactAssessment)
+          .values({
+            eventId: id,
+            decision: input.decision,
+            rationale: input.rationale,
+            affectedPeriodStart: input.affectedPeriodStart
+              ? new Date(input.affectedPeriodStart)
+              : null,
+            affectedPeriodEnd: input.affectedPeriodEnd
+              ? new Date(input.affectedPeriodEnd)
+              : null,
+            suspectProductShipped: input.suspectProductShipped ?? null,
+            customerNotified: input.customerNotified ?? null,
+            portalUserId: session.user.id,
+            ipAddress,
+            userAgent,
+          })
+          .returning();
+
+        await db
+          .update(assetOotEvent)
+          .set({ status: "ASSESSED" })
+          .where(
+            and(
+              eq(assetOotEvent.id, id),
+              inArray(assetOotEvent.customerId, scope.customerIds),
+            ),
+          );
+
+        await db.insert(assetOotAuditLog).values({
+          eventId: id,
+          action: "assess",
+          changes: {
+            decision: input.decision,
+            affectedPeriodStart: input.affectedPeriodStart ?? null,
+            affectedPeriodEnd: input.affectedPeriodEnd ?? null,
+            suspectProductShipped: input.suspectProductShipped ?? null,
+            customerNotified: input.customerNotified ?? null,
+          },
+          performedBy: session.user.id,
+          ipAddress,
+          userAgent,
+        });
+
+        return c.json(
+          {
+            message: "Avaliação registrada",
+            data: { event: { ...event, status: "ASSESSED" }, assessment },
+          },
+          201,
+        );
+      } catch (error) {
+        console.error("Error recording OOT assessment:", error);
+        return c.json({ error: "Erro ao registrar avaliação" }, 500);
       }
     },
   );

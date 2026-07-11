@@ -129,6 +129,7 @@ type ApiRoutePath =
   | "/api/customers/:id/invitations/:invId/resend"
   | "/api/customers/:id/members"
   | "/api/customers/:id/members/:memberId"
+  | "/api/customers/:id/oot-events"
   | "/api/customer-groups"
   | "/api/customer-groups/:id"
   | "/api/customer-groups/:id/branches"

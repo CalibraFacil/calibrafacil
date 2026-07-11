@@ -211,6 +211,7 @@ export const calibraApiPolicyRegistry = {
   customers: {
     list: "local-first-read-through-sync",
     lookupCnpj: "cloud-only",
+    ootEvents: "cloud-only",
     create: "local-command-sync",
     get: "local-first-read-through-sync",
     update: "local-command-sync",

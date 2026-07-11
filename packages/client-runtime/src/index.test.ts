@@ -724,6 +724,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "ootEvents",
+          "namespace": "customers",
+          "policy": "cloud-only",
+        },
+        {
           "method": "create",
           "namespace": "customers",
           "policy": "local-command-sync",

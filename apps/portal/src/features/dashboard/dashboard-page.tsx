@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   Alert02Icon,
+  AlertDiamondIcon,
   ArrowRight01Icon,
   Calendar03Icon,
   CheckmarkCircle02Icon,
@@ -39,6 +40,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from "@/components/instrument-panel";
+import { useOotEvents } from "@/features/reliability/queries";
 import {
   useOverview,
   useUnitSummary,
@@ -404,8 +406,16 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
   const quotes = data.serviceOrders.awaitingQuote.slice(0, 4);
   const rejected = data.requests.rejected;
 
+  // Out-of-tolerance events awaiting the customer's §7.1.5.2 impact assessment.
+  const ootQuery = useOotEvents("OPEN");
+  const ootOpen = ootQuery.data ?? [];
+  const ootItems = ootOpen.slice(0, 3);
+
   const actionCount =
-    data.equipment.overdue + quotes.length + (rejected > 0 ? 1 : 0);
+    ootOpen.length +
+    data.equipment.overdue +
+    quotes.length +
+    (rejected > 0 ? 1 : 0);
 
   if (actionCount === 0) {
     return (
@@ -421,8 +431,8 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
           <div className="space-y-0.5">
             <p className="font-medium">Tudo em dia</p>
             <p className="text-pretty text-sm text-muted-foreground">
-              Nenhuma calibração vencida, orçamento pendente ou solicitação
-              recusada no momento.
+              Nenhuma calibração vencida, avaliação de impacto pendente,
+              orçamento pendente ou solicitação recusada no momento.
             </p>
           </div>
         </div>
@@ -442,6 +452,19 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
         }
       />
       <div className="mt-4 space-y-1">
+        {ootItems.map((event) => (
+          <ActionRow
+            key={`oot-${event.id}`}
+            to="/assets/$id"
+            params={{ id: String(event.assetId) }}
+            tone="critical"
+            icon={AlertDiamondIcon}
+            pulse
+            title={`Avaliar impacto: ${event.assetTag}`}
+            subtitle={`Reprovado como recebido na calibração ${event.jobIdentifier}`}
+          />
+        ))}
+
         {overdueItems.map((item) => {
           const status = getCalibrationStatus(item.nextCalibrationDate);
           return (

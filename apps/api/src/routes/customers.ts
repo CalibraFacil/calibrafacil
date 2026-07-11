@@ -12,6 +12,9 @@ import {
   customerAuditLog,
   asset,
   assetAuditLog,
+  assetOotEvent,
+  assetOotImpactAssessment,
+  calibrationJob,
 } from "@calibra-facil/db/schema";
 import {
   CreateCustomerSchema,
@@ -412,6 +415,71 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
     return c.json(foundCustomer);
   })
+
+  // =========================================================================
+  // GET /:id/oot-events - customer's asset OOT events + assessment status
+  // =========================================================================
+  // #740 Track B lab visibility: read-only view of whether the customer has
+  // closed their ISO 9001 §7.1.5.2 impact-assessment loop per OOT event.
+  // =========================================================================
+  .get(
+    "/:id/oot-events",
+    ...withLabPermission({ client: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
+      if (id === null) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [foundCustomer] = await db
+        .select({ id: customer.id })
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, id),
+            eq(customer.labOrganizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!foundCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
+
+      const events = await db
+        .select({
+          id: assetOotEvent.id,
+          status: assetOotEvent.status,
+          detectedAt: assetOotEvent.detectedAt,
+          assetId: assetOotEvent.assetId,
+          assetTag: asset.tag,
+          assetName: asset.name,
+          jobId: assetOotEvent.jobId,
+          jobIdentifier: calibrationJob.jobId,
+          assessmentDecision: assetOotImpactAssessment.decision,
+          assessmentCreatedAt: assetOotImpactAssessment.createdAt,
+        })
+        .from(assetOotEvent)
+        .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
+        .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
+        .leftJoin(
+          assetOotImpactAssessment,
+          eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+        )
+        .where(
+          and(
+            eq(assetOotEvent.customerId, id),
+            eq(assetOotEvent.labOrganizationId, memberData.organizationId),
+          ),
+        )
+        .orderBy(desc(assetOotEvent.detectedAt));
+
+      return c.json({ data: events });
+    },
+  )
 
   // =========================================================================
   // GET /:id - Get customer by ID

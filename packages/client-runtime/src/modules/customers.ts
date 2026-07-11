@@ -80,6 +80,14 @@ export function createCustomersApi(rawCloudClient: any): CustomersApi {
         "Falha ao carregar historico",
       );
     },
+    async ootEvents<TResponse = unknown>(id: string | number) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.customers[":id"]["oot-events"].$get({
+          param: { id: String(id) },
+        }),
+        "Falha ao carregar eventos fora de tolerância",
+      );
+    },
     async updateCompliance<TCustomer = CustomerDetailData>(
       id: string | number,
       input: UpdateCustomerComplianceInput,

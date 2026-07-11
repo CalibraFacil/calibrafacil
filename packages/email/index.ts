@@ -12,6 +12,7 @@ export { OrganizationInvitationEmail } from "./emails/organization-invitation-em
 export { NewLeadEmail } from "./emails/new-lead-email";
 export { NotificationEmail } from "./emails/notification-email";
 export { CertificateReadyEmail } from "./emails/certificate-ready-email";
+export { AssetOotEmail } from "./emails/asset-oot-email";
 export { AuditPackReadyEmail } from "./emails/audit-pack-ready-email";
 export { CertificateAmendedEmail } from "./emails/certificate-amended-email";
 export { JobNotificationEmail } from "./emails/job-notification-email";

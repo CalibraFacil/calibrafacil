@@ -9,6 +9,7 @@ import {
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
+import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
 import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../lib/signatory";
 import {
@@ -2353,6 +2354,22 @@ export const jobsRouter = new Hono<{
       notifyJobApproved(id, session.user.id).catch((err) => {
         console.error("[Jobs] Failed to send approval notification:", err);
       });
+
+      // #740 Track B: as-found non-conforming → customer-facing OOT event +
+      // "avaliar impacto" alert (ISO 9001 §7.1.5.2). Idempotent per job;
+      // fire-and-forget — never blocks the approval.
+      if (asFoundVerdict.conformity === "NON_CONFORMING") {
+        createAssetOotEventForApprovedJob({
+          jobId: id,
+          assetId: existing.assetId,
+          customerId: existing.customerId,
+          labOrganizationId: memberData.organizationId,
+          detectedAt: updated?.approvedAt ?? new Date(),
+          actorUserId: session.user.id,
+        }).catch((err) => {
+          console.error("[Jobs] Failed to create asset OOT event:", err);
+        });
+      }
 
       // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
       // to this job. Fire-and-forget — never block the approval response

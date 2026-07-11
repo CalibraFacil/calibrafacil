@@ -710,6 +710,9 @@ export function createDesktopApiClient(
       async lookupCnpj() {
         throw desktopUnsupportedAuthAction("Consulta de CNPJ");
       },
+      async ootEvents() {
+        throw desktopUnsupportedAuthAction("Eventos fora de tolerância");
+      },
       async get<TCustomer = CustomerDetailData>(id: string | number) {
         const response = await fetchImpl(
           new URL(

@@ -35,6 +35,8 @@ import {
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatDate } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
+import { DriftChartPanel } from "@/features/reliability/drift-chart-panel";
+import { OotAssessmentPanel } from "@/features/reliability/oot-assessment-panel";
 
 export const Route = createFileRoute("/_authenticated/assets/$id")({
   component: AssetDetailPage,
@@ -295,6 +297,9 @@ function AssetDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="space-y-6">
+          {/* Out-of-tolerance impact assessment (ISO 9001 §7.1.5.2) */}
+          <OotAssessmentPanel assetId={asset.id} />
+
           {/* Identification */}
           <Panel className="p-5">
             <PanelHeader
@@ -371,6 +376,9 @@ function AssetDetailPage() {
 
           {/* Reliability-based interval analysis (read-only) */}
           <IntervalInsightPanel assetId={asset.id} />
+
+          {/* Per-point as-found drift chart (ILAC-G24 Method 2) */}
+          <DriftChartPanel assetId={asset.id} />
 
           {/* Calibration history */}
           <Panel className="p-5">

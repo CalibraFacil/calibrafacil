@@ -24,6 +24,7 @@ export {
   notifyStandardExpiring,
   notifyStandardExpired,
   notifyPtPlanDue,
+  notifyAssetFoundOutOfTolerance,
   notifySigningCertificateExpiring,
   notifyAccreditationExpiring,
   notifyJobOverdue,

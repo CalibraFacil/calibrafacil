@@ -652,6 +652,13 @@
       "when": 1783726248850,
       "tag": "0092_proficiency_testing_spc",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1783786756756,
+      "tag": "0093_asset_oot_events",
+      "breakpoints": true
     }
   ]
 }

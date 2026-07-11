@@ -7286,6 +7286,7 @@ export type NotificationType =
   | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
   | "COMPETENCE_APPROVED" // ISO 17025 Clause 6.2.3 - Qualification approved
   | "PT_PLAN_DUE" // ISO 17025 Clause 7.7.2 - Proficiency-test participation due for a scope part (#60)
+  | "ASSET_FOUND_OUT_OF_TOLERANCE" // ISO 9001 7.1.5.2 / #740 - Customer's instrument reproved as-found; impact assessment required
   | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
   | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
   | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
@@ -9571,6 +9572,160 @@ export const controlChartAuditLogRelations = relations(
     }),
     performedByUser: one(user, {
       fields: [controlChartAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// ============================================================================
+// Asset out-of-tolerance (OOT) events & customer impact assessments (#740).
+// Track B: when a certificate is approved with asFoundConformity =
+// NON_CONFORMING, the owning customer gets an auditable "avaliar impacto"
+// workflow — ISO 9001:2015 §7.1.5.2 (validity of previous results) and
+// IATF 16949 §7.1.5.2.1 (risk assessment + customer notification records).
+// The assessment is the CUSTOMER'S obligation; the portal is the workspace.
+// ============================================================================
+
+export type AssetOotEventStatus = "OPEN" | "ASSESSED";
+
+export type AssetOotImpactDecision =
+  | "NO_IMPACT"
+  | "IMPACT_CONTAINED"
+  | "IMPACT_ESCALATED";
+
+export const assetOotEvent = pgTable(
+  "asset_oot_event",
+  {
+    id: serial("id").primaryKey(),
+    // One event per approved job — the approval hook is idempotent on this.
+    jobId: integer("job_id")
+      .notNull()
+      .unique()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    labOrganizationId: text("lab_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<AssetOotEventStatus>()
+      .default("OPEN")
+      .notNull(),
+    /** Approval time of the non-conforming as-found certificate. */
+    detectedAt: timestamp("detected_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("asset_oot_event_customer_status_idx").on(
+      table.customerId,
+      table.status,
+    ),
+    index("asset_oot_event_asset_id_idx").on(table.assetId),
+    index("asset_oot_event_lab_org_idx").on(table.labOrganizationId),
+  ],
+);
+
+export const assetOotImpactAssessment = pgTable(
+  "asset_oot_impact_assessment",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id")
+      .notNull()
+      .references(() => assetOotEvent.id, { onDelete: "cascade" }),
+    decision: text("decision").$type<AssetOotImpactDecision>().notNull(),
+    rationale: text("rationale").notNull(),
+    // Suspect window: last known-good calibration → the failing calibration.
+    affectedPeriodStart: timestamp("affected_period_start"),
+    affectedPeriodEnd: timestamp("affected_period_end"),
+    // IATF 16949 §7.1.5.2.1 fields
+    suspectProductShipped: boolean("suspect_product_shipped"),
+    customerNotified: boolean("customer_notified"),
+    // Actor provenance (portal user; append-only audit evidence)
+    portalUserId: text("portal_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("asset_oot_impact_assessment_event_uidx").on(table.eventId),
+  ],
+);
+
+export const assetOotAuditLog = pgTable(
+  "asset_oot_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    // Soft reference on purpose — NO FK. Append-only audit trail: the row
+    // must survive deletion of the event (customer's own audit evidence).
+    eventId: integer("event_id").notNull(),
+    action: text("action").notNull(), // 'create', 'notify', 'assess'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+  },
+  (table) => [
+    index("asset_oot_audit_log_event_id_idx").on(table.eventId),
+    index("asset_oot_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+export const assetOotEventRelations = relations(
+  assetOotEvent,
+  ({ one, many }) => ({
+    job: one(calibrationJob, {
+      fields: [assetOotEvent.jobId],
+      references: [calibrationJob.id],
+    }),
+    asset: one(asset, {
+      fields: [assetOotEvent.assetId],
+      references: [asset.id],
+    }),
+    customer: one(customer, {
+      fields: [assetOotEvent.customerId],
+      references: [customer.id],
+    }),
+    labOrganization: one(organization, {
+      fields: [assetOotEvent.labOrganizationId],
+      references: [organization.id],
+    }),
+    assessments: many(assetOotImpactAssessment),
+  }),
+);
+
+export const assetOotImpactAssessmentRelations = relations(
+  assetOotImpactAssessment,
+  ({ one }) => ({
+    event: one(assetOotEvent, {
+      fields: [assetOotImpactAssessment.eventId],
+      references: [assetOotEvent.id],
+    }),
+    portalUser: one(user, {
+      fields: [assetOotImpactAssessment.portalUserId],
+      references: [user.id],
+      relationName: "assetOotAssessor",
+    }),
+  }),
+);
+
+export const assetOotAuditLogRelations = relations(
+  assetOotAuditLog,
+  ({ one }) => ({
+    event: one(assetOotEvent, {
+      fields: [assetOotAuditLog.eventId],
+      references: [assetOotEvent.id],
+    }),
+    performedByUser: one(user, {
+      fields: [assetOotAuditLog.performedBy],
       references: [user.id],
     }),
   }),

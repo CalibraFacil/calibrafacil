@@ -99,6 +99,12 @@ const { dbMock } = vi.hoisted(() => ({
 
 vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
 
+// The email path consults the suppression list before every send; stub it so
+// these template tests never touch the (mocked-away) emailSuppression table.
+vi.mock("./suppression", () => ({
+  isEmailSuppressed: vi.fn().mockResolvedValue(false),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------

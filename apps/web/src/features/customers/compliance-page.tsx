@@ -11,6 +11,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
+import { CustomerOotEventsPanel } from '@/features/customers/components/oot-events-panel'
 import {
   useCustomerAuditLogData,
   useCustomerDetailData,
@@ -127,16 +128,19 @@ export function ClientComplianceTab({ id }: { id: string }) {
   }
 
   return (
-    <ClientComplianceForm
-      key={customer.id}
-      customer={customer}
-      customerId={id}
-      auditLogData={auditLogData}
-      auditLoading={auditLoading}
-      formatAction={formatAction}
-      formatDate={formatDate}
-      getStatusLabel={getStatusLabel}
-    />
+    <div className="space-y-6">
+      <ClientComplianceForm
+        key={customer.id}
+        customer={customer}
+        customerId={id}
+        auditLogData={auditLogData}
+        auditLoading={auditLoading}
+        formatAction={formatAction}
+        formatDate={formatDate}
+        getStatusLabel={getStatusLabel}
+      />
+      <CustomerOotEventsPanel customerId={id} />
+    </div>
   )
 }
 
