@@ -6,6 +6,15 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Data-viz tokens — validated (dataviz skill six-checks) against the light
+     card surface #ffffff: CVD worst-pair ΔE 73.6; chart-2 is 2.8:1 so any
+     chart using it must carry direct labels or a legend (relief rule). */
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #4a3aa7;
+  --chart-ok: #0ca30c;
+  --chart-warning: #fab219;
+  --chart-critical: #d03b3b;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
@@ -36,6 +45,10 @@
 }
 
 .dark {
+  /* Same hues re-stepped for the dark card surface #18181b — all ≥3:1. */
+  --chart-1: #3987e5;
+  --chart-2: #199e70;
+  --chart-3: #9085e9;
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);

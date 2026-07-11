@@ -452,7 +452,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
 const trendChartConfig = {
   ootRate: {
     label: "Taxa fora de tolerância",
-    color: "var(--critical)",
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
@@ -534,17 +534,13 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
             }
           />
           <Bar dataKey="ootRate" radius={[4, 4, 0, 0]} maxBarSize={40}>
+            {/* One measure, one hue — the height carries the value; status
+                colors stay reserved for status. No-signal buckets stay empty. */}
             {chartData.map((entry) => (
               <Cell
                 key={entry.bucket}
-                fill={
-                  !entry.hasSignal
-                    ? "transparent"
-                    : entry.ootRate > 0
-                      ? "var(--critical)"
-                      : "var(--ok)"
-                }
-                fillOpacity={0.8}
+                fill={entry.hasSignal ? "var(--chart-1)" : "transparent"}
+                fillOpacity={0.85}
               />
             ))}
             <LabelList

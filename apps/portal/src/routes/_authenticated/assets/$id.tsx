@@ -586,8 +586,6 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
           </BlueprintGrid>
         ) : null}
 
-        <MarginSparkline series={insight.series} />
-
         {insight.recommendation ? (
           <div className="bg-muted/45 rounded-xl p-4 text-sm shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
             Sugestão:{" "}
@@ -641,69 +639,6 @@ function IntervalInsightPanel({ assetId }: { assetId: number }) {
         </div>
       </div>
     </Panel>
-  );
-}
-
-/** Compact as-found margin trend; the dashed line is the tolerance limit (margin 0). */
-type SparklinePoint = IntervalInsight["series"][number] & { minMargin: number };
-
-function MarginSparkline({ series }: { series: IntervalInsight["series"] }) {
-  const points = series.filter(
-    (p): p is SparklinePoint => p.minMargin !== null,
-  );
-  if (points.length < 2) return null;
-
-  const width = 220;
-  const height = 44;
-  const margins = points.map((p) => p.minMargin);
-  const min = Math.min(...margins, 0);
-  const max = Math.max(...margins, 0);
-  const range = max - min || 1;
-  const span = points.length - 1;
-  const x = (i: number) => (i / span) * width;
-  const y = (value: number) => height - ((value - min) / range) * height;
-  const path = points
-    .map(
-      (p, i) =>
-        `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.minMargin).toFixed(1)}`,
-    )
-    .join(" ");
-
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="h-12 w-full"
-      role="img"
-      aria-label="Tendência da margem de conformidade (encontrado)"
-      preserveAspectRatio="none"
-    >
-      <line
-        x1={0}
-        x2={width}
-        y1={y(0)}
-        y2={y(0)}
-        className="stroke-muted-foreground/40"
-        strokeDasharray="3 3"
-        strokeWidth={1}
-      />
-      <path
-        d={path}
-        fill="none"
-        className="stroke-foreground/70"
-        strokeWidth={1.5}
-      />
-      {points.map((p, i) => (
-        <circle
-          key={p.approvedAt}
-          cx={x(i)}
-          cy={y(p.minMargin)}
-          r={2.2}
-          className={
-            p.minMargin < 0 ? "fill-[var(--critical)]" : "fill-[var(--ok)]"
-          }
-        />
-      ))}
-    </svg>
   );
 }
 
