@@ -125,7 +125,9 @@ describe("ReliabilityPage", () => {
     expect((await screen.findAllByText("22,2%")).length).toBeGreaterThan(0);
     // Coverage honesty line — always visible.
     expect(
-      screen.getByText(/3 de 12 calibrações sem sinal as-found no período\./),
+      screen.getByText(
+        /3 de 12 calibrações sem parecer “como recebido” no período\./,
+      ),
     ).toBeTruthy();
     // Legal-regime exclusion note.
     expect(
@@ -141,7 +143,7 @@ describe("ReliabilityPage", () => {
     ).toBeTruthy();
   });
 
-  it("shows honest empty states when there is no as-found signal", async () => {
+  it("shows honest empty states when there is no as-found signal in the data", async () => {
     stubFetch(
       analyticsPayload({
         totals: rateFields({
@@ -178,18 +180,20 @@ describe("ReliabilityPage", () => {
     // Trend empty state (no KNOWN cycles anywhere).
     expect(
       await screen.findByText(
-        /Nenhuma calibração com sinal as-found no período/,
+        /Nenhuma calibração com parecer “como recebido” no período/,
       ),
     ).toBeTruthy();
     // Worst-offenders empty state.
     expect(
-      screen.getByText("Nenhuma reprovação as-found no período."),
+      screen.getByText("Nenhuma reprovação “como recebido” no período."),
     ).toBeTruthy();
     // Null rates render as "—" tiles instead of a misleading 0%.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
     // Coverage line still present.
     expect(
-      screen.getByText(/0 de 0 calibrações sem sinal as-found no período\./),
+      screen.getByText(
+        /0 de 0 calibrações sem parecer “como recebido” no período\./,
+      ),
     ).toBeTruthy();
   });
 });

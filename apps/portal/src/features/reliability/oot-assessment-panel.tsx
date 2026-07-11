@@ -152,7 +152,7 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
             Ação requerida
           </span>
         }
-        title="Avaliação de impacto (ISO 9001 §7.1.5.2)"
+        title="Avaliação de impacto"
         description={
           <>
             Este instrumento foi reprovado na condição &ldquo;como
@@ -313,7 +313,7 @@ function OotAssessmentRecord({ event }: { event: OotEvent }) {
             <span className="font-mono tabular-nums">
               {event.jobIdentifier}
             </span>{" "}
-            ({formatDate(event.detectedAt)}) — ISO 9001 §7.1.5.2.
+            ({formatDate(event.detectedAt)}).
           </>
         }
       />

@@ -1902,7 +1902,7 @@ export async function notifyAssetFoundOutOfTolerance(
       type: "ASSET_FOUND_OUT_OF_TOLERANCE",
       priority: "HIGH",
       title: "Ação requerida: avaliar impacto",
-      message: `O equipamento ${assetTag} foi reprovado na condição "como recebido" (as-found) na calibração ${job.jobIdentifier}. Avalie o impacto sobre medições anteriores (ISO 9001 7.1.5.2).`,
+      message: `O equipamento ${assetTag} foi reprovado na condição "como recebido" na calibração ${job.jobIdentifier}. Avalie o impacto sobre medições anteriores no portal.`,
       relatedEntity: {
         entityType: "asset",
         entityId: job.assetId,

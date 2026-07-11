@@ -2858,7 +2858,7 @@ export const portalRouter = new Hono<{
           assetId: id,
           ...buildAssetDriftSeries(rows),
           attribution:
-            "Margens conforme os resultados as-found do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
+            "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
         });
       } catch (error) {
         console.error("Error building drift series:", error);

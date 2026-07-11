@@ -51,7 +51,7 @@ export function NotificationsPage() {
         <PageHeader
           eyebrow="Qualidade"
           title="Notificações"
-          description="Comunicações de qualidade do laboratório (ISO/IEC 17025 §7.10)."
+          description="Comunicações de qualidade do laboratório."
         />
         <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
           A confirmação registra apenas o recebimento da notificação.

@@ -68,9 +68,7 @@ describe("OotAssessmentPanel", () => {
 
     renderPanel();
 
-    expect(
-      await screen.findByText("Avaliação de impacto (ISO 9001 §7.1.5.2)"),
-    ).toBeTruthy();
+    expect(await screen.findByText("Avaliação de impacto")).toBeTruthy();
     expect(screen.getByText(/CAL-2026-0099/)).toBeTruthy();
 
     // Suspect-window defaults: last known-good calibration → detection date.

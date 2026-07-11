@@ -139,7 +139,7 @@ export function ReliabilityPage() {
                 className="text-muted-foreground size-4"
               />
               <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Qualidade · confiabilidade observada (EOPR)
+                Qualidade · confiabilidade observada
               </p>
             </div>
             <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -147,8 +147,8 @@ export function ReliabilityPage() {
             </h1>
             <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
               Desempenho dos instrumentos na condição &ldquo;como
-              recebido&rdquo; (as-found): taxa fora de tolerância, cobertura do
-              sinal e reincidência por equipamento.
+              recebido&rdquo;: taxa fora de tolerância, cobertura do sinal e
+              reincidência por equipamento.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
@@ -262,7 +262,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
             icon={Analytics01Icon}
             label="Taxa fora de tolerância"
             value={formatPct(totals.ootRatePct)}
-            hint="como recebido (as-found)"
+            hint={"condição “como recebido”"}
             tone={ootRateTone(totals.ootRatePct)}
           />
         </StaggerItem>
@@ -278,7 +278,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
         <StaggerItem>
           <SignalTile
             icon={ChartHistogramIcon}
-            label="Cobertura do sinal as-found"
+            label="Cobertura do parecer"
             value={formatPct(totals.coveragePct)}
             hint="ciclos com parecer"
             tone={coverageTone(totals.coveragePct)}
@@ -287,7 +287,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
         <StaggerItem>
           <SignalTile
             icon={HelpCircleIcon}
-            label="Sem sinal as-found"
+            label="Sem parecer"
             value={totals.unknown}
             hint="ciclos sem parecer"
             tone={totals.unknown > 0 ? "info" : "neutral"}
@@ -298,8 +298,8 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
       {/* Coverage honesty line — always visible so nothing is overstated */}
       <Panel className="p-4">
         <p className="text-pretty text-sm text-muted-foreground">
-          {totals.unknown} de {totals.jobs} calibrações sem sinal as-found no
-          período.
+          {totals.unknown} de {totals.jobs} calibrações sem parecer “como
+          recebido” no período.
           {data.legalExcluded > 0
             ? ` ${data.legalExcluded} calibrações de instrumentos em regime legal (Inmetro) não entram nos indicadores.`
             : ""}
@@ -323,7 +323,9 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
         <PanelHeader
           eyebrow="Distribuição"
           title="Por tipo de instrumento"
-          description="Reprovações as-found por família de equipamento no período."
+          description={
+            "Reprovações na condição “como recebido” por família de equipamento no período."
+          }
         />
         <div className="mt-4 overflow-x-auto">
           {data.byAssetType.length > 0 ? (
@@ -374,7 +376,9 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
       <Panel className="p-5">
         <PanelHeader
           eyebrow="Reincidência"
-          title="Equipamentos com maior reincidência de reprovação as-found"
+          title={
+            "Equipamentos com maior reincidência de reprovação “como recebido”"
+          }
           description="Priorize a investigação destes instrumentos — encurtar a periodicidade ou substituir pode ser necessário."
         />
         <div className="mt-4 overflow-x-auto">
@@ -427,7 +431,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
             </Table>
           ) : (
             <p className="text-muted-foreground text-sm">
-              Nenhuma reprovação as-found no período.
+              Nenhuma reprovação “como recebido” no período.
             </p>
           )}
         </div>
@@ -458,8 +462,8 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
     return (
       <div className="bg-muted/30 flex min-h-32 items-center justify-center rounded-xl p-6 text-center">
         <p className="text-muted-foreground max-w-sm text-pretty text-sm">
-          Nenhuma calibração com sinal as-found no período — sem dados para a
-          tendência.
+          Nenhuma calibração com parecer “como recebido” no período — sem dados
+          para a tendência.
         </p>
       </div>
     );
@@ -524,7 +528,7 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
                       : 0;
                   return hasSignal
                     ? `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de ${known} com parecer`
-                    : "sem sinal as-found";
+                    : "sem parecer registrado";
                 }}
               />
             }
@@ -553,7 +557,7 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
       </ChartContainer>
       <p className="text-muted-foreground mt-2 text-xs">
         Barras sobre os ciclos com parecer conhecido; &ldquo;—&rdquo; indica
-        período sem sinal as-found.
+        período sem parecer registrado.
       </p>
     </div>
   );

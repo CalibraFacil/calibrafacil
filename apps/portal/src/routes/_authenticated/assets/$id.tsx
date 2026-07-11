@@ -875,7 +875,7 @@ function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
               rows={3}
             />
             <p className="text-muted-foreground text-xs text-pretty">
-              Registro técnico obrigatório (NBR ISO/IEC 17025 §7.5).
+              A justificativa fica registrada no histórico do equipamento.
             </p>
           </div>
           <Button

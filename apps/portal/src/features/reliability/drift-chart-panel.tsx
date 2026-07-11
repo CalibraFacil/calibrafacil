@@ -52,7 +52,7 @@ export function DriftChartPanel({ assetId }: { assetId: number }) {
       <div className="mt-4 space-y-3">
         {data.coverage.cyclesWithMargins < 3 ? (
           <p className="text-muted-foreground text-sm text-pretty">
-            Sem histórico as-found suficiente para análise de deriva (
+            Sem histórico “como recebido” suficiente para análise de deriva (
             {data.coverage.cyclesWithMargins} de {data.coverage.totalCycles}{" "}
             calibrações com sinal).
           </p>
