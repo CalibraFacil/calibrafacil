@@ -295,8 +295,12 @@ function AssetDetailPage() {
         </StaggerItem>
       </StaggerGroup>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
-        <div className="space-y-6">
+      {/* min-w-0 on the columns: a grid item's implicit min-width is
+          min-content, and the recharts SVG carries a fixed pixel width once
+          measured — without min-w-0 one wide measurement ratchets the column
+          past the viewport and it can never shrink back. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="min-w-0 space-y-6">
           {/* Out-of-tolerance impact assessment (ISO 9001 §7.1.5.2) */}
           <OotAssessmentPanel assetId={asset.id} />
 
@@ -367,7 +371,7 @@ function AssetDetailPage() {
           ) : null}
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Track 1 — customer-owned calibration interval */}
           <IntervalEditorPanel asset={asset} />
 
