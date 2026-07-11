@@ -1,9 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  type OnChangeFn,
-  type SortingState,
-} from "@tanstack/react-table";
+import { type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import {
   Add01Icon,
   AlertCircleIcon,
@@ -194,12 +191,19 @@ export function FleetPage({
       />
 
       {/* Compliance vitals — instrument indicators that double as filters */}
-      <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <StaggerGroup className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
         {VITALS.map((vital) => {
           const active = dueStatus === vital.filter;
           const count = vitalCounts[vital.filter];
           return (
-            <StaggerItem key={vital.filter}>
+            <StaggerItem
+              key={vital.filter}
+              className={
+                vital.filter === "overdue"
+                  ? "col-span-2 sm:col-span-1"
+                  : undefined
+              }
+            >
               <button
                 type="button"
                 onClick={() => toggleVital(vital.filter)}
@@ -222,38 +226,43 @@ export function FleetPage({
         })}
       </StaggerGroup>
 
-      {/* Calibration-status filter chips */}
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((filter) => {
-          const active =
-            filter.value === "all" ? !dueStatus : filter.value === dueStatus;
-          return (
-            <button
-              key={filter.value}
-              type="button"
-              onClick={() => selectFilter(filter.value)}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] active:scale-[0.96]",
-                active
-                  ? cn(TONE[filter.tone].surface, "border-transparent")
-                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              {filter.value !== "all" ? (
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    active ? TONE[filter.tone].dot : "bg-muted-foreground/40",
-                  )}
-                />
-              ) : null}
-              {filter.label}
-            </button>
-          );
-        })}
-      </div>
-
       <Panel className="space-y-4 p-4">
+        {/* Table toolbar — the filters belong to the table, not floating above it */}
+        <div className="-mx-4 overflow-x-auto px-4">
+          <div className="flex w-max items-center gap-2 sm:w-auto sm:flex-wrap">
+            {FILTERS.map((filter) => {
+              const active =
+                filter.value === "all"
+                  ? !dueStatus
+                  : filter.value === dueStatus;
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => selectFilter(filter.value)}
+                  className={cn(
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] active:scale-[0.96]",
+                    active
+                      ? cn(TONE[filter.tone].surface, "border-transparent")
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {filter.value !== "all" ? (
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        active
+                          ? TONE[filter.tone].dot
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                  ) : null}
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative min-w-50 flex-1">
             <HugeiconsIcon

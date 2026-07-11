@@ -256,7 +256,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
   return (
     <>
       {/* Vitals */}
-      <StaggerGroup className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <StaggerGroup className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <StaggerItem>
           <SignalTile
             icon={Analytics01Icon}
@@ -566,7 +566,7 @@ function TrendBarChart({ trend }: { trend: Array<FleetTrendBucket> }) {
 function ReliabilitySkeleton() {
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         {["oot", "jobs", "coverage", "unknown"].map((tile) => (
           <Skeleton key={tile} className="h-[5.5rem] rounded-xl" />
         ))}

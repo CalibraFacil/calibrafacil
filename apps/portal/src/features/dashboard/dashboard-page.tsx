@@ -310,8 +310,8 @@ function ComplianceVitals({
       </div>
 
       {/* Vitals tiles */}
-      <StaggerGroup className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StaggerItem>
+      <StaggerGroup className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        <StaggerItem className="col-span-2 sm:col-span-1">
           <VitalTileLink
             icon={Alert02Icon}
             label="Vencidas"
