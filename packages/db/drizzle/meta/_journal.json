@@ -659,6 +659,13 @@
       "when": 1783786756756,
       "tag": "0093_asset_oot_events",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1783824119761,
+      "tag": "0094_asset_public_id",
+      "breakpoints": true
     }
   ]
 }

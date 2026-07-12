@@ -6,6 +6,7 @@ import type { CalendarDueAsset } from "./queries";
 function due(overrides: Partial<CalendarDueAsset>): CalendarDueAsset {
   return {
     id: 1,
+    publicId: "pub-1",
     name: "Balança",
     tag: "EQ-1",
     assetTypeName: "Balança",

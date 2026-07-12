@@ -2760,6 +2760,13 @@ export const asset = pgTable(
   "asset",
   {
     id: serial("id").primaryKey(),
+    // Opaque, non-sequential identifier for client-facing URLs (the portal
+    // routes by this instead of the enumerable serial id). Mirrors
+    // serviceOrder.publicId / billingDocument.publicId.
+    publicId: text("public_id")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),

@@ -353,7 +353,7 @@ export function FleetPage({
               onRowClick={(asset) => {
                 void navigate({
                   to: "/assets/$id",
-                  params: { id: String(asset.id) },
+                  params: { id: asset.publicId },
                 });
               }}
               itemName="equipamentos"

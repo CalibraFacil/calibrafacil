@@ -30,6 +30,7 @@ export type FleetAssetTypeBreakdown = FleetRateFields & {
 
 export type FleetWorstOffender = {
   assetId: number;
+  assetPublicId: string;
   tag: string;
   name: string;
   assetTypeName: string;
@@ -93,6 +94,7 @@ export type OotEvent = {
   detectedAt: string;
   customerId: number;
   assetId: number;
+  assetPublicId: string;
   assetTag: string;
   assetName: string;
   jobId: number;

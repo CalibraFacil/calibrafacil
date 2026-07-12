@@ -12,6 +12,7 @@ function row(overrides: Partial<FleetJobRow>): FleetJobRow {
     approvedAt: new Date("2026-01-15T12:00:00Z"),
     asFoundConformity: "CONFORMING",
     assetId: 1,
+    assetPublicId: "pub-1",
     assetTag: "EQ-1",
     assetName: "Balança",
     assetTypeId: 10,
@@ -115,7 +116,11 @@ describe("buildFleetReliabilitySummary", () => {
   it("ranks worst offenders by failure count then rate, capped at maxOffenders", () => {
     const rows: FleetJobRow[] = [
       // asset 1: 2 failures of 3 known
-      row({ assetId: 1, assetTag: "EQ-1", asFoundConformity: "NON_CONFORMING" }),
+      row({
+        assetId: 1,
+        assetTag: "EQ-1",
+        asFoundConformity: "NON_CONFORMING",
+      }),
       row({
         assetId: 1,
         assetTag: "EQ-1",
@@ -124,7 +129,11 @@ describe("buildFleetReliabilitySummary", () => {
       }),
       row({ assetId: 1, assetTag: "EQ-1" }),
       // asset 2: 1 failure of 1 known (higher rate, lower count)
-      row({ assetId: 2, assetTag: "EQ-2", asFoundConformity: "NON_CONFORMING" }),
+      row({
+        assetId: 2,
+        assetTag: "EQ-2",
+        asFoundConformity: "NON_CONFORMING",
+      }),
       // asset 3: clean — must not appear
       row({ assetId: 3, assetTag: "EQ-3" }),
     ];

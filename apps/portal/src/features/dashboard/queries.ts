@@ -5,6 +5,7 @@ import type { RequestStatus } from "@/lib/status-labels";
 
 export type OverviewEquipmentItem = {
   id: number;
+  publicId: string;
   name: string;
   tag: string;
   nextCalibrationDate: string | null;

@@ -66,6 +66,7 @@ function analyticsPayload(overrides: Record<string, unknown> = {}) {
     worstOffenders: [
       {
         assetId: 10,
+        assetPublicId: "pub-asset-10",
         tag: "MAN-001",
         name: "Manômetro linha 2",
         assetTypeName: "Manômetro",

@@ -19,6 +19,8 @@ export type FleetLastCertificate = {
 
 export type FleetAsset = {
   id: number;
+  /** Opaque identifier used in portal URLs (never the serial id). */
+  publicId: string;
   customerId: number;
   customerName: string;
   assetTypeId: number;

@@ -456,7 +456,7 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
           <ActionRow
             key={`oot-${event.id}`}
             to="/assets/$id"
-            params={{ id: String(event.assetId) }}
+            params={{ id: event.assetPublicId }}
             tone="critical"
             icon={AlertDiamondIcon}
             pulse
@@ -471,7 +471,7 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
             <ActionRow
               key={`asset-${item.id}`}
               to="/assets/$id"
-              params={{ id: String(item.id) }}
+              params={{ id: item.publicId }}
               tone="critical"
               icon={Wrench01Icon}
               pulse

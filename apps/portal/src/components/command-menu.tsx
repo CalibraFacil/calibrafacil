@@ -24,6 +24,7 @@ import { StatusPill } from "@/components/status-pill";
 
 type AssetHit = {
   id: number;
+  publicId: string;
   name: string;
   tag: string;
   serialNumber: string;
@@ -190,7 +191,7 @@ export function CommandMenu({
                         run(() =>
                           navigate({
                             to: "/assets/$id",
-                            params: { id: String(asset.id) },
+                            params: { id: asset.publicId },
                           }),
                         )
                       }

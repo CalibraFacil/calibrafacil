@@ -32,6 +32,7 @@ export type FleetJobRow = {
   approvedAt: Date | null;
   asFoundConformity: "CONFORMING" | "NON_CONFORMING" | "UNKNOWN" | null;
   assetId: number;
+  assetPublicId: string;
   assetTag: string;
   assetName: string;
   assetTypeId: number;
@@ -62,6 +63,7 @@ export type FleetAssetTypeSlice = FleetRateSlice & {
 
 export type FleetWorstOffender = {
   assetId: number;
+  assetPublicId: string;
   tag: string;
   name: string;
   assetTypeName: string;
@@ -170,6 +172,7 @@ export function buildFleetReliabilitySummary(
     if (!offender) {
       offender = {
         assetId: row.assetId,
+        assetPublicId: row.assetPublicId,
         tag: row.assetTag,
         name: row.assetName,
         assetTypeName: row.assetTypeName,
@@ -192,7 +195,10 @@ export function buildFleetReliabilitySummary(
     if (row.asFoundConformity === "NON_CONFORMING") {
       offender.nonConforming += 1;
       const ms = row.approvedAt.getTime();
-      if (offender.lastNonConformingMs === null || ms > offender.lastNonConformingMs) {
+      if (
+        offender.lastNonConformingMs === null ||
+        ms > offender.lastNonConformingMs
+      ) {
         offender.lastNonConformingMs = ms;
         offender.lastNonConformingAt = row.approvedAt.toISOString();
       }
@@ -305,9 +311,7 @@ export function buildAssetDriftSeries(
 ): AssetDriftSeries {
   const dated = sortedDatedDriftRows(rows);
   const firstMs = dated[0]?.approvedAt.getTime() ?? 0;
-  const withMargins = dated.filter(
-    (r) => (r.asFoundMargins?.length ?? 0) > 0,
-  );
+  const withMargins = dated.filter((r) => (r.asFoundMargins?.length ?? 0) > 0);
 
   const cycles = dated.map((r) => ({
     approvedAt: r.approvedAt.toISOString(),

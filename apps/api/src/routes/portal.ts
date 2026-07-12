@@ -147,6 +147,26 @@ const PortalAuditPackRequestSchema = z
     { message: "Selecione ao menos um conteúdo para o pacote" },
   );
 
+// The portal routes assets by the opaque `publicId` (uuid) so URLs never
+// expose the enumerable serial id; plain numeric params stay accepted so
+// pre-existing links and integrations keep working. Resolves to the internal
+// serial id or null when the param matches nothing. Scope checks still happen
+// downstream — this only translates the identifier.
+async function resolvePortalAssetIdParam(
+  param: string,
+): Promise<number | null> {
+  if (/^\d+$/.test(param)) {
+    const id = Number.parseInt(param, 10);
+    return Number.isNaN(id) ? null : id;
+  }
+  const [row] = await db
+    .select({ id: asset.id })
+    .from(asset)
+    .where(eq(asset.publicId, param))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 // An instrument is "in lab" while it has an open calibration job or an open
 // service order — i.e. it is physically at the laboratory right now. Open job
 // statuses are every non-terminal JobStatus; open service orders mirror the
@@ -702,6 +722,7 @@ export const portalRouter = new Hono<{
         db
           .select({
             id: asset.id,
+            publicId: asset.publicId,
             name: asset.name,
             tag: asset.tag,
             nextCalibrationDate: asset.nextCalibrationDate,
@@ -922,6 +943,7 @@ export const portalRouter = new Hono<{
         const assets = await db
           .select({
             id: asset.id,
+            publicId: asset.publicId,
             customerId: asset.customerId,
             customerName: customer.name,
             assetTypeId: asset.assetTypeId,
@@ -1022,10 +1044,9 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = Number.parseInt(c.req.param("id"), 10);
-
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      const id = await resolvePortalAssetIdParam(c.req.param("id"));
+      if (id === null) {
+        return c.json({ error: "Ativo nao encontrado" }, 404);
       }
 
       try {
@@ -1042,6 +1063,7 @@ export const portalRouter = new Hono<{
         const [assetDetails] = await db
           .select({
             id: asset.id,
+            publicId: asset.publicId,
             customerId: asset.customerId,
             customerName: customer.name,
             assetTypeId: asset.assetTypeId,
@@ -1200,6 +1222,7 @@ export const portalRouter = new Hono<{
         const dues = await db
           .select({
             id: asset.id,
+            publicId: asset.publicId,
             name: asset.name,
             tag: asset.tag,
             assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
@@ -1384,9 +1407,9 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      const id = await resolvePortalAssetIdParam(c.req.param("id"));
+      if (id === null) {
+        return c.json({ error: "Ativo nao encontrado" }, 404);
       }
 
       try {
@@ -1507,9 +1530,9 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      const id = await resolvePortalAssetIdParam(c.req.param("id"));
+      if (id === null) {
+        return c.json({ error: "Ativo nao encontrado" }, 404);
       }
 
       try {
@@ -1651,9 +1674,9 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      const id = await resolvePortalAssetIdParam(c.req.param("id"));
+      if (id === null) {
+        return c.json({ error: "Ativo nao encontrado" }, 404);
       }
 
       const { intervalMonths, rationale, source } = c.req.valid("json");
@@ -1886,6 +1909,7 @@ export const portalRouter = new Hono<{
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
           assetId: calibrationJob.assetId,
+          assetPublicId: asset.publicId,
           assetName: asset.name,
           assetTag: asset.tag,
           assetManufacturer: asset.manufacturer,
@@ -1965,6 +1989,7 @@ export const portalRouter = new Hono<{
             calibrationJob.calibrationLocationSnapshot,
           results: calibrationJob.results,
           assetId: calibrationJob.assetId,
+          assetPublicId: asset.publicId,
           assetName: asset.name,
           assetTag: asset.tag,
           assetManufacturer: asset.manufacturer,
@@ -2760,6 +2785,7 @@ export const portalRouter = new Hono<{
             approvedAt: calibrationJob.approvedAt,
             asFoundConformity: calibrationJob.asFoundConformity,
             assetId: calibrationJob.assetId,
+            assetPublicId: asset.publicId,
             assetTag: asset.tag,
             assetName: asset.name,
             assetTypeId: asset.assetTypeId,
@@ -2809,9 +2835,9 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      const id = await resolvePortalAssetIdParam(c.req.param("id"));
+      if (id === null) {
+        return c.json({ error: "Ativo nao encontrado" }, 404);
       }
 
       try {
@@ -2914,6 +2940,7 @@ export const portalRouter = new Hono<{
             detectedAt: assetOotEvent.detectedAt,
             customerId: assetOotEvent.customerId,
             assetId: assetOotEvent.assetId,
+            assetPublicId: asset.publicId,
             assetTag: asset.tag,
             assetName: asset.name,
             jobId: assetOotEvent.jobId,
@@ -2940,10 +2967,7 @@ export const portalRouter = new Hono<{
           })
           .from(assetOotEvent)
           .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
-          .innerJoin(
-            calibrationJob,
-            eq(assetOotEvent.jobId, calibrationJob.id),
-          )
+          .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
           .leftJoin(
             assetOotImpactAssessment,
             eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
@@ -3020,9 +3044,7 @@ export const portalRouter = new Hono<{
         }
 
         const ipAddress =
-          c.req.header("x-forwarded-for") ??
-          c.req.header("x-real-ip") ??
-          null;
+          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
         const userAgent = c.req.header("user-agent") ?? null;
 
         const [assessment] = await db

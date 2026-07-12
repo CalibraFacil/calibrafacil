@@ -1,4 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Fragment, useMemo, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon } from "@hugeicons/core-free-icons";
@@ -53,6 +54,17 @@ export function PortalHeader() {
   const { pathname } = useLocation();
   const [commandOpen, setCommandOpen] = useState(false);
 
+  // On an asset detail page the trailing crumb shows the instrument's name
+  // instead of a generic "Equipamento". The URL id is opaque (publicId), so the
+  // name comes from the page's own query cache: same key, skipToken — the
+  // header never fetches, it only mirrors what the page already loaded.
+  const assetParam = /^\/assets\/([^/]+)/.exec(pathname)?.[1] ?? null;
+  const assetCrumbQuery = useQuery<{ name?: string }>({
+    queryKey: ["portal-asset", assetParam ?? "__none__"],
+    queryFn: skipToken,
+  });
+  const assetName = assetParam ? assetCrumbQuery.data?.name : undefined;
+
   useMountEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -78,6 +90,8 @@ export function PortalHeader() {
       let label: string;
       if (SEGMENT_LABELS[segment]) {
         label = SEGMENT_LABELS[segment];
+      } else if (parent === "assets" && assetName) {
+        label = assetName;
       } else if (parent && DETAIL_LABELS[parent]) {
         label = DETAIL_LABELS[parent];
       } else {
@@ -88,7 +102,7 @@ export function PortalHeader() {
     });
 
     return crumbs;
-  }, [pathname]);
+  }, [pathname, assetName]);
 
   return (
     <header className="bg-background/80 sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 backdrop-blur-sm">
@@ -103,7 +117,9 @@ export function PortalHeader() {
                 <Fragment key={crumb.path}>
                   <BreadcrumbItem>
                     {isLast ? (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage className="max-w-[18rem] truncate">
+                        {crumb.label}
+                      </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink render={<Link to={crumb.path} />}>
                         {crumb.label}

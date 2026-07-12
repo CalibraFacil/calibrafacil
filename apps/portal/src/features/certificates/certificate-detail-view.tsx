@@ -76,6 +76,7 @@ export type Certificate = {
   methodSnapshot: MethodSnapshotLike;
   results: Record<string, unknown> | null;
   assetId: number;
+  assetPublicId: string;
   assetName: string;
   assetTag: string;
   assetManufacturer: string | null;
@@ -580,7 +581,7 @@ export function CertificateDetailView({
             render={
               <Link
                 to="/assets/$id"
-                params={{ id: String(certificate.assetId) }}
+                params={{ id: certificate.assetPublicId }}
               />
             }
           >

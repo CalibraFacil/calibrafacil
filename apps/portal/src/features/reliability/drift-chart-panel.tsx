@@ -10,7 +10,13 @@ import {
   YAxis,
 } from "recharts";
 
-import { Panel, PanelHeader } from "@/components/instrument-panel";
+import {
+  ACTION_BUTTON_CLASS,
+  Panel,
+  PanelHeader,
+} from "@/components/instrument-panel";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusPill } from "@/components/status-pill";
 import {
   ChartContainer,
@@ -57,7 +63,6 @@ function formatFullDate(timeMs: number): string {
 export function DriftChartPanel({ assetId }: { assetId: number }) {
   const query = useDriftSeries(assetId);
   const data = query.data;
-  if (!data) return null;
 
   return (
     <Panel className="p-5">
@@ -67,7 +72,23 @@ export function DriftChartPanel({ assetId }: { assetId: number }) {
         description="Margem de conformidade 'como recebido' de cada ponto medido ao longo do tempo — margem 0 é o limite de tolerância."
       />
       <div className="mt-4 space-y-3">
-        {data.coverage.cyclesWithMargins < 3 ? (
+        {query.isPending ? (
+          <Skeleton className="h-56 w-full rounded-xl" />
+        ) : query.isError || !data ? (
+          <div className="space-y-3">
+            <p className="text-muted-foreground text-sm text-pretty">
+              Não foi possível carregar a análise de deriva.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => query.refetch()}
+              className={ACTION_BUTTON_CLASS}
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        ) : data.coverage.cyclesWithMargins < 3 ? (
           <p className="text-muted-foreground text-sm text-pretty">
             Sem histórico “como recebido” suficiente para análise de deriva (
             {data.coverage.cyclesWithMargins} de {data.coverage.totalCycles}{" "}
@@ -76,9 +97,11 @@ export function DriftChartPanel({ assetId }: { assetId: number }) {
         ) : (
           <DriftChart data={data} />
         )}
-        <p className="text-muted-foreground text-xs text-pretty">
-          {data.attribution}
-        </p>
+        {data ? (
+          <p className="text-muted-foreground text-xs text-pretty">
+            {data.attribution}
+          </p>
+        ) : null}
       </div>
     </Panel>
   );

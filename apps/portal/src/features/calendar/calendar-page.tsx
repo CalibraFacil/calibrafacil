@@ -315,7 +315,7 @@ export function CalendarPage({
                 <Link
                   key={due.id}
                   to="/assets/$id"
-                  params={{ id: String(due.id) }}
+                  params={{ id: due.publicId }}
                   className="hover:bg-muted/60 flex items-center justify-between gap-3 rounded-lg p-2 transition-colors"
                 >
                   <div className="min-w-0">

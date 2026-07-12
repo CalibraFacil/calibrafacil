@@ -404,7 +404,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
                     <TableCell>
                       <Link
                         to="/assets/$id"
-                        params={{ id: String(offender.assetId) }}
+                        params={{ id: offender.assetPublicId }}
                         className="font-mono tabular-nums hover:underline"
                       >
                         {offender.tag}

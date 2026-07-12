@@ -4,6 +4,7 @@ import { getApiBaseUrl } from "@/lib/utils";
 
 export type CalendarDueAsset = {
   id: number;
+  publicId: string;
   name: string;
   tag: string;
   assetTypeName: string;
