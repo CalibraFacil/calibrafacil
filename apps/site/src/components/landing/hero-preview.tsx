@@ -6,6 +6,10 @@ import { Reveal } from "./reveal";
  * Full-bleed screenshot of the dashboard, framed as a macOS window. Tilts back
  * at rest and flattens on hover. Uses design-system surfaces so the frame
  * belongs to the rest of the landing.
+ *
+ * Below `md` the macOS window is swapped for the dashboard captured on an
+ * iPhone, composited into Apple's official iPhone 17 product bezel (white for
+ * light mode, black for dark mode).
  */
 export function HeroPreview() {
   return (
@@ -21,7 +25,33 @@ export function HeroPreview() {
       <div className="relative mx-auto max-w-[1200px] px-6 md:px-8">
         <Reveal delay={0.16}>
           <div className="group/preview mx-auto w-full transition-transform duration-[600ms] ease-[ease] [transform:perspective(2000px)_rotateX(-2deg)] hover:[transform:perspective(2000px)_rotateX(0deg)] motion-reduce:transform-none motion-reduce:transition-none">
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 ring-1 ring-black/[0.04] dark:shadow-black/40 dark:ring-white/[0.04]">
+            {/* Phone-framed variant for phones. The `1px` sizes entry keeps
+                the off-breakpoint priority preload down to the smallest srcset
+                candidate, so mobile and desktop each effectively preload only
+                their own LCP image. */}
+            <div className="md:hidden">
+              <Image
+                src="/hero-preview-mobile.png"
+                alt="Painel do CalibraFácil no celular, com indicadores de calibração e fila de ordens de serviço."
+                width={1311}
+                height={2708}
+                priority
+                sizes="(min-width: 768px) 1px, 300px"
+                draggable={false}
+                className="mx-auto block h-auto w-[min(76vw,300px)] select-none dark:hidden"
+              />
+              <Image
+                src="/hero-preview-mobile-dark.png"
+                alt="Painel do CalibraFácil no celular, com indicadores de calibração e fila de ordens de serviço."
+                width={1311}
+                height={2708}
+                sizes="(min-width: 768px) 1px, 300px"
+                draggable={false}
+                className="mx-auto hidden h-auto w-[min(76vw,300px)] select-none dark:block"
+              />
+            </div>
+
+            <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 ring-1 ring-black/[0.04] md:block dark:shadow-black/40 dark:ring-white/[0.04]">
               <div className="flex items-center gap-3 border-b border-border/80 bg-background/60 px-4 py-3 backdrop-blur-sm">
                 <div className="flex shrink-0 gap-1.5" aria-hidden>
                   <span className="size-3 rounded-full bg-[#ff5f57] ring-1 ring-inset ring-black/10" />
@@ -50,7 +80,7 @@ export function HeroPreview() {
                 width={3420}
                 height={2146}
                 priority
-                sizes="(min-width: 1200px) 1136px, 100vw"
+                sizes="(max-width: 767px) 1px, (min-width: 1200px) 1136px, 100vw"
                 draggable={false}
                 className="block h-auto w-full select-none dark:hidden"
               />
@@ -59,7 +89,7 @@ export function HeroPreview() {
                 alt="Painel do CalibraFácil com indicadores de calibração, fila de ordens de serviço e tendência de aprovações."
                 width={3420}
                 height={2146}
-                sizes="(min-width: 1200px) 1136px, 100vw"
+                sizes="(max-width: 767px) 1px, (min-width: 1200px) 1136px, 100vw"
                 draggable={false}
                 className="hidden h-auto w-full select-none dark:block"
               />
