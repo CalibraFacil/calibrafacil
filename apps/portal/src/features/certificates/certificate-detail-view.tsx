@@ -62,6 +62,33 @@ import {
   type MethodSnapshotLike,
 } from "@/features/certificates/verdict";
 
+/**
+ * Amendment chain info (ISO/IEC 17025 §7.8.8) attached by
+ * GET /api/portal/certificates/:id. Neighbour links are only present once the
+ * neighbour is itself an issued, portal-visible certificate.
+ */
+export type CertificateAmendment = {
+  isAmendment: boolean;
+  isSuperseded: boolean;
+  amendmentNumber: number | null;
+  amendmentReason: string | null;
+  supersededAt: string | null;
+  supersedes: { id: number; jobId: string } | null;
+  supersededBy: {
+    id: number;
+    jobId: string;
+    amendmentNumber: number | null;
+    approvedAt: string | null;
+  } | null;
+  chain: Array<{
+    id: number;
+    jobId: string;
+    amendmentNumber: number | null;
+    approvedAt: string | null;
+    isCurrent: boolean;
+  }>;
+};
+
 export type Certificate = {
   id: number;
   jobId: string;
@@ -91,6 +118,7 @@ export type Certificate = {
     accredited: boolean;
     number: string | null;
   };
+  amendment?: CertificateAmendment | null;
   onSite?: {
     executedOnSite: boolean;
     addressText: string | null;
@@ -303,6 +331,191 @@ function SignatureStrip({ token }: { token: string }) {
 }
 
 /**
+ * Amendment banner (ISO/IEC 17025 §7.8.8) — a superseded certificate must be
+ * unmistakably flagged, and a retificação must reference the original it
+ * replaces (with the reason for the change).
+ */
+function AmendmentNotice({ amendment }: { amendment: CertificateAmendment }) {
+  if (amendment.isSuperseded) {
+    const replacement = amendment.supersededBy;
+    return (
+      <Alert variant="warning">
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+        <AlertTitle>Certificado substituído</AlertTitle>
+        <AlertDescription>
+          <p>
+            {replacement ? (
+              <>
+                Este certificado foi substituído pela retificação
+                {replacement.amendmentNumber
+                  ? ` nº ${replacement.amendmentNumber}`
+                  : ""}{" "}
+                (
+                <span className="font-mono tabular-nums">
+                  {replacement.jobId}
+                </span>
+                )
+              </>
+            ) : (
+              <>
+                Este certificado foi substituído por uma nova emissão, que será
+                disponibilizada no portal assim que concluída
+              </>
+            )}
+            {amendment.supersededAt
+              ? ` em ${formatDate(amendment.supersededAt)}`
+              : ""}
+            . Não o utilize como referência.
+          </p>
+          {amendment.amendmentReason ? (
+            <p className="mt-1">Motivo: {amendment.amendmentReason}</p>
+          ) : null}
+          {replacement ? (
+            <Link
+              to="/certificates/$id"
+              params={{ id: replacement.jobId }}
+              className="mt-2 inline-flex items-center gap-1 font-medium underline underline-offset-2"
+            >
+              Ver versão vigente
+              <HugeiconsIcon
+                icon={ArrowRight01Icon}
+                strokeWidth={2}
+                className="size-3.5"
+              />
+            </Link>
+          ) : null}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (amendment.isAmendment) {
+    const original = amendment.supersedes;
+    return (
+      <Alert variant="info">
+        <HugeiconsIcon icon={SecurityCheckIcon} strokeWidth={2} />
+        <AlertTitle>
+          Retificação
+          {amendment.amendmentNumber ? ` nº ${amendment.amendmentNumber}` : ""}
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            {original ? (
+              <>
+                Substitui o certificado{" "}
+                <span className="font-mono tabular-nums">{original.jobId}</span>
+                .
+              </>
+            ) : (
+              <>Substitui uma emissão anterior deste certificado.</>
+            )}
+          </p>
+          {amendment.amendmentReason ? (
+            <p className="mt-1">Motivo: {amendment.amendmentReason}</p>
+          ) : null}
+          {original ? (
+            <Link
+              to="/certificates/$id"
+              params={{ id: original.jobId }}
+              className="mt-2 inline-flex items-center gap-1 font-medium underline underline-offset-2"
+            >
+              Ver certificado substituído
+              <HugeiconsIcon
+                icon={ArrowRight01Icon}
+                strokeWidth={2}
+                className="size-3.5"
+              />
+            </Link>
+          ) : null}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Compact emission-chain timeline, shown when a certificate was re-amended
+ * (chain longer than original + one retificação).
+ */
+function AmendmentChainTimeline({
+  chain,
+  viewedId,
+}: {
+  chain: CertificateAmendment["chain"];
+  viewedId: number;
+}) {
+  return (
+    <Panel className="p-5 sm:p-6">
+      <PanelHeader
+        eyebrow="Retificações"
+        title="Histórico de emissões"
+        description="Cadeia de retificações deste certificado, da emissão original à versão vigente."
+      />
+      <ol className="mt-4">
+        {chain.map((member, index) => {
+          const tone: SignalTone = member.isCurrent ? "ok" : "neutral";
+          const isViewed = member.id === viewedId;
+          return (
+            <li key={member.id} className="relative flex gap-3 pb-4 last:pb-0">
+              {index < chain.length - 1 ? (
+                <span
+                  aria-hidden
+                  className="bg-foreground/15 absolute top-4 left-[5px] h-full w-px"
+                />
+              ) : null}
+              <span
+                aria-hidden
+                className={cn(
+                  "relative mt-1.5 size-[11px] shrink-0 rounded-full",
+                  TONE[tone].dot,
+                )}
+              />
+              <div className="min-w-0 text-sm">
+                <p className="flex flex-wrap items-center gap-2">
+                  {isViewed ? (
+                    <span className="font-mono font-medium tabular-nums">
+                      {member.jobId}
+                    </span>
+                  ) : (
+                    <Link
+                      to="/certificates/$id"
+                      params={{ id: member.jobId }}
+                      className="font-mono tabular-nums underline underline-offset-2"
+                    >
+                      {member.jobId}
+                    </Link>
+                  )}
+                  {member.isCurrent ? (
+                    <StatusPill tone="ok" size="sm">
+                      Vigente
+                    </StatusPill>
+                  ) : (
+                    <StatusPill tone="neutral" size="sm" dot={false}>
+                      Substituído
+                    </StatusPill>
+                  )}
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  {member.amendmentNumber
+                    ? `Retificação nº ${member.amendmentNumber}`
+                    : "Emissão original"}
+                  {member.approvedAt
+                    ? ` · aprovado em ${formatDate(member.approvedAt)}`
+                    : ""}
+                  {isViewed ? " · este certificado" : ""}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Panel>
+  );
+}
+
+/**
  * Presentational certificate detail. The route adapter fetches the certificate
  * and passes it in.
  */
@@ -382,6 +595,7 @@ export function CertificateDetailView({
     label: conformityLabel,
     pointsHint,
   } = summarizeConformity(verdict);
+  const amendment = certificate.amendment ?? null;
 
   return (
     <div className="portal-shell space-y-6">
@@ -389,6 +603,11 @@ export function CertificateDetailView({
         <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} />
         Certificados
       </Button>
+
+      {/* §7.8.8 — supersession / retificação must be the first thing read. */}
+      {amendment && (amendment.isSuperseded || amendment.isAmendment) ? (
+        <AmendmentNotice amendment={amendment} />
+      ) : null}
 
       {/* Quality-record header */}
       <Panel className="relative overflow-hidden">
@@ -438,6 +657,13 @@ export function CertificateDetailView({
                   <StatusPill tone={conformityTone}>
                     {conformityLabel}
                   </StatusPill>
+                  {amendment?.isSuperseded ? (
+                    <StatusPill tone="warning">Substituído</StatusPill>
+                  ) : amendment?.isAmendment ? (
+                    <StatusPill tone="info">
+                      Retificação nº {amendment.amendmentNumber ?? 1}
+                    </StatusPill>
+                  ) : null}
                   {accredited ? (
                     <StatusPill tone="info">Acreditado RBC</StatusPill>
                   ) : null}
@@ -536,6 +762,14 @@ export function CertificateDetailView({
 
       {/* Authenticity — Vercel-style status strip */}
       <SignatureStrip token={certificate.verificationToken} />
+
+      {/* Re-amended chains get the full emission history. */}
+      {amendment && amendment.chain.length > 2 ? (
+        <AmendmentChainTimeline
+          chain={amendment.chain}
+          viewedId={certificate.id}
+        />
+      ) : null}
 
       {isPaymentPending ? (
         <Alert variant="warning">

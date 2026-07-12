@@ -12,6 +12,7 @@ import {
 import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
 import {
   Card,
   CardContent,
@@ -67,6 +68,10 @@ type Certificate = {
   assetSerialNumber: string;
   serviceName: string;
   labName: string;
+  /** Amendment chain (ISO 17025 §7.8.8) — see GET /api/portal/certificates. */
+  isSuperseded: boolean;
+  isAmendment: boolean;
+  amendmentNumber: number | null;
 };
 
 type CertificatesResponse = {
@@ -270,7 +275,19 @@ function CertificatesPage() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: () => <Badge variant="default">Aprovado</Badge>,
+        // §7.8.8: a superseded original and its retificação must be
+        // distinguishable at a glance — same vocabulary as the public
+        // verification page.
+        cell: ({ row }) =>
+          row.original.isSuperseded ? (
+            <StatusPill tone="warning">Substituído</StatusPill>
+          ) : row.original.isAmendment ? (
+            <StatusPill tone="info">
+              Retificação nº {row.original.amendmentNumber ?? 1}
+            </StatusPill>
+          ) : (
+            <StatusPill tone="ok">Aprovado</StatusPill>
+          ),
       },
       {
         id: "actions",

@@ -4020,7 +4020,7 @@ export const referenceStandardAuditLogRelations = relations(
  * - APPROVED: Certificate generated and ready
  * - REJECTED: Manager rejected, needs rework
  * - CANCELED: Job was canceled (soft delete equivalent)
- * - SUPERSEDED: Certificate was amended and replaced by a new version (ISO 17025 Clause 7.8.4.1)
+ * - SUPERSEDED: Certificate was amended and replaced by a new version (ISO 17025 Clause 7.8.8)
  */
 export type JobStatus =
   | "DRAFT"
@@ -4286,7 +4286,8 @@ export const calibrationJob = pgTable(
     rejectedAt: timestamp("rejected_at"),
     rejectionReason: text("rejection_reason"),
     // ==========================================================================
-    // AMENDMENT TRACKING - ISO 17025:2017 Clause 7.8.4.1
+    // AMENDMENT TRACKING - ISO 17025:2017 Clause 7.8.8 (amendments to
+    // reports; 7.8.4 covers calibration-certificate content)
     // "When a report or certificate needs to be revised after issue, each
     // revision shall be uniquely identified and shall contain a reference
     // to the original."
@@ -6199,7 +6200,7 @@ export const calibrationJobRelations = relations(
       fields: [calibrationJob.id],
       references: [issuedCertificateSnapshot.jobId],
     }),
-    // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
+    // Amendment tracking - ISO 17025:2017 Clause 7.8.8
     // The job that this one supersedes (original certificate being corrected)
     supersedes: one(calibrationJob, {
       fields: [calibrationJob.supersedesId],
@@ -7274,7 +7275,7 @@ export type NotificationType =
   | "JOB_REJECTED"
   | "JOB_ASSIGNED"
   | "CERTIFICATE_READY"
-  | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
+  | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.8 - Certificate amendment notification
   | "AUDIT_PACK_READY" // Portal audit pack (bulk certificate + fleet-status export) ready for download
   | "ASSET_DUE_FOR_RECALIBRATION"
   | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration

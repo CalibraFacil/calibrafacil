@@ -281,6 +281,11 @@ import {
   resolvePortalAccessibleCustomerIds,
   resolvePortalCustomerScope,
 } from "../lib/portal-customer-scope";
+import {
+  createPortalAmendmentChainLoader,
+  resolvePortalAmendmentInfo,
+  PORTAL_TERMINAL_CERTIFICATE_STATUSES,
+} from "../lib/certificate-amendment-chain";
 
 /**
  * Resolve a `/certificates/:id` URL param to a Drizzle predicate. Customers see
@@ -1868,9 +1873,11 @@ export const portalRouter = new Hono<{
 
       const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
 
+      // Superseded originals stay listed (ISO 17025 §7.8.8 — the customer
+      // must be able to tell them apart, not lose them), flagged below.
       const whereCondition = and(
         inArray(calibrationJob.customerId, customerIds),
-        eq(calibrationJob.status, "APPROVED"),
+        inArray(calibrationJob.status, PORTAL_TERMINAL_CERTIFICATE_STATUSES),
         assetId !== undefined ? eq(calibrationJob.assetId, assetId) : undefined,
         query
           ? or(
@@ -1908,6 +1915,9 @@ export const portalRouter = new Hono<{
           approvedAt: calibrationJob.approvedAt,
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
+          supersedesId: calibrationJob.supersedesId,
+          supersededById: calibrationJob.supersededById,
+          amendmentNumber: calibrationJob.amendmentNumber,
           assetId: calibrationJob.assetId,
           assetPublicId: asset.publicId,
           assetName: asset.name,
@@ -1931,10 +1941,22 @@ export const portalRouter = new Hono<{
         .offset(offset);
 
       // Phase 2 slice 1: hide certificateUrl for held releases.
-      const certificates = await applyPortalCertificateReleaseGate(
+      const gatedCertificates = await applyPortalCertificateReleaseGate(
         certificatesRaw,
         portalLabScope.labOrganizationId,
       );
+
+      // Amendment chips (§7.8.8) — derived from the row's own links, same
+      // semantics as the public verification page: superseded reads as
+      // superseded even while its replacement is still in DRAFT.
+      const certificates = gatedCertificates.map((row) => ({
+        ...row,
+        isSuperseded:
+          row.supersededById !== null || row.status === "SUPERSEDED",
+        isAmendment: row.supersedesId !== null,
+        supersedesId: undefined,
+        supersededById: undefined,
+      }));
 
       return c.json({
         data: certificates,
@@ -1983,6 +2005,11 @@ export const portalRouter = new Hono<{
           dueDate: calibrationJob.dueDate,
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
+          supersedesId: calibrationJob.supersedesId,
+          supersededById: calibrationJob.supersededById,
+          amendmentNumber: calibrationJob.amendmentNumber,
+          amendmentReason: calibrationJob.amendmentReason,
+          supersededAt: calibrationJob.supersededAt,
           methodSnapshot: calibrationJob.methodSnapshot,
           standardsSnapshot: calibrationJob.standardsSnapshot,
           calibrationLocationSnapshot:
@@ -2019,7 +2046,11 @@ export const portalRouter = new Hono<{
           and(
             matchPortalCertificateParam(certificateParam),
             inArray(calibrationJob.customerId, customerIds),
-            eq(calibrationJob.status, "APPROVED"),
+            // Superseded originals stay reachable (§7.8.8) — flagged below.
+            inArray(
+              calibrationJob.status,
+              PORTAL_TERMINAL_CERTIFICATE_STATUSES,
+            ),
           ),
         )
         .limit(1);
@@ -2059,6 +2090,25 @@ export const portalRouter = new Hono<{
         formulas: certificate.methodSnapshot?.formulas,
       });
 
+      // Amendment chain (§7.8.8): links only surface once the neighbour is
+      // itself terminal — same gate as the public verification page. The
+      // chain carries ids/jobIds only, so a held replacement leaks no
+      // download URL through the banner.
+      const amendment = await resolvePortalAmendmentInfo(
+        {
+          id: certificate.id,
+          jobId: certificate.jobId,
+          status: certificate.status,
+          supersedesId: certificate.supersedesId,
+          supersededById: certificate.supersededById,
+          amendmentNumber: certificate.amendmentNumber,
+          amendmentReason: certificate.amendmentReason,
+          approvedAt: certificate.approvedAt,
+          supersededAt: certificate.supersededAt,
+        },
+        createPortalAmendmentChainLoader({ customerIds }),
+      );
+
       // Surface where the calibration was performed (frozen at execution).
       const locationSnapshot = certificate.calibrationLocationSnapshot;
       const onSite = {
@@ -2075,6 +2125,12 @@ export const portalRouter = new Hono<{
         releaseStatus,
         verdict,
         onSite,
+        amendment,
+        supersedesId: undefined,
+        supersededById: undefined,
+        amendmentNumber: undefined,
+        amendmentReason: undefined,
+        supersededAt: undefined,
         standardsSnapshot: undefined,
         calibrationLocationSnapshot: undefined,
         referenceStandards,
@@ -2119,7 +2175,8 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
-      // Get certificate
+      // Get certificate. Superseded originals stay downloadable — auditors
+      // need the historical document (§7.8.8 keeps it identified, not gone).
       const [certificate] = await db
         .select({
           id: calibrationJob.id,
@@ -2132,7 +2189,10 @@ export const portalRouter = new Hono<{
           and(
             matchPortalCertificateParam(certificateParam),
             inArray(calibrationJob.customerId, customerIds),
-            eq(calibrationJob.status, "APPROVED"),
+            inArray(
+              calibrationJob.status,
+              PORTAL_TERMINAL_CERTIFICATE_STATUSES,
+            ),
           ),
         )
         .limit(1);
@@ -2667,7 +2727,10 @@ export const portalRouter = new Hono<{
             and(
               matchPortalCertificateParam(certificateParam),
               inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
+              inArray(
+                calibrationJob.status,
+                PORTAL_TERMINAL_CERTIFICATE_STATUSES,
+              ),
             ),
           )
           .limit(1);

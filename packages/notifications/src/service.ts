@@ -39,6 +39,7 @@ import {
 } from "drizzle-orm";
 import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
+import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
@@ -2029,7 +2030,13 @@ export async function notifyCertificateAmended(
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
-  const portalUrl = `${getPortalBaseUrl()}/certificates`;
+  // Deep-link to the superseded certificate's detail page (#744): it renders
+  // the §7.8.8 supersession banner and links the retificação once issued —
+  // the amendment itself is still DRAFT at this point.
+  const { actionUrl, portalUrl } = buildCertificateAmendedLinks({
+    portalBaseUrl: getPortalBaseUrl(),
+    supersededJobIdentifier: originalJob.jobIdentifier,
+  });
   const emailBrand = await getLabEmailBrand(originalJob.organizationId);
 
   // Send notifications to all portal users
@@ -2046,7 +2053,7 @@ export async function notifyCertificateAmended(
         entityId: amendedJobId,
         jobId: amendedJob.jobIdentifier,
       },
-      actionUrl: `/portal/certificates`,
+      actionUrl,
       emailContext: {
         type: "certificate",
         data: {

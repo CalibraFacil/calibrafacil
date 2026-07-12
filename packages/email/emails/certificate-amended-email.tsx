@@ -85,7 +85,8 @@ CertificateAmendedEmail.PreviewProps = {
   assetName: "Balança analítica",
   customerName: "ACME Laboratórios",
   reason: "Correção da identificação do instrumento.",
-  actionUrl: "https://calibrafacil.com/portal/certificates",
+  // Deep link to the superseded certificate's detail page (#744).
+  actionUrl: "https://portal.calibrafacil.com/certificates/CAL-2026-0012",
 } satisfies CertificateAmendedEmailProps;
 
 export default CertificateAmendedEmail;
