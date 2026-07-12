@@ -166,14 +166,20 @@ export function DashboardIndex() {
 
       {/* Operational vitals — act-now counts */}
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
           {[...Array(5)].map((_, index) => (
-            <Skeleton key={index} className="h-[5.5rem] rounded-xl" />
+            <Skeleton
+              key={index}
+              className={cn(
+                'h-[5.5rem] rounded-xl',
+                index === 0 && 'col-span-2 sm:col-span-1',
+              )}
+            />
           ))}
         </div>
       ) : (
-        <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <StaggerItem>
+        <StaggerGroup className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
+          <StaggerItem className="col-span-2 sm:col-span-1">
             <SignalTile
               icon={Alert02Icon}
               label="Em atraso"
@@ -255,7 +261,7 @@ export function DashboardIndex() {
                     to="/dashboard/jobs"
                     search={{ status: stage.status }}
                     className={cn(
-                      'flex min-w-[7rem] flex-1 flex-col rounded-xl px-3.5 py-3 transition-[background-color,box-shadow,transform] active:scale-[0.98]',
+                      'flex min-w-[7rem] flex-1 flex-col rounded-xl px-3 py-2.5 transition-[background-color,box-shadow,transform] active:scale-[0.98] sm:px-3.5 sm:py-3',
                       highlight
                         ? 'bg-primary/10 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.35)]'
                         : 'bg-muted/40 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]',
@@ -266,7 +272,7 @@ export function DashboardIndex() {
                     </span>
                     <span
                       className={cn(
-                        'mt-1.5 font-mono text-2xl font-semibold leading-none tabular-nums',
+                        'mt-1.5 font-mono text-xl font-semibold leading-none tabular-nums sm:text-2xl',
                         highlight && 'text-primary',
                       )}
                     >

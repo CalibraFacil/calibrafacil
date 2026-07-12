@@ -185,7 +185,7 @@ export function SignalTile({
   return (
     <div
       className={cn(
-        'rounded-xl p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]',
+        'rounded-xl p-3 sm:p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]',
         TONE_SURFACE[tone],
         className,
       )}
@@ -201,10 +201,10 @@ export function SignalTile({
           />
         ) : null}
       </div>
-      <div className="mt-2 flex min-w-0 items-baseline gap-1.5">
+      <div className="mt-1.5 flex min-w-0 items-baseline gap-1.5 sm:mt-2">
         <span
           className={cn(
-            'shrink-0 font-mono text-2xl font-semibold leading-none tabular-nums',
+            'shrink-0 font-mono text-xl font-semibold leading-none tabular-nums sm:text-2xl',
             TONE_VALUE[tone],
           )}
         >
