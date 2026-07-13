@@ -57,7 +57,6 @@ type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
 import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
-  type IntegrationSyncQueueMessage,
 } from "./integrations.js";
 import {
   formatSpecificationsForDisplay,
@@ -2160,12 +2159,6 @@ function isDocumentMessage(
   );
 }
 
-function isIntegrationSyncMessage(
-  message: BackgroundJobMessage,
-): message is IntegrationSyncQueueMessage {
-  return message.type === "INTEGRATION_SYNC";
-}
-
 function isServiceOrderDocumentMessage(
   message: DocumentBackgroundJobMessage,
 ): message is Extract<
@@ -3425,78 +3418,12 @@ async function processBackgroundJobUnreported(
   await processDocumentMessage(env, message);
 }
 
-export async function processBackgroundJobBatch(
-  env: Env,
-  messages: BackgroundJobMessage[],
-) {
-  const integrationMessages = messages.filter(isIntegrationSyncMessage);
-  const scheduledNotificationMessages = messages.filter(
-    (message) => message.type === "SCHEDULED_NOTIFICATIONS",
-  );
-  const portalDigestMessages = messages.filter(
-    (message) => message.type === "PORTAL_DIGEST",
-  );
-  const marketingContactSyncMessages = messages.filter(
-    (message) => message.type === "MARKETING_CONTACT_SYNC",
-  );
-  const spcRecomputeMessages = messages.filter(
-    (message) => message.type === "SPC_RECOMPUTE",
-  );
-  const xlsxPreviewMessages = messages.filter(
-    (message): message is CertificateXlsxPreviewBackgroundJobMessage =>
-      message.type === "CERTIFICATE_XLSX_PREVIEW",
-  );
-  const auditPackMessages = messages.filter(
-    (message): message is AuditPackBackgroundJobMessage =>
-      message.type === "AUDIT_PACK",
-  );
-  const documentMessages = messages.filter(isDocumentMessage);
-
-  for (const message of integrationMessages) {
-    await processIntegrationSync(env, message);
-  }
-
-  for (const _message of scheduledNotificationMessages) {
-    await processScheduledNotifications(env);
-  }
-
-  for (const _message of portalDigestMessages) {
-    await processPortalDigest();
-  }
-
-  for (const _message of marketingContactSyncMessages) {
-    await processMarketingContactSync(env);
-  }
-
-  for (const _message of spcRecomputeMessages) {
-    await processSpcRecompute(env);
-  }
-
-  for (const message of xlsxPreviewMessages) {
-    await processXlsxPreviewJob(env, message);
-  }
-
-  for (const message of auditPackMessages) {
-    await processAuditPackJob(env, message);
-  }
-
-  const pendingDocumentMessages: DocumentBackgroundJobMessage[] = [];
-  for (const message of documentMessages) {
-    if (await processXlsxCertificateMessageIfSelected(env, message)) {
-      continue;
-    }
-    pendingDocumentMessages.push(message);
-  }
-
-  if (pendingDocumentMessages.length === 0) return;
-
-  // HTML/label documents render through the hosted Gotenberg service
-  // (services/gotenberg) — no in-function Chromium to launch.
-  for (const message of pendingDocumentMessages) {
-    await processDocumentMessage(env, message);
-  }
-}
-
+// One message dispatcher only: every run mode routes through
+// processBackgroundJob above. The old processBackgroundJobBatch re-implemented
+// the same routing as a parallel filter-chain with no callers — and had
+// already diverged (an unselected calibration-certificate message fell through
+// to the HTML-document path instead of failing with the template-required
+// error). Batch callers iterate messages and call processBackgroundJob.
 export default {
   async queue(
     batch: MessageBatch<QueueMessage>,
