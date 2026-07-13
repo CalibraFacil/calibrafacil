@@ -8,6 +8,7 @@ import {
   calibrationJob,
   calibrationVisit,
   customer,
+  jobAuditLog,
   user,
 } from "@calibra-facil/db/schema";
 import {
@@ -476,7 +477,10 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Ativo nao encontrado" }, 400);
       }
 
-      const customerGuard = assertAssetBelongsToVisitCustomer(foundAsset, visit);
+      const customerGuard = assertAssetBelongsToVisitCustomer(
+        foundAsset,
+        visit,
+      );
       if (!customerGuard.ok) {
         return c.json({ error: customerGuard.body }, customerGuard.status);
       }
@@ -515,6 +519,7 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ request: ["update"] }),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = parseInt(c.req.param("id"), 10);
       const jobId = parseInt(c.req.param("jobId"), 10);
       if (isNaN(id) || isNaN(jobId))
@@ -550,6 +555,10 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       if (!removalGuard.ok) {
         return c.json({ error: removalGuard.body }, removalGuard.status);
       }
+      // The guard already rejects a missing job with 404; narrow for TS.
+      if (!foundJob) {
+        return c.json({ error: "Job nao encontrado nesta visita" }, 404);
+      }
 
       // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum)
       const [updatedJob] = await db
@@ -557,6 +566,18 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         .set({ status: "CANCELED" })
         .where(eq(calibrationJob.id, jobId))
         .returning();
+
+      // Audit parity with the main job-cancel route (append-only ISO 17025 trail)
+      await db.insert(jobAuditLog).values({
+        jobId,
+        action: "cancel",
+        changes: {
+          status: { old: foundJob.status, new: "CANCELED" },
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: `Instrumento removido da visita #${id}`,
+      });
 
       return c.json(updatedJob);
     },

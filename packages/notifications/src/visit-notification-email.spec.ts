@@ -134,6 +134,14 @@ const VISIT_ROW = {
   technicianId: "tech-1",
   scheduledAt: new Date("2026-06-25T10:00:00Z"),
   sourceRequestId: 42,
+  address: {
+    street: "Rua das Balanças",
+    number: "100",
+    neighbourhood: "Centro",
+    city: "Porto Alegre",
+    state: "RS",
+    cep: "90000-000",
+  },
   customerName: "ACME Ltda",
   labName: "Lab Acme",
   technicianName: "João Técnico",
@@ -174,7 +182,10 @@ function setupDirectSend() {
   });
   dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
   dbMock.update.mockImplementation(() => {
-    const c = { set: vi.fn().mockReturnThis(), where: vi.fn().mockResolvedValue([]) };
+    const c = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
+    };
     return c;
   });
 }
@@ -191,11 +202,15 @@ function setupVisitConfirmed() {
   dbMock.select.mockImplementation(() => {
     n++;
     const result =
-      n === 1 ? [VISIT_ROW]
-      : n === 2 ? [ORG_ROW]
-      : n === 3 ? []
-      : n === 4 ? [USER_ROW]
-      : [];
+      n === 1
+        ? [VISIT_ROW]
+        : n === 2
+          ? [ORG_ROW]
+          : n === 3
+            ? []
+            : n === 4
+              ? [USER_ROW]
+              : [];
     return makeChain(result);
   });
   dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
@@ -222,13 +237,19 @@ function setupVisitTwoSends() {
   dbMock.select.mockImplementation(() => {
     n++;
     const result =
-      n === 1 ? [VISIT_ROW]
-      : n === 2 ? []                         // tech getUserPreferences → DEFAULT
-      : n === 3 ? [{ email: "tech@lab.com", name: "João Técnico" }]
-      : n === 4 ? [ORG_ROW]                  // getLabEmailBrand
-      : n === 5 ? []                         // customer getUserPreferences → DEFAULT
-      : n === 6 ? [USER_ROW]                 // customer email
-      : [];
+      n === 1
+        ? [VISIT_ROW]
+        : n === 2
+          ? [] // tech getUserPreferences → DEFAULT
+          : n === 3
+            ? [{ email: "tech@lab.com", name: "João Técnico" }]
+            : n === 4
+              ? [ORG_ROW] // getLabEmailBrand
+              : n === 5
+                ? [] // customer getUserPreferences → DEFAULT
+                : n === 6
+                  ? [USER_ROW] // customer email
+                  : [];
     return makeChain(result);
   });
   dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
@@ -259,11 +280,15 @@ function setupVisitScheduled() {
   dbMock.select.mockImplementation(() => {
     n++;
     const result =
-      n === 1 ? [VISIT_ROW]
-      : n === 2 ? [{ name: "Lab Actor" }]    // getActorName
-      : n === 3 ? []                         // getUserPreferences → DEFAULT
-      : n === 4 ? [{ email: "tech@lab.com", name: "João Técnico" }]
-      : [];
+      n === 1
+        ? [VISIT_ROW]
+        : n === 2
+          ? [{ name: "Lab Actor" }] // getActorName
+          : n === 3
+            ? [] // getUserPreferences → DEFAULT
+            : n === 4
+              ? [{ email: "tech@lab.com", name: "João Técnico" }]
+              : [];
     return makeChain(result);
   });
   dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
@@ -432,6 +457,8 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
         customerName: "ACME Ltda",
         labName: "Lab Acme",
         technicianName: "João Técnico",
+        addressText:
+          "Rua das Balanças, 100 · Centro - Porto Alegre - RS · 90000-000",
       }),
     );
   });
@@ -448,6 +475,36 @@ describe("REQ-VISITEMAIL-005: customer-facing notify functions pass type:visit e
         args[0].customerName === "ACME Ltda",
     );
     expect(customerCall).toBeDefined();
+    expect(customerCall?.[0].addressText).toBe(
+      "Rua das Balanças, 100 · Centro - Porto Alegre - RS · 90000-000",
+    );
+  });
+
+  it("notifyVisitConfirmed: addressText is undefined when the visit has no address", async () => {
+    let n = 0;
+    dbMock.select.mockImplementation(() => {
+      n++;
+      const result =
+        n === 1
+          ? [{ ...VISIT_ROW, address: null }]
+          : n === 2
+            ? [ORG_ROW]
+            : n === 3
+              ? []
+              : n === 4
+                ? [USER_ROW]
+                : [];
+      return makeChain(result);
+    });
+    dbMock.insert.mockImplementation(() => makeChain([{ id: 99 }]));
+    dbMock.update.mockImplementation(() => ({
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
+    }));
+    const { notifyVisitConfirmed } = await import("./service");
+    await notifyVisitConfirmed(1, "lab-actor-user");
+    expect(visitEmailSpy).toHaveBeenCalledTimes(1);
+    expect(visitEmailSpy.mock.calls[0]?.[0]?.addressText).toBeUndefined();
   });
 
   it("notifyVisitCancelled: customer branch calls VisitNotificationEmail with reason", async () => {

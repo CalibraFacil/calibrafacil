@@ -49,8 +49,8 @@ location pre-frozen to the customer site. Two polish items remain:
   layout + primitives from `packages/email` (`emails/components/email-layout.tsx`);
   Resend + `@react-email/render` transport unchanged.
 - **No new notification types.** `VISIT_SCHEDULED|VISIT_CONFIRMED|VISIT_RESCHEDULED|
-  VISIT_CANCELLED|VISIT_REMINDER` already exist (PR #485). This spec adds an email
-  *template*, not a notification type, so the notification-type registries
+VISIT_CANCELLED|VISIT_REMINDER` already exist (PR #485). This spec adds an email
+  _template_, not a notification type, so the notification-type registries
   (db union, zod, DEFAULT_PREFERENCES, settings page) are NOT touched.
 - pt-BR copy. No `useEffect` import; no `as` assertions. Tests are `*.spec.ts`
   (Vitest); regulated API test files are `*.spec.ts`.
@@ -103,6 +103,11 @@ that fails on regression.
   routes SHALL be listed in `BrowserRoutePath` (`packages/contracts/src/api-app.ts`),
   and the desktop transport SHALL stub both as cloud-only-unsupported, matching
   the existing visit methods.
+- REQ-VISITJOB-013: WHEN a job is removed (soft-cancelled) from a PROPOSED
+  visit, the API SHALL insert a `job_audit_log` row with `action = "cancel"`,
+  the status old/new change set, and `performedBy` — audit parity with the
+  main job-cancel route (`DELETE /api/jobs/:id`), preserving the append-only
+  ISO/IEC 17025 trail.
 
 ### Mini-spec 2 — Dedicated `VisitNotificationEmail` templates
 
@@ -112,7 +117,7 @@ non-tautology guard used by `nova-os-email.spec.ts`).
 
 - REQ-VISITEMAIL-001: `packages/email` SHALL export a `VisitNotificationEmail`
   React Email component accepting `variant` ∈ `{ scheduled, confirmed,
-  rescheduled, cancelled, reminder }`.
+rescheduled, cancelled, reminder }`.
 - REQ-VISITEMAIL-002: WHEN rendered for any variant with the supplied fields, the
   email HTML SHALL contain the scheduled date, the customer name, and (when
   provided) the técnico name and the on-site address.
@@ -128,6 +133,10 @@ non-tautology guard used by `nova-os-email.spec.ts`).
   `notifyVisitCancelled`, and `notifyVisitReminder` send to the customer, each
   SHALL pass a `type: "visit"` `emailContext` (so the customer email uses the
   dedicated template). [the technician in-app notifications keep the generic path]
+- REQ-VISITEMAIL-006: WHEN the visit row has an `address`, the customer-facing
+  notify functions SHALL pass it as `addressText` (single-line, same format as
+  the API-side `formatOnsiteAddressText`) so the on-site address renders in the
+  email; WHEN the visit has no address, `addressText` SHALL be omitted.
 
 ## Out-of-scope / Deferred
 
@@ -147,13 +156,13 @@ non-tautology guard used by `nova-os-email.spec.ts`).
 > unchanged, operating only on DRAFT jobs / PROPOSED visits (never the calibration
 > approval workflow, signing, GUM math, or RBAC policy). Email is not a cut-line
 > surface (same reasoning as the service-order-emails spec). Both are
-> **loopable-with-verifier**; the HIGH RISK *criteria* (state/scope guards) get the
+> **loopable-with-verifier**; the HIGH RISK _criteria_ (state/scope guards) get the
 > verifier's strongest scrutiny.
 
-| Mini-spec | Layer (real path) | Depends on | Risk | Mode |
-| --- | --- | --- | --- | --- |
-| **1. Add/remove instruments** | `packages/schemas` (AddVisitJobSchema) + `apps/api/src/routes/visits.ts` + extracted guard helper + `packages/contracts` + `packages/client-runtime` + `apps/web/src/features/visits` | — | med (state/scope guards) | loopable-with-verifier (max scrutiny on 003/004/005/007/008/010) |
-| **2. Visit email templates** | `packages/email` (new template) + `packages/notifications/src/service.ts` (visit EmailContext + render branch + pass context) | — | low | loopable-with-verifier |
+| Mini-spec                     | Layer (real path)                                                                                                                                                                     | Depends on | Risk                     | Mode                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | ---------------------------------------------------------------- |
+| **1. Add/remove instruments** | `packages/schemas` (AddVisitJobSchema) + `apps/api/src/routes/visits.ts` + extracted guard helper + `packages/contracts` + `packages/client-runtime` + `apps/web/src/features/visits` | —          | med (state/scope guards) | loopable-with-verifier (max scrutiny on 003/004/005/007/008/010) |
+| **2. Visit email templates**  | `packages/email` (new template) + `packages/notifications/src/service.ts` (visit EmailContext + render branch + pass context)                                                         | —          | low                      | loopable-with-verifier                                           |
 
 **Order:** the two minis are independent and can run in parallel worktrees. Each
 maker worktree base-syncs (`git fetch` + `git reset --hard

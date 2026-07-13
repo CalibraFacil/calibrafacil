@@ -20,6 +20,7 @@ import {
   customerGroup,
   portalExportJob,
   ptPlanItem,
+  type CustomerAddress,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
@@ -1287,6 +1288,26 @@ export async function notifyCalibrationRequestConverted(
 // NOTIFICATION TRIGGERS - Called from visit routes (calibração in loco)
 // =============================================================================
 
+/**
+ * Formats the visit's on-site address to a single-line text string for the
+ * customer email. Mirrors the API-side `formatOnsiteAddressText` used to
+ * freeze the calibration location snapshot at job-creation time.
+ */
+function formatVisitAddressText(
+  address: CustomerAddress | null,
+): string | undefined {
+  if (!address) return undefined;
+  const street = [address.street, address.number].filter(Boolean).join(", ");
+  const region = [address.neighbourhood, address.city, address.state]
+    .filter(Boolean)
+    .join(" - ");
+  const text = [street, address.complement, region, address.cep]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+  return text || undefined;
+}
+
 function formatVisitDate(date: Date | null): string {
   if (!date) return "data a confirmar";
   return date.toLocaleDateString("pt-BR", {
@@ -1303,6 +1324,7 @@ async function getVisitDetails(visitId: number): Promise<{
   technicianId: string | null;
   scheduledAt: Date | null;
   sourceRequestId: number | null;
+  address: CustomerAddress | null;
   customerName: string;
   labName: string;
   technicianName: string | null;
@@ -1316,6 +1338,7 @@ async function getVisitDetails(visitId: number): Promise<{
       technicianId: calibrationVisit.technicianId,
       scheduledAt: calibrationVisit.scheduledAt,
       sourceRequestId: calibrationVisit.sourceRequestId,
+      address: calibrationVisit.address,
       customerName: customer.name,
       labName: organization.name,
       technicianName: user.name,
@@ -1417,6 +1440,7 @@ export async function notifyVisitConfirmed(
         customerName: visit.customerName,
         scheduledDate: visitDate,
         technicianName: visit.technicianName ?? undefined,
+        addressText: formatVisitAddressText(visit.address),
         labName: visit.labName,
       },
     },
@@ -1472,6 +1496,7 @@ export async function notifyVisitRescheduled(
           customerName: visit.customerName,
           scheduledDate: visitDate,
           technicianName: visit.technicianName ?? undefined,
+          addressText: formatVisitAddressText(visit.address),
           labName: visit.labName,
         },
       },
@@ -1529,6 +1554,7 @@ export async function notifyVisitCancelled(
           customerName: visit.customerName,
           scheduledDate: formatVisitDate(visit.scheduledAt),
           technicianName: visit.technicianName ?? undefined,
+          addressText: formatVisitAddressText(visit.address),
           labName: visit.labName,
           reason: reason?.trim() || undefined,
         },
@@ -1579,6 +1605,7 @@ export async function notifyVisitReminder(visitId: number): Promise<void> {
           customerName: visit.customerName,
           scheduledDate: visitDate,
           technicianName: visit.technicianName ?? undefined,
+          addressText: formatVisitAddressText(visit.address),
           labName: visit.labName,
         },
       },
