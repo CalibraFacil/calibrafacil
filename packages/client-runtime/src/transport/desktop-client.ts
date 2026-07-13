@@ -52,7 +52,14 @@ import type {
   UpdateCustomerComplianceInput,
   UpdateCustomerInput,
 } from "../types";
-import { getDesktopDataPolicyUnavailableMessage } from "../data-policy";
+import {
+  getDesktopDataPolicyUnavailableMessage,
+  listCalibraApiNamespaceMethodsWithPolicy,
+  listCalibraApiNamespaces,
+  type CalibraApiMethodsWithPolicy,
+  type CalibraApiNamespace,
+  type DataPolicy,
+} from "../data-policy";
 import { readApiError } from "./response";
 import { apiRouteParam } from "./url";
 import {
@@ -70,6 +77,69 @@ async function readDesktopJson<TResponse>(
 ): Promise<TResponse> {
   const payload: unknown = await response.json();
   return assumeDesktopPayload<TResponse>(payload);
+}
+
+type DesktopUnsupportedMessageFlavor = "web-api" | "cloud-sync";
+
+function desktopUnsupportedError(
+  action: string,
+  flavor: DesktopUnsupportedMessageFlavor,
+) {
+  return new Error(
+    flavor === "cloud-sync"
+      ? `${action} requer sincronização com a nuvem neste momento.`
+      : `${action} requer a API web/nuvem neste momento.`,
+  );
+}
+
+type DesktopCloudOnlyStubLabels<TNamespace extends CalibraApiNamespace> = {
+  action: string;
+  flavor?: DesktopUnsupportedMessageFlavor;
+  actionByMethod?: Partial<
+    Record<CalibraApiMethodsWithPolicy<TNamespace, "cloud-only">, string>
+  >;
+};
+
+/**
+ * Throw-stubs for every method the policy registry classifies as
+ * `cloud-only` in a namespace. The return type is a `Pick` of exactly those
+ * methods, so any method with a local policy (`local-*`) still demands an
+ * explicit implementation at the call site — reclassifying a method in
+ * `calibraApiPolicyRegistry` surfaces here as a compile error instead of a
+ * silently wrong stub. Graceful desktop degradations (empty lists, synthesized
+ * responses) stay hand-written and simply override their stub in the spread.
+ */
+function desktopCloudOnlyStubs<TNamespace extends CalibraApiNamespace>(
+  namespace: TNamespace,
+  labels: DesktopCloudOnlyStubLabels<TNamespace>,
+): Pick<
+  CalibraApi[TNamespace],
+  CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
+    keyof CalibraApi[TNamespace]
+> {
+  const actionOverrides = new Map<string, string>();
+  for (const [method, action] of Object.entries(labels.actionByMethod ?? {})) {
+    if (typeof action === "string") {
+      actionOverrides.set(method, action);
+    }
+  }
+
+  const stubs: Record<string, () => Promise<never>> = {};
+  for (const method of listCalibraApiNamespaceMethodsWithPolicy(namespace, [
+    "cloud-only",
+  ])) {
+    const action = actionOverrides.get(method) ?? labels.action;
+    stubs[method] = async () => {
+      throw desktopUnsupportedError(action, labels.flavor ?? "web-api");
+    };
+  }
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the stub keys are exactly the registry's cloud-only methods for this namespace, and the registry is type-total over CalibraApi; this is the single trust point that ties the runtime object to the Pick above.
+  return stubs as Pick<
+    CalibraApi[TNamespace],
+    CalibraApiMethodsWithPolicy<TNamespace, "cloud-only"> &
+      keyof CalibraApi[TNamespace]
+  >;
 }
 
 export function createDesktopApiClient(
@@ -137,6 +207,7 @@ export function createDesktopApiClient(
       },
     },
     units: {
+      ...desktopCloudOnlyStubs("units", { action: "Governança de unidades" }),
       async getDashboardUnits() {
         const session = await getLocalSessionSnapshot();
         return buildDesktopUnitsResponse(session.data);
@@ -150,54 +221,21 @@ export function createDesktopApiClient(
       async listAdminActivity<TResponse = unknown>() {
         return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
       },
-      async createAdminUnit() {
-        throw desktopUnsupportedAuthAction("Governança de unidades");
-      },
-      async updateAdminUnit() {
-        throw desktopUnsupportedAuthAction("Governança de unidades");
-      },
-      async updateMemberAssignments() {
-        throw desktopUnsupportedAuthAction("Governança de unidades");
-      },
-      async updateMemberRole() {
-        throw desktopUnsupportedAuthAction("Governança de unidades");
-      },
     },
     customerGroups: {
       // Customer groups are a cloud-only lab feature; desktop/offline can't
       // provision CLIENT orgs. Reads degrade to empty, writes are unsupported.
+      ...desktopCloudOnlyStubs("customerGroups", {
+        action: "Grupos de clientes",
+      }),
       async list() {
         return { data: [] };
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async addBranch() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async removeBranch() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
       },
       async listMembers() {
         return [];
       },
       async listInvitations() {
         return [];
-      },
-      async createInvitation() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async resendInvitation() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async cancelInvitation() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
-      },
-      async removeMember() {
-        throw desktopUnsupportedAuthAction("Grupos de clientes");
       },
     },
     access: {
@@ -208,112 +246,10 @@ export function createDesktopApiClient(
         return desktopFinanceAccess();
       },
     },
-    sessions: {
-      async revoke() {
-        throw desktopUnsupportedAuthAction("Gerenciamento de sessoes");
-      },
-    },
-    finance: {
-      async getOverview() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listDocuments() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async updateDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async issueDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async voidDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listEligibleJobs() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async createDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listContracts() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getContract() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async createContract() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async activateContract() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async cancelContract() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listReceipts() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async receiveInstallment() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listErpExports() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async exportErpDocument() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listBillingReadiness() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async sendBillingReadiness() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getServiceOrderStatus() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getCustomerTimeline() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getCertificateRelease() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async releaseCertificateByException() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listCertificateReleasePolicies() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async createCertificateReleasePolicy() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async updateCertificateReleasePolicy() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async listAutomaticSendRules() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async createAutomaticSendRule() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async updateAutomaticSendRule() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getOperationsToCash() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getRevenueLeakage() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getCashForecast() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-      async getMarginDashboards() {
-        throw desktopUnsupportedAuthAction("Financeiro");
-      },
-    },
+    sessions: desktopCloudOnlyStubs("sessions", {
+      action: "Gerenciamento de sessoes",
+    }),
+    finance: desktopCloudOnlyStubs("finance", { action: "Financeiro" }),
     billing: {
       async getSubscription() {
         return desktopBillingSubscription();
@@ -323,6 +259,52 @@ export function createDesktopApiClient(
       },
     },
     backoffice: {
+      ...desktopCloudOnlyStubs("backoffice", {
+        action: "Backoffice",
+        actionByMethod: {
+          bootstrap: "Bootstrap backoffice",
+          listOrganizations: "Organizações backoffice",
+          getOrganization: "Organizações backoffice",
+          getSupportQueue: "Suporte backoffice",
+          listUsers: "Usuários backoffice",
+          updateUserRole: "Usuários backoffice",
+          banUser: "Usuários backoffice",
+          unbanUser: "Usuários backoffice",
+          impersonateUser: "Usuários backoffice",
+          createUser: "Usuários backoffice",
+          provisionLab: "Laboratórios backoffice",
+          requestUserPasswordReset: "Usuários backoffice",
+          getUser: "Usuários backoffice",
+          listUserSessions: "Sessões backoffice",
+          revokeUserSession: "Sessões backoffice",
+          listUserActivity: "Atividade backoffice",
+          getPresence: "Presença backoffice",
+          listAuditLog: "Auditoria backoffice",
+          getIntegrationHealth: "Integrações backoffice",
+          getVitals: "Indicadores backoffice",
+          listOperatorAlerts: "Alertas backoffice",
+          recomputeOperatorAlerts: "Alertas backoffice",
+          acknowledgeOperatorAlert: "Alertas backoffice",
+          listAccountTasks: "Tarefas backoffice",
+          createAccountTask: "Tarefas backoffice",
+          completeAccountTask: "Tarefas backoffice",
+          updateOrganizationLifecycle: "Ciclo de vida backoffice",
+          listInteractions: "Interações backoffice",
+          createInteraction: "Interações backoffice",
+          manageSubscription: "Assinatura backoffice",
+          listEntitlementOverrides: "Concessões backoffice",
+          grantEntitlementOverride: "Concessões backoffice",
+          revokeEntitlementOverride: "Concessões backoffice",
+          getOrganizationActivity: "Atividade backoffice",
+          listImportRuns: "Importações backoffice",
+          parseImportFile: "Importações backoffice",
+          validateImportRun: "Importações backoffice",
+          listApprovals: "Aprovações backoffice",
+          createApprovalRequest: "Aprovações backoffice",
+          decideApproval: "Aprovações backoffice",
+          stopImpersonation: "Impersonação backoffice",
+        },
+      }),
       async getAccess() {
         return {
           allowed: false,
@@ -330,126 +312,6 @@ export function createDesktopApiClient(
           bootstrapAvailable: false,
           isImpersonating: false,
         };
-      },
-      async bootstrap() {
-        throw desktopUnsupportedBackofficeAction("Bootstrap backoffice");
-      },
-      async listOrganizations() {
-        throw desktopUnsupportedBackofficeAction("Organizações backoffice");
-      },
-      async getOrganization() {
-        throw desktopUnsupportedBackofficeAction("Organizações backoffice");
-      },
-      async getSupportQueue() {
-        throw desktopUnsupportedBackofficeAction("Suporte backoffice");
-      },
-      async listUsers() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async updateUserRole() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async banUser() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async unbanUser() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async impersonateUser() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async createUser() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async provisionLab() {
-        throw desktopUnsupportedBackofficeAction("Laboratórios backoffice");
-      },
-      async requestUserPasswordReset() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async getUser() {
-        throw desktopUnsupportedBackofficeAction("Usuários backoffice");
-      },
-      async listUserSessions() {
-        throw desktopUnsupportedBackofficeAction("Sessões backoffice");
-      },
-      async revokeUserSession() {
-        throw desktopUnsupportedBackofficeAction("Sessões backoffice");
-      },
-      async listUserActivity() {
-        throw desktopUnsupportedBackofficeAction("Atividade backoffice");
-      },
-      async getPresence() {
-        throw desktopUnsupportedBackofficeAction("Presença backoffice");
-      },
-      async listAuditLog() {
-        throw desktopUnsupportedBackofficeAction("Auditoria backoffice");
-      },
-      async getIntegrationHealth() {
-        throw desktopUnsupportedBackofficeAction("Integrações backoffice");
-      },
-      async getVitals() {
-        throw desktopUnsupportedBackofficeAction("Indicadores backoffice");
-      },
-      async listOperatorAlerts() {
-        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
-      },
-      async recomputeOperatorAlerts() {
-        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
-      },
-      async acknowledgeOperatorAlert() {
-        throw desktopUnsupportedBackofficeAction("Alertas backoffice");
-      },
-      async listAccountTasks() {
-        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
-      },
-      async createAccountTask() {
-        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
-      },
-      async completeAccountTask() {
-        throw desktopUnsupportedBackofficeAction("Tarefas backoffice");
-      },
-      async updateOrganizationLifecycle() {
-        throw desktopUnsupportedBackofficeAction("Ciclo de vida backoffice");
-      },
-      async listInteractions() {
-        throw desktopUnsupportedBackofficeAction("Interações backoffice");
-      },
-      async createInteraction() {
-        throw desktopUnsupportedBackofficeAction("Interações backoffice");
-      },
-      async manageSubscription() {
-        throw desktopUnsupportedBackofficeAction("Assinatura backoffice");
-      },
-      async listEntitlementOverrides() {
-        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
-      },
-      async grantEntitlementOverride() {
-        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
-      },
-      async revokeEntitlementOverride() {
-        throw desktopUnsupportedBackofficeAction("Concessões backoffice");
-      },
-      async getOrganizationActivity() {
-        throw desktopUnsupportedBackofficeAction("Atividade backoffice");
-      },
-      async listImportRuns() {
-        throw desktopUnsupportedBackofficeAction("Importações backoffice");
-      },
-      async parseImportFile() {
-        throw desktopUnsupportedBackofficeAction("Importações backoffice");
-      },
-      async validateImportRun() {
-        throw desktopUnsupportedBackofficeAction("Importações backoffice");
-      },
-      async listApprovals() {
-        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
-      },
-      async createApprovalRequest() {
-        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
-      },
-      async decideApproval() {
-        throw desktopUnsupportedBackofficeAction("Aprovações backoffice");
       },
       commercial: {
         async listOrganizations() {
@@ -509,42 +371,20 @@ export function createDesktopApiClient(
           throw desktopUnsupportedBackofficeAction("Customer Success");
         },
       },
-      async stopImpersonation() {
-        throw desktopUnsupportedBackofficeAction("Impersonação backoffice");
-      },
     },
     sso: {
-      async start() {
-        throw desktopUnsupportedAuthAction("Login SSO");
-      },
+      ...desktopCloudOnlyStubs("sso", {
+        action: "Configuração SSO",
+        actionByMethod: { start: "Login SSO" },
+      }),
       async getProviders() {
         return desktopSsoSettings();
       },
-      async createProvider() {
-        throw desktopUnsupportedAuthAction("Configuração SSO");
-      },
-      async requestDomainVerification() {
-        throw desktopUnsupportedAuthAction("Configuração SSO");
-      },
-      async verifyDomain() {
-        throw desktopUnsupportedAuthAction("Configuração SSO");
-      },
-      async deleteProvider() {
-        throw desktopUnsupportedAuthAction("Configuração SSO");
-      },
     },
     apiKeys: {
+      ...desktopCloudOnlyStubs("apiKeys", { action: "API keys" }),
       async list() {
         return { data: [] };
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("API keys");
-      },
-      async rotate() {
-        throw desktopUnsupportedAuthAction("API keys");
-      },
-      async revoke() {
-        throw desktopUnsupportedAuthAction("API keys");
       },
     },
     entityLabels: {
@@ -559,28 +399,19 @@ export function createDesktopApiClient(
       },
     },
     certificateNumbering: {
+      ...desktopCloudOnlyStubs("certificateNumbering", {
+        action: "Numeração de certificados",
+      }),
       async getProfile() {
         return desktopCertificateNumberingProfile();
       },
-      async updateProfile() {
-        throw desktopUnsupportedAuthAction("Numeração de certificados");
-      },
     },
     portalDomains: {
+      ...desktopCloudOnlyStubs("portalDomains", {
+        action: "Domínio do portal",
+      }),
       async get() {
         return desktopPortalDomain();
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Domínio do portal");
-      },
-      async verify() {
-        throw desktopUnsupportedAuthAction("Domínio do portal");
-      },
-      async activate() {
-        throw desktopUnsupportedAuthAction("Domínio do portal");
-      },
-      async delete() {
-        throw desktopUnsupportedAuthAction("Domínio do portal");
       },
     },
     notifications: {
@@ -611,58 +442,40 @@ export function createDesktopApiClient(
       },
     },
     signatures: {
+      ...desktopCloudOnlyStubs("signatures", {
+        action: "Assinatura visual",
+        flavor: "cloud-sync",
+      }),
       async getMine() {
         return { hasSignature: false };
       },
-      async uploadMine() {
-        throw desktopUnsupportedSignatureAction("Assinatura visual");
-      },
-      async deleteMine() {
-        throw desktopUnsupportedSignatureAction("Assinatura visual");
-      },
     },
-    profileMedia: {
-      async uploadAvatar() {
-        throw desktopUnsupportedProfileMediaAction("Avatar");
-      },
-      async deleteAvatar() {
-        throw desktopUnsupportedProfileMediaAction("Avatar");
-      },
-    },
-    organizationMedia: {
-      async uploadLogo() {
-        throw desktopUnsupportedProfileMediaAction("Logo da organização");
-      },
-      async deleteLogo() {
-        throw desktopUnsupportedProfileMediaAction("Logo da organização");
-      },
-    },
+    profileMedia: desktopCloudOnlyStubs("profileMedia", {
+      action: "Avatar",
+      flavor: "cloud-sync",
+    }),
+    organizationMedia: desktopCloudOnlyStubs("organizationMedia", {
+      action: "Logo da organização",
+      flavor: "cloud-sync",
+    }),
     signingCertificates: {
+      ...desktopCloudOnlyStubs("signingCertificates", {
+        action: "Certificado ICP-Brasil",
+        flavor: "cloud-sync",
+        actionByMethod: { setPolicy: "Política de assinatura" },
+      }),
       async list() {
         return { certificates: [] };
       },
-      async upload() {
-        throw desktopUnsupportedSigningCertificateAction(
-          "Certificado ICP-Brasil",
-        );
-      },
-      async setDefault() {
-        throw desktopUnsupportedSigningCertificateAction(
-          "Certificado ICP-Brasil",
-        );
-      },
-      async setPolicy() {
-        throw desktopUnsupportedSigningCertificateAction(
-          "Política de assinatura",
-        );
-      },
-      async revoke() {
-        throw desktopUnsupportedSigningCertificateAction(
-          "Certificado ICP-Brasil",
-        );
-      },
     },
     customers: {
+      ...desktopCloudOnlyStubs("customers", {
+        action: "Clientes",
+        actionByMethod: {
+          lookupCnpj: "Consulta de CNPJ",
+          ootEvents: "Eventos fora de tolerância",
+        },
+      }),
       async list(input) {
         const url = new URL("/api/customers", options.baseUrl);
         url.searchParams.set("page", String(input.page));
@@ -707,12 +520,6 @@ export function createDesktopApiClient(
       // Cloud-only enrichment: it reaches the external Receita Federal mirrors,
       // which the offline local server can't proxy. The cadastro still works
       // with manual entry; the autofill is simply unavailable in desktop mode.
-      async lookupCnpj() {
-        throw desktopUnsupportedAuthAction("Consulta de CNPJ");
-      },
-      async ootEvents() {
-        throw desktopUnsupportedAuthAction("Eventos fora de tolerância");
-      },
       async get<TCustomer = CustomerDetailData>(id: string | number) {
         const response = await fetchImpl(
           new URL(
@@ -1070,6 +877,9 @@ export function createDesktopApiClient(
       },
     },
     environmentalLimits: {
+      ...desktopCloudOnlyStubs("environmentalLimits", {
+        action: "Limites ambientais",
+      }),
       async list() {
         const session = await getLocalSessionSnapshot();
         const activeUnitId = session.data?.permissions.activeUnitId ?? null;
@@ -1088,63 +898,26 @@ export function createDesktopApiClient(
           },
         };
       },
-      async save() {
-        throw desktopUnsupportedAuthAction("Limites ambientais");
-      },
-      async delete() {
-        throw desktopUnsupportedAuthAction("Limites ambientais");
-      },
     },
-    reports: {
-      async getExecutiveOverview() {
-        throw desktopUnsupportedAuthAction("Relatórios consolidados");
-      },
-      async getComparison() {
-        throw desktopUnsupportedAuthAction("Relatórios consolidados");
-      },
-      async getTrend() {
-        throw desktopUnsupportedAuthAction("Relatórios consolidados");
-      },
-    },
-    publicCheckout: {
-      async getSnapshot() {
-        throw desktopUnsupportedAuthAction("Checkout comercial");
-      },
-      async getStatus() {
-        throw desktopUnsupportedAuthAction("Checkout comercial");
-      },
-      async start() {
-        throw desktopUnsupportedAuthAction("Checkout comercial");
-      },
-    },
-    publicInvitations: {
-      async get() {
-        throw desktopUnsupportedAuthAction("Convites");
-      },
-      async requestSetupLink() {
-        throw desktopUnsupportedAuthAction("Convites");
-      },
-    },
-    publicLeads: {
-      async create() {
-        throw desktopUnsupportedAuthAction("Contato comercial");
-      },
-    },
-    labSetup: {
-      async get() {
-        throw desktopUnsupportedAuthAction("Configuração de acesso");
-      },
-      async requestMagicLink() {
-        throw desktopUnsupportedAuthAction("Configuração de acesso");
-      },
-      async requestOtp() {
-        throw desktopUnsupportedAuthAction("Configuração de acesso");
-      },
-      async complete() {
-        throw desktopUnsupportedAuthAction("Configuração de acesso");
-      },
-    },
+    reports: desktopCloudOnlyStubs("reports", {
+      action: "Relatórios consolidados",
+    }),
+    publicCheckout: desktopCloudOnlyStubs("publicCheckout", {
+      action: "Checkout comercial",
+    }),
+    publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
+      action: "Convites",
+    }),
+    publicLeads: desktopCloudOnlyStubs("publicLeads", {
+      action: "Contato comercial",
+    }),
+    labSetup: desktopCloudOnlyStubs("labSetup", {
+      action: "Configuração de acesso",
+    }),
     nonConformances: {
+      ...desktopCloudOnlyStubs("nonConformances", {
+        action: "Não conformidades",
+      }),
       async list<TResponse = unknown>(input: NonConformanceListInput) {
         const url = new URL("/api/nc", options.baseUrl);
         url.searchParams.set("page", String(input.page));
@@ -1173,15 +946,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<TResponse>(response);
       },
-      async summary() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async auditLog() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
       async create(input: CreateNonConformanceInput) {
         const response = await fetchImpl(new URL("/api/nc", options.baseUrl), {
           method: "POST",
@@ -1198,275 +962,30 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CreateNonConformanceResult>(response);
       },
-      async setDisposition() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async resolve() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async escalateToCapa() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async getOotNotification() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async registerOotAcknowledgement() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async getImpactAssessment() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async saveImpactAssessment() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
-      async signImpactAssessment() {
-        throw desktopUnsupportedAuthAction("Não conformidades");
-      },
     },
-    capas: {
-      async list() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async summary() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async auditLog() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async update() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async implement() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async verify() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-      async close() {
-        throw desktopUnsupportedAuthAction("CAPA");
-      },
-    },
-    proficiencyTests: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async summary() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async auditLog() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async update() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async recordResults() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async remove() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async listPlan() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async createPlanItem() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async updatePlanItem() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-      async removePlanItem() {
-        throw desktopUnsupportedAuthAction("Ensaios de proficiência");
-      },
-    },
-    spc: {
-      async listCharts() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async getChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async createChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async updateChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async removeChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async recalculateChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async escalateChart() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async listReadings() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async createReading() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-      async removeReading() {
-        throw desktopUnsupportedAuthAction("Cartas de controle");
-      },
-    },
-    certificateTemplates: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async update() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async duplicate() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async setDefault() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async getXlsxVersion() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async uploadXlsx() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async validateXlsx() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async updateXlsxBindings() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async createXlsxPreview() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async getXlsxPreview() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async publishXlsx() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-      async createXlsxAssignment() {
-        throw desktopUnsupportedAuthAction("Templates de certificado");
-      },
-    },
-    competences: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async matrix() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async auditLog() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async transition() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async evaluate() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async renew() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async cancel() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async delete() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-      async assignTraining() {
-        throw desktopUnsupportedAuthAction("Competências");
-      },
-    },
-    trainingRecords: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Registros de treinamento");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Registros de treinamento");
-      },
-    },
-    customerSuccess: {
-      async getProfile() {
-        throw desktopUnsupportedAuthAction("Customer Success");
-      },
-      async listRequests() {
-        throw desktopUnsupportedAuthAction("Customer Success");
-      },
-      async createRequest() {
-        throw desktopUnsupportedAuthAction("Customer Success");
-      },
-    },
-    calibrationRequests: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-      async review() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-      async approve() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-      async reject() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-      async convert() {
-        throw desktopUnsupportedAuthAction("Solicitações de calibração");
-      },
-    },
-    visits: {
-      async list() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async assign() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async confirm() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async reschedule() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async cancel() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async complete() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async addJob() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-      async removeJob() {
-        throw desktopUnsupportedAuthAction("Visitas");
-      },
-    },
+    capas: desktopCloudOnlyStubs("capas", { action: "CAPA" }),
+    proficiencyTests: desktopCloudOnlyStubs("proficiencyTests", {
+      action: "Ensaios de proficiência",
+    }),
+    spc: desktopCloudOnlyStubs("spc", { action: "Cartas de controle" }),
+    certificateTemplates: desktopCloudOnlyStubs("certificateTemplates", {
+      action: "Templates de certificado",
+    }),
+    competences: desktopCloudOnlyStubs("competences", {
+      action: "Competências",
+    }),
+    trainingRecords: desktopCloudOnlyStubs("trainingRecords", {
+      action: "Registros de treinamento",
+    }),
+    customerSuccess: desktopCloudOnlyStubs("customerSuccess", {
+      action: "Customer Success",
+    }),
+    calibrationRequests: desktopCloudOnlyStubs("calibrationRequests", {
+      action: "Solicitações de calibração",
+    }),
+    visits: desktopCloudOnlyStubs("visits", { action: "Visitas" }),
     integrations: {
+      ...desktopCloudOnlyStubs("integrations", { action: "Integrações" }),
       async list<TResponse = unknown>() {
         return assumeDesktopPayload<TResponse>({
           billing: {
@@ -1478,97 +997,16 @@ export function createDesktopApiClient(
           data: [],
         });
       },
-      async create() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async startContaAzulOAuth() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async validate() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async update() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async updateContaAzulConfig() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async listContaAzulCatalog() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async pollContaAzul() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async pollContaAzulFiscal() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async linkContaAzulInvoicesToMdfe() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async pollContaAzulPayables() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async pollContaAzulProtocols() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async pollContaAzulDrift() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async getContaAzulSchedule() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async refreshContaAzul() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async disconnectContaAzul() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async toggle() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async previewSync() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async sync() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async schedule() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async listRunItems() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async retryRun() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async listDrift() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
-      async acknowledgeDrift() {
-        throw desktopUnsupportedAuthAction("Integrações");
-      },
     },
     materials: {
       // Material catalog is cloud-only in v1; the desktop SO flow keeps the
       // free-form part-item fallback. Reads degrade to empty, writes are
       // unsupported offline.
+      ...desktopCloudOnlyStubs("materials", {
+        action: "Catálogo de materiais",
+      }),
       async list() {
         return { data: [] };
-      },
-      async get() {
-        throw desktopUnsupportedAuthAction("Catálogo de materiais");
-      },
-      async create() {
-        throw desktopUnsupportedAuthAction("Catálogo de materiais");
-      },
-      async update() {
-        throw desktopUnsupportedAuthAction("Catálogo de materiais");
-      },
-      async deactivate() {
-        throw desktopUnsupportedAuthAction("Catálogo de materiais");
-      },
-      async adjustStock() {
-        throw desktopUnsupportedAuthAction("Catálogo de materiais");
       },
     },
     services: {
@@ -1708,6 +1146,17 @@ export function createDesktopApiClient(
       },
     },
     methods: {
+      ...desktopCloudOnlyStubs("methods", {
+        action: "Métodos",
+        actionByMethod: {
+          compileDraft: "Compilação de método",
+          previewDraft: "Preview de método",
+          publishDraft: "Publicação de método",
+          requestApproval: "Solicitação de aprovação",
+          listMethodTemplates: "Catálogo de modelos de método",
+          fromTemplate: "Adoção de método a partir de modelo",
+        },
+      }),
       async list(input = {}) {
         const url = new URL("/api/methods", options.baseUrl);
         url.searchParams.set("page", String(input.page ?? 1));
@@ -1865,28 +1314,18 @@ export function createDesktopApiClient(
           "Erro ao retornar para rascunho",
         );
       },
-      async compileDraft() {
-        throw desktopUnsupportedAuthAction("Compilação de método");
-      },
-      async previewDraft() {
-        throw desktopUnsupportedAuthAction("Preview de método");
-      },
-      async publishDraft() {
-        throw desktopUnsupportedAuthAction("Publicação de método");
-      },
-      async requestApproval() {
-        throw desktopUnsupportedAuthAction("Solicitação de aprovação");
-      },
-      async listMethodTemplates() {
-        throw desktopUnsupportedAuthAction("Catálogo de modelos de método");
-      },
-      async fromTemplate() {
-        throw desktopUnsupportedAuthAction(
-          "Adoção de método a partir de modelo",
-        );
-      },
     },
     standards: {
+      ...desktopCloudOnlyStubs("standards", {
+        action: "Padrões",
+        actionByMethod: {
+          getImpactedCertificates: "Recall de padrão",
+          getRecall: "Recall de padrão",
+          sendRecall: "Recall de padrão",
+          uploadCertificateDocument: "Certificado de padrão",
+          getCertificateDocumentDownloadUrl: "Certificado de padrão",
+        },
+      }),
       async list(input = {}) {
         const url = new URL("/api/standards", options.baseUrl);
         url.searchParams.set("page", String(input.page ?? 1));
@@ -2113,23 +1552,23 @@ export function createDesktopApiClient(
 
         return readDesktopJson<unknown>(response);
       },
-      async getImpactedCertificates() {
-        throw desktopUnsupportedAuthAction("Recall de padrão");
-      },
-      async getRecall() {
-        throw desktopUnsupportedAuthAction("Recall de padrão");
-      },
-      async sendRecall() {
-        throw desktopUnsupportedAuthAction("Recall de padrão");
-      },
-      async uploadCertificateDocument() {
-        throw desktopUnsupportedAuthAction("Certificado de padrão");
-      },
-      async getCertificateDocumentDownloadUrl() {
-        throw desktopUnsupportedAuthAction("Certificado de padrão");
-      },
     },
     jobs: {
+      ...desktopCloudOnlyStubs("jobs", {
+        action: "Jobs de calibração",
+        actionByMethod: {
+          approve: "Aprovação de job",
+          reject: "Rejeição de job",
+          cancel: "Cancelamento de job",
+          assign: "Atribuição de técnico",
+          getCertificateDownloadUrl: "Download de certificado publicado",
+          generateLabel: "Geração de etiqueta publicada",
+          getLabelDownloadUrl: "Download de etiqueta publicada",
+          getLabelCommands: "Geração de comandos da etiqueta",
+          amend: "Retificação de certificado",
+          flagOutOfTolerance: "Sinalização de fora de tolerância",
+        },
+      }),
       async list(input) {
         const url = new URL("/api/jobs", options.baseUrl);
         url.searchParams.set("page", String(input.page));
@@ -2206,18 +1645,6 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<TechnicianListData>(response);
-      },
-      async approve() {
-        throw desktopUnsupportedJobAction("Aprovação de job");
-      },
-      async reject() {
-        throw desktopUnsupportedJobAction("Rejeição de job");
-      },
-      async cancel() {
-        throw desktopUnsupportedJobAction("Cancelamento de job");
-      },
-      async assign() {
-        throw desktopUnsupportedJobAction("Atribuição de técnico");
       },
       async listStandards<TStandard = unknown>() {
         const url = new URL("/api/standards", options.baseUrl);
@@ -2320,26 +1747,23 @@ export function createDesktopApiClient(
 
         return readDesktopJson<LocalCertificateDraft>(response);
       },
-      async getCertificateDownloadUrl() {
-        throw desktopUnsupportedJobAction("Download de certificado publicado");
-      },
-      async generateLabel() {
-        throw desktopUnsupportedJobAction("Geração de etiqueta publicada");
-      },
-      async getLabelDownloadUrl() {
-        throw desktopUnsupportedJobAction("Download de etiqueta publicada");
-      },
-      async getLabelCommands() {
-        throw desktopUnsupportedJobAction("Geração de comandos da etiqueta");
-      },
-      async amend() {
-        throw desktopUnsupportedJobAction("Retificação de certificado");
-      },
-      async flagOutOfTolerance() {
-        throw desktopUnsupportedJobAction("Sinalização de fora de tolerância");
-      },
     },
     serviceOrders: {
+      ...desktopCloudOnlyStubs("serviceOrders", {
+        action: "Ordens de serviço",
+        actionByMethod: {
+          update: "Atualização da OS",
+          saveEvaluation: "Avaliação técnica",
+          sendQuote: "Emissão de orçamento",
+          generateIntakeDocument: "Geração de comprovante",
+          getIntakeDocumentPdf: "Abertura de comprovante",
+          generateTag: "Geração de etiqueta",
+          getTagPdf: "Abertura de etiqueta",
+          updateRepairMark: "Marca de Reparo",
+          deliver: "Registro de entrega",
+          getDeliveryDocumentPdf: "Abertura do comprovante de entrega",
+        },
+      }),
       async list(input) {
         const url = new URL("/api/service-orders", options.baseUrl);
         url.searchParams.set("page", String(input.page));
@@ -2404,9 +1828,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CreateServiceOrderResult>(response);
       },
-      async update() {
-        throw desktopUnsupportedServiceOrderAction("Atualização da OS");
-      },
       async createQuote(id, input) {
         const response = await fetchImpl(
           new URL(
@@ -2431,12 +1852,6 @@ export function createDesktopApiClient(
 
         return response.json();
       },
-      async saveEvaluation() {
-        throw desktopUnsupportedServiceOrderAction("Avaliação técnica");
-      },
-      async sendQuote() {
-        throw desktopUnsupportedServiceOrderAction("Emissão de orçamento");
-      },
       async saveExecution(id, input) {
         const response = await fetchImpl(
           new URL(
@@ -2460,24 +1875,6 @@ export function createDesktopApiClient(
         }
 
         return response.json();
-      },
-      async generateIntakeDocument() {
-        throw desktopUnsupportedServiceOrderAction("Geração de comprovante");
-      },
-      async getIntakeDocumentPdf() {
-        throw desktopUnsupportedServiceOrderAction("Abertura de comprovante");
-      },
-      async generateTag() {
-        throw desktopUnsupportedServiceOrderAction("Geração de etiqueta");
-      },
-      async getTagPdf() {
-        throw desktopUnsupportedServiceOrderAction("Abertura de etiqueta");
-      },
-      async updateRepairMark() {
-        throw desktopUnsupportedServiceOrderAction("Marca de Reparo");
-      },
-      async deliver() {
-        throw desktopUnsupportedServiceOrderAction("Registro de entrega");
       },
       async issueDeliveryDocument(id, input) {
         const response = await fetchImpl(
@@ -2507,11 +1904,6 @@ export function createDesktopApiClient(
         }
 
         return response.json();
-      },
-      async getDeliveryDocumentPdf() {
-        throw desktopUnsupportedServiceOrderAction(
-          "Abertura do comprovante de entrega",
-        );
       },
     },
     sync: {
@@ -2688,6 +2080,78 @@ function isAsyncNamespaceMethod(
   value: unknown,
 ): value is (...args: unknown[]) => Promise<unknown> {
   return typeof value === "function";
+}
+
+const HYBRID_LOCAL_METHOD_POLICIES: readonly DataPolicy[] = [
+  "local-command-sync",
+  "local-only",
+];
+
+/**
+ * Composes the desktop hybrid client from `calibraApiPolicyRegistry` — the
+ * single place a method's offline availability is declared. Per namespace:
+ * `local-first-read-through-sync` methods get the read-through wrapper,
+ * `local-command-sync` / `local-only` methods route to the local adapter, and
+ * everything else keeps the cloud implementation. Reclassifying a method in
+ * the registry is all it takes to reroute it here.
+ */
+export function composeDesktopHybridApi(
+  cloud: CalibraApi,
+  local: CalibraApi,
+  requestBackgroundSync: () => void,
+): CalibraApi {
+  const hybrid: CalibraApi = { ...cloud };
+
+  for (const namespace of listCalibraApiNamespaces()) {
+    assignHybridNamespace(
+      hybrid,
+      namespace,
+      cloud,
+      local,
+      requestBackgroundSync,
+    );
+  }
+
+  return hybrid;
+}
+
+function assignHybridNamespace<TNamespace extends CalibraApiNamespace>(
+  hybrid: CalibraApi,
+  namespace: TNamespace,
+  cloud: CalibraApi,
+  local: CalibraApi,
+  requestBackgroundSync: () => void,
+): void {
+  const readThroughMethods = listCalibraApiNamespaceMethodsWithPolicy(
+    namespace,
+    ["local-first-read-through-sync"],
+  );
+  const localMethods = listCalibraApiNamespaceMethodsWithPolicy(
+    namespace,
+    HYBRID_LOCAL_METHOD_POLICIES,
+  );
+
+  if (readThroughMethods.length === 0 && localMethods.length === 0) {
+    // Cloud-only namespace: keep the cloud implementation untouched.
+    return;
+  }
+
+  const composed =
+    readThroughMethods.length > 0
+      ? withDesktopLocalFirstReadThroughSync(
+          cloud[namespace],
+          local[namespace],
+          local,
+          readThroughMethods,
+          requestBackgroundSync,
+        )
+      : { ...cloud[namespace] };
+
+  for (const method of localMethods) {
+    composed[method] = local[namespace][method];
+  }
+
+  hybrid[namespace] = composed;
 }
 
 export function createDesktopBackgroundSyncRequester(
@@ -3031,32 +2495,11 @@ function desktopNotificationPreferences(): NotificationPreferencesResponse {
   };
 }
 
-function desktopUnsupportedServiceOrderAction(action: string) {
-  return new Error(`${action} requer a API web/nuvem neste momento.`);
-}
-
-function desktopUnsupportedJobAction(action: string) {
-  return new Error(`${action} requer a API web/nuvem neste momento.`);
-}
-
-function desktopUnsupportedSignatureAction(action: string) {
-  return new Error(`${action} requer sincronização com a nuvem neste momento.`);
-}
-
-function desktopUnsupportedProfileMediaAction(action: string) {
-  return new Error(`${action} requer sincronização com a nuvem neste momento.`);
-}
-
-function desktopUnsupportedSigningCertificateAction(action: string) {
-  return new Error(`${action} requer sincronização com a nuvem neste momento.`);
-}
-
+// The backoffice namespace nests sub-objects (`commercial`, `customerSuccess`)
+// that the policy registry cannot describe (it registers function-valued
+// methods only), so their stubs stay hand-written on top of this helper.
 function desktopUnsupportedBackofficeAction(action: string) {
-  return new Error(`${action} requer a API web/nuvem neste momento.`);
-}
-
-function desktopUnsupportedAuthAction(action: string) {
-  return new Error(`${action} requer a API web/nuvem neste momento.`);
+  return desktopUnsupportedError(action, "web-api");
 }
 
 async function postDesktopMethodAction<TResponse = unknown>(

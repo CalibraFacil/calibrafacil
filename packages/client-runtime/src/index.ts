@@ -43,9 +43,9 @@ import {
 } from "./transport/cloud";
 import type { CreateDesktopHybridApiClientOptions } from "./transport/desktop";
 import {
+  composeDesktopHybridApi,
   createDesktopApiClient,
   createDesktopBackgroundSyncRequester,
-  withDesktopLocalFirstReadThroughSync,
 } from "./transport/desktop-client";
 import { createAccessApi } from "./modules/access";
 import { createApiKeysApi } from "./modules/api-keys";
@@ -840,105 +840,7 @@ export function createDesktopHybridApiClient(
     options.local,
   );
 
-  return {
-    ...cloud,
-    dashboard: withDesktopLocalFirstReadThroughSync(
-      cloud.dashboard,
-      local.dashboard,
-      local,
-      ["getStats"],
-      requestBackgroundSync,
-    ),
-    customers: {
-      ...withDesktopLocalFirstReadThroughSync(
-        cloud.customers,
-        local.customers,
-        local,
-        ["list", "get"],
-        requestBackgroundSync,
-      ),
-      create: local.customers.create,
-      update: local.customers.update,
-    },
-    assets: {
-      ...withDesktopLocalFirstReadThroughSync(
-        cloud.assets,
-        local.assets,
-        local,
-        ["list", "get"],
-        requestBackgroundSync,
-      ),
-      create: local.assets.create,
-      update: local.assets.update,
-    },
-    assetTypes: withDesktopLocalFirstReadThroughSync(
-      cloud.assetTypes,
-      local.assetTypes,
-      local,
-      ["list"],
-      requestBackgroundSync,
-    ),
-    services: withDesktopLocalFirstReadThroughSync(
-      cloud.services,
-      local.services,
-      local,
-      ["list", "get"],
-      requestBackgroundSync,
-    ),
-    methods: withDesktopLocalFirstReadThroughSync(
-      cloud.methods,
-      local.methods,
-      local,
-      ["list", "get"],
-      requestBackgroundSync,
-    ),
-    standards: withDesktopLocalFirstReadThroughSync(
-      cloud.standards,
-      local.standards,
-      local,
-      ["list", "get", "listCompositionProfiles"],
-      requestBackgroundSync,
-    ),
-    environmentalLimits: withDesktopLocalFirstReadThroughSync(
-      cloud.environmentalLimits,
-      local.environmentalLimits,
-      local,
-      ["list"],
-      requestBackgroundSync,
-    ),
-    sync: local.sync,
-    attachments: local.attachments,
-    jobs: {
-      ...withDesktopLocalFirstReadThroughSync(
-        cloud.jobs,
-        local.jobs,
-        local,
-        ["list", "get", "listStandards", "getEffectiveEnvironmentalLimits"],
-        requestBackgroundSync,
-      ),
-      saveExecution: local.jobs.saveExecution,
-      submitExecution: local.jobs.submitExecution,
-      createCertificateDraft: local.jobs.createCertificateDraft,
-    },
-    serviceOrders: {
-      ...withDesktopLocalFirstReadThroughSync(
-        cloud.serviceOrders,
-        local.serviceOrders,
-        local,
-        ["list", "get"],
-        requestBackgroundSync,
-      ),
-      create: local.serviceOrders.create,
-      createQuote: local.serviceOrders.createQuote,
-      saveExecution: local.serviceOrders.saveExecution,
-      issueDeliveryDocument: local.serviceOrders.issueDeliveryDocument,
-    },
-    nonConformances: {
-      // Reads stay cloud: cloud NCs are not mirrored locally, so a local-first
-      // list would hide everything captured online. Only the offline create
-      // path (issue #426 Phase 0) is routed to the local server + outbox.
-      ...cloud.nonConformances,
-      create: local.nonConformances.create,
-    },
-  };
+  // All cloud-vs-local routing is derived from calibraApiPolicyRegistry —
+  // change a method's policy there and the hybrid client reroutes with it.
+  return composeDesktopHybridApi(cloud, local, requestBackgroundSync);
 }

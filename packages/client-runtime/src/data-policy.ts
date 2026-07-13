@@ -33,6 +33,21 @@ export type CalibraApiPolicyEntry = {
   policy: DataPolicy;
 };
 
+/**
+ * Method names of a namespace whose registry policy matches `TPolicy`.
+ * Resolved from the literal policy strings in `calibraApiPolicyRegistry`, so a
+ * policy reclassification changes this type — and everything derived from it —
+ * in the same edit.
+ */
+export type CalibraApiMethodsWithPolicy<
+  TNamespace extends CalibraApiNamespace,
+  TPolicy extends DataPolicy,
+> = {
+  [TMethod in CalibraApiMethod<TNamespace>]: (typeof calibraApiPolicyRegistry)[TNamespace][TMethod] extends TPolicy
+    ? TMethod
+    : never;
+}[CalibraApiMethod<TNamespace>];
+
 export const desktopDataPolicyUnavailableMessages = {
   "cloud-only":
     "Esta tela depende da API da nuvem e não está disponível offline. Verifique a conexão e tente novamente.",
@@ -538,16 +553,42 @@ export function getDesktopDataPolicyUnavailableMessage(
 }
 
 export function listCalibraApiPolicyEntries(): CalibraApiPolicyEntry[] {
-  return Object.keys(calibraApiPolicyRegistry)
-    .filter(isCalibraApiNamespace)
-    .flatMap((namespace) => {
-      const methods = calibraApiPolicyRegistry[namespace];
-      return Object.entries(methods).map(([method, policy]) => ({
-        namespace,
-        method,
-        policy,
-      }));
-    });
+  return listCalibraApiNamespaces().flatMap((namespace) => {
+    const methods = calibraApiPolicyRegistry[namespace];
+    return Object.entries(methods).map(([method, policy]) => ({
+      namespace,
+      method,
+      policy,
+    }));
+  });
+}
+
+export function listCalibraApiNamespaces(): CalibraApiNamespace[] {
+  return Object.keys(calibraApiPolicyRegistry).filter(isCalibraApiNamespace);
+}
+
+/**
+ * Runtime companion of `CalibraApiMethodsWithPolicy`: the method names of a
+ * namespace whose registry policy is one of `policies`, typed as keys of the
+ * product API namespace so composers can index `CalibraApi` with them. The
+ * registry is type-total over every `CalibraApi` method, which is what makes
+ * the narrowing in the filter predicate sound.
+ */
+export function listCalibraApiNamespaceMethodsWithPolicy<
+  TNamespace extends CalibraApiNamespace,
+>(
+  namespace: TNamespace,
+  policies: readonly DataPolicy[],
+): Array<keyof CalibraApi[TNamespace] & string> {
+  const registryNamespace: Record<string, DataPolicy> =
+    calibraApiPolicyRegistry[namespace];
+
+  return Object.keys(registryNamespace).filter(
+    (method): method is keyof CalibraApi[TNamespace] & string => {
+      const policy = registryNamespace[method];
+      return policy !== undefined && policies.includes(policy);
+    },
+  );
 }
 
 function isCalibraApiNamespace(value: string): value is CalibraApiNamespace {
