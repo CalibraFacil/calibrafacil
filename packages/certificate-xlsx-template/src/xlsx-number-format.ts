@@ -1,11 +1,11 @@
 /**
  * pt-BR number formatting for certificate XLSX cells.
  *
- * Extracted from index.ts so it is unit-testable. The previous inline version
- * derived the decimal count with `String(value).split(".")[1]?.length`, which
- * is wrong for scientific-notation values — e.g. `5e-7` has no "." so it fell
- * back to 1 decimal and rendered as "0,0", silently dropping sub-microgram
- * metrology values (buoyancy, max error) on the certificate.
+ * The previous inline version derived the decimal count with
+ * `String(value).split(".")[1]?.length`, which is wrong for
+ * scientific-notation values — e.g. `5e-7` has no "." so it fell back to
+ * 1 decimal and rendered as "0,0", silently dropping sub-microgram metrology
+ * values (buoyancy, max error) on the certificate.
  */
 
 /**

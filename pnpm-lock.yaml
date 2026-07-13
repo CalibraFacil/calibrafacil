@@ -1128,6 +1128,9 @@ importers:
 
   packages/certificate-xlsx-template:
     dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@cj-tech-master/excelts':
         specifier: ^9.6.0
         version: 9.6.0

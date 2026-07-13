@@ -34,6 +34,21 @@ export {
   workbookImageFromDataUrl,
   type CertificateImageContext,
 } from "./render.js";
+export {
+  buildCertificateData,
+  renderCertificateWorkbook,
+  type AssetSnapshot,
+  type BuildCertificateDataOptions,
+  type CalibrationLocationSnapshot,
+  type CalibrationPhaseSnapshot,
+  type CertificateJobData,
+  type CertifiedValue,
+  type EnvironmentalSnapshot,
+  type MethodInputField,
+  type MethodSnapshot,
+  type StandardSnapshot,
+} from "./certificate-data.js";
+export { formatNumberForXlsx, fractionDigitsOf } from "./xlsx-number-format.js";
 export type {
   CertificateWorkbookEngine,
   FilledWorkbookResult,
