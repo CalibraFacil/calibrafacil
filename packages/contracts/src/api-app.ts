@@ -271,6 +271,7 @@ type ApiRoutePath =
   | "/api/reports/consolidated/trend"
   | "/api/service-orders"
   | "/api/service-orders/:id"
+  | "/api/service-orders/:id/communications"
   | "/api/service-orders/:id/deliver"
   | "/api/service-orders/:id/delivery-document"
   | "/api/service-orders/:id/delivery-document.pdf"

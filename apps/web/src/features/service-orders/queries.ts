@@ -69,6 +69,13 @@ export function serviceOrderDetailQueryOptions(id: string) {
   })
 }
 
+export function serviceOrderCommunicationsQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: ['service-order', id, 'communications'],
+    queryFn: () => calibraApi.serviceOrders.listCommunications(id),
+  })
+}
+
 export function serviceOrderFinancialStatusQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['service-order', id, 'financial-status'],
@@ -255,6 +262,19 @@ export function useServiceOrdersListData({
 
 export function useServiceOrderDetailData(id: string) {
   return useQuery(serviceOrderDetailQueryOptions(id))
+}
+
+export function useServiceOrderCommunicationsData({
+  enabled,
+  id,
+}: {
+  enabled: boolean
+  id: string
+}) {
+  return useQuery({
+    ...serviceOrderCommunicationsQueryOptions(id),
+    enabled,
+  })
 }
 
 export function useServiceOrderFinancialStatusData({

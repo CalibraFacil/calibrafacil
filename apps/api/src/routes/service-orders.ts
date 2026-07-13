@@ -59,6 +59,7 @@ import {
   getServiceOrderDetail,
   toClientVisibleServiceOrderDetail,
 } from "../modules/service-orders/service-order.read-model";
+import { listServiceOrderCommunications } from "../modules/service-orders/service-order.communications";
 import { buildPortalServiceOrderFinancialSummary } from "../lib/portal-financial-summary";
 import {
   approveQuoteWithPublicServiceOrderAccess,
@@ -226,6 +227,25 @@ export const serviceOrdersRouter = new Hono<{
       );
       if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
       return c.json({ data: detail });
+    },
+  )
+  // #343 — per-OS customer-communication log ("Comunicações"): merges the
+  // email ledger + outbox into a timestamped audit trail. Read-only, same
+  // permission as viewing the OS.
+  .get(
+    "/:id/communications",
+    ...withLabPermission({ service_order: ["read"] }),
+    zValidator("param", IdParamSchema),
+    async (c) => {
+      const member = c.get("member");
+      const { id } = c.req.valid("param");
+      const result = await listServiceOrderCommunications(
+        id,
+        member.organizationId,
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      );
+      if (!result) return c.json({ error: "OS nao encontrada" }, 404);
+      return c.json(result);
     },
   )
   .patch(

@@ -340,6 +340,7 @@ export const calibraApiPolicyRegistry = {
   serviceOrders: {
     list: "local-first-read-through-sync",
     get: "local-first-read-through-sync",
+    listCommunications: "cloud-only",
     create: "local-command-sync",
     update: "cloud-only",
     createQuote: "local-command-sync",

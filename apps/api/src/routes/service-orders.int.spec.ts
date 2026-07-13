@@ -5,9 +5,12 @@ import {
   asset,
   assetType,
   customer,
+  emailSuppression,
   organization,
   organizationUnit,
   serviceOrder,
+  serviceOrderEmailLog,
+  serviceOrderEmailOutbox,
   serviceOrderExecution,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -136,7 +139,7 @@ async function seedServiceOrder(params: {
   assetId: number;
   openedByUserId: string;
   serviceOrderNumber?: string;
-  status?: typeof serviceOrder.$inferInsert["status"];
+  status?: (typeof serviceOrder.$inferInsert)["status"];
 }): Promise<number> {
   const [row] = await db
     .insert(serviceOrder)
@@ -187,421 +190,400 @@ describe("serviceOrdersRouter — real DB + real RBAC middleware", () => {
   // ==========================================================================
   // REQ-SO-001: GET / returns ONLY the authed org's service orders
   // ==========================================================================
-  it(
-    "REQ-SO-001: GET / returns only the authenticated org's service orders — exact count, no cross-tenant leak",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-SO-001: GET / returns only the authenticated org's service orders — exact count, no cross-tenant leak", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const typeId = await seedAssetType("type-so-001");
+    const typeId = await seedAssetType("type-so-001");
 
-      const custA = await seedCustomer({
-        labOrganizationId: orgA.orgId,
-        clientOrgId: "client-a-001",
-        name: "Customer Alpha",
-      });
-      const custB = await seedCustomer({
-        labOrganizationId: orgB.orgId,
-        clientOrgId: "client-b-001",
-        name: "Customer Beta",
-      });
+    const custA = await seedCustomer({
+      labOrganizationId: orgA.orgId,
+      clientOrgId: "client-a-001",
+      name: "Customer Alpha",
+    });
+    const custB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      clientOrgId: "client-b-001",
+      name: "Customer Beta",
+    });
 
-      const assetA = await seedAsset({
-        unitId: orgA.unitId,
-        customerId: custA,
-        assetTypeId: typeId,
-        tag: "TAG-A-001",
-        name: "Asset Alpha",
-      });
-      const assetB = await seedAsset({
-        unitId: orgB.unitId,
-        customerId: custB,
-        assetTypeId: typeId,
-        tag: "TAG-B-001",
-        name: "Asset Beta",
-      });
+    const assetA = await seedAsset({
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetTypeId: typeId,
+      tag: "TAG-A-001",
+      name: "Asset Alpha",
+    });
+    const assetB = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetTypeId: typeId,
+      tag: "TAG-B-001",
+      name: "Asset Beta",
+    });
 
-      // 2 orders for org A, 1 for org B
-      await seedServiceOrder({
-        organizationId: orgA.orgId,
-        unitId: orgA.unitId,
-        customerId: custA,
-        assetId: assetA,
-        openedByUserId: orgA.userId,
-        serviceOrderNumber: "OS-A-0001",
-      });
-      await seedServiceOrder({
-        organizationId: orgA.orgId,
-        unitId: orgA.unitId,
-        customerId: custA,
-        assetId: assetA,
-        openedByUserId: orgA.userId,
-        serviceOrderNumber: "OS-A-0002",
-      });
-      await seedServiceOrder({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        customerId: custB,
-        assetId: assetB,
-        openedByUserId: orgB.userId,
-        serviceOrderNumber: "OS-B-0001",
-      });
+    // 2 orders for org A, 1 for org B
+    await seedServiceOrder({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetId: assetA,
+      openedByUserId: orgA.userId,
+      serviceOrderNumber: "OS-A-0001",
+    });
+    await seedServiceOrder({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetId: assetA,
+      openedByUserId: orgA.userId,
+      serviceOrderNumber: "OS-A-0002",
+    });
+    await seedServiceOrder({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetId: assetB,
+      openedByUserId: orgB.userId,
+      serviceOrderNumber: "OS-B-0001",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await serviceOrdersRouter.request("/", {
-        headers: JSON_HEADERS,
-      });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      // Exactly 2 orders (org A's), not 3
-      expect(body.pagination.total).toBe(2);
-      expect(body.data).toHaveLength(2);
-      // All returned records belong to org A's customer
-      const customerNames = body.data.map(
-        (so: { customerName: string }) => so.customerName,
-      );
-      expect(customerNames.every((n: string) => n === "Customer Alpha")).toBe(
-        true,
-      );
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Exactly 2 orders (org A's), not 3
+    expect(body.pagination.total).toBe(2);
+    expect(body.data).toHaveLength(2);
+    // All returned records belong to org A's customer
+    const customerNames = body.data.map(
+      (so: { customerName: string }) => so.customerName,
+    );
+    expect(customerNames.every((n: string) => n === "Customer Alpha")).toBe(
+      true,
+    );
+  });
 
   // ==========================================================================
   // REQ-SO-002: Cross-tenant GET /:id — no data leak
   // ==========================================================================
-  it(
-    "REQ-SO-002: GET /:id of another org's service order → 404, no data returned",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-SO-002: GET /:id of another org's service order → 404, no data returned", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const typeId = await seedAssetType("type-so-002");
-      const custB = await seedCustomer({
-        labOrganizationId: orgB.orgId,
-        clientOrgId: "client-b-002",
-        name: "Secret Customer B",
-      });
-      const assetB = await seedAsset({
-        unitId: orgB.unitId,
-        customerId: custB,
-        assetTypeId: typeId,
-        tag: "TAG-B-002",
-      });
-      const orderBId = await seedServiceOrder({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        customerId: custB,
-        assetId: assetB,
-        openedByUserId: orgB.userId,
-        serviceOrderNumber: "OS-B-002",
-      });
+    const typeId = await seedAssetType("type-so-002");
+    const custB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      clientOrgId: "client-b-002",
+      name: "Secret Customer B",
+    });
+    const assetB = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetTypeId: typeId,
+      tag: "TAG-B-002",
+    });
+    const orderBId = await seedServiceOrder({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetId: assetB,
+      openedByUserId: orgB.userId,
+      serviceOrderNumber: "OS-B-002",
+    });
 
-      // Org A tries to read org B's service order by numeric id
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await serviceOrdersRouter.request(`/${orderBId}`, {
-        headers: JSON_HEADERS,
-      });
+    // Org A tries to read org B's service order by numeric id
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderBId}`, {
+      headers: JSON_HEADERS,
+    });
 
-      // getServiceOrderDetail scopes by organizationId → null → 404
-      expect(res.status).toBe(404);
-      const body = await res.json();
-      expect(body).not.toHaveProperty("customerName");
-      expect(body).not.toHaveProperty("customerId");
-      expect(body).not.toHaveProperty("data");
-    },
-  );
+    // getServiceOrderDetail scopes by organizationId → null → 404
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body).not.toHaveProperty("customerName");
+    expect(body).not.toHaveProperty("customerId");
+    expect(body).not.toHaveProperty("data");
+  });
 
   // ==========================================================================
   // REQ-SO-003: POST /:id/cancel as member → 403
   // ==========================================================================
-  it(
-    "REQ-SO-003: POST /:id/cancel as member → 403 (service_order:cancel absent for member role)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
-      const typeId = await seedAssetType("type-so-003");
-      const cust = await seedCustomer({
-        labOrganizationId: org.orgId,
-        clientOrgId: "client-a-003",
-      });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cust,
-        assetTypeId: typeId,
-        tag: "TAG-003",
-      });
-      const orderId = await seedServiceOrder({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        customerId: cust,
-        assetId,
-        openedByUserId: org.userId,
-        serviceOrderNumber: "OS-003",
-      });
+  it("REQ-SO-003: POST /:id/cancel as member → 403 (service_order:cancel absent for member role)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const typeId = await seedAssetType("type-so-003");
+    const cust = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: "client-a-003",
+    });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cust,
+      assetTypeId: typeId,
+      tag: "TAG-003",
+    });
+    const orderId = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: cust,
+      assetId,
+      openedByUserId: org.userId,
+      serviceOrderNumber: "OS-003",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(`/${orderId}/cancel`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Should be blocked by RBAC" }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/cancel`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Should be blocked by RBAC" }),
+    });
 
-      expect(res.status).toBe(403);
+    expect(res.status).toBe(403);
 
-      // Verify the order was NOT cancelled in the DB
-      const [row] = await db
-        .select({ status: serviceOrder.status })
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, orderId));
-      expect(row?.status).toBe("awaiting_tech_evaluation");
-    },
-  );
+    // Verify the order was NOT cancelled in the DB
+    const [row] = await db
+      .select({ status: serviceOrder.status })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, orderId));
+    expect(row?.status).toBe("awaiting_tech_evaluation");
+  });
 
   // ==========================================================================
   // REQ-SO-004: POST /:id/cancel as admin → 200, persists "canceled"
   // ==========================================================================
-  it(
-    "REQ-SO-004: POST /:id/cancel as admin → 200, service order persists as canceled, org-scoped",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-so-004");
-      const cust = await seedCustomer({
-        labOrganizationId: org.orgId,
-        clientOrgId: "client-a-004",
-      });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cust,
-        assetTypeId: typeId,
-        tag: "TAG-004",
-      });
-      const orderId = await seedServiceOrder({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        customerId: cust,
-        assetId,
-        openedByUserId: org.userId,
-        serviceOrderNumber: "OS-004",
-        status: "awaiting_tech_evaluation",
-      });
+  it("REQ-SO-004: POST /:id/cancel as admin → 200, service order persists as canceled, org-scoped", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-so-004");
+    const cust = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: "client-a-004",
+    });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cust,
+      assetTypeId: typeId,
+      tag: "TAG-004",
+    });
+    const orderId = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: cust,
+      assetId,
+      openedByUserId: org.userId,
+      serviceOrderNumber: "OS-004",
+      status: "awaiting_tech_evaluation",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(`/${orderId}/cancel`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ reason: "Client withdrew request" }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/cancel`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Client withdrew request" }),
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.data.status).toBe("canceled");
-      expect(body.data.cancelReason).toBe("Client withdrew request");
-      // Org-scope: the returned record belongs to the calling org
-      expect(body.data.organizationId).toBe(org.orgId);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.status).toBe("canceled");
+    expect(body.data.cancelReason).toBe("Client withdrew request");
+    // Org-scope: the returned record belongs to the calling org
+    expect(body.data.organizationId).toBe(org.orgId);
 
-      // Verify persisted to DB
-      const [row] = await db
-        .select({
-          status: serviceOrder.status,
-          cancelReason: serviceOrder.cancelReason,
-          organizationId: serviceOrder.organizationId,
-        })
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, orderId));
-      expect(row?.status).toBe("canceled");
-      expect(row?.cancelReason).toBe("Client withdrew request");
-      expect(row?.organizationId).toBe(org.orgId);
-    },
-  );
+    // Verify persisted to DB
+    const [row] = await db
+      .select({
+        status: serviceOrder.status,
+        cancelReason: serviceOrder.cancelReason,
+        organizationId: serviceOrder.organizationId,
+      })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, orderId));
+    expect(row?.status).toBe("canceled");
+    expect(row?.cancelReason).toBe("Client withdrew request");
+    expect(row?.organizationId).toBe(org.orgId);
+  });
 
   // ==========================================================================
   // REQ-SO-005: Unit-scope — service orders in another unit are hidden
   // ==========================================================================
-  it(
-    "REQ-SO-005: GET / with unit scope — service orders in another unit within the same org are excluded",
-    async () => {
-      // Seed ONE org with TWO units. Authenticate as a user whose active unit
-      // is unit-A and confirm unit-B orders are invisible.
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+  it("REQ-SO-005: GET / with unit scope — service orders in another unit within the same org are excluded", async () => {
+    // Seed ONE org with TWO units. Authenticate as a user whose active unit
+    // is unit-A and confirm unit-B orders are invisible.
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
 
-      // Create a second unit in the same org
-      const [unitB] = await db
-        .insert(organizationUnit)
-        .values({
-          organizationId: orgA.orgId,
-          name: "Unit B",
-          slug: "unit-b",
-          status: "ACTIVE",
-          isDefault: false,
-          createdBy: orgA.userId,
-        })
-        .returning({ id: organizationUnit.id });
-      if (!unitB) throw new Error("unit-B insert failed");
-
-      const typeId = await seedAssetType("type-so-005");
-      const custA = await seedCustomer({
-        labOrganizationId: orgA.orgId,
-        clientOrgId: "client-a-005",
-        name: "Customer A",
-      });
-
-      const assetUnitA = await seedAsset({
-        unitId: orgA.unitId,
-        customerId: custA,
-        assetTypeId: typeId,
-        tag: "TAG-005-A",
-      });
-      const assetUnitB = await seedAsset({
-        unitId: unitB.id,
-        customerId: custA,
-        assetTypeId: typeId,
-        tag: "TAG-005-B",
-      });
-
-      // One order per unit
-      await seedServiceOrder({
+    // Create a second unit in the same org
+    const [unitB] = await db
+      .insert(organizationUnit)
+      .values({
         organizationId: orgA.orgId,
-        unitId: orgA.unitId,
-        customerId: custA,
-        assetId: assetUnitA,
-        openedByUserId: orgA.userId,
-        serviceOrderNumber: "OS-UNIT-A",
-      });
-      await seedServiceOrder({
-        organizationId: orgA.orgId,
-        unitId: unitB.id,
-        customerId: custA,
-        assetId: assetUnitB,
-        openedByUserId: orgA.userId,
-        serviceOrderNumber: "OS-UNIT-B",
-      });
+        name: "Unit B",
+        slug: "unit-b",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: orgA.userId,
+      })
+      .returning({ id: organizationUnit.id });
+    if (!unitB) throw new Error("unit-B insert failed");
 
-      // Authenticate as org-a admin, scoped to unit-A only
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await serviceOrdersRouter.request("/", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(orgA.unitId),
-        },
-      });
+    const typeId = await seedAssetType("type-so-005");
+    const custA = await seedCustomer({
+      labOrganizationId: orgA.orgId,
+      clientOrgId: "client-a-005",
+      name: "Customer A",
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      // Only unit-A's order should appear
-      expect(body.pagination.total).toBe(1);
-      expect(body.data).toHaveLength(1);
-      const numbers = body.data.map(
-        (so: { serviceOrderNumber: string }) => so.serviceOrderNumber,
-      );
-      expect(numbers).toContain("OS-UNIT-A");
-      expect(numbers).not.toContain("OS-UNIT-B");
-    },
-  );
+    const assetUnitA = await seedAsset({
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetTypeId: typeId,
+      tag: "TAG-005-A",
+    });
+    const assetUnitB = await seedAsset({
+      unitId: unitB.id,
+      customerId: custA,
+      assetTypeId: typeId,
+      tag: "TAG-005-B",
+    });
+
+    // One order per unit
+    await seedServiceOrder({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetId: assetUnitA,
+      openedByUserId: orgA.userId,
+      serviceOrderNumber: "OS-UNIT-A",
+    });
+    await seedServiceOrder({
+      organizationId: orgA.orgId,
+      unitId: unitB.id,
+      customerId: custA,
+      assetId: assetUnitB,
+      openedByUserId: orgA.userId,
+      serviceOrderNumber: "OS-UNIT-B",
+    });
+
+    // Authenticate as org-a admin, scoped to unit-A only
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(orgA.unitId),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Only unit-A's order should appear
+    expect(body.pagination.total).toBe(1);
+    expect(body.data).toHaveLength(1);
+    const numbers = body.data.map(
+      (so: { serviceOrderNumber: string }) => so.serviceOrderNumber,
+    );
+    expect(numbers).toContain("OS-UNIT-A");
+    expect(numbers).not.toContain("OS-UNIT-B");
+  });
 
   // ==========================================================================
   // REQ-SO-006: POST /:id/assign-technician as operator → 403
   // ==========================================================================
-  it(
-    "REQ-SO-006: POST /:id/assign-technician as operator → 403 (service_order:assign_technician absent for operator role)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "operator" });
-      const typeId = await seedAssetType("type-so-006");
-      const cust = await seedCustomer({
-        labOrganizationId: org.orgId,
-        clientOrgId: "client-a-006",
-      });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cust,
-        assetTypeId: typeId,
-        tag: "TAG-006",
-      });
-      const orderId = await seedServiceOrder({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        customerId: cust,
-        assetId,
-        openedByUserId: org.userId,
-        serviceOrderNumber: "OS-006",
-      });
+  it("REQ-SO-006: POST /:id/assign-technician as operator → 403 (service_order:assign_technician absent for operator role)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    const typeId = await seedAssetType("type-so-006");
+    const cust = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: "client-a-006",
+    });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cust,
+      assetTypeId: typeId,
+      tag: "TAG-006",
+    });
+    const orderId = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: cust,
+      assetId,
+      openedByUserId: org.userId,
+      serviceOrderNumber: "OS-006",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(
-        `/${orderId}/assign-technician`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ technicianId: org.userId }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/assign-technician`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ technicianId: org.userId }),
+      },
+    );
 
-      expect(res.status).toBe(403);
+    expect(res.status).toBe(403);
 
-      // Verify technician was NOT assigned
-      const [row] = await db
-        .select({
-          responsibleTechnicianId: serviceOrder.responsibleTechnicianId,
-        })
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, orderId));
-      expect(row?.responsibleTechnicianId).toBeNull();
-    },
-  );
+    // Verify technician was NOT assigned
+    const [row] = await db
+      .select({
+        responsibleTechnicianId: serviceOrder.responsibleTechnicianId,
+      })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, orderId));
+    expect(row?.responsibleTechnicianId).toBeNull();
+  });
 
   // ==========================================================================
   // REQ-SO-007: POST / (create) as admin → 201, org-scoped
   // ==========================================================================
-  it(
-    "REQ-SO-007: POST / (create) as admin → 201, returned service order belongs to calling org",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-so-007");
-      const custId = await seedCustomer({
-        labOrganizationId: org.orgId,
-        clientOrgId: "client-a-007",
-        name: "Customer Create Test",
-      });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
+  it("REQ-SO-007: POST / (create) as admin → 201, returned service order belongs to calling org", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-so-007");
+    const custId = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: "client-a-007",
+      name: "Customer Create Test",
+    });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: custId,
+      assetTypeId: typeId,
+      tag: "TAG-007",
+      name: "Create Test Asset",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
         customerId: custId,
-        assetTypeId: typeId,
-        tag: "TAG-007",
-        name: "Create Test Asset",
-      });
+        assetId,
+        intakeType: "counter",
+        priority: "normal",
+        claimedDefect: "Equipment not turning on",
+        intakeCondition: "Physical damage on casing",
+        deliveryMethod: "pickup_at_lab",
+        evaluationFeeCents: 0,
+      }),
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request("/", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          customerId: custId,
-          assetId,
-          intakeType: "counter",
-          priority: "normal",
-          claimedDefect: "Equipment not turning on",
-          intakeCondition: "Physical damage on casing",
-          deliveryMethod: "pickup_at_lab",
-          evaluationFeeCents: 0,
-        }),
-      });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data).toBeDefined();
+    // The returned order must be scoped to the calling org
+    expect(body.data.organizationId).toBe(org.orgId);
+    expect(body.data.unitId).toBe(org.unitId);
+    expect(body.data.customerId).toBe(custId);
+    expect(body.data.assetId).toBe(assetId);
 
-      expect(res.status).toBe(201);
-      const body = await res.json();
-      expect(body.data).toBeDefined();
-      // The returned order must be scoped to the calling org
-      expect(body.data.organizationId).toBe(org.orgId);
-      expect(body.data.unitId).toBe(org.unitId);
-      expect(body.data.customerId).toBe(custId);
-      expect(body.data.assetId).toBe(assetId);
-
-      // Verify persisted in DB with correct org scope
-      const [row] = await db
-        .select({ organizationId: serviceOrder.organizationId })
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, body.data.id));
-      expect(row?.organizationId).toBe(org.orgId);
-    },
-  );
+    // Verify persisted in DB with correct org scope
+    const [row] = await db
+      .select({ organizationId: serviceOrder.organizationId })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, body.data.id));
+    expect(row?.organizationId).toBe(org.orgId);
+  });
 
   // ==========================================================================
   // REQ-SO-008: Unauthenticated → 401
@@ -641,7 +623,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
    * requested `status`. Returns everything a transition test needs.
    */
   async function setupOrderAt(
-    status: typeof serviceOrder.$inferInsert["status"],
+    status: (typeof serviceOrder.$inferInsert)["status"],
     tag: string,
   ) {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
@@ -671,153 +653,306 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
   // -------------------------------------------------------------------------
   // REQ-TST-SO-003 — startServiceOrderExecution consults the graph.
   // -------------------------------------------------------------------------
-  it(
-    "REQ-TST-SO-003: POST /:id/execution/start from a status that cannot reach repair_in_progress → 400, status unchanged",
-    async () => {
-      // "opened" → "repair_in_progress" is NOT in the graph. Before enforcement
-      // the command wrote the status directly (bypass); it must now be rejected.
-      const { org, orderId } = await setupOrderAt("opened", "tst-start-bad");
+  it("REQ-TST-SO-003: POST /:id/execution/start from a status that cannot reach repair_in_progress → 400, status unchanged", async () => {
+    // "opened" → "repair_in_progress" is NOT in the graph. Before enforcement
+    // the command wrote the status directly (bypass); it must now be rejected.
+    const { org, orderId } = await setupOrderAt("opened", "tst-start-bad");
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(
-        `/${orderId}/execution/start`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ notes: "should be blocked" }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/execution/start`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ notes: "should be blocked" }),
+      },
+    );
 
-      expect(res.status).toBe(400);
-      expect(await readServiceOrderStatus(orderId)).toBe("opened");
-    },
-  );
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("opened");
+  });
 
-  it(
-    "REQ-TST-SO-003: POST /:id/execution/start from quote_approved (a permitted edge) → 200, status becomes repair_in_progress",
-    async () => {
-      const { org, orderId } = await setupOrderAt(
-        "quote_approved",
-        "tst-start-ok",
-      );
+  it("REQ-TST-SO-003: POST /:id/execution/start from quote_approved (a permitted edge) → 200, status becomes repair_in_progress", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "quote_approved",
+      "tst-start-ok",
+    );
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(
-        `/${orderId}/execution/start`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ notes: "repair begins" }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/execution/start`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ notes: "repair begins" }),
+      },
+    );
 
-      expect(res.status).toBe(200);
-      expect(await readServiceOrderStatus(orderId)).toBe("repair_in_progress");
-    },
-  );
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("repair_in_progress");
+  });
 
   // -------------------------------------------------------------------------
   // REQ-TST-SO-003 — finishServiceOrderExecution consults the graph.
   // -------------------------------------------------------------------------
-  it(
-    "REQ-TST-SO-003: POST /:id/execution/finish from a status that cannot reach awaiting_final_review → 400, status unchanged",
-    async () => {
-      // Seed an order already "delivered" (delivered → awaiting_final_review is
-      // NOT a permitted edge) plus its execution row so the command reaches the
-      // transition check rather than the "not started" guard.
-      const { org, orderId } = await setupOrderAt(
-        "delivered",
-        "tst-finish-bad",
-      );
-      await db.insert(serviceOrderExecution).values({
-        serviceOrderId: orderId,
-        startedByUserId: org.userId,
-      });
+  it("REQ-TST-SO-003: POST /:id/execution/finish from a status that cannot reach awaiting_final_review → 400, status unchanged", async () => {
+    // Seed an order already "delivered" (delivered → awaiting_final_review is
+    // NOT a permitted edge) plus its execution row so the command reaches the
+    // transition check rather than the "not started" guard.
+    const { org, orderId } = await setupOrderAt("delivered", "tst-finish-bad");
+    await db.insert(serviceOrderExecution).values({
+      serviceOrderId: orderId,
+      startedByUserId: org.userId,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(
-        `/${orderId}/execution/finish`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({
-            servicePerformed: "done",
-            result: "repaired",
-            calibrationRequiredAfterRepair: false,
-          }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/execution/finish`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          servicePerformed: "done",
+          result: "repaired",
+          calibrationRequiredAfterRepair: false,
+        }),
+      },
+    );
 
-      expect(res.status).toBe(400);
-      expect(await readServiceOrderStatus(orderId)).toBe("delivered");
-    },
-  );
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("delivered");
+  });
 
-  it(
-    "REQ-TST-SO-003: POST /:id/execution/finish from repair_in_progress (permitted edge) → 200, status becomes awaiting_final_review",
-    async () => {
-      const { org, orderId } = await setupOrderAt(
-        "repair_in_progress",
-        "tst-finish-ok",
-      );
-      await db.insert(serviceOrderExecution).values({
-        serviceOrderId: orderId,
-        startedByUserId: org.userId,
-      });
+  it("REQ-TST-SO-003: POST /:id/execution/finish from repair_in_progress (permitted edge) → 200, status becomes awaiting_final_review", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "repair_in_progress",
+      "tst-finish-ok",
+    );
+    await db.insert(serviceOrderExecution).values({
+      serviceOrderId: orderId,
+      startedByUserId: org.userId,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(
-        `/${orderId}/execution/finish`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({
-            servicePerformed: "done",
-            result: "repaired",
-            calibrationRequiredAfterRepair: false,
-          }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/execution/finish`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          servicePerformed: "done",
+          result: "repaired",
+          calibrationRequiredAfterRepair: false,
+        }),
+      },
+    );
 
-      expect(res.status).toBe(200);
-      expect(await readServiceOrderStatus(orderId)).toBe("awaiting_final_review");
-    },
-  );
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("awaiting_final_review");
+  });
 
   // -------------------------------------------------------------------------
   // REQ-TST-SO-001 / REQ-TST-SO-002 — the update path uses the REAL guard.
   // -------------------------------------------------------------------------
-  it(
-    "REQ-TST-SO-001/002: PATCH /:id with a graph-forbidden status (opened → closed) → 400, status unchanged (real guard)",
-    async () => {
-      const { org, orderId } = await setupOrderAt("opened", "tst-patch-bad");
+  it("REQ-TST-SO-001/002: PATCH /:id with a graph-forbidden status (opened → closed) → 400, status unchanged (real guard)", async () => {
+    const { org, orderId } = await setupOrderAt("opened", "tst-patch-bad");
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(`/${orderId}`, {
-        method: "PATCH",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ status: "closed" }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status: "closed" }),
+    });
 
-      expect(res.status).toBe(400);
-      expect(await readServiceOrderStatus(orderId)).toBe("opened");
-    },
-  );
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("opened");
+  });
 
-  it(
-    "REQ-TST-SO-002: PATCH /:id with a permitted status edge (opened → awaiting_tech_evaluation) → 200 (real guard)",
-    async () => {
-      const { org, orderId } = await setupOrderAt("opened", "tst-patch-ok");
+  it("REQ-TST-SO-002: PATCH /:id with a permitted status edge (opened → awaiting_tech_evaluation) → 200 (real guard)", async () => {
+    const { org, orderId } = await setupOrderAt("opened", "tst-patch-ok");
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await serviceOrdersRouter.request(`/${orderId}`, {
-        method: "PATCH",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ status: "awaiting_tech_evaluation" }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status: "awaiting_tech_evaluation" }),
+    });
 
-      expect(res.status).toBe(200);
-      expect(await readServiceOrderStatus(orderId)).toBe("awaiting_tech_evaluation");
-    },
-  );
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe(
+      "awaiting_tech_evaluation",
+    );
+  });
+
+  // ==========================================================================
+  // REQ-SO-COMM (#343): GET /:id/communications — per-OS customer email log
+  // ==========================================================================
+  it("REQ-SO-COMM-001: GET /:id/communications merges ledger + outbox with derived statuses, as a plain member", async () => {
+    // member role: the log is operador-readable (service_order:read), not admin-only.
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const typeId = await seedAssetType("type-so-comm-001");
+    const custId = await seedCustomer({
+      labOrganizationId: org.orgId,
+      clientOrgId: "client-a-comm-001",
+    });
+    await db
+      .update(customer)
+      .set({ email: "cliente@exemplo.com.br" })
+      .where(eq(customer.id, custId));
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: custId,
+      assetTypeId: typeId,
+      tag: "TAG-COMM-001",
+    });
+    const orderId = await seedServiceOrder({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: custId,
+      assetId,
+      openedByUserId: org.userId,
+      serviceOrderNumber: "OS-COMM-001",
+    });
+
+    // sent: ledger row + processed outbox counterpart
+    await db.insert(serviceOrderEmailLog).values({
+      serviceOrderId: orderId,
+      eventKey: "status_email:ready_for_pickup",
+      recipientEmail: "cliente@exemplo.com.br",
+      sentAt: new Date("2026-07-01T10:05:00Z"),
+    });
+    await db.insert(serviceOrderEmailOutbox).values([
+      {
+        organizationId: org.orgId,
+        serviceOrderId: orderId,
+        eventKey: "status_email:ready_for_pickup",
+        targetStatus: "ready_for_pickup",
+        payload: {},
+        createdAt: new Date("2026-07-01T10:00:00Z"),
+        processedAt: new Date("2026-07-01T10:05:00Z"),
+      },
+      // queued: pending, no attempts
+      {
+        organizationId: org.orgId,
+        serviceOrderId: orderId,
+        eventKey: "status_email:delivered",
+        targetStatus: "delivered",
+        payload: {},
+        createdAt: new Date("2026-07-02T09:00:00Z"),
+      },
+      // failed: dead-lettered after exhausting attempts
+      {
+        organizationId: org.orgId,
+        serviceOrderId: orderId,
+        eventKey: "status_email:closed",
+        targetStatus: "closed",
+        payload: {},
+        attempts: 3,
+        lastError: "Send did not complete — released for retry",
+        createdAt: new Date("2026-07-03T09:00:00Z"),
+        deadLetterAt: new Date("2026-07-03T11:00:00Z"),
+      },
+      // skipped: processed with no ledger row (no recipient resolved)
+      {
+        organizationId: org.orgId,
+        serviceOrderId: orderId,
+        eventKey: "status_email:canceled",
+        targetStatus: "canceled",
+        payload: {},
+        createdAt: new Date("2026-07-04T09:00:00Z"),
+        processedAt: new Date("2026-07-04T09:30:00Z"),
+      },
+    ]);
+    // bounce signal: the sent recipient is on the suppression list
+    await db.insert(emailSuppression).values({
+      email: "cliente@exemplo.com.br",
+      scope: "all",
+      reason: "hard_bounce",
+      source: "resend_webhook",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/communications`,
+      { headers: JSON_HEADERS },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveLength(4);
+
+    const byKey = new Map(
+      body.data.map((entry: { eventKey: string }) => [entry.eventKey, entry]),
+    );
+    expect(byKey.get("status_email:ready_for_pickup")).toMatchObject({
+      channel: "email",
+      status: "sent",
+      recipientEmail: "cliente@exemplo.com.br",
+      recipientSuppressed: true,
+      sentAt: "2026-07-01T10:05:00.000Z",
+    });
+    expect(byKey.get("status_email:delivered")).toMatchObject({
+      status: "queued",
+      recipientEmail: "cliente@exemplo.com.br",
+      attempts: 0,
+    });
+    expect(byKey.get("status_email:closed")).toMatchObject({
+      status: "failed",
+      attempts: 3,
+    });
+    expect(byKey.get("status_email:canceled")).toMatchObject({
+      status: "skipped",
+      recipientEmail: null,
+    });
+
+    // newest first
+    expect(
+      body.data.map((entry: { eventKey: string }) => entry.eventKey),
+    ).toEqual([
+      "status_email:canceled",
+      "status_email:closed",
+      "status_email:delivered",
+      "status_email:ready_for_pickup",
+    ]);
+  });
+
+  it("REQ-SO-COMM-002: cross-tenant GET /:id/communications → 404, no data leak", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const typeId = await seedAssetType("type-so-comm-002");
+    const custB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      clientOrgId: "client-b-comm-002",
+    });
+    const assetB = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetTypeId: typeId,
+      tag: "TAG-COMM-002",
+    });
+    const orderBId = await seedServiceOrder({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetId: assetB,
+      openedByUserId: orgB.userId,
+      serviceOrderNumber: "OS-COMM-B-002",
+    });
+    await db.insert(serviceOrderEmailLog).values({
+      serviceOrderId: orderBId,
+      eventKey: "nova_os",
+      recipientEmail: "segredo@exemplo.com.br",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderBId}/communications`,
+      { headers: JSON_HEADERS },
+    );
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body).not.toHaveProperty("data");
+    expect(JSON.stringify(body)).not.toContain("segredo@exemplo.com.br");
+  });
 });

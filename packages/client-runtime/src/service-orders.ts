@@ -233,3 +233,26 @@ export type DeliverServiceOrderInput = {
 export type ServiceOrderDocumentUrl = {
   url: string;
 };
+
+export type ServiceOrderCommunicationStatus =
+  | "sent"
+  | "queued"
+  | "retrying"
+  | "failed"
+  | "skipped";
+
+export type ServiceOrderCommunicationEntry = {
+  eventKey: string;
+  channel: "email";
+  status: ServiceOrderCommunicationStatus;
+  recipientEmail: string | null;
+  recipientSuppressed: boolean;
+  sentAt: string | null;
+  queuedAt: string | null;
+  attempts: number;
+  lastError: string | null;
+};
+
+export type ServiceOrderCommunicationsData = {
+  data: ServiceOrderCommunicationEntry[];
+};

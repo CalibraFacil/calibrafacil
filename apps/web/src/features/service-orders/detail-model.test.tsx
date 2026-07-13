@@ -6,6 +6,9 @@ import {
   buildServiceOrderDetailFormKey,
   buildServiceOrderIntakeHtml,
   buildServiceOrderTimelineItems,
+  COMMUNICATION_STATUS_LABELS,
+  communicationEventLabel,
+  communicationStatusBadgeVariant,
   createEmptyQuoteItem,
   financialStatusBadgeVariant,
   formatCentsForMoneyInput,
@@ -18,6 +21,47 @@ import {
   serviceOrderFinancialStatusSummary,
   toApiItems,
 } from './detail-model'
+
+describe('service order communications (#343)', () => {
+  it('labels communication event keys in pt-BR', () => {
+    expect(communicationEventLabel('nova_os')).toBe(
+      'OS registrada — confirmação',
+    )
+    expect(communicationEventLabel('orcamento_sent:42')).toBe(
+      'Orçamento enviado',
+    )
+    expect(communicationEventLabel('quote_approved:42')).toBe(
+      'Orçamento aprovado — confirmação',
+    )
+    expect(communicationEventLabel('quote_rejected:42')).toBe(
+      'Orçamento recusado — confirmação',
+    )
+    expect(communicationEventLabel('status_email:ready_for_pickup')).toBe(
+      'Pronto para retirada',
+    )
+    expect(communicationEventLabel('status_email:something_new')).toBe(
+      'Atualização de status',
+    )
+    // unknown namespaces fall back to the raw key rather than hiding the entry
+    expect(communicationEventLabel('future_event:1')).toBe('future_event:1')
+  })
+
+  it('maps every communication status to a label and a badge variant', () => {
+    const statuses = [
+      'sent',
+      'queued',
+      'retrying',
+      'failed',
+      'skipped',
+    ] as const
+    for (const status of statuses) {
+      expect(COMMUNICATION_STATUS_LABELS[status]).toBeTruthy()
+      expect(communicationStatusBadgeVariant(status)).toBeTruthy()
+    }
+    expect(communicationStatusBadgeVariant('failed')).toBe('destructive')
+    expect(communicationStatusBadgeVariant('sent')).toBe('default')
+  })
+})
 
 describe('service order detail model', () => {
   it('parses Brazilian money strings into cents', () => {

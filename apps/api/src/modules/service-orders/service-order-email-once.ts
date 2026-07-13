@@ -146,6 +146,23 @@ export async function sendServiceOrderEmailOnce(
     }
     return "failed";
   }
-  // Step 5: sent: true → keep the log row (REQ-SOEMAIL-007).
+  // Step 5: sent: true → keep the log row (REQ-SOEMAIL-007) and stamp the
+  // resolved recipient on it so the per-OS communications log (#343) can show
+  // who was actually emailed. Best-effort: a failed stamp keeps the row valid.
+  const recipientEmail =
+    result?.sent === true ? result.recipientEmail : undefined;
+  if (recipientEmail && claimedId !== undefined) {
+    try {
+      await db
+        .update(serviceOrderEmailLog)
+        .set({ recipientEmail })
+        .where(eq(serviceOrderEmailLog.id, claimedId));
+    } catch (updateError) {
+      console.error(
+        `[sendServiceOrderEmailOnce] recipient stamp failed for SO ${serviceOrderId} / key "${eventKey}" / log id ${claimedId}:`,
+        updateError,
+      );
+    }
+  }
   return "sent";
 }

@@ -1194,6 +1194,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-first-read-through-sync",
         },
         {
+          "method": "listCommunications",
+          "namespace": "serviceOrders",
+          "policy": "cloud-only",
+        },
+        {
           "method": "create",
           "namespace": "serviceOrders",
           "policy": "local-command-sync",

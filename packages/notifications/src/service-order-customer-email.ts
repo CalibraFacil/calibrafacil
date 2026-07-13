@@ -87,7 +87,14 @@ export interface ServiceOrderEmailInput {
 
 /** Result returned by sendServiceOrderCustomerEmail (never throws). */
 export type ServiceOrderCustomerEmailResult =
-  | { sent: true; skipped?: false; emailId?: string; error?: undefined }
+  | {
+      sent: true;
+      skipped?: false;
+      emailId?: string;
+      /** Resolved recipient address the email was actually sent to. */
+      recipientEmail?: string;
+      error?: undefined;
+    }
   | {
       sent: false;
       skipped: true;
@@ -151,7 +158,10 @@ function getEmailAddress(value: string): string {
   return match?.[1]?.trim() ?? value.trim();
 }
 
-function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined): string {
+function formatFromEmail(
+  fromEmail: string,
+  brand: EmailBrand | undefined,
+): string {
   if (!brand?.isWhiteLabel) return fromEmail;
   return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
 }
@@ -245,13 +255,16 @@ export async function sendServiceOrderCustomerEmail(
     });
 
     const emailId =
-      response.data && typeof response.data === "object" && "id" in response.data
+      response.data &&
+      typeof response.data === "object" &&
+      "id" in response.data
         ? String(response.data.id)
         : undefined;
 
     return {
       sent: true,
       emailId,
+      recipientEmail,
     } satisfies ServiceOrderCustomerEmailResult;
   } catch (error) {
     const message =

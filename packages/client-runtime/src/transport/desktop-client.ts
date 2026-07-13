@@ -1759,6 +1759,7 @@ export function createDesktopApiClient(
       ...desktopCloudOnlyStubs("serviceOrders", {
         action: "Ordens de serviço",
         actionByMethod: {
+          listCommunications: "Comunicações da OS",
           update: "Atualização da OS",
           saveEvaluation: "Avaliação técnica",
           sendQuote: "Emissão de orçamento",

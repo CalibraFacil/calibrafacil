@@ -22,15 +22,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // All mock functions must be hoisted so they are available inside vi.mock factories.
 // ---------------------------------------------------------------------------
 
-const { mockInsert, mockDelete } = vi.hoisted(() => ({
+const { mockInsert, mockDelete, mockUpdate } = vi.hoisted(() => ({
   mockInsert: vi.fn(),
   mockDelete: vi.fn(),
+  mockUpdate: vi.fn(),
 }));
 
 vi.mock("@calibra-facil/db", () => ({
   db: {
     insert: mockInsert,
     delete: mockDelete,
+    update: mockUpdate,
   },
 }));
 
@@ -76,6 +78,16 @@ function makeDeleteChain() {
     returning: vi.fn().mockResolvedValue([]),
   };
   mockDelete.mockReturnValue(chain);
+  return chain;
+}
+
+/** Build a chainable UPDATE builder that resolves. */
+function makeUpdateChain() {
+  const chain = {
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue([]),
+  };
+  mockUpdate.mockReturnValue(chain);
   return chain;
 }
 
@@ -236,6 +248,66 @@ describe("(d) claimed + dispatch sent → no release DELETE", () => {
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     // No DELETE — key is kept
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("recipient stamp (#343 communications log)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("UPDATEs the kept log row with recipientEmail when dispatch reports it", async () => {
+    makeInsertChain([{ id: 8 }]);
+    const updateChain = makeUpdateChain();
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 21,
+      eventKey: "nova_os",
+      dispatch: async () => ({
+        sent: true,
+        emailId: "email-xyz",
+        recipientEmail: "cliente@exemplo.com.br",
+      }),
+    });
+
+    expect(outcome).toBe("sent");
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(updateChain.set).toHaveBeenCalledWith({
+      recipientEmail: "cliente@exemplo.com.br",
+    });
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("skips the UPDATE when the sent result has no recipientEmail", async () => {
+    makeInsertChain([{ id: 9 }]);
+    makeUpdateChain();
+
+    await sendServiceOrderEmailOnce({
+      serviceOrderId: 22,
+      eventKey: "nova_os",
+      dispatch: async () => ({ sent: true }),
+    });
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("still returns 'sent' when the recipient stamp UPDATE throws (best-effort)", async () => {
+    makeInsertChain([{ id: 10 }]);
+    mockUpdate.mockImplementation(() => {
+      throw new Error("db down");
+    });
+
+    const outcome = await sendServiceOrderEmailOnce({
+      serviceOrderId: 23,
+      eventKey: "nova_os",
+      dispatch: async () => ({
+        sent: true,
+        recipientEmail: "cliente@exemplo.com.br",
+      }),
+    });
+
+    expect(outcome).toBe("sent");
     expect(mockDelete).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,10 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
-import type { MaterialsListData } from '@calibra-facil/client-runtime'
+import type {
+  MaterialsListData,
+  ServiceOrderCommunicationStatus,
+} from '@calibra-facil/client-runtime'
 import type { EventTimelineItem } from '@/components/event-timeline'
 import type {
   FinancialContinuityStatus,
@@ -128,6 +131,65 @@ export const SERVICE_ORDER_EVENT_LABELS: Record<string, string> = {
   'service_order.closed': 'OS encerrada',
   'service_order.canceled': 'OS cancelada',
   'service_order.certificate_linked': 'Calibração vinculada',
+}
+
+export const COMMUNICATION_STATUS_LABELS: Record<
+  ServiceOrderCommunicationStatus,
+  string
+> = {
+  sent: 'Enviado',
+  queued: 'Na fila de envio',
+  retrying: 'Reenvio pendente',
+  failed: 'Falhou',
+  skipped: 'Não enviado',
+}
+
+export function communicationStatusBadgeVariant(
+  status: ServiceOrderCommunicationStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'sent':
+      return 'default'
+    case 'failed':
+      return 'destructive'
+    case 'queued':
+    case 'retrying':
+      return 'secondary'
+    case 'skipped':
+      return 'outline'
+  }
+}
+
+// Labels for the status_email:* event keys — mirrors the subjects the customer
+// receives (apps/api service-order-email-drain buildSubject).
+const COMMUNICATION_STATUS_EMAIL_LABELS: Record<string, string> = {
+  repair_in_progress: 'Serviço iniciado',
+  awaiting_calibration: 'Atualização do serviço — aguardando calibração',
+  calibration_in_progress: 'Atualização do serviço — calibração em andamento',
+  awaiting_tech_evaluation: 'Aguardando avaliação técnica',
+  under_evaluation: 'Em avaliação técnica',
+  ready_for_pickup: 'Pronto para retirada',
+  delivered: 'Equipamento entregue',
+  closed: 'OS encerrada',
+  awaiting_final_review: 'Em revisão final',
+  canceled: 'OS cancelada',
+  warranty_return: 'Retorno em garantia',
+}
+
+export function communicationEventLabel(eventKey: string): string {
+  if (eventKey === 'nova_os') return 'OS registrada — confirmação'
+  if (eventKey.startsWith('orcamento_sent:')) return 'Orçamento enviado'
+  if (eventKey.startsWith('quote_approved:')) {
+    return 'Orçamento aprovado — confirmação'
+  }
+  if (eventKey.startsWith('quote_rejected:')) {
+    return 'Orçamento recusado — confirmação'
+  }
+  if (eventKey.startsWith('status_email:')) {
+    const status = eventKey.slice('status_email:'.length)
+    return COMMUNICATION_STATUS_EMAIL_LABELS[status] ?? 'Atualização de status'
+  }
+  return eventKey
 }
 
 const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {

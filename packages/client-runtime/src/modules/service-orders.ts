@@ -1,4 +1,5 @@
 import type {
+  ServiceOrderCommunicationsData,
   ServiceOrderDetail,
   ServiceOrderDocumentUrl,
   ServiceOrdersListData,
@@ -43,6 +44,14 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
       );
 
       return result.data;
+    },
+    async listCommunications(id: string | number) {
+      return readJsonResponse<ServiceOrderCommunicationsData>(
+        await rawCloudClient.api["service-orders"][":id"].communications.$get({
+          param: { id: String(id) },
+        }),
+        "Erro ao carregar comunicações da OS",
+      );
     },
     async create(input: CreateServiceOrderInput) {
       return readJsonResponse<CreateServiceOrderResult>(

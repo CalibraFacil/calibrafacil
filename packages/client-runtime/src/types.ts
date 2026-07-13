@@ -103,6 +103,7 @@ import type {
   SaveServiceOrderExecutionInput,
   SaveServiceOrderEvaluationInput,
   SendServiceOrderQuoteInput,
+  ServiceOrderCommunicationsData,
   ServiceOrderDetail,
   ServiceOrderDocumentUrl,
   ServiceOrderRepairMarkInput,
@@ -127,6 +128,9 @@ export type {
   SaveServiceOrderExecutionInput,
   SaveServiceOrderEvaluationInput,
   SendServiceOrderQuoteInput,
+  ServiceOrderCommunicationEntry,
+  ServiceOrderCommunicationsData,
+  ServiceOrderCommunicationStatus,
   ServiceOrderDetail,
   ServiceOrderDocumentUrl,
   ServiceOrderListItem,
@@ -1953,6 +1957,9 @@ export interface IntegrationsApi {
 export interface ServiceOrdersApi {
   list(input: ServiceOrdersListInput): Promise<ServiceOrdersListData>;
   get(id: string | number): Promise<ServiceOrderDetail>;
+  listCommunications(
+    id: string | number,
+  ): Promise<ServiceOrderCommunicationsData>;
   create(input: CreateServiceOrderInput): Promise<CreateServiceOrderResult>;
   update(
     id: string | number,

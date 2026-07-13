@@ -17,6 +17,7 @@ import {
   getServiceOrderDeliveryDocumentUrl,
   getServiceOrderIntakeDocumentUrl,
   getServiceOrderTagDocumentUrl,
+  useServiceOrderCommunicationsData,
   useServiceOrderDetailData,
   useServiceOrderFinancialStatusData,
 } from '@/features/service-orders/queries'
@@ -30,6 +31,9 @@ import {
   buildServiceOrderDetailFormKey,
   buildServiceOrderIntakeHtml,
   buildServiceOrderTimelineItems,
+  COMMUNICATION_STATUS_LABELS,
+  communicationEventLabel,
+  communicationStatusBadgeVariant,
   createEmptyQuoteItem,
   DELIVERY_METHOD_LABELS,
   EXECUTION_RESULT_LABELS,
@@ -328,6 +332,99 @@ export function ServiceOrderFinancialStatusBlock({
           </dl>
         </CardContent>
       ) : null}
+    </Card>
+  )
+}
+
+// #343 — per-OS customer notification log. Answers "we told customer X on
+// date Y via channel Z" from the email ledger/outbox; printable via the
+// browser as the dispute-proof trail.
+export function ServiceOrderCommunicationsBlock({
+  id,
+  isDesktop,
+}: {
+  id: string
+  isDesktop: boolean
+}) {
+  const communicationsQuery = useServiceOrderCommunicationsData({
+    enabled: !isDesktop,
+    id,
+  })
+  const entries = communicationsQuery.data?.data ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Comunicações</CardTitle>
+        <CardDescription>
+          Notificações enviadas ao cliente para esta OS
+        </CardDescription>
+      </CardHeader>
+      <CardContent aria-live="polite">
+        {isDesktop ? (
+          <p className="text-sm text-muted-foreground">
+            Disponível apenas no modo online.
+          </p>
+        ) : communicationsQuery.isPending ? (
+          <div className="space-y-3">
+            <span className="sr-only">Carregando comunicações...</span>
+            <div className="h-4 w-48 rounded bg-muted" />
+            <div className="h-4 w-36 rounded bg-muted/70" />
+          </div>
+        ) : communicationsQuery.isError ? (
+          <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+            <span>Comunicações indisponíveis no momento.</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => communicationsQuery.refetch()}
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhuma comunicação registrada para esta OS
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {entries.map((entry) => (
+              <li
+                key={entry.eventKey}
+                className="border-b border-border/70 pb-3 last:border-0 last:pb-0"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {communicationEventLabel(entry.eventKey)}
+                  </span>
+                  <Badge
+                    variant={communicationStatusBadgeVariant(entry.status)}
+                  >
+                    {COMMUNICATION_STATUS_LABELS[entry.status]}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatDateTime(entry.sentAt ?? entry.queuedAt)} · E-mail
+                  {entry.recipientEmail ? <> · {entry.recipientEmail}</> : null}
+                </p>
+                {entry.recipientSuppressed ? (
+                  <p className="mt-1 text-xs text-destructive">
+                    Endereço com falha de entrega registrada (devolução ou
+                    reclamação de spam)
+                  </p>
+                ) : null}
+                {entry.status === 'retrying' || entry.status === 'failed' ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Tentativas de envio: {entry.attempts}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
     </Card>
   )
 }
@@ -1710,6 +1807,8 @@ function ServiceOrderDetailContent({
               />
             </CardContent>
           </Card>
+
+          <ServiceOrderCommunicationsBlock id={id} isDesktop={isDesktop} />
         </div>
       </div>
     </div>
