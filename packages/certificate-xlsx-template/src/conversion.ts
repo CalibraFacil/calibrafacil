@@ -142,9 +142,17 @@ export class LocalLibreOfficeXlsxToPdfConverter implements XlsxToPdfConverter {
   }
 }
 
-export function createConfiguredXlsxToPdfConverter(): XlsxToPdfConverter {
-  if (process.env.GOTENBERG_URL) {
-    return new GotenbergXlsxToPdfConverter();
+export function createConfiguredXlsxToPdfConverter(
+  env: {
+    GOTENBERG_URL?: string;
+    GOTENBERG_TOKEN?: string;
+  } = process.env,
+): XlsxToPdfConverter {
+  if (env.GOTENBERG_URL) {
+    return new GotenbergXlsxToPdfConverter(
+      env.GOTENBERG_URL,
+      env.GOTENBERG_TOKEN,
+    );
   }
 
   return new LocalLibreOfficeXlsxToPdfConverter();

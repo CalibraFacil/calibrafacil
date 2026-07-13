@@ -26,6 +26,14 @@ export {
   type WorkbookPrintSettings,
   type KeepOnlyVisibleSheetOptions,
 } from "./ooxml.js";
+export {
+  ECCENTRICITY_INDICATOR_SPEC_KEY,
+  fillCertificateWorkbook,
+  renderEccentricityIndicatorPng,
+  resolveCertificateImageBindings,
+  workbookImageFromDataUrl,
+  type CertificateImageContext,
+} from "./render.js";
 export type {
   CertificateWorkbookEngine,
   FilledWorkbookResult,
