@@ -1,6 +1,7 @@
 import {
   createCalculationEngine,
   isCalculationEngineError,
+  METHOD_ENGINE_OPTIONS,
   type CalculationEngine,
 } from '@calibra-facil/math-engine'
 
@@ -60,7 +61,13 @@ interface FormulaContextSource {
 }
 
 export function createMethodCalculationEngine(): CalculationEngine {
-  return createCalculationEngine({ numericMode: 'decimal' })
+  return createCalculationEngine({
+    ...METHOD_ENGINE_OPTIONS,
+    // Unlike server-side execution, the preview evaluates each formula
+    // against the full variable context (every binding plus inline
+    // statistics), so unused inputs are expected and must not reject.
+    rejectUnusedInputs: false,
+  })
 }
 
 export function buildDefaultVariableBindings(

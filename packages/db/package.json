@@ -33,6 +33,7 @@
   "dependencies": {
     "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/method-definition": "workspace:^",
+    "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@neondatabase/serverless": "^1.1.0",
     "dotenv": "^17.4.2",

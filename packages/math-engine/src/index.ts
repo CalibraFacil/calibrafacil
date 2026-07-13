@@ -1,6 +1,10 @@
 export { createCalculationEngine } from "./engine/create.js";
 export type { CalculationEngine } from "./engine/create.js";
-export { ENGINE_VERSION, normalizeEngineOptions } from "./engine/options.js";
+export {
+  ENGINE_VERSION,
+  METHOD_ENGINE_OPTIONS,
+  normalizeEngineOptions,
+} from "./engine/options.js";
 export type {
   AngleMode,
   CalculationEngineOptions,

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@calibra-facil/math-engine', () => ({
+  METHOD_ENGINE_OPTIONS: {
+    numericMode: 'decimal',
+    rejectUnusedInputs: true,
+    maxExponentMagnitude: 12,
+    maxSignificantDigits: 24,
+  },
   createCalculationEngine: () => ({
     evaluateFormula: (expression: string, inputs: Record<string, number>) => {
       if (expression === 'runtime_0') {

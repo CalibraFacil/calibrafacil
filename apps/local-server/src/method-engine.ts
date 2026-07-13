@@ -1,5 +1,6 @@
 import {
   createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
   type CalculationEngineOptions,
   type MeasurementModelInput,
 } from "@calibra-facil/math-engine";
@@ -8,12 +9,9 @@ import type {
   MeasurementModelInputLike,
 } from "@calibra-facil/method-definition";
 
-export const localMethodEngineOptions = {
-  numericMode: "decimal",
-  rejectUnusedInputs: true,
-  maxExponentMagnitude: 12,
-  maxSignificantDigits: 24,
-} satisfies CalculationEngineOptions;
+// The shared numeric contract — must match the cloud API's engine so a method
+// executed offline produces the same certificate values as the cloud path.
+export const localMethodEngineOptions = METHOD_ENGINE_OPTIONS;
 
 export function createMethodDefinitionEngine(
   options: CalculationEngineOptions = localMethodEngineOptions,

@@ -1,4 +1,5 @@
 import { relations, sql } from "drizzle-orm";
+import type { MethodMeasurementModel } from "@calibra-facil/schemas";
 import {
   pgTable,
   text,
@@ -3123,21 +3124,10 @@ export type MethodFormula = {
   metadata?: Record<string, unknown>;
 };
 
-export type MethodMeasurementModel = {
-  key: string;
-  label: string;
-  scope?: { kind: "scalar" } | { kind: "table_row"; tableKey: string };
-  measurand: string;
-  expression: string;
-  quantities: unknown[];
-  correlations?: unknown[];
-  covariances?: unknown[];
-  coverageProbability?: number;
-  coverageFactor?: string | number;
-  outputUnit?: string;
-  options?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-};
+// The persisted measurement-model shape is owned by @calibra-facil/schemas
+// (MethodMeasurementModelSchema). Importing it keeps the jsonb column type
+// permanently in sync with the validation schema instead of a hand copy.
+export type { MethodMeasurementModel };
 
 /**
  * Validation rule for pass/fail criteria.

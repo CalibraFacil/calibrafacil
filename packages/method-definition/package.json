@@ -21,6 +21,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@calibra-facil/schemas": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "typescript": "^7.0.2",
     "vitest": "^4.0.17"

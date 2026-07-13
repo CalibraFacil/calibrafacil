@@ -51,7 +51,10 @@ import {
   type CompiledMethod,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
-import { createCalculationEngine } from "@calibra-facil/math-engine";
+import {
+  createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
+} from "@calibra-facil/math-engine";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { desktopCertificatePdfKey } from "@calibra-facil/shared/storage-keys";
 import {
@@ -132,12 +135,6 @@ import {
   syncComplianceWithActiveAgreement,
 } from "../lib/finance";
 
-const METHOD_ENGINE_OPTIONS = {
-  numericMode: "decimal" as const,
-  rejectUnusedInputs: true,
-  maxExponentMagnitude: 12,
-  maxSignificantDigits: 24,
-};
 const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
 const CERTIFICATE_PUBLIC_BASE_URL = "https://certificates.calibrafacil.com";
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;

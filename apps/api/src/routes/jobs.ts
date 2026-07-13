@@ -109,7 +109,10 @@ import {
   type CompiledMethodExecutionResult,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
-import { createCalculationEngine } from "@calibra-facil/math-engine";
+import {
+  createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
+} from "@calibra-facil/math-engine";
 import {
   decodeRouteIdentifier,
   shouldUseLocalR2Download,
@@ -128,13 +131,6 @@ import { approveJob } from "../modules/jobs/approve-job";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
-
-const METHOD_ENGINE_OPTIONS = {
-  numericMode: "decimal" as const,
-  rejectUnusedInputs: true,
-  maxExponentMagnitude: 12,
-  maxSignificantDigits: 24,
-};
 
 const CommandPaletteJobSearchQuerySchema = z.object({
   query: z.string().trim().min(2),

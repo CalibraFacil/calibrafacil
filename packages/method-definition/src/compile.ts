@@ -1010,7 +1010,7 @@ export function buildMeasurementModelInput(
       options,
     );
   }
-  return {
+  return pruneMeasurementModelInput({
     formula: model.expression,
     quantities,
     correlations: model.correlations?.map((item) => [
@@ -1031,7 +1031,38 @@ export function buildMeasurementModelInput(
     ),
     allowNonSmoothWithExplicitSensitivities:
       model.options?.allowNonSmoothWithExplicitSensitivities,
-  };
+  });
+}
+
+// The engine validates its input shape strictly: an own key holding the value
+// undefined is rejected as an invalid input shape (e.g. "Input field must be
+// a boolean/string"), so absent optional fields must be omitted entirely.
+// The fake engines used elsewhere in the tests never enforced this, which let
+// undefined-valued keys ship — the real-engine golden test pins it now.
+function pruneMeasurementModelInput(
+  input: MeasurementModelInputLike,
+): MeasurementModelInputLike {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- pruning only removes undefined-valued keys, which the optional fields of the input type already allow to be absent.
+  return pruneUndefinedFieldsDeep(input) as MeasurementModelInputLike;
+}
+
+function pruneUndefinedFieldsDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(pruneUndefinedFieldsDeep);
+  }
+
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== undefined) {
+      result[key] = pruneUndefinedFieldsDeep(entry);
+    }
+  }
+
+  return result;
 }
 
 function buildInputQuantity(
@@ -1110,16 +1141,12 @@ function buildInputQuantity(
       context,
       options.engine,
     );
+    // The Type-B specification must appear exactly once: the engine rejects a
+    // quantity that carries source fields both at the top level and inside
+    // the typeB record (INVALID_TYPE_B_CONFIGURATION).
     return {
       ...base,
       estimate,
-      distribution,
-      standardUncertainty,
-      halfWidth,
-      lowerLimit,
-      upperLimit,
-      expandedUncertainty,
-      coverageFactor,
       typeB: {
         distribution,
         standardUncertainty,

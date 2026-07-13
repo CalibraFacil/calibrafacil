@@ -126,6 +126,12 @@ vi.mock("../lib/storage", () => ({
 }));
 
 vi.mock("@calibra-facil/math-engine", () => ({
+  METHOD_ENGINE_OPTIONS: {
+    numericMode: "decimal",
+    rejectUnusedInputs: true,
+    maxExponentMagnitude: 12,
+    maxSignificantDigits: 24,
+  },
   // Deterministic, input-sensitive stub so method-definition's SHA-256-based
   // fingerprints still work under the mocked engine.
   stableHash: (input: string) => {

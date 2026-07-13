@@ -7,6 +7,20 @@ import { assertAllowedKeys, assertBoolean, assertNoDangerousKeys, assertPlainRec
 
 export const ENGINE_VERSION = "0.3.0";
 
+/**
+ * The canonical engine configuration for certificate-producing method
+ * execution. Every runtime that evaluates a compiled method (cloud API
+ * routes, the local desktop server, the web method preview) must build its
+ * engine from this object: the numeric contract that defines certificate
+ * values lives here and only here, so cloud and desktop cannot drift apart.
+ */
+export const METHOD_ENGINE_OPTIONS = Object.freeze({
+  numericMode: "decimal",
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+}) satisfies CalculationEngineOptions;
+
 export type AngleMode = "radian";
 
 export interface CalculationEngineOptions extends Partial<FormulaLimits> {

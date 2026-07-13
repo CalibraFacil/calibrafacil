@@ -1221,6 +1221,9 @@ importers:
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../method-definition
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared
@@ -1415,6 +1418,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       '@repo/typescript-config':
         specifier: workspace:^
         version: link:../typescript-config

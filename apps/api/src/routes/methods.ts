@@ -33,6 +33,7 @@ import {
 } from "@calibra-facil/method-definition";
 import {
   createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
 import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
@@ -50,13 +51,6 @@ import {
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
-
-const METHOD_ENGINE_OPTIONS = {
-  numericMode: "decimal" as const,
-  rejectUnusedInputs: true,
-  maxExponentMagnitude: 12,
-  maxSignificantDigits: 24,
-};
 
 type DefinitionTableColumn = Extract<
   MethodDraft["inputs"][number],
@@ -1000,7 +994,9 @@ function formatDimensionalDiagnostic(d: DimensionalDiagnostic): string {
   return `Erro dimensional na fórmula '${d.formulaId}': ${d.message}`;
 }
 
-function dimensionalErrorPayload(diagnostics: readonly DimensionalDiagnostic[]) {
+function dimensionalErrorPayload(
+  diagnostics: readonly DimensionalDiagnostic[],
+) {
   const first = diagnostics[0];
   return {
     error: first
@@ -1429,49 +1425,50 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         spec: unknown;
         previewScenarios: unknown;
       }> => {
-      const governance = template.governance;
-      if (
-        governance === undefined ||
-        governance.sources.length === 0 ||
-        governance.measurand.trim().length === 0 ||
-        governance.verificarItems.length === 0 ||
-        governance.reviewStatus !== "draft_pending_revalidation"
-      ) {
-        return [];
-      }
-      const def = template.productDefinition;
-      return [
-        {
-          templateKey: template.key,
-          templateVersion: template.templateVersion,
-          discipline: template.discipline,
-          defaultName: template.defaultName,
-          defaultAccreditedScope: template.defaultAccreditedScope,
-          assetTypeSlug: def.assetTypeSlug,
-          description: def.description ?? "",
-          model: governance.model,
-          counts: {
-            dataFields: def.dataFields.length,
-            formulas: def.formulas.length,
-            validations: def.validations.length,
-            uncertaintyParams: def.uncertaintyParams.length,
-            verificar: governance.verificarItems.length,
-            omitted: governance.omittedComponents.length,
+        const governance = template.governance;
+        if (
+          governance === undefined ||
+          governance.sources.length === 0 ||
+          governance.measurand.trim().length === 0 ||
+          governance.verificarItems.length === 0 ||
+          governance.reviewStatus !== "draft_pending_revalidation"
+        ) {
+          return [];
+        }
+        const def = template.productDefinition;
+        return [
+          {
+            templateKey: template.key,
+            templateVersion: template.templateVersion,
+            discipline: template.discipline,
+            defaultName: template.defaultName,
+            defaultAccreditedScope: template.defaultAccreditedScope,
+            assetTypeSlug: def.assetTypeSlug,
+            description: def.description ?? "",
+            model: governance.model,
+            counts: {
+              dataFields: def.dataFields.length,
+              formulas: def.formulas.length,
+              validations: def.validations.length,
+              uncertaintyParams: def.uncertaintyParams.length,
+              verificar: governance.verificarItems.length,
+              omitted: governance.omittedComponents.length,
+            },
+            // Served verbatim: the picker's "informed, not trust-me" surface.
+            governance,
+            spec: {
+              dataFields: def.dataFields,
+              formulas: def.formulas,
+              measurementModels: def.measurementModels,
+              validations: def.validations,
+              uncertaintyParams: def.uncertaintyParams,
+              certificateContent: def.certificateContent,
+            },
+            previewScenarios: template.previewScenarios,
           },
-          // Served verbatim: the picker's "informed, not trust-me" surface.
-          governance,
-          spec: {
-            dataFields: def.dataFields,
-            formulas: def.formulas,
-            measurementModels: def.measurementModels,
-            validations: def.validations,
-            uncertaintyParams: def.uncertaintyParams,
-            certificateContent: def.certificateContent,
-          },
-          previewScenarios: template.previewScenarios,
-        },
-      ];
-    });
+        ];
+      },
+    );
 
     return c.json(entries);
   })
@@ -1810,7 +1807,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(newMethod, 201);
       } catch (error) {
         console.error("Error creating method from template:", error);
-        return c.json({ error: "Erro ao criar método a partir do modelo" }, 500);
+        return c.json(
+          { error: "Erro ao criar método a partir do modelo" },
+          500,
+        );
       }
     },
   )
