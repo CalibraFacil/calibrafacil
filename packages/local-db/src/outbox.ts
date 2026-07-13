@@ -1,5 +1,5 @@
 import type { SyncPushResponse } from "@calibra-facil/contracts";
-import { stringifySyncConflictPayload } from "@calibra-facil/sync";
+import { stringifySyncConflictPayload } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 
 export type PendingOutboxEvent = {

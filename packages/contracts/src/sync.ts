@@ -266,3 +266,47 @@ export type SyncConflictResolutionRequest = z.infer<
 export type SyncConflictResolutionResponse = z.infer<
   typeof syncConflictResolutionResponseSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Wire-format builders shared by both sides of the sync seam (cloud apply in
+// apps/api, local outbox in packages/local-db). The conflict-id and push-cursor
+// string formats are part of the sync wire contract, so they live beside the
+// schemas that validate the payloads carrying them. Formerly packages/sync.
+// ---------------------------------------------------------------------------
+
+export type DesktopSyncConflictIdentity = {
+  eventId: string;
+  entityType: string;
+  entityId: string;
+};
+
+export function buildDesktopSyncConflictId(input: DesktopSyncConflictIdentity) {
+  return [
+    "desktop-conflict",
+    safeSyncIdSegment(input.entityType),
+    safeSyncIdSegment(input.entityId),
+    safeSyncIdSegment(input.eventId),
+  ].join(":");
+}
+
+export function buildSyncPushCursor(
+  clientBatchId: string,
+  acceptedCount: number,
+  conflictCount: number,
+) {
+  if (conflictCount === 0) {
+    return `cursor:${clientBatchId}:${acceptedCount}`;
+  }
+
+  return `cursor:${clientBatchId}:${acceptedCount}:${conflictCount}`;
+}
+
+export function stringifySyncConflictPayload(value: unknown) {
+  return JSON.stringify(value ?? {});
+}
+
+function safeSyncIdSegment(value: string) {
+  return (
+    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
+  );
+}

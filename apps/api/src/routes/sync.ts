@@ -57,7 +57,7 @@ import { desktopCertificatePdfKey } from "@calibra-facil/shared/storage-keys";
 import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
-} from "@calibra-facil/sync";
+} from "@calibra-facil/contracts";
 import {
   CreateAssetSchema,
   CreateCustomerSchema,
