@@ -3,8 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import type { OotNotificationData } from '@calibra-facil/client-runtime'
-
 import { calibraApi } from '@/utils/api'
 import {
   useNonConformanceAuditLogData,
@@ -45,6 +43,14 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import {
+  getAcknowledgedViaLabel,
+  getDispositionLabel,
+  getOotStatusBadge,
+  getStatusBadge,
+  getTypeLabel,
+  ncAvailableActions,
+} from '@/features/quality/nc-model'
 
 function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return '-'
@@ -55,78 +61,6 @@ function formatDate(dateString: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function getTypeLabel(type: string): string {
-  switch (type) {
-    case 'work':
-      return 'Trabalho'
-    case 'equipment':
-      return 'Equipamento'
-    case 'documentation':
-      return 'Documentacao'
-    case 'out_of_tolerance':
-      return 'Fora de tolerância'
-    default:
-      return type
-  }
-}
-
-function getOotStatusBadge(status: OotNotificationData['status']) {
-  switch (status) {
-    case 'ACKNOWLEDGED':
-      return { variant: 'default' as const, label: 'Confirmada' }
-    case 'SENT':
-      return { variant: 'secondary' as const, label: 'Enviada' }
-    case 'GENERATED':
-    case 'PENDING':
-    default:
-      return { variant: 'outline' as const, label: 'Gerada' }
-  }
-}
-
-function getAcknowledgedViaLabel(
-  via: NonNullable<OotNotificationData['acknowledgedVia']>,
-): string {
-  switch (via) {
-    case 'email_link':
-      return 'link do e-mail'
-    case 'portal_link':
-      return 'portal'
-    case 'manual':
-      return 'registro manual'
-    default:
-      return via
-  }
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'open':
-      return { variant: 'destructive' as const, label: 'Aberta' }
-    case 'under_review':
-      return { variant: 'outline' as const, label: 'Em Analise' }
-    case 'resolved':
-      return { variant: 'default' as const, label: 'Resolvida' }
-    default:
-      return { variant: 'secondary' as const, label: status }
-  }
-}
-
-function getDispositionLabel(disposition: string | null): string {
-  if (!disposition) return 'Pendente'
-  switch (disposition) {
-    case 'rework':
-      return 'Retrabalho'
-    case 'scrap':
-      return 'Sucata'
-    case 'use_as_is':
-      return 'Uso como esta'
-    case 'concession':
-      return 'Concessao'
-    default:
-      return disposition
-  }
 }
 
 export function NCDetailPage({ id }: { id: string }) {
@@ -263,7 +197,7 @@ export function NCDetailPage({ id }: { id: string }) {
   }
 
   const statusBadge = getStatusBadge(nc.status)
-  const isResolved = nc.status === 'resolved'
+  const availableActions = ncAvailableActions(nc)
 
   return (
     <div className="space-y-6">
@@ -393,10 +327,10 @@ export function NCDetailPage({ id }: { id: string }) {
               </div>
             )}
 
-            {/* Action Buttons */}
-            {!isResolved && (
+            {/* Action Buttons — the lifecycle rules live in ncAvailableActions */}
+            {availableActions.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-4 border-t">
-                {!nc.disposition && (
+                {availableActions.includes('setDisposition') && (
                   <Dialog
                     open={dispositionDialogOpen}
                     onOpenChange={setDispositionDialogOpen}
@@ -421,7 +355,7 @@ export function NCDetailPage({ id }: { id: string }) {
                   </Dialog>
                 )}
 
-                {nc.disposition && (
+                {availableActions.includes('resolve') && (
                   <Dialog
                     open={resolveDialogOpen}
                     onOpenChange={setResolveDialogOpen}
@@ -442,7 +376,7 @@ export function NCDetailPage({ id }: { id: string }) {
                   </Dialog>
                 )}
 
-                {!nc.capaId && (
+                {availableActions.includes('escalateToCapa') && (
                   <Dialog
                     open={capaDialogOpen}
                     onOpenChange={setCapaDialogOpen}
