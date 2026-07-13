@@ -79,6 +79,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@calibra-facil/method-definition": "workspace:^",
     "@playwright/test": "1.60.0",
     "@repo/typescript-config": "workspace:^",
     "@tanstack/devtools-vite": "0.7.0",
