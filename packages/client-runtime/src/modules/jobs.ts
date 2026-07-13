@@ -55,7 +55,8 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
     },
     async approve(
       jobId: string | number,
-      input: { reason: string; environmentalJustification?: string },
+      // Mirrors ApproveJobSchema: reason is optional approval notes.
+      input: { reason?: string; environmentalJustification?: string },
     ) {
       return readJsonResponse<unknown>(
         await rawCloudClient.api.jobs[":id"].approve.$post({

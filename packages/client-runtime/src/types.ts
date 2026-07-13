@@ -1,3 +1,84 @@
+// Request payload types derived from @calibra-facil/schemas — the client
+// can no longer drift from what the API validates (e.g. the hand-written
+// CreateJobInput was missing sourceServiceOrderId). z.input (not z.infer)
+// keeps fields with schema defaults optional for callers, matching what
+// the wire actually accepts.
+import type { z } from "zod";
+import type {
+  AdjustMaterialStockSchema,
+  CreateAssetSchema,
+  CreateCustomerSchema,
+  CreateCustomerGroupSchema,
+  CreateJobSchema,
+  CreateMaterialSchema,
+  CreateNonConformanceSchema,
+  CreateServiceSchema,
+  UpdateAssetSchema,
+  UpdateCertificateNumberingProfileSchema,
+  UpdateCustomerSchema,
+  UpdateMaterialSchema,
+  UpdateNotificationPreferencesSchema,
+  UpdateServiceSchema,
+} from "@calibra-facil/schemas";
+
+export type AdjustMaterialStockInput = z.input<
+  typeof AdjustMaterialStockSchema
+>;
+export type CreateAssetInput = z.input<typeof CreateAssetSchema>;
+export type CreateCustomerInput = z.input<typeof CreateCustomerSchema>;
+export type CreateCustomerGroupInput = z.input<
+  typeof CreateCustomerGroupSchema
+>;
+export type CreateJobInput = z.input<typeof CreateJobSchema>;
+export type CreateMaterialInput = z.input<typeof CreateMaterialSchema>;
+export type CreateNonConformanceInput = z.input<
+  typeof CreateNonConformanceSchema
+>;
+export type CreateServiceInput = z.input<typeof CreateServiceSchema>;
+export type UpdateAssetInput = z.input<typeof UpdateAssetSchema>;
+export type UpdateCertificateNumberingProfileInput = z.input<
+  typeof UpdateCertificateNumberingProfileSchema
+>;
+export type UpdateCustomerInput = z.input<typeof UpdateCustomerSchema>;
+export type UpdateMaterialInput = z.input<typeof UpdateMaterialSchema>;
+export type UpdateNotificationPreferencesInput = z.input<
+  typeof UpdateNotificationPreferencesSchema
+>;
+export type UpdateServiceInput = z.input<typeof UpdateServiceSchema>;
+
+export type ServiceAuditLogData<TRecord = unknown> = {
+  data: TRecord[];
+};
+
+export type AdjustMaterialStockData = {
+  stockQuantity: number;
+  stockSyncedAt: string | Date;
+};
+
+export type AssetAuditLogData<TRecord = unknown> = {
+  data: TRecord[];
+};
+
+export type CustomerDetailData = CustomersListData["data"][number] & {
+  address?: Record<string, unknown> | null;
+  compliance?: {
+    qualificationStatus?: "pending" | "qualified" | "suspended" | "expired";
+    [key: string]: unknown;
+  } | null;
+  financialSummary?: {
+    openDocumentsCount: number;
+    overdueDocumentsCount: number;
+    openBalanceCents: number;
+    overdueBalanceCents: number;
+    overdueBalanceFlag: boolean;
+  };
+  activeCommercialAgreement?: unknown;
+  /** Parent customer group (rede), resolved on the detail payload. */
+  group?: { id: number; name: string } | null;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+};
+
 import type {
   LocalAttachment,
   LocalAttachmentsResponse,
@@ -69,13 +150,6 @@ export type JobsListInput = {
   customerId?: number;
   query?: string;
   status?: JobsListStatus;
-};
-
-export type CreateJobInput = {
-  assetId: number;
-  serviceId: number;
-  technicianId?: string | null;
-  dueDate?: string | null;
 };
 
 export type CreateJobResult = {
@@ -228,23 +302,6 @@ export type ServiceDetailData = ServicesListData["data"][number] & {
   updatedAt: string | Date | null;
 };
 
-export type CreateServiceInput = {
-  name: string;
-  description?: string | null;
-  methodId?: number | null;
-  assetTypeId?: number | null;
-  price?: number | null;
-  currency?: string;
-  tat?: number | null;
-  isActive?: boolean;
-};
-
-export type UpdateServiceInput = Partial<CreateServiceInput>;
-
-export type ServiceAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
-};
-
 export interface ServicesApi {
   list(input?: ServicesListInput): Promise<ServicesListData>;
   get(id: string | number): Promise<ServiceDetailData>;
@@ -292,28 +349,6 @@ export type MaterialsListData = {
 };
 
 export type MaterialDetailData = MaterialsListData["data"][number];
-
-export type CreateMaterialInput = {
-  name: string;
-  description?: string | null;
-  sku?: string | null;
-  unit?: string;
-  unitCostCents?: number | null;
-  unitPriceCents?: number | null;
-  controlsStock?: boolean;
-  isActive?: boolean;
-};
-
-export type UpdateMaterialInput = Partial<CreateMaterialInput>;
-
-export type AdjustMaterialStockInput = {
-  quantityOnHand: number;
-};
-
-export type AdjustMaterialStockData = {
-  stockQuantity: number;
-  stockSyncedAt: string | Date;
-};
 
 export interface MaterialsApi {
   list(input?: MaterialsListInput): Promise<MaterialsListData>;
@@ -826,47 +861,6 @@ export type CustomersListData = {
   };
 };
 
-export type CreateCustomerInput = {
-  name: string;
-  tradeName?: string;
-  taxId?: string;
-  email?: string;
-  phone?: string;
-  address?: {
-    cep?: string;
-    street?: string;
-    number?: string;
-    complement?: string;
-    neighbourhood?: string;
-    city?: string;
-    state?: string;
-  };
-  /** Parent customer group (rede). null detaches; omitted leaves unchanged. */
-  groupId?: number | null;
-};
-
-export type UpdateCustomerInput = Partial<CreateCustomerInput>;
-
-export type CustomerDetailData = CustomersListData["data"][number] & {
-  address?: Record<string, unknown> | null;
-  compliance?: {
-    qualificationStatus?: "pending" | "qualified" | "suspended" | "expired";
-    [key: string]: unknown;
-  } | null;
-  financialSummary?: {
-    openDocumentsCount: number;
-    overdueDocumentsCount: number;
-    openBalanceCents: number;
-    overdueBalanceCents: number;
-    overdueBalanceFlag: boolean;
-  };
-  activeCommercialAgreement?: unknown;
-  /** Parent customer group (rede), resolved on the detail payload. */
-  group?: { id: number; name: string } | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
-
 export type UpdateCustomerComplianceInput = {
   compliance: Record<string, unknown>;
   reason: string;
@@ -967,11 +961,6 @@ export type CustomerGroupDetailData = {
   branches: Array<CustomerGroupBranch>;
 };
 
-export type CreateCustomerGroupInput = {
-  name: string;
-  email?: string;
-};
-
 export interface CustomerGroupsApi {
   list(): Promise<CustomerGroupsListData>;
   get(id: string | number): Promise<CustomerGroupDetailData>;
@@ -1068,22 +1057,6 @@ export type MeasurementUnit =
   | "MHz"
   | "rpm";
 
-export type CreateAssetInput = {
-  customerId: number;
-  assetTypeId: number;
-  name: string;
-  manufacturer?: string;
-  model?: string;
-  serialNumber: string;
-  tag: string;
-  status?: AssetStatus;
-  baseMeasurementUnit?: MeasurementUnit | null;
-  lastCalibrationDate?: string;
-  nextCalibrationDate?: string;
-  comments?: string;
-  specifications?: Record<string, unknown>;
-};
-
 export type AssetsListData = {
   data: Array<{
     id: number;
@@ -1139,14 +1112,6 @@ export type AssetDetailData = AssetsListData["data"][number] & {
     note?: string;
   } | null;
   nextLegalVerificationDate?: string | Date | null;
-};
-
-export type UpdateAssetInput = Partial<
-  Omit<CreateAssetInput, "customerId" | "assetTypeId" | "baseMeasurementUnit">
->;
-
-export type AssetAuditLogData<TRecord = unknown> = {
-  data: TRecord[];
 };
 
 export interface AssetsApi {
@@ -1258,13 +1223,6 @@ export type NonConformanceListInput = {
   jobId?: string | number;
   dateFrom?: string;
   dateTo?: string;
-};
-
-export type CreateNonConformanceInput = {
-  type: "work" | "equipment" | "documentation" | "out_of_tolerance";
-  description: string;
-  detectedAt: string;
-  jobId?: number;
 };
 
 export type CreateNonConformanceResult = {
@@ -2689,11 +2647,6 @@ export type CertificateNumberingProfileResponse = {
   supportedTokens: string[];
 };
 
-export type UpdateCertificateNumberingProfileInput = {
-  name: string;
-  config: CertificateNumberingConfig;
-};
-
 export type UpdateCertificateNumberingProfileResponse = {
   message: string;
   profile: {
@@ -2795,13 +2748,6 @@ export type NotificationPreferencesResponse = {
   emailEnabled: boolean;
   notifySelfActions: boolean;
   digestFrequency: "NONE" | "DAILY" | "WEEKLY";
-};
-
-export type UpdateNotificationPreferencesInput = {
-  preferences?: NotificationPreferencesMap;
-  emailEnabled?: boolean;
-  notifySelfActions?: boolean;
-  digestFrequency?: "NONE" | "DAILY" | "WEEKLY";
 };
 
 export interface NotificationsApi {

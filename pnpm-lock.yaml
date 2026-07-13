@@ -1174,9 +1174,15 @@ importers:
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../contracts
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:^

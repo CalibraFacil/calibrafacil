@@ -437,7 +437,14 @@ export function createDesktopApiClient(
         return {
           ...desktopNotificationPreferences(),
           ...input,
-          preferences: input.preferences ?? {},
+          // Mirror the server-side schema defaults (inApp/email default true)
+          // that zValidator would apply before echoing the preferences back.
+          preferences: Object.fromEntries(
+            Object.entries(input.preferences ?? {}).map(([key, value]) => [
+              key,
+              { inApp: value.inApp ?? true, email: value.email ?? true },
+            ]),
+          ),
         };
       },
     },

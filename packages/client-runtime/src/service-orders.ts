@@ -1,3 +1,9 @@
+import type { z } from "zod";
+import type {
+  CreateServiceOrderSchema,
+  UpdateServiceOrderSchema,
+} from "@calibra-facil/schemas";
+
 export type ServiceOrderStatus = string;
 
 export type ServiceOrderListItem = {
@@ -145,34 +151,13 @@ export type ServiceOrdersListInput = {
   status?: ServiceOrderStatus;
 };
 
-export type CreateServiceOrderInput = {
-  customerId: number;
-  assetId: number;
-  intakeType: string;
-  isExternalService: boolean;
-  priority: string;
-  deliveryMethod: string;
-  claimedDefect: string;
-  intakeCondition: string;
-  accessories: string | null;
-  removedSealingMarkNumber: string | null;
-  invoiceRemittanceNumber: string | null;
-  invoiceRemittanceKey: string | null;
-  carrierName: string | null;
-  carrierDocument: string | null;
-  thirdPartyName: string | null;
-  thirdPartyDocument: string | null;
-  thirdPartyPhone: string | null;
-  clientVisibleNotes: string | null;
-  internalNotes: string | null;
-  evaluationFeeCents: number;
-};
+// Derived from the Zod schemas the service-order routes validate with
+// (zValidator on Create/UpdateServiceOrderSchema) — z.input keeps fields
+// with schema defaults optional for callers.
+export type CreateServiceOrderInput = z.input<typeof CreateServiceOrderSchema>;
 
 /** Partial update of an existing OS (detail-page edits). */
-export type UpdateServiceOrderInput = {
-  serviceStartedAt?: string | null;
-  isExternalService?: boolean;
-};
+export type UpdateServiceOrderInput = z.input<typeof UpdateServiceOrderSchema>;
 
 export type CreateServiceOrderResult = {
   data: {
