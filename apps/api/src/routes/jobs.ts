@@ -8,14 +8,6 @@ import {
   defaultRenderOptions,
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
-import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
-import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
-import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
-import { checkApproverIsAuthorizedSignatory } from "../lib/signatory";
-import {
-  findServiceOrdersForCalibrationJob,
-  triggerAutomaticSendForMilestone,
-} from "../lib/automatic-send";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import type { IntegrationsEnv } from "../lib/integrations";
 import {
@@ -44,7 +36,6 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   notifyJobSubmittedForReview,
-  notifyJobApproved,
   notifyJobRejected,
   notifyJobAssigned,
   notifyCertificateAmended,
@@ -88,7 +79,6 @@ import {
   inArray,
   isNull,
   like,
-  ne,
   not,
   or,
   sql,
@@ -133,6 +123,7 @@ import {
   findMissingRequiredAssetSpecs,
   stripAssetSpecData,
 } from "../modules/jobs/helpers";
+import { approveJob } from "../modules/jobs/approve-job";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -2165,62 +2156,31 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const result = await approveJob({
+        jobId: id,
+        member: memberData,
+        approverId: session.user.id,
+        values: input,
+        metadata: { ipAddress: c.req.header("x-forwarded-for") || null },
+        sendServiceOrdersToFinance: (params) =>
+          sendServiceOrdersToFinance({
+            ...params,
+            scope: memberData,
+            env: c.env,
+          }),
+      });
 
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Can only approve from REVIEW status
-      if (existing.status !== "REVIEW") {
-        return c.json(
-          {
-            error: `Nao e possivel aprovar um job com status ${existing.status}. O job deve estar em REVIEW.`,
-          },
-          400,
-        );
-      }
-
-      // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): the technician who
-      // executed — or the user who created — the calibration must not approve
-      // their own work. Auto-detected like the personnel-competence gate: it is
-      // enforced only when the organization actually has an *eligible alternate
-      // approver*, so a genuine solo lab — or one whose only other members are
-      // technicians/operators who cannot approve — is exempt rather than left
-      // with a REVIEW job nobody can release. An eligible approver is another
-      // member whose role grants `calibration.approve`, which access.ts grants
-      // to admin/owner only; both are global multi-unit roles, so any such
-      // member can access the job's unit by construction (no unit-scope join
-      // needed here).
-      const approverId = session.user.id;
-      if (
-        existing.technicianId === approverId ||
-        existing.createdBy === approverId
-      ) {
-        const [alternateApprover] = await db
-          .select({ id: member.id })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, memberData.organizationId),
-              inArray(member.role, ["admin", "owner"]),
-              ne(member.userId, approverId),
-            ),
-          )
-          .limit(1);
-
-        if (alternateApprover) {
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "invalid_status":
+          return c.json(
+            {
+              error: `Nao e possivel aprovar um job com status ${result.currentStatus}. O job deve estar em REVIEW.`,
+            },
+            400,
+          );
+        case "self_approval_blocked":
           return c.json(
             {
               error:
@@ -2229,209 +2189,30 @@ export const jobsRouter = new Hono<{
             },
             403,
           );
-        }
-      }
-
-      // Authorized-signatory scope (ISO/IEC 17025 §6.2.6): when the organization
-      // maintains a signatory roster, the approver must be authorized to sign for
-      // this instrument's asset type (or be an org-wide signatory). Auto-detected
-      // — skipped when the org has no signatory records. Distinct from execution
-      // competence (which gates the technician at assignment) and from the
-      // self-approval gate above — four-eyes by identity vs. signatory scope.
-      const signatoryGate = await checkApproverIsAuthorizedSignatory({
-        organizationId: memberData.organizationId,
-        approverId,
-        assetId: existing.assetId,
-      });
-      if (!signatoryGate.ok) {
-        return c.json(
-          {
-            error:
-              "O aprovador não é um signatário autorizado para este tipo de instrumento (ISO/IEC 17025 §6.2.6). A liberação do certificado deve ser feita por um signatário autorizado.",
-            code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
-          },
-          403,
-        );
-      }
-
-      // Check environmental conditions - block approval if out of limits without justification
-      if (
-        existing.environmentalSnapshot &&
-        !existing.environmentalSnapshot.withinLimits &&
-        !existing.environmentalSnapshot.outOfLimitsJustification &&
-        !input.environmentalJustification
-      ) {
-        return c.json(
-          {
-            error:
-              "Condições ambientais fora dos limites. Forneça uma justificativa para aprovar.",
-            environmentalSnapshot: existing.environmentalSnapshot,
-          },
-          400,
-        );
-      }
-
-      // Save environmental justification if provided
-      if (
-        input.environmentalJustification &&
-        existing.environmentalSnapshot &&
-        !existing.environmentalSnapshot.withinLimits
-      ) {
-        await db
-          .update(calibrationJob)
-          .set({
-            environmentalSnapshot: {
-              ...existing.environmentalSnapshot,
-              outOfLimitsJustification: input.environmentalJustification,
+        case "not_authorized_signatory":
+          return c.json(
+            {
+              error:
+                "O aprovador não é um signatário autorizado para este tipo de instrumento (ISO/IEC 17025 §6.2.6). A liberação do certificado deve ser feita por um signatário autorizado.",
+              code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
             },
-          })
-          .where(eq(calibrationJob.id, id));
-      }
-
-      const effectiveTemplateSnapshot =
-        certificateTemplateSnapshotFromUnknown(
-          existing.certificateTemplateSnapshot,
-        ) ??
-        (await getEffectiveCertificateTemplateSnapshot(
-          memberData.organizationId,
-        ));
-
-      // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
-      // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
-      // `results`; it does NOT influence approval, conformity, or the certificate.
-      const asFoundVerdict = buildAsFoundReliabilityVerdict({
-        results: existing.results,
-      });
-
-      // Update job status to GENERATING_PDF and set approver info
-      // (we set approved_by now so the PDF worker can fetch it)
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          status: "GENERATING_PDF",
-          approvedBy: session.user.id,
-          approvedAt: new Date(),
-          asFoundConformity: asFoundVerdict.conformity,
-          asFoundMargins: asFoundVerdict.margins,
-          certificateTemplateId:
-            existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
-          certificateTemplateSnapshot:
-            existing.certificateTemplateSnapshot ??
-            serializeCertificateTemplateSnapshot(effectiveTemplateSnapshot),
-        })
-        .where(eq(calibrationJob.id, id))
-        .returning();
-
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "approve",
-        changes: {
-          status: { old: existing.status, new: "GENERATING_PDF" },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason || "Aprovado - Gerando PDF",
-      });
-
-      // Advance the asset's calibration dates from the approved work
-      // (last_calibration_date + the derived next dates) — forward-only and
-      // never fails the approval. Without this the due sweeps re-remind for
-      // an instrument that was just calibrated.
-      await advanceAssetCalibrationDatesOnApproval({
-        assetId: existing.assetId,
-        calibrationDate: existing.performedAt ?? updated?.approvedAt ?? null,
-        performedBy: session.user.id,
-        source: "job_approval",
-      });
-
-      await enqueueBackgroundJob({
-        jobId: id,
-        userId: session.user.id,
-      });
-
-      // Send notification to technician (fire and forget)
-      notifyJobApproved(id, session.user.id).catch((err) => {
-        console.error("[Jobs] Failed to send approval notification:", err);
-      });
-
-      // #740 Track B: as-found non-conforming → customer-facing OOT event +
-      // "avaliar impacto" alert (ISO 9001 §7.1.5.2). Idempotent per job;
-      // fire-and-forget — never blocks the approval.
-      if (asFoundVerdict.conformity === "NON_CONFORMING") {
-        createAssetOotEventForApprovedJob({
-          jobId: id,
-          assetId: existing.assetId,
-          customerId: existing.customerId,
-          labOrganizationId: memberData.organizationId,
-          detectedAt: updated?.approvedAt ?? new Date(),
-          actorUserId: session.user.id,
-        }).catch((err) => {
-          console.error("[Jobs] Failed to create asset OOT event:", err);
-        });
-      }
-
-      // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
-      // to this job. Fire-and-forget — never block the approval response
-      // on the financial-send pathway. Engine writes an audit row per
-      // call regardless of outcome.
-      void (async () => {
-        try {
-          const orgId = memberData.organizationId;
-          const linkedSoIds = await findServiceOrdersForCalibrationJob(
-            id,
-            orgId,
+            403,
           );
-          for (const serviceOrderId of linkedSoIds) {
-            await triggerAutomaticSendForMilestone({
-              event: {
-                event: "certificate_approved",
-                serviceOrderId,
-                organizationId: orgId,
-              },
-              actorUserId: session.user.id,
-              invoker: async (params) => {
-                try {
-                  const results = await sendServiceOrdersToFinance({
-                    organizationId: params.organizationId,
-                    serviceOrderIds: [params.serviceOrderId],
-                    actorUserId: params.actorUserId,
-                    scope: memberData,
-                    env: c.env,
-                  });
-                  const first = results[0];
-                  if (!first) {
-                    return { ok: false, reason: "no_result" };
-                  }
-                  return {
-                    ok: first.ok,
-                    summary: {
-                      ok: first.ok,
-                      billingDocumentId: first.billingDocumentId ?? null,
-                    },
-                    reason: first.ok
-                      ? undefined
-                      : (first.error ?? "send_failed"),
-                  };
-                } catch (error) {
-                  return {
-                    ok: false,
-                    reason:
-                      error instanceof Error ? error.message : "send_threw",
-                  };
-                }
-              },
-            });
-          }
-        } catch (error) {
-          console.error("[Jobs] Automatic-send wire-up failed:", error);
-        }
-      })();
-
-      return c.json({
-        message: "Gerando certificado...",
-        data: updated,
-      });
+        case "environmental_justification_required":
+          return c.json(
+            {
+              error:
+                "Condições ambientais fora dos limites. Forneça uma justificativa para aprovar.",
+              environmentalSnapshot: result.environmentalSnapshot,
+            },
+            400,
+          );
+        case "approved":
+          return c.json({
+            message: "Gerando certificado...",
+            data: result.job,
+          });
+      }
     },
   )
 
