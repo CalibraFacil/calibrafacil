@@ -15,7 +15,8 @@
     "./plans": "./src/plans.ts",
     "./storage-keys": "./src/storage-keys.ts",
     "./telemetry": "./src/telemetry/index.ts",
-    "./units": "./src/units/index.ts"
+    "./units": "./src/units/index.ts",
+    "./format": "./src/format.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
