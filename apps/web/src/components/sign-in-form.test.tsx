@@ -322,32 +322,17 @@ describe('SignInForm workflow', () => {
     expect(authMocks.navigate).not.toHaveBeenCalled()
   })
 
-  it('starts SSO with organization, optional email hint, and route redirect', async () => {
-    authMocks.ssoStart.mockResolvedValue({})
+  it('offers the SSO scene switch instead of inline SSO fields in lab mode', () => {
+    const onSwitchToSso = vi.fn()
 
-    render(<SignInForm redirect="/dashboard/jobs" />)
+    render(<SignInForm onSwitchToSso={onSwitchToSso} />)
 
-    expect(
-      screen.getByRole('button', { name: 'Entrar com SSO' }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.change(screen.getByLabelText('Slug da organização'), {
-      target: { value: 'lab-acreditado' },
-    })
-    fireEvent.change(screen.getByLabelText('Email corporativo'), {
-      target: { value: 'tecnico@lab.test' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar com SSO' }))
+    expect(screen.queryByLabelText('Slug da organização')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Entrar com SSO corporativo' }),
+    )
 
-    await waitFor(() => {
-      expect(authMocks.ssoStart).toHaveBeenCalledWith({
-        organizationSlug: 'lab-acreditado',
-        email: 'tecnico@lab.test',
-        redirectPath: '/dashboard/jobs',
-      })
-    })
-    expect(
-      await screen.findByText('Falha ao iniciar login via SSO'),
-    ).toBeTruthy()
+    expect(onSwitchToSso).toHaveBeenCalledTimes(1)
   })
 })
 

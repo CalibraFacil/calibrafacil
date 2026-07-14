@@ -810,6 +810,9 @@ importers:
       '@maskito/react':
         specifier: ^5.2.2
         version: 5.2.2(@maskito/core@5.2.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@paper-design/shaders-react':
+        specifier: ^0.0.77
+        version: 0.0.77(@types/react@19.2.16)(react@19.2.7)
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -3633,6 +3636,18 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@paper-design/shaders-react@0.0.77':
+    resolution: {integrity: sha512-VCjhK7k6GT1BMjq7kLsDHMnMy1ryjCTALdhOVIf2Z5b1jh5eEHXqHdQCvMAJ7v6evjiN1twzjM1KUNOg2RoXBw==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@paper-design/shaders@0.0.77':
+    resolution: {integrity: sha512-y0mR3brBu6qvVgbnvBdXX3zL/hajdamkECLt8NbexaEc1L46W3a+ZIEwxu1NJ2/bqwxAgjJC0o2+4CAii5wp/w==}
 
   '@payloadcms/db-postgres@3.85.0':
     resolution: {integrity: sha512-sjtVmtoVRyCIHMsEZswr8+Qmp06Q5n875AGSvtR4Mmx1LEy/SsjdzbV42+wo/olSoTn5qSeO6am1KVMqfaEp5A==}
@@ -13230,6 +13245,15 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.68.0':
     optional: true
 
+  '@paper-design/shaders-react@0.0.77(@types/react@19.2.16)(react@19.2.7)':
+    dependencies:
+      '@paper-design/shaders': 0.0.77
+      react: 19.2.7
+    optionalDependencies:
+      '@types/react': 19.2.16
+
+  '@paper-design/shaders@0.0.77': {}
+
   '@payloadcms/db-postgres@3.85.0(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.17)(payload@3.85.0(graphql@16.14.1)(typescript@6.0.3))(postgres@3.4.9)':
     dependencies:
       '@payloadcms/drizzle': 3.85.0(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(payload@3.85.0(graphql@16.14.1)(typescript@6.0.3))(pg@8.20.0)(postgres@3.4.9)
@@ -15307,7 +15331,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.77.4)(terser@5.48.0)(tsx@4.22.4))
+      vitest: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(terser@5.48.0)(tsx@4.22.4))
 
   '@vitest/expect@4.1.8':
     dependencies:

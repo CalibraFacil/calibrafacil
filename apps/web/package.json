@@ -39,6 +39,7 @@
     "@hugeicons/react": "^1.1.6",
     "@maskito/core": "^5.2.2",
     "@maskito/react": "^5.2.2",
+    "@paper-design/shaders-react": "^0.0.77",
     "@phosphor-icons/react": "^2.1.10",
     "@sentry/react": "^10.56.0",
     "@tailwindcss/vite": "^4.3.0",

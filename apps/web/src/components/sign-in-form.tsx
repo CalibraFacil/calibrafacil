@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { Building03Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import {
   backofficeSignIn,
@@ -37,22 +39,21 @@ import { Separator } from '@/components/ui/separator'
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
   mode?: 'lab' | 'backoffice'
+  onSwitchToSso?: () => void
 }
 
 export function SignInForm({
   className,
   redirect,
   mode = 'lab',
+  onSwitchToSso,
   ...props
 }: SignInFormProps) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [organizationSlug, setOrganizationSlug] = useState('')
-  const [ssoEmail, setSsoEmail] = useState('')
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isSsoLoading, setIsSsoLoading] = useState(false)
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false)
   const [isOtpRequesting, setIsOtpRequesting] = useState(false)
   const [isOtpSigningIn, setIsOtpSigningIn] = useState(false)
@@ -306,37 +307,6 @@ export function SignInForm({
     }
   }
 
-  async function handleSsoSubmit(e: React.SyntheticEvent) {
-    e.preventDefault()
-    setAuthStatus(null)
-    setIsSsoLoading(true)
-
-    try {
-      const data = await calibraApi.sso.start({
-        organizationSlug,
-        ...(ssoEmail ? { email: ssoEmail } : {}),
-        redirectPath: sanitizeLabRedirect(redirect),
-      })
-      if (!data.url) {
-        setAuthStatus({
-          tone: 'error',
-          title: 'Falha ao iniciar login via SSO',
-        })
-        return
-      }
-
-      clearDesktopSignedOut()
-      window.location.assign(data.url)
-    } catch {
-      setAuthStatus({
-        tone: 'error',
-        title: 'Falha ao iniciar login via SSO',
-      })
-    } finally {
-      setIsSsoLoading(false)
-    }
-  }
-
   return (
     <form
       className={cn('flex flex-col gap-6', className)}
@@ -489,58 +459,13 @@ export function SignInForm({
             </Field>
           </>
         )}
-        {mode === 'lab' ? (
+        {mode === 'lab' && onSwitchToSso ? (
           <>
             <Separator />
             <Field>
-              <div className="space-y-1">
-                <FieldLabel htmlFor="organizationSlug">
-                  Entrar com SSO
-                </FieldLabel>
-                <p className="text-sm text-muted-foreground">
-                  Informe o slug da organização e, se quiser, um email
-                  corporativo como login hint.
-                </p>
-              </div>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="organizationSlug">
-                Slug da organização
-              </FieldLabel>
-              <Input
-                id="organizationSlug"
-                value={organizationSlug}
-                onChange={(e) => setOrganizationSlug(e.target.value)}
-                placeholder="laboratorio-acreditado"
-                required={false}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="ssoEmail">Email corporativo</FieldLabel>
-              <Input
-                id="ssoEmail"
-                type="email"
-                value={ssoEmail}
-                onChange={(e) => setSsoEmail(e.target.value)}
-                placeholder="voce@empresa.com.br"
-                required={false}
-              />
-            </Field>
-            <Field>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSsoLoading || !organizationSlug.trim()}
-                onClick={handleSsoSubmit}
-              >
-                {isSsoLoading ? (
-                  <>
-                    <Spinner className="mr-2" />
-                    Redirecionando...
-                  </>
-                ) : (
-                  'Entrar com SSO'
-                )}
+              <Button type="button" variant="outline" onClick={onSwitchToSso}>
+                <HugeiconsIcon icon={Building03Icon} className="size-4" />
+                Entrar com SSO corporativo
               </Button>
             </Field>
           </>
