@@ -15,6 +15,15 @@ import {
 } from "@/components/instrument-panel";
 import type { SignalTone } from "@/components/instrument-panel";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { usePublicServiceOrder, submitQuoteDecision } from "./queries";
@@ -53,6 +62,7 @@ const QUOTE_STATUS_LABEL: Record<string, string> = {
 export function PublicQuotePage({ token }: { token: string }) {
   const orderQuery = usePublicServiceOrder(token);
   const [decision, setDecision] = useState<QuoteDecision | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
@@ -61,6 +71,7 @@ export function PublicQuotePage({ token }: { token: string }) {
     onSuccess: (made) => {
       // REQ-QPUB-043: terminal state from local data — no query invalidation.
       setDecision(made);
+      setRejectOpen(false);
       setDecisionError(null);
     },
     onError: (error) => {
@@ -147,7 +158,11 @@ export function PublicQuotePage({ token }: { token: string }) {
                 description={`Entrada em ${formatDate(order.openedAt)}`}
                 action={
                   <span className="rounded-full bg-muted px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                    {order.statusLabel ?? order.status}
+                    {decision
+                      ? decision === "approved"
+                        ? "Orçamento aprovado"
+                        : "Orçamento recusado"
+                      : (order.statusLabel ?? order.status)}
                   </span>
                 }
               />
@@ -309,44 +324,72 @@ export function PublicQuotePage({ token }: { token: string }) {
                 ) : null}
 
                 {canAnswer ? (
-                  <div className="grid gap-4 border-t border-foreground/10 pt-5 sm:grid-cols-2">
-                    <Button
-                      onClick={() =>
-                        decisionMutation.mutate({
-                          token,
-                          decision: "approved",
-                        })
-                      }
-                      disabled={decisionMutation.isPending}
-                      className={cn(ACTION_BUTTON_CLASS, "sm:h-full")}
-                    >
-                      Aprovar orçamento
-                    </Button>
-                    <div className="space-y-3">
-                      <Textarea
-                        value={rejectionReason}
-                        onChange={(event) =>
-                          setRejectionReason(event.target.value)
-                        }
-                        placeholder="Motivo da recusa (opcional)"
-                        aria-label="Motivo da recusa"
-                      />
+                  <>
+                    <div className="flex flex-col-reverse gap-2 border-t border-foreground/10 pt-5 sm:flex-row sm:justify-end">
                       <Button
-                        variant="outline"
-                        onClick={() =>
-                          decisionMutation.mutate({
-                            token,
-                            decision: "rejected",
-                            rejectionReason,
-                          })
-                        }
+                        variant="destructive"
+                        onClick={() => setRejectOpen(true)}
                         disabled={decisionMutation.isPending}
-                        className={cn(ACTION_BUTTON_CLASS, "w-full")}
+                        className={ACTION_BUTTON_CLASS}
                       >
                         Recusar orçamento
                       </Button>
+                      <Button
+                        onClick={() =>
+                          decisionMutation.mutate({
+                            token,
+                            decision: "approved",
+                          })
+                        }
+                        disabled={decisionMutation.isPending}
+                        className={cn(ACTION_BUTTON_CLASS, "sm:min-w-52")}
+                      >
+                        Aprovar orçamento
+                      </Button>
                     </div>
-                  </div>
+
+                    <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Recusar este orçamento?</DialogTitle>
+                          <DialogDescription>
+                            A recusa encerra esta versão do orçamento e este
+                            link deixa de funcionar. Não se preocupe: o
+                            laboratório será notificado e pode enviar uma nova
+                            versão para aprovação.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Textarea
+                          value={rejectionReason}
+                          onChange={(event) =>
+                            setRejectionReason(event.target.value)
+                          }
+                          placeholder="Motivo da recusa (opcional)"
+                          aria-label="Motivo da recusa"
+                        />
+                        <DialogFooter>
+                          <DialogClose render={<Button variant="outline" />}>
+                            Voltar
+                          </DialogClose>
+                          <Button
+                            variant="destructive"
+                            onClick={() =>
+                              decisionMutation.mutate({
+                                token,
+                                decision: "rejected",
+                                rejectionReason,
+                              })
+                            }
+                            disabled={decisionMutation.isPending}
+                          >
+                            {decisionMutation.isPending
+                              ? "Enviando..."
+                              : "Confirmar recusa"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </>
                 ) : null}
 
                 {decisionError ? (

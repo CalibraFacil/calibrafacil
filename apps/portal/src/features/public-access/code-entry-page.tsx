@@ -112,9 +112,8 @@ export function CodeEntryPage() {
             </form>
 
             <p className="text-xs text-muted-foreground">
-              O código tem 8 caracteres e diferencia apenas letras e números —
-              espaços e hífens são ignorados. Ele deixa de funcionar quando o
-              orçamento é respondido ou expira.
+              O código tem 8 letras e números. Espaços e hífens são ignorados.
+              Ele deixa de funcionar quando o orçamento é respondido ou expira.
             </p>
           </div>
         </Panel>

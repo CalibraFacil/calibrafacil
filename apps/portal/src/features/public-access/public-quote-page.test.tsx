@@ -121,7 +121,9 @@ describe("PublicQuotePage (REQ-QPUB-042/043/044/045)", () => {
       await screen.findByRole("button", { name: "Aprovar orçamento" }),
     );
 
-    expect(await screen.findByText("Orçamento aprovado")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Orçamento aprovado" }),
+    ).toBeTruthy();
     // exactly one GET + one POST — no post-decision refetch (the token is
     // revoked; a refetch would 410 and blank the page)
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -129,7 +131,7 @@ describe("PublicQuotePage (REQ-QPUB-042/043/044/045)", () => {
     expect(String(postCall?.[0])).toContain(`/${TOKEN}/approve-quote`);
   });
 
-  it("REQ-QPUB-043: rejecting shows the terminal rejection state from local data", async () => {
+  it("REQ-QPUB-043: rejecting asks for confirmation, then shows the terminal rejection state from local data", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(orderPayload()))
@@ -137,13 +139,42 @@ describe("PublicQuotePage (REQ-QPUB-042/043/044/045)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    fireEvent.change(await screen.findByLabelText("Motivo da recusa"), {
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Recusar orçamento" }),
+    );
+
+    // Confirmation dialog: nothing is sent until the customer confirms.
+    expect(await screen.findByText("Recusar este orçamento?")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Motivo da recusa"), {
       target: { value: "Valor acima do esperado" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Recusar orçamento" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar recusa" }));
 
-    expect(await screen.findByText("Orçamento recusado")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Orçamento recusado" }),
+    ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("the rejection dialog can be dismissed without sending anything", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(orderPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Recusar orçamento" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Voltar" }));
+
+    expect(screen.queryByText("Recusar este orçamento?")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Aprovar orçamento" }),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("REQ-QPUB-044: a 410 renders 'Orçamento já respondido' without any pricing", async () => {
