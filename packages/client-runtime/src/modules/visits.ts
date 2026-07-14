@@ -1,8 +1,10 @@
 import type {
+  VisitAcceptRescheduleRequestInput,
   VisitAddJobInput,
   VisitAssignInput,
   VisitCancelInput,
   VisitConfirmInput,
+  VisitDeclineRescheduleRequestInput,
   VisitRescheduleInput,
   VisitsApi,
   VisitsListInput,
@@ -22,6 +24,7 @@ export function createVisitsApi(rawCloudClient: any): VisitsApi {
             dateFrom: input.dateFrom || undefined,
             dateTo: input.dateTo || undefined,
             mine: input.mine ? "true" : undefined,
+            rescheduleRequested: input.rescheduleRequested ? "true" : undefined,
           },
         }),
         "Falha ao carregar visitas",
@@ -112,6 +115,36 @@ export function createVisitsApi(rawCloudClient: any): VisitsApi {
           param: { id: String(id), jobId: String(jobId) },
         }),
         "Erro ao remover instrumento da visita",
+      );
+    },
+    async acceptRescheduleRequest<TResponse = unknown>(
+      id: string | number,
+      requestId: string | number,
+      input: VisitAcceptRescheduleRequestInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.visits[":id"]["reschedule-requests"][
+          ":requestId"
+        ].accept.$post({
+          param: { id: String(id), requestId: String(requestId) },
+          json: input,
+        }),
+        "Erro ao aceitar o reagendamento",
+      );
+    },
+    async declineRescheduleRequest<TResponse = unknown>(
+      id: string | number,
+      requestId: string | number,
+      input: VisitDeclineRescheduleRequestInput = {},
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.visits[":id"]["reschedule-requests"][
+          ":requestId"
+        ].decline.$post({
+          param: { id: String(id), requestId: String(requestId) },
+          json: input,
+        }),
+        "Erro ao recusar o reagendamento",
       );
     },
   };

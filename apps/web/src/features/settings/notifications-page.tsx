@@ -42,6 +42,8 @@ type NotificationType =
   | 'VISIT_RESCHEDULED'
   | 'VISIT_CANCELLED'
   | 'VISIT_REMINDER'
+  | 'VISIT_CUSTOMER_CONFIRMED'
+  | 'VISIT_RESCHEDULE_REQUESTED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -156,6 +158,20 @@ const notificationSettings: NotificationSetting[] = [
     id: 'VISIT_REMINDER',
     title: 'Lembrete de visita no local',
     description: 'Lembrete antes de uma visita de calibração in loco agendada',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_CUSTOMER_CONFIRMED',
+    title: 'Cliente confirmou presença',
+    description:
+      'Quando o cliente confirma pelo portal que receberá a visita in loco',
+    category: 'operational',
+  },
+  {
+    id: 'VISIT_RESCHEDULE_REQUESTED',
+    title: 'Cliente solicitou reagendamento',
+    description:
+      'Quando o cliente pede pelo portal para mudar a data de uma visita',
     category: 'operational',
   },
   {
@@ -302,6 +318,8 @@ const defaultPreferences: NotificationPreferencesMap = {
   CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
+  VISIT_CUSTOMER_CONFIRMED: { inApp: true, email: false },
+  VISIT_RESCHEDULE_REQUESTED: { inApp: true, email: true },
 }
 
 export function NotificationsSettingsPage() {

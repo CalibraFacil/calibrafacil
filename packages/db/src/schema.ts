@@ -6123,6 +6123,18 @@ export const calibrationVisit = pgTable(
     }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: text("cancel_reason"),
+    // Customer acknowledgement from the portal ("estaremos prontos para
+    // receber o técnico"). An annotation, not a status transition — the lab
+    // lifecycle above stays the single state machine, and confirmedBy/At keep
+    // their lab-actor meaning. Both reset to NULL whenever scheduledAt moves
+    // (a rescheduled visit must be re-confirmed).
+    customerConfirmedBy: text("customer_confirmed_by").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    customerConfirmedAt: timestamp("customer_confirmed_at", {
+      withTimezone: true,
+    }),
   },
   (table) => [
     index("calibration_visit_org_idx").on(table.organizationId),
@@ -6131,6 +6143,106 @@ export const calibrationVisit = pgTable(
     index("calibration_visit_technician_idx").on(table.technicianId),
     index("calibration_visit_status_idx").on(table.status),
     index("calibration_visit_scheduled_idx").on(table.scheduledAt),
+  ],
+);
+
+// =============================================================================
+// VISIT RESCHEDULE REQUEST (portal customer → lab)
+// =============================================================================
+
+// A customer-initiated "this date doesn't work" request raised from the
+// portal. First-class record (like calibrationRequest), NOT a mutation of the
+// visit: the visit only moves when the lab accepts and reschedules. At most
+// one PENDING request per visit (partial unique index). A lab-side reschedule
+// while a request is pending marks it SUPERSEDED.
+export type VisitRescheduleRequestStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "DECLINED"
+  | "SUPERSEDED";
+
+export type VisitReschedulePreferredPeriod = "MORNING" | "AFTERNOON" | "ANY";
+
+export type VisitReschedulePreferredWindow = {
+  /** Preferred date, ISO yyyy-mm-dd. */
+  date: string;
+  period: VisitReschedulePreferredPeriod;
+  note?: string;
+};
+
+export const visitRescheduleRequest = pgTable(
+  "visit_reschedule_request",
+  {
+    id: serial("id").primaryKey(),
+    visitId: integer("visit_id")
+      .notNull()
+      .references(() => calibrationVisit.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    reason: text("reason"),
+    preferredWindows: jsonb("preferred_windows")
+      .$type<VisitReschedulePreferredWindow[]>()
+      .default([])
+      .notNull(),
+    status: text("status")
+      .$type<VisitRescheduleRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    resolvedBy: text("resolved_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("visit_reschedule_request_visit_idx").on(table.visitId),
+    index("visit_reschedule_request_customer_idx").on(table.customerId),
+    index("visit_reschedule_request_org_pending_idx")
+      .on(table.organizationId, table.status)
+      .where(sql`${table.status} = 'PENDING'`),
+    uniqueIndex("visit_reschedule_request_pending_uidx")
+      .on(table.visitId)
+      .where(sql`${table.status} = 'PENDING'`),
+  ],
+);
+
+// Append-only audit trail for customer-facing visit actions (portal confirm,
+// reschedule request lifecycle). Same pattern as calibrationRequestAuditLog:
+// soft reference on purpose — NO FK — so rows survive deletion of the visit.
+export const visitAuditLog = pgTable(
+  "visit_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    visitId: integer("visit_id").notNull(),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("visit_audit_log_visit_id_idx").on(table.visitId),
+    index("visit_audit_log_performed_at_idx").on(table.performedAt),
   ],
 );
 
@@ -6477,6 +6589,39 @@ export const calibrationRequestAuditLogRelations = relations(
     }),
   }),
 );
+
+export const visitRescheduleRequestRelations = relations(
+  visitRescheduleRequest,
+  ({ one }) => ({
+    visit: one(calibrationVisit, {
+      fields: [visitRescheduleRequest.visitId],
+      references: [calibrationVisit.id],
+    }),
+    customerRecord: one(customer, {
+      fields: [visitRescheduleRequest.customerId],
+      references: [customer.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [visitRescheduleRequest.requestedBy],
+      references: [user.id],
+    }),
+    resolvedByUser: one(user, {
+      fields: [visitRescheduleRequest.resolvedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const visitAuditLogRelations = relations(visitAuditLog, ({ one }) => ({
+  visit: one(calibrationVisit, {
+    fields: [visitAuditLog.visitId],
+    references: [calibrationVisit.id],
+  }),
+  performedByUser: one(user, {
+    fields: [visitAuditLog.performedBy],
+    references: [user.id],
+  }),
+}));
 
 // =============================================================================
 // ENVIRONMENTAL LIMITS - ISO 17025:2017 Clause 7.1.2
@@ -7301,7 +7446,10 @@ export type NotificationType =
   | "VISIT_CONFIRMED" // On-site visit confirmed (date + technician) for the customer
   | "VISIT_RESCHEDULED" // On-site visit date changed
   | "VISIT_CANCELLED" // On-site visit cancelled
-  | "VISIT_REMINDER"; // On-site visit coming up soon (scheduled reminder)
+  | "VISIT_REMINDER" // On-site visit coming up soon (scheduled reminder)
+  | "VISIT_CUSTOMER_CONFIRMED" // Lab-bound (#739): portal customer confirmed attendance for a visit
+  | "VISIT_RESCHEDULE_REQUESTED" // Lab-bound (#739): portal customer asked to reschedule a visit
+  | "VISIT_RESCHEDULE_DECLINED"; // Customer-bound (#739): lab declined the customer's reschedule request
 
 /**
  * Notification priority levels

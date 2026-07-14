@@ -1,5 +1,5 @@
 /**
- * REQ-VISITEMAIL-001: VisitNotificationEmail exported with 5 variants.
+ * REQ-VISITEMAIL-001: VisitNotificationEmail exported with 6 variants.
  * REQ-VISITEMAIL-002: rendered HTML contains scheduled date, customer name,
  *   and (when provided) técnico name + address.
  * REQ-VISITEMAIL-003: renders lab white-label brand name + CTA actionUrl.
@@ -24,7 +24,13 @@ const BASE_PROPS = {
 } as const;
 
 async function renderVariant(
-  variant: "scheduled" | "confirmed" | "rescheduled" | "cancelled" | "reminder",
+  variant:
+    | "scheduled"
+    | "confirmed"
+    | "rescheduled"
+    | "reschedule_declined"
+    | "cancelled"
+    | "reminder",
   overrides: Record<string, unknown> = {},
 ): Promise<string> {
   return render(
@@ -36,7 +42,7 @@ async function renderVariant(
   );
 }
 
-describe("REQ-VISITEMAIL-001: VisitNotificationEmail is exported with all 5 variants", () => {
+describe("REQ-VISITEMAIL-001: VisitNotificationEmail is exported with all 6 variants", () => {
   it("module exports VisitNotificationEmail", () => {
     expect(typeof VisitNotificationEmail).toBe("function");
   });
@@ -53,6 +59,11 @@ describe("REQ-VISITEMAIL-001: VisitNotificationEmail is exported with all 5 vari
 
   it("renders without throwing for variant: rescheduled", async () => {
     const html = await renderVariant("rescheduled");
+    expect(html.length).toBeGreaterThan(0);
+  });
+
+  it("renders without throwing for variant: reschedule_declined", async () => {
+    const html = await renderVariant("reschedule_declined");
     expect(html.length).toBeGreaterThan(0);
   });
 
@@ -107,7 +118,9 @@ describe("REQ-VISITEMAIL-002: rendered HTML contains required fields per variant
   });
 
   it("omitting technicianName renders without error and field absent", async () => {
-    const html = await renderVariant("confirmed", { technicianName: undefined });
+    const html = await renderVariant("confirmed", {
+      technicianName: undefined,
+    });
     expect(html).toContain("25/06/2026");
     expect(html).not.toContain("João Técnico");
   });
@@ -123,6 +136,21 @@ describe("REQ-VISITEMAIL-002: rendered HTML contains required fields per variant
       reason: "Indisponibilidade do laboratório",
     });
     expect(html).toContain("Indisponibilidade do laboratório");
+  });
+
+  it("reschedule_declined: contains kept-date message, scheduledDate and reason", async () => {
+    const html = await renderVariant("reschedule_declined", {
+      reason: "Sem agenda disponível no mês",
+    });
+    expect(html).toContain("25/06/2026");
+    expect(html).toContain("ACME Indústria Ltda");
+    expect(html).toContain("data original está mantida");
+    expect(html).toContain("Sem agenda disponível no mês");
+  });
+
+  it("reminder: contains the confirm/reschedule portal call-to-action line (#739)", async () => {
+    const html = await renderVariant("reminder");
+    expect(html).toContain("solicitar o reagendamento");
   });
 });
 

@@ -5,7 +5,11 @@ import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
-import { visitJobsRouter, visitsRouter } from "../routes/visits";
+import {
+  visitJobsRouter,
+  visitRescheduleRequestsRouter,
+  visitsRouter,
+} from "../routes/visits";
 import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { proficiencyTestsRouter } from "../routes/proficiency-tests";
@@ -114,6 +118,7 @@ export function mountApiRoutes(
       .route("/api/calibration-requests", calibrationRequestsRouter)
       .route("/api/visits", visitsRouter)
       .route("/api/visits", visitJobsRouter)
+      .route("/api/visits", visitRescheduleRequestsRouter)
       .route("/api/verify", verifyRouter)
       .route("/api/magic-link", magicLinkRouter)
       .route("/api/dashboard", dashboardRouter)

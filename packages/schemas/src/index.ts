@@ -767,7 +767,59 @@ export const ListVisitsQuerySchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   mine: z.coerce.boolean().optional(),
+  rescheduleRequested: z.coerce.boolean().optional(),
 });
+
+// #739: portal two-way visit scheduling ------------------------------------
+
+export const VisitReschedulePreferredPeriodSchema = z.enum([
+  "MORNING",
+  "AFTERNOON",
+  "ANY",
+]);
+
+export const VisitReschedulePreferredWindowSchema = z.object({
+  date: z
+    .string()
+    .refine(isValidDateString, { message: "Data preferida invalida" }),
+  period: VisitReschedulePreferredPeriodSchema.default("ANY"),
+  note: z.string().trim().max(200).optional(),
+});
+
+/** Portal customer asks the lab to move a visit (does not move the visit). */
+export const PortalVisitRescheduleRequestSchema = z.object({
+  reason: z.string().trim().max(1000).optional().nullable(),
+  preferredWindows: z
+    .array(VisitReschedulePreferredWindowSchema)
+    .max(3, "Informe no maximo 3 janelas preferidas")
+    .default([]),
+});
+export type PortalVisitRescheduleRequestInput = z.infer<
+  typeof PortalVisitRescheduleRequestSchema
+>;
+
+/** Lab accepts a reschedule request: the new date the visit moves to. */
+export const AcceptVisitRescheduleRequestSchema = z.object({
+  scheduledAt: z
+    .string()
+    .refine(isValidDateString, { message: "Data da visita invalida" }),
+  scheduledEndAt: z
+    .string()
+    .refine(isValidDateString, { message: "Data da visita invalida" })
+    .optional()
+    .nullable(),
+  resolutionNote: z.string().trim().max(1000).optional().nullable(),
+});
+export type AcceptVisitRescheduleRequestInput = z.infer<
+  typeof AcceptVisitRescheduleRequestSchema
+>;
+
+export const DeclineVisitRescheduleRequestSchema = z.object({
+  resolutionNote: z.string().trim().max(1000).optional().nullable(),
+});
+export type DeclineVisitRescheduleRequestInput = z.infer<
+  typeof DeclineVisitRescheduleRequestSchema
+>;
 
 /** REQ-VISITJOB-011: Add a calibration job (instrument) to an on-site visit. */
 export const AddVisitJobSchema = z.object({
@@ -2171,6 +2223,9 @@ export const NotificationTypeSchema = z.enum([
   "VISIT_RESCHEDULED", // On-site visit date changed
   "VISIT_CANCELLED", // On-site visit cancelled
   "VISIT_REMINDER", // On-site visit coming up soon
+  "VISIT_CUSTOMER_CONFIRMED", // Lab-bound (#739): portal customer confirmed attendance
+  "VISIT_RESCHEDULE_REQUESTED", // Lab-bound (#739): portal customer asked to reschedule
+  "VISIT_RESCHEDULE_DECLINED", // Customer-bound (#739): lab declined the reschedule request
 ]);
 
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
@@ -2284,6 +2339,7 @@ export const PORTAL_NOTIFICATION_TYPES = [
   "VISIT_RESCHEDULED",
   "VISIT_CANCELLED",
   "VISIT_REMINDER",
+  "VISIT_RESCHEDULE_DECLINED",
   "ASSET_FOUND_OUT_OF_TOLERANCE",
 ] as const;
 

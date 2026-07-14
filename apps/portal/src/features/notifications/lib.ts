@@ -34,6 +34,7 @@ export const PORTAL_NOTIFICATION_TYPES = [
   "VISIT_RESCHEDULED",
   "VISIT_CANCELLED",
   "VISIT_REMINDER",
+  "VISIT_RESCHEDULE_DECLINED",
   "ASSET_FOUND_OUT_OF_TOLERANCE",
 ] as const;
 
@@ -115,6 +116,13 @@ const TYPE_META: Record<PortalNotificationType, NotificationTypeMeta> = {
     label: "Lembrete de visita",
     description: "Uma visita no local está próxima.",
   },
+  VISIT_RESCHEDULE_DECLINED: {
+    icon: CancelCircleIcon,
+    tone: "warning",
+    label: "Reagendamento não atendido",
+    description:
+      "O laboratório não pôde atender sua solicitação de reagendamento.",
+  },
   ASSET_FOUND_OUT_OF_TOLERANCE: {
     icon: Alert02Icon,
     tone: "critical",
@@ -168,6 +176,7 @@ export const PREFERENCE_GROUPS: Array<{
     types: [
       "VISIT_CONFIRMED",
       "VISIT_RESCHEDULED",
+      "VISIT_RESCHEDULE_DECLINED",
       "VISIT_CANCELLED",
       "VISIT_REMINDER",
     ],

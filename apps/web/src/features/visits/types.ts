@@ -30,6 +30,8 @@ export type VisitListItem = {
   sourceRequestId: number | null
   createdAt: string
   assetCount: number
+  customerConfirmedAt: string | null
+  rescheduleRequested: boolean
 }
 
 export type VisitsListData = {
@@ -50,6 +52,21 @@ export type VisitDetailJob = {
   assetTag: string
 }
 
+export type VisitReschedulePreferredWindow = {
+  /** ISO yyyy-mm-dd */
+  date: string
+  period: 'MORNING' | 'AFTERNOON' | 'ANY'
+  note?: string
+}
+
+export type VisitPendingRescheduleRequest = {
+  id: number
+  reason: string | null
+  preferredWindows: Array<VisitReschedulePreferredWindow>
+  createdAt: string
+  requestedByName: string | null
+}
+
 export type VisitDetail = {
   id: number
   status: VisitStatus
@@ -66,7 +83,18 @@ export type VisitDetail = {
   confirmedAt: string | null
   cancelledAt: string | null
   cancelReason: string | null
+  customerConfirmedAt: string | null
   jobs: Array<VisitDetailJob>
+  pendingRescheduleRequest: VisitPendingRescheduleRequest | null
+}
+
+export const PREFERRED_PERIOD_LABELS: Record<
+  VisitReschedulePreferredWindow['period'],
+  string
+> = {
+  MORNING: 'Manhã',
+  AFTERNOON: 'Tarde',
+  ANY: 'Qualquer horário',
 }
 
 export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {

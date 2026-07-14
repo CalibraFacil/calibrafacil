@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { visitJobsRouter, visitsRouter } from "./visits";
+import {
+  visitJobsRouter,
+  visitRescheduleRequestsRouter,
+  visitsRouter,
+} from "./visits";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -10,6 +14,8 @@ import {
   jobAuditLog,
   organization,
   service,
+  visitAuditLog,
+  visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -660,5 +666,320 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
       .from(jobAuditLog)
       .where(eq(jobAuditLog.jobId, jobDbId));
     expect(auditRows).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #739 — customer reschedule requests, lab side: accept / decline endpoints,
+// the SUPERSEDED-on-lab-reschedule invariant, and the re-confirm reset when
+// the visit date moves. Same real-DB + real-RBAC tier as above.
+// ---------------------------------------------------------------------------
+
+/** Seed a customer reschedule request (defaults to PENDING). */
+async function seedRescheduleRequest(params: {
+  visitId: number;
+  organizationId: string;
+  customerId: number;
+  requestedBy: string;
+  status?: "PENDING" | "ACCEPTED" | "DECLINED" | "SUPERSEDED";
+}): Promise<number> {
+  const [row] = await db
+    .insert(visitRescheduleRequest)
+    .values({
+      visitId: params.visitId,
+      organizationId: params.organizationId,
+      customerId: params.customerId,
+      requestedBy: params.requestedBy,
+      status: params.status ?? "PENDING",
+      preferredWindows: [{ date: "2026-08-10", period: "MORNING" }],
+      reason: "Planta parada",
+    })
+    .returning({ id: visitRescheduleRequest.id });
+  if (!row) throw new Error("seedRescheduleRequest: insert failed");
+  return row.id;
+}
+
+describe("visitRescheduleRequestsRouter (#739) — real DB + real RBAC middleware", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function seedVisitWithRequest(params?: {
+    customerConfirmed?: boolean;
+  }) {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const custId = await seedCustomer({
+      labOrgId: org.orgId,
+      clientOrgId: "client-a1",
+      name: "Customer Alpha",
+    });
+    const scheduledAt = new Date("2026-08-01T12:00:00.000Z");
+    const visitId = await seedVisit({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: custId,
+      createdBy: org.userId,
+      status: "CONFIRMED",
+      scheduledAt,
+    });
+    if (params?.customerConfirmed) {
+      await db
+        .update(calibrationVisit)
+        .set({
+          customerConfirmedBy: org.userId,
+          customerConfirmedAt: new Date("2026-07-20T12:00:00.000Z"),
+        })
+        .where(eq(calibrationVisit.id, visitId));
+    }
+    const requestId = await seedRescheduleRequest({
+      visitId,
+      organizationId: org.orgId,
+      customerId: custId,
+      requestedBy: org.userId,
+    });
+    return { org, custId, visitId, requestId, scheduledAt };
+  }
+
+  it("REQ-VRR-001: accept moves the visit, marks the request ACCEPTED and resets the customer confirmation", async () => {
+    const fx = await seedVisitWithRequest({ customerConfirmed: true });
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+    const res = await visitRescheduleRequestsRouter.request(
+      `/${fx.visitId}/reschedule-requests/${fx.requestId}/accept`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          scheduledAt: "2026-08-10T12:00:00.000Z",
+          resolutionNote: "Combinado pela manhã",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+
+    const [visit] = await db
+      .select()
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, fx.visitId));
+    expect(visit?.scheduledAt?.toISOString()).toBe("2026-08-10T12:00:00.000Z");
+    // The customer confirmed the OLD date — a moved visit needs re-confirming.
+    expect(visit?.customerConfirmedAt).toBeNull();
+    expect(visit?.customerConfirmedBy).toBeNull();
+
+    const [request] = await db
+      .select()
+      .from(visitRescheduleRequest)
+      .where(eq(visitRescheduleRequest.id, fx.requestId));
+    expect(request?.status).toBe("ACCEPTED");
+    expect(request?.resolvedBy).toBe(fx.org.userId);
+    expect(request?.resolutionNote).toBe("Combinado pela manhã");
+
+    const auditRows = await db
+      .select()
+      .from(visitAuditLog)
+      .where(eq(visitAuditLog.visitId, fx.visitId));
+    expect(auditRows.map((row) => row.action)).toContain(
+      "reschedule_request_accept",
+    );
+  });
+
+  it("REQ-VRR-002: decline keeps the visit date and marks the request DECLINED with the note", async () => {
+    const fx = await seedVisitWithRequest();
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+    const res = await visitRescheduleRequestsRouter.request(
+      `/${fx.visitId}/reschedule-requests/${fx.requestId}/decline`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ resolutionNote: "Sem agenda no mês" }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+
+    const [visit] = await db
+      .select()
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, fx.visitId));
+    expect(visit?.scheduledAt?.toISOString()).toBe(
+      fx.scheduledAt.toISOString(),
+    );
+
+    const [request] = await db
+      .select()
+      .from(visitRescheduleRequest)
+      .where(eq(visitRescheduleRequest.id, fx.requestId));
+    expect(request?.status).toBe("DECLINED");
+    expect(request?.resolutionNote).toBe("Sem agenda no mês");
+
+    const auditRows = await db
+      .select()
+      .from(visitAuditLog)
+      .where(eq(visitAuditLog.visitId, fx.visitId));
+    expect(auditRows.map((row) => row.action)).toContain(
+      "reschedule_request_decline",
+    );
+  });
+
+  it("REQ-VRR-003: resolving an already-resolved request → 409", async () => {
+    const fx = await seedVisitWithRequest();
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+    const decline = () =>
+      visitRescheduleRequestsRouter.request(
+        `/${fx.visitId}/reschedule-requests/${fx.requestId}/decline`,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({}),
+        },
+      );
+    expect((await decline()).status).toBe(200);
+    expect((await decline()).status).toBe(409);
+  });
+
+  it("REQ-VRR-004 [HIGH RISK]: cross-tenant accept → 404, nothing written", async () => {
+    const fx = await seedVisitWithRequest();
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+
+    loginAs({ userId: orgB.userId, organizationId: orgB.orgId });
+    const res = await visitRescheduleRequestsRouter.request(
+      `/${fx.visitId}/reschedule-requests/${fx.requestId}/accept`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ scheduledAt: "2026-08-10T12:00:00.000Z" }),
+      },
+    );
+    expect(res.status).toBe(404);
+
+    const [request] = await db
+      .select()
+      .from(visitRescheduleRequest)
+      .where(eq(visitRescheduleRequest.id, fx.requestId));
+    expect(request?.status).toBe("PENDING");
+  });
+
+  it("REQ-VRR-005: RBAC — member (no request:update) cannot accept → 403", async () => {
+    // "member" role has request:["read"] only — no "update".
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const custId = await seedCustomer({
+      labOrgId: org.orgId,
+      clientOrgId: "client-a1",
+    });
+    const visitId = await seedVisit({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: custId,
+      createdBy: org.userId,
+      status: "CONFIRMED",
+      scheduledAt: new Date("2026-08-01T12:00:00.000Z"),
+    });
+    const requestId = await seedRescheduleRequest({
+      visitId,
+      organizationId: org.orgId,
+      customerId: custId,
+      requestedBy: org.userId,
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await visitRescheduleRequestsRouter.request(
+      `/${visitId}/reschedule-requests/${requestId}/accept`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ scheduledAt: "2026-08-10T12:00:00.000Z" }),
+      },
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("REQ-VRR-010: lab PATCH reschedule supersedes the pending request and resets the customer confirmation", async () => {
+    const fx = await seedVisitWithRequest({ customerConfirmed: true });
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+    const res = await visitsRouter.request(`/${fx.visitId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ scheduledAt: "2026-08-15T12:00:00.000Z" }),
+    });
+
+    expect(res.status).toBe(200);
+
+    const [request] = await db
+      .select()
+      .from(visitRescheduleRequest)
+      .where(eq(visitRescheduleRequest.id, fx.requestId));
+    expect(request?.status).toBe("SUPERSEDED");
+    expect(request?.resolvedBy).toBe(fx.org.userId);
+
+    const [visit] = await db
+      .select()
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, fx.visitId));
+    expect(visit?.customerConfirmedAt).toBeNull();
+  });
+
+  it("REQ-VRR-011: lab PATCH without a date change keeps the pending request and the confirmation", async () => {
+    const fx = await seedVisitWithRequest({ customerConfirmed: true });
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+    const res = await visitsRouter.request(`/${fx.visitId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ notes: "levar escada" }),
+    });
+
+    expect(res.status).toBe(200);
+
+    const [request] = await db
+      .select()
+      .from(visitRescheduleRequest)
+      .where(eq(visitRescheduleRequest.id, fx.requestId));
+    expect(request?.status).toBe("PENDING");
+
+    const [visit] = await db
+      .select()
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, fx.visitId));
+    expect(visit?.customerConfirmedAt).not.toBeNull();
+  });
+
+  it("REQ-VRR-012: GET / flags rescheduleRequested and filters by it", async () => {
+    const fx = await seedVisitWithRequest();
+    // A second visit without any request.
+    const plainVisitId = await seedVisit({
+      organizationId: fx.org.orgId,
+      unitId: fx.org.unitId,
+      customerId: fx.custId,
+      createdBy: fx.org.userId,
+      status: "CONFIRMED",
+      scheduledAt: new Date("2026-09-01T12:00:00.000Z"),
+    });
+
+    loginAs({ userId: fx.org.userId, organizationId: fx.org.orgId });
+
+    const all = await visitsRouter.request("/", { headers: JSON_HEADERS });
+    expect(all.status).toBe(200);
+    const allBody = await all.json();
+    expect(allBody.data).toHaveLength(2);
+    const flagged = new Map(
+      allBody.data.map((v: { id: number; rescheduleRequested: boolean }) => [
+        v.id,
+        v.rescheduleRequested,
+      ]),
+    );
+    expect(flagged.get(fx.visitId)).toBe(true);
+    expect(flagged.get(plainVisitId)).toBe(false);
+
+    const filtered = await visitsRouter.request("/?rescheduleRequested=true", {
+      headers: JSON_HEADERS,
+    });
+    expect(filtered.status).toBe(200);
+    const filteredBody = await filtered.json();
+    expect(filteredBody.data).toHaveLength(1);
+    expect(filteredBody.data[0].id).toBe(fx.visitId);
   });
 });

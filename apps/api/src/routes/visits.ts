@@ -1,7 +1,17 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
-import { and, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -10,12 +20,16 @@ import {
   customer,
   jobAuditLog,
   user,
+  visitAuditLog,
+  visitRescheduleRequest,
 } from "@calibra-facil/db/schema";
 import {
+  AcceptVisitRescheduleRequestSchema,
   AddVisitJobSchema,
   AssignVisitTechnicianSchema,
   CancelVisitSchema,
   ConfirmVisitSchema,
+  DeclineVisitRescheduleRequestSchema,
   ListVisitsQuerySchema,
   RescheduleVisitSchema,
 } from "@calibra-facil/schemas";
@@ -27,6 +41,7 @@ import { buildUnitScopeCondition } from "../lib/units";
 import {
   notifyVisitCancelled,
   notifyVisitConfirmed,
+  notifyVisitRescheduleDeclined,
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
@@ -66,6 +81,43 @@ async function getScopedVisit(id: number, member: AuthVariables["member"]) {
   return visit ?? null;
 }
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * #739: reset of the customer's acknowledgement when the visit date moves —
+ * the customer confirmed a *specific* date, so a new date needs a new
+ * confirmation. Spread into the caller's `.set()`.
+ */
+const RESET_CUSTOMER_CONFIRMATION = {
+  customerConfirmedBy: null,
+  customerConfirmedAt: null,
+};
+
+/**
+ * #739: a lab-driven date change supersedes any PENDING customer reschedule
+ * request — in the caller's transaction, so a lab reschedule can never race a
+ * pending request into a stale state.
+ */
+async function supersedePendingRescheduleRequests(
+  tx: DbTransaction,
+  visitId: number,
+  actorUserId: string,
+) {
+  await tx
+    .update(visitRescheduleRequest)
+    .set({
+      status: "SUPERSEDED",
+      resolvedBy: actorUserId,
+      resolvedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(visitRescheduleRequest.visitId, visitId),
+        eq(visitRescheduleRequest.status, "PENDING"),
+      ),
+    );
+}
+
 export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
   // ===========================================================================
   // GET / — list visits (status / technician / date filters; `mine` for técnico)
@@ -77,8 +129,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const { page, limit, status, technicianId, dateFrom, dateTo, mine } =
-        c.req.valid("query");
+      const {
+        page,
+        limit,
+        status,
+        technicianId,
+        dateFrom,
+        dateTo,
+        mine,
+        rescheduleRequested,
+      } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
       const conditions = [
@@ -96,6 +156,21 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
       if (dateTo) {
         conditions.push(lte(calibrationVisit.scheduledAt, new Date(dateTo)));
+      }
+      if (rescheduleRequested) {
+        conditions.push(
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(visitRescheduleRequest)
+              .where(
+                and(
+                  eq(visitRescheduleRequest.visitId, calibrationVisit.id),
+                  eq(visitRescheduleRequest.status, "PENDING"),
+                ),
+              ),
+          ),
+        );
       }
       const where = and(...conditions);
 
@@ -116,6 +191,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           technicianName: technicianUser.name,
           sourceRequestId: calibrationVisit.sourceRequestId,
           createdAt: calibrationVisit.createdAt,
+          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
         })
         .from(calibrationVisit)
         .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
@@ -145,10 +221,28 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         jobCounts.map((row) => [row.visitId, row.total] as const),
       );
 
+      // #739: badge visits with a pending customer reschedule request.
+      const pendingReschedules =
+        visitIds.length > 0
+          ? await db
+              .select({ visitId: visitRescheduleRequest.visitId })
+              .from(visitRescheduleRequest)
+              .where(
+                and(
+                  inArray(visitRescheduleRequest.visitId, visitIds),
+                  eq(visitRescheduleRequest.status, "PENDING"),
+                ),
+              )
+          : [];
+      const pendingRescheduleVisitIds = new Set(
+        pendingReschedules.map((row) => row.visitId),
+      );
+
       return c.json({
         data: visits.map((visit) => ({
           ...visit,
           assetCount: assetCountByVisit.get(visit.id) ?? 0,
+          rescheduleRequested: pendingRescheduleVisitIds.has(visit.id),
         })),
         pagination: {
           page,
@@ -184,6 +278,7 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         confirmedAt: calibrationVisit.confirmedAt,
         cancelledAt: calibrationVisit.cancelledAt,
         cancelReason: calibrationVisit.cancelReason,
+        customerConfirmedAt: calibrationVisit.customerConfirmedAt,
       })
       .from(calibrationVisit)
       .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
@@ -215,7 +310,30 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       .where(eq(calibrationJob.visitId, id))
       .orderBy(calibrationJob.id);
 
-    return c.json({ ...visit, jobs });
+    // #739: pending customer reschedule request (feeds the detail banner).
+    const [pendingReschedule] = await db
+      .select({
+        id: visitRescheduleRequest.id,
+        reason: visitRescheduleRequest.reason,
+        preferredWindows: visitRescheduleRequest.preferredWindows,
+        createdAt: visitRescheduleRequest.createdAt,
+        requestedByName: user.name,
+      })
+      .from(visitRescheduleRequest)
+      .leftJoin(user, eq(visitRescheduleRequest.requestedBy, user.id))
+      .where(
+        and(
+          eq(visitRescheduleRequest.visitId, id),
+          eq(visitRescheduleRequest.status, "PENDING"),
+        ),
+      )
+      .limit(1);
+
+    return c.json({
+      ...visit,
+      jobs,
+      pendingRescheduleRequest: pendingReschedule ?? null,
+    });
   })
   // ===========================================================================
   // POST /:id/assign — assign / reassign the technician
@@ -285,17 +403,28 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [updated] = await db
-        .update(calibrationVisit)
-        .set({
-          status: "CONFIRMED",
-          scheduledAt,
-          technicianId,
-          confirmedBy: session.user.id,
-          confirmedAt: new Date(),
-        })
-        .where(eq(calibrationVisit.id, id))
-        .returning();
+      const confirmDateChanged =
+        scheduledAt.getTime() !== visit.scheduledAt?.getTime();
+
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationVisit)
+          .set({
+            status: "CONFIRMED",
+            scheduledAt,
+            technicianId,
+            confirmedBy: session.user.id,
+            confirmedAt: new Date(),
+            ...(confirmDateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
+          })
+          .where(eq(calibrationVisit.id, id))
+          .returning();
+
+        if (confirmDateChanged) {
+          await supersedePendingRescheduleRequests(tx, id, session.user.id);
+        }
+        return row;
+      });
 
       try {
         await notifyVisitConfirmed(id, session.user.id);
@@ -335,18 +464,26 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       const dateChanged =
         nextScheduledAt?.getTime() !== visit.scheduledAt?.getTime();
 
-      const [updated] = await db
-        .update(calibrationVisit)
-        .set({
-          scheduledAt: nextScheduledAt,
-          scheduledEndAt: input.scheduledEndAt
-            ? new Date(input.scheduledEndAt)
-            : visit.scheduledEndAt,
-          address: input.address ?? visit.address,
-          notes: input.notes ?? visit.notes,
-        })
-        .where(eq(calibrationVisit.id, id))
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationVisit)
+          .set({
+            scheduledAt: nextScheduledAt,
+            scheduledEndAt: input.scheduledEndAt
+              ? new Date(input.scheduledEndAt)
+              : visit.scheduledEndAt,
+            address: input.address ?? visit.address,
+            notes: input.notes ?? visit.notes,
+            ...(dateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
+          })
+          .where(eq(calibrationVisit.id, id))
+          .returning();
+
+        if (dateChanged) {
+          await supersedePendingRescheduleRequests(tx, id, session.user.id);
+        }
+        return row;
+      });
 
       if (dateChanged) {
         try {
@@ -580,5 +717,178 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       return c.json(updatedJob);
+    },
+  );
+
+/** Load a reschedule request that belongs to the given visit (any status). */
+async function getVisitRescheduleRequestById(
+  requestId: number,
+  visitId: number,
+) {
+  const [request] = await db
+    .select()
+    .from(visitRescheduleRequest)
+    .where(
+      and(
+        eq(visitRescheduleRequest.id, requestId),
+        eq(visitRescheduleRequest.visitId, visitId),
+      ),
+    )
+    .limit(1);
+  return request ?? null;
+}
+
+/**
+ * #739: lab resolution of customer reschedule requests. Mounted separately
+ * (like visitJobsRouter) to keep the main visitsRouter under Hono's type
+ * chain limits (TS7056).
+ */
+export const visitRescheduleRequestsRouter = new Hono<{
+  Variables: AuthVariables;
+}>()
+  // ===========================================================================
+  // POST /:id/reschedule-requests/:requestId/accept — move the visit to the
+  // agreed date and close the request. Fires the existing reschedule
+  // notification toward technician + customer.
+  // ===========================================================================
+  .post(
+    "/:id/reschedule-requests/:requestId/accept",
+    ...withLabPermission({ request: ["update"] }),
+    zValidator("json", AcceptVisitRescheduleRequestSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const requestId = parseInt(c.req.param("requestId"), 10);
+      if (isNaN(id) || isNaN(requestId)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+      const input = c.req.valid("json");
+
+      const visit = await getScopedVisit(id, member);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      if (VISIT_TERMINAL.has(visit.status)) {
+        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
+      }
+
+      const request = await getVisitRescheduleRequestById(requestId, id);
+      if (!request) return c.json({ error: "Solicitacao nao encontrada" }, 404);
+      if (request.status !== "PENDING") {
+        return c.json({ error: "Solicitacao ja resolvida" }, 409);
+      }
+
+      const nextScheduledAt = new Date(input.scheduledAt);
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationVisit)
+          .set({
+            scheduledAt: nextScheduledAt,
+            scheduledEndAt: input.scheduledEndAt
+              ? new Date(input.scheduledEndAt)
+              : null,
+            ...RESET_CUSTOMER_CONFIRMATION,
+          })
+          .where(eq(calibrationVisit.id, id))
+          .returning();
+
+        await tx
+          .update(visitRescheduleRequest)
+          .set({
+            status: "ACCEPTED",
+            resolvedBy: session.user.id,
+            resolvedAt: new Date(),
+            resolutionNote: input.resolutionNote ?? null,
+          })
+          .where(eq(visitRescheduleRequest.id, requestId));
+
+        await tx.insert(visitAuditLog).values({
+          visitId: id,
+          action: "reschedule_request_accept",
+          changes: {
+            rescheduleRequestId: requestId,
+            scheduledAt: { old: visit.scheduledAt, new: nextScheduledAt },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.resolutionNote ?? null,
+        });
+
+        return row;
+      });
+
+      try {
+        await notifyVisitRescheduled(id, session.user.id);
+      } catch (error) {
+        console.error(
+          "[Visits] Failed to notify reschedule acceptance:",
+          error,
+        );
+      }
+
+      return c.json(updated);
+    },
+  )
+  // ===========================================================================
+  // POST /:id/reschedule-requests/:requestId/decline — keep the visit as is;
+  // the reason goes back to the customer.
+  // ===========================================================================
+  .post(
+    "/:id/reschedule-requests/:requestId/decline",
+    ...withLabPermission({ request: ["update"] }),
+    zValidator("json", DeclineVisitRescheduleRequestSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const requestId = parseInt(c.req.param("requestId"), 10);
+      if (isNaN(id) || isNaN(requestId)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+      const input = c.req.valid("json");
+
+      const visit = await getScopedVisit(id, member);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+
+      const request = await getVisitRescheduleRequestById(requestId, id);
+      if (!request) return c.json({ error: "Solicitacao nao encontrada" }, 404);
+      if (request.status !== "PENDING") {
+        return c.json({ error: "Solicitacao ja resolvida" }, 409);
+      }
+
+      const [updated] = await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(visitRescheduleRequest)
+          .set({
+            status: "DECLINED",
+            resolvedBy: session.user.id,
+            resolvedAt: new Date(),
+            resolutionNote: input.resolutionNote ?? null,
+          })
+          .where(eq(visitRescheduleRequest.id, requestId))
+          .returning();
+
+        await tx.insert(visitAuditLog).values({
+          visitId: id,
+          action: "reschedule_request_decline",
+          changes: { rescheduleRequestId: requestId },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.resolutionNote ?? null,
+        });
+
+        return rows;
+      });
+
+      try {
+        await notifyVisitRescheduleDeclined(
+          id,
+          session.user.id,
+          input.resolutionNote ?? undefined,
+        );
+      } catch (error) {
+        console.error("[Visits] Failed to notify reschedule decline:", error);
+      }
+
+      return c.json(updated);
     },
   );

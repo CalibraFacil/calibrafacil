@@ -10,6 +10,7 @@ export function visitsListQueryOptions(input: {
   page: number
   status: VisitStatus | ''
   mine: boolean
+  rescheduleRequested?: boolean
 }) {
   return queryOptions({
     queryKey: [
@@ -18,6 +19,7 @@ export function visitsListQueryOptions(input: {
       input.page,
       input.status,
       input.mine,
+      Boolean(input.rescheduleRequested),
     ],
     queryFn: () =>
       calibraApi.visits.list<VisitsListData>({
@@ -25,6 +27,7 @@ export function visitsListQueryOptions(input: {
         limit: VISITS_LIST_LIMIT,
         status: input.status || undefined,
         mine: input.mine || undefined,
+        rescheduleRequested: input.rescheduleRequested || undefined,
       }),
   })
 }
@@ -55,12 +58,14 @@ export function useVisitsListData({
   page,
   status,
   mine,
+  rescheduleRequested,
 }: {
   activeOrganizationId: string | null
   enabled: boolean
   page: number
   status: VisitStatus | ''
   mine: boolean
+  rescheduleRequested?: boolean
 }) {
   return useQuery({
     ...visitsListQueryOptions({
@@ -68,6 +73,7 @@ export function useVisitsListData({
       page,
       status,
       mine,
+      rescheduleRequested,
     }),
     enabled: Boolean(activeOrganizationId) && enabled,
   })

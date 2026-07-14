@@ -666,6 +666,13 @@
       "when": 1783824119761,
       "tag": "0094_asset_public_id",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1783994485683,
+      "tag": "0095_visit_customer_confirm_reschedule",
+      "breakpoints": true
     }
   ]
 }

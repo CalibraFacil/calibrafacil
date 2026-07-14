@@ -13,6 +13,7 @@ import {
   calibrationRequest,
   calibrationRequestItem,
   calibrationVisit,
+  visitRescheduleRequest,
   organization,
   organizationCustomDomain,
   organizationSigningCertificate,
@@ -31,6 +32,7 @@ import {
   eq,
   and,
   asc,
+  desc,
   inArray,
   isNull,
   isNotNull,
@@ -404,7 +406,13 @@ function getCalibrationRequestEmailType(
 
 function getVisitEmailType(
   type: NotificationType,
-): "scheduled" | "confirmed" | "rescheduled" | "cancelled" | "reminder" {
+):
+  | "scheduled"
+  | "confirmed"
+  | "rescheduled"
+  | "reschedule_declined"
+  | "cancelled"
+  | "reminder" {
   switch (type) {
     case "VISIT_SCHEDULED":
       return "scheduled";
@@ -412,6 +420,8 @@ function getVisitEmailType(
       return "confirmed";
     case "VISIT_RESCHEDULED":
       return "rescheduled";
+    case "VISIT_RESCHEDULE_DECLINED":
+      return "reschedule_declined";
     case "VISIT_CANCELLED":
       return "cancelled";
     case "VISIT_REMINDER":
@@ -834,6 +844,7 @@ function renderEmailTemplate(
       "VISIT_SCHEDULED",
       "VISIT_CONFIRMED",
       "VISIT_RESCHEDULED",
+      "VISIT_RESCHEDULE_DECLINED",
       "VISIT_CANCELLED",
       "VISIT_REMINDER",
     ].includes(type)
@@ -1611,6 +1622,155 @@ export async function notifyVisitReminder(visitId: number): Promise<void> {
       },
     });
   }
+}
+
+const VISIT_LAB_STAFF_ROLES = ["owner", "admin", "operator"];
+
+/**
+ * #739: notify the lab (unit staff) that the portal customer confirmed
+ * attendance for a visit — schedulers chase only the unconfirmed ones.
+ */
+export async function notifyVisitCustomerConfirmed(
+  visitId: number,
+  actorUserId: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const visitDate = formatVisitDate(visit.scheduledAt);
+  const recipients = await getRecipientsByRole(
+    visit.organizationId,
+    VISIT_LAB_STAFF_ROLES,
+  );
+
+  for (const recipientId of recipients) {
+    if (recipientId === actorUserId) continue;
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId: visit.organizationId,
+      type: "VISIT_CUSTOMER_CONFIRMED",
+      priority: "MEDIUM",
+      title: "Cliente confirmou presença na visita",
+      message: `${visit.customerName} confirmou que estará pronto para receber o técnico em ${visitDate}.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: `/dashboard/visits/${visitId}`,
+    });
+  }
+}
+
+/**
+ * #739: notify the lab (unit staff) that the portal customer asked to
+ * reschedule a visit — actionable: someone must accept or decline.
+ */
+export async function notifyVisitRescheduleRequested(
+  visitId: number,
+  actorUserId: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const visitDate = formatVisitDate(visit.scheduledAt);
+  const recipients = await getRecipientsByRole(
+    visit.organizationId,
+    VISIT_LAB_STAFF_ROLES,
+  );
+
+  for (const recipientId of recipients) {
+    if (recipientId === actorUserId) continue;
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId: visit.organizationId,
+      type: "VISIT_RESCHEDULE_REQUESTED",
+      priority: "HIGH",
+      title: "Cliente solicitou reagendamento de visita",
+      message: `${visit.customerName} solicitou o reagendamento da visita de ${visitDate}. Aceite ou recuse a solicitação.`,
+      relatedEntity: { entityType: "visit", entityId: visitId },
+      actionUrl: `/dashboard/visits/${visitId}`,
+    });
+  }
+}
+
+/**
+ * Resolve the portal (CLIENT) organization for a customer: the customer's own
+ * linked org, or its group's org in multi-unit (group) mode.
+ */
+async function getPortalOrgForCustomer(
+  customerId: number,
+): Promise<string | null> {
+  const [row] = await db
+    .select({
+      authOrganizationId: customer.authOrganizationId,
+      groupAuthOrganizationId: customerGroup.authOrganizationId,
+    })
+    .from(customer)
+    .leftJoin(customerGroup, eq(customer.groupId, customerGroup.id))
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  return row?.authOrganizationId ?? row?.groupAuthOrganizationId ?? null;
+}
+
+/**
+ * #739: notify the requesting portal user that the lab declined their
+ * reschedule request (the visit keeps its date). The recipient is whoever
+ * opened the most recently declined request, not the original request
+ * submitter — in group mode those can differ.
+ */
+export async function notifyVisitRescheduleDeclined(
+  visitId: number,
+  actorUserId: string,
+  reason?: string,
+): Promise<void> {
+  const visit = await getVisitDetails(visitId);
+  if (!visit) return;
+
+  const [declined] = await db
+    .select({
+      requestedBy: visitRescheduleRequest.requestedBy,
+      customerId: visitRescheduleRequest.customerId,
+    })
+    .from(visitRescheduleRequest)
+    .where(
+      and(
+        eq(visitRescheduleRequest.visitId, visitId),
+        eq(visitRescheduleRequest.status, "DECLINED"),
+      ),
+    )
+    .orderBy(
+      desc(visitRescheduleRequest.resolvedAt),
+      desc(visitRescheduleRequest.id),
+    )
+    .limit(1);
+  if (!declined || declined.requestedBy === actorUserId) return;
+
+  const portalOrgId = await getPortalOrgForCustomer(declined.customerId);
+  if (!portalOrgId) return;
+
+  const visitDate = formatVisitDate(visit.scheduledAt);
+
+  await sendNotification({
+    recipientUserId: declined.requestedBy,
+    organizationId: portalOrgId,
+    type: "VISIT_RESCHEDULE_DECLINED",
+    priority: "HIGH",
+    title: "Reagendamento não foi possível",
+    message: reason
+      ? `${visit.labName} não pôde reagendar a visita de ${visitDate}: ${reason}`
+      : `${visit.labName} não pôde reagendar a visita de ${visitDate}. A data original está mantida.`,
+    relatedEntity: { entityType: "visit", entityId: visitId },
+    actionUrl: "/portal/calendar",
+    emailBrand: await getLabEmailBrand(visit.organizationId),
+    emailContext: {
+      type: "visit",
+      data: {
+        customerName: visit.customerName,
+        scheduledDate: visitDate,
+        technicianName: visit.technicianName ?? undefined,
+        addressText: formatVisitAddressText(visit.address),
+        labName: visit.labName,
+        reason,
+      },
+    },
+  });
 }
 
 // =============================================================================

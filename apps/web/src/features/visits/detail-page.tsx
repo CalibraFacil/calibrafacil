@@ -48,10 +48,12 @@ import {
 import { useVisitDetailData } from '@/features/visits/queries'
 import {
   formatVisitAddress,
+  PREFERRED_PERIOD_LABELS,
   VISIT_STATUS_LABELS,
   VISIT_STATUS_VARIANTS,
   type VisitDetail,
   type VisitDetailJob,
+  type VisitPendingRescheduleRequest,
 } from '@/features/visits/types'
 
 function formatDateTime(value: string | null | undefined) {
@@ -157,9 +159,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const customerAssets = customerAssetsData?.data ?? []
 
   // Find the selected asset's typeId for filtering services
-  const selectedAsset = customerAssets.find(
-    (a) => String(a.id) === addAssetId,
-  )
+  const selectedAsset = customerAssets.find((a) => String(a.id) === addAssetId)
   const selectedAssetTypeId = selectedAsset?.assetTypeId ?? null
 
   // Fetch compatible services filtered by asset type
@@ -257,6 +257,30 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     onError: (mutationError: Error) => toast.error(mutationError.message),
   })
 
+  const acceptRescheduleMutation = useMutation({
+    mutationFn: async (input: { requestId: number; scheduledAt: string }) =>
+      calibraApi.visits.acceptRescheduleRequest(visit.id, input.requestId, {
+        scheduledAt: input.scheduledAt,
+      }),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Reagendamento aceito — visita movida para a nova data')
+    },
+    onError: (mutationError: Error) => toast.error(mutationError.message),
+  })
+
+  const declineRescheduleMutation = useMutation({
+    mutationFn: async (input: { requestId: number; resolutionNote: string }) =>
+      calibraApi.visits.declineRescheduleRequest(visit.id, input.requestId, {
+        resolutionNote: input.resolutionNote.trim() || null,
+      }),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Reagendamento recusado — o cliente será notificado')
+    },
+    onError: (mutationError: Error) => toast.error(mutationError.message),
+  })
+
   const busy =
     assignMutation.isPending ||
     rescheduleMutation.isPending ||
@@ -264,7 +288,9 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
     cancelMutation.isPending ||
     completeMutation.isPending ||
     addJobMutation.isPending ||
-    removeJobMutation.isPending
+    removeJobMutation.isPending ||
+    acceptRescheduleMutation.isPending ||
+    declineRescheduleMutation.isPending
 
   const canComplete =
     visit.status === 'CONFIRMED' || visit.status === 'IN_PROGRESS'
@@ -272,6 +298,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const addressText = formatVisitAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
   const dateChanged = toDateInputValue(visit.scheduledAt) !== scheduledAt
+  const pendingReschedule = visit.pendingRescheduleRequest
 
   const canAddJob =
     isProposed &&
@@ -295,6 +322,9 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
             <Badge variant={VISIT_STATUS_VARIANTS[visit.status]}>
               {VISIT_STATUS_LABELS[visit.status]}
             </Badge>
+            {visit.customerConfirmedAt ? (
+              <Badge variant="outline">Cliente confirmou ✓</Badge>
+            ) : null}
           </div>
           <p className="text-sm text-muted-foreground">
             Agendada para{' '}
@@ -312,6 +342,26 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
           ) : null}
         </div>
       </div>
+
+      {pendingReschedule && !isTerminal ? (
+        <VisitRescheduleRequestBanner
+          request={pendingReschedule}
+          currentScheduledAt={visit.scheduledAt}
+          busy={busy}
+          onAccept={(acceptedDate) =>
+            acceptRescheduleMutation.mutate({
+              requestId: pendingReschedule.id,
+              scheduledAt: acceptedDate,
+            })
+          }
+          onDecline={(resolutionNote) =>
+            declineRescheduleMutation.mutate({
+              requestId: pendingReschedule.id,
+              resolutionNote,
+            })
+          }
+        />
+      ) : null}
 
       {!isTerminal ? (
         <Panel className="space-y-4 p-4 sm:p-5">
@@ -555,6 +605,113 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   )
 }
 
+/**
+ * #739: pending customer reschedule request. Aceitar moves the visit to the
+ * chosen date (prefilled with the first preferred window) and closes the
+ * request; Recusar keeps the date and sends the reason back to the customer.
+ */
+export function VisitRescheduleRequestBanner({
+  request,
+  currentScheduledAt,
+  busy,
+  onAccept,
+  onDecline,
+}: {
+  request: VisitPendingRescheduleRequest
+  currentScheduledAt: string | null
+  busy: boolean
+  onAccept: (scheduledAt: string) => void
+  onDecline: (resolutionNote: string) => void
+}) {
+  const firstWindow = request.preferredWindows[0]
+  const [acceptDate, setAcceptDate] = useState(
+    firstWindow?.date ?? toDateInputValue(currentScheduledAt),
+  )
+  const [declineNote, setDeclineNote] = useState('')
+
+  return (
+    <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/50 dark:bg-amber-950/40">
+      <div>
+        <p className="text-sm font-medium text-amber-900 dark:text-amber-300">
+          Cliente solicitou reagendamento
+        </p>
+        <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-400">
+          {request.requestedByName ? `${request.requestedByName} · ` : ''}
+          {formatDateTime(request.createdAt)}
+          {request.reason ? ` — ${request.reason}` : ''}
+        </p>
+        {request.preferredWindows.length > 0 ? (
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">
+            Janelas preferidas:{' '}
+            {request.preferredWindows
+              .map(
+                (window) =>
+                  `${formatDateTime(`${window.date}T12:00:00`)} (${PREFERRED_PERIOD_LABELS[
+                    window.period
+                  ].toLowerCase()})${window.note ? ` — ${window.note}` : ''}`,
+              )
+              .join(' · ')}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1">
+          <label
+            htmlFor={`reschedule-accept-date-${request.id}`}
+            className="text-xs font-medium text-amber-900 dark:text-amber-300"
+          >
+            Nova data
+          </label>
+          <Input
+            id={`reschedule-accept-date-${request.id}`}
+            type="date"
+            value={acceptDate}
+            onChange={(event) => setAcceptDate(event.target.value)}
+            className="w-40 bg-background"
+          />
+        </div>
+        <Button
+          size="sm"
+          disabled={busy || !acceptDate}
+          onClick={() => onAccept(acceptDate)}
+        >
+          Aceitar e reagendar
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={
+              <Button variant="outline" size="sm" disabled={busy}>
+                Recusar
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Recusar reagendamento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A visita continua na data atual e o cliente será notificado com
+                o motivo abaixo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Textarea
+              placeholder="Motivo da recusa (opcional)"
+              value={declineNote}
+              onChange={(event) => setDeclineNote(event.target.value)}
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel>Voltar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => onDecline(declineNote)}>
+                Recusar reagendamento
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  )
+}
+
 function VisitJobRow({
   job,
   isProposed,
@@ -601,7 +758,11 @@ function VisitJobRow({
           onClick={onRemove}
           aria-label="Remover instrumento da visita"
         >
-          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
+          <HugeiconsIcon
+            icon={Cancel01Icon}
+            strokeWidth={2}
+            className="size-4"
+          />
         </Button>
       ) : null}
     </div>

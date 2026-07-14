@@ -18,6 +18,7 @@ type VisitVariant =
   | "scheduled"
   | "confirmed"
   | "rescheduled"
+  | "reschedule_declined"
   | "cancelled"
   | "reminder";
 
@@ -65,6 +66,16 @@ const getTypeConfig = (variant: VisitVariant) => {
         statusVariant: "warning" as const,
         actionLabel: "Ver nova data",
       };
+    case "reschedule_declined":
+      return {
+        title: "Reagendamento não foi possível",
+        previewText:
+          "O laboratório não pôde reagendar a sua visita de calibração no local",
+        label: "Data mantida",
+        badgeVariant: "warning" as const,
+        statusVariant: "warning" as const,
+        actionLabel: "Ver visita no portal",
+      };
     case "cancelled":
       return {
         title: "Visita no local cancelada",
@@ -77,7 +88,8 @@ const getTypeConfig = (variant: VisitVariant) => {
     case "reminder":
       return {
         title: "Lembrete: visita no local",
-        previewText: "Lembrete — a visita de calibração no local está se aproximando",
+        previewText:
+          "Lembrete — a visita de calibração no local está se aproximando",
         label: "Lembrete",
         badgeVariant: "info" as const,
         statusVariant: "info" as const,
@@ -108,9 +120,11 @@ export function VisitNotificationEmail({
         ? `${labName ?? "O laboratório"} confirmou a visita de calibração no local para ${customerName}.`
         : variant === "rescheduled"
           ? `${labName ?? "O laboratório"} reagendou a visita de calibração no local para ${customerName}.`
-          : variant === "cancelled"
-            ? `${labName ?? "O laboratório"} cancelou a visita de calibração no local para ${customerName}.`
-            : `Lembrete: a visita de calibração no local para ${customerName} está se aproximando.`;
+          : variant === "reschedule_declined"
+            ? `${labName ?? "O laboratório"} não pôde atender à sua solicitação de reagendamento da visita para ${customerName}. A data original está mantida.`
+            : variant === "cancelled"
+              ? `${labName ?? "O laboratório"} cancelou a visita de calibração no local para ${customerName}.`
+              : `Lembrete: a visita de calibração no local para ${customerName} está se aproximando.`;
 
   return (
     <EmailLayout
@@ -144,6 +158,13 @@ export function VisitNotificationEmail({
         <StatusBox variant={config.statusVariant}>
           <strong>Status:</strong> {config.label}
         </StatusBox>
+
+        {variant === "reminder" && (
+          <Paragraph>
+            Não vai poder receber a visita nesta data? Acesse o portal para
+            confirmar presença ou solicitar o reagendamento.
+          </Paragraph>
+        )}
 
         <ActionButton href={actionUrl}>{config.actionLabel}</ActionButton>
         <LinkFallback url={actionUrl} />

@@ -51,6 +51,7 @@ export function VisitsPage() {
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [mine, setMine] = useState(true)
   const [status, setStatus] = useState<VisitStatus | ''>('')
+  const [rescheduleRequested, setRescheduleRequested] = useState(false)
   const [page, setPage] = useState(1)
 
   const enabled =
@@ -64,6 +65,7 @@ export function VisitsPage() {
     page,
     status,
     mine,
+    rescheduleRequested,
   })
 
   if (cloudOnlyUnavailable) {
@@ -105,6 +107,16 @@ export function VisitsPage() {
                 {filter.label}
               </Button>
             ))}
+            <Button
+              variant={rescheduleRequested ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setRescheduleRequested((current) => !current)
+                setPage(1)
+              }}
+            >
+              Reagendamento solicitado
+            </Button>
           </div>
           <div className="flex gap-1.5">
             <Button
@@ -170,6 +182,16 @@ export function VisitsPage() {
                         <Badge variant={VISIT_STATUS_VARIANTS[visit.status]}>
                           {VISIT_STATUS_LABELS[visit.status]}
                         </Badge>
+                        {visit.rescheduleRequested ? (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                          >
+                            Reagendamento solicitado
+                          </Badge>
+                        ) : visit.customerConfirmedAt ? (
+                          <Badge variant="outline">Cliente confirmou ✓</Badge>
+                        ) : null}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         <span className="font-mono tabular-nums">

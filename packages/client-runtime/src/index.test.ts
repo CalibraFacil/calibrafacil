@@ -1814,6 +1814,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "acceptRescheduleRequest",
+          "namespace": "visits",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "declineRescheduleRequest",
+          "namespace": "visits",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "integrations",
           "policy": "cloud-only",

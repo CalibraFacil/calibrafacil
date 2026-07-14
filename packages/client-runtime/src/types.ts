@@ -1821,6 +1821,7 @@ export type VisitsListInput = {
   dateFrom?: string;
   dateTo?: string;
   mine?: boolean;
+  rescheduleRequested?: boolean;
 };
 
 export type VisitAssignInput = { technicianId: string };
@@ -1842,6 +1843,16 @@ export type VisitCancelInput = { reason?: string | null };
 export type VisitAddJobInput = {
   assetId: number;
   serviceId: number;
+};
+
+export type VisitAcceptRescheduleRequestInput = {
+  scheduledAt: string;
+  scheduledEndAt?: string | null;
+  resolutionNote?: string | null;
+};
+
+export type VisitDeclineRescheduleRequestInput = {
+  resolutionNote?: string | null;
 };
 
 export interface VisitsApi {
@@ -1871,6 +1882,16 @@ export interface VisitsApi {
   removeJob<TResponse = unknown>(
     id: string | number,
     jobId: string | number,
+  ): Promise<TResponse>;
+  acceptRescheduleRequest<TResponse = unknown>(
+    id: string | number,
+    requestId: string | number,
+    input: VisitAcceptRescheduleRequestInput,
+  ): Promise<TResponse>;
+  declineRescheduleRequest<TResponse = unknown>(
+    id: string | number,
+    requestId: string | number,
+    input?: VisitDeclineRescheduleRequestInput,
   ): Promise<TResponse>;
 }
 

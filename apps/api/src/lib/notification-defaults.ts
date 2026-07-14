@@ -42,4 +42,7 @@ export const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   VISIT_RESCHEDULED: { inApp: true, email: true },
   VISIT_CANCELLED: { inApp: true, email: true },
   VISIT_REMINDER: { inApp: true, email: true },
+  VISIT_CUSTOMER_CONFIRMED: { inApp: true, email: false },
+  VISIT_RESCHEDULE_REQUESTED: { inApp: true, email: true },
+  VISIT_RESCHEDULE_DECLINED: { inApp: true, email: true },
 };
