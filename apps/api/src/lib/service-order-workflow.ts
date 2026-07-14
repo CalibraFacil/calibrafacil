@@ -18,6 +18,7 @@ import {
   serviceOrderQuoteItem,
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
+import type { ServiceOrderTokenRevokedReason } from "@calibra-facil/db/schema";
 import { getStatusEmailDescriptor } from "../modules/service-orders/status-email-map";
 import type {
   ServiceOrderActorType,
@@ -26,7 +27,7 @@ import type {
 } from "@calibra-facil/shared";
 import { DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS } from "@calibra-facil/shared";
 import { formatSpecificationsForDisplay } from "@calibra-facil/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import {
   DEFAULT_SERVICE_ORDER_NUMBERING_SETTINGS,
   generateServiceOrderNumber,
@@ -69,6 +70,166 @@ export function createServiceOrderPublicToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return toHex(bytes);
+}
+
+// ---------------------------------------------------------------------------
+// Approval code (spec quote-approval-public-access, mini-spec B)
+// ---------------------------------------------------------------------------
+
+/**
+ * REQ-QPUB-010: unambiguous uppercase alphabet — no 0/O, 1/I/L — so a code
+ * read from a printed quote or over the phone can't be mistranscribed.
+ */
+export const APPROVAL_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+export const APPROVAL_CODE_LENGTH = 8;
+
+/**
+ * Generate an approval code with rejection sampling: only bytes below the
+ * largest multiple of the alphabet size (248 = 8 × 31) are accepted, so every
+ * character is uniformly likely (no modulo bias).
+ */
+export function createServiceOrderApprovalCode(): string {
+  const limit =
+    Math.floor(256 / APPROVAL_CODE_ALPHABET.length) *
+    APPROVAL_CODE_ALPHABET.length;
+  const chars: string[] = [];
+  while (chars.length < APPROVAL_CODE_LENGTH) {
+    const bytes = new Uint8Array(APPROVAL_CODE_LENGTH * 2);
+    crypto.getRandomValues(bytes);
+    for (const byte of bytes) {
+      if (byte >= limit) continue;
+      chars.push(
+        APPROVAL_CODE_ALPHABET.charAt(byte % APPROVAL_CODE_ALPHABET.length),
+      );
+      if (chars.length === APPROVAL_CODE_LENGTH) break;
+    }
+  }
+  return chars.join("");
+}
+
+/**
+ * Uppercase and strip whitespace/hyphens so "k7wm 3p9a" and "K7WM-3P9A"
+ * redeem the same code the email carried.
+ */
+export function normalizeApprovalCode(input: string): string {
+  return input.toUpperCase().replace(/[\s-]/g, "");
+}
+
+/**
+ * REQ-QPUB-011 [HIGH RISK]: codes are low-entropy by design, so they are
+ * stored as HMAC-SHA-256 keyed by a server-side pepper — a database dump
+ * alone is not enough to brute-force them offline. Web Crypto keeps this
+ * portable across Bun and workers (same style as hashServiceOrderToken).
+ */
+export async function hashServiceOrderApprovalCode(
+  code: string,
+  pepper: string,
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(code),
+  );
+  return toHex(new Uint8Array(signature));
+}
+
+/**
+ * Pepper for approval-code HMACs. Enforced in production by
+ * requiredProductionEnv (runtime-env.ts); the dev fallback keeps local
+ * `pnpm dev` working without extra setup. Rotating the pepper orphans all
+ * outstanding codes (acceptable — codes die with the decision/expiry anyway).
+ */
+export function resolveApprovalCodePepper(): string {
+  const configured = process.env.QUOTE_APPROVAL_CODE_PEPPER?.trim();
+  if (configured) return configured;
+  if (process.env.VERCEL_ENV === "production") {
+    throw new Error("QUOTE_APPROVAL_CODE_PEPPER is required");
+  }
+  return "dev-approval-code-pepper";
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Grace window past the quote's validUntil before the access link dies. */
+export const PUBLIC_TOKEN_VALIDITY_GRACE_DAYS = 7;
+/** Fallback lifetime from send when the quote has no validUntil. */
+export const PUBLIC_TOKEN_DEFAULT_TTL_DAYS = 30;
+
+/**
+ * REQ-QPUB-001: default expiry for a public quote-access token when the lab
+ * supplied none — quote validUntil + 7 days, else sentAt + 30 days.
+ */
+export function computeDefaultPublicTokenExpiry(params: {
+  validUntil: Date | null;
+  sentAt: Date;
+}): Date {
+  if (params.validUntil) {
+    return new Date(
+      params.validUntil.getTime() + PUBLIC_TOKEN_VALIDITY_GRACE_DAYS * DAY_MS,
+    );
+  }
+  return new Date(
+    params.sentAt.getTime() + PUBLIC_TOKEN_DEFAULT_TTL_DAYS * DAY_MS,
+  );
+}
+
+/**
+ * REQ-QPUB-003 [HIGH RISK]: once a quote is approved or rejected (by ANY
+ * path), every public access token pointing at it stops granting access.
+ * Runs inside the caller's decision transaction. The organizationId predicate
+ * is defense-in-depth on top of the callers' org-scoped lookups.
+ */
+export async function revokeActiveTokensForQuote(
+  executor: ServiceOrderDbExecutor,
+  params: {
+    organizationId: string;
+    quoteId: number;
+    reason: ServiceOrderTokenRevokedReason;
+  },
+): Promise<void> {
+  await executor
+    .update(serviceOrderPublicAccessToken)
+    .set({ revokedAt: new Date(), revokedReason: params.reason })
+    .where(
+      and(
+        eq(serviceOrderPublicAccessToken.quoteId, params.quoteId),
+        eq(serviceOrderPublicAccessToken.organizationId, params.organizationId),
+        isNull(serviceOrderPublicAccessToken.revokedAt),
+      ),
+    );
+}
+
+/**
+ * REQ-QPUB-004: sending a new quote version kills the live tokens of the
+ * service order's earlier quotes. Tokens with a NULL quoteId (pure
+ * service_order scope) are not "of an earlier quote" and stay live.
+ */
+export async function revokeSupersededServiceOrderTokens(
+  executor: ServiceOrderDbExecutor,
+  params: {
+    organizationId: string;
+    serviceOrderId: number;
+    currentQuoteId: number;
+  },
+): Promise<void> {
+  await executor
+    .update(serviceOrderPublicAccessToken)
+    .set({ revokedAt: new Date(), revokedReason: "superseded" })
+    .where(
+      and(
+        eq(serviceOrderPublicAccessToken.serviceOrderId, params.serviceOrderId),
+        eq(serviceOrderPublicAccessToken.organizationId, params.organizationId),
+        isNull(serviceOrderPublicAccessToken.revokedAt),
+        isNotNull(serviceOrderPublicAccessToken.quoteId),
+        ne(serviceOrderPublicAccessToken.quoteId, params.currentQuoteId),
+      ),
+    );
 }
 
 export function calculatePricedItems<
@@ -391,18 +552,31 @@ export async function createPublicServiceOrderAccessToken(params: {
   serviceOrderId: number;
   quoteId?: number | null;
   expiresAt?: Date | null;
+  /**
+   * REQ-QPUB-010: also mint a human-typeable approval code on this grant.
+   * Only the grant minted at quote send carries a code; redemption-minted
+   * sibling tokens and service_order-scoped grants leave codeHash NULL.
+   */
+  withApprovalCode?: boolean;
 }) {
   const token = createServiceOrderPublicToken();
   const tokenHash = await hashServiceOrderToken(token);
+  const code = params.withApprovalCode
+    ? createServiceOrderApprovalCode()
+    : null;
+  const codeHash = code
+    ? await hashServiceOrderApprovalCode(code, resolveApprovalCodePepper())
+    : null;
   await db.insert(serviceOrderPublicAccessToken).values({
     organizationId: params.organizationId,
     serviceOrderId: params.serviceOrderId,
     quoteId: params.quoteId ?? null,
     tokenHash,
+    codeHash,
     scope: params.quoteId ? "quote" : "service_order",
     expiresAt: params.expiresAt ?? null,
   });
-  return { token, tokenHash };
+  return { token, tokenHash, code };
 }
 
 /**

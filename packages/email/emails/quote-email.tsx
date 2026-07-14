@@ -11,6 +11,7 @@ import {
   ActionButton,
   LinkFallback,
   Eyebrow,
+  HighlightValue,
 } from "./components/email-layout";
 import { Section, Text } from "@react-email/components";
 import { formatMoney } from "@calibra-facil/shared";
@@ -122,6 +123,20 @@ export interface QuoteEmailProps {
    * REQ-SOEMAIL-023: internalNotes MUST NOT appear — there is no such prop.
    */
   approvalUrl: string;
+
+  // ---- REQ-QPUB-020/021: typeable approval code (optional) ----
+
+  /**
+   * Human-typeable approval code minted alongside the token at send time.
+   * Absent/null for emails enqueued before the code feature shipped — the
+   * code section is then omitted entirely.
+   */
+  approvalCode?: string | null;
+  /**
+   * Portal page where the customer types the code, e.g.
+   * `${PORTAL_APP_URL}/access-code`. Rendered only together with approvalCode.
+   */
+  codeEntryUrl?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +268,8 @@ export function QuoteEmail({
   discountCents,
   totalCents,
   approvalUrl,
+  approvalCode,
+  codeEntryUrl,
 }: QuoteEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
 
@@ -261,7 +278,8 @@ export function QuoteEmail({
   const assetDesc = [assetManufacturer, assetModel].filter(Boolean).join(" ");
   const previewText = `Orçamento ${serviceOrderNumber} — ${assetDesc || "equipamento"} — ${brl(totalCents)}`;
 
-  const hasOptionals = freightCents > 0 || discountCents > 0 || optionals.length > 0;
+  const hasOptionals =
+    freightCents > 0 || discountCents > 0 || optionals.length > 0;
 
   return (
     <ServiceOrderEmailLayout previewText={previewText} brand={brand}>
@@ -284,9 +302,7 @@ export function QuoteEmail({
           {(assetManufacturer ?? assetModel) ? (
             <DetailRow
               label="Equipamento"
-              value={
-                [assetManufacturer, assetModel].filter(Boolean).join(" ")
-              }
+              value={[assetManufacturer, assetModel].filter(Boolean).join(" ")}
             />
           ) : null}
           {assetInventoryCode ? (
@@ -367,6 +383,19 @@ export function QuoteEmail({
 
         <ActionButton href={approvalUrl}>Aprovar Orçamento</ActionButton>
         <LinkFallback url={approvalUrl} />
+
+        {/* REQ-QPUB-020: typeable approval code as a second entry point.
+            Rendered only when the code was minted (post-deploy emails). */}
+        {approvalCode && codeEntryUrl ? (
+          <Section className="mt-4 border-t border-t-[rgba(0,0,0,0.06)] pt-4">
+            <Paragraph>
+              Prefere digitar um código? Acesse a página abaixo e informe o
+              código de aprovação:
+            </Paragraph>
+            <HighlightValue>{approvalCode}</HighlightValue>
+            <LinkFallback url={codeEntryUrl} />
+          </Section>
+        ) : null}
       </EmailCard>
     </ServiceOrderEmailLayout>
   );
@@ -411,7 +440,10 @@ QuoteEmail.PreviewProps = {
   freightCents: 4000,
   discountCents: 1000,
   totalCents: 46000,
-  approvalUrl: "https://portal.calibrafacil.com/orcamento/OS-2026-042?token=preview",
+  approvalUrl:
+    "https://portal.calibrafacil.com/orcamento/OS-2026-042?token=preview",
+  approvalCode: "K7WM3P9A",
+  codeEntryUrl: "https://portal.calibrafacil.com/access-code",
 } satisfies QuoteEmailProps;
 
 export default QuoteEmail;

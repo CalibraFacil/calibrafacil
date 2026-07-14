@@ -673,6 +673,13 @@
       "when": 1783994485683,
       "tag": "0095_visit_customer_confirm_reschedule",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1784051700568,
+      "tag": "0096_public_quote_access_lifecycle",
+      "breakpoints": true
     }
   ]
 }

@@ -22,9 +22,12 @@ import { and, desc, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { AuthVariables } from "../../middleware/permission";
 import {
+  computeDefaultPublicTokenExpiry,
   createPublicServiceOrderAccessToken,
   recordServiceOrderEvent,
   replaceQuoteItems,
+  revokeActiveTokensForQuote,
+  revokeSupersededServiceOrderTokens,
 } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
@@ -233,18 +236,38 @@ export async function sendServiceOrderQuote(input: {
   );
   if (!detail) return { status: "order_not_found" as const };
 
+  const sentAt = new Date();
+
+  // REQ-QPUB-004: a new quote version supersedes earlier quotes' live tokens.
+  // Revoke BEFORE minting so a crash between the two never leaves stale-live
+  // old-quote tokens alongside a new send.
+  await revokeSupersededServiceOrderTokens(db, {
+    organizationId: input.member.organizationId,
+    serviceOrderId: input.serviceOrderId,
+    currentQuoteId: input.quoteId,
+  });
+
   const token = await createPublicServiceOrderAccessToken({
     organizationId: input.member.organizationId,
     serviceOrderId: input.serviceOrderId,
     quoteId: input.quoteId,
-    expiresAt: parseDate(input.values.expiresAt),
+    // REQ-QPUB-010: the send-time grant also carries the emailed approval code.
+    withApprovalCode: true,
+    // REQ-QPUB-001: links never live forever — default to validUntil + grace,
+    // else sentAt + 30 days, when the lab didn't set an explicit expiry.
+    expiresAt:
+      parseDate(input.values.expiresAt) ??
+      computeDefaultPublicTokenExpiry({
+        validUntil: quote.validUntil,
+        sentAt,
+      }),
   });
 
   const [updated] = await db
     .update(serviceOrderQuote)
     .set({
       status: "sent",
-      sentAt: new Date(),
+      sentAt,
       sentByUserId: input.actorUserId,
       portalAccessTokenHash: token.tokenHash,
       clientMessage: input.values.clientMessage ?? quote.clientMessage,
@@ -382,6 +405,8 @@ export async function sendServiceOrderQuote(input: {
       totalCents: quote.totalCents,
       // REQ-SOEMAIL-023 [HIGH RISK]: token captured above, not reminted
       publicAccessToken: token.token,
+      // REQ-QPUB-021 [HIGH RISK]: the emailed code is the one minted above.
+      ...(token.code ? { approvalCode: token.code } : {}),
       portalAppUrl,
     } satisfies OrcamentoSentOutboxPayload;
 
@@ -450,6 +475,12 @@ export async function approveServiceOrderQuoteManually(input: {
         manualApprovalEvidenceText: input.values.manualApprovalEvidenceText,
       })
       .where(eq(serviceOrderQuote.id, input.quoteId));
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(tx, {
+      organizationId: order.organizationId,
+      quoteId: input.quoteId,
+      reason: "decided",
+    });
     await tx
       .update(serviceOrder)
       .set({
@@ -552,6 +583,12 @@ export async function rejectServiceOrderQuoteManually(input: {
         rejectionReason: input.values.rejectionReason,
       })
       .where(eq(serviceOrderQuote.id, input.quoteId));
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(tx, {
+      organizationId: order.organizationId,
+      quoteId: input.quoteId,
+      reason: "decided",
+    });
     await tx
       .update(serviceOrder)
       .set({ status: "quote_rejected", rejectedAt: new Date() })
@@ -638,6 +675,12 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
         approvedByPortalUserId: input.actorUserId,
       })
       .where(eq(serviceOrderQuote.id, input.quoteId));
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(tx, {
+      organizationId: order.organizationId,
+      quoteId: input.quoteId,
+      reason: "decided",
+    });
     await tx
       .update(serviceOrder)
       .set({
@@ -726,6 +769,12 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
         rejectionReason: input.values.rejectionReason ?? null,
       })
       .where(eq(serviceOrderQuote.id, input.quoteId));
+    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+    await revokeActiveTokensForQuote(tx, {
+      organizationId: order.organizationId,
+      quoteId: input.quoteId,
+      reason: "decided",
+    });
     await tx
       .update(serviceOrder)
       .set({ status: "quote_rejected", rejectedAt: new Date() })

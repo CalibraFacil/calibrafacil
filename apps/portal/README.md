@@ -32,6 +32,7 @@ local HTTPS. The app talks to the API at `/api/portal/*` (see `getApiBaseUrl` in
 /accept-invite                   # Portal invitation acceptance
 /v/$token                        # Public certificate verification + download
 /service-order-access/$token     # Public service-order view + quote approve/reject
+/access-code                     # Public approval-code entry (redeems to the tokenized page)
 
 # Authenticated (_authenticated/)
 /                                # Command center dashboard

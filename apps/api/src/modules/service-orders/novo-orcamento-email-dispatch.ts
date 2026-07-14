@@ -122,6 +122,13 @@ export interface NovoOrcamentoEmailDispatchInput {
    */
   publicAccessToken: string;
   /**
+   * REQ-QPUB-020/021: the human-typeable approval code minted alongside the
+   * token in sendServiceOrderQuote and captured in the outbox payload. Null
+   * for rows enqueued before the code feature shipped — the template then
+   * omits the code section. This function does NOT mint codes.
+   */
+  approvalCode: string | null;
+  /**
    * Base URL for the portal, e.g. "https://portal.calibrafacil.com".
    * Comes from PORTAL_APP_URL env var. The caller resolves this.
    */
@@ -174,6 +181,8 @@ export async function dispatchNovoOrcamentoEmail(
     // sendServiceOrderQuote. We use it directly — no new token is minted here.
     const portalBase = input.portalAppUrl.replace(/\/$/, "");
     const approvalUrl = `${portalBase}/service-order-access/${input.publicAccessToken}`;
+    // REQ-QPUB-020: where the customer types the approval code by hand.
+    const codeEntryUrl = `${portalBase}/access-code`;
 
     return await sendServiceOrderCustomerEmail({
       serviceOrder: {
@@ -214,6 +223,9 @@ export async function dispatchNovoOrcamentoEmail(
           totalCents: input.totalCents,
           // REQ-SOEMAIL-023 [HIGH RISK]: approval URL from captured token.
           approvalUrl,
+          // REQ-QPUB-020/021: code + entry URL; template renders conditionally.
+          approvalCode: input.approvalCode,
+          codeEntryUrl,
           // internalNotes is NOT passed — it is intentionally absent (REQ-023).
         }),
     });

@@ -5770,6 +5770,13 @@ export const serviceOrderNumberingSequence = pgTable(
   ],
 );
 
+/**
+ * Why a public access token stopped granting access:
+ * - "decided": the quote it grants access to was approved or rejected.
+ * - "superseded": a newer quote version was sent for the same service order.
+ */
+export type ServiceOrderTokenRevokedReason = "decided" | "superseded";
+
 export const serviceOrderPublicAccessToken = pgTable(
   "service_order_public_access_token",
   {
@@ -5784,9 +5791,16 @@ export const serviceOrderPublicAccessToken = pgTable(
       onDelete: "cascade",
     }),
     tokenHash: text("token_hash").notNull(),
+    // Peppered HMAC-SHA-256 of the human-typeable approval code. Only set on
+    // the grant minted at quote send; redemption-minted sibling tokens keep it
+    // NULL. Nullable + unique is safe: Postgres unique indexes admit multiple
+    // NULLs.
+    codeHash: text("code_hash"),
     scope: text("scope").default("service_order").notNull(),
     expiresAt: timestamp("expires_at"),
     revokedAt: timestamp("revoked_at"),
+    revokedReason:
+      text("revoked_reason").$type<ServiceOrderTokenRevokedReason>(),
     lastViewedAt: timestamp("last_viewed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -5794,10 +5808,36 @@ export const serviceOrderPublicAccessToken = pgTable(
     uniqueIndex("service_order_public_access_token_hash_uidx").on(
       table.tokenHash,
     ),
+    uniqueIndex("service_order_public_access_token_code_hash_uidx").on(
+      table.codeHash,
+    ),
     index("service_order_public_access_token_order_idx").on(
       table.serviceOrderId,
     ),
     index("service_order_public_access_token_quote_idx").on(table.quoteId),
+  ],
+);
+
+/**
+ * Per-IP failed-attempt counter for the public approval-code redemption
+ * endpoint. Fixed-window buckets: one row per (ip_hash, window_starts_at).
+ * The IP is stored as a SHA-256 hash (no raw PII at rest); the row carries no
+ * organization/FK because the traffic is pre-auth and unattributable.
+ */
+export const publicCodeRedeemThrottle = pgTable(
+  "public_code_redeem_throttle",
+  {
+    id: serial("id").primaryKey(),
+    ipHash: text("ip_hash").notNull(),
+    windowStartsAt: timestamp("window_starts_at").notNull(),
+    failedAttempts: integer("failed_attempts").default(0).notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("public_code_redeem_throttle_ip_window_uidx").on(
+      table.ipHash,
+      table.windowStartsAt,
+    ),
   ],
 );
 

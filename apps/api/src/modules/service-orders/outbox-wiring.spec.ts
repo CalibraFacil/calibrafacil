@@ -56,7 +56,9 @@ const {
     select: vi.fn(),
     update: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        where: vi
+          .fn()
+          .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
       }),
     }),
     delete: vi.fn(),
@@ -232,6 +234,7 @@ vi.mock("../../lib/service-order-workflow", () => ({
   createPublicServiceOrderAccessToken: vi.fn().mockResolvedValue({
     token: "tok-abc-123",
     tokenHash: "hash-abc-123",
+    code: "K7WM3P9A",
   }),
   recordServiceOrderEvent: vi.fn().mockResolvedValue(undefined),
   replaceQuoteItems: vi.fn().mockResolvedValue({
@@ -243,6 +246,13 @@ vi.mock("../../lib/service-order-workflow", () => ({
   }),
   getOrCreateServiceOrderSettings: vi.fn().mockResolvedValue({}),
   createBillingDocumentFromServiceOrder: vi.fn().mockResolvedValue(undefined),
+  // Token-lifecycle helpers (spec quote-approval-public-access) — not under
+  // test here, but the quote commands call them.
+  computeDefaultPublicTokenExpiry: vi
+    .fn()
+    .mockReturnValue(new Date("2026-08-08T00:00:00.000Z")),
+  revokeActiveTokensForQuote: vi.fn().mockResolvedValue(undefined),
+  revokeSupersededServiceOrderTokens: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../lib/units", () => ({
@@ -275,11 +285,17 @@ vi.mock("@calibra-facil/db/schema", () => ({
   serviceOrder: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   serviceOrderQuote: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   serviceOrderQuoteItem: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
-  serviceOrderAssetSnapshot: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
+  serviceOrderAssetSnapshot: new Proxy(
+    {},
+    { get: (_, p) => ({ col: String(p) }) },
+  ),
   customer: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   asset: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   serviceOrderSettings: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
-  serviceOrderEmailOutbox: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
+  serviceOrderEmailOutbox: new Proxy(
+    {},
+    { get: (_, p) => ({ col: String(p) }) },
+  ),
 }));
 
 // =============================================================================
@@ -501,8 +517,22 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
       [{ ...SAMPLE_ORDER, status: "sent", sentAt: new Date() }], // [0] quote UPDATE returning
       [{ publicId: "pub-abc-123", clientContactSnapshot: null }], // [1] orderRow SELECT
       [], // [2] quoteItemRows SELECT (orderBy thenable → empty)
-      [{ manufacturer: "Mettler", model: "XS105", serialNumber: "SN-1", inventoryCode: "INV-1", displaySpecs: [] }], // [3] snapshotRow SELECT
-      [{ name: "Empresa Teste SA", email: "empresa@example.com", taxId: "12.345.678/0001-99" }], // [4] customerRow SELECT
+      [
+        {
+          manufacturer: "Mettler",
+          model: "XS105",
+          serialNumber: "SN-1",
+          inventoryCode: "INV-1",
+          displaySpecs: [],
+        },
+      ], // [3] snapshotRow SELECT
+      [
+        {
+          name: "Empresa Teste SA",
+          email: "empresa@example.com",
+          taxId: "12.345.678/0001-99",
+        },
+      ], // [4] customerRow SELECT
     );
   });
 
@@ -526,7 +556,15 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
       [{ ...SAMPLE_ORDER, status: "sent", sentAt: new Date() }],
       [{ publicId: "pub-abc-123", clientContactSnapshot: null }],
       [],
-      [{ manufacturer: "M", model: "Y", serialNumber: "Z", inventoryCode: null, displaySpecs: [] }],
+      [
+        {
+          manufacturer: "M",
+          model: "Y",
+          serialNumber: "Z",
+          inventoryCode: null,
+          displaySpecs: [],
+        },
+      ],
       [{ name: "Empresa", email: "e@e.com", taxId: null }],
     );
 
@@ -546,6 +584,10 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
     expect(payload.serviceOrderId).toBe(1);
     expect(payload.quoteId).toBe(42);
     expect(payload.organizationId).toBe("org-1");
+    // REQ-QPUB-021 [HIGH RISK]: the enqueued payload carries the minted
+    // token AND its approval code — captured, never reminted downstream.
+    expect(payload.publicAccessToken).toBe("tok-abc-123");
+    expect(payload.approvalCode).toBe("K7WM3P9A");
   });
 
   it("REQ-SOEMAIL-071/C: dispatchNovoOrcamentoEmail and sendServiceOrderEmailOnce are NOT called directly", async () => {
@@ -553,7 +595,15 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
       [{ ...SAMPLE_ORDER, status: "sent", sentAt: new Date() }],
       [{ publicId: "pub-abc-123", clientContactSnapshot: null }],
       [],
-      [{ manufacturer: "M", model: "Y", serialNumber: "Z", inventoryCode: null, displaySpecs: [] }],
+      [
+        {
+          manufacturer: "M",
+          model: "Y",
+          serialNumber: "Z",
+          inventoryCode: null,
+          displaySpecs: [],
+        },
+      ],
       [{ name: "Empresa", email: "e@e.com", taxId: null }],
     );
 

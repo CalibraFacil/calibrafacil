@@ -50,46 +50,47 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const dbQueue: Array<unknown[]> = [];
 
-const {
-  mockEnqueueServiceOrderEmail,
-  capturedTxExecutors,
-  mockTxProxy,
-} = vi.hoisted(() => {
-  const captured: Array<unknown> = [];
-  const txProxy = {
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+const { mockEnqueueServiceOrderEmail, capturedTxExecutors, mockTxProxy } =
+  vi.hoisted(() => {
+    const captured: Array<unknown> = [];
+    const txProxy = {
+      insert: vi.fn().mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
       }),
-    }),
-    select: vi.fn(),
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+      select: vi.fn(),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
       }),
-    }),
-    delete: vi.fn(),
-  };
+      delete: vi.fn(),
+    };
 
-  interface EnqueueParams {
-    organizationId: string;
-    unitId?: number | null;
-    serviceOrderId: number;
-    eventKey: string;
-    targetStatus: string;
-    payload: Record<string, unknown>;
-  }
+    interface EnqueueParams {
+      organizationId: string;
+      unitId?: number | null;
+      serviceOrderId: number;
+      eventKey: string;
+      targetStatus: string;
+      payload: Record<string, unknown>;
+    }
 
-  const enqueue = vi.fn(async (_params: EnqueueParams, executor?: unknown) => {
-    captured.push(executor);
+    const enqueue = vi.fn(
+      async (_params: EnqueueParams, executor?: unknown) => {
+        captured.push(executor);
+      },
+    );
+
+    return {
+      mockEnqueueServiceOrderEmail: enqueue,
+      capturedTxExecutors: captured,
+      mockTxProxy: txProxy,
+    };
   });
-
-  return {
-    mockEnqueueServiceOrderEmail: enqueue,
-    capturedTxExecutors: captured,
-    mockTxProxy: txProxy,
-  };
-});
 
 // ---------------------------------------------------------------------------
 // DB mock — FIFO queue + transaction
@@ -124,7 +125,8 @@ vi.mock("@calibra-facil/db", () => {
       update: () => builder,
       insert: () => builder,
       delete: () => builder,
-      transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockTxProxy),
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn(mockTxProxy),
     },
   };
 });
@@ -192,6 +194,13 @@ vi.mock("../../lib/service-order-workflow", () => ({
     freightCents: 0,
     totalCents: 0,
   }),
+  // Token-lifecycle helpers (spec quote-approval-public-access) — not under
+  // test here, but the quote commands call them.
+  computeDefaultPublicTokenExpiry: vi
+    .fn()
+    .mockReturnValue(new Date("2026-08-08T00:00:00.000Z")),
+  revokeActiveTokensForQuote: vi.fn().mockResolvedValue(undefined),
+  revokeSupersededServiceOrderTokens: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../lib/units", () => ({
@@ -214,7 +223,10 @@ vi.mock("@calibra-facil/db/schema", () => ({
   serviceOrder: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   serviceOrderQuote: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
   serviceOrderQuoteItem: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
-  serviceOrderAssetSnapshot: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
+  serviceOrderAssetSnapshot: new Proxy(
+    {},
+    { get: (_, p) => ({ col: String(p) }) },
+  ),
   customer: new Proxy({}, { get: (_, p) => ({ col: String(p) }) }),
 }));
 
@@ -249,7 +261,10 @@ const SAMPLE_ORDER = {
   openedAt: new Date(),
 };
 
-const SAMPLE_CUSTOMER = { name: "Empresa Teste SA", email: "empresa@example.com" };
+const SAMPLE_CUSTOMER = {
+  name: "Empresa Teste SA",
+  email: "empresa@example.com",
+};
 
 // ---------------------------------------------------------------------------
 // approveServiceOrderQuoteManually
@@ -348,7 +363,8 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
       },
     });
     // Ensure old fire-and-forget pattern is gone
-    const { sendServiceOrderEmailOnce } = await import("./service-order-email-once");
+    const { sendServiceOrderEmailOnce } =
+      await import("./service-order-email-once");
     expect(vi.mocked(sendServiceOrderEmailOnce)).not.toHaveBeenCalled();
   });
 });
@@ -518,14 +534,14 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
       actorUserId: "portal-user-1",
       metadata: {},
     });
-    const { sendServiceOrderEmailOnce } = await import("./service-order-email-once");
+    const { sendServiceOrderEmailOnce } =
+      await import("./service-order-email-once");
     expect(vi.mocked(sendServiceOrderEmailOnce)).not.toHaveBeenCalled();
   });
 
   it("returns not_found and does not enqueue when tenancy guard fails (customerId mismatch)", async () => {
-    const { getPortalCustomerForAuthOrganization } = await import(
-      "./service-order.list-queries"
-    );
+    const { getPortalCustomerForAuthOrganization } =
+      await import("./service-order.list-queries");
     vi.mocked(getPortalCustomerForAuthOrganization).mockResolvedValueOnce({
       id: 999, // does NOT match SAMPLE_ORDER.customerId (101)
       name: "Wrong Customer",
@@ -656,9 +672,8 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
   });
 
   it("returns not_found and does not enqueue when tenancy guard fails", async () => {
-    const { getPortalCustomerForAuthOrganization } = await import(
-      "./service-order.list-queries"
-    );
+    const { getPortalCustomerForAuthOrganization } =
+      await import("./service-order.list-queries");
     vi.mocked(getPortalCustomerForAuthOrganization).mockResolvedValueOnce({
       id: 999, // mismatch
       name: "Wrong Customer",

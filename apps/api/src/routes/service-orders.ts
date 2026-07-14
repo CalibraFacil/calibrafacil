@@ -15,6 +15,7 @@ import {
   FinishServiceOrderExecutionSchema,
   IssueServiceOrderDeliveryDocumentSchema,
   ListServiceOrdersQuerySchema,
+  RedeemServiceOrderAccessCodeSchema,
   RejectServiceOrderQuoteManuallySchema,
   RejectServiceOrderQuotePortalSchema,
   ReopenServiceOrderSchema,
@@ -63,6 +64,7 @@ import { listServiceOrderCommunications } from "../modules/service-orders/servic
 import { buildPortalServiceOrderFinancialSummary } from "../lib/portal-financial-summary";
 import {
   approveQuoteWithPublicServiceOrderAccess,
+  redeemServiceOrderAccessCode,
   rejectQuoteWithPublicServiceOrderAccess,
   viewPublicServiceOrderAccess,
 } from "../modules/service-orders/service-order.tokens";
@@ -128,6 +130,16 @@ function requestUserAgent(c: {
   req: { header: (name: string) => string | undefined };
 }) {
   return c.req.header("user-agent") ?? null;
+}
+
+// Public token/code responses must never be cached or indexed (mirrors
+// withPublicCheckoutHeaders in public-commercial-checkout.ts).
+function withPublicNoStoreHeaders(c: {
+  header(name: string, value: string): void;
+}) {
+  c.header("Cache-Control", "private, no-store, max-age=0");
+  c.header("Pragma", "no-cache");
+  c.header("X-Robots-Tag", "noindex, nofollow");
 }
 
 export const serviceOrdersRouter = new Hono<{
@@ -1029,7 +1041,32 @@ export const portalServiceOrdersRouter = new Hono<{
 export const publicServiceOrderAccessRouter = new Hono<{
   Variables: AuthVariables;
 }>()
+  .post(
+    "/redeem-code",
+    zValidator("json", RedeemServiceOrderAccessCodeSchema),
+    async (c) => {
+      withPublicNoStoreHeaders(c);
+      const result = await redeemServiceOrderAccessCode(
+        c.req.valid("json").code,
+        {
+          ipAddress: requestIp(c),
+          userAgent: requestUserAgent(c),
+        },
+      );
+
+      // REQ-QPUB-014: throttled callers get 429 until the window elapses.
+      if (result.status === "throttled") {
+        return c.json({ error: result.error }, 429);
+      }
+      // REQ-QPUB-013: one generic 404 for every miss — no existence oracle.
+      if (result.status === "not_found") {
+        return c.json({ error: result.error }, 404);
+      }
+      return c.json({ data: result.data });
+    },
+  )
   .get("/:token", zValidator("param", TokenParamSchema), async (c) => {
+    withPublicNoStoreHeaders(c);
     const result = await viewPublicServiceOrderAccess(
       c.req.valid("param").token,
       {
@@ -1038,6 +1075,10 @@ export const publicServiceOrderAccessRouter = new Hono<{
       },
     );
 
+    // REQ-QPUB-006: decided grants answer 410 with a stable reason code and
+    // no order/quote data; every other dead link stays a generic 404
+    // (REQ-QPUB-005).
+    if (result.status === "gone") return c.json({ error: result.error }, 410);
     if (result.status !== "ok") return c.json({ error: result.error }, 404);
     return c.json({ data: result.data });
   })
@@ -1046,6 +1087,7 @@ export const publicServiceOrderAccessRouter = new Hono<{
     zValidator("param", TokenParamSchema),
     zValidator("json", ApproveServiceOrderQuotePortalSchema),
     async (c) => {
+      withPublicNoStoreHeaders(c);
       const result = await approveQuoteWithPublicServiceOrderAccess(
         c.req.valid("param").token,
         {
@@ -1054,7 +1096,7 @@ export const publicServiceOrderAccessRouter = new Hono<{
         },
       );
 
-      if (result.status === "not_found") {
+      if (result.status === "not_found" || result.status === "gone") {
         return c.json({ error: result.error }, 404);
       }
       if (result.status === "conflict") {
@@ -1069,6 +1111,7 @@ export const publicServiceOrderAccessRouter = new Hono<{
     zValidator("param", TokenParamSchema),
     zValidator("json", RejectServiceOrderQuotePortalSchema),
     async (c) => {
+      withPublicNoStoreHeaders(c);
       const input = c.req.valid("json");
       const result = await rejectQuoteWithPublicServiceOrderAccess(
         c.req.valid("param").token,
@@ -1079,7 +1122,7 @@ export const publicServiceOrderAccessRouter = new Hono<{
         },
       );
 
-      if (result.status === "not_found") {
+      if (result.status === "not_found" || result.status === "gone") {
         return c.json({ error: result.error }, 404);
       }
       if (result.status === "conflict") {

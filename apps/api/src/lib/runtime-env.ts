@@ -28,6 +28,8 @@ export type WorkerRuntimeEnv = {
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
+  // Pepper for public quote approval-code HMACs (REQ-QPUB-011).
+  QUOTE_APPROVAL_CODE_PEPPER?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   // Marketing-audience sync (Resend Contacts) — operator-set, optional.
@@ -52,6 +54,7 @@ const requiredProductionEnv = [
   "PUBLIC_API_MASTER_KEY",
   "INTEGRATIONS_MASTER_KEY",
   "SIGNING_MASTER_KEY",
+  "QUOTE_APPROVAL_CODE_PEPPER",
   "PORTAL_SERVICE_USER_ID",
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",

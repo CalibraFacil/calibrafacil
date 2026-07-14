@@ -156,6 +156,7 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.email_sent",
   "service_order.portal_viewed",
   "service_order.public_link_viewed",
+  "service_order.public_code_redeemed",
 ] as const;
 export type ServiceOrderEventType = (typeof SERVICE_ORDER_EVENT_TYPES)[number];
 

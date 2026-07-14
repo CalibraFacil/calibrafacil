@@ -22,17 +22,14 @@ import type { NovoOrcamentoEmailDispatchInput } from "./novo-orcamento-email-dis
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockSendSOEmail,
-  mockGetLabEmailBrand,
-  mockNovoOrcamentoEmail,
-} = vi.hoisted(() => ({
-  mockSendSOEmail: vi
-    .fn()
-    .mockResolvedValue({ sent: true, emailId: "email-id-1" }),
-  mockGetLabEmailBrand: vi.fn().mockResolvedValue(undefined),
-  mockNovoOrcamentoEmail: vi.fn().mockReturnValue("novo-orcamento-element"),
-}));
+const { mockSendSOEmail, mockGetLabEmailBrand, mockNovoOrcamentoEmail } =
+  vi.hoisted(() => ({
+    mockSendSOEmail: vi
+      .fn()
+      .mockResolvedValue({ sent: true, emailId: "email-id-1" }),
+    mockGetLabEmailBrand: vi.fn().mockResolvedValue(undefined),
+    mockNovoOrcamentoEmail: vi.fn().mockReturnValue("novo-orcamento-element"),
+  }));
 
 vi.mock("@calibra-facil/notifications", () => ({
   sendServiceOrderCustomerEmail: mockSendSOEmail,
@@ -107,6 +104,9 @@ function makeInput(
     // createPublicServiceOrderAccessToken INSIDE sendServiceOrderQuote.
     // It must be passed in here — NOT reminted by the dispatch helper.
     publicAccessToken: "tok-from-sendserviceorderquote",
+    // REQ-QPUB-021 [HIGH RISK]: the code minted alongside the token in
+    // sendServiceOrderQuote — passed through, never reminted here.
+    approvalCode: "K7WM3P9A",
     portalAppUrl: "https://portal.calibrafacil.com",
     ...overrides,
   };
@@ -407,5 +407,36 @@ describe("best-effort containment: failed email does not propagate", () => {
       customerEmail: null,
     });
     await expect(dispatchNovoOrcamentoEmail(input)).resolves.not.toThrow();
+  });
+});
+
+describe("REQ-QPUB-020/021: approval code in the novo orçamento email", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLabEmailBrand.mockResolvedValue({
+      name: "Lab Acme",
+      isWhiteLabel: true,
+    });
+    mockSendSOEmail.mockResolvedValue({ sent: true, emailId: "e-1" });
+    mockNovoOrcamentoEmail.mockReturnValue("novo-orcamento-element");
+  });
+
+  it("passes the captured approvalCode and the /access-code entry URL to the template", async () => {
+    const input = makeInput({ approvalCode: "MNPQ2345" });
+    await dispatchNovoOrcamentoEmail(input);
+
+    const props = getTemplateProps(input);
+    expect(props.approvalCode).toBe("MNPQ2345");
+    expect(props.codeEntryUrl).toBe(
+      "https://portal.calibrafacil.com/access-code",
+    );
+  });
+
+  it("REQ-QPUB-021: does not mint a code — a null approvalCode stays null", async () => {
+    const input = makeInput({ approvalCode: null });
+    await dispatchNovoOrcamentoEmail(input);
+
+    const props = getTemplateProps(input);
+    expect(props.approvalCode).toBeNull();
   });
 });

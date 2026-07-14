@@ -241,8 +241,33 @@ async function releaseOutboxRow(
  * graceful skip (e.g. the service order / customer no longer exists), so the
  * row is never re-leased. The `processed_at IS NULL` guard in the claim ensures
  * a done row is never picked up again.
+ *
+ * REQ-QPUB-008 [HIGH RISK]: with `redactCredentials`, the raw credential
+ * fields (`publicAccessToken`, `approvalCode`) are overwritten with
+ * "[REDACTED]" in the SAME statement that marks the row sent, so a sent row
+ * never keeps a live credential at rest while a retry-eligible (released) row
+ * keeps its payload intact for the retry. `jsonb_set(..., false)` is a no-op
+ * per missing key, so legacy rows and other namespaces pass through unchanged.
+ * The placeholder (not key removal) keeps the payload valid for
+ * parseOutboxPayloadByNamespace's z.string().min(1) on any later read. Two SQL
+ * variants (not a CASE) keep the redaction assertable in SQL-text unit tests,
+ * mirroring releaseOutboxRow.
  */
-async function markOutboxRowProcessed(rowId: number): Promise<void> {
+async function markOutboxRowProcessed(
+  rowId: number,
+  options: { redactCredentials: boolean },
+): Promise<void> {
+  if (options.redactCredentials) {
+    await db.execute(
+      sql`UPDATE service_order_email_outbox
+          SET processed_at = now(),
+              payload = jsonb_set(
+                jsonb_set(payload, '{publicAccessToken}', '"[REDACTED]"', false),
+                '{approvalCode}', '"[REDACTED]"', false)
+          WHERE id = ${rowId}`,
+    );
+    return;
+  }
   await db.execute(
     sql`UPDATE service_order_email_outbox
         SET processed_at = now()
@@ -289,7 +314,7 @@ async function dispatchBcdEmailForRow(
 
   if (parseResult.namespace === "nova_os") {
     const p = parseResult.payload;
-    await sendServiceOrderEmailOnce({
+    const outcome = await sendServiceOrderEmailOnce({
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -309,12 +334,13 @@ async function dispatchBcdEmailForRow(
           claimedDefect: p.claimedDefect,
         }),
     });
-    return true; // sendServiceOrderEmailOnce handled it (sent or deduped)
+    // "sent"/"deduped" → done; "failed" → release the outbox row for retry.
+    return outcome !== "failed";
   }
 
   if (parseResult.namespace === "orcamento_sent") {
     const p = parseResult.payload;
-    await sendServiceOrderEmailOnce({
+    const outcome = await sendServiceOrderEmailOnce({
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -343,15 +369,18 @@ async function dispatchBcdEmailForRow(
           discountCents: p.discountCents,
           totalCents: p.totalCents,
           publicAccessToken: p.publicAccessToken,
+          approvalCode: p.approvalCode ?? null,
           portalAppUrl: p.portalAppUrl,
         }),
     });
-    return true;
+    // "sent"/"deduped" → done; "failed" → release for retry BEFORE any
+    // credential redaction (REQ-QPUB-008 keeps retryable payloads intact).
+    return outcome !== "failed";
   }
 
   if (parseResult.namespace === "quote_approved") {
     const p = parseResult.payload;
-    await sendServiceOrderEmailOnce({
+    const outcome = await sendServiceOrderEmailOnce({
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -368,12 +397,12 @@ async function dispatchBcdEmailForRow(
           totalApprovedCents: p.totalApprovedCents,
         }),
     });
-    return true;
+    return outcome !== "failed";
   }
 
   if (parseResult.namespace === "quote_rejected") {
     const p = parseResult.payload;
-    await sendServiceOrderEmailOnce({
+    const outcome = await sendServiceOrderEmailOnce({
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -390,7 +419,7 @@ async function dispatchBcdEmailForRow(
           rejectionReason: p.rejectionReason ?? null,
         }),
     });
-    return true;
+    return outcome !== "failed";
   }
 
   // Should never reach here (exhaustive over namespaces)
@@ -648,7 +677,10 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
           if (handled) {
             // Terminal success — mark done so the lease isn't reclaimed.
-            await markOutboxRowProcessed(row.id);
+            // orcamento_sent payloads carry raw credentials → redact on send.
+            await markOutboxRowProcessed(row.id, {
+              redactCredentials: eventKey.startsWith("orcamento_sent:"),
+            });
             result.sent++;
           } else {
             // Dispatch failed — release for retry (or dead-letter if exhausted).
@@ -722,7 +754,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
           );
           // Graceful terminal skip — the SO is gone, so mark done (don't let the
           // lease expire and re-pick it forever).
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.id, { redactCredentials: false });
           result.skipped++;
           continue;
         }
@@ -743,7 +775,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
             `[ServiceOrderEmailDrain] Customer ${soRow.customerId} not found (outbox id=${row.id}); marking processed.`,
           );
           // Graceful terminal skip — mark done so the lease isn't re-claimed.
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.id, { redactCredentials: false });
           result.skipped++;
           continue;
         }
@@ -762,7 +794,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
         if (sent) {
           // Terminal success — mark done so the lease isn't reclaimed.
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.id, { redactCredentials: false });
           result.sent++;
         } else {
           // 5. On failure: release the lease back to pending for retry (or

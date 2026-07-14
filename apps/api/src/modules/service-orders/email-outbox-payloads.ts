@@ -23,9 +23,7 @@
 
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import {
-  serviceOrderEmailOutbox,
-} from "@calibra-facil/db/schema";
+import { serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 
 // =============================================================================
 // Helpers
@@ -161,10 +159,16 @@ export const OrcamentoSentOutboxPayloadSchema = z.object({
   discountCents: z.number().int(),
   totalCents: z.number().int(),
   publicAccessToken: z.string().min(1),
+  // REQ-QPUB-020/021: human-typeable approval code captured at send time.
+  // OPTIONAL on purpose — rows enqueued before the code feature shipped carry
+  // none and must still send (the template renders the code conditionally).
+  approvalCode: z.string().min(1).optional(),
   portalAppUrl: z.string().min(1),
 });
 
-export type OrcamentoSentOutboxPayload = z.infer<typeof OrcamentoSentOutboxPayloadSchema>;
+export type OrcamentoSentOutboxPayload = z.infer<
+  typeof OrcamentoSentOutboxPayloadSchema
+>;
 
 // =============================================================================
 // quote_approved payload schema (matches OrcamentoAprovadoEmailDispatchInput)
@@ -198,7 +202,9 @@ export const QuoteApprovedOutboxPayloadSchema = z.object({
   totalApprovedCents: z.number().int(),
 });
 
-export type QuoteApprovedOutboxPayload = z.infer<typeof QuoteApprovedOutboxPayloadSchema>;
+export type QuoteApprovedOutboxPayload = z.infer<
+  typeof QuoteApprovedOutboxPayloadSchema
+>;
 
 // =============================================================================
 // quote_rejected payload schema (matches OrcamentoRecusadoEmailDispatchInput)
@@ -232,7 +238,9 @@ export const QuoteRejectedOutboxPayloadSchema = z.object({
   rejectionReason: nullableString,
 });
 
-export type QuoteRejectedOutboxPayload = z.infer<typeof QuoteRejectedOutboxPayloadSchema>;
+export type QuoteRejectedOutboxPayload = z.infer<
+  typeof QuoteRejectedOutboxPayloadSchema
+>;
 
 // =============================================================================
 // Discriminated parse helper

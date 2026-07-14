@@ -314,6 +314,7 @@ function makeOrcamentoSentRow(
     discountCents: 0,
     totalCents: 15000,
     publicAccessToken: "tok-abc",
+    approvalCode: "K7WM3P9A",
     portalAppUrl: "https://portal.calibrafacil.com",
   };
   return {
@@ -536,8 +537,26 @@ describe("mini-spec I drain: B/C/D routing", () => {
           quoteId: 42,
           totalCents: 15000,
           publicAccessToken: "tok-abc",
+          // REQ-QPUB-020/021: the captured code flows through unchanged.
+          approvalCode: "K7WM3P9A",
           serviceOrderNumber: "OS-2026-TEST",
         }),
+      );
+    });
+
+    it("REQ-QPUB-020 (transitional): a legacy row WITHOUT approvalCode still sends, code null", async () => {
+      const row = makeOrcamentoSentRow(42);
+      const legacyPayload = { ...row.payload };
+      delete legacyPayload.approvalCode;
+      const legacyRow = { ...row, payload: legacyPayload };
+      enqueueSelects([legacyRow]);
+      claimSucceeds(legacyRow.id);
+
+      const result = await drainServiceOrderEmailOutbox({ batchSize: 10 });
+
+      expect(result.sent).toBe(1);
+      expect(mockDispatchNovoOrcamento).toHaveBeenCalledWith(
+        expect.objectContaining({ approvalCode: null }),
       );
     });
   });
@@ -860,6 +879,78 @@ describe("mini-spec I drain: B/C/D routing", () => {
 
       expect(result.sent).toBe(1);
       expect(mockDispatchNovaOs).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // REQ-QPUB-008 [HIGH RISK]: credential redaction on the sent-marking UPDATE
+  // ---------------------------------------------------------------------------
+
+  describe("REQ-QPUB-008: raw credentials are redacted when an orcamento_sent row is marked sent", () => {
+    // The mocked `sql` tag returns { _sql: true, _sqlText: strings.join("?") },
+    // so the template text of the LAST db.execute (the processed UPDATE that
+    // follows the claim) is directly assertable — same convention as the
+    // dead-letter SQL-text tests in service-order-email-drain.spec.ts.
+    function lastExecuteSqlText(): string {
+      const calls = mockExecute.mock.calls;
+      const lastArg: unknown = calls[calls.length - 1]?.[0];
+      const sqlText: unknown =
+        typeof lastArg === "object" && lastArg !== null
+          ? Reflect.get(lastArg, "_sqlText")
+          : undefined;
+      expect(typeof sqlText).toBe("string");
+      return String(sqlText).toLowerCase();
+    }
+
+    it("orcamento_sent success marks processed AND jsonb_set-redacts publicAccessToken + approvalCode in one statement", async () => {
+      const row = makeOrcamentoSentRow(42);
+      enqueueSelects([row]);
+      claimSucceeds(row.id);
+
+      const result = await drainServiceOrderEmailOutbox({ batchSize: 10 });
+
+      expect(result.sent).toBe(1);
+      const text = lastExecuteSqlText();
+      expect(text).toContain("processed_at = now()");
+      expect(text).toContain("jsonb_set");
+      expect(text).toContain("publicaccesstoken");
+      expect(text).toContain("approvalcode");
+      expect(text).toContain("[redacted]");
+    });
+
+    it("non-credential namespaces (nova_os) mark processed WITHOUT touching the payload", async () => {
+      const row = makeNovaOsRow();
+      enqueueSelects([row]);
+      claimSucceeds(row.id);
+
+      const result = await drainServiceOrderEmailOutbox({ batchSize: 10 });
+
+      expect(result.sent).toBe(1);
+      const text = lastExecuteSqlText();
+      expect(text).toContain("processed_at = now()");
+      expect(text).not.toContain("jsonb_set");
+    });
+
+    it("a FAILED orcamento_sent dispatch is released with its payload intact (no redaction on retryable rows)", async () => {
+      const row = makeOrcamentoSentRow(42);
+      enqueueSelects([row]);
+      claimSucceeds(row.id);
+      // Real sendServiceOrderEmailOnce maps a sent:false dispatch to "failed";
+      // the drain must release (not process/redact) such rows.
+      mockSendOnce.mockImplementationOnce(
+        async (input: { dispatch: () => Promise<unknown> }) => {
+          await input.dispatch();
+          return "failed";
+        },
+      );
+
+      const result = await drainServiceOrderEmailOutbox({ batchSize: 10 });
+
+      expect(result.released).toBe(1);
+      expect(result.sent).toBe(0);
+      const text = lastExecuteSqlText();
+      expect(text).toContain("attempts = attempts + 1");
+      expect(text).not.toContain("jsonb_set");
     });
   });
 });

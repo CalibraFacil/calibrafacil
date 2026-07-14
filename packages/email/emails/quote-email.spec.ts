@@ -95,7 +95,8 @@ const SAMPLE_PROPS: QuoteEmailProps = {
   freightCents: 8000,
   discountCents: 3000,
   totalCents: 115000,
-  approvalUrl: "https://portal.calibrafacil.com/service-order-access/tok-abc123",
+  approvalUrl:
+    "https://portal.calibrafacil.com/service-order-access/tok-abc123",
 };
 
 async function renderEmail(
@@ -366,5 +367,38 @@ describe("REQ-SOEMAIL-024: monetary values rendered in BRL from integer cents", 
       totalCents: 1_234_567,
     });
     expect(html).toContain("12.345,67");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REQ-QPUB-020: typeable approval code section
+// ---------------------------------------------------------------------------
+
+describe("REQ-QPUB-020: approval code section", () => {
+  it("renders the code, the /access-code entry URL and the pt-BR instruction when present", async () => {
+    const html = await renderEmail({
+      ...SAMPLE_PROPS,
+      approvalCode: "K7WM3P9A",
+      codeEntryUrl: "https://portal.calibrafacil.com/access-code",
+    });
+    expect(html).toContain("K7WM3P9A");
+    expect(html).toContain("https://portal.calibrafacil.com/access-code");
+    expect(html).toContain("Prefere digitar um código?");
+  });
+
+  it("omits the code section entirely for legacy payloads without a code", async () => {
+    const html = await renderEmail(SAMPLE_PROPS);
+    expect(html).not.toContain("Prefere digitar um código?");
+    expect(html).not.toContain("/access-code");
+  });
+
+  it("mutation check: a different code must show up verbatim (no hardcoded preview code)", async () => {
+    const html = await renderEmail({
+      ...SAMPLE_PROPS,
+      approvalCode: "XYZW2345",
+      codeEntryUrl: "https://portal.calibrafacil.com/access-code",
+    });
+    expect(html).toContain("XYZW2345");
+    expect(html).not.toContain("K7WM3P9A");
   });
 });

@@ -289,6 +289,92 @@ export const RejectServiceOrderQuotePortalSchema = z.object({
   rejectionReason: z.string().trim().max(5000).optional().nullable(),
 });
 
+/**
+ * Public approval-code redemption (spec quote-approval-public-access,
+ * REQ-QPUB-012/013). Generous max: the normalizer strips spaces/hyphens.
+ */
+export const RedeemServiceOrderAccessCodeSchema = z.object({
+  code: z.string().trim().min(1).max(32),
+});
+
+/** Success envelope of POST /api/public/service-order-access/redeem-code. */
+export const RedeemServiceOrderAccessCodeResponseSchema = z.object({
+  data: z.object({
+    token: z.string().min(16),
+    accessUrl: z.string().url(),
+  }),
+});
+
+/**
+ * Client-side model of GET /api/public/service-order-access/:token
+ * (the client-visible projection built by toClientVisibleServiceOrderDetail).
+ * Deliberately models ONLY what the public portal page consumes — Zod strips
+ * unknown keys, so additive API changes don't break the page (REQ-QPUB-045).
+ * Dates arrive JSON-serialized as ISO strings.
+ */
+export const PublicServiceOrderAccessViewSchema = z.object({
+  serviceOrderNumber: z.string(),
+  status: z.string(),
+  statusLabel: z.string().optional(),
+  openedAt: z.string().nullable().optional(),
+  claimedDefect: z.string().nullable().optional(),
+  assetSnapshot: z
+    .object({
+      assetName: z.string().nullable().optional(),
+      manufacturer: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      serialNumber: z.string().nullable().optional(),
+      inventoryCode: z.string().nullable().optional(),
+      displaySpecs: z
+        .array(z.object({ label: z.string(), value: z.string() }))
+        .nullable()
+        .optional(),
+    })
+    .nullable()
+    .optional(),
+  evaluations: z
+    .array(
+      z.object({
+        id: z.number(),
+        diagnosis: z.string().nullable().optional(),
+        clientVisibleNotes: z.string().nullable().optional(),
+        evaluatedAt: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
+  quotes: z
+    .array(
+      z.object({
+        id: z.number(),
+        quoteNumber: z.string(),
+        version: z.number(),
+        status: z.string(),
+        totalCents: z.number(),
+        validUntil: z.string().nullable().optional(),
+        clientMessage: z.string().nullable().optional(),
+        warrantyTerms: z.string().nullable().optional(),
+        items: z
+          .array(
+            z.object({
+              id: z.number(),
+              type: z.string().optional(),
+              description: z.string(),
+              quantity: z.union([z.string(), z.number()]).optional(),
+              unit: z.string().nullable().optional(),
+              unitPriceCents: z.number(),
+              totalPriceCents: z.number(),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .default([]),
+});
+
+export type PublicServiceOrderAccessView = z.infer<
+  typeof PublicServiceOrderAccessViewSchema
+>;
+
 export const StartServiceOrderExecutionSchema = z.object({
   notes: nullableText,
 });
