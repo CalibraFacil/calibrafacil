@@ -1,10 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  CheckmarkCircle01Icon,
-  InboxIcon,
-  Notification03Icon,
-} from "@hugeicons/core-free-icons";
-import { toast } from "sonner";
+import { InboxIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,84 +9,69 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import {
-  BlueprintField,
-  BlueprintGrid,
   Panel,
-  SignalTile,
   StaggerGroup,
   StaggerItem,
 } from "@/components/instrument-panel";
-import { StatusPill } from "@/components/status-pill";
-import { formatDateTime } from "@/lib/format";
-import { getOotNotificationStatus } from "@/lib/status-labels";
+import { NotificationItem } from "./notification-item";
 import {
-  useAcknowledgeNotification,
-  useNotifications,
-  type PortalNotification,
+  useMarkAllNotificationsRead,
+  useNotificationFeed,
+  useUnreadNotificationCount,
 } from "./queries";
 
-const ACK_VIA_LABEL: Record<string, string> = {
-  email_link: "link do e-mail",
-  portal_link: "portal",
-  manual: "registro manual",
-};
-
+/**
+ * Full-page view of the general notification center — the bell popover's
+ * "Ver todas" target. Same feed, roomier layout, cursor-paginated.
+ */
 export function NotificationsPage() {
-  const { data, isLoading, error } = useNotifications();
-
-  const notifications = data?.data ?? [];
-  const total = data?.counts.total ?? 0;
-  const pending = data?.counts.pending ?? 0;
+  const feed = useNotificationFeed(true);
+  const countQuery = useUnreadNotificationCount();
+  const markAll = useMarkAllNotificationsRead();
+  const unreadCount = countQuery.data ?? 0;
+  const items = feed.data?.pages.flatMap((page) => page.data) ?? [];
 
   return (
-    <div className="portal-shell space-y-6">
-      <div className="space-y-2">
-        <PageHeader
-          eyebrow="Qualidade"
-          title="Notificações"
-          description="Comunicações de qualidade do laboratório."
-        />
-        <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
-          A confirmação registra apenas o recebimento da notificação.
-        </p>
-      </div>
+    <div className="portal-shell-sm space-y-6">
+      <PageHeader
+        eyebrow="Portal"
+        title="Notificações"
+        description="Atualizações do laboratório: certificados, solicitações, visitas e qualidade dos últimos 90 dias."
+        actions={
+          unreadCount > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={markAll.isPending}
+              onClick={() => markAll.mutate()}
+            >
+              <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+              Marcar todas como lidas
+            </Button>
+          ) : null
+        }
+      />
 
-      <StaggerGroup className="grid gap-3 sm:grid-cols-2">
-        <StaggerItem>
-          <SignalTile
-            icon={InboxIcon}
-            label="Total"
-            value={isLoading ? "—" : total}
-            hint={total === 1 ? "notificação" : "notificações"}
-            tone="neutral"
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <SignalTile
-            icon={Notification03Icon}
-            label="Aguardando confirmação"
-            value={isLoading ? "—" : pending}
-            hint={pending > 0 ? "confirme o recebimento" : "tudo confirmado"}
-            tone={pending > 0 ? "warning" : "ok"}
-          />
-        </StaggerItem>
-      </StaggerGroup>
-
-      {error ? (
-        <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-4 text-sm">
-          {error instanceof Error
-            ? error.message
-            : "Erro ao carregar as notificações."}
-        </div>
-      ) : isLoading ? (
-        <Panel className="p-5">
-          <p className="text-muted-foreground text-sm">
-            Carregando notificações…
-          </p>
+      {feed.isLoading ? (
+        <Panel className="space-y-4 p-5">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="flex items-start gap-3">
+              <Skeleton className="size-8 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-full" />
+              </div>
+            </div>
+          ))}
         </Panel>
-      ) : notifications.length === 0 ? (
+      ) : feed.isError ? (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-4 text-sm">
+          Erro ao carregar as notificações.
+        </div>
+      ) : items.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -99,121 +79,37 @@ export function NotificationsPage() {
             </EmptyMedia>
             <EmptyTitle>Nenhuma notificação.</EmptyTitle>
             <EmptyDescription>
-              As comunicações de qualidade enviadas pelo laboratório aparecerão
-              aqui.
+              As atualizações do laboratório — certificados liberados,
+              solicitações e visitas — aparecerão aqui.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <StaggerGroup className="space-y-3">
-          {notifications.map((notification) => (
-            <StaggerItem key={notification.id}>
-              <NotificationCard notification={notification} />
-            </StaggerItem>
-          ))}
+        <StaggerGroup>
+          <StaggerItem>
+            <Panel className="p-0">
+              <div className="divide-foreground/10 divide-y">
+                {items.map((item) => (
+                  <NotificationItem key={item.id} notification={item} />
+                ))}
+              </div>
+              {feed.hasNextPage ? (
+                <div className="border-foreground/10 border-t p-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground w-full text-xs"
+                    disabled={feed.isFetchingNextPage}
+                    onClick={() => void feed.fetchNextPage()}
+                  >
+                    {feed.isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+                  </Button>
+                </div>
+              ) : null}
+            </Panel>
+          </StaggerItem>
         </StaggerGroup>
       )}
     </div>
-  );
-}
-
-function NotificationCard({
-  notification,
-}: {
-  notification: PortalNotification;
-}) {
-  const acknowledge = useAcknowledgeNotification();
-  const status = getOotNotificationStatus(notification.status);
-  const isAcknowledged = notification.status === "ACKNOWLEDGED";
-  const viaLabel = notification.acknowledgedVia
-    ? ACK_VIA_LABEL[notification.acknowledgedVia]
-    : null;
-  const hasUnit = Boolean(notification.unitName);
-  const hasScope = Boolean(notification.affectedScope);
-
-  return (
-    <Panel className="space-y-4 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-sm font-semibold">
-            {notification.ncNumber}
-          </p>
-          <p className="text-muted-foreground text-xs">
-            Notificação de resultado fora de tolerância
-          </p>
-        </div>
-        <StatusPill tone={status.tone} pulse={notification.status === "SENT"}>
-          {status.label}
-        </StatusPill>
-      </div>
-
-      <BlueprintGrid className="grid-cols-1 sm:grid-cols-2">
-        <BlueprintField label="Instrumento">
-          {notification.assetName ?? "—"}
-          {notification.assetTag ? (
-            <span className="text-muted-foreground">
-              {" "}
-              · {notification.assetTag}
-            </span>
-          ) : null}
-        </BlueprintField>
-        <BlueprintField label="Certificado" mono>
-          {notification.certificateNumber ?? "—"}
-        </BlueprintField>
-        {hasUnit ? (
-          <BlueprintField
-            label="Unidade"
-            className={hasScope ? undefined : "sm:col-span-2"}
-          >
-            {notification.unitName}
-          </BlueprintField>
-        ) : null}
-        {hasScope ? (
-          <BlueprintField
-            label="Escopo afetado"
-            className={hasUnit ? undefined : "sm:col-span-2"}
-          >
-            {notification.affectedScope}
-          </BlueprintField>
-        ) : null}
-      </BlueprintGrid>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="text-muted-foreground space-y-0.5 text-xs">
-          {notification.sentAt ? (
-            <p>Enviada em {formatDateTime(notification.sentAt)}</p>
-          ) : (
-            <p>Registrada em {formatDateTime(notification.createdAt)}</p>
-          )}
-          {isAcknowledged ? (
-            <p>
-              Confirmada em {formatDateTime(notification.acknowledgedAt)}
-              {viaLabel ? ` (via ${viaLabel})` : ""}
-            </p>
-          ) : null}
-        </div>
-        {!isAcknowledged ? (
-          <Button
-            size="sm"
-            disabled={acknowledge.isPending}
-            onClick={() => {
-              acknowledge.mutate(notification.id, {
-                onSuccess: () => {
-                  toast.success(
-                    "Recebimento confirmado. Recomendamos avaliar o impacto nas medições realizadas.",
-                  );
-                },
-                onError: (mutationError) => {
-                  toast.error(mutationError.message);
-                },
-              });
-            }}
-          >
-            <HugeiconsIcon icon={CheckmarkCircle01Icon} strokeWidth={2} />
-            {acknowledge.isPending ? "Confirmando…" : "Confirmar recebimento"}
-          </Button>
-        ) : null}
-      </div>
-    </Panel>
   );
 }

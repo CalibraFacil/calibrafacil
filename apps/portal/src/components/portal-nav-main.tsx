@@ -1,12 +1,12 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Alert02Icon,
   Analytics01Icon,
   Calendar03Icon,
   File01Icon,
   Home01Icon,
   Notebook01Icon,
-  Notification03Icon,
   ToolsIcon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
@@ -72,11 +72,11 @@ const sections: Array<NavSection> = [
     items: [
       // No badgeKey: nav badges are driven by `useOverview()` counts, and the
       // overview endpoint has no §7.10 notifications count yet (adding one is
-      // an API change). Revisit when the overview exposes `notifications`.
+      // an API change). Revisit when the overview exposes `outOfTolerance`.
       {
-        title: "Notificações",
-        url: "/notifications",
-        icon: Notification03Icon,
+        title: "Fora de tolerância",
+        url: "/out-of-tolerance",
+        icon: Alert02Icon,
       },
     ],
   },

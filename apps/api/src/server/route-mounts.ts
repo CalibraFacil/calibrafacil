@@ -32,6 +32,7 @@ import { nonConformancesRouter } from "../routes/non-conformances";
 import { ootAckRouter } from "../routes/oot-ack";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { portalDomainsRouter } from "../routes/portal-domains";
+import { portalNotificationsRouter } from "../routes/portal-notifications";
 import { portalRequestsRouter } from "../routes/portal-requests";
 import { portalVisitsRouter } from "../routes/portal-visits";
 import { portalRouter } from "../routes/portal";
@@ -94,6 +95,7 @@ export function mountApiRoutes(
       .route("/api/invitations", invitationsRouter)
       .route("/api/lab-setup", labSetupRouter)
       .route("/api/portal", portalRouter)
+      .route("/api/portal/notifications", portalNotificationsRouter)
       .route("/api/portal/requests", portalRequestsRouter)
       .route("/api/portal/visits", portalVisitsRouter)
       .route("/api/portal/service-orders", portalServiceOrdersRouter)

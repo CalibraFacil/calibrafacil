@@ -24,6 +24,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedServiceOrdersIndexRouteImport } from './routes/_authenticated/service-orders/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedReliabilityIndexRouteImport } from './routes/_authenticated/reliability/index'
+import { Route as AuthenticatedOutOfToleranceIndexRouteImport } from './routes/_authenticated/out-of-tolerance/index'
 import { Route as AuthenticatedNotificationsIndexRouteImport } from './routes/_authenticated/notifications/index'
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
 import { Route as AuthenticatedCalendarIndexRouteImport } from './routes/_authenticated/calendar/index'
@@ -118,6 +119,12 @@ const AuthenticatedReliabilityIndexRoute =
     path: '/reliability/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOutOfToleranceIndexRoute =
+  AuthenticatedOutOfToleranceIndexRouteImport.update({
+    id: '/out-of-tolerance/',
+    path: '/out-of-tolerance/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedNotificationsIndexRoute =
   AuthenticatedNotificationsIndexRouteImport.update({
     id: '/notifications/',
@@ -205,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/notifications/': typeof AuthenticatedNotificationsIndexRoute
+  '/out-of-tolerance/': typeof AuthenticatedOutOfToleranceIndexRoute
   '/reliability/': typeof AuthenticatedReliabilityIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
@@ -228,6 +236,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof AuthenticatedCalendarIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
   '/notifications': typeof AuthenticatedNotificationsIndexRoute
+  '/out-of-tolerance': typeof AuthenticatedOutOfToleranceIndexRoute
   '/reliability': typeof AuthenticatedReliabilityIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/service-orders': typeof AuthenticatedServiceOrdersIndexRoute
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/_authenticated/calendar/': typeof AuthenticatedCalendarIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/_authenticated/notifications/': typeof AuthenticatedNotificationsIndexRoute
+  '/_authenticated/out-of-tolerance/': typeof AuthenticatedOutOfToleranceIndexRoute
   '/_authenticated/reliability/': typeof AuthenticatedReliabilityIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/calendar/'
     | '/certificates/'
     | '/notifications/'
+    | '/out-of-tolerance/'
     | '/reliability/'
     | '/requests/'
     | '/service-orders/'
@@ -309,6 +320,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/certificates'
     | '/notifications'
+    | '/out-of-tolerance'
     | '/reliability'
     | '/requests'
     | '/service-orders'
@@ -337,6 +349,7 @@ export interface FileRouteTypes {
     | '/_authenticated/calendar/'
     | '/_authenticated/certificates/'
     | '/_authenticated/notifications/'
+    | '/_authenticated/out-of-tolerance/'
     | '/_authenticated/reliability/'
     | '/_authenticated/requests/'
     | '/_authenticated/service-orders/'
@@ -457,6 +470,13 @@ declare module '@tanstack/react-router' {
       path: '/reliability'
       fullPath: '/reliability/'
       preLoaderRoute: typeof AuthenticatedReliabilityIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/out-of-tolerance/': {
+      id: '/_authenticated/out-of-tolerance/'
+      path: '/out-of-tolerance'
+      fullPath: '/out-of-tolerance/'
+      preLoaderRoute: typeof AuthenticatedOutOfToleranceIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/notifications/': {
@@ -618,6 +638,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCalendarIndexRoute: typeof AuthenticatedCalendarIndexRoute
   AuthenticatedCertificatesIndexRoute: typeof AuthenticatedCertificatesIndexRoute
   AuthenticatedNotificationsIndexRoute: typeof AuthenticatedNotificationsIndexRoute
+  AuthenticatedOutOfToleranceIndexRoute: typeof AuthenticatedOutOfToleranceIndexRoute
   AuthenticatedReliabilityIndexRoute: typeof AuthenticatedReliabilityIndexRoute
 }
 
@@ -632,6 +653,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCalendarIndexRoute: AuthenticatedCalendarIndexRoute,
   AuthenticatedCertificatesIndexRoute: AuthenticatedCertificatesIndexRoute,
   AuthenticatedNotificationsIndexRoute: AuthenticatedNotificationsIndexRoute,
+  AuthenticatedOutOfToleranceIndexRoute: AuthenticatedOutOfToleranceIndexRoute,
   AuthenticatedReliabilityIndexRoute: AuthenticatedReliabilityIndexRoute,
 }
 

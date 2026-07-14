@@ -2264,6 +2264,76 @@ export type UpdateNotificationPreferencesInput = z.infer<
   typeof UpdateNotificationPreferencesSchema
 >;
 
+/**
+ * Customer-facing notification types: the only types the portal notification
+ * center lists and whose channel preferences a portal user may edit.
+ * Deliberately a subset of the full type union — lab-internal types (jobs,
+ * standards, competence, payments, customer success) must never be listed or
+ * toggled from a portal session. Keep in sync with the dispatchers in
+ * packages/notifications/src/service.ts that address portal recipients.
+ */
+export const PORTAL_NOTIFICATION_TYPES = [
+  "CERTIFICATE_READY",
+  "CERTIFICATE_AMENDED",
+  "AUDIT_PACK_READY",
+  "CALIBRATION_REQUEST_UNDER_REVIEW",
+  "CALIBRATION_REQUEST_APPROVED",
+  "CALIBRATION_REQUEST_REJECTED",
+  "CALIBRATION_REQUEST_CONVERTED",
+  "VISIT_CONFIRMED",
+  "VISIT_RESCHEDULED",
+  "VISIT_CANCELLED",
+  "VISIT_REMINDER",
+  "ASSET_FOUND_OUT_OF_TOLERANCE",
+] as const;
+
+export const PortalNotificationTypeSchema = z.enum(PORTAL_NOTIFICATION_TYPES);
+
+export type PortalNotificationType = z.infer<
+  typeof PortalNotificationTypeSchema
+>;
+
+const PORTAL_NOTIFICATION_TYPE_SET: ReadonlySet<string> = new Set(
+  PORTAL_NOTIFICATION_TYPES,
+);
+
+/**
+ * Portal notification preferences update. `preferences` keys are validated
+ * against the portal whitelist so a portal session cannot toggle lab-internal
+ * types; the API merge-writes the map so lab-side keys of dual-role users
+ * survive untouched.
+ */
+export const PortalUpdateNotificationPreferencesSchema = z.object({
+  preferences: z
+    .record(z.string(), NotificationChannelPreferenceSchema)
+    .refine(
+      (map) =>
+        Object.keys(map).every((key) => PORTAL_NOTIFICATION_TYPE_SET.has(key)),
+      { message: "Tipo de notificação não permitido" },
+    )
+    .optional(),
+  emailEnabled: z.boolean().optional(),
+  digestFrequency: DigestFrequencySchema.optional(),
+});
+
+export type PortalUpdateNotificationPreferencesInput = z.infer<
+  typeof PortalUpdateNotificationPreferencesSchema
+>;
+
+/**
+ * Query for the portal notification center list. Cursor = the last row's id
+ * (serial, descending order), so pagination is stable under new inserts.
+ */
+export const PortalListNotificationsQuerySchema = z.object({
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().min(1).max(50).default(20),
+  status: NotificationStatusSchema.optional(),
+});
+
+export type PortalListNotificationsQuery = z.infer<
+  typeof PortalListNotificationsQuerySchema
+>;
+
 // =============================================================================
 // NON-CONFORMANCE SCHEMAS - ISO 17025:2017 Clause 8.7
 // =============================================================================

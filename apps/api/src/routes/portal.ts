@@ -57,6 +57,8 @@ import {
   SetCalibrationIntervalSchema,
   FleetAnalyticsQuerySchema,
   RecordOotImpactAssessmentSchema,
+  PORTAL_NOTIFICATION_TYPES,
+  PortalUpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
 import {
   normalizeAccreditationNumber,
@@ -110,12 +112,36 @@ const PortalCalendarQuerySchema = z.object({
   unitId: z.coerce.number().int().positive().optional(),
 });
 
-// Opt-in due-calibration digest email. The frequency lives on the user's
-// notification_preference row (the portal-digest cron is its first consumer);
-// the portal exposes only this one field.
-const PortalNotificationPreferencesSchema = z.object({
-  digestFrequency: z.enum(["NONE", "DAILY", "WEEKLY"]),
-});
+// Notification preferences exposed to the portal: the digest opt-in, the
+// global email switch and the per-type channel map — the map restricted to
+// the customer-facing whitelist (PortalUpdateNotificationPreferencesSchema).
+// The row is per-user and shared with the lab surface, so reads project only
+// the whitelisted keys and writes merge instead of clobbering.
+type PortalPreferenceChannels = { inApp: boolean; email: boolean };
+
+function portalPreferencesPayload(
+  stored:
+    | {
+        preferences: Record<string, PortalPreferenceChannels | undefined>;
+        emailEnabled: boolean;
+        digestFrequency: "NONE" | "DAILY" | "WEEKLY";
+      }
+    | undefined,
+) {
+  const preferences: Record<string, PortalPreferenceChannels> = {};
+  for (const type of PORTAL_NOTIFICATION_TYPES) {
+    // Same fallback as the dispatcher (sendNotification): absent = both on.
+    preferences[type] = stored?.preferences[type] ?? {
+      inApp: true,
+      email: true,
+    };
+  }
+  return {
+    digestFrequency: stored?.digestFrequency ?? "NONE",
+    emailEnabled: stored?.emailEnabled ?? true,
+    preferences,
+  };
+}
 
 // Audit pack (#738): bulk export of released certificates + fleet status for
 // customer audits. Hard cap so a single request can never fan out into an
@@ -1364,7 +1390,8 @@ export const portalRouter = new Hono<{
   })
 
   // =========================================================================
-  // GET /notification-preferences - Digest opt-in for the portal user
+  // GET /notification-preferences - Digest opt-in + per-type channel map
+  // (whitelisted types only) for the portal user
   // =========================================================================
   .get("/notification-preferences", ...requirePortalProtected, async (c) => {
     const session = c.get("session");
@@ -1376,13 +1403,15 @@ export const portalRouter = new Hono<{
     try {
       const [prefs] = await db
         .select({
+          preferences: notificationPreference.preferences,
+          emailEnabled: notificationPreference.emailEnabled,
           digestFrequency: notificationPreference.digestFrequency,
         })
         .from(notificationPreference)
         .where(eq(notificationPreference.userId, session.user.id))
         .limit(1);
 
-      return c.json({ digestFrequency: prefs?.digestFrequency ?? "NONE" });
+      return c.json(portalPreferencesPayload(prefs));
     } catch (error) {
       console.error("Error reading portal notification preferences:", error);
       return c.json({ error: "Erro ao carregar preferências" }, 500);
@@ -1791,7 +1820,7 @@ export const portalRouter = new Hono<{
   .put(
     "/notification-preferences",
     ...requirePortalProtected,
-    zValidator("json", PortalNotificationPreferencesSchema),
+    zValidator("json", PortalUpdateNotificationPreferencesSchema),
     async (c) => {
       const session = c.get("session");
       const portalLabScope = await getPortalLabScope(c);
@@ -1799,22 +1828,42 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const { digestFrequency } = c.req.valid("json");
+      const input = c.req.valid("json");
 
       try {
+        const [existing] = await db
+          .select({
+            preferences: notificationPreference.preferences,
+            emailEnabled: notificationPreference.emailEnabled,
+            digestFrequency: notificationPreference.digestFrequency,
+          })
+          .from(notificationPreference)
+          .where(eq(notificationPreference.userId, session.user.id))
+          .limit(1);
+
+        // Merge-write: the schema only lets whitelisted keys through, and the
+        // spread preserves every other stored key — a dual-role user's
+        // lab-side preferences survive portal edits untouched.
+        const mergedPreferences = {
+          ...(existing?.preferences ?? DEFAULT_PREFERENCES),
+          ...input.preferences,
+        };
+        const merged = {
+          preferences: mergedPreferences,
+          emailEnabled: input.emailEnabled ?? existing?.emailEnabled ?? true,
+          digestFrequency:
+            input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
+        };
+
         await db
           .insert(notificationPreference)
-          .values({
-            userId: session.user.id,
-            preferences: DEFAULT_PREFERENCES,
-            digestFrequency,
-          })
+          .values({ userId: session.user.id, ...merged })
           .onConflictDoUpdate({
             target: notificationPreference.userId,
-            set: { digestFrequency },
+            set: merged,
           });
 
-        return c.json({ digestFrequency });
+        return c.json(portalPreferencesPayload(merged));
       } catch (error) {
         console.error("Error saving portal notification preferences:", error);
         return c.json({ error: "Erro ao salvar preferências" }, 500);
@@ -2519,11 +2568,13 @@ export const portalRouter = new Hono<{
   })
 
   // =========================================================================
-  // GET /notifications - §7.10 out-of-tolerance notifications addressed to
-  // this portal customer (#426 Phase 2). Opaque id = the notification's
+  // GET /oot-notifications - §7.10 out-of-tolerance notifications addressed
+  // to this portal customer (#426 Phase 2). Opaque id = the notification's
   // ackToken (already the customer's ack credential in the e-mail link).
+  // The general in-app notification center lives at /api/portal/notifications
+  // (portal-notifications.ts) — this endpoint is OOT-specific.
   // =========================================================================
-  .get("/notifications", ...requirePortalProtected, async (c) => {
+  .get("/oot-notifications", ...requirePortalProtected, async (c) => {
     const portalMember = c.get("member");
     const portalLabScope = await getPortalLabScope(c);
     if (portalLabScope.blocked) {
@@ -2596,12 +2647,12 @@ export const portalRouter = new Hono<{
   })
 
   // =========================================================================
-  // POST /notifications/:token/acknowledge - Registers receipt from the
+  // POST /oot-notifications/:token/acknowledge - Registers receipt from the
   // authenticated portal (acknowledgedVia portal_link). Idempotent; the WHERE
   // re-checks customer scope so a token from another org can never be stamped.
   // =========================================================================
   .post(
-    "/notifications/:token/acknowledge",
+    "/oot-notifications/:token/acknowledge",
     ...requirePortalProtected,
     async (c) => {
       const portalMember = c.get("member");

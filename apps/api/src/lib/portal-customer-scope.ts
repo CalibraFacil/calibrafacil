@@ -138,6 +138,90 @@ export function applyUnitFilter(
  * regardless of the active switcher selection; this preserves that behavior
  * while adding group support. All results are constrained to the host lab.
  */
+/**
+ * The CLIENT organization ids whose in-app notification rows a portal user
+ * may read. Notification rows are always addressed to a recipient user, but
+ * their `organizationId` is the CLIENT org the event belongs to — a branch
+ * customer's org for most dispatchers. A user therefore sees rows from:
+ * every CLIENT org they belong to with a portal role (validated against the
+ * host lab through its customer/customer-group mapping — the cross-tenant
+ * guard), plus, for group memberships, the branch customers' own CLIENT orgs
+ * (group cockpit: rows addressed to a unit org must reach the group's
+ * quality manager). Lab orgs never qualify, so a dual-role user's lab-side
+ * notifications stay out of the portal.
+ */
+export async function resolvePortalNotificationOrgIds(params: {
+  userId: string;
+  labScope: string | null;
+}): Promise<string[]> {
+  const { userId, labScope } = params;
+
+  const orgs = await db
+    .select({ orgId: member.organizationId })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .where(
+      and(
+        eq(member.userId, userId),
+        eq(organization.type, "CLIENT"),
+        inArray(member.role, PORTAL_ACCESS_ROLES),
+      ),
+    );
+
+  const memberOrgIds = orgs.map((row) => row.orgId);
+  if (memberOrgIds.length === 0) return [];
+
+  const orgIds = new Set<string>();
+
+  // Direct branch memberships.
+  const directCustomers = await db
+    .select({ authOrganizationId: customer.authOrganizationId })
+    .from(customer)
+    .where(
+      and(
+        inArray(customer.authOrganizationId, memberOrgIds),
+        labScope ? eq(customer.labOrganizationId, labScope) : undefined,
+      ),
+    );
+  for (const row of directCustomers) {
+    if (row.authOrganizationId) orgIds.add(row.authOrganizationId);
+  }
+
+  // Group memberships → the group org itself plus all branch customer orgs.
+  const groups = await db
+    .select({
+      id: customerGroup.id,
+      authOrganizationId: customerGroup.authOrganizationId,
+    })
+    .from(customerGroup)
+    .where(
+      and(
+        inArray(customerGroup.authOrganizationId, memberOrgIds),
+        labScope ? eq(customerGroup.labOrganizationId, labScope) : undefined,
+      ),
+    );
+  for (const row of groups) {
+    if (row.authOrganizationId) orgIds.add(row.authOrganizationId);
+  }
+  const groupIds = groups.map((row) => row.id);
+  if (groupIds.length > 0) {
+    const branchOrgs = await db
+      .select({ authOrganizationId: customer.authOrganizationId })
+      .from(customer)
+      .where(
+        and(
+          inArray(customer.groupId, groupIds),
+          labScope ? eq(customer.labOrganizationId, labScope) : undefined,
+        ),
+      );
+    for (const row of branchOrgs) {
+      if (row.authOrganizationId) orgIds.add(row.authOrganizationId);
+    }
+  }
+
+  return [...orgIds];
+}
+
 export async function resolvePortalAccessibleCustomerIds(params: {
   userId: string;
   labScope: string | null;

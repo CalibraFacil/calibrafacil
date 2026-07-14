@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { CommandMenu } from "@/components/command-menu";
+import { NotificationBell } from "@/features/notifications/notification-bell";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { shortcutLabel } from "@/lib/platform";
 
@@ -31,6 +32,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   "service-orders": "Manutenção",
   settings: "Configurações",
   appearance: "Aparência",
+  notifications: "Notificações",
+  "out-of-tolerance": "Fora de tolerância",
   new: "Nova solicitação",
 };
 
@@ -134,27 +137,35 @@ export function PortalHeader() {
         </Breadcrumb>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setCommandOpen(true)}
-        className="border-border bg-background text-muted-foreground hover:bg-muted hidden h-9 w-64 items-center gap-2 rounded-lg border px-3 text-sm shadow-xs transition-[background-color,box-shadow] active:scale-[0.98] sm:flex"
-      >
-        <HugeiconsIcon icon={Search01Icon} className="size-4" strokeWidth={2} />
-        <span className="flex-1 text-left">Buscar…</span>
-        <kbd className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
-          {shortcutLabel("K")}
-        </kbd>
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setCommandOpen(true)}
+          className="border-border bg-background text-muted-foreground hover:bg-muted hidden h-9 w-64 items-center gap-2 rounded-lg border px-3 text-sm shadow-xs transition-[background-color,box-shadow] active:scale-[0.98] sm:flex"
+        >
+          <HugeiconsIcon
+            icon={Search01Icon}
+            className="size-4"
+            strokeWidth={2}
+          />
+          <span className="flex-1 text-left">Buscar…</span>
+          <kbd className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
+            {shortcutLabel("K")}
+          </kbd>
+        </button>
 
-      <Button
-        variant="outline"
-        size="icon-sm"
-        className="sm:hidden"
-        aria-label="Buscar"
-        onClick={() => setCommandOpen(true)}
-      >
-        <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
-      </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="sm:hidden"
+          aria-label="Buscar"
+          onClick={() => setCommandOpen(true)}
+        >
+          <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
+        </Button>
+
+        <NotificationBell />
+      </div>
 
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
     </header>

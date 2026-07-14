@@ -5,11 +5,11 @@ import { Command } from "cmdk";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
+  Alert02Icon,
   ArrowRight01Icon,
   File01Icon,
   Home01Icon,
   Notebook01Icon,
-  Notification03Icon,
   Search01Icon,
   ToolsIcon,
   Wrench01Icon,
@@ -150,10 +150,10 @@ export function CommandMenu({
                     }
                   />
                   <Item
-                    icon={Notification03Icon}
-                    label="Notificações"
+                    icon={Alert02Icon}
+                    label="Fora de tolerância"
                     onSelect={() =>
-                      run(() => navigate({ to: "/notifications" }))
+                      run(() => navigate({ to: "/out-of-tolerance" }))
                     }
                   />
                 </Group>
