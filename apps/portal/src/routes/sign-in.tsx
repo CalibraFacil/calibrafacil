@@ -5,6 +5,7 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup } from "@/components/brand";
+import { SignInShaderPanel } from "@/components/sign-in-shader-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -150,20 +151,8 @@ function SignInPage() {
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden bg-muted p-10 lg:flex lg:flex-col lg:items-center lg:justify-center">
-        <div className="absolute inset-0 bg-linear-to-br from-primary/10 via-muted to-chart-1/10" />
-        <div className="absolute -top-1/2 -left-1/2 h-full w-full rounded-full bg-chart-1/20 blur-[100px]" />
-        <div className="absolute -right-1/2 -bottom-1/2 h-full w-full rounded-full bg-primary/20 blur-[100px]" />
-
-        <div className="relative z-10 mt-auto max-w-md space-y-3">
-          <p className="text-2xl font-semibold tracking-tight text-balance">
-            Tudo da sua calibração em um só lugar
-          </p>
-          <p className="text-muted-foreground text-base text-balance">
-            Consulte certificados, acompanhe o status dos seus equipamentos e
-            baixe documentos a qualquer momento.
-          </p>
-        </div>
+      <div aria-hidden="true" className="hidden p-3 lg:block">
+        <SignInShaderPanel />
       </div>
     </div>
   );
