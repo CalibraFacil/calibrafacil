@@ -36,6 +36,16 @@ export const styles = {
     "m-0 font-mono text-[21px] font-bold leading-[1.2] tracking-[0.02em] text-brand tabular-nums",
 } as const;
 
+/**
+ * Present when the lab sends from its OWN verified domain (issue #584).
+ * With a first-party envelope the "via CalibraFácil" wording is dropped —
+ * it only exists because the default domain is shared.
+ */
+export interface EmailBrandSender {
+  organizationId: string;
+  fromAddress: string;
+}
+
 export interface EmailBrand {
   name: string;
   logoSrc?: string;
@@ -43,6 +53,7 @@ export interface EmailBrand {
   supportEmail?: string;
   website?: string;
   isWhiteLabel?: boolean;
+  sender?: EmailBrandSender;
 }
 
 interface EmailLayoutProps {
@@ -64,7 +75,11 @@ export function EmailLayout({
   const brandLogoSrc = brand?.logoSrc ?? logoSrc;
   const isWordmarkLogo = Boolean(brand?.isWhiteLabel);
   const headerLogoWidth = isWordmarkLogo ? 112 : 24;
-  const headerLabel = brand?.isWhiteLabel ? "via CalibraFácil" : brandName;
+  const headerLabel = brand?.isWhiteLabel
+    ? brand.sender
+      ? ""
+      : "via CalibraFácil"
+    : brandName;
   const legalLines = brand?.footerLegalLines?.filter(Boolean) ?? [];
   const contactLines = [
     brand?.supportEmail ? `E-mail: ${brand.supportEmail}` : undefined,
@@ -119,7 +134,9 @@ export function EmailLayout({
                 <Text className="m-0 text-center font-sans text-[11px] font-[420] leading-[1.5] tracking-[-0.033px] text-fg-3">
                   © {new Date().getFullYear()} {brandName}. Todos os direitos
                   reservados.
-                  {brand?.isWhiteLabel ? " Enviado via CalibraFácil." : ""}
+                  {brand?.isWhiteLabel && !brand.sender
+                    ? " Enviado via CalibraFácil."
+                    : ""}
                 </Text>
               </Section>
             </Section>

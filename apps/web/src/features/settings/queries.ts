@@ -17,6 +17,7 @@ import type {
   SettingsIntegrationsData,
   ContaAzulCatalogResponse,
   SettingsNotificationPreferencesData,
+  SettingsEmailDomainData,
   SettingsPortalDomainData,
   SettingsSigningCertificatesData,
   SettingsSignatureData,
@@ -105,6 +106,14 @@ export function portalDomainQueryOptions() {
       trustedApiResult<SettingsPortalDomainData>(
         calibraApi.portalDomains.get(),
       ),
+  })
+}
+
+export function emailDomainQueryOptions() {
+  return queryOptions({
+    queryKey: ['email-domain'],
+    queryFn: () =>
+      trustedApiResult<SettingsEmailDomainData>(calibraApi.emailDomains.get()),
   })
 }
 
@@ -404,6 +413,10 @@ export function useMySignatureData() {
 
 export function usePortalDomainData() {
   return useQuery(portalDomainQueryOptions())
+}
+
+export function useEmailDomainData() {
+  return useQuery(emailDomainQueryOptions())
 }
 
 export function useEnvironmentalLimitsData({

@@ -1130,6 +1130,74 @@ export const organizationCustomDomain = pgTable(
   ],
 );
 
+/** BYOK now; "managed" is the future shared-platform-account mode (#584). */
+export type OrganizationEmailDomainMode = "byok" | "managed";
+
+/** Mirrors Resend's domain status vocabulary. */
+export type OrganizationEmailDomainStatus =
+  | "pending"
+  | "verified"
+  | "failed"
+  | "not_started"
+  | "partially_verified"
+  | "partially_failed";
+
+export type OrganizationEmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
+
+/**
+ * Lab-owned email sending domain (issue #584). One per lab org. The lab brings
+ * its own Resend account (BYOK): the API key is stored AES-256-GCM encrypted
+ * (EMAIL_DOMAIN_MASTER_KEY, never the signing key) and must never be returned
+ * by any API response — only `resendApiKeyLast4` is exposed for masking.
+ */
+export const organizationEmailDomain = pgTable(
+  "organization_email_domain",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    mode: text("mode")
+      .$type<OrganizationEmailDomainMode>()
+      .default("byok")
+      .notNull(),
+    hostname: text("hostname").notNull(),
+    resendDomainId: text("resend_domain_id").notNull(),
+    resendApiKeyEncrypted: text("resend_api_key_encrypted").notNull(),
+    resendApiKeyIv: text("resend_api_key_iv").notNull(),
+    resendApiKeyLast4: text("resend_api_key_last4").notNull(),
+    fromAddress: text("from_address").notNull(),
+    /** Snapshot of Resend's generated DKIM/SPF rows (diagnostics only). */
+    dnsRecords: jsonb("dns_records").$type<Record<string, unknown>[]>(),
+    status: text("status")
+      .$type<OrganizationEmailDomainStatus>()
+      .default("pending")
+      .notNull(),
+    verifiedAt: timestamp("verified_at"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    activatedAt: timestamp("activated_at"),
+    isActive: boolean("is_active").default(false).notNull(),
+    keyStatus: text("key_status")
+      .$type<OrganizationEmailDomainKeyStatus>()
+      .default("ok")
+      .notNull(),
+    keyLastError: text("key_last_error"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("org_email_domain_org_uidx").on(table.organizationId),
+    uniqueIndex("org_email_domain_hostname_uidx").on(table.hostname),
+    index("org_email_domain_active_idx").on(table.isActive),
+  ],
+);
+
 export const certificateTemplate = pgTable(
   "certificate_template",
   {
@@ -2137,6 +2205,7 @@ export const userRelations = relations(user, ({ many }) => ({
   labAccountSetupTokens: many(labAccountSetupToken),
   ssoProviders: many(ssoProvider),
   customDomains: many(organizationCustomDomain),
+  emailDomains: many(organizationEmailDomain),
   certificateTemplates: many(certificateTemplate),
   certificateTemplateVersions: many(certificateTemplateVersion),
   certificateTemplateAssignments: many(certificateTemplateAssignment),
@@ -2186,6 +2255,7 @@ export const organizationRelations = relations(
     subscription: one(subscription),
     ssoProviders: many(ssoProvider),
     customDomain: one(organizationCustomDomain),
+    emailDomain: one(organizationEmailDomain),
     certificateTemplates: many(certificateTemplate),
     certificateTemplateVersions: many(certificateTemplateVersion),
     certificateTemplateAssignments: many(certificateTemplateAssignment),
@@ -2371,6 +2441,20 @@ export const organizationCustomDomainRelations = relations(
     }),
     createdByUser: one(user, {
       fields: [organizationCustomDomain.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationEmailDomainRelations = relations(
+  organizationEmailDomain,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationEmailDomain.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationEmailDomain.createdBy],
       references: [user.id],
     }),
   }),

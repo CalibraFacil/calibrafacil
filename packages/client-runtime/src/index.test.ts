@@ -624,6 +624,41 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "get",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "validateKey",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "rotateKey",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "verify",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "activate",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "delete",
+          "namespace": "emailDomains",
+          "policy": "cloud-only",
+        },
+        {
           "method": "getUnreadCount",
           "namespace": "notifications",
           "policy": "cloud-only",
@@ -4700,6 +4735,125 @@ describe("portal domains runtime adapter", () => {
     );
     await expect(client.portalDomains.delete()).rejects.toThrow(
       "Domínio do portal requer a API web/nuvem",
+    );
+  });
+});
+
+describe("email domains runtime adapter", () => {
+  it("routes email-domain operations through the cloud API", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const payload = {
+      domain: {
+        id: "emaildom-1",
+        mode: "byok" as const,
+        hostname: "mail.lab.example.test",
+        fromAddress: "os@mail.lab.example.test",
+        status: "verified",
+        verifiedAt: null,
+        lastVerifiedAt: null,
+        activatedAt: null,
+        isActive: false,
+        keyStatus: "ok" as const,
+        keyLastError: null,
+        apiKeyMasked: "\u2022\u2022\u2022\u20221234",
+        dnsRecords: [],
+        createdAt: "2026-07-15T00:00:00.000Z",
+      },
+      statusSummary: {
+        status: "verified" as const,
+        canActivate: true,
+        message: "Pronto para ativar",
+        keyHealth: { status: "ok" as const, lastError: null },
+      },
+    };
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+
+      if (init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+
+      if (String(input).endsWith("/validate-key")) {
+        return Response.json({
+          valid: true,
+          domains: [
+            { id: "rd-1", name: "mail.lab.example.test", status: "verified" },
+          ],
+        });
+      }
+
+      return Response.json(payload);
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(client.emailDomains.get()).resolves.toMatchObject({
+      domain: { hostname: "mail.lab.example.test" },
+    });
+    await expect(
+      client.emailDomains.validateKey({ apiKey: "re_key" }),
+    ).resolves.toMatchObject({ valid: true });
+    await expect(
+      client.emailDomains.create({
+        apiKey: "re_key",
+        resendDomainId: "rd-1",
+        fromLocalPart: "os",
+      }),
+    ).resolves.toMatchObject({ domain: { id: "emaildom-1" } });
+    await expect(
+      client.emailDomains.rotateKey({ apiKey: "re_key2" }),
+    ).resolves.toMatchObject({ domain: { id: "emaildom-1" } });
+    await expect(client.emailDomains.verify()).resolves.toMatchObject({
+      statusSummary: { status: "verified" },
+    });
+    await expect(client.emailDomains.activate()).resolves.toMatchObject({
+      statusSummary: { canActivate: true },
+    });
+    await expect(client.emailDomains.delete()).resolves.toBeUndefined();
+
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/email-domains",
+      "https://api.example.test/api/email-domains/validate-key",
+      "https://api.example.test/api/email-domains",
+      "https://api.example.test/api/email-domains/key",
+      "https://api.example.test/api/email-domains/verify",
+      "https://api.example.test/api/email-domains/activate",
+      "https://api.example.test/api/email-domains",
+    ]);
+  });
+
+  it("keeps email-domain mutations cloud-only in the desktop adapter", async () => {
+    const client = createDesktopApiClient({
+      baseUrl: "http://127.0.0.1:4317",
+      fetch: async () => {
+        throw new Error("fetch should not be called");
+      },
+    });
+
+    await expect(client.emailDomains.get()).resolves.toMatchObject({
+      domain: null,
+      statusSummary: { status: "not_configured" },
+    });
+    await expect(
+      client.emailDomains.validateKey({ apiKey: "re_key" }),
+    ).rejects.toThrow("Domínio de e-mail requer a API web/nuvem");
+    await expect(
+      client.emailDomains.create({
+        apiKey: "re_key",
+        resendDomainId: "rd-1",
+        fromLocalPart: "os",
+      }),
+    ).rejects.toThrow("Domínio de e-mail requer a API web/nuvem");
+    await expect(client.emailDomains.verify()).rejects.toThrow(
+      "Domínio de e-mail requer a API web/nuvem",
+    );
+    await expect(client.emailDomains.activate()).rejects.toThrow(
+      "Domínio de e-mail requer a API web/nuvem",
+    );
+    await expect(client.emailDomains.delete()).rejects.toThrow(
+      "Domínio de e-mail requer a API web/nuvem",
     );
   });
 });

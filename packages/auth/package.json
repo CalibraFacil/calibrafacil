@@ -19,6 +19,7 @@
   "dependencies": {
     "@better-auth/passkey": "1.6.14",
     "@better-auth/sso": "1.6.14",
+    "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@simplewebauthn/server": "13.3.1",

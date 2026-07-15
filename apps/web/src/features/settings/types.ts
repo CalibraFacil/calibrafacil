@@ -3,6 +3,7 @@ import type {
   BillingPaymentsResponse,
   BillingSubscriptionResponse,
   CertificateNumberingProfileResponse,
+  EmailDomainResponse,
   EnvironmentalLimitsResponse,
   MySignatureResponse,
   NotificationPreferencesResponse,
@@ -34,6 +35,8 @@ export type SettingsSigningCertificatesData = SigningCertificatesListResponse
 export type SettingsSignatureData = MySignatureResponse
 
 export type SettingsPortalDomainData = PortalDomainResponse
+
+export type SettingsEmailDomainData = EmailDomainResponse
 
 export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
 

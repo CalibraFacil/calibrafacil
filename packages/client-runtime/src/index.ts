@@ -80,6 +80,7 @@ import { createNotificationsApi } from "./modules/notifications";
 import { createNonConformancesApi } from "./modules/non-conformances";
 import { createOrganizationMediaApi } from "./modules/organization-media";
 import { createPortalDomainsApi } from "./modules/portal-domains";
+import { createEmailDomainsApi } from "./modules/email-domains";
 import { createProfileMediaApi } from "./modules/profile-media";
 import { createPublicCheckoutApi } from "./modules/public-checkout";
 import { createPublicInvitationsApi } from "./modules/public-invitations";
@@ -791,6 +792,7 @@ export function createCloudApiClient(
     entityLabels: createEntityLabelsApi(rawCloudClient),
     certificateNumbering: createCertificateNumberingApi(rawCloudClient),
     portalDomains: createPortalDomainsApi(rawCloudClient),
+    emailDomains: createEmailDomainsApi(rawCloudClient),
     notifications: createNotificationsApi(rawCloudClient),
     signatures: createSignaturesApi(rawCloudClient, options),
     profileMedia: createProfileMediaApi(options),

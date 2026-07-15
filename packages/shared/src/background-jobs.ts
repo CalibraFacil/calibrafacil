@@ -74,6 +74,16 @@ export type SpcRecomputeBackgroundJobMessage = {
   type: "SPC_RECOMPUTE";
 };
 
+/**
+ * Daily timer that re-polls Resend for every lab-owned email sending domain
+ * (issue #584): DKIM can rotate and keys get revoked silently, so the sweep
+ * refreshes domain status and key health instead of waiting for a send to
+ * fail. No payload — the worker sweeps all organization_email_domain rows.
+ */
+export type EmailDomainHealthBackgroundJobMessage = {
+  type: "EMAIL_DOMAIN_HEALTH";
+};
+
 export type CertificateXlsxPreviewBackgroundJobMessage = {
   type: "CERTIFICATE_XLSX_PREVIEW";
   previewId: number;
@@ -99,6 +109,7 @@ export type BackgroundJobMessage =
   | PortalDigestBackgroundJobMessage
   | MarketingContactSyncBackgroundJobMessage
   | SpcRecomputeBackgroundJobMessage
+  | EmailDomainHealthBackgroundJobMessage
   | CertificateXlsxPreviewBackgroundJobMessage
   | AuditPackBackgroundJobMessage;
 
@@ -114,7 +125,8 @@ export function isBackgroundJobMessage(
     type === "SCHEDULED_NOTIFICATIONS" ||
     type === "PORTAL_DIGEST" ||
     type === "MARKETING_CONTACT_SYNC" ||
-    type === "SPC_RECOMPUTE"
+    type === "SPC_RECOMPUTE" ||
+    type === "EMAIL_DOMAIN_HEALTH"
   ) {
     return true;
   }

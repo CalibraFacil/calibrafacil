@@ -478,13 +478,16 @@ async function dispatchEmailForRow(
         },
         brand,
         subject: buildSubject(descriptor.emailType, so.serviceOrderNumber),
-        renderEmail: () =>
+        // Use ctx.brand (not the closed-over brand): the send layer re-renders
+        // with a sender-stripped brand when a lab-sender attempt falls back to
+        // the platform envelope (#584).
+        renderEmail: (ctx) =>
           renderTemplate(
             descriptor.emailType,
             so.serviceOrderNumber,
             cust.name,
             row.targetStatus,
-            brand,
+            ctx.brand,
           ),
       }),
   });

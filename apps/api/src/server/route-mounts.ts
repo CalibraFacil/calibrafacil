@@ -35,6 +35,7 @@ import { notificationsRouter } from "../routes/notifications";
 import { nonConformancesRouter } from "../routes/non-conformances";
 import { ootAckRouter } from "../routes/oot-ack";
 import { organizationMediaRouter } from "../routes/organization-media";
+import { emailDomainsRouter } from "../routes/email-domains";
 import { portalDomainsRouter } from "../routes/portal-domains";
 import { portalNotificationsRouter } from "../routes/portal-notifications";
 import { portalRequestsRouter } from "../routes/portal-requests";
@@ -141,6 +142,7 @@ export function mountApiRoutes(
       .route("/api/sso", ssoRouter)
       .route("/api/api-keys", apiKeysRouter)
       .route("/api/portal-domains", portalDomainsRouter)
+      .route("/api/email-domains", emailDomainsRouter)
       .route("/api/certificate-templates", certificateTemplatesRouter)
       .route("/api/certificate-numbering", certificateNumberingRouter)
       .route("/api/units", unitsRouter)

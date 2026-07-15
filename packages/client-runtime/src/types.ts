@@ -2739,6 +2739,68 @@ export interface PortalDomainsApi {
   delete(): Promise<void>;
 }
 
+export type EmailDomainStatus =
+  | "not_configured"
+  | "waiting_verification"
+  | "verified"
+  | "active";
+
+export type EmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
+
+export type EmailDomainRecord = {
+  id: string;
+  mode: "byok" | "managed";
+  hostname: string;
+  fromAddress: string;
+  status: string;
+  verifiedAt: string | Date | null;
+  lastVerifiedAt: string | Date | null;
+  activatedAt: string | Date | null;
+  isActive: boolean;
+  keyStatus: EmailDomainKeyStatus;
+  keyLastError: string | null;
+  /** Masked representation; the raw key never leaves the server. */
+  apiKeyMasked: string;
+  dnsRecords: Record<string, unknown>[];
+  createdAt: string | Date;
+};
+
+export type EmailDomainResponse = {
+  domain: EmailDomainRecord | null;
+  statusSummary: {
+    status: EmailDomainStatus;
+    canActivate: boolean;
+    message: string;
+    keyHealth: { status: EmailDomainKeyStatus; lastError: string | null };
+  };
+  /**
+   * Where customer replies land (Reply-To = organization.email). Present on
+   * GET only; null means replies would be lost — the settings page warns.
+   */
+  replyToEmail?: string | null;
+};
+
+export type EmailDomainValidateKeyResponse = {
+  valid: boolean;
+  domains?: { id: string; name: string; status: string }[];
+};
+
+export interface EmailDomainsApi {
+  get(): Promise<EmailDomainResponse>;
+  validateKey(input: {
+    apiKey: string;
+  }): Promise<EmailDomainValidateKeyResponse>;
+  create(input: {
+    apiKey: string;
+    resendDomainId: string;
+    fromLocalPart: string;
+  }): Promise<EmailDomainResponse>;
+  rotateKey(input: { apiKey: string }): Promise<EmailDomainResponse>;
+  verify(): Promise<EmailDomainResponse>;
+  activate(): Promise<EmailDomainResponse>;
+  delete(): Promise<void>;
+}
+
 export type NotificationSummary = {
   id: number;
   type: string;
@@ -2974,6 +3036,7 @@ export interface CalibraApi {
   entityLabels: EntityLabelsApi;
   certificateNumbering: CertificateNumberingApi;
   portalDomains: PortalDomainsApi;
+  emailDomains: EmailDomainsApi;
   notifications: NotificationsApi;
   signatures: SignaturesApi;
   profileMedia: ProfileMediaApi;

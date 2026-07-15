@@ -1,12 +1,11 @@
 {
-  "name": "@calibra-facil/notifications",
+  "name": "@calibra-facil/email-sender",
   "type": "module",
   "version": "1.0.0",
+  "description": "Lab-owned email sending domain (BYOK Resend): key custody, domain wrapper, sender resolution and send-with-fallback",
   "exports": {
-    ".": "./src/index.ts",
-    "./service": "./src/service.ts"
+    ".": "./src/index.ts"
   },
-  "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc",
@@ -16,18 +15,14 @@
     "lint": "oxlint"
   },
   "keywords": [
-    "notifications",
-    "calibration",
-    "iso17025"
+    "email",
+    "resend",
+    "white-label"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@calibra-facil/shared": "workspace:*",
-    "@calibra-facil/email-sender": "workspace:*",
-    "@calibra-facil/email": "workspace:*",
-    "@react-email/components": "1.0.12",
-    "@react-email/render": "^2.0.8",
     "resend": "^6.12.4"
   },
   "peerDependencies": {
@@ -36,13 +31,9 @@
   },
   "devDependencies": {
     "@calibra-facil/db": "workspace:*",
-    "@calibra-facil/email": "workspace:*",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "@types/react": "^19.2.16",
-    "@vitejs/plugin-react": "6.0.2",
     "drizzle-orm": "^0.45.2",
-    "react": "^19.2.7",
     "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }

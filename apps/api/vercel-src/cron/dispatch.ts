@@ -262,6 +262,22 @@ async function handleSubscriptionReconciliation(request: Request) {
   );
 }
 
+// #584 P4: daily re-poll of every lab-owned email sending domain via the
+// lab's own Resend key — refreshes domain verification status and key health
+// so lapses surface in settings before a send has to fall back.
+async function handleEmailDomainHealth(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("email-domain-health", { leaseSeconds: 120 }, () =>
+    enqueueBackgroundJob(
+      { type: "EMAIL_DOMAIN_HEALTH" },
+      { idempotencyKey: `email-domain-health-${todayKey()}` },
+    ),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -277,6 +293,7 @@ export const JOB_HANDLERS: Record<
   "queue-backstop": handleQueueBackstop,
   "subscription-reconciliation": handleSubscriptionReconciliation,
   "spc-recompute": handleSpcRecompute,
+  "email-domain-health": handleEmailDomainHealth,
 };
 
 function resolveJob(request: Request) {

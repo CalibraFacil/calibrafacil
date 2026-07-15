@@ -15,8 +15,11 @@
  *    they never propagate to the caller (REQ-SOEMAIL-005).
  */
 
-import { Resend } from "resend";
 import { render } from "@react-email/render";
+import {
+  formatLabFromHeader,
+  sendEmailWithLabSender,
+} from "@calibra-facil/email-sender";
 import type { EmailBrand } from "@calibra-facil/email";
 
 // =============================================================================
@@ -172,6 +175,14 @@ function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
   return sanitizeMailHeader(email);
 }
 
+/** Platform-variant brand (shared envelope): see #584 fallback semantics. */
+function stripBrandSender(
+  brand: EmailBrand | undefined,
+): EmailBrand | undefined {
+  if (!brand?.sender) return brand;
+  return { ...brand, sender: undefined };
+}
+
 // =============================================================================
 // CORE DISPATCHER
 // =============================================================================
@@ -241,30 +252,53 @@ export async function sendServiceOrderCustomerEmail(
     } satisfies ServiceOrderCustomerEmailResult;
   }
 
-  // REQ-SOEMAIL-005: wrap Resend call in try/catch — never propagate
+  // REQ-SOEMAIL-005: wrap the send in try/catch — never propagate.
+  //
+  // #584: when the brand carries a lab sender, the email goes out through the
+  // lab's own Resend account. Key/domain-class failures fall back to the
+  // platform sender INSIDE this call (fall-back-now), so the outbox drain only
+  // ever sees transient failures on its release/retry path (retry-later).
   try {
-    const html = await render(emailElement);
-    const resend = new Resend(resendApiKey);
-
-    const response = await resend.emails.send({
-      from: formatFromEmail(fromEmail, brand),
-      to: recipientEmail,
-      subject: sanitizeMailHeader(subject),
-      html,
-      replyTo: getReplyToEmail(brand),
+    const outcome = await sendEmailWithLabSender({
+      organizationId: brand?.sender?.organizationId,
+      platformApiKey: resendApiKey,
+      buildPayload: async (sender) => {
+        const brandVariant = sender ? brand : stripBrandSender(brand);
+        const element =
+          brandVariant === brand
+            ? emailElement
+            : renderEmail({ serviceOrder, customer, brand: brandVariant });
+        if (!element) {
+          throw new Error("renderEmail returned no element for variant");
+        }
+        const html = await render(element);
+        return {
+          from:
+            sender && brandVariant
+              ? formatLabFromHeader(brandVariant.name, sender.fromAddress)
+              : formatFromEmail(fromEmail, brandVariant),
+          to: recipientEmail,
+          subject: sanitizeMailHeader(subject),
+          html,
+          replyTo: getReplyToEmail(brandVariant),
+        };
+      },
     });
 
-    const emailId =
-      response.data &&
-      typeof response.data === "object" &&
-      "id" in response.data
-        ? String(response.data.id)
-        : undefined;
+    if (outcome.sent) {
+      return {
+        sent: true,
+        emailId: outcome.emailId,
+        recipientEmail,
+      } satisfies ServiceOrderCustomerEmailResult;
+    }
 
+    console.error(
+      `[ServiceOrderEmail] Failed to send email for OS ${serviceOrder.serviceOrderNumber}: ${outcome.error}`,
+    );
     return {
-      sent: true,
-      emailId,
-      recipientEmail,
+      sent: false,
+      error: outcome.error,
     } satisfies ServiceOrderCustomerEmailResult;
   } catch (error) {
     const message =

@@ -34,6 +34,7 @@ export type FeatureFlag =
   | "financial_integrations" // Professional+: Native financial ERP integration (Conta Azul + connectors)
   | "api" // Professional+: API access for integrations
   | "custom_domain" // Professional+: Custom domain support
+  | "email_sender_domain" // Standard+: Send customer email from the lab's own domain (BYOK Resend)
   | "sso" // Enterprise: SSO for lab dashboard access
   | "approval_workflow" // Professional+: Review and approval flows
   | "advanced_audit_trail" // Professional+: Detailed audit history
@@ -55,6 +56,7 @@ export interface PlanEntitlements {
     | "financial_integrations"
     | "api"
     | "custom_domain"
+    | "email_sender_domain"
     | "sso"
     | "approval_workflow"
     | "advanced_audit_trail"
@@ -173,6 +175,11 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
     name: "Domínio Personalizado",
     description: "Portal com domínio da sua empresa",
   },
+  email_sender_domain: {
+    category: "capabilities",
+    name: "Domínio de E-mail Próprio",
+    description: "E-mails transacionais enviados do domínio do seu laboratório",
+  },
   sso: {
     category: "capabilities",
     name: "SSO Corporativo",
@@ -223,6 +230,7 @@ export const FEATURE_FLAGS = [
   "financial_integrations",
   "api",
   "custom_domain",
+  "email_sender_domain",
   "sso",
   "approval_workflow",
   "advanced_audit_trail",
@@ -245,6 +253,7 @@ const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   financial_integrations: ["financial_integrations"],
   api: ["api"],
   custom_domain: ["custom_domain"],
+  email_sender_domain: ["email_sender_domain"],
   sso: ["sso"],
   approval_workflow: ["approval_workflow"],
   advanced_audit_trail: ["advanced_audit_trail"],
@@ -266,6 +275,7 @@ function createEntitlements(enabled: FeatureFlag[]): PlanEntitlements {
       financial_integrations: has("financial_integrations"),
       api: has("api"),
       custom_domain: has("custom_domain"),
+      email_sender_domain: has("email_sender_domain"),
       sso: has("sso"),
       approval_workflow: has("approval_workflow"),
       advanced_audit_trail: has("advanced_audit_trail"),
@@ -307,7 +317,11 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       users: 5,
       storage: 5 * GB,
     },
-    entitlements: createEntitlements(["math_engine", "portal"]),
+    entitlements: createEntitlements([
+      "math_engine",
+      "portal",
+      "email_sender_domain",
+    ]),
     support: SUPPORT_POLICIES.STANDARD,
   },
   PROFESSIONAL: {
@@ -328,6 +342,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "financial_integrations",
       "api",
       "custom_domain",
+      "email_sender_domain",
       "approval_workflow",
       "advanced_audit_trail",
       "custom_templates",
@@ -352,6 +367,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "financial_integrations",
       "api",
       "custom_domain",
+      "email_sender_domain",
       "sso",
       "approval_workflow",
       "advanced_audit_trail",

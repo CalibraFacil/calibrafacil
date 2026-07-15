@@ -195,6 +195,15 @@ export const calibraApiPolicyRegistry = {
     activate: "cloud-only",
     delete: "cloud-only",
   },
+  emailDomains: {
+    get: "cloud-only",
+    validateKey: "cloud-only",
+    create: "cloud-only",
+    rotateKey: "cloud-only",
+    verify: "cloud-only",
+    activate: "cloud-only",
+    delete: "cloud-only",
+  },
   notifications: {
     getUnreadCount: "cloud-only",
     listRecent: "cloud-only",

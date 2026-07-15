@@ -33,6 +33,7 @@ import type {
   NonConformanceListInput,
   NotificationPreferencesResponse,
   PlanAccessResponse,
+  EmailDomainResponse,
   PortalDomainResponse,
   ReferenceStandardsResponse,
   ServiceAuditLogData,
@@ -412,6 +413,14 @@ export function createDesktopApiClient(
       }),
       async get() {
         return desktopPortalDomain();
+      },
+    },
+    emailDomains: {
+      ...desktopCloudOnlyStubs("emailDomains", {
+        action: "Domínio de e-mail",
+      }),
+      async get() {
+        return desktopEmailDomain();
       },
     },
     notifications: {
@@ -2430,6 +2439,18 @@ function desktopCertificateNumberingProfile(): CertificateNumberingProfileRespon
       "{seq}",
       "{number}",
     ],
+  };
+}
+
+function desktopEmailDomain(): EmailDomainResponse {
+  return {
+    domain: null,
+    statusSummary: {
+      status: "not_configured",
+      canActivate: false,
+      message: "Domínio de e-mail próprio requer a API web/nuvem.",
+      keyHealth: { status: "ok", lastError: null },
+    },
   };
 }
 

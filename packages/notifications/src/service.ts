@@ -44,6 +44,11 @@ import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
+import {
+  formatLabFromHeader,
+  resolveLabEmailSender,
+  sendEmailWithLabSender,
+} from "@calibra-facil/email-sender";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
@@ -557,6 +562,18 @@ function createLabEmailBrand(
   };
 }
 
+/**
+ * Platform-variant copy of a brand: same identity, shared envelope. Used when
+ * a lab-sender attempt falls back so the rendered HTML (which shows/hides the
+ * "via CalibraFácil" wording) always matches the actual envelope.
+ */
+function stripBrandSender(
+  brand: EmailBrand | undefined,
+): EmailBrand | undefined {
+  if (!brand?.sender) return brand;
+  return { ...brand, sender: undefined };
+}
+
 export async function getLabEmailBrand(
   organizationId: string,
 ): Promise<EmailBrand | undefined> {
@@ -582,7 +599,20 @@ export async function getLabEmailBrand(
     .where(eq(organization.id, organizationId))
     .limit(1);
 
-  return lab ? createLabEmailBrand(lab) : undefined;
+  const brand = lab ? createLabEmailBrand(lab) : undefined;
+  if (!brand) return undefined;
+
+  // Lab-owned sending domain (#584): when the org has a verified + active
+  // email domain (and the entitlement), sends carry a first-party envelope.
+  const sender = await resolveLabEmailSender(organizationId);
+  if (sender) {
+    brand.sender = {
+      organizationId: sender.organizationId,
+      fromAddress: sender.fromAddress,
+    };
+  }
+
+  return brand;
 }
 
 function resolveEmailActionUrl(
@@ -952,34 +982,45 @@ async function sendNotificationEmail(options: {
   }
 
   try {
-    const resend = new Resend(resendApiKey);
     const recipientName = userData.name ?? "Usuário";
     const logoSrc = getEmailLogoSrc();
     const emailActionUrl = resolveEmailActionUrl(actionUrl);
 
-    // Render the appropriate email template
-    const emailElement = renderEmailTemplate(
-      type,
-      recipientName,
-      title,
-      message,
-      emailActionUrl,
-      emailContext,
-      logoSrc,
-      emailBrand,
-    );
-
-    const html = await render(emailElement);
-
-    await resend.emails.send({
-      from: formatFromEmail(fromEmail, emailBrand),
-      to: userData.email,
-      subject: title,
-      html,
-      replyTo: getReplyToEmail(emailBrand),
+    // Lab-sender first when the brand carries one (#584); the payload is
+    // (re-)rendered per variant so the HTML matches the actual envelope.
+    const outcome = await sendEmailWithLabSender({
+      organizationId: emailBrand?.sender?.organizationId,
+      platformApiKey: resendApiKey,
+      buildPayload: async (sender) => {
+        const brandVariant = sender ? emailBrand : stripBrandSender(emailBrand);
+        const emailElement = renderEmailTemplate(
+          type,
+          recipientName,
+          title,
+          message,
+          emailActionUrl,
+          emailContext,
+          logoSrc,
+          brandVariant,
+        );
+        const html = await render(emailElement);
+        return {
+          from:
+            sender && brandVariant
+              ? formatLabFromHeader(brandVariant.name, sender.fromAddress)
+              : formatFromEmail(fromEmail, brandVariant),
+          to: userData.email,
+          subject: title,
+          html,
+          replyTo: getReplyToEmail(brandVariant),
+        };
+      },
     });
 
-    return true;
+    if (!outcome.sent) {
+      console.error("[Notifications] Failed to send email:", outcome.error);
+    }
+    return outcome.sent;
   } catch (error) {
     console.error("[Notifications] Failed to send email:", error);
     return false;

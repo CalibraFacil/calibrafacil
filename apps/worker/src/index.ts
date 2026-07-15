@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { flushWorkerErrorReporter, reportWorkerError } from "./observability";
 import { processSpcRecompute } from "./spc-recompute";
+import { processEmailDomainHealth } from "./email-domain-health";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
@@ -3389,6 +3390,11 @@ async function processBackgroundJobUnreported(
 
   if (message.type === "SPC_RECOMPUTE") {
     await processSpcRecompute(env);
+    return;
+  }
+
+  if (message.type === "EMAIL_DOMAIN_HEALTH") {
+    await processEmailDomainHealth();
     return;
   }
 

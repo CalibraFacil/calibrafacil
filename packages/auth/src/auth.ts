@@ -13,6 +13,11 @@ import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
+import {
+  formatLabFromHeader,
+  resolveLabEmailSender,
+  sendEmailWithLabSender,
+} from "@calibra-facil/email-sender";
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -684,7 +689,30 @@ async function findLabBrandForClientOrganization(
     .where(eq(schema.organization.id, customerData.labOrganizationId))
     .limit(1);
 
-  return labOrganization ? createLabEmailBrand(labOrganization) : undefined;
+  const brand = labOrganization
+    ? createLabEmailBrand(labOrganization)
+    : undefined;
+  if (!brand) return undefined;
+
+  // Lab-owned sending domain (#584): portal invitations may leave through the
+  // lab's own verified domain when one is active.
+  const sender = await resolveLabEmailSender(customerData.labOrganizationId);
+  if (sender) {
+    brand.sender = {
+      organizationId: sender.organizationId,
+      fromAddress: sender.fromAddress,
+    };
+  }
+
+  return brand;
+}
+
+/** Platform-variant brand (shared envelope): see #584 fallback semantics. */
+function stripBrandSender(
+  brand: EmailBrand | undefined,
+): EmailBrand | undefined {
+  if (!brand?.sender) return brand;
+  return { ...brand, sender: undefined };
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
@@ -794,49 +822,78 @@ async function sendPortalMagicLink(
     return;
   }
 
-  const resend = new Resend(apiKey);
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
     "Calibra Fácil <noreply@calibrafacil.com>";
 
+  if (pendingInvitation) {
+    // #584: the portal INVITATION is lab-branded and may leave through the
+    // lab's own sending domain when one is active. The login magic link below
+    // stays on the platform sender on purpose: auth mail is the most
+    // deliverability-sensitive, so it rides the established calibrafacil.com.
+    const invitation = pendingInvitation;
+    const outcome = await sendEmailWithLabSender({
+      organizationId: labBrand?.sender?.organizationId,
+      platformApiKey: apiKey,
+      buildPayload: (sender) => {
+        const brandVariant = sender ? labBrand : stripBrandSender(labBrand);
+        return {
+          from:
+            sender && brandVariant
+              ? formatLabFromHeader(brandVariant.name, sender.fromAddress)
+              : formatFromEmail(fromEmail, brandVariant),
+          to: normalizedEmail,
+          subject,
+          replyTo: getReplyToEmail(brandVariant),
+          react: PortalInvitationEmail({
+            recipientName: normalizedEmail,
+            organizationName: invitation.organizationName,
+            labName,
+            role: invitation.role ?? undefined,
+            inviteUrl: magicLinkUrl,
+            logoSrc: getEmailLogoSrc(),
+            brand: brandVariant,
+          }),
+          text: [
+            `Convite para ${invitation.organizationName}`,
+            "",
+            "Use o link abaixo para aceitar o convite e acessar o portal:",
+            magicLinkUrl,
+            "",
+            "Se você não esperava este convite, ignore esta mensagem.",
+          ].join("\n"),
+        };
+      },
+    });
+
+    if (!outcome.sent) {
+      // Same fail-loud contract as sendResend: a provider rejection must
+      // surface instead of returning a silent 200.
+      console.error("[Resend] Email delivery failed", outcome.error);
+      throw new Error(`Resend email delivery failed: ${outcome.error}`);
+    }
+    return;
+  }
+
+  const resend = new Resend(apiKey);
   await sendResend(resend, {
-    from: formatFromEmail(fromEmail, labBrand),
+    from: formatFromEmail(fromEmail, undefined),
     to: normalizedEmail,
     subject,
-    replyTo: getReplyToEmail(labBrand),
-    react: pendingInvitation
-      ? PortalInvitationEmail({
-          recipientName: normalizedEmail,
-          organizationName: pendingInvitation.organizationName,
-          labName,
-          role: pendingInvitation.role ?? undefined,
-          inviteUrl: magicLinkUrl,
-          logoSrc: getEmailLogoSrc(),
-          brand: labBrand,
-        })
-      : PortalMagicLinkEmail({
-          recipientName: normalizedEmail,
-          magicLinkUrl,
-          logoSrc: getEmailLogoSrc(),
-        }),
-    text: pendingInvitation
-      ? [
-          `Convite para ${pendingInvitation.organizationName}`,
-          "",
-          "Use o link abaixo para aceitar o convite e acessar o portal:",
-          magicLinkUrl,
-          "",
-          "Se você não esperava este convite, ignore esta mensagem.",
-        ].join("\n")
-      : [
-          "Acesse o Portal CalibraFácil",
-          "",
-          "Use o link abaixo para entrar no portal:",
-          magicLinkUrl,
-          "",
-          "Se você não solicitou acesso, ignore esta mensagem.",
-        ].join("\n"),
+    react: PortalMagicLinkEmail({
+      recipientName: normalizedEmail,
+      magicLinkUrl,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      "Acesse o Portal CalibraFácil",
+      "",
+      "Use o link abaixo para entrar no portal:",
+      magicLinkUrl,
+      "",
+      "Se você não solicitou acesso, ignore esta mensagem.",
+    ].join("\n"),
   });
 }
 

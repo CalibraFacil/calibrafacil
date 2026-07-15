@@ -6,6 +6,7 @@ import {
   HierarchyIcon,
   Key01Icon,
   LinkSquare02Icon,
+  Mail01Icon,
   Notification01Icon,
   Settings02Icon,
   ShieldKeyIcon,
@@ -148,6 +149,12 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         label: 'Domínio do portal',
         href: '/dashboard/settings/portal-domain',
         icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
+      },
+      {
+        value: 'email-domain',
+        label: 'Domínio de e-mail',
+        href: '/dashboard/settings/email-domain',
+        icon: <HugeiconsIcon icon={Mail01Icon} className="size-4" />,
       },
       {
         value: 'integrations',

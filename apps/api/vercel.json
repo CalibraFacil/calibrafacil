@@ -66,6 +66,10 @@
     {
       "path": "/api/cron/spc-recompute",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/email-domain-health",
+      "schedule": "30 3 * * *"
     }
   ],
   "rewrites": [

@@ -72,6 +72,7 @@ import { Route as DashboardSettingsNotificationsRouteImport } from './routes/das
 import { Route as DashboardSettingsMembersRouteImport } from './routes/dashboard/settings/members'
 import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dashboard/settings/integrations'
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
+import { Route as DashboardSettingsEmailDomainRouteImport } from './routes/dashboard/settings/email-domain'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dashboard/settings/certificates'
 import { Route as DashboardSettingsCertificateReleaseRouteImport } from './routes/dashboard/settings/certificate-release'
@@ -483,6 +484,12 @@ const DashboardSettingsEnvironmentRoute =
   DashboardSettingsEnvironmentRouteImport.update({
     id: '/environment',
     path: '/environment',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsEmailDomainRoute =
+  DashboardSettingsEmailDomainRouteImport.update({
+    id: '/email-domain',
+    path: '/email-domain',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsDangerRoute = DashboardSettingsDangerRouteImport.update({
@@ -1004,6 +1011,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
+  '/dashboard/settings/email-domain': typeof DashboardSettingsEmailDomainRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
@@ -1127,6 +1135,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
+  '/dashboard/settings/email-domain': typeof DashboardSettingsEmailDomainRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
@@ -1271,6 +1280,7 @@ export interface FileRoutesById {
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
+  '/dashboard/settings/email-domain': typeof DashboardSettingsEmailDomainRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRouteWithChildren
   '/dashboard/settings/members': typeof DashboardSettingsMembersRoute
@@ -1417,6 +1427,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
+    | '/dashboard/settings/email-domain'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/members'
@@ -1540,6 +1551,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
+    | '/dashboard/settings/email-domain'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/members'
@@ -1683,6 +1695,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificate-release'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
+    | '/dashboard/settings/email-domain'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/members'
@@ -2212,6 +2225,13 @@ declare module '@tanstack/react-router' {
       path: '/environment'
       fullPath: '/dashboard/settings/environment'
       preLoaderRoute: typeof DashboardSettingsEnvironmentRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/email-domain': {
+      id: '/dashboard/settings/email-domain'
+      path: '/email-domain'
+      fullPath: '/dashboard/settings/email-domain'
+      preLoaderRoute: typeof DashboardSettingsEmailDomainRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/danger': {
@@ -3185,6 +3205,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsCertificateReleaseRoute: typeof DashboardSettingsCertificateReleaseRoute
   DashboardSettingsCertificatesRoute: typeof DashboardSettingsCertificatesRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
+  DashboardSettingsEmailDomainRoute: typeof DashboardSettingsEmailDomainRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
   DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRouteWithChildren
   DashboardSettingsMembersRoute: typeof DashboardSettingsMembersRoute
@@ -3212,6 +3233,7 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
       DashboardSettingsCertificateReleaseRoute,
     DashboardSettingsCertificatesRoute: DashboardSettingsCertificatesRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
+    DashboardSettingsEmailDomainRoute: DashboardSettingsEmailDomainRoute,
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,
     DashboardSettingsIntegrationsRoute:
       DashboardSettingsIntegrationsRouteWithChildren,

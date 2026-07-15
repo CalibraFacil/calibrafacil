@@ -680,6 +680,13 @@
       "when": 1784051700568,
       "tag": "0096_public_quote_access_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1784563200000,
+      "tag": "0097_organization_email_domain",
+      "breakpoints": true
     }
   ]
 }
