@@ -143,7 +143,9 @@ function FeedActions({
         size="icon-sm"
         className="text-muted-foreground size-7"
         aria-label="Preferências de notificação"
-        render={<Link to="/settings/notifications" onClick={onNavigate} />}
+        render={
+          <Link to="/settings" hash="notificacoes" onClick={onNavigate} />
+        }
       >
         <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
       </Button>

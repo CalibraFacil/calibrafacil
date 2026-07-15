@@ -17,7 +17,6 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ServiceOrderAccessTokenRouteImport } from './routes/service-order-access/$token'
-import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
 import { Route as AuthenticatedServiceOrdersRouteRouteImport } from './routes/_authenticated/service-orders/route'
 import { Route as AuthenticatedRequestsRouteRouteImport } from './routes/_authenticated/requests/route'
 import { Route as AuthenticatedAssetsRouteRouteImport } from './routes/_authenticated/assets/route'
@@ -77,12 +76,6 @@ const ServiceOrderAccessTokenRoute = ServiceOrderAccessTokenRouteImport.update({
   path: '/service-order-access/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedSettingsRouteRoute =
-  AuthenticatedSettingsRouteRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedServiceOrdersRouteRoute =
   AuthenticatedServiceOrdersRouteRouteImport.update({
     id: '/service-orders',
@@ -103,9 +96,9 @@ const AuthenticatedAssetsRouteRoute =
   } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedServiceOrdersIndexRoute =
   AuthenticatedServiceOrdersIndexRouteImport.update({
@@ -157,15 +150,15 @@ const AuthenticatedAssetsIndexRoute =
   } as any)
 const AuthenticatedSettingsNotificationsRoute =
   AuthenticatedSettingsNotificationsRouteImport.update({
-    id: '/notifications',
-    path: '/notifications',
-    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+    id: '/settings/notifications',
+    path: '/settings/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSettingsAppearanceRoute =
   AuthenticatedSettingsAppearanceRouteImport.update({
-    id: '/appearance',
-    path: '/appearance',
-    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+    id: '/settings/appearance',
+    path: '/settings/appearance',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedServiceOrdersIdRoute =
   AuthenticatedServiceOrdersIdRouteImport.update({
@@ -205,7 +198,6 @@ export interface FileRoutesByFullPath {
   '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
   '/service-orders': typeof AuthenticatedServiceOrdersRouteRouteWithChildren
-  '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/assets/$id': typeof AuthenticatedAssetsIdRoute
@@ -260,7 +252,6 @@ export interface FileRoutesById {
   '/_authenticated/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/_authenticated/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
   '/_authenticated/service-orders': typeof AuthenticatedServiceOrdersRouteRouteWithChildren
-  '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -292,7 +283,6 @@ export interface FileRouteTypes {
     | '/assets'
     | '/requests'
     | '/service-orders'
-    | '/settings'
     | '/service-order-access/$token'
     | '/v/$token'
     | '/assets/$id'
@@ -346,7 +336,6 @@ export interface FileRouteTypes {
     | '/_authenticated/assets'
     | '/_authenticated/requests'
     | '/_authenticated/service-orders'
-    | '/_authenticated/settings'
     | '/service-order-access/$token'
     | '/v/$token'
     | '/_authenticated/'
@@ -436,13 +425,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServiceOrderAccessTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/service-orders': {
       id: '/_authenticated/service-orders'
       path: '/service-orders'
@@ -466,10 +448,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
-      path: '/'
+      path: '/settings'
       fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/service-orders/': {
       id: '/_authenticated/service-orders/'
@@ -529,17 +511,17 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/settings/notifications': {
       id: '/_authenticated/settings/notifications'
-      path: '/notifications'
+      path: '/settings/notifications'
       fullPath: '/settings/notifications'
       preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings/appearance': {
       id: '/_authenticated/settings/appearance'
-      path: '/appearance'
+      path: '/settings/appearance'
       fullPath: '/settings/appearance'
       preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/service-orders/$id': {
       id: '/_authenticated/service-orders/$id'
@@ -629,37 +611,20 @@ const AuthenticatedServiceOrdersRouteRouteWithChildren =
     AuthenticatedServiceOrdersRouteRouteChildren,
   )
 
-interface AuthenticatedSettingsRouteRouteChildren {
-  AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
-  AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
-  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
-}
-
-const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
-  {
-    AuthenticatedSettingsAppearanceRoute: AuthenticatedSettingsAppearanceRoute,
-    AuthenticatedSettingsNotificationsRoute:
-      AuthenticatedSettingsNotificationsRoute,
-    AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
-  }
-
-const AuthenticatedSettingsRouteRouteWithChildren =
-  AuthenticatedSettingsRouteRoute._addFileChildren(
-    AuthenticatedSettingsRouteRouteChildren,
-  )
-
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAssetsRouteRoute: typeof AuthenticatedAssetsRouteRouteWithChildren
   AuthenticatedRequestsRouteRoute: typeof AuthenticatedRequestsRouteRouteWithChildren
   AuthenticatedServiceOrdersRouteRoute: typeof AuthenticatedServiceOrdersRouteRouteWithChildren
-  AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedCertificatesIdRoute: typeof AuthenticatedCertificatesIdRoute
+  AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
+  AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedCalendarIndexRoute: typeof AuthenticatedCalendarIndexRoute
   AuthenticatedCertificatesIndexRoute: typeof AuthenticatedCertificatesIndexRoute
   AuthenticatedNotificationsIndexRoute: typeof AuthenticatedNotificationsIndexRoute
   AuthenticatedOutOfToleranceIndexRoute: typeof AuthenticatedOutOfToleranceIndexRoute
   AuthenticatedReliabilityIndexRoute: typeof AuthenticatedReliabilityIndexRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -667,14 +632,17 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRequestsRouteRoute: AuthenticatedRequestsRouteRouteWithChildren,
   AuthenticatedServiceOrdersRouteRoute:
     AuthenticatedServiceOrdersRouteRouteWithChildren,
-  AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedCertificatesIdRoute: AuthenticatedCertificatesIdRoute,
+  AuthenticatedSettingsAppearanceRoute: AuthenticatedSettingsAppearanceRoute,
+  AuthenticatedSettingsNotificationsRoute:
+    AuthenticatedSettingsNotificationsRoute,
   AuthenticatedCalendarIndexRoute: AuthenticatedCalendarIndexRoute,
   AuthenticatedCertificatesIndexRoute: AuthenticatedCertificatesIndexRoute,
   AuthenticatedNotificationsIndexRoute: AuthenticatedNotificationsIndexRoute,
   AuthenticatedOutOfToleranceIndexRoute: AuthenticatedOutOfToleranceIndexRoute,
   AuthenticatedReliabilityIndexRoute: AuthenticatedReliabilityIndexRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

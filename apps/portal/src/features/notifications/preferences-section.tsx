@@ -18,10 +18,11 @@ import {
 } from "./queries";
 
 /**
- * Notification preferences, in the instrument-panel language: a flat channel
- * panel (global e-mail switch + digest segmented control) and a per-event
- * matrix (Evento | No app | E-mail) — the same layout the lab dashboard uses,
- * deliberately without collapsibles.
+ * Notification preferences section of the unified /settings page: a flat
+ * channel panel (global e-mail switch + digest segmented control) and a
+ * per-event matrix (Evento | No app | E-mail), deliberately without
+ * collapsibles. Also the landing spot of e-mail unsubscribe links
+ * (/settings/notifications redirects here).
  */
 
 const DIGEST_OPTIONS: Array<{
@@ -48,7 +49,7 @@ const DIGEST_OPTIONS: Array<{
 
 const DEFAULT_CHANNELS: NotificationChannels = { inApp: true, email: true };
 
-export function NotificationSettingsPage() {
+export function NotificationPreferencesSection() {
   const preferencesQuery = useNotificationPreferences();
   const updateMutation = useUpdateNotificationPreferences();
 
@@ -167,8 +168,8 @@ export function NotificationSettingsPage() {
         />
         {!emailEnabled ? (
           <p className="text-muted-foreground mt-3 text-xs">
-            E-mails estão desativados — a coluna E-mail volta a valer quando
-            você reativar o canal acima.
+            E-mails estão desativados. A coluna E-mail volta a valer quando você
+            reativar o canal acima.
           </p>
         ) : null}
         <div className="mt-4 space-y-5">

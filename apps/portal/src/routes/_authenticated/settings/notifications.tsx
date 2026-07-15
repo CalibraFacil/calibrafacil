@@ -1,7 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { NotificationSettingsPage } from "@/features/notifications/settings-page";
-
+// Legacy tab URL; settings are unified at /settings. Must keep resolving:
+// notification e-mails link here as the unsubscribe URL
+// (packages/notifications/src/service.ts).
 export const Route = createFileRoute("/_authenticated/settings/notifications")({
-  component: NotificationSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings", hash: "notificacoes" });
+  },
 });
