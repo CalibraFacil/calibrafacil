@@ -7,7 +7,7 @@ const RAW_URL =
 export const SITE_URL = RAW_URL.replace(/\/+$/, "");
 export const SITE_NAME = "CalibraFácil";
 export const SITE_DESCRIPTION =
-  "Software para laboratórios de calibração e oficinas permissionárias do Inmetro: cálculo de incerteza conforme o GUM, gestão de ordens de serviço, rastreabilidade e certificados ISO/IEC 17025.";
+  "Gestão para laboratórios de calibração ISO/IEC 17025 e oficinas do Inmetro: incerteza (GUM), certificados assinados em ICP-Brasil e portal do cliente.";
 export const LOCALE = "pt_BR";
 
 // Where the on-site lead form lives (the Vite landing owns "/"). Marketing CTAs
