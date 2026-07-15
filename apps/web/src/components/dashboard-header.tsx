@@ -40,6 +40,7 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/profile': 'Perfil',
   '/dashboard/settings/organization': 'Organização',
   '/dashboard/settings/portal-domain': 'Portal Domain',
+  '/dashboard/settings/email-domain': 'Domínio de E-mail',
   '/dashboard/settings/branding': 'Branding',
   '/dashboard/settings/billing': 'Assinatura',
   '/dashboard/settings/subscription': 'Assinatura',

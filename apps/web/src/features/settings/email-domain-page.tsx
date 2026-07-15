@@ -324,10 +324,9 @@ export function EmailDomainSettingsPage() {
             {domain ? 'Trocar domínio ou conta' : 'Configurar envio'}
           </CardTitle>
           <CardDescription>
-            O laboratório usa a própria conta Resend (o plano gratuito cobre 1
-            domínio e 3.000 e-mails por mês). Recomendamos um subdomínio
-            dedicado, como <code>mail.suaempresa.com.br</code>, para isolar a
-            reputação de envio do seu e-mail principal.
+            O laboratório usa a própria conta Resend. Recomendamos um subdomínio
+            dedicado, como <code>mail.suaempresa.com.br</code>, para proteger a
+            reputação do seu e-mail principal.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
