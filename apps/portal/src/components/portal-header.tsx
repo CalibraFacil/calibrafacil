@@ -31,6 +31,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   requests: "Solicitações",
   "service-orders": "Manutenção",
   settings: "Configurações",
+  profile: "Perfil",
+  appearance: "Aparência",
   notifications: "Notificações",
   "out-of-tolerance": "Fora de tolerância",
   new: "Nova solicitação",

@@ -1,8 +1,7 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-// Legacy tab URL; settings are unified at /settings.
+import { AppearanceSettingsPage } from "@/features/settings/appearance-page";
+
 export const Route = createFileRoute("/_authenticated/settings/appearance")({
-  beforeLoad: () => {
-    throw redirect({ to: "/settings", hash: "aparencia" });
-  },
+  component: AppearanceSettingsPage,
 });

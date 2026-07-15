@@ -183,7 +183,7 @@ function ThemePreview({ value }: { value: Theme }) {
   return <ThemePreviewSurface mode={value} />;
 }
 
-export function AppearanceSection() {
+export function AppearanceSettingsPage() {
   const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
 
   const handleSelect = (value: Theme) => {
@@ -194,8 +194,8 @@ export function AppearanceSection() {
   return (
     <Panel className="p-5">
       <PanelHeader
-        title="Aparência"
-        description="Escolha como o portal se apresenta neste dispositivo."
+        title="Tema"
+        description="Escolha como o portal se apresenta neste dispositivo. A interface muda na hora."
       />
       <div
         role="radiogroup"

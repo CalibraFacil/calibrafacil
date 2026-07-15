@@ -18,11 +18,10 @@ import {
 } from "./queries";
 
 /**
- * Notification preferences section of the unified /settings page: a flat
- * channel panel (global e-mail switch + digest segmented control) and a
- * per-event matrix (Evento | No app | E-mail), deliberately without
- * collapsibles. Also the landing spot of e-mail unsubscribe links
- * (/settings/notifications redirects here).
+ * Notification preferences sub-page of /settings: a flat channel panel
+ * (global e-mail switch + digest segmented control) and a per-event matrix
+ * (Evento | No app | E-mail), deliberately without collapsibles. Also the
+ * landing page of e-mail unsubscribe links (/settings/notifications).
  */
 
 const DIGEST_OPTIONS: Array<{

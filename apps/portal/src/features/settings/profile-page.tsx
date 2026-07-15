@@ -28,19 +28,19 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export function AccountSection() {
+async function handleSignOut() {
+  await portalSignOut({
+    fetchOptions: {
+      onSuccess: () => {
+        window.location.href = "/sign-in";
+      },
+    },
+  });
+}
+
+export function ProfileSettingsPage() {
   const { data: session, isPending } = usePortalSession();
   const { data: activeOrg } = usePortalActiveOrganization();
-
-  const handleSignOut = async () => {
-    await portalSignOut({
-      fetchOptions: {
-        onSuccess: () => {
-          window.location.href = "/sign-in";
-        },
-      },
-    });
-  };
 
   if (isPending) {
     return (
@@ -66,7 +66,7 @@ export function AccountSection() {
       <BlueprintOverlay />
       <div className="relative">
         <PanelHeader
-          title="Conta"
+          title="Perfil"
           description="Seus dados de acesso ao portal do cliente."
           action={
             <Button variant="outline" size="sm" onClick={handleSignOut}>
