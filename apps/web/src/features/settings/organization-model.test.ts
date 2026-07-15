@@ -214,6 +214,25 @@ describe('organization-model', () => {
       city: undefined,
       technicalManagerName: 'Ana',
     })
+
+    // #647: vigência travels as an ISO string (Better Auth rejects Date-typed
+    // fields on JSON bodies), start-of-day / end-of-day anchored. Empty stays
+    // "" so the server clears the stored date (undefined would be skipped by
+    // the partial update).
+    expect(
+      buildOrganizationIsoPayload({
+        ...isoDraft,
+        accreditationValidFrom: '2027-03-01',
+        accreditationValidUntil: '2027-03-05',
+      }),
+    ).toMatchObject({
+      accreditationValidFrom: '2027-03-01T00:00:00.000Z',
+      accreditationValidUntil: '2027-03-05T23:59:59.999Z',
+    })
+    expect(buildOrganizationIsoPayload(isoDraft)).toMatchObject({
+      accreditationValidFrom: '',
+      accreditationValidUntil: '',
+    })
   })
 
   it('builds unit name drafts from units and local overrides', () => {

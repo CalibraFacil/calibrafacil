@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { format, isValid, parse } from 'date-fns'
 import { toast } from 'sonner'
 import { Building06Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -37,6 +38,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import {
   InputGroup,
@@ -62,6 +64,18 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { brazilPhoneMask, cepMask, cnpjMask } from '@/lib/input-masks'
+
+// The vigência drafts stay "yyyy-MM-dd" strings (what buildOrganizationIsoPayload
+// consumes); DateInput is controlled by a local Date, so convert at the edge.
+function draftToDate(value: string): Date | undefined {
+  if (!value) return undefined
+  const parsed = parse(value, 'yyyy-MM-dd', new Date())
+  return isValid(parsed) ? parsed : undefined
+}
+
+function dateToDraft(date: Date | undefined): string {
+  return date && isValid(date) ? format(date, 'yyyy-MM-dd') : ''
+}
 
 export function OrganizationProfileSection({
   activeOrg,
@@ -600,12 +614,11 @@ export function OrganizationProfileSection({
                             <FieldLabel htmlFor="org-accreditation-valid-from">
                               Início da vigência
                             </FieldLabel>
-                            <Input
+                            <DateInput
                               id="org-accreditation-valid-from"
-                              type="date"
-                              value={accreditationValidFrom}
-                              onChange={(e) =>
-                                setAccreditationValidFrom(e.target.value)
+                              value={draftToDate(accreditationValidFrom)}
+                              onChange={(date) =>
+                                setAccreditationValidFrom(dateToDraft(date))
                               }
                               disabled={isUpdatingIso}
                             />
@@ -614,12 +627,11 @@ export function OrganizationProfileSection({
                             <FieldLabel htmlFor="org-accreditation-valid-until">
                               Fim da vigência
                             </FieldLabel>
-                            <Input
+                            <DateInput
                               id="org-accreditation-valid-until"
-                              type="date"
-                              value={accreditationValidUntil}
-                              onChange={(e) =>
-                                setAccreditationValidUntil(e.target.value)
+                              value={draftToDate(accreditationValidUntil)}
+                              onChange={(date) =>
+                                setAccreditationValidUntil(dateToDraft(date))
                               }
                               disabled={isUpdatingIso}
                             />

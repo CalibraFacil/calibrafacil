@@ -1162,6 +1162,23 @@ async function ensureLabInvitationUser(email: string): Promise<void> {
   }
 }
 
+// #647: vigência fields travel as ISO strings (see additionalFields below);
+// these convert string ↔ Date at the adapter boundary. Invalid or empty
+// input clears the field rather than storing an Invalid Date.
+function parseVigenciaInput(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return null;
+}
+
+function formatVigenciaOutput(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "string" && value ? value : null;
+}
+
 // Organization plugin configuration factory
 function createOrganizationPlugin() {
   return organization({
@@ -1187,16 +1204,28 @@ function createOrganizationPlugin() {
             required: false,
             defaultValue: false,
           },
-          // #647: vigência window (nullable)
+          // #647: vigência window (nullable). Declared "string" on the wire:
+          // Better Auth validates `type: "date"` additional fields with a
+          // plain z.date(), which rejects every JSON body (the Date arrives
+          // as an ISO string). The transforms restore Date semantics at the
+          // DB boundary (timestamp column).
           accreditationValidFrom: {
-            type: "date",
+            type: "string",
             input: true,
             required: false,
+            transform: {
+              input: parseVigenciaInput,
+              output: formatVigenciaOutput,
+            },
           },
           accreditationValidUntil: {
-            type: "date",
+            type: "string",
             input: true,
             required: false,
+            transform: {
+              input: parseVigenciaInput,
+              output: formatVigenciaOutput,
+            },
           },
           // Legal-metrology repair authorization (RBMLQ-I oficina permissionária).
           // Optional: existing createOrganization/createUser call sites (backoffice,

@@ -96,9 +96,19 @@ const organizationPluginConfig = organizationClient({
           required: false,
           defaultValue: false,
         },
-        // #647: vigência window (nullable)
-        accreditationValidFrom: { type: "date", input: true, required: false },
-        accreditationValidUntil: { type: "date", input: true, required: false },
+        // #647: vigência window (nullable). "string" (ISO) to mirror the
+        // server plugin — Better Auth rejects `type: "date"` fields on JSON
+        // bodies (z.date() vs. the serialized string), see auth.ts.
+        accreditationValidFrom: {
+          type: "string",
+          input: true,
+          required: false,
+        },
+        accreditationValidUntil: {
+          type: "string",
+          input: true,
+          required: false,
+        },
         street: { type: "string", input: true },
         number: { type: "string", input: true },
         complement: { type: "string", input: true },

@@ -188,19 +188,18 @@ function toDateInputValue(value: Date | string | null | undefined): string {
 
 /**
  * #647: form date ("2027-03-01") → ISO instant for the Better Auth payload;
- * empty clears. `validFrom` anchors at start-of-day and `validUntil` at
- * END-of-day so the final vigência day is inclusive (a certificate emitted at
- * noon on the validUntil date is still inside the window).
+ * empty stays "" so the field clears (the server transform stores "" as
+ * NULL; undefined would be skipped by the partial update, leaving a stale
+ * date in place). `validFrom` anchors at start-of-day and `validUntil` at
+ * END-of-day so the final vigência day is inclusive (a certificate emitted
+ * at noon on the validUntil date is still inside the window).
  */
-function dateInputToIso(
-  value: string,
-  bound: 'start' | 'end',
-): Date | undefined {
+function dateInputToIso(value: string, bound: 'start' | 'end'): string {
   const trimmed = value.trim()
-  if (!trimmed) return undefined
+  if (!trimmed) return ''
   const time = bound === 'start' ? 'T00:00:00.000Z' : 'T23:59:59.999Z'
   const date = new Date(`${trimmed}${time}`)
-  return Number.isNaN(date.getTime()) ? undefined : date
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
 export function createOrganizationIsoDraft(
