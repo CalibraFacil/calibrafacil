@@ -6,6 +6,7 @@ import { GTM_CONTAINER_ID } from "@/lib/analytics/config";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { ConsentGate } from "@/components/landing/consent-gate";
+import { WhatsAppFloat } from "@/components/landing/whatsapp-float";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -63,6 +64,7 @@ export default function RootLayout({
           <main>{children}</main>
           <LandingFooter />
         </div>
+        <WhatsAppFloat />
         <ConsentGate />
         <Analytics />
       </body>
