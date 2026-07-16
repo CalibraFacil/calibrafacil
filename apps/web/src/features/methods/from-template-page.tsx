@@ -152,7 +152,7 @@ export function FromTemplatePage({ search }: { search: FromTemplateSearch }) {
         <PanelHeader
           eyebrow="Cadastro"
           title="Novo método a partir de modelo"
-          description="Modelos curados, fundamentados em guias publicados. Cada modelo entra como RASCUNHO e exige a verificação do seu laboratório antes do uso (ISO/IEC 17025 §7.2.1.5)."
+          description="Modelos curados, fundamentados em guias publicados. Cada modelo entra como RASCUNHO e exige a verificação do seu laboratório antes do uso."
         />
         <div className="mt-4">
           {/* REQ-FTPL-006: completed steps are clickable via handleStepSelect */}
@@ -308,8 +308,8 @@ function ConfirmStep({
             Li os itens [VERIFICAR] e os componentes situacionais deste modelo.
           </AckRow>
           <AckRow checked={ackDuty} onChange={setAckDuty}>
-            Assumo o dever do meu laboratório de VERIFICAR (ISO/IEC 17025
-            §7.2.1.5) e VALIDAR (§7.2.2) este método antes de usá-lo —{' '}
+            Assumo o dever do meu laboratório de VERIFICAR e VALIDAR este método
+            antes de usá-lo.{' '}
             <span className="font-medium text-foreground">
               reconheço que marcar estas caixas NÃO constitui essa verificação.
             </span>

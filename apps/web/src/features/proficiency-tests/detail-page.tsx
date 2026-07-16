@@ -133,7 +133,7 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
         <div className="relative space-y-4">
           <div className="min-w-0">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {PT_ACTIVITY_TYPE_LABELS[pt.activityType]} · §7.7
+              {PT_ACTIVITY_TYPE_LABELS[pt.activityType]}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-3">
               <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
@@ -195,11 +195,11 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
             />
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                Resultado insatisfatório — ação corretiva aberta
+                Resultado insatisfatório: ação corretiva aberta
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Uma CAPA foi aberta automaticamente para tratar o resultado
-                insatisfatório (§7.7.3).{' '}
+                insatisfatório.{' '}
                 <Link
                   to="/dashboard/capa/$id"
                   params={{ id: String(pt.capaId) }}

@@ -31,6 +31,7 @@ import {
   type PtListQueryInput,
   type PtPlanData,
   type PtPlanItem,
+  type PtStandardOptionsData,
   type PtSummaryData,
 } from './types'
 
@@ -98,6 +99,17 @@ export function ptPlanQueryOptions(organizationId: string) {
   })
 }
 
+export function ptStandardOptionsQueryOptions() {
+  return queryOptions({
+    queryKey: ['pt-standard-options'],
+    queryFn: (): Promise<PtStandardOptionsData> =>
+      calibraApi.standards.list({
+        page: 1,
+        limit: 100,
+      }),
+  })
+}
+
 export async function getPtIndexEssentialQueries(url?: URL) {
   const organizationId = await getStableDashboardOrganizationIdForRouteData()
   if (!organizationId) return []
@@ -121,6 +133,13 @@ export async function prewarmPtDetail(queryClient: QueryClient, id: string) {
     ptDetailQueryOptions(id),
     ptAuditLogQueryOptions(id),
   ])
+}
+
+export function usePtStandardOptionsData({ enabled }: { enabled: boolean }) {
+  return useQuery({
+    ...ptStandardOptionsQueryOptions(),
+    enabled,
+  })
 }
 
 export function usePtListData({

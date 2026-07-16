@@ -157,7 +157,7 @@ export function ProficiencyTestListPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Qualidade · ISO/IEC 17025 §7.7
+            Qualidade
           </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Ensaios de proficiência

@@ -412,10 +412,9 @@ export function NCDetailPage({ id }: { id: string }) {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Notificação 7.10</CardTitle>
+              <CardTitle>Notificação ao cliente</CardTitle>
               <CardDescription>
                 Notificação ao cliente sobre resultado fora de tolerância
-                (ISO/IEC 17025 §7.10)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -810,7 +809,7 @@ function OotAmendCertificateDialog({
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState(
-    `Resultado fora de tolerância — ${ncNumber}. Retificação do certificado após avaliação de impacto (ISO/IEC 17025 §7.8.8).`,
+    `Resultado fora de tolerância (${ncNumber}). Retificação do certificado após avaliação de impacto.`,
   )
 
   const amendMutation = useMutation({
@@ -835,9 +834,8 @@ function OotAmendCertificateDialog({
         <DialogHeader>
           <DialogTitle>Retificar certificado</DialogTitle>
           <DialogDescription>
-            Emite um certificado retificado para a ordem {job.jobId} (ISO/IEC
-            17025 §7.8.8). O certificado original passa a constar como
-            substituído.
+            Emite um certificado retificado para a ordem {job.jobId}. O
+            certificado original passa a constar como substituído.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

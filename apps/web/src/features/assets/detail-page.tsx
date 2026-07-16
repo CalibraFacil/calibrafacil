@@ -373,9 +373,8 @@ export function AssetDetailPage({ id }: { id: string }) {
                     Próxima calibração
                     <InfoHint label="Sobre a próxima calibração">
                       A periodicidade de calibração é definida pelo cliente no
-                      portal — o laboratório não atribui periodicidade (NBR
-                      ISO/IEC 17025 §7.8.4.3). Exibida aqui somente para
-                      consulta.
+                      portal. O laboratório não atribui periodicidade; a data é
+                      exibida aqui somente para consulta.
                     </InfoHint>
                   </span>
                 }

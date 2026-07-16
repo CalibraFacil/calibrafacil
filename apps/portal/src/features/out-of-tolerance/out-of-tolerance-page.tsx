@@ -51,7 +51,7 @@ export function OutOfTolerancePage() {
         <PageHeader
           eyebrow="Qualidade"
           title="Fora de tolerância"
-          description="Notificações de resultados fora de tolerância (ISO/IEC 17025 §7.10)."
+          description="Notificações de resultados fora de tolerância."
         />
         <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
           A confirmação registra apenas o recebimento da notificação.

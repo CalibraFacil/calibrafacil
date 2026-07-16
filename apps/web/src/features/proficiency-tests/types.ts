@@ -141,3 +141,14 @@ export type PtPlanItem = {
 export type PtPlanData = {
   data: PtPlanItem[]
 }
+
+/** Minimal reference-standard option list for the create-round form. */
+export type PtStandardOption = {
+  id: number
+  name: string
+  serialNumber: string
+}
+
+export type PtStandardOptionsData = {
+  data: PtStandardOption[]
+}

@@ -61,7 +61,7 @@ const NC_TYPES: ReadonlyArray<{
   {
     value: 'out_of_tolerance',
     label: 'Fora de tolerância',
-    hint: 'Resultado "como encontrado" fora de tolerância (§7.10)',
+    hint: 'Resultado "como encontrado" fora de tolerância',
     icon: Alert02Icon,
   },
 ]

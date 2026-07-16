@@ -70,10 +70,19 @@ const routeLabels: Record<string, string> = {
   '/dashboard/finance/analytics': 'Análises financeiras',
   '/dashboard/finance/automation': 'Automação financeira',
   '/dashboard/finance/erp': 'ERP financeiro',
+  '/dashboard/finance/cash-forecast': 'Previsão de caixa',
+  '/dashboard/finance/margin-dashboards': 'Painel de margens',
+  '/dashboard/finance/operations-to-cash': 'Operação ao caixa',
+  '/dashboard/finance/revenue-leakage': 'Alertas de receita',
 
   // Clients
   '/dashboard/clients': 'Clientes',
   '/dashboard/clients/new': 'Novo Cliente',
+  '/dashboard/clients/groups': 'Grupos de Clientes',
+  '/dashboard/clients/groups/$groupId': 'Grupo',
+  '/dashboard/clients/groups/$groupId/overview': 'Visão geral',
+  '/dashboard/clients/groups/$groupId/unidades': 'Unidades',
+  '/dashboard/clients/groups/$groupId/gestor': 'Gestor',
   '/dashboard/clients/$id': 'Cliente',
   '/dashboard/clients/$id/overview': 'Visão geral',
   '/dashboard/clients/$id/info': 'Informações',
@@ -147,8 +156,34 @@ const routeLabels: Record<string, string> = {
   '/dashboard/personnel/$id/training': 'Treinamentos',
   '/dashboard/personnel/$id/audit': 'Histórico',
 
+  // Proficiency tests
+  '/dashboard/proficiency-tests': 'Ensaios de Proficiência',
+  '/dashboard/proficiency-tests/new': 'Novo Ensaio',
+  '/dashboard/proficiency-tests/plan': 'Plano de Participação',
+  '/dashboard/proficiency-tests/$id': 'Ensaio',
+
+  // Control charts (SPC)
+  '/dashboard/spc': 'Cartas de Controle',
+  '/dashboard/spc/$id': 'Carta',
+
+  // Visits
+  '/dashboard/visits': 'Visitas',
+  '/dashboard/visits/$id': 'Visita',
+
+  // Sync
+  '/dashboard/sync/conflicts': 'Conflitos de Sincronização',
+
   // Certificate Templates
   '/dashboard/certificate-templates': 'Templates de Certificados',
+
+  // Settings (extra pages)
+  '/dashboard/settings/accredited-scope': 'Escopo Acreditado',
+  '/dashboard/settings/automatic-send': 'Envio Automático',
+  '/dashboard/settings/certificate-release': 'Liberação de Certificados',
+  '/dashboard/settings/environment': 'Condições Ambientais',
+  '/dashboard/settings/members': 'Membros e Convites',
+  '/dashboard/settings/units': 'Unidades e Governança',
+  '/dashboard/settings/integrations/drift': 'Divergências de Integração',
 }
 
 function getCachedLabel(

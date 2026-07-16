@@ -18,7 +18,6 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Empty,
   EmptyContent,
@@ -28,12 +27,21 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import {
   ACTION_BUTTON_CLASS,
   Panel,
-  PanelHeader,
   SignalTile,
   StaggerGroup,
   StaggerItem,
+  type SignalTone,
 } from '@/components/instrument-panel'
 import {
   Select,
@@ -42,6 +50,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
+import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
@@ -58,13 +67,71 @@ import {
   type ControlChartFormData,
 } from '@/features/spc/forms'
 import {
-  SPC_CHART_TYPE_LABELS,
   SPC_STATUSES,
   SPC_STATUS_LABELS,
   type SpcChartType,
   type SpcStatus,
 } from '@/features/spc/types'
 import { spcChartColumns } from '@/features/spc/components/spc-chart-columns'
+
+const CHART_TYPE_OPTIONS: Array<{
+  value: SpcChartType
+  label: string
+  hint: string
+}> = [
+  {
+    value: 'i_mr',
+    label: 'I-MR (individuais)',
+    hint: 'Uma leitura por verificação. A escolha padrão para monitorar um ponto.',
+  },
+  {
+    value: 'xbar_r',
+    label: 'X̄-R (subgrupos)',
+    hint: 'Médias de subgrupos de 2 a 10 leituras feitas na mesma sessão.',
+  },
+  {
+    value: 'cusum',
+    label: 'CUSUM',
+    hint: 'Soma acumulada. Detecta desvios pequenos e persistentes da média.',
+  },
+  {
+    value: 'ewma',
+    label: 'EWMA',
+    hint: 'Média móvel ponderada. Sensível a mudanças graduais no processo.',
+  },
+]
+
+const STATUS_TILES: Array<{
+  status: SpcStatus
+  label: string
+  icon: typeof Alert02Icon
+  tone: (count: number) => SignalTone
+}> = [
+  {
+    status: 'in_control',
+    label: 'Sob controle',
+    icon: CheckmarkCircle01Icon,
+    tone: () => 'ok',
+  },
+  {
+    status: 'trending',
+    label: 'Tendência',
+    icon: Analytics01Icon,
+    tone: (count) => (count > 0 ? 'warning' : 'neutral'),
+  },
+  {
+    status: 'out_of_control',
+    label: 'Fora de controle',
+    icon: Alert02Icon,
+    tone: (count) => (count > 0 ? 'critical' : 'neutral'),
+  },
+  {
+    status: 'insufficient_data',
+    label: 'Dados insuficientes',
+    icon: AlertCircleIcon,
+    tone: () => 'neutral',
+  },
+]
 
 function parseSpcStatusFilter(value: string | null): SpcStatus | '' {
   switch (value) {
@@ -75,18 +142,6 @@ function parseSpcStatusFilter(value: string | null): SpcStatus | '' {
       return value
     default:
       return ''
-  }
-}
-
-function parseSpcChartType(value: string | null): SpcChartType | null {
-  switch (value) {
-    case 'i_mr':
-    case 'xbar_r':
-    case 'cusum':
-    case 'ewma':
-      return value
-    default:
-      return null
   }
 }
 
@@ -109,6 +164,7 @@ export function SpcOverviewPage() {
     'standardId',
     parseAsString.withDefault(''),
   )
+  const [createOpen, setCreateOpen] = useState(Boolean(standardIdParam))
 
   const standardId = numericStandardId(standardIdParam)
 
@@ -133,6 +189,11 @@ export function SpcOverviewPage() {
 
   const statusCount = (status: SpcStatus) =>
     summary?.data.filter((chart) => chart.status === status).length ?? 0
+
+  const toggleStatusFilter = (status: SpcStatus) => {
+    setStatusFilter(statusFilter === status ? '' : status)
+    setPage(1)
+  }
 
   const hasFilters = Boolean(statusFilter || standardId)
 
@@ -167,56 +228,57 @@ export function SpcOverviewPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Qualidade · ISO/IEC 17025 §7.7.1
+            Qualidade
           </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
-            Cartas de controle (CEP)
+            Cartas de controle
           </h1>
           <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
-            Controle estatístico das leituras de verificação intermediária dos
-            padrões de referência.
+            Acompanhe as leituras de verificação dos padrões de referência e
+            receba sinais quando algo sair do esperado.
           </p>
         </div>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className={ACTION_BUTTON_CLASS}
+        >
+          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+          Nova carta
+        </Button>
       </div>
 
       {summary && (
         <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StaggerItem>
-            <SignalTile
-              icon={CheckmarkCircle01Icon}
-              label="Sob controle"
-              value={statusCount('in_control')}
-              tone="ok"
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <SignalTile
-              icon={Analytics01Icon}
-              label="Tendência"
-              value={statusCount('trending')}
-              tone={statusCount('trending') > 0 ? 'warning' : 'neutral'}
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <SignalTile
-              icon={Alert02Icon}
-              label="Fora de controle"
-              value={statusCount('out_of_control')}
-              tone={statusCount('out_of_control') > 0 ? 'critical' : 'neutral'}
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <SignalTile
-              icon={AlertCircleIcon}
-              label="Dados insuficientes"
-              value={statusCount('insufficient_data')}
-              tone="neutral"
-            />
-          </StaggerItem>
+          {STATUS_TILES.map((tile) => {
+            const count = statusCount(tile.status)
+            const active = statusFilter === tile.status
+            return (
+              <StaggerItem key={tile.status}>
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleStatusFilter(tile.status)}
+                  title={
+                    active ? 'Remover filtro' : `Filtrar por "${tile.label}"`
+                  }
+                  className={cn(
+                    'block w-full rounded-xl text-left transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    active &&
+                      'ring-2 ring-primary/60 ring-offset-2 ring-offset-background',
+                  )}
+                >
+                  <SignalTile
+                    icon={tile.icon}
+                    label={tile.label}
+                    value={count}
+                    tone={tile.tone(count)}
+                  />
+                </button>
+              </StaggerItem>
+            )
+          })}
         </StaggerGroup>
       )}
-
-      <NewChartPanel initialStandardId={standardIdParam} canLoad={canLoad} />
 
       <Panel className="p-4 sm:p-5">
         <div>
@@ -275,7 +337,7 @@ export function SpcOverviewPage() {
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                {hasFilters && (
+                {hasFilters ? (
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -285,6 +347,17 @@ export function SpcOverviewPage() {
                     }}
                   >
                     Limpar filtros
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setCreateOpen(true)}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 size-4"
+                    />
+                    Criar primeira carta
                   </Button>
                 )}
               </EmptyContent>
@@ -300,19 +373,29 @@ export function SpcOverviewPage() {
           )}
         </div>
       </Panel>
+
+      <NewChartDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        initialStandardId={standardIdParam}
+        canLoad={canLoad}
+      />
     </div>
   )
 }
 
-function NewChartPanel({
+function NewChartDialog({
+  open,
+  onOpenChange,
   initialStandardId,
   canLoad,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   initialStandardId: string
   canLoad: boolean
 }) {
   const navigate = useNavigate()
-  const [open, setOpen] = useState(Boolean(initialStandardId))
   const [form, setForm] = useState<ControlChartFormData>({
     standardId: initialStandardId,
     parameter: '',
@@ -342,6 +425,7 @@ function NewChartPanel({
     createMutation.mutate(parsed.data, {
       onSuccess: (chart) => {
         toast.success('Carta de controle criada')
+        onOpenChange(false)
         navigate({
           to: '/dashboard/spc/$id',
           params: { id: String(chart.id) },
@@ -353,146 +437,170 @@ function NewChartPanel({
     })
   }
 
-  if (!open) {
-    return (
-      <div className="flex justify-end">
-        <Button onClick={() => setOpen(true)} className={ACTION_BUTTON_CLASS}>
-          <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-          Nova carta
-        </Button>
-      </div>
-    )
-  }
-
   return (
-    <Panel className="p-4 sm:p-5">
-      <PanelHeader
-        eyebrow="Monitoramento"
-        title="Nova carta de controle"
-        description="Escolha o padrão e o parâmetro monitorado. Os limites de controle são calculados a partir da janela base de leituras."
-      />
-      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-2">
-            <Label>Padrão de referência</Label>
-            <Select
-              value={form.standardId}
-              onValueChange={(v) =>
-                setForm((current) => ({ ...current, standardId: v ?? '' }))
-              }
-            >
-              <SelectTrigger>
-                <span
-                  className="flex flex-1 text-left line-clamp-1"
-                  data-slot="select-value"
-                >
-                  {selectedStandard
-                    ? selectedStandard.name
-                    : 'Selecione o padrão'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {standardsData?.data.map((standard) => (
-                  <SelectItem key={standard.id} value={String(standard.id)}>
-                    {standard.name} ({standard.serialNumber})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Nova carta de controle</DialogTitle>
+          <DialogDescription>
+            Escolha o padrão e o ponto monitorado. Os limites de controle são
+            calculados automaticamente a partir das primeiras leituras.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-2">
-            <Label>Parâmetro / ponto de medição</Label>
-            <Input
-              value={form.parameter}
-              onChange={(e) =>
-                setForm((current) => ({
-                  ...current,
-                  parameter: e.target.value,
-                }))
-              }
-              placeholder="Ex: Ponto 100 g"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tipo de carta</Label>
-            <Select
-              value={form.chartType}
-              onValueChange={(v) => {
-                const chartType = parseSpcChartType(v)
-                if (chartType) {
-                  setForm((current) => ({ ...current, chartType }))
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>Padrão de referência *</FieldLabel>
+              <Select
+                value={form.standardId}
+                onValueChange={(v) =>
+                  setForm((current) => ({ ...current, standardId: v ?? '' }))
                 }
-              }}
-            >
-              <SelectTrigger>
-                <span
-                  className="flex flex-1 text-left line-clamp-1"
-                  data-slot="select-value"
-                >
-                  {SPC_CHART_TYPE_LABELS[form.chartType]}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="i_mr">I-MR (individuais)</SelectItem>
-                <SelectItem value="xbar_r">X̄-R (subgrupos)</SelectItem>
-                <SelectItem value="cusum">CUSUM</SelectItem>
-                <SelectItem value="ewma">EWMA</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              >
+                <SelectTrigger>
+                  <span
+                    className="flex flex-1 text-left line-clamp-1"
+                    data-slot="select-value"
+                  >
+                    {selectedStandard
+                      ? selectedStandard.name
+                      : 'Selecione o padrão'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {standardsData?.data.map((standard) => (
+                    <SelectItem key={standard.id} value={String(standard.id)}>
+                      {standard.name} ({standard.serialNumber})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
 
-          <div className="space-y-2">
-            <Label>Janela base (opcional)</Label>
-            <Input
-              inputMode="numeric"
-              value={form.baselineWindow}
-              onChange={(e) =>
-                setForm((current) => ({
-                  ...current,
-                  baselineWindow: e.target.value,
-                }))
-              }
-              placeholder="Ex: 20"
-            />
-          </div>
-
-          {form.chartType === 'xbar_r' && (
-            <div className="space-y-2">
-              <Label>Tamanho do subgrupo</Label>
+            <Field>
+              <FieldLabel htmlFor="spc-parameter">
+                Parâmetro / ponto de medição *
+              </FieldLabel>
               <Input
-                inputMode="numeric"
-                value={form.subgroupSize}
+                id="spc-parameter"
+                value={form.parameter}
                 onChange={(e) =>
                   setForm((current) => ({
                     ...current,
-                    subgroupSize: e.target.value,
+                    parameter: e.target.value,
                   }))
                 }
-                placeholder="Ex: 4"
+                placeholder="Ex: Ponto 100 g"
               />
-            </div>
-          )}
-        </div>
+              <FieldDescription>
+                O ponto verificado. Cada ponto do padrão tem a própria carta.
+              </FieldDescription>
+            </Field>
+          </div>
 
-        <div className="flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setOpen(false)}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            className={ACTION_BUTTON_CLASS}
-            disabled={createMutation.isPending}
-          >
-            {createMutation.isPending ? 'Criando...' : 'Criar carta'}
-          </Button>
-        </div>
-      </form>
-    </Panel>
+          <Field>
+            <FieldLabel>Tipo de carta</FieldLabel>
+            <div
+              role="radiogroup"
+              aria-label="Tipo de carta"
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              {CHART_TYPE_OPTIONS.map((option) => {
+                const selected = form.chartType === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        chartType: option.value,
+                      }))
+                    }
+                    className={cn(
+                      'flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-[background-color,box-shadow,transform] active:scale-[0.98]',
+                      selected
+                        ? 'border-transparent bg-primary/5 shadow-[0_0_0_1.5px_hsl(var(--primary))]'
+                        : 'border-border/70 hover:bg-muted/40',
+                    )}
+                  >
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="text-xs leading-4 text-muted-foreground">
+                      {option.hint}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="spc-baseline">Janela base</FieldLabel>
+              <Input
+                id="spc-baseline"
+                inputMode="numeric"
+                value={form.baselineWindow}
+                onChange={(e) =>
+                  setForm((current) => ({
+                    ...current,
+                    baselineWindow: e.target.value,
+                  }))
+                }
+                placeholder="Ex: 20"
+              />
+              <FieldDescription>
+                Opcional. Quantas leituras iniciais definem os limites de
+                controle.
+              </FieldDescription>
+            </Field>
+
+            {form.chartType === 'xbar_r' && (
+              <Field>
+                <FieldLabel htmlFor="spc-subgroup">
+                  Tamanho do subgrupo *
+                </FieldLabel>
+                <Input
+                  id="spc-subgroup"
+                  inputMode="numeric"
+                  value={form.subgroupSize}
+                  onChange={(e) =>
+                    setForm((current) => ({
+                      ...current,
+                      subgroupSize: e.target.value,
+                    }))
+                  }
+                  placeholder="Ex: 4"
+                />
+                <FieldDescription>
+                  Leituras por sessão de verificação (2 a 10).
+                </FieldDescription>
+              </Field>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={createMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className={ACTION_BUTTON_CLASS}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? 'Criando...' : 'Criar carta'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -66,8 +66,8 @@ export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
         </h3>
         <p className="text-xs text-muted-foreground">
           Eventos gerados na aprovação de certificados reprovados na condição
-          "como recebido". A avaliação de impacto (ISO 9001 §7.1.5.2) é
-          registrada pelo cliente no portal.
+          "como recebido". A avaliação de impacto é registrada pelo cliente no
+          portal.
         </p>
       </div>
       {isLoading ? (

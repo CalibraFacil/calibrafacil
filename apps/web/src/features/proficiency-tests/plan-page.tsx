@@ -159,7 +159,7 @@ export function ProficiencyTestPlanPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Qualidade · NIT-DICLA-026 §9.4
+            Qualidade
           </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Plano de participação em EP

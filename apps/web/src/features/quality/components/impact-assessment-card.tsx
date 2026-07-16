@@ -103,7 +103,7 @@ export function ImpactAssessmentCard({
         <CardTitle>Avaliação de impacto</CardTitle>
         <CardDescription>
           Avaliação guiada do impacto do resultado fora de tolerância nas
-          medições do cliente (ISO/IEC 17025 §7.10)
+          medições do cliente
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -479,7 +479,7 @@ function SignAssessmentSection({
           <DialogHeader>
             <DialogTitle>Assinar avaliação de impacto</DialogTitle>
             <DialogDescription>
-              A assinatura congela o registro (ISO/IEC 17025 §7.10.2).
+              A assinatura congela o registro e não pode ser desfeita.
               Confirmar?
             </DialogDescription>
           </DialogHeader>

@@ -119,7 +119,7 @@ export function StandardRecallPanel({
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Qualidade · ISO/IEC 17025 §7.10"
+        eyebrow="Qualidade"
         title="Recall de certificados"
         description="Notificação de clientes sobre certificados emitidos com este padrão fora de tolerância."
       />
@@ -329,7 +329,7 @@ function RecallDraftWizard({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Aprovar recall §7.10</DialogTitle>
+            <DialogTitle>Aprovar recall</DialogTitle>
             <DialogDescription>
               Serão enviadas notificações para{' '}
               <span className="font-medium text-foreground">
@@ -344,8 +344,8 @@ function RecallDraftWizard({
                 {formatDate(impacted?.window.from ?? null)} –{' '}
                 {formatDate(impacted?.window.to ?? null)}
               </span>
-              . O envio registra você como aprovador do lote (§7.10.1) e fica
-              documentado na não conformidade.
+              . O envio registra você como aprovador do lote e fica documentado
+              na não conformidade.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

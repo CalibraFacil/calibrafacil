@@ -695,12 +695,12 @@ export function ApprovedJobRecord({
                 icon={Alert02Icon}
                 className="h-5 w-5 text-destructive"
               />
-              Registrar NC 7.10
+              Registrar não conformidade
             </DialogTitle>
             <DialogDescription>
               Abre uma não conformidade do tipo &quot;fora de tolerância&quot;
               para este resultado como encontrado e, se marcado, notifica o
-              cliente conforme a ISO/IEC 17025 §7.10.
+              cliente.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -738,7 +738,7 @@ export function ApprovedJobRecord({
                 htmlFor="oot-notify-customer"
                 className="text-sm font-normal"
               >
-                Notificar cliente (e-mail + PDF §7.10)
+                Notificar cliente (e-mail + PDF)
               </Label>
             </div>
           </div>
