@@ -194,7 +194,7 @@ function toDateInputValue(value: Date | string | null | undefined): string {
  * END-of-day so the final vigência day is inclusive (a certificate emitted
  * at noon on the validUntil date is still inside the window).
  */
-function dateInputToIso(value: string, bound: 'start' | 'end'): string {
+export function dateInputToIso(value: string, bound: 'start' | 'end'): string {
   const trimmed = value.trim()
   if (!trimmed) return ''
   const time = bound === 'start' ? 'T00:00:00.000Z' : 'T23:59:59.999Z'

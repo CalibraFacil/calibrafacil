@@ -6,6 +6,7 @@ import type { z } from "zod";
 import type { AuthVariables } from "../../middleware/permission";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
 import { buildAsFoundReliabilityVerdict } from "../../lib/as-found-reliability-verdict";
+import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
 import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 import { advanceAssetCalibrationDatesOnApproval } from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
@@ -39,7 +40,12 @@ export type ApproveJobResult =
       status: "environmental_justification_required";
       environmentalSnapshot: JobRow["environmentalSnapshot"];
     }
-  | { status: "approved"; job: JobRow | undefined };
+  | {
+      status: "approved";
+      job: JobRow | undefined;
+      /** Accredited-scope (CMC) classification frozen at approval (#427). */
+      scopeCompliance: JobRow["scopeComplianceStatus"];
+    };
 
 /**
  * Approve a calibration job: the ISO/IEC 17025 release gates, the
@@ -177,6 +183,21 @@ export async function approveJob(input: {
     results: existing.results,
   });
 
+  // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
+  // (#427 Phase 0). Re-classified here at the emission date so the frozen
+  // record is authoritative even if scope lines changed since submit.
+  // Warn-only: the classification never blocks the approval.
+  const approvedAt = new Date();
+  const scopeCompliance = await classifyJobScopeCompliance({
+    organizationId: memberData.organizationId,
+    unitId: existing.unitId,
+    methodSnapshot: existing.methodSnapshot,
+    assetSnapshot: existing.assetSnapshot,
+    data: existing.data,
+    results: existing.results,
+    atDate: approvedAt,
+  });
+
   // Update job status to GENERATING_PDF and set approver info
   // (we set approved_by now so the PDF worker can fetch it)
   const [updated] = await db
@@ -184,9 +205,11 @@ export async function approveJob(input: {
     .set({
       status: "GENERATING_PDF",
       approvedBy: approverId,
-      approvedAt: new Date(),
+      approvedAt,
       asFoundConformity: asFoundVerdict.conformity,
       asFoundMargins: asFoundVerdict.margins,
+      scopeComplianceStatus: scopeCompliance?.status ?? null,
+      scopeComplianceFindings: scopeCompliance?.findings ?? null,
       certificateTemplateId:
         existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
       certificateTemplateSnapshot:
@@ -202,6 +225,14 @@ export async function approveJob(input: {
     action: "approve",
     changes: {
       status: { old: existing.status, new: "GENERATING_PDF" },
+      ...(scopeCompliance
+        ? {
+            scopeComplianceStatus: {
+              old: existing.scopeComplianceStatus,
+              new: scopeCompliance.status,
+            },
+          }
+        : {}),
     },
     performedBy: approverId,
     ipAddress: input.metadata.ipAddress ?? null,
@@ -297,5 +328,9 @@ export async function approveJob(input: {
     }
   })();
 
-  return { status: "approved", job: updated };
+  return {
+    status: "approved",
+    job: updated,
+    scopeCompliance: scopeCompliance?.status ?? null,
+  };
 }

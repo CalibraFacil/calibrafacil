@@ -20,6 +20,7 @@ import type {
   MethodPublishDraftInput,
   MethodRequestApprovalInput,
   MethodWriteInput,
+  SaveAccreditedScopeLineInput,
   SaveEnvironmentalLimitInput,
   SaveServiceOrderEvaluationInput,
   SaveServiceOrderExecutionInput,
@@ -70,6 +71,7 @@ import { createCustomersApi } from "./modules/customers";
 import { createCustomerGroupsApi } from "./modules/customer-groups";
 import { createDashboardApi } from "./modules/dashboard";
 import { createEntityLabelsApi } from "./modules/entity-labels";
+import { createAccreditedScopeApi } from "./modules/accredited-scope";
 import { createEnvironmentalLimitsApi } from "./modules/environmental-limits";
 import { createFinanceApi } from "./modules/finance";
 import { createIntegrationsApi } from "./modules/integrations";
@@ -612,6 +614,15 @@ export function createCloudApiClient(
           };
         };
       };
+      "accredited-scope": {
+        $get(): Promise<Response>;
+        $put(input: {
+          json: SaveAccreditedScopeLineInput;
+        }): Promise<Response>;
+        ":id": {
+          $delete(input: { param: { id: string } }): Promise<Response>;
+        };
+      };
       customers: {
         $get(input: {
           query: {
@@ -803,6 +814,7 @@ export function createCloudApiClient(
     assets: createAssetsApi(rawCloudClient),
     assetTypes: createAssetTypesApi(rawCloudClient),
     environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient),
+    accreditedScope: createAccreditedScopeApi(rawCloudClient),
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),
     materials: createMaterialsApi(rawCloudClient),

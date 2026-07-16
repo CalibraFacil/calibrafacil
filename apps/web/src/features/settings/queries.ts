@@ -5,6 +5,7 @@ import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import type {
   ApiKeysData,
+  SettingsAccreditedScopeData,
   OrganizationGovernanceActivityData,
   OrganizationGovernanceMembersData,
   OrganizationInvitation,
@@ -123,6 +124,16 @@ export function environmentalLimitsQueryOptions(unitId: number | null) {
     queryFn: () =>
       trustedApiResult<SettingsEnvironmentalLimitsData>(
         calibraApi.environmentalLimits.list(),
+      ),
+  })
+}
+
+export function accreditedScopeQueryOptions(unitId: number | null) {
+  return queryOptions({
+    queryKey: ['accredited-scope', unitId ?? 'no-unit'],
+    queryFn: () =>
+      trustedApiResult<SettingsAccreditedScopeData>(
+        calibraApi.accreditedScope.list(),
       ),
   })
 }
@@ -428,6 +439,19 @@ export function useEnvironmentalLimitsData({
 }) {
   return useQuery({
     ...environmentalLimitsQueryOptions(unitId),
+    enabled,
+  })
+}
+
+export function useAccreditedScopeData({
+  enabled,
+  unitId,
+}: {
+  enabled: boolean
+  unitId: number | null
+}) {
+  return useQuery({
+    ...accreditedScopeQueryOptions(unitId),
     enabled,
   })
 }

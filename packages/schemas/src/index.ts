@@ -2144,6 +2144,70 @@ export type EnvironmentalLimitsInput = z.infer<
 >;
 
 /**
+ * Quantity kinds understood by the kind-aware unit registry
+ * (`@calibra-facil/shared/units`). Must stay in sync with `QuantityKind`.
+ */
+export const QuantityKindSchema = z.enum([
+  "mass",
+  "length",
+  "temperature",
+  "pressure",
+  "volume",
+  "time",
+  "torque",
+  "humidity",
+  "force",
+  "voltage",
+  "current",
+  "resistance",
+  "frequency",
+]);
+
+/**
+ * Accredited-scope line (CMC) — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427).
+ * CMC(x) = cmcA + cmcB·|x| with x in rangeUnit and the result in cmcUnit;
+ * "fixed" ignores cmcB. Upsert payload: `id` present = update.
+ */
+export const AccreditedScopeLineSchema = z
+  .object({
+    id: z.number().optional(),
+    quantityKind: QuantityKindSchema,
+    rangeMin: z.number(),
+    rangeMax: z.number(),
+    rangeUnit: MeasurementUnitSchema,
+    cmcType: z.enum(["fixed", "linear"]).default("fixed"),
+    cmcA: z.number().nonnegative("CMC deve ser positiva"),
+    cmcB: z.number().nonnegative().nullable().optional(),
+    cmcUnit: MeasurementUnitSchema,
+    // Optional on purpose (no default): an omitted field on update must
+    // preserve the stored value instead of silently resetting it to 2.
+    coverageFactor: z.number().positive().optional(),
+    description: z.string().max(500).nullable().optional(),
+    validFrom: z.string().datetime().nullable().optional(),
+    validUntil: z.string().datetime().nullable().optional(),
+  })
+  .refine((line) => line.rangeMax >= line.rangeMin, {
+    message: "Faixa inválida: o limite superior deve ser maior que o inferior",
+    path: ["rangeMax"],
+  })
+  .refine((line) => line.cmcType === "fixed" || line.cmcB != null, {
+    message: "CMC linear exige o coeficiente por unidade de leitura",
+    path: ["cmcB"],
+  })
+  .refine(
+    (line) =>
+      line.cmcType === "linear" || line.cmcA > 0,
+    {
+      message: "CMC fixa deve ser maior que zero",
+      path: ["cmcA"],
+    },
+  );
+
+export type AccreditedScopeLineInput = z.infer<
+  typeof AccreditedScopeLineSchema
+>;
+
+/**
  * Schema for executing a job (saving worksheet data)
  * Includes selected reference standards for ISO 17025 traceability
  */

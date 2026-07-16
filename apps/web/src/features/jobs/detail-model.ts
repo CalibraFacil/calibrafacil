@@ -204,6 +204,18 @@ export type ReviewJobDetailData = {
   data?: Record<string, unknown> | null
   results?: Record<string, unknown> | null
   environmentalSnapshot?: { withinLimits?: boolean | null } | null
+  scopeComplianceStatus?: string | null
+  scopeComplianceFindings?: ScopeComplianceFindingData[] | null
+}
+
+/**
+ * Accredited-scope (CMC) finding frozen on the job by the server-side guard
+ * (#427 — ISO/IEC 17025 §7.6/§7.8.3). Mirrors `ScopeComplianceFinding` in
+ * `@calibra-facil/shared`, tolerant of missing fields on older records.
+ */
+export type ScopeComplianceFindingData = {
+  kind?: string | null
+  message?: string | null
 }
 
 type EnvironmentalLimitRange = {
@@ -259,6 +271,8 @@ export type JobDetailData = {
   amendmentReason?: string | null
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
+  scopeComplianceStatus?: string | null
+  scopeComplianceFindings?: ScopeComplianceFindingData[] | null
 }
 
 export type ReviewContextItem = {
@@ -805,6 +819,64 @@ export function buildJobVerdictModel(input: {
   }
 }
 
+/**
+ * Signer-facing warnings from the frozen accredited-scope (CMC) verdict.
+ * One item per server finding when available, else a single generic warning
+ * for the adverse status. PASS/NOT_EVALUATED/absent produce nothing.
+ */
+export function buildScopeComplianceWarnings(
+  job: ReviewJobDetailData | null | undefined,
+): AcceptanceItem[] {
+  const status = job?.scopeComplianceStatus
+  const findings = job?.scopeComplianceFindings ?? []
+
+  // The guard ran but could not check anything — an accredited certificate
+  // would issue unverified. Never silent: the signer must check manually.
+  if (status === 'NOT_EVALUATED') {
+    return [
+      {
+        key: 'scope-compliance-not-evaluated',
+        message:
+          'O escopo acreditado (CMC) não pôde ser verificado automaticamente para este job. Confira os pontos e a incerteza manualmente contra o escopo antes de assinar.',
+        severity: 'warning',
+        status: 'warning',
+      },
+    ]
+  }
+
+  // On PASS, only partial-coverage notes surface (points the gate had to
+  // skip); on adverse statuses every finding surfaces.
+  const relevant =
+    status === 'OUT_OF_SCOPE' || status === 'U_BELOW_CMC'
+      ? findings
+      : status === 'PASS'
+        ? findings.filter((finding) => finding?.kind === 'not_evaluated')
+        : []
+  const findingMessages = relevant.flatMap((finding) =>
+    finding?.message ? [finding.message] : [],
+  )
+  if (findingMessages.length > 0) {
+    return findingMessages.map((message, index) => ({
+      key: `scope-compliance-${index}`,
+      message,
+      severity: 'warning' as const,
+      status: 'warning' as const,
+    }))
+  }
+  if (status !== 'OUT_OF_SCOPE' && status !== 'U_BELOW_CMC') return []
+  return [
+    {
+      key: 'scope-compliance',
+      message:
+        status === 'OUT_OF_SCOPE'
+          ? 'Ponto calibrado fora do escopo acreditado (CMC).'
+          : 'Incerteza reportada menor que a CMC do escopo acreditado.',
+      severity: 'warning',
+      status: 'warning',
+    },
+  ]
+}
+
 export function buildJobReviewModel(
   job: ReviewJobDetailData | null | undefined,
 ) {
@@ -903,9 +975,15 @@ export function buildJobReviewModel(
           status: 'warning' as const,
         }
       : null
-  const quickAlertItems = environmentalWarning
-    ? [...acceptanceItems, environmentalWarning]
-    : acceptanceItems
+  // Accredited-scope (CMC) guard (#427 Phase 0): the server classifies at
+  // submit/approve; here we only surface the frozen verdict to the signer.
+  // Warn-only — never blocks the approval.
+  const scopeComplianceWarnings = buildScopeComplianceWarnings(job)
+  const quickAlertItems = [
+    ...acceptanceItems,
+    ...(environmentalWarning ? [environmentalWarning] : []),
+    ...scopeComplianceWarnings,
+  ]
 
   const expandedUncertainty = formatExpandedUncertainty(
     displayReviewResults,

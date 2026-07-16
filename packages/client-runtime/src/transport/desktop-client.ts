@@ -915,6 +915,9 @@ export function createDesktopApiClient(
         };
       },
     },
+    accreditedScope: desktopCloudOnlyStubs("accreditedScope", {
+      action: "Escopo acreditado (CMC)",
+    }),
     reports: desktopCloudOnlyStubs("reports", {
       action: "Relatórios consolidados",
     }),

@@ -1191,6 +1191,61 @@ export interface EnvironmentalLimitsApi {
   delete(id: number): Promise<{ message: string }>;
 }
 
+/** Accredited-scope (CMC) line — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427). */
+export type AccreditedScopeLine = {
+  id: number;
+  unitId: number;
+  quantityKind: string;
+  rangeMin: number;
+  rangeMax: number;
+  rangeUnit: string;
+  cmcType: "fixed" | "linear";
+  cmcA: number;
+  cmcB: number | null;
+  cmcUnit: string;
+  coverageFactor: number;
+  description: string | null;
+  validFrom: string | Date | null;
+  validUntil: string | Date | null;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+};
+
+export type AccreditedScopeResponse = {
+  lines: AccreditedScopeLine[];
+  unit: { unitId: number | null; unitName: string | null };
+};
+
+export type SaveAccreditedScopeLineInput = {
+  id?: number;
+  quantityKind: string;
+  rangeMin: number;
+  rangeMax: number;
+  rangeUnit: string;
+  cmcType: "fixed" | "linear";
+  cmcA: number;
+  cmcB?: number | null;
+  cmcUnit: string;
+  coverageFactor?: number;
+  description?: string | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+};
+
+export type SaveAccreditedScopeLineResponse = {
+  message: string;
+  data: AccreditedScopeLine;
+  unit: { unitId: number | null; unitName: string | null };
+};
+
+export interface AccreditedScopeApi {
+  list(): Promise<AccreditedScopeResponse>;
+  save(
+    input: SaveAccreditedScopeLineInput,
+  ): Promise<SaveAccreditedScopeLineResponse>;
+  delete(id: number): Promise<{ message: string }>;
+}
+
 export type ReportsQueryInput = {
   period?: string;
   unitIds?: string;
@@ -3055,6 +3110,7 @@ export interface CalibraApi {
   sync: SyncApi;
   attachments: AttachmentsApi;
   environmentalLimits: EnvironmentalLimitsApi;
+  accreditedScope: AccreditedScopeApi;
   reports: ReportsApi;
   publicCheckout: PublicCheckoutApi;
   publicInvitations: PublicInvitationsApi;

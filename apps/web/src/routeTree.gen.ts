@@ -82,6 +82,7 @@ import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard
 import { Route as DashboardSettingsAutomaticSendRouteImport } from './routes/dashboard/settings/automatic-send'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
+import { Route as DashboardSettingsAccreditedScopeRouteImport } from './routes/dashboard/settings/accredited-scope'
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
 import { Route as DashboardServiceOrdersNewRouteImport } from './routes/dashboard/service-orders/new'
 import { Route as DashboardServiceOrdersIdRouteImport } from './routes/dashboard/service-orders/$id'
@@ -545,6 +546,12 @@ const DashboardSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsAccreditedScopeRoute =
+  DashboardSettingsAccreditedScopeRouteImport.update({
+    id: '/accredited-scope',
+    path: '/accredited-scope',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 const DashboardServicesNewRoute = DashboardServicesNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -1002,6 +1009,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
+  '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
@@ -1126,6 +1134,7 @@ export interface FileRoutesByTo {
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
+  '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
@@ -1271,6 +1280,7 @@ export interface FileRoutesById {
   '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
+  '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
@@ -1418,6 +1428,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
+    | '/dashboard/settings/accredited-scope'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
@@ -1542,6 +1553,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
+    | '/dashboard/settings/accredited-scope'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
@@ -1686,6 +1698,7 @@ export interface FileRouteTypes {
     | '/dashboard/service-orders/$id'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
+    | '/dashboard/settings/accredited-scope'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
@@ -2295,6 +2308,13 @@ declare module '@tanstack/react-router' {
       path: '/appearance'
       fullPath: '/dashboard/settings/appearance'
       preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/accredited-scope': {
+      id: '/dashboard/settings/accredited-scope'
+      path: '/accredited-scope'
+      fullPath: '/dashboard/settings/accredited-scope'
+      preLoaderRoute: typeof DashboardSettingsAccreditedScopeRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/services/new': {
@@ -3196,6 +3216,7 @@ const DashboardSettingsIntegrationsRouteWithChildren =
   )
 
 interface DashboardSettingsRouteRouteChildren {
+  DashboardSettingsAccreditedScopeRoute: typeof DashboardSettingsAccreditedScopeRoute
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
   DashboardSettingsAutomaticSendRoute: typeof DashboardSettingsAutomaticSendRoute
@@ -3222,6 +3243,8 @@ interface DashboardSettingsRouteRouteChildren {
 
 const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
   {
+    DashboardSettingsAccreditedScopeRoute:
+      DashboardSettingsAccreditedScopeRoute,
     DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
     DashboardSettingsAutomaticSendRoute: DashboardSettingsAutomaticSendRoute,

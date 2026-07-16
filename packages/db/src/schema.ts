@@ -71,7 +71,11 @@ import type {
   AutomaticSendOutcome,
   SupplierKind,
   BillingGroupStatus,
+  CmcExpressionType,
   MeasurementUnit,
+  QuantityKind,
+  ScopeComplianceFinding,
+  ScopeComplianceStatus,
   ServiceOrderActorType,
   ServiceOrderClosingReason,
   ServiceOrderDeliveryMethod,
@@ -4308,6 +4312,17 @@ export const calibrationJob = pgTable(
       "CONFORMING" | "NON_CONFORMING" | "UNKNOWN"
     >(),
     asFoundMargins: jsonb("as_found_margins").$type<number[]>(),
+    // Accredited-scope (CMC) classification — ISO/IEC 17025 §7.6/§7.8.3,
+    // ILAC P14 (#427 Phase 0). Stamped at submit (technician warning) and
+    // re-stamped at approval (authoritative, frozen with the record) via
+    // shared/scope-compliance.ts. Null when the certificate is not accredited
+    // or the lab has no scope lines configured. Phase 0 never blocks.
+    scopeComplianceStatus: text(
+      "scope_compliance_status",
+    ).$type<ScopeComplianceStatus>(),
+    scopeComplianceFindings: jsonb("scope_compliance_findings").$type<
+      ScopeComplianceFinding[]
+    >(),
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
@@ -6806,6 +6821,113 @@ export const environmentalLimitsRelations = relations(
     assetType: one(assetType, {
       fields: [environmentalLimits.assetTypeId],
       references: [assetType.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// ACCREDITED SCOPE (CMC) - ISO/IEC 17025 §7.6 / §7.8.3, ILAC P14 (#427)
+// The lab's accredited scope: one line per grandeza × faixa × CMC, per unit
+// (Cgcre accredits each laboratory site with its own scope). Certificate
+// issuance is validated against these lines (see shared/scope-compliance.ts).
+// =============================================================================
+
+export const accreditedScopeLine = pgTable(
+  "accredited_scope_line",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    // Grandeza — a QuantityKind from the shared unit registry (no DB table).
+    quantityKind: text("quantity_kind").$type<QuantityKind>().notNull(),
+    // Faixa de medição (inclusive bounds), in rangeUnit.
+    rangeMin: doublePrecision("range_min").notNull(),
+    rangeMax: doublePrecision("range_max").notNull(),
+    rangeUnit: text("range_unit").$type<MeasurementUnit>().notNull(),
+    // CMC expression: CMC(x) = cmcA + cmcB·|x| with x in rangeUnit and the
+    // result in cmcUnit ('fixed' ignores cmcB). Cgcre's "table" format is
+    // just multiple lines over sub-ranges; percent-of-reading maps to cmcB.
+    cmcType: text("cmc_type").$type<CmcExpressionType>()
+      .default("fixed")
+      .notNull(),
+    cmcA: doublePrecision("cmc_a").notNull(),
+    cmcB: doublePrecision("cmc_b"),
+    cmcUnit: text("cmc_unit").$type<MeasurementUnit>().notNull(),
+    // Coverage factor the CMC is stated at (ILAC P14: k=2 / ~95 %).
+    coverageFactor: doublePrecision("coverage_factor").default(2).notNull(),
+    // Free-text service description, e.g. "Balanças classe II".
+    description: text("description"),
+    // Vigência window of this scope line; null bounds impose no constraint
+    // (mirrors organization-level accreditation vigência, #647).
+    validFrom: timestamp("valid_from"),
+    validUntil: timestamp("valid_until"),
+    // Audit
+    updatedBy: text("updated_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("accredited_scope_line_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("accredited_scope_line_unit_id_idx").on(table.unitId),
+  ],
+);
+
+export const accreditedScopeLineRelations = relations(
+  accreditedScopeLine,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [accreditedScopeLine.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [accreditedScopeLine.unitId],
+      references: [organizationUnit.id],
+    }),
+  }),
+);
+
+/**
+ * Append-only audit trail for scope-line edits (ISO/IEC 17025 §8.4) — a
+ * Cgcre auditor will ask who changed the accredited scope and when. Soft
+ * reference on purpose (no FK): rows must survive deletion of the line.
+ */
+export const accreditedScopeLineAuditLog = pgTable(
+  "accredited_scope_line_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    scopeLineId: integer("scope_line_id").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'delete'
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+  },
+  (table) => [
+    index("accredited_scope_line_audit_log_line_idx").on(table.scopeLineId),
+    index("accredited_scope_line_audit_log_org_idx").on(table.organizationId),
+  ],
+);
+
+export const accreditedScopeLineAuditLogRelations = relations(
+  accreditedScopeLineAuditLog,
+  ({ one }) => ({
+    performedByUser: one(user, {
+      fields: [accreditedScopeLineAuditLog.performedBy],
+      references: [user.id],
     }),
   }),
 );

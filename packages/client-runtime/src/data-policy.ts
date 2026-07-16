@@ -379,6 +379,15 @@ export const calibraApiPolicyRegistry = {
     save: "cloud-only",
     delete: "cloud-only",
   },
+  // #427 Phase 0: managed on the cloud-only settings surface and enforced
+  // server-side at submit/approve; nothing consumes scope lines on the
+  // desktop yet, so the whole namespace stays cloud-only until the offline
+  // execution warning lands.
+  accreditedScope: {
+    list: "cloud-only",
+    save: "cloud-only",
+    delete: "cloud-only",
+  },
   reports: {
     getExecutiveOverview: "cloud-only",
     getComparison: "cloud-only",

@@ -14,6 +14,7 @@ import {
   UserIcon,
   PenTool01Icon,
   Certificate01Icon,
+  SecurityCheckIcon,
   ThermometerIcon,
   FingerPrintIcon,
 } from '@hugeicons/core-free-icons'
@@ -110,6 +111,12 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         label: 'Ambiente',
         href: '/dashboard/settings/environment',
         icon: <HugeiconsIcon icon={ThermometerIcon} className="size-4" />,
+      },
+      {
+        value: 'accredited-scope',
+        label: 'Escopo acreditado (CMC)',
+        href: '/dashboard/settings/accredited-scope',
+        icon: <HugeiconsIcon icon={SecurityCheckIcon} className="size-4" />,
       },
     ],
   },

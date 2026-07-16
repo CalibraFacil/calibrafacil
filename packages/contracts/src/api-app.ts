@@ -36,6 +36,8 @@ type RpcRoute<Path extends string> = {
 // Keep the browser-facing Hono contract server-free. Importing apps/api here
 // pulls route handlers and runtime dependencies back across the package boundary.
 type ApiRoutePath =
+  | "/api/accredited-scope"
+  | "/api/accredited-scope/:id"
   | "/api/api-keys"
   | "/api/api-keys/:id/revoke"
   | "/api/api-keys/:id/rotate"

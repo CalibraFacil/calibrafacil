@@ -21,6 +21,7 @@ import {
   buildApprovedJobRecordModel,
   buildJobReviewModel,
   buildJobVerdictModel,
+  buildScopeComplianceWarnings,
   desktopCloudActionError,
   formatDate,
   formatDateTime,
@@ -458,5 +459,86 @@ describe('reviewColumnDisplayLabel', () => {
         type: 'text',
       }),
     ).toBe('Condição')
+  })
+})
+
+describe('buildScopeComplianceWarnings', () => {
+  it('returns nothing for a clean PASS or an absent status', () => {
+    expect(buildScopeComplianceWarnings(null)).toEqual([])
+    expect(
+      buildScopeComplianceWarnings({ scopeComplianceStatus: 'PASS' }),
+    ).toEqual([])
+  })
+
+  it('maps each server finding to a warning item', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'U_BELOW_CMC',
+      scopeComplianceFindings: [
+        { kind: 'u_below_cmc', message: 'Incerteza menor que a CMC em 100 g.' },
+        { kind: 'out_of_scope', message: 'Ponto 600 g fora do escopo.' },
+      ],
+    })
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({
+      severity: 'warning',
+      status: 'warning',
+      message: 'Incerteza menor que a CMC em 100 g.',
+    })
+  })
+
+  it('falls back to a generic warning when findings are missing', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'OUT_OF_SCOPE',
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.message).toContain('fora do escopo acreditado')
+  })
+
+  it('appends scope warnings to quickAlertItems in the review model', () => {
+    const model = buildJobReviewModel({
+      methodSnapshot: null,
+      scopeComplianceStatus: 'U_BELOW_CMC',
+      scopeComplianceFindings: [
+        { kind: 'u_below_cmc', message: 'Incerteza menor que a CMC.' },
+      ],
+    })
+    expect(
+      model.quickAlertItems.some(
+        (item) => item.message === 'Incerteza menor que a CMC.',
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('buildScopeComplianceWarnings — NOT_EVALUATED visibility', () => {
+  it('warns the signer when the guard could not check anything', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'NOT_EVALUATED',
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.message).toContain('não pôde ser verificado')
+  })
+
+  it('surfaces partial-coverage notes on a PASS', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'PASS',
+      scopeComplianceFindings: [
+        {
+          kind: 'not_evaluated',
+          message: 'Ponto 200 g não pôde ser comparado ao escopo.',
+        },
+      ],
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.message).toContain('não pôde ser comparado')
+  })
+
+  it('stays silent on a clean PASS', () => {
+    expect(
+      buildScopeComplianceWarnings({
+        scopeComplianceStatus: 'PASS',
+        scopeComplianceFindings: [],
+      }),
+    ).toEqual([])
   })
 })

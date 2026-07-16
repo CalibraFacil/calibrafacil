@@ -55,6 +55,7 @@ import {
 } from "@calibra-facil/schemas";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
 import { syncJobStandardLinks } from "../lib/job-standards";
+import { classifyJobScopeCompliance } from "../lib/scope-compliance";
 import {
   addServerTiming,
   withLabPermission,
@@ -1085,6 +1086,8 @@ export const jobsRouter = new Hono<{
         environmentalSnapshot: calibrationJob.environmentalSnapshot,
         calibrationLocationSnapshot: calibrationJob.calibrationLocationSnapshot,
         calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
+        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+        scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
         assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
@@ -1803,12 +1806,30 @@ export const jobsRouter = new Hono<{
         ? officialExecution.results
         : (input.results ?? existing.results);
 
+      // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
+      // (#427 Phase 0). Classified here so the technician and the signer see
+      // the warning during review; approval re-classifies at the emission
+      // date and is authoritative. Warn-only: never blocks the submit.
+      const scopeCompliance = await classifyJobScopeCompliance({
+        organizationId: memberData.organizationId,
+        unitId: existing.unitId,
+        methodSnapshot: existing.methodSnapshot,
+        assetSnapshot: nextAssetSnapshot,
+        data: nextData ?? null,
+        results: nextResults ?? null,
+        // `now`, not performedAt: predicts the seal decision approval will
+        // make at the emission date (backdated executions stay comparable).
+        atDate: now,
+      });
+
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
           data: nextData,
           results: nextResults,
+          scopeComplianceStatus: scopeCompliance?.status ?? null,
+          scopeComplianceFindings: scopeCompliance?.findings ?? null,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -1883,6 +1904,11 @@ export const jobsRouter = new Hono<{
             nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
               ? "Submetido com condições ambientais fora dos limites"
               : null,
+            scopeCompliance?.status === "OUT_OF_SCOPE"
+              ? "Submetido com ponto fora do escopo acreditado (CMC)"
+              : scopeCompliance?.status === "U_BELOW_CMC"
+                ? "Submetido com incerteza menor que a CMC acreditada"
+                : null,
             diffDays > BACKDATE_REASON_THRESHOLD_DAYS
               ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
               : null,

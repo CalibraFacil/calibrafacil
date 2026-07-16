@@ -687,6 +687,13 @@
       "when": 1784563200000,
       "tag": "0097_organization_email_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1784563300000,
+      "tag": "0098_accredited_scope_cmc",
+      "breakpoints": true
     }
   ]
 }

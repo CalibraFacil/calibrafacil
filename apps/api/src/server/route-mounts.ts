@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { accreditedScopeRouter } from "../routes/accredited-scope";
 import { apiKeysRouter } from "../routes/api-keys";
 import { assetTypesRouter } from "../routes/asset-types";
 import { assetsRouter } from "../routes/assets";
@@ -135,6 +136,7 @@ export function mountApiRoutes(
       .route("/api/proficiency-tests", proficiencyTestsRouter)
       .route("/api/spc", spcRouter)
       .route("/api/environmental-limits", environmentalLimitsRouter)
+      .route("/api/accredited-scope", accreditedScopeRouter)
       .route("/api/authorized-signatories", authorizedSignatoriesRouter)
       .route("/api/competences", competencesRouter)
       .route("/api/training-records", trainingRecordsRouter)

@@ -1,4 +1,5 @@
 import type {
+  AccreditedScopeResponse,
   ApiKeysListResponse,
   BillingPaymentsResponse,
   BillingSubscriptionResponse,
@@ -39,6 +40,8 @@ export type SettingsPortalDomainData = PortalDomainResponse
 export type SettingsEmailDomainData = EmailDomainResponse
 
 export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
+
+export type SettingsAccreditedScopeData = AccreditedScopeResponse
 
 export type SettingsBillingSubscriptionData = BillingSubscriptionResponse
 
