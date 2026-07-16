@@ -98,15 +98,21 @@ export function isAccreditationActive(
 /**
  * A certificate carries the accreditation seal only when the lab is accredited
  * (within vigência at `atDate` — the emission date for stored certificates)
- * AND the method that produced it is inside the accredited scope.
+ * AND the method that produced it is inside the accredited scope AND the
+ * issuance was not downgraded by a documented scope-violation override
+ * (#427 Phase 1: an override never issues "accredited anyway" — it issues
+ * WITHOUT the seal, per NIE-Cgcre-009/ILAC P8 symbol rules).
  */
 export function shouldRenderAccreditationSeal(params: {
   lab: AccreditationProfile;
   methodAccreditedScope: boolean | null | undefined;
   atDate?: Date;
+  /** Frozen `calibration_job.scope_override_justification`; non-empty = downgraded. */
+  scopeOverrideJustification?: string | null;
 }): boolean {
   return (
     isAccreditationActive(params.lab, params.atDate) &&
-    params.methodAccreditedScope === true
+    params.methodAccreditedScope === true &&
+    !params.scopeOverrideJustification?.trim()
   );
 }

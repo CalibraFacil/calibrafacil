@@ -694,6 +694,13 @@
       "when": 1784563300000,
       "tag": "0098_accredited_scope_cmc",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1784563400000,
+      "tag": "0099_accredited_scope_enforce",
+      "breakpoints": true
     }
   ]
 }

@@ -715,6 +715,13 @@ function toJobDetail(job: LocalJobRow) {
       job.calibration_location_snapshot_json,
     ),
     calibrationPhaseSnapshot: parseJson(job.calibration_phase_snapshot_json),
+    // #427: frozen accredited-scope verdict, mirrored from the cloud row so
+    // the desktop review warnings and the seal-suppression decision match
+    // the cloud exactly (an override-downgraded certificate must never show
+    // the seal here either).
+    scopeComplianceStatus: job.scope_compliance_status,
+    scopeComplianceFindings: parseJson(job.scope_compliance_findings_json),
+    scopeOverrideJustification: job.scope_override_justification,
     dueDate: job.due_date,
     performedAt: job.performed_at,
     submittedAt: job.submitted_at,
@@ -1316,6 +1323,9 @@ type LocalJobRow = {
   calibration_phase_snapshot_json: string | null;
   data_json: string | null;
   results_json: string | null;
+  scope_compliance_status: string | null;
+  scope_compliance_findings_json: string | null;
+  scope_override_justification: string | null;
   status: LocalJobStatus;
   due_date: string | null;
   performed_at: string | null;

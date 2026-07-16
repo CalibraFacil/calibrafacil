@@ -330,3 +330,36 @@ describe("accreditation vigência window", () => {
     ).toBe("incomplete");
   });
 });
+
+// #427 Phase 1: a documented scope-violation override downgrades the issuance
+// to NON-accredited — the seal must never render for an overridden approval.
+describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
+  const activeLab = { accreditationActive: true, accreditationNumber: "9999" };
+
+  it("suppresses the seal when a scope-override justification is frozen on the job", () => {
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: activeLab,
+        methodAccreditedScope: true,
+        scopeOverrideJustification: "Cliente exigiu emissão fora do escopo.",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the seal when the override field is null, absent or blank", () => {
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: activeLab,
+        methodAccreditedScope: true,
+        scopeOverrideJustification: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: activeLab,
+        methodAccreditedScope: true,
+        scopeOverrideJustification: "   ",
+      }),
+    ).toBe(true);
+  });
+});

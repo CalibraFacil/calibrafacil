@@ -93,6 +93,7 @@ import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
+import { classifyJobScopeCompliance } from "../lib/scope-compliance";
 import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
 import {
   asRecord,
@@ -381,6 +382,10 @@ export const syncRouter = new Hono<{
             calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
             data: calibrationJob.data,
             results: calibrationJob.results,
+            scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+            scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
+            scopeOverrideJustification:
+              calibrationJob.scopeOverrideJustification,
             status: calibrationJob.status,
             dueDate: calibrationJob.dueDate,
             createdAt: calibrationJob.createdAt,
@@ -1101,6 +1106,9 @@ async function loadCloudSyncEventsSince(
         calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
         data: calibrationJob.data,
         results: calibrationJob.results,
+        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+        scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
         status: calibrationJob.status,
         dueDate: calibrationJob.dueDate,
         createdAt: calibrationJob.createdAt,
@@ -1562,6 +1570,22 @@ async function applyDesktopCertificatePdfUpload(
       results: job.results,
     });
 
+    // Accredited-scope (CMC) classification — mirrors the cloud approval
+    // route (#427) so a desktop-published certificate carries the same frozen
+    // verdict instead of staying permanently unclassified. Warn-only here:
+    // this path is a trusted publish mirror for work already released on the
+    // desktop; whether enforce mode should reject the publish outright is a
+    // separate product decision.
+    const { compliance: scopeCompliance } = await classifyJobScopeCompliance({
+      organizationId: input.memberData.organizationId,
+      unitId: job.unitId,
+      methodSnapshot: job.methodSnapshot,
+      assetSnapshot: job.assetSnapshot,
+      data: job.data,
+      results: job.results,
+      atDate: approvedAt,
+    });
+
     await db
       .update(calibrationJob)
       .set({
@@ -1571,6 +1595,8 @@ async function applyDesktopCertificatePdfUpload(
         approvedAt,
         asFoundConformity: asFoundVerdict.conformity,
         asFoundMargins: asFoundVerdict.margins,
+        scopeComplianceStatus: scopeCompliance?.status ?? null,
+        scopeComplianceFindings: scopeCompliance?.findings ?? null,
         certificateTemplateId:
           job.certificateTemplateId ??
           (typeof effectiveTemplateSnapshot.id === "number"
@@ -1597,6 +1623,14 @@ async function applyDesktopCertificatePdfUpload(
       changes: {
         source: "desktop_sync",
         status: { old: job.status, new: "APPROVED" },
+        ...(job.scopeComplianceStatus !== (scopeCompliance?.status ?? null)
+          ? {
+              scopeComplianceStatus: {
+                old: job.scopeComplianceStatus,
+                new: scopeCompliance?.status ?? null,
+              },
+            }
+          : {}),
         approvedBy: { old: job.approvedBy, new: job.approvedBy ?? actorUserId },
         approvedAt: {
           old: job.approvedAt?.toISOString?.() ?? job.approvedAt,

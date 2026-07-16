@@ -279,6 +279,8 @@ async function fetchJobData(
       cj.superseded_by_id,
       cj.amendment_number,
       cj.amendment_reason,
+      -- #427 Phase 1: non-null = issuance downgraded to non-accredited
+      cj.scope_override_justification,
       -- Organization (Lab) info
       o.name as lab_name,
       o.cnpj as lab_cnpj,
@@ -490,6 +492,9 @@ async function fetchJobData(
         }
       : row.method_snapshot,
     assetSnapshot: row.asset_snapshot,
+    // #427 Phase 1: a documented override downgrades the issuance to
+    // non-accredited; certificate-data suppresses the seal when set.
+    scopeOverrideJustification: row.scope_override_justification,
     standardsSnapshot: row.standards_snapshot,
     serviceOrder: {
       inmetroRepairMarkNumber: row.inmetro_repair_mark_number,

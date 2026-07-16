@@ -387,6 +387,7 @@ export const calibraApiPolicyRegistry = {
     list: "cloud-only",
     save: "cloud-only",
     delete: "cloud-only",
+    setEnforcementMode: "cloud-only",
   },
   reports: {
     getExecutiveOverview: "cloud-only",

@@ -1088,6 +1088,7 @@ export const jobsRouter = new Hono<{
         calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
         scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
         assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
@@ -1810,17 +1811,19 @@ export const jobsRouter = new Hono<{
       // (#427 Phase 0). Classified here so the technician and the signer see
       // the warning during review; approval re-classifies at the emission
       // date and is authoritative. Warn-only: never blocks the submit.
-      const scopeCompliance = await classifyJobScopeCompliance({
-        organizationId: memberData.organizationId,
-        unitId: existing.unitId,
-        methodSnapshot: existing.methodSnapshot,
-        assetSnapshot: nextAssetSnapshot,
-        data: nextData ?? null,
-        results: nextResults ?? null,
-        // `now`, not performedAt: predicts the seal decision approval will
-        // make at the emission date (backdated executions stay comparable).
-        atDate: now,
-      });
+      const { compliance: scopeCompliance } = await classifyJobScopeCompliance(
+        {
+          organizationId: memberData.organizationId,
+          unitId: existing.unitId,
+          methodSnapshot: existing.methodSnapshot,
+          assetSnapshot: nextAssetSnapshot,
+          data: nextData ?? null,
+          results: nextResults ?? null,
+          // `now`, not performedAt: predicts the seal decision approval will
+          // make at the emission date (backdated executions stay comparable).
+          atDate: now,
+        },
+      );
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
@@ -1830,6 +1833,9 @@ export const jobsRouter = new Hono<{
           results: nextResults,
           scopeComplianceStatus: scopeCompliance?.status ?? null,
           scopeComplianceFindings: scopeCompliance?.findings ?? null,
+          // A re-submission restarts the release flow: any override recorded
+          // by a previous approval attempt no longer applies.
+          scopeOverrideJustification: null,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -2228,6 +2234,16 @@ export const jobsRouter = new Hono<{
               environmentalSnapshot: result.environmentalSnapshot,
             },
             400,
+          );
+        case "scope_violation":
+          return c.json(
+            {
+              error:
+                "Violação do escopo acreditado (CMC): a emissão acreditada está bloqueada. Corrija o resultado ou aprove com justificativa documentada. Nesse caso o certificado sai sem o selo de acreditação.",
+              code: "SCOPE_VIOLATION",
+              scopeCompliance: result.scopeCompliance,
+            },
+            422,
           );
         case "approved":
           return c.json({

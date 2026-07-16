@@ -622,6 +622,11 @@ export function createCloudApiClient(
         ":id": {
           $delete(input: { param: { id: string } }): Promise<Response>;
         };
+        enforcement: {
+          $put(input: {
+            json: { mode: "warn" | "enforce" };
+          }): Promise<Response>;
+        };
       };
       customers: {
         $get(input: {

@@ -160,6 +160,9 @@ export function ApprovedJobRecord({
       accreditationValidUntil: orgAccreditation.accreditationValidUntil,
     },
     methodAccreditedScope: methodSnapshot.accreditedScope ?? false,
+    // #427 Phase 1: an approval overridden past the CMC guard was
+    // downgraded to non-accredited issuance.
+    scopeOverrideJustification: job.scopeOverrideJustification,
     ...(approvedAtDate ? { atDate: approvedAtDate } : {}),
   })
   const [isDownloading, setIsDownloading] = useState(false)

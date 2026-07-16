@@ -109,6 +109,18 @@ export function AccreditedScopeSettingsPage() {
     },
   })
 
+  const enforcementMutation = useMutation({
+    mutationFn: async (mode: 'warn' | 'enforce') =>
+      calibraApi.accreditedScope.setEnforcementMode(mode),
+    onSuccess: (result) => {
+      invalidate()
+      toast.success(result.message)
+    },
+    onError: () => {
+      toast.error('Erro ao alterar o modo da guarda')
+    },
+  })
+
   function openNewDialog() {
     setForm(emptyScopeLineForm)
     setEditingId(null)
@@ -178,6 +190,41 @@ export function AccreditedScopeSettingsPage() {
           </p>
         </Panel>
       ) : (
+        <>
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            title="Guarda de emissão"
+            description="Como o sistema reage quando um certificado acreditado viola o escopo: ponto fora de faixa ou incerteza menor que a CMC."
+          />
+          <div className="mt-4 max-w-sm">
+            <Select
+              value={scopeData?.enforcementMode ?? 'warn'}
+              onValueChange={(value) => {
+                if (value === 'warn' || value === 'enforce') {
+                  enforcementMutation.mutate(value)
+                }
+              }}
+            >
+              <SelectTrigger disabled={enforcementMutation.isPending}>
+                {scopeData?.enforcementMode === 'enforce'
+                  ? 'Bloquear emissão acreditada'
+                  : 'Apenas avisar'}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="warn">Apenas avisar</SelectItem>
+                <SelectItem value="enforce">
+                  Bloquear emissão acreditada
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-2 text-xs text-muted-foreground">
+              No modo bloqueio, a aprovação só passa com justificativa
+              documentada e o certificado sai sem o selo de acreditação.
+              Comece no modo aviso e ative o bloqueio depois de validar as
+              linhas do escopo.
+            </p>
+          </div>
+        </Panel>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
             title="Linhas de escopo"
@@ -275,6 +322,7 @@ export function AccreditedScopeSettingsPage() {
             )}
           </div>
         </Panel>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

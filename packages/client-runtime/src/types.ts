@@ -190,7 +190,11 @@ export interface JobsApi {
   listTechnicians(): Promise<TechnicianListData>;
   approve(
     jobId: string | number,
-    input: { reason: string; environmentalJustification?: string },
+    input: {
+      reason: string;
+      environmentalJustification?: string;
+      scopeOverrideJustification?: string;
+    },
   ): Promise<unknown>;
   reject(jobId: string | number, reason: string): Promise<unknown>;
   cancel(jobId: string | number, reason: string): Promise<unknown>;
@@ -1211,9 +1215,13 @@ export type AccreditedScopeLine = {
   updatedAt?: string | Date | null;
 };
 
+export type ScopeEnforcementMode = "warn" | "enforce";
+
 export type AccreditedScopeResponse = {
   lines: AccreditedScopeLine[];
   unit: { unitId: number | null; unitName: string | null };
+  /** Org-level guard behavior (#427 Phase 1). */
+  enforcementMode: ScopeEnforcementMode;
 };
 
 export type SaveAccreditedScopeLineInput = {
@@ -1244,6 +1252,10 @@ export interface AccreditedScopeApi {
     input: SaveAccreditedScopeLineInput,
   ): Promise<SaveAccreditedScopeLineResponse>;
   delete(id: number): Promise<{ message: string }>;
+  setEnforcementMode(mode: ScopeEnforcementMode): Promise<{
+    message: string;
+    enforcementMode: ScopeEnforcementMode;
+  }>;
 }
 
 export type ReportsQueryInput = {

@@ -6,7 +6,11 @@ import type { z } from "zod";
 import type { AuthVariables } from "../../middleware/permission";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
 import { buildAsFoundReliabilityVerdict } from "../../lib/as-found-reliability-verdict";
-import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
+import {
+  classifyJobScopeCompliance,
+  isAdverseScopeCompliance,
+} from "../../lib/scope-compliance";
+import type { ScopeComplianceResult } from "@calibra-facil/shared";
 import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 import { advanceAssetCalibrationDatesOnApproval } from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
@@ -39,6 +43,14 @@ export type ApproveJobResult =
   | {
       status: "environmental_justification_required";
       environmentalSnapshot: JobRow["environmentalSnapshot"];
+    }
+  | {
+      /**
+       * #427 Phase 1: adverse CMC classification under enforce mode and no
+       * documented override — accredited issuance is blocked.
+       */
+      status: "scope_violation";
+      scopeCompliance: ScopeComplianceResult;
     }
   | {
       status: "approved";
@@ -184,19 +196,34 @@ export async function approveJob(input: {
   });
 
   // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
-  // (#427 Phase 0). Re-classified here at the emission date so the frozen
-  // record is authoritative even if scope lines changed since submit.
-  // Warn-only: the classification never blocks the approval.
+  // (#427). Re-classified here at the emission date so the frozen record is
+  // authoritative even if scope lines changed since submit. In 'warn' mode
+  // the classification never blocks; in 'enforce' mode an adverse result
+  // blocks accredited issuance unless a documented override downgrades the
+  // certificate to non-accredited (seal suppressed at every render site).
   const approvedAt = new Date();
-  const scopeCompliance = await classifyJobScopeCompliance({
-    organizationId: memberData.organizationId,
-    unitId: existing.unitId,
-    methodSnapshot: existing.methodSnapshot,
-    assetSnapshot: existing.assetSnapshot,
-    data: existing.data,
-    results: existing.results,
-    atDate: approvedAt,
-  });
+  const { compliance: scopeCompliance, enforcementMode } =
+    await classifyJobScopeCompliance({
+      organizationId: memberData.organizationId,
+      unitId: existing.unitId,
+      methodSnapshot: existing.methodSnapshot,
+      assetSnapshot: existing.assetSnapshot,
+      data: existing.data,
+      results: existing.results,
+      atDate: approvedAt,
+    });
+
+  const scopeOverrideJustification =
+    values.scopeOverrideJustification?.trim() || null;
+  const scopeBlocked =
+    enforcementMode === "enforce" && isAdverseScopeCompliance(scopeCompliance);
+  if (scopeBlocked && scopeCompliance && !scopeOverrideJustification) {
+    return { status: "scope_violation", scopeCompliance };
+  }
+  // The override is only meaningful when it is actually unblocking an
+  // enforced violation — never let a stray justification downgrade a
+  // passing (or warn-mode) certificate.
+  const appliedScopeOverride = scopeBlocked ? scopeOverrideJustification : null;
 
   // Update job status to GENERATING_PDF and set approver info
   // (we set approved_by now so the PDF worker can fetch it)
@@ -210,6 +237,7 @@ export async function approveJob(input: {
       asFoundMargins: asFoundVerdict.margins,
       scopeComplianceStatus: scopeCompliance?.status ?? null,
       scopeComplianceFindings: scopeCompliance?.findings ?? null,
+      scopeOverrideJustification: appliedScopeOverride,
       certificateTemplateId:
         existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
       certificateTemplateSnapshot:
@@ -225,18 +253,39 @@ export async function approveJob(input: {
     action: "approve",
     changes: {
       status: { old: existing.status, new: "GENERATING_PDF" },
-      ...(scopeCompliance
+      // Recorded on ANY transition — including adverse → null when the guard
+      // stopped applying (scope lines deleted, vigência lapsed). Erasing a
+      // previously frozen verdict without an audit entry would leave a §8.4
+      // gap and make bypass-by-deleting-scope-lines invisible.
+      ...(existing.scopeComplianceStatus !== (scopeCompliance?.status ?? null)
         ? {
             scopeComplianceStatus: {
               old: existing.scopeComplianceStatus,
-              new: scopeCompliance.status,
+              new: scopeCompliance?.status ?? null,
+            },
+          }
+        : {}),
+      ...(appliedScopeOverride
+        ? {
+            scopeOverrideJustification: {
+              old: existing.scopeOverrideJustification,
+              new: appliedScopeOverride,
             },
           }
         : {}),
     },
     performedBy: approverId,
     ipAddress: input.metadata.ipAddress ?? null,
-    reason: values.reason || "Aprovado - Gerando PDF",
+    // Keep the approver's own notes alongside the override record — the
+    // downgrade must not erase the supplied approval reason from the trail.
+    reason: appliedScopeOverride
+      ? [
+          `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
+          values.reason?.trim() || null,
+        ]
+          .filter(Boolean)
+          .join(" | ")
+      : values.reason || "Aprovado - Gerando PDF",
   });
 
   // Advance the asset's calibration dates from the approved work

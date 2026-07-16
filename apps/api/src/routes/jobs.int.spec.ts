@@ -23,6 +23,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsRouter } from "./jobs";
 import { db } from "@calibra-facil/db";
 import {
+  accreditedScopeLine,
   calibrationJob,
   organization,
   assetType,
@@ -945,5 +946,252 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #427 Phase 1 — accredited-scope (CMC) guard at approval.
+//
+// Proven properties:
+//   REQ-CMC-010  enforce mode + U below CMC → 422 SCOPE_VIOLATION, job stays REVIEW
+//   REQ-CMC-011  enforce mode + documented override → approved WITHOUT seal
+//                (scope_override_justification frozen on the job)
+//   REQ-CMC-012  warn mode + violation → approved, classification stamped,
+//                no override recorded
+//   REQ-CMC-013  enforce mode + passing U → approved, status PASS
+// ---------------------------------------------------------------------------
+
+/** MethodSnapshot with role-tagged per-point expanded uncertainty (mass). */
+function scopeGuardMethodSnapshot() {
+  return {
+    methodId: 1,
+    methodName: "Massa - Balanças",
+    methodVersion: 1,
+    dataFields: [
+      {
+        key: "pontos_indicacao",
+        label: "Pontos de indicação",
+        type: "table",
+        columns: [
+          { key: "carga_nominal", label: "Carga", type: "number", unit: "g" },
+        ],
+      },
+    ],
+    variableBindings: [],
+    formulas: [
+      {
+        outputKey: "incerteza_expandida_apos",
+        expression: "1",
+        unit: "g",
+        scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+        reporting: {
+          role: "expanded_uncertainty",
+          group: "calibration_result",
+        },
+      },
+      {
+        outputKey: "fator_k_apos",
+        expression: "1",
+        scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+        reporting: { role: "coverage_factor", group: "uncertainty_budget" },
+      },
+    ],
+    measurementModels: [],
+    validations: [],
+    uncertaintyParams: [],
+    accreditedScope: true,
+  } satisfies Record<string, unknown>;
+}
+
+async function seedScopeGuardWorld(params: {
+  orgId: string;
+  userId: string;
+  tagSuffix: string;
+  enforcementMode: "warn" | "enforce";
+  reportedU: number;
+}) {
+  const fixture = await seedJobFixture({
+    orgId: params.orgId,
+    userId: params.userId,
+    tagSuffix: params.tagSuffix,
+  });
+
+  // Accredited lab with the guard configured (CMC 0.01 g on 0–500 g).
+  await db
+    .update(organization)
+    .set({
+      accreditationActive: true,
+      accreditationNumber: "1234",
+      scopeEnforcementMode: params.enforcementMode,
+    })
+    .where(eq(organization.id, params.orgId));
+  await db.insert(accreditedScopeLine).values({
+    organizationId: params.orgId,
+    unitId: fixture.unitId,
+    quantityKind: "mass",
+    rangeMin: 0,
+    rangeMax: 500,
+    rangeUnit: "g",
+    cmcType: "fixed",
+    cmcA: 0.01,
+    cmcUnit: "g",
+    updatedBy: params.userId,
+  });
+
+  const [job] = await db
+    .insert(calibrationJob)
+    .values({
+      jobId: `JOB-${params.tagSuffix}`,
+      organizationId: params.orgId,
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: params.userId, // solo lab: self-approval exempt
+      status: "REVIEW",
+      methodSnapshot: scopeGuardMethodSnapshot(),
+      certificateName: `JOB-${params.tagSuffix}`,
+      data: { pontos_indicacao: [{ carga_nominal: 100 }] },
+      results: {
+        incerteza_expandida_apos: [params.reportedU],
+        fator_k_apos: [2],
+      },
+      performedAt: new Date("2026-07-01T12:00:00.000Z"),
+    })
+    .returning({ id: calibrationJob.id });
+  if (!job) throw new Error("seedScopeGuardWorld: job insert failed");
+
+  return { ...fixture, jobId: job.id };
+}
+
+describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-CMC-010: enforce mode blocks U-below-CMC approval with 422 SCOPE_VIOLATION", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-cmc-block",
+      userId: "user-cmc-block",
+      tagSuffix: "cmc-block",
+      enforcementMode: "enforce",
+      reportedU: 0.002, // below the 0.01 g CMC
+    });
+
+    loginAs({ userId: "user-cmc-block", organizationId: "org-cmc-block" });
+    const res = await jobsRouter.request(`/${world.jobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("SCOPE_VIOLATION");
+    expect(body.scopeCompliance.status).toBe("U_BELOW_CMC");
+
+    const [row] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.status).toBe("REVIEW");
+  });
+
+  it("REQ-CMC-011: documented override approves WITHOUT the seal and freezes the justification", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-cmc-override",
+      userId: "user-cmc-override",
+      tagSuffix: "cmc-override",
+      enforcementMode: "enforce",
+      reportedU: 0.002,
+    });
+
+    loginAs({
+      userId: "user-cmc-override",
+      organizationId: "org-cmc-override",
+    });
+    const res = await jobsRouter.request(`/${world.jobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        scopeOverrideJustification:
+          "Cliente aceitou emissão sem selo; ponto fora da capacidade declarada.",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({
+        status: calibrationJob.status,
+        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+        scopeOverrideJustification:
+          calibrationJob.scopeOverrideJustification,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.status).toBe("GENERATING_PDF");
+    expect(row?.scopeComplianceStatus).toBe("U_BELOW_CMC");
+    expect(row?.scopeOverrideJustification).toContain("sem selo");
+  });
+
+  it("REQ-CMC-012: warn mode approves the violation and stamps the classification without an override", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-cmc-warn",
+      userId: "user-cmc-warn",
+      tagSuffix: "cmc-warn",
+      enforcementMode: "warn",
+      reportedU: 0.002,
+    });
+
+    loginAs({ userId: "user-cmc-warn", organizationId: "org-cmc-warn" });
+    const res = await jobsRouter.request(`/${world.jobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      // A stray justification in warn mode must NOT downgrade the seal.
+      body: JSON.stringify({ scopeOverrideJustification: "não se aplica" }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({
+        status: calibrationJob.status,
+        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+        scopeOverrideJustification:
+          calibrationJob.scopeOverrideJustification,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.status).toBe("GENERATING_PDF");
+    expect(row?.scopeComplianceStatus).toBe("U_BELOW_CMC");
+    expect(row?.scopeOverrideJustification).toBeNull();
+  });
+
+  it("REQ-CMC-013: enforce mode approves a passing U and stamps PASS", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-cmc-pass",
+      userId: "user-cmc-pass",
+      tagSuffix: "cmc-pass",
+      enforcementMode: "enforce",
+      reportedU: 0.02, // above the 0.01 g CMC
+    });
+
+    loginAs({ userId: "user-cmc-pass", organizationId: "org-cmc-pass" });
+    const res = await jobsRouter.request(`/${world.jobId}/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({
+        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+        scopeOverrideJustification:
+          calibrationJob.scopeOverrideJustification,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.scopeComplianceStatus).toBe("PASS");
+    expect(row?.scopeOverrideJustification).toBeNull();
   });
 });

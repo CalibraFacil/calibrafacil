@@ -2066,6 +2066,10 @@ export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
 export const ApproveJobSchema = z.object({
   reason: z.string().optional(), // Optional approval notes
   environmentalJustification: z.string().optional(), // Required if env conditions out of limits
+  // #427 Phase 1: documented scope-violation override. Only honored when the
+  // org enforces the CMC guard and the classification is adverse; approving
+  // with it downgrades the issuance to non-accredited (seal suppressed).
+  scopeOverrideJustification: z.string().max(1000).optional(),
 });
 
 export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;

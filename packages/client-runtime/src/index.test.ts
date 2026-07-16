@@ -1359,6 +1359,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "setEnforcementMode",
+          "namespace": "accreditedScope",
+          "policy": "cloud-only",
+        },
+        {
           "method": "getExecutiveOverview",
           "namespace": "reports",
           "policy": "cloud-only",

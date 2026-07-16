@@ -64,6 +64,14 @@ export function quantityKindLabelPt(kind: string): string {
 }
 
 /**
+ * Org-level guard behavior (#427 Phase 1). Labs start in `warn` (Phase 0
+ * classification only) and opt into `enforce` after trusting the output:
+ * enforce blocks accredited approval on OUT_OF_SCOPE/U_BELOW_CMC unless a
+ * documented override downgrades the issuance to non-accredited.
+ */
+export type ScopeEnforcementMode = "warn" | "enforce";
+
+/**
  * One line of the lab's accredited scope (grandeza × faixa × CMC), as
  * published by Cgcre. A CMC "table" over sub-ranges is just multiple lines.
  *

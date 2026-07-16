@@ -169,6 +169,7 @@ export type ApprovedJobRecordData = {
   supersededAt?: string | null
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
+  scopeOverrideJustification?: string | null
 }
 
 export type ReviewValidation = {

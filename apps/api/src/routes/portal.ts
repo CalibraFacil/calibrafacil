@@ -2077,6 +2077,8 @@ export const portalRouter = new Hono<{
           labEmail: organization.email,
           labPhone: organization.phone,
           // Accreditation seal - frozen method flag with current-method fallback
+          scopeOverrideJustification:
+            calibrationJob.scopeOverrideJustification,
           serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
           labAccreditationActive: organization.accreditationActive,
           labAccreditationNumber: organization.accreditationNumber,
@@ -2131,6 +2133,9 @@ export const portalRouter = new Hono<{
           certificate.methodSnapshot?.accreditedScope ??
           certificate.serviceMethodAccreditedScope ??
           false,
+        // #427 Phase 1: an approval overridden past the CMC guard was
+        // downgraded to non-accredited issuance.
+        scopeOverrideJustification: certificate.scopeOverrideJustification,
         ...(certificate.approvedAt ? { atDate: certificate.approvedAt } : {}),
       });
 
@@ -2196,6 +2201,8 @@ export const portalRouter = new Hono<{
         labAccreditationNumber: undefined,
         labAccreditationValidFrom: undefined,
         labAccreditationValidUntil: undefined,
+        // Internal release-gate detail; the customer only sees `accredited`.
+        scopeOverrideJustification: undefined,
       });
     } catch (error) {
       console.error("Error fetching portal certificate:", error);

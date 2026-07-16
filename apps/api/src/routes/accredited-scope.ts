@@ -4,8 +4,10 @@ import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
   accreditedScopeLineAuditLog,
+  organization,
 } from "@calibra-facil/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { z } from "zod";
 import { AccreditedScopeLineSchema } from "@calibra-facil/schemas";
 import { unitKind } from "@calibra-facil/shared";
 import {
@@ -71,22 +73,84 @@ export const accreditedScopeRouter = new Hono<{
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
 
-    const lines = await db
-      .select()
-      .from(accreditedScopeLine)
-      .where(
-        and(
-          eq(accreditedScopeLine.organizationId, memberData.organizationId),
-          eq(accreditedScopeLine.unitId, unit.unitId),
+    const [lines, [org]] = await Promise.all([
+      db
+        .select()
+        .from(accreditedScopeLine)
+        .where(
+          and(
+            eq(accreditedScopeLine.organizationId, memberData.organizationId),
+            eq(accreditedScopeLine.unitId, unit.unitId),
+          ),
+        )
+        .orderBy(
+          asc(accreditedScopeLine.quantityKind),
+          asc(accreditedScopeLine.rangeMin),
         ),
-      )
-      .orderBy(
-        asc(accreditedScopeLine.quantityKind),
-        asc(accreditedScopeLine.rangeMin),
-      );
+      db
+        .select({ scopeEnforcementMode: organization.scopeEnforcementMode })
+        .from(organization)
+        .where(eq(organization.id, memberData.organizationId))
+        .limit(1),
+    ]);
 
-    return c.json({ lines, unit });
+    return c.json({
+      lines,
+      unit,
+      enforcementMode: org?.scopeEnforcementMode ?? "warn",
+    });
   })
+
+  // ===========================================================================
+  // PUT /enforcement - Switch the org-level guard mode (#427 Phase 1)
+  // ===========================================================================
+  .put(
+    "/enforcement",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    zValidator("json", z.object({ mode: z.enum(["warn", "enforce"]) })),
+    async (c) => {
+      const input = c.req.valid("json");
+      const memberData = c.get("member");
+      const session = c.get("session");
+      requireUnitOperationalSettingsManager(memberData);
+
+      const [before] = await db
+        .select({ scopeEnforcementMode: organization.scopeEnforcementMode })
+        .from(organization)
+        .where(eq(organization.id, memberData.organizationId))
+        .limit(1);
+
+      await db
+        .update(organization)
+        .set({ scopeEnforcementMode: input.mode })
+        .where(eq(organization.id, memberData.organizationId));
+
+      if (before && before.scopeEnforcementMode !== input.mode) {
+        await db.insert(accreditedScopeLineAuditLog).values({
+          scopeLineId: null,
+          organizationId: memberData.organizationId,
+          action: "enforcement_mode_change",
+          changes: {
+            scopeEnforcementMode: {
+              old: before.scopeEnforcementMode,
+              new: input.mode,
+            },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+      }
+
+      return c.json({
+        message:
+          input.mode === "enforce"
+            ? "Guarda de escopo ativada: violações bloqueiam a emissão acreditada"
+            : "Guarda de escopo em modo aviso",
+        enforcementMode: input.mode,
+      });
+    },
+  )
 
   // ===========================================================================
   // PUT / - Create or update a scope line (id present = update)

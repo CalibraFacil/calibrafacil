@@ -92,6 +92,7 @@ import {
 import {
   buildJobApprovalInput,
   isJobApprovalBlockedByEnvironment,
+  isScopeViolationError,
 } from '@/features/jobs/approval-model'
 import {
   ACTION_BUTTON_CLASS,
@@ -353,6 +354,11 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   const [cancelReason, setCancelReason] = useState('')
   const [selectedTechnician, setSelectedTechnician] = useState<string>('')
   const [envJustification, setEnvJustification] = useState('')
+  // #427 Phase 1: server blocked the approval with SCOPE_VIOLATION; the
+  // dialog then offers the documented-override path (issues without seal).
+  const [scopeViolationBlocked, setScopeViolationBlocked] = useState(false)
+  const [scopeOverrideJustification, setScopeOverrideJustification] =
+    useState('')
 
   // Stable callback for refreshing job data (used by ApprovedJobRecord for label polling)
   const refreshJob = useCallback(() => {
@@ -381,7 +387,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       }
       return calibraApi.jobs.approve(
         apiJobId,
-        buildJobApprovalInput(envJustification),
+        buildJobApprovalInput(
+          envJustification,
+          scopeViolationBlocked ? scopeOverrideJustification : '',
+        ),
       )
     },
     onSuccess: () => {
@@ -390,8 +399,13 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       toast.success('Job aprovado com sucesso!')
       setApproveDialogOpen(false)
       setEnvJustification('')
+      setScopeViolationBlocked(false)
+      setScopeOverrideJustification('')
     },
     onError: (error) => {
+      if (isScopeViolationError(error)) {
+        setScopeViolationBlocked(true)
+      }
       toast.error(error.message)
     },
   })
@@ -1674,7 +1688,16 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       )}
 
       {/* Approve Dialog */}
-      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
+      <Dialog
+        open={approveDialogOpen}
+        onOpenChange={(open) => {
+          setApproveDialogOpen(open)
+          if (!open) {
+            setScopeViolationBlocked(false)
+            setScopeOverrideJustification('')
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Aprovar Job</DialogTitle>
@@ -1734,6 +1757,35 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               </div>
             )}
 
+          {/* #427 Phase 1: scope-violation override (only after the server
+              blocked with SCOPE_VIOLATION). Approving here issues WITHOUT
+              the accreditation seal. */}
+          {scopeViolationBlocked && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  Violação do escopo acreditado (CMC)
+                </p>
+                <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+                  O resultado viola o escopo acreditado do laboratório. Para
+                  aprovar mesmo assim, justifique. O certificado será emitido
+                  sem o selo de acreditação.
+                </p>
+              </div>
+              <Field>
+                <FieldLabel>Justificativa (obrigatória)</FieldLabel>
+                <Textarea
+                  placeholder="Justifique a emissão sem o selo de acreditação..."
+                  value={scopeOverrideJustification}
+                  onChange={(e) =>
+                    setScopeOverrideJustification(e.target.value)
+                  }
+                  rows={3}
+                />
+              </Field>
+            </div>
+          )}
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -1746,11 +1798,17 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               onClick={() => approveMutation.mutate()}
               disabled={
                 approveMutation.isPending ||
-                isJobApprovalBlockedByEnvironment(job, envJustification)
+                isJobApprovalBlockedByEnvironment(job, envJustification) ||
+                (scopeViolationBlocked &&
+                  scopeOverrideJustification.trim().length === 0)
               }
             >
               {approveMutation.isPending && <Spinner className="mr-2" />}
-              {approveMutation.isPending ? 'Aprovando...' : 'Aprovar'}
+              {approveMutation.isPending
+                ? 'Aprovando...'
+                : scopeViolationBlocked
+                  ? 'Aprovar sem selo'
+                  : 'Aprovar'}
             </Button>
           </DialogFooter>
         </DialogContent>

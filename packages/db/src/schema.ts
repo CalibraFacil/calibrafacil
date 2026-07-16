@@ -76,6 +76,7 @@ import type {
   QuantityKind,
   ScopeComplianceFinding,
   ScopeComplianceStatus,
+  ScopeEnforcementMode,
   ServiceOrderActorType,
   ServiceOrderClosingReason,
   ServiceOrderDeliveryMethod,
@@ -280,6 +281,14 @@ export const organization = pgTable(
     // falls inside [validFrom, validUntil]; null bounds impose no constraint.
     accreditationValidFrom: timestamp("accreditation_valid_from"),
     accreditationValidUntil: timestamp("accreditation_valid_until"),
+    // #427 Phase 1: accredited-scope (CMC) guard behavior. 'warn' keeps the
+    // Phase 0 classification-only behavior; 'enforce' blocks accredited
+    // approval on scope violations unless a documented override downgrades
+    // the issuance to non-accredited (seal suppressed).
+    scopeEnforcementMode: text("scope_enforcement_mode")
+      .$type<ScopeEnforcementMode>()
+      .default("warn")
+      .notNull(),
     // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
     // Distinct from the RBC/CGCRE accreditation above: required on repair OS
     // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),
@@ -4323,6 +4332,11 @@ export const calibrationJob = pgTable(
     scopeComplianceFindings: jsonb("scope_compliance_findings").$type<
       ScopeComplianceFinding[]
     >(),
+    // #427 Phase 1: documented scope-violation override. Non-null means the
+    // approver knowingly issued DESPITE an adverse classification under
+    // enforce mode — and the certificate was downgraded to non-accredited
+    // (shouldRenderAccreditationSeal suppresses the seal when this is set).
+    scopeOverrideJustification: text("scope_override_justification"),
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
@@ -6904,7 +6918,9 @@ export const accreditedScopeLineAuditLog = pgTable(
   "accredited_scope_line_audit_log",
   {
     id: serial("id").primaryKey(),
-    scopeLineId: integer("scope_line_id").notNull(),
+    // Null for org-level scope events (e.g. enforcement-mode changes) that
+    // are not tied to a single line.
+    scopeLineId: integer("scope_line_id"),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),

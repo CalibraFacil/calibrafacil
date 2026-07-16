@@ -73,6 +73,11 @@ export type CertificateJobData = {
   };
   methodSnapshot: MethodSnapshot;
   assetSnapshot?: AssetSnapshot | null;
+  /**
+   * #427 Phase 1: frozen scope-violation override. Non-null means the
+   * approval was downgraded to non-accredited issuance (seal suppressed).
+   */
+  scopeOverrideJustification?: string | null;
   standardsSnapshot: StandardSnapshot[] | null;
   serviceOrder?: {
     inmetroRepairMarkNumber?: string | null;
@@ -653,6 +658,7 @@ export function buildCertificateData(
   const certificateAccredited = shouldRenderAccreditationSeal({
     lab: job.lab,
     methodAccreditedScope: job.methodSnapshot?.accreditedScope,
+    scopeOverrideJustification: job.scopeOverrideJustification,
     atDate: new Date(),
   });
   const accreditationNumberFormatted = formatAccreditationNumber(

@@ -3,6 +3,7 @@ import type {
   AccreditedScopeResponse,
   SaveAccreditedScopeLineInput,
   SaveAccreditedScopeLineResponse,
+  ScopeEnforcementMode,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
 
@@ -28,6 +29,17 @@ export function createAccreditedScopeApi(
           param: { id: String(id) },
         }),
         "Falha ao remover",
+      );
+    },
+    async setEnforcementMode(mode: ScopeEnforcementMode) {
+      return readJsonResponse<{
+        message: string;
+        enforcementMode: ScopeEnforcementMode;
+      }>(
+        await rawCloudClient.api["accredited-scope"].enforcement.$put({
+          json: { mode },
+        }),
+        "Falha ao alterar o modo da guarda de escopo",
       );
     },
   };

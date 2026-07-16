@@ -38,6 +38,7 @@ type RpcRoute<Path extends string> = {
 type ApiRoutePath =
   | "/api/accredited-scope"
   | "/api/accredited-scope/:id"
+  | "/api/accredited-scope/enforcement"
   | "/api/api-keys"
   | "/api/api-keys/:id/revoke"
   | "/api/api-keys/:id/rotate"

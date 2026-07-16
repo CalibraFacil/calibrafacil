@@ -24,8 +24,26 @@ import {
   extractScopeEvaluationPoints,
   shouldRenderAccreditationSeal,
   type ScopeComplianceResult,
+  type ScopeEnforcementMode,
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
+
+export type JobScopeClassification = {
+  /** Null when the guard does not apply (no seal, or no scope lines). */
+  compliance: ScopeComplianceResult | null;
+  /** Org-level guard behavior (#427 Phase 1); 'warn' when the org is absent. */
+  enforcementMode: ScopeEnforcementMode;
+};
+
+/** An adverse classification — the two statuses enforce mode blocks on. */
+export function isAdverseScopeCompliance(
+  compliance: ScopeComplianceResult | null | undefined,
+): boolean {
+  return (
+    compliance?.status === "OUT_OF_SCOPE" ||
+    compliance?.status === "U_BELOW_CMC"
+  );
+}
 
 export async function classifyJobScopeCompliance(input: {
   organizationId: string;
@@ -36,17 +54,19 @@ export async function classifyJobScopeCompliance(input: {
   results: Record<string, unknown> | null;
   /** Evaluation instant — emission date at approval, now at submit. */
   atDate: Date;
-}): Promise<ScopeComplianceResult | null> {
+}): Promise<JobScopeClassification> {
   const [lab] = await db
     .select({
       accreditationActive: organization.accreditationActive,
       accreditationNumber: organization.accreditationNumber,
       accreditationValidFrom: organization.accreditationValidFrom,
       accreditationValidUntil: organization.accreditationValidUntil,
+      scopeEnforcementMode: organization.scopeEnforcementMode,
     })
     .from(organization)
     .where(eq(organization.id, input.organizationId))
     .limit(1);
+  const enforcementMode = lab?.scopeEnforcementMode ?? "warn";
 
   const sealWouldRender =
     lab !== undefined &&
@@ -55,7 +75,7 @@ export async function classifyJobScopeCompliance(input: {
       methodAccreditedScope: input.methodSnapshot.accreditedScope ?? false,
       atDate: input.atDate,
     });
-  if (!sealWouldRender) return null;
+  if (!sealWouldRender) return { compliance: null, enforcementMode };
 
   const scopeLines = await db
     .select()
@@ -66,7 +86,7 @@ export async function classifyJobScopeCompliance(input: {
         eq(accreditedScopeLine.unitId, input.unitId),
       ),
     );
-  if (scopeLines.length === 0) return null;
+  if (scopeLines.length === 0) return { compliance: null, enforcementMode };
 
   const points = extractScopeEvaluationPoints({
     data: input.data,
@@ -76,9 +96,12 @@ export async function classifyJobScopeCompliance(input: {
     fallbackUnit: input.assetSnapshot?.baseMeasurementUnit ?? null,
   });
 
-  return evaluateScopeCompliance({
-    scopeLines,
-    points,
-    atDate: input.atDate,
-  });
+  return {
+    compliance: evaluateScopeCompliance({
+      scopeLines,
+      points,
+      atDate: input.atDate,
+    }),
+    enforcementMode,
+  };
 }

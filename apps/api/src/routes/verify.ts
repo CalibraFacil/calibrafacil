@@ -93,6 +93,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         labName: organization.name,
         // Accreditation seal - frozen method flag with current-method fallback
         methodSnapshot: calibrationJob.methodSnapshot,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
         serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
         labAccreditationActive: organization.accreditationActive,
         labAccreditationValidFrom: organization.accreditationValidFrom,
@@ -201,6 +202,9 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         job.methodSnapshot?.accreditedScope ??
         job.serviceMethodAccreditedScope ??
         false,
+      // #427 Phase 1: an approval overridden past the CMC guard was
+      // downgraded to non-accredited issuance.
+      scopeOverrideJustification: job.scopeOverrideJustification,
       ...(job.approvedAt ? { atDate: job.approvedAt } : {}),
     });
 
