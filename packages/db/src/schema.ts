@@ -7680,6 +7680,7 @@ export type NotificationType =
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
   | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission degrades to unsigned once expired)
   | "ACCREDITATION_EXPIRING" // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
+  | "ACCREDITED_SCOPE_LINE_EXPIRING" // #427 Phase 2 - a scope line's vigência nearing validUntil (points stop matching once expired)
   | "JOB_OVERDUE"
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED"
@@ -7850,7 +7851,8 @@ export type ScheduledNotificationEntityType =
   | "competence"
   | "visit"
   | "signing_certificate" // CMP-02 - ICP-Brasil A1 signing-certificate expiry alert
-  | "organization_accreditation"; // #647 - entity_id is the constant 0 (one accreditation per org)
+  | "organization_accreditation" // #647 - entity_id is the constant 0 (one accreditation per org)
+  | "accredited_scope_line"; // #427 Phase 2 - entity_id is accredited_scope_line.id
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.

@@ -4,6 +4,7 @@ import {
   notificationPreference,
   member,
   user,
+  accreditedScopeLine,
   calibrationJob,
   customer,
   asset,
@@ -40,7 +41,10 @@ import {
   lte,
   sql,
 } from "drizzle-orm";
-import { portalDigestFrequenciesFor } from "@calibra-facil/shared";
+import {
+  portalDigestFrequenciesFor,
+  quantityKindLabelPt,
+} from "@calibra-facil/shared";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
@@ -2798,6 +2802,75 @@ export async function notifyAccreditationExpiring(
         type: "compliance",
         data: {
           itemName: "Acreditação Cgcre/RBC",
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Warn lab admins/owners that one accredited-scope (CMC) line's vigência is
+ * nearing its end (#427 Phase 2). Once the line expires, points it covered
+ * stop matching and accredited issuance in that range classifies as
+ * OUT_OF_SCOPE — blocking approval when the org enforces the guard.
+ */
+export async function notifyAccreditedScopeLineExpiring(
+  scopeLineId: number,
+  organizationId: string,
+  context: { daysRemaining: number },
+): Promise<void> {
+  // Org-scoped read (defense in depth): never resolve/notify across tenants.
+  // Join the unit so the alert names which site's scope line expires.
+  const [lineData] = await db
+    .select({
+      quantityKind: accreditedScopeLine.quantityKind,
+      rangeMin: accreditedScopeLine.rangeMin,
+      rangeMax: accreditedScopeLine.rangeMax,
+      rangeUnit: accreditedScopeLine.rangeUnit,
+      description: accreditedScopeLine.description,
+      validUntil: accreditedScopeLine.validUntil,
+      unitName: organizationUnit.name,
+    })
+    .from(accreditedScopeLine)
+    .innerJoin(
+      organizationUnit,
+      eq(accreditedScopeLine.unitId, organizationUnit.id),
+    )
+    .where(
+      and(
+        eq(accreditedScopeLine.id, scopeLineId),
+        eq(accreditedScopeLine.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!lineData?.validUntil) return;
+
+  const dueDate = formatDateBR(lineData.validUntil);
+  const daysRemaining = context.daysRemaining;
+  const kindLabel = quantityKindLabelPt(lineData.quantityKind);
+  const lineName = `${kindLabel} ${lineData.rangeMin} a ${lineData.rangeMax} ${lineData.rangeUnit}${lineData.description ? ` (${lineData.description})` : ""} na unidade ${lineData.unitName}`;
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+      priority: daysRemaining <= 7 ? "HIGH" : "MEDIUM",
+      title: "Linha do escopo acreditado expirando",
+      message: `A vigência da linha ${lineName} termina em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} (${dueDate}). Após o vencimento, pontos nessa faixa deixam de casar com o escopo e a emissão acreditada passa a classificar como fora de escopo. Atualize a linha nas configurações após a renovação do escopo.`,
+      actionUrl: "/dashboard/settings/accredited-scope",
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName: lineName,
           dueDate,
           daysRemaining,
         },

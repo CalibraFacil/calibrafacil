@@ -12,6 +12,7 @@ import { Client } from "pg";
 import {
   decideSigningCertificateExpiryAlert,
   notifyAccreditationExpiring,
+  notifyAccreditedScopeLineExpiring,
   notifyAssetDueForLegalVerification,
   notifyAssetDueForRecalibration,
   notifyCompetenceExpired,
@@ -443,7 +444,7 @@ async function recordScheduledNotification(
       sent_at
     ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
     ON CONFLICT (organization_id, type, entity_type, entity_id, lead_time_days)
-    DO UPDATE SET sent_at = NOW()
+    DO UPDATE SET sent_at = NOW(), scheduled_for = EXCLUDED.scheduled_for
     `,
     [
       params.organizationId,
@@ -669,6 +670,10 @@ async function checkAccreditationsExpiring(
             AND sn.entity_type = 'organization_accreditation'
             AND sn.organization_id = o.id
             AND sn.sent_at IS NOT NULL
+            -- Only windows alerted for THIS expiry: a renewed vigência
+            -- (new valid_until) re-arms all windows instead of staying
+            -- suppressed forever by the previous cycle's rows.
+            AND sn.scheduled_for = o.accreditation_valid_until
         ),
         ARRAY[]::int[]
       ) AS alerted_lead_days
@@ -678,6 +683,60 @@ async function checkAccreditationsExpiring(
       AND o.accreditation_valid_until > NOW()
       AND o.accreditation_valid_until <= NOW() + INTERVAL '30 days'
     ORDER BY o.accreditation_valid_until ASC, o.id ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+interface AccreditedScopeLineExpiringRow {
+  id: number;
+  organization_id: string;
+  valid_until: Date;
+  alerted_lead_days: number[];
+}
+
+/**
+ * Accredited-scope (CMC) line vigência nearing its end (#427 Phase 2). Same
+ * escalating-window shape as the org-level accreditation above, but per line:
+ * once a line expires, points it covered stop matching the scope and
+ * accredited issuance in that range classifies OUT_OF_SCOPE (blocking under
+ * enforce mode). Lines without a validUntil never expire and are skipped.
+ */
+async function checkAccreditedScopeLinesExpiring(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<AccreditedScopeLineExpiringRow[]> {
+  const result = await client.query<AccreditedScopeLineExpiringRow>(
+    `
+    SELECT
+      l.id,
+      l.organization_id,
+      l.valid_until,
+      COALESCE(
+        ARRAY(
+          SELECT sn.lead_time_days
+          FROM scheduled_notification sn
+          WHERE sn.type = 'ACCREDITED_SCOPE_LINE_EXPIRING'
+            AND sn.entity_type = 'accredited_scope_line'
+            AND sn.entity_id = l.id
+            AND sn.organization_id = l.organization_id
+            AND sn.sent_at IS NOT NULL
+            -- Only windows alerted for THIS expiry: renewing the line's
+            -- vigência in place (same id, new valid_until) re-arms all
+            -- windows instead of staying suppressed by the previous cycle.
+            AND sn.scheduled_for = l.valid_until
+        ),
+        ARRAY[]::int[]
+      ) AS alerted_lead_days
+    FROM accredited_scope_line l
+    WHERE l.valid_until IS NOT NULL
+      AND l.valid_until > NOW()
+      AND l.valid_until <= NOW() + INTERVAL '30 days'
+    ORDER BY l.valid_until ASC, l.id ASC
     LIMIT $1 OFFSET $2
     `,
     [batchSize, offset],
@@ -704,6 +763,7 @@ export async function processScheduledNotifications(
   visitsProcessed: number;
   signingCertsProcessed: number;
   accreditationsProcessed: number;
+  scopeLinesProcessed: number;
   ptPlanItemsProcessed: number;
 }> {
   let assetsProcessed = 0;
@@ -716,6 +776,7 @@ export async function processScheduledNotifications(
   let visitsProcessed = 0;
   let signingCertsProcessed = 0;
   let accreditationsProcessed = 0;
+  let scopeLinesProcessed = 0;
   let ptPlanItemsProcessed = 0;
 
   await withDbClient(env, async (client) => {
@@ -1228,6 +1289,67 @@ export async function processScheduledNotifications(
       accreditationOffset += accreditationBatch.length;
     } while (accreditationBatch.length === BATCH_SIZE);
 
+    // 10. Warn admins/owners that an accredited-scope (CMC) line's vigência
+    // nears its end (#427 Phase 2). Same escalating-window decider — one
+    // validity end per line, idempotency-per-window via scheduled_notification
+    // (entity_type accredited_scope_line, entity_id = line id).
+    let scopeLineOffset = 0;
+    let scopeLineBatch: AccreditedScopeLineExpiringRow[];
+
+    do {
+      scopeLineBatch = await checkAccreditedScopeLinesExpiring(
+        client,
+        scopeLineOffset,
+        BATCH_SIZE,
+      );
+      if (scopeLineBatch.length > 0) {
+        console.log(
+          `[Scheduled] Evaluating ${scopeLineBatch.length} accredited-scope lines (offset ${scopeLineOffset})`,
+        );
+      }
+
+      const scopeLineNow = new Date();
+      for (const row of scopeLineBatch) {
+        try {
+          const decision = decideSigningCertificateExpiryAlert({
+            validUntil: row.valid_until,
+            now: scopeLineNow,
+            alreadyAlertedLeadDays: row.alerted_lead_days,
+          });
+
+          if (!decision.shouldAlert || decision.leadTimeDays === null) {
+            continue;
+          }
+
+          await notifyAccreditedScopeLineExpiring(
+            row.id,
+            row.organization_id,
+            { daysRemaining: decision.daysUntilExpiry },
+          );
+
+          await recordScheduledNotification(client, {
+            organizationId: row.organization_id,
+            type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+            entityType: "accredited_scope_line",
+            entityId: row.id,
+            scheduledFor: row.valid_until,
+            leadTimeDays: decision.leadTimeDays,
+          });
+
+          scopeLinesProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing accredited-scope line ${row.id}:`,
+            error,
+          );
+        }
+      }
+
+      // No NOT-EXISTS narrowing: the candidate set is stable across the run —
+      // advance by the full page to make forward progress.
+      scopeLineOffset += scopeLineBatch.length;
+    } while (scopeLineBatch.length === BATCH_SIZE);
+
     // 11. Process proficiency-test participation-plan due dates (issue #60)
     let ptPlanOffset = 0;
     let ptPlanBatch: PtPlanDueRow[];
@@ -1278,6 +1400,7 @@ export async function processScheduledNotifications(
     visitsProcessed,
     signingCertsProcessed,
     accreditationsProcessed,
+    scopeLinesProcessed,
     ptPlanItemsProcessed,
   };
 }

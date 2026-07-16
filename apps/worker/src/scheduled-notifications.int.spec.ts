@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { accreditedScopeLine } from "@calibra-facil/db/schema";
 import { processScheduledNotifications } from "./scheduled";
 import { db, truncateAll } from "../test/integration/db";
 import {
@@ -569,5 +570,165 @@ describe("processScheduledNotifications — legal-verification recall (REQ-LVREC
     expect(messages[0]).toContain("Portaria Inmetro nº 157/2022");
     // It must NOT present the indicative date as a hard deadline.
     expect(messages[0]).not.toContain("vencendo em");
+  });
+});
+
+// ── #427 Phase 2: accredited-scope (CMC) line expiry reminders ───────────────
+describe("processScheduledNotifications — accredited-scope line expiry (REQ-CMC-020..022)", () => {
+  async function seedScopeLine(params: {
+    organizationId: string;
+    unitId: number;
+    validUntil: Date | null;
+  }): Promise<number> {
+    const [row] = await db
+      .insert(accreditedScopeLine)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        quantityKind: "mass",
+        rangeMin: 0,
+        rangeMax: 500,
+        rangeUnit: "g",
+        cmcType: "fixed",
+        cmcA: 0.01,
+        cmcUnit: "g",
+        validUntil: params.validUntil,
+      })
+      .returning();
+    if (!row) throw new Error("seedScopeLine: insert failed");
+    return row.id;
+  }
+
+  it("REQ-CMC-020: line expiring in 20 days → one ACCREDITED_SCOPE_LINE_EXPIRING row (lead 30); 2nd sweep idempotent", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-cmc-exp",
+      userId: "owner-cmc-exp",
+    });
+    const lineId = await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      validUntil: daysFromNow(20),
+    });
+
+    const first = await processScheduledNotifications(buildEnv());
+    expect(first.scopeLinesProcessed).toBe(1);
+
+    const rows = await scheduledNotificationRows({
+      type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+      entityType: "accredited_scope_line",
+      entityId: lineId,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      organization_id: org.orgId,
+      lead_time_days: 30,
+    });
+
+    // Idempotent within the same window: the alerted lead day suppresses.
+    const second = await processScheduledNotifications(buildEnv());
+    expect(second.scopeLinesProcessed).toBe(0);
+    expect(
+      await scheduledNotificationRows({
+        type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+        entityType: "accredited_scope_line",
+        entityId: lineId,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("REQ-CMC-021: null valid_until or expiry beyond 30 days → no reminder", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-cmc-quiet",
+      userId: "owner-cmc-quiet",
+    });
+    await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      validUntil: null,
+    });
+    await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      validUntil: daysFromNow(90),
+    });
+
+    const counts = await processScheduledNotifications(buildEnv());
+    expect(counts.scopeLinesProcessed).toBe(0);
+    expect(
+      await scheduledNotificationRows({
+        type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("REQ-CMC-022: with an admin member, the in-app alert names the line and links the scope settings", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-cmc-copy",
+      userId: "owner-cmc-copy",
+    });
+    await seedMember({
+      memberId: "member-cmc-copy",
+      organizationId: org.orgId,
+      userId: org.ownerUserId,
+      role: "admin",
+    });
+    await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      validUntil: daysFromNow(5),
+    });
+
+    await processScheduledNotifications(buildEnv());
+
+    const result = await db.execute(
+      sql`SELECT message, action_url, priority
+          FROM notification
+          WHERE type = 'ACCREDITED_SCOPE_LINE_EXPIRING'`,
+    );
+    const rows = toRows(result);
+    expect(rows).toHaveLength(1);
+    expect(asString(field(rows[0], "message"))).toContain("Massa 0 a 500 g");
+    expect(asString(field(rows[0], "action_url"))).toBe(
+      "/dashboard/settings/accredited-scope",
+    );
+    // 5 days out → inside the ≤7-day window → HIGH priority.
+    expect(asString(field(rows[0], "priority"))).toBe("HIGH");
+  });
+
+  it("REQ-CMC-023: renewing the vigência in place re-arms the reminder windows", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-cmc-renew",
+      userId: "owner-cmc-renew",
+    });
+    const lineId = await seedScopeLine({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      validUntil: daysFromNow(20),
+    });
+
+    // First cycle: the 30-day window fires and is recorded.
+    const first = await processScheduledNotifications(buildEnv());
+    expect(first.scopeLinesProcessed).toBe(1);
+
+    // The lab renews the SAME line (edit dialog keeps the id).
+    await db
+      .update(accreditedScopeLine)
+      .set({ validUntil: daysFromNow(10) })
+      .where(eq(accreditedScopeLine.id, lineId));
+
+    // Post-renewal sweep must alert again — the previous cycle's recorded
+    // windows are keyed to the OLD valid_until and no longer suppress.
+    const second = await processScheduledNotifications(buildEnv());
+    expect(second.scopeLinesProcessed).toBe(1);
+    const rows = await scheduledNotificationRows({
+      type: "ACCREDITED_SCOPE_LINE_EXPIRING",
+      entityType: "accredited_scope_line",
+      entityId: lineId,
+    });
+    // 30-day window from cycle 1 plus the 15-day window from the renewed
+    // cycle (10 days out → 15-day window).
+    expect(rows.map((row) => row.lead_time_days).sort((a, b) => a - b)).toEqual(
+      [15, 30],
+    );
   });
 });

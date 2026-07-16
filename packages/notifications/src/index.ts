@@ -27,6 +27,7 @@ export {
   notifyAssetFoundOutOfTolerance,
   notifySigningCertificateExpiring,
   notifyAccreditationExpiring,
+  notifyAccreditedScopeLineExpiring,
   notifyJobOverdue,
   notifyPaymentReceived,
   notifyPaymentFailed,
