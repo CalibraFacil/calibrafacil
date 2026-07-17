@@ -89,5 +89,13 @@
   html {
     @apply font-sans;
     scrollbar-gutter: stable;
+    /* Offset anchor targets so they clear the 64px sticky header (h-16). */
+    scroll-padding-top: 5rem;
+  }
+  /* Smoothly scroll to in-page anchors, unless the user prefers reduced motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 }
