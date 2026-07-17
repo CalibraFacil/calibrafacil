@@ -3,6 +3,7 @@ import { HeroPreview } from "@/components/landing/hero-preview";
 import { WorkflowSection } from "@/components/landing/workflow-section";
 import { AudienceSection } from "@/components/landing/audience-section";
 import { FeaturesSection } from "@/components/landing/features-section";
+import { VideoSection } from "@/components/landing/video-section";
 import { FAQSection } from "@/components/landing/faq-section";
 import { LeadFormSection } from "@/components/landing/lead-form-section";
 import { ClosingCTA } from "@/components/landing/closing-cta";
@@ -43,6 +44,7 @@ export default function HomePage() {
       <WorkflowSection />
       <AudienceSection />
       <FeaturesSection />
+      <VideoSection />
       <FAQSection />
       <LeadFormSection />
       <ClosingCTA />
