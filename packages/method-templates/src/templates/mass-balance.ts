@@ -65,6 +65,7 @@ export const dataFields = [
         type: "number",
         unit: "g",
         label: "Carga nominal",
+        includeInCertificate: false,
       },
       {
         key: "valor_padrao",
@@ -76,6 +77,7 @@ export const dataFields = [
         key: "composicao",
         type: "text",
         label: "Composição dos pesos",
+        includeInCertificate: false,
         role: "mass_standard_composition",
         massComposition: {
           targetUnit: "g",
@@ -92,30 +94,40 @@ export const dataFields = [
           quantityMode: "profile_linear",
         },
       },
-      { key: "divisao", type: "number", unit: "g", label: "Divisão usada" },
+      {
+        key: "divisao",
+        type: "number",
+        unit: "g",
+        label: "Divisão usada",
+        includeInCertificate: false,
+      },
       {
         key: "erro_maximo_pesos",
         type: "number",
         unit: "g",
         label: "Erro máximo dos pesos",
+        includeInCertificate: false,
       },
       {
         key: "incerteza_pesos",
         type: "number",
         unit: "g",
         label: "Incerteza dos pesos",
+        includeInCertificate: false,
       },
       {
         key: "efeito_empuxo",
         type: "number",
         unit: "g",
         label: "Efeito empuxo",
+        includeInCertificate: false,
       },
       {
         key: "deriva_pesos",
         type: "number",
         unit: "g",
         label: "Deriva dos pesos",
+        includeInCertificate: false,
       },
       {
         key: "antes_leitura_1",
@@ -291,6 +303,7 @@ export const formulas: Record<string, unknown>[] = [
       "(pontos_indicacao_antes_leitura_1 + pontos_indicacao_antes_leitura_2 + pontos_indicacao_antes_leitura_3) / 3",
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -303,6 +316,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "media_indicacao_antes - pontos_indicacao_valor_padrao",
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -415,6 +429,7 @@ export const formulas: Record<string, unknown>[] = [
     ),
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "auxiliary",
       group: "uncertainty_budget",
     },
@@ -429,6 +444,7 @@ export const formulas: Record<string, unknown>[] = [
     ),
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "coverage_factor",
       group: "uncertainty_budget",
     },
@@ -441,6 +457,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "fator_k_antes * u_combinada_antes",
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "expanded_uncertainty",
       group: "calibration_result",
     },
@@ -454,6 +471,7 @@ export const formulas: Record<string, unknown>[] = [
       "(pontos_indicacao_apos_leitura_1 + pontos_indicacao_apos_leitura_2 + pontos_indicacao_apos_leitura_3) / 3",
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -466,6 +484,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "media_indicacao_apos - pontos_indicacao_valor_padrao",
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -518,6 +537,7 @@ export const formulas: Record<string, unknown>[] = [
     ),
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "auxiliary",
       group: "uncertainty_budget",
     },
@@ -532,6 +552,7 @@ export const formulas: Record<string, unknown>[] = [
     ),
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "coverage_factor",
       group: "uncertainty_budget",
     },
@@ -544,6 +565,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "fator_k_apos * u_combinada_apos",
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "expanded_uncertainty",
       group: "calibration_result",
     },
@@ -557,6 +579,7 @@ export const formulas: Record<string, unknown>[] = [
       "std([repetibilidade_leitura_1, repetibilidade_leitura_2, repetibilidade_leitura_3, repetibilidade_leitura_4, repetibilidade_leitura_5], 1)",
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -593,6 +616,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "excentricidade_antes - mean(excentricidade_antes)",
     reporting: {
       includeInCertificate: true,
+      phase: "before",
       role: "primary_result",
       group: "calibration_result",
     },
@@ -640,6 +664,7 @@ export const formulas: Record<string, unknown>[] = [
     expression: "excentricidade_apos - mean(excentricidade_apos)",
     reporting: {
       includeInCertificate: true,
+      phase: "after",
       role: "primary_result",
       group: "calibration_result",
     },
