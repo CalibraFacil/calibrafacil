@@ -36,8 +36,10 @@ import {
   Heading02Icon,
   Heading03Icon,
   LeftToRightListBulletIcon,
+  CombineIcon,
   LeftToRightListNumberIcon,
   MinusSignIcon,
+  SplitIcon,
   Redo02Icon,
   SquareLock02Icon,
   Table01Icon,
@@ -231,6 +233,10 @@ function PlaceholderView(props: NodeViewProps) {
 // lane selects the band node so the inspector exposes its config.
 // ---------------------------------------------------------------------------
 
+function rowSlot(value: unknown): 'left' | 'right' | undefined {
+  return value === 'left' || value === 'right' ? value : undefined
+}
+
 function readTopBandAttrs(
   attrs: Record<string, unknown>,
 ): BandTopIdentityNode['attrs'] {
@@ -240,6 +246,11 @@ function readTopBandAttrs(
     showCertificateNumber: attrs.showCertificateNumber === true,
     showTitle: attrs.showTitle === true,
     showSealText: attrs.showSealText === true,
+    labNameSlot: rowSlot(attrs.labNameSlot),
+    titleSlot: rowSlot(attrs.titleSlot),
+    certificateNumberSlot: rowSlot(attrs.certificateNumberSlot),
+    sealTextSlot:
+      attrs.sealTextSlot === 'line2' ? 'line2' : rowSlot(attrs.sealTextSlot),
   }
 }
 
@@ -251,6 +262,7 @@ function readFooterBandAttrs(
     showCertificateNumber: attrs.showCertificateNumber === true,
     showLabName: attrs.showLabName === true,
     showIssueDate: attrs.showIssueDate === true,
+    identitySide: rowSlot(attrs.identitySide),
   }
 }
 
@@ -550,6 +562,16 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
         onClick={() =>
           run().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run()
         }
+      />
+      <ToolbarButton
+        label="Mesclar células"
+        icon={CombineIcon}
+        onClick={() => run().mergeCells().run()}
+      />
+      <ToolbarButton
+        label="Dividir célula"
+        icon={SplitIcon}
+        onClick={() => run().splitCell().run()}
       />
       <ToolbarButton
         label="Divisor"

@@ -257,6 +257,44 @@ describe("compileCertificateHtml", () => {
     expect(html).toContain("&amp; Cia");
   });
 
+  it("serializes merged cells in authored tables (M-C)", async () => {
+    const document = starterPlus([
+      {
+        type: "table",
+        content: [
+          {
+            type: "tableRow",
+            content: [
+              {
+                type: "tableHeader",
+                attrs: { colspan: 2, rowspan: 1, colwidth: null },
+                content: [
+                  { type: "paragraph", content: [{ type: "text", text: "Faixa" }] },
+                ],
+              },
+            ],
+          },
+          {
+            type: "tableRow",
+            content: [
+              {
+                type: "tableCell",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "a" }] }],
+              },
+              {
+                type: "tableCell",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "b" }] }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    const { html } = await compileCertificateHtml(document, sampleCertificateInputData);
+    expect(html).toContain('colspan="2"');
+    expect(html).toContain("Faixa");
+  });
+
   it("images require caller-resolved mediaUrls; unresolved id is fail-loud", async () => {
     const document = starterPlus([
       { type: "image", attrs: { mediaId: 7, alt: "selo interno", widthMm: 40 } },

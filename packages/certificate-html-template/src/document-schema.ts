@@ -131,12 +131,17 @@ const orderedListNodeSchema = z.strictObject({
   content: z.array(listItemNodeSchema).min(1),
 });
 
-/** v1: no merged cells in AUTHORED tables (ADR-2; backlog #7). */
-const tableSpanSchema = z.literal(1).nullish();
+/**
+ * M-C (backlog #7 lifted): merged cells are allowed in AUTHORED tables, with
+ * sane print bounds. The generated results data-grid is untouched — its shape
+ * stays derived from the method, never authored.
+ */
+const tableColspanSchema = z.int().min(1).max(8).nullish();
+const tableRowspanSchema = z.int().min(1).max(20).nullish();
 
 const tableCellAttrsSchema = z.strictObject({
-  colspan: tableSpanSchema,
-  rowspan: tableSpanSchema,
+  colspan: tableColspanSchema,
+  rowspan: tableRowspanSchema,
   colwidth: z.array(z.number().positive()).nullish(),
   // Emitted by TipTap v3's table cells (round-trip compatibility).
   align: textAlignSchema.nullish(),
@@ -199,6 +204,15 @@ const horizontalRuleNodeSchema = z.strictObject({
 // attrs, never authored inline. Exactly-once, pinned first/last in `content`.
 // ---------------------------------------------------------------------------
 
+/**
+ * M-C band element SLOTS — additive optional attrs on the v3 band nodes.
+ * Absent/null slots reproduce the M-B arrangement byte-identically, so stored
+ * documents compile unchanged until an admin touches a slot. Placement stays
+ * slot-based (no coordinates): left/right on the identity row, line2 below.
+ */
+const bandRowSlotSchema = z.enum(["left", "right"]).nullish();
+const bandSealSlotSchema = z.enum(["line2", "left", "right"]).nullish();
+
 const bandTopIdentityNodeSchema = z.strictObject({
   type: z.literal("bandTopIdentity"),
   attrs: z.strictObject({
@@ -208,6 +222,11 @@ const bandTopIdentityNodeSchema = z.strictObject({
     showTitle: z.boolean(),
     /** Accreditation-as-text on every page (the seal IMAGE stays page-1 only). */
     showSealText: z.boolean(),
+    /** Slots (M-C): defaults — labName/title left, certNumber right, sealText line2. */
+    labNameSlot: bandRowSlotSchema,
+    titleSlot: bandRowSlotSchema,
+    certificateNumberSlot: bandRowSlotSchema,
+    sealTextSlot: bandSealSlotSchema,
   }),
 });
 
@@ -219,6 +238,8 @@ const bandPageFooterNodeSchema = z.strictObject({
     showLabName: z.boolean(),
     showIssueDate: z.boolean(),
     // "Página X de Y" is mandatory (NIE-CGCRE-009) — always rendered.
+    /** Slot (M-C): identity side; page numbers take the opposite side. */
+    identitySide: bandRowSlotSchema,
   }),
 });
 

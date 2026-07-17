@@ -7,4 +7,4 @@
  * serialization order. Same discipline as `ENGINE_VERSION` in
  * `packages/math-engine`.
  */
-export const CERT_HTML_COMPILER_VERSION = "0.6.0";
+export const CERT_HTML_COMPILER_VERSION = "0.7.0";

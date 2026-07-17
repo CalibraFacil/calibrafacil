@@ -50,6 +50,22 @@ function section(title: string | null, inner: string): string {
   return `${heading}${inner}`;
 }
 
+/**
+ * Placement presets (M-C): the layout envelope's free-string `preset` becomes
+ * a CSS modifier ONLY when it is on the block's whitelist — unknown presets
+ * render as the default (never as an arbitrary class).
+ */
+function presetClass(
+  layout: CertificateBlockLayout | null | undefined,
+  allowed: readonly string[],
+): string {
+  const preset = layout?.preset;
+  return preset && allowed.includes(preset) ? ` cf-preset-${preset}` : "";
+}
+
+export const LAB_IDENTIFICATION_PRESETS = ["logo-right", "logo-top"] as const;
+export const ACCREDITATION_SEAL_PRESETS = ["seal-left", "seal-center"] as const;
+
 // ---------------------------------------------------------------------------
 // Structured data mini-schemas (fail-loud shape checks)
 // ---------------------------------------------------------------------------
@@ -105,7 +121,10 @@ ${amendment}</dl><div><div class="cf-certno-label">Certificado n.º</div><div cl
   );
 }
 
-function renderLabIdentification(data: Data): string {
+function renderLabIdentification(
+  data: Data,
+  layout?: CertificateBlockLayout | null,
+): string {
   // Masthead (reference PR #587): logo · lab identity lines · 2px brand rule.
   const rawLogo = Reflect.get(Reflect.get(data, "lab") ?? {}, "logoDataUrl");
   const logo =
@@ -140,7 +159,7 @@ function renderLabIdentification(data: Data): string {
   ]
     .filter(Boolean)
     .join("<br/>");
-  return `<div class="cf-masthead">${logo}<div class="cf-masthead-id"><div class="cf-masthead-name">${field(data, "lab.name")}</div><div class="cf-masthead-lines">${lines}</div></div></div><div class="cf-rule"></div>`;
+  return `<div class="cf-masthead${presetClass(layout, LAB_IDENTIFICATION_PRESETS)}">${logo}<div class="cf-masthead-id"><div class="cf-masthead-name">${field(data, "lab.name")}</div><div class="cf-masthead-lines">${lines}</div></div></div><div class="cf-rule"></div>`;
 }
 
 function renderCustomerIdentification(data: Data): string {
@@ -341,7 +360,10 @@ function renderSignatureBlock(data: Data): string {
   return `<div class="cf-signature-block">${signatureImg}<div><span class="cf-signature-line"><span class="cf-signature-name">${approverName}</span><br/><span class="cf-signature-title">Signatário autorizado</span></span></div></div>`;
 }
 
-function renderAccreditationSeal(data: Data): string {
+function renderAccreditationSeal(
+  data: Data,
+  layout?: CertificateBlockLayout | null,
+): string {
   const accredited = field(data, "accreditation.accredited") === "Sim";
   const rawSeal = Reflect.get(Reflect.get(data, "lab") ?? {}, "accreditationSealPng");
   const sealImg =
@@ -350,7 +372,7 @@ function renderAccreditationSeal(data: Data): string {
       : "";
   // Layout-stable: the reserved box renders whether or not the seal appears
   // (vigência is decided at emission and arrives in the input data — #647).
-  return `<div class="cf-accreditation-seal">${sealImg}${sealImg === "" ? "" : '<div class="cf-seal-caption">CGCRE · RBC</div>'}</div>`;
+  return `<div class="cf-accreditation-seal${presetClass(layout, ACCREDITATION_SEAL_PRESETS)}">${sealImg}${sealImg === "" ? "" : '<div class="cf-seal-caption">CGCRE · RBC</div>'}</div>`;
 }
 
 function renderVerificationQr(data: Data, qrDataUrl: string): string {
@@ -378,7 +400,7 @@ export function renderLockedBlockInner(
     case "certificate_identification":
       return renderCertificateIdentification(data);
     case "lab_identification":
-      return renderLabIdentification(data);
+      return renderLabIdentification(data, layout);
     case "customer_identification":
       return renderCustomerIdentification(data);
     case "item_identification":
@@ -394,7 +416,7 @@ export function renderLockedBlockInner(
     case "signature_block":
       return renderSignatureBlock(data);
     case "accreditation_seal":
-      return renderAccreditationSeal(data);
+      return renderAccreditationSeal(data, layout);
     case "verification_qr":
       return renderVerificationQr(data, context.qrDataUrl);
     case "end_of_document":

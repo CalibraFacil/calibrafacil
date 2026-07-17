@@ -238,4 +238,11 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
   font-size: var(--size-label); font-weight: 600;
 }
 .cf-band-seal-text{ font-size: var(--size-caption); color: var(--muted); margin-top: 1pt; }
+.cf-band-seal-inline{ font-size: var(--size-caption); color: var(--muted); }
+
+/* ── placement presets (M-C) ── */
+.cf-accreditation-seal.cf-preset-seal-left{ align-items: flex-start; }
+.cf-accreditation-seal.cf-preset-seal-center{ align-items: center; }
+.cf-masthead.cf-preset-logo-right{ flex-direction: row-reverse; }
+.cf-masthead.cf-preset-logo-top{ flex-direction: column; align-items: center; text-align: center; gap: 4pt; }
 `;

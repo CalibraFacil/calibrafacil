@@ -96,6 +96,10 @@ export const BandTopIdentity = Node.create({
       showCertificateNumber: { default: true },
       showTitle: { default: false },
       showSealText: { default: true },
+      labNameSlot: { default: null },
+      titleSlot: { default: null },
+      certificateNumberSlot: { default: null },
+      sealTextSlot: { default: null },
     };
   },
   parseHTML() {
@@ -117,6 +121,7 @@ export const BandPageFooter = Node.create({
       showCertificateNumber: { default: true },
       showLabName: { default: false },
       showIssueDate: { default: false },
+      identitySide: { default: null },
     };
   },
   parseHTML() {

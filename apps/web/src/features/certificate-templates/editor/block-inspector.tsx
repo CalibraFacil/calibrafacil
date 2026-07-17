@@ -75,6 +75,29 @@ function writeLayout(editor: Editor, layout: CertificateBlockLayout) {
     .run()
 }
 
+/** Placement-preset selects (M-C): value '' = the block's default position. */
+const PLACEMENT_BLOCKS: Record<
+  string,
+  { label: string; options: { value: string; label: string }[] }
+> = {
+  accreditation_seal: {
+    label: 'Posição do selo',
+    options: [
+      { value: '', label: 'Direita (padrão)' },
+      { value: 'seal-left', label: 'Esquerda' },
+      { value: 'seal-center', label: 'Centro' },
+    ],
+  },
+  lab_identification: {
+    label: 'Posição do logo',
+    options: [
+      { value: '', label: 'Esquerda (padrão)' },
+      { value: 'logo-right', label: 'Direita' },
+      { value: 'logo-top', label: 'Topo, centralizado' },
+    ],
+  },
+}
+
 export function BlockInspector({ editor }: { editor: Editor | null }) {
   const node = selectedNode(editor)
   if (!editor || !editor.isEditable || !node) return null
@@ -89,7 +112,8 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
   const label = LOCKED_BLOCK_LABELS[selected.blockKey] ?? selected.blockKey
   const isResults = selected.blockKey === 'results_table'
   const isMetadata = METADATA_BLOCKS.has(selected.blockKey)
-  if (!isResults && !isMetadata) return null
+  const placement = PLACEMENT_BLOCKS[selected.blockKey]
+  if (!isResults && !isMetadata && !placement) return null
 
   return (
     <div
@@ -97,6 +121,30 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
       data-testid="block-inspector"
     >
       <h2 className="text-sm font-semibold">{label}</h2>
+
+      {placement && (
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">{placement.label}</span>
+          <NativeSelect
+            aria-label={placement.label}
+            className="h-8 text-xs"
+            value={selected.layout.preset ?? ''}
+            onChange={(event) => {
+              const preset = event.target.value
+              writeLayout(editor, {
+                ...selected.layout,
+                preset: preset === '' ? undefined : preset,
+              })
+            }}
+          >
+            {placement.options.map((option) => (
+              <NativeSelectOption key={option.value} value={option.value}>
+                {option.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
+      )}
 
       {isResults && (
         <ResultsGridControls editor={editor} layout={selected.layout} />
@@ -168,6 +216,50 @@ const BAND_TOGGLES: Record<string, { attr: string; label: string }[]> = {
   ],
 }
 
+/** Slot selects per band element (M-C). '' = the element's default slot. */
+const BAND_SLOTS: Record<
+  string,
+  { attr: string; label: string; options: { value: string; label: string }[] }[]
+> = {
+  bandTopIdentity: [
+    {
+      attr: 'labNameSlot',
+      label: 'Posição do nome',
+      options: [
+        { value: '', label: 'Esquerda (padrão)' },
+        { value: 'right', label: 'Direita' },
+      ],
+    },
+    {
+      attr: 'certificateNumberSlot',
+      label: 'Posição do número',
+      options: [
+        { value: '', label: 'Direita (padrão)' },
+        { value: 'left', label: 'Esquerda' },
+      ],
+    },
+    {
+      attr: 'sealTextSlot',
+      label: 'Posição da acreditação',
+      options: [
+        { value: '', label: 'Linha inferior (padrão)' },
+        { value: 'left', label: 'Esquerda' },
+        { value: 'right', label: 'Direita' },
+      ],
+    },
+  ],
+  bandPageFooter: [
+    {
+      attr: 'identitySide',
+      label: 'Lado da identificação',
+      options: [
+        { value: '', label: 'Esquerda (padrão)' },
+        { value: 'right', label: 'Direita' },
+      ],
+    },
+  ],
+}
+
 function BandInspector({
   editor,
   typeName,
@@ -178,6 +270,7 @@ function BandInspector({
   attrs: Record<string, unknown>
 }) {
   const toggles = BAND_TOGGLES[typeName] ?? []
+  const slots = BAND_SLOTS[typeName] ?? []
   const enabled = attrs.enabled === true
   return (
     <div
@@ -208,6 +301,36 @@ function BandInspector({
           </label>
         ))}
       </div>
+      {enabled && slots.length > 0 && (
+        <div className="grid gap-2">
+          {slots.map(({ attr, label, options }) => (
+            <label key={attr} className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">{label}</span>
+              <NativeSelect
+                aria-label={label}
+                className="h-8 text-xs"
+                value={typeof attrs[attr] === 'string' ? String(attrs[attr]) : ''}
+                onChange={(event) => {
+                  const slot = event.target.value
+                  editor
+                    .chain()
+                    .focus()
+                    .updateAttributes(typeName, {
+                      [attr]: slot === '' ? null : slot,
+                    })
+                    .run()
+                }}
+              >
+                {options.map((option) => (
+                  <NativeSelectOption key={option.value} value={option.value}>
+                    {option.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

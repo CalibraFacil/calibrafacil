@@ -124,3 +124,70 @@ describe("compiled band structure", () => {
     expect(extractCertificatePageFooterHtml(html)).toContain("pageNumber");
   });
 });
+
+describe("placement presets (M-C)", () => {
+  it("seal and masthead presets emit whitelisted modifier classes only", async () => {
+    const doc: { content: { type: string; attrs?: Record<string, unknown> }[] } =
+      JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
+    for (const node of doc.content) {
+      const attrs = node.attrs ?? {};
+      if (Reflect.get(attrs, "blockKey") === "accreditation_seal") {
+        Reflect.set(attrs, "layout", { preset: "seal-center" });
+      }
+      if (Reflect.get(attrs, "blockKey") === "lab_identification") {
+        Reflect.set(attrs, "layout", { preset: "logo-right" });
+      }
+      if (Reflect.get(attrs, "blockKey") === "customer_identification") {
+        // unknown preset: must NOT leak into a class
+        Reflect.set(attrs, "layout", { preset: "evil injection" });
+      }
+    }
+    const { html } = await compileCertificateHtml(doc, sampleCertificateInputData);
+    expect(html).toContain("cf-accreditation-seal cf-preset-seal-center");
+    expect(html).toContain("cf-masthead cf-preset-logo-right");
+    expect(html).not.toContain("evil injection");
+  });
+});
+
+describe("band element slots (M-C)", () => {
+  it("absent slot attrs reproduce the M-B arrangement", () => {
+    const html = renderBandTopIdentityInner(TOP_DEFAULTS, sampleCertificateInputData);
+    // labName left, certNumber right, seal text bare on the second line
+    expect(html).toMatch(
+      /cf-band-left"><span class="cf-band-lab"/,
+    );
+    expect(html).toMatch(/cf-band-right"><span class="cf-band-cert"/);
+    expect(html).toMatch(/cf-band-seal-text">Laboratório de calibração/);
+  });
+
+  it("slots move elements across the identity row", () => {
+    const html = renderBandTopIdentityInner(
+      {
+        ...TOP_DEFAULTS,
+        labNameSlot: "right",
+        certificateNumberSlot: "left",
+        sealTextSlot: "right",
+      },
+      sampleCertificateInputData,
+    );
+    expect(html).toMatch(/cf-band-left"><span class="cf-band-cert"/);
+    expect(html).toMatch(
+      /cf-band-right"><span class="cf-band-lab"[^]*cf-band-seal-inline/,
+    );
+    expect(html).not.toContain("cf-band-seal-text");
+  });
+
+  it("footer identitySide=right puts page numbers on the left", () => {
+    const left = renderBandPageFooterTemplate(FOOTER_DEFAULTS, sampleCertificateInputData);
+    expect(left.indexOf("Certificado CAL-2026-0042")).toBeLessThan(
+      left.indexOf("pageNumber"),
+    );
+    const right = renderBandPageFooterTemplate(
+      { ...FOOTER_DEFAULTS, identitySide: "right" },
+      sampleCertificateInputData,
+    );
+    expect(right.indexOf("pageNumber")).toBeLessThan(
+      right.indexOf("Certificado CAL-2026-0042"),
+    );
+  });
+});

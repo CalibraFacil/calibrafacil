@@ -234,6 +234,77 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
   })
 
+  it('band slots: moving the certificate number to the left re-renders the lane (M-C)', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setNodeSelection(findBandPos(editor, 'bandTopIdentity'))
+    await waitFor(() => {
+      expect(screen.getByTestId('band-inspector')).toBeDefined()
+    })
+    fireEvent.change(screen.getByLabelText('Posição do número'), {
+      target: { value: 'left' },
+    })
+    await waitFor(() => {
+      const json = editor.getJSON()
+      const band = Array.isArray(json.content) ? json.content[0] : null
+      expect(band?.attrs?.certificateNumberSlot).toBe('left')
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+    await waitFor(() => {
+      const lane = document.querySelector(
+        '[data-band-view="bandTopIdentity"] .cf-band-left',
+      )
+      expect(lane?.innerHTML).toContain('cf-band-cert')
+    })
+  })
+
+  it('placement preset: seal position select writes layout.preset and the preview follows (M-C)', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setNodeSelection(
+      findLockedPos(editor, 'accreditation_seal'),
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('block-inspector')).toBeDefined()
+    })
+    fireEvent.change(screen.getByLabelText('Posição do selo'), {
+      target: { value: 'seal-center' },
+    })
+    await waitFor(() => {
+      const layout = blockLayout(editor, 'accreditation_seal')
+      expect(
+        layout && typeof layout === 'object'
+          ? Reflect.get(layout, 'preset')
+          : null,
+      ).toBe('seal-center')
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+    await waitFor(() => {
+      const body = document.querySelector(
+        '[data-locked-block-view="accreditation_seal"] .cf-locked-block-view__body',
+      )
+      expect(body?.innerHTML).toContain('cf-preset-seal-center')
+    })
+  })
+
+  it('merging table cells writes bounded colspans and the document stays valid (M-C)', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false })
+    // collect the first row's two cell positions
+    const cellPositions: number[] = []
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell') cellPositions.push(pos)
+      return true
+    })
+    expect(cellPositions.length).toBeGreaterThanOrEqual(2)
+    editor.commands.setCellSelection({
+      anchorCell: cellPositions[0]!,
+      headCell: cellPositions[1]!,
+    })
+    expect(editor.commands.mergeCells()).toBe(true)
+    const json = editor.getJSON()
+    expect(JSON.stringify(json)).toContain('"colspan":2')
+    expect(validateCertificateDocument(json).ok).toBe(true)
+  })
+
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
     const editor = await mountWithInspector()
     editor.commands.selectAll()

@@ -54,24 +54,66 @@ export function renderBandTopIdentityInner(
   data: Data,
 ): string {
   if (!attrs.enabled) return "";
+  // M-C slots: absent slot attrs reproduce the M-B arrangement byte-for-byte
+  // (labName/title left, certNumber right, sealText on the second line).
   const left: string[] = [];
+  const right: string[] = [];
+  const line2: string[] = [];
+  const place = (
+    slot: "left" | "right" | "line2" | null | undefined,
+    fallback: "left" | "right" | "line2",
+    fragment: string,
+  ) => {
+    if (fragment === "") return;
+    const target = slot ?? fallback;
+    if (target === "left") left.push(fragment);
+    else if (target === "right") right.push(fragment);
+    else line2.push(fragment);
+  };
   if (attrs.showLabName) {
     const labName = bandField(data, "lab.name");
-    if (labName !== "") left.push(`<span class="cf-band-lab">${labName}</span>`);
+    place(
+      attrs.labNameSlot,
+      "left",
+      labName === "" ? "" : `<span class="cf-band-lab">${labName}</span>`,
+    );
   }
   if (attrs.showTitle) {
-    left.push('<span class="cf-band-title">Certificado de Calibração</span>');
+    place(
+      attrs.titleSlot,
+      "left",
+      '<span class="cf-band-title">Certificado de Calibração</span>',
+    );
   }
-  const right: string[] = [];
   if (attrs.showCertificateNumber) {
     const number = bandField(data, "certificate.number");
-    if (number !== "") {
-      right.push(`<span class="cf-band-cert">Certificado ${number}</span>`);
+    place(
+      attrs.certificateNumberSlot,
+      "right",
+      number === ""
+        ? ""
+        : `<span class="cf-band-cert">Certificado ${number}</span>`,
+    );
+  }
+  if (attrs.showSealText) {
+    const sealText = accreditationTextLine(data);
+    if (sealText !== "") {
+      const slot = attrs.sealTextSlot ?? "line2";
+      // On the second line the text renders bare (M-B markup); inline on the
+      // identity row it needs its own sizing class.
+      place(
+        slot,
+        "line2",
+        slot === "line2"
+          ? sealText
+          : `<span class="cf-band-seal-inline">${sealText}</span>`,
+      );
     }
   }
-  const sealText = attrs.showSealText ? accreditationTextLine(data) : "";
   const sealLine =
-    sealText === "" ? "" : `<div class="cf-band-seal-text">${sealText}</div>`;
+    line2.length === 0
+      ? ""
+      : `<div class="cf-band-seal-text">${line2.join(" ")}</div>`;
   if (left.length === 0 && right.length === 0 && sealLine === "") return "";
   return `<div class="cf-band-identity-row"><div class="cf-band-left">${left.join(
     " ",
@@ -104,6 +146,13 @@ export function renderBandPageFooterTemplate(
     }
   }
   const identityHtml = identity.join(" · ");
+  const pageNumbersHtml =
+    'Página <span class="pageNumber"></span> de <span class="totalPages"></span>';
+  // M-C slot: identity side (default left); page numbers take the other side.
+  const cells =
+    (attrs.identitySide ?? "left") === "left"
+      ? `<div>${identityHtml}</div><div>${pageNumbersHtml}</div>`
+      : `<div>${pageNumbersHtml}</div><div>${identityHtml}</div>`;
   // Inline styles only: Chromium footerTemplates ignore external CSS and
   // @font-face. 8.5pt >= the R3 8pt print floor; near-black ink.
   const baseStyle =
@@ -111,8 +160,7 @@ export function renderBandPageFooterTemplate(
   return (
     '<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>' +
     `<div style="width:100%;box-sizing:border-box;padding:0 15mm;display:flex;justify-content:space-between;align-items:baseline;border-top:0.6pt solid #1a1a1a;padding-top:4pt;${baseStyle}">` +
-    `<div>${identityHtml}</div>` +
-    '<div>Página <span class="pageNumber"></span> de <span class="totalPages"></span></div>' +
+    cells +
     "</div></body></html>"
   );
 }

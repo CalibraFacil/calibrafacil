@@ -55,7 +55,9 @@ export {
   lockedBlockGuardKey,
 } from "./locked-guard.js";
 export {
+  ACCREDITATION_SEAL_PRESETS,
   CertificateRenderDataError,
+  LAB_IDENTIFICATION_PRESETS,
   escapeHtml,
   renderLockedBlockInner,
 } from "./blocks.js";

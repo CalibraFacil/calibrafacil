@@ -215,28 +215,37 @@ describe("certificateDocumentSchema", () => {
     ]);
   });
 
-  it("rejects merged cells in authored tables (v1)", () => {
-    const result = validateCertificateDocument(
-      starterWithBlocks((content) => [
-        ...content,
+  it("accepts bounded merged cells in authored tables (M-C); rejects absurd spans", () => {
+    const tableWith = (colspan: number, rowspan: number) => ({
+      type: "table",
+      content: [
         {
-          type: "table",
+          type: "tableRow",
           content: [
             {
-              type: "tableRow",
-              content: [
-                {
-                  type: "tableCell",
-                  attrs: { colspan: 2, rowspan: 1, colwidth: null },
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }],
-                },
-              ],
+              type: "tableCell",
+              attrs: { colspan, rowspan, colwidth: null },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }],
             },
           ],
         },
-      ]),
-    );
-    expect(result.ok).toBe(false);
+      ],
+    });
+    expect(
+      validateCertificateDocument(
+        starterWithBlocks((content) => [...content, tableWith(2, 3)]),
+      ).ok,
+    ).toBe(true);
+    expect(
+      validateCertificateDocument(
+        starterWithBlocks((content) => [...content, tableWith(50, 1)]),
+      ).ok,
+    ).toBe(false);
+    expect(
+      validateCertificateDocument(
+        starterWithBlocks((content) => [...content, tableWith(1, 99)]),
+      ).ok,
+    ).toBe(false);
   });
 
   it("accepts a plain authored table and collects placeholders inside cells", () => {
