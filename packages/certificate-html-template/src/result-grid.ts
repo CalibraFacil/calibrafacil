@@ -40,9 +40,30 @@ const tableRowFormulaSchema = z.object({
     .object({
       includeInCertificate: z.boolean().nullish(),
       role: z.string().nullish(),
+      group: z.string().nullish(),
     })
     .nullish(),
 });
+
+/**
+ * Ground truth (Exemplo FOR 50/51 certificate + DOQ-CGCRE-057): the printed
+ * results grid carries the RESULTS — mean, error, expanded uncertainty, k,
+ * veff — never the per-row uncertainty BUDGET internals (u_resolução,
+ * u_repetibilidade, u_pesos, …, combined u). A real accredited method
+ * declares those as table_row formulas with includeInCertificate=true (they
+ * belong in the budget annex), and without this filter they turn the grid
+ * into an unprintable ~30-column table.
+ */
+function isBudgetInternal(reporting: {
+  role?: string | null;
+  group?: string | null;
+} | null | undefined): boolean {
+  const role = reporting?.role ?? null;
+  const group = reporting?.group ?? null;
+  if (role === "uncertainty_component") return true;
+  // the combined-u intermediate: expanded_uncertainty ROLE but budget GROUP
+  return group === "uncertainty_budget" && role === "expanded_uncertainty";
+}
 
 export type ResultGridColumn = {
   key: string;
@@ -124,6 +145,7 @@ export function deriveResultGrids(
         (formula) =>
           formula.scope.tableKey === field.key &&
           formula.reporting?.includeInCertificate !== false &&
+          !isBudgetInternal(formula.reporting) &&
           !hidden.has(formula.outputKey),
       )
       .map((formula) => ({
