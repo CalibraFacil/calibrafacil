@@ -86,6 +86,18 @@ function wysiwygMethodSnapshot(): MethodSnapshot {
           { key: "leitura", label: "Indicação", type: "number", unit: "kg" },
         ],
       },
+      {
+        key: "excentricidade",
+        label: "Excentricidade",
+        type: "table",
+        // Weighing-method opt-in: the worker renders the indicator SVG into
+        // the frozen snapshot; the html renderer prints it after this grid.
+        eccentricityIndicator: { enabled: true, variant: "circular_platform" },
+        columns: [
+          { key: "posicao", label: "Posição", type: "text" },
+          { key: "leitura_exc", label: "Indicação", type: "number", unit: "kg" },
+        ],
+      },
     ],
     formulas: [
       {
@@ -146,6 +158,10 @@ export const WYSIWYG_JOB_RESULTS = {
 
 /** Multi-point table data matching wysiwygMethodSnapshot's `pontos` field. */
 export const WYSIWYG_JOB_DATA = {
+  excentricidade: [
+    { posicao: "Centro", leitura_exc: 500.0 },
+    { posicao: "Frente", leitura_exc: 500.1 },
+  ],
   pontos: [
     { nominal: 500, leitura: 500 },
     { nominal: 1000, leitura: 999.5 },

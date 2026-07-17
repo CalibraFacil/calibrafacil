@@ -191,3 +191,55 @@ describe("band element slots (M-C)", () => {
     );
   });
 });
+
+describe("eccentricity indicator figure (calibration finding 3)", () => {
+  const SAMPLE_SVG_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>',
+  )}`;
+
+  function withIndicator(): Record<string, unknown> {
+    const data = JSON.parse(JSON.stringify(sampleCertificateInputData));
+    const methodSnapshot = Reflect.get(data, "methodSnapshot");
+    const fields = Reflect.get(methodSnapshot ?? {}, "dataFields");
+    if (!Array.isArray(fields)) throw new Error("fixture missing dataFields");
+    const tableField = fields.find(
+      (field) => Reflect.get(field ?? {}, "type") === "table",
+    );
+    if (!tableField) throw new Error("fixture missing table field");
+    Reflect.set(tableField, "eccentricityIndicator", {
+      enabled: true,
+      variant: "circular_platform",
+    });
+    Reflect.set(data, "graphics", {
+      eccentricityIndicatorSvg: SAMPLE_SVG_DATA_URL,
+    });
+    return data;
+  }
+
+  it("prints after the indicator table's grid when method + svg agree", async () => {
+    const { html } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      withIndicator(),
+    );
+    expect(html).toContain('class="cf-eccentricity-indicator"');
+    expect(html).toContain("Posições de excentricidade");
+  });
+
+  it("renders nothing without the injected svg (method flag alone is not enough)", async () => {
+    const data = withIndicator();
+    Reflect.set(data, "graphics", {});
+    const { html } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      data,
+    );
+    expect(html).not.toContain('class="cf-eccentricity-indicator"');
+  });
+
+  it("the default sample data renders no indicator (no method opt-in)", async () => {
+    const { html } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      sampleCertificateInputData,
+    );
+    expect(html).not.toContain('class="cf-eccentricity-indicator"');
+  });
+});

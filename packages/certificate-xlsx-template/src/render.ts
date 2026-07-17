@@ -215,6 +215,41 @@ const CIRCULAR_ECCENTRICITY_LOAD_POINTS = ["A", "B", "C", "D", "E"];
 const ECCENTRICITY_INDICATOR_FONT_FAMILY =
   "Carlito, Calibri, Aptos, sans-serif";
 
+/**
+ * SVG variant of the eccentricity indicator for HTML-rendered certificates
+ * (wysiwyg engine): same resolution rules as the PNG path, but returns raw
+ * SVG markup — Chromium renders it natively, no rasterizer needed. Returns
+ * null when the method declares no eccentricity indicator (the xlsx path
+ * gates on the template's image binding instead; here the METHOD opts in).
+ */
+export function renderEccentricityIndicatorSvgMarkup(
+  context: CertificateImageContext | undefined,
+  data: Record<string, unknown>,
+): string | null {
+  const enabled =
+    (context?.dataFields ?? []).some(
+      (field) => field.eccentricityIndicator?.enabled,
+    ) ||
+    typeof getPathValue(data, "graphics.eccentricityIndicatorVariant") ===
+      "string";
+  if (!enabled) return null;
+  const variant = resolveEccentricityIndicatorVariant(context, data);
+  const selectedPosition = resolveEccentricityIndicatorPosition(
+    context,
+    data,
+    variant,
+  );
+  const loadPositions =
+    variant === "circular_platform"
+      ? resolveCircularEccentricityLoadPositions(context, data)
+      : undefined;
+  return renderEccentricityIndicatorSvg({
+    variant,
+    selectedPosition,
+    loadPositions,
+  });
+}
+
 export function renderEccentricityIndicatorPng(
   context: CertificateImageContext | undefined,
   data: Record<string, unknown>,

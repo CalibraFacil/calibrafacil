@@ -240,6 +240,10 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 .cf-band-seal-text{ font-size: var(--size-caption); color: var(--muted); margin-top: 1pt; }
 .cf-band-seal-inline{ font-size: var(--size-caption); color: var(--muted); }
 
+/* eccentricity indicator (weighing methods) */
+.cf-eccentricity-indicator{ break-inside: avoid; margin: 4pt 0 7pt; }
+.cf-eccentricity-indicator img{ width: 52mm; max-width: 100%; display: block; }
+
 /* ── placement presets (M-C) ── */
 .cf-accreditation-seal.cf-preset-seal-left{ align-items: flex-start; }
 .cf-accreditation-seal.cf-preset-seal-center{ align-items: center; }

@@ -231,6 +231,10 @@ describe("processHtmlIssuedCertificate (worker real-DB integration — M1)", () 
       expect(html).toContain("999,5");
       expect(html).toContain('class="cf-unit-row"');
       expect(html).toContain('data-locked-block="end_of_document"');
+      // eccentricity indicator (calibration finding 3): the method's
+      // indicator-enabled table renders the injected SVG after its grid
+      expect(html).toContain('class="cf-eccentricity-indicator"');
+      expect(html).toContain("data:image/svg+xml");
     }
   });
 

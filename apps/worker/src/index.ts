@@ -29,6 +29,8 @@ import React from "react";
 import QRCode from "qrcode";
 import {
   buildCertificateData,
+  certificateImageContextFromJob,
+  renderEccentricityIndicatorSvgMarkup,
   createConfiguredXlsxToPdfConverter,
   ExcelTsCertificateWorkbookEngine,
   fillCertificateWorkbook,
@@ -2958,6 +2960,25 @@ async function processHtmlIssuedCertificate(
     const labRecord = Reflect.get(inputDataSnapshot, "lab");
     if (labRecord && typeof labRecord === "object") {
       Reflect.set(labRecord, "logoDataUrl", labLogoDataUrl);
+    }
+    // Eccentricity indicator (weighing methods): render the SVG the xlsx
+    // pipeline rasterizes, frozen into the snapshot as a data URL — the html
+    // renderer prints it after the indicator table's grid. Deterministic for
+    // equal job inputs; absent when the method declares no indicator.
+    const eccentricitySvg = renderEccentricityIndicatorSvgMarkup(
+      certificateImageContextFromJob(job),
+      inputDataSnapshot,
+    );
+    if (eccentricitySvg) {
+      const rawGraphics = Reflect.get(inputDataSnapshot, "graphics");
+      const graphics =
+        rawGraphics && typeof rawGraphics === "object" ? rawGraphics : {};
+      Reflect.set(
+        graphics,
+        "eccentricityIndicatorSvg",
+        `data:image/svg+xml;utf8,${encodeURIComponent(eccentricitySvg)}`,
+      );
+      Reflect.set(inputDataSnapshot, "graphics", graphics);
     }
     const compiled = await compileCertificateHtml(
       selection.documentJson,

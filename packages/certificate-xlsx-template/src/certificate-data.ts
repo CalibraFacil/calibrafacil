@@ -845,7 +845,7 @@ export function buildCertificateData(
   };
 }
 
-function certificateImageContextFromJob(
+export function certificateImageContextFromJob(
   job: CertificateJobData,
 ): CertificateImageContext {
   return {

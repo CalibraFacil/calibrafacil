@@ -278,6 +278,26 @@ function renderResultGrid(
   return `${caption}<table${tableClass(layout)}><thead><tr>${labelRow}</tr>${unitRow}</thead><tbody>${body}</tbody></table>`;
 }
 
+/** The method table field (if any) that declares the eccentricity indicator. */
+function eccentricityIndicatorTableKey(data: Data): string | null {
+  const methodSnapshot = Reflect.get(data, "methodSnapshot");
+  if (!methodSnapshot || typeof methodSnapshot !== "object") return null;
+  const rawFields = Reflect.get(methodSnapshot, "dataFields");
+  for (const field of Array.isArray(rawFields) ? rawFields : []) {
+    if (!field || typeof field !== "object") continue;
+    const indicator = Reflect.get(field, "eccentricityIndicator");
+    if (
+      indicator &&
+      typeof indicator === "object" &&
+      Reflect.get(indicator, "enabled") === true
+    ) {
+      const key = Reflect.get(field, "key");
+      return typeof key === "string" ? key : null;
+    }
+  }
+  return null;
+}
+
 function renderResultsTable(
   data: Data,
   layout?: CertificateBlockLayout | null,
@@ -318,8 +338,34 @@ function renderResultsTable(
     );
   }
 
+  // Eccentricity indicator (calibration finding 3): when the method declares
+  // an indicator-enabled table field AND the worker injected the rendered SVG
+  // (graphics.eccentricityIndicatorSvg data URL, same injection pattern as
+  // the lab logo), the figure prints after that field's grid — the placement
+  // real certificates use. Purely data-driven: absent either piece, nothing
+  // renders.
+  const indicatorTableKey = eccentricityIndicatorTableKey(data);
+  const rawIndicator = Reflect.get(
+    Reflect.get(data, "graphics") ?? {},
+    "eccentricityIndicatorSvg",
+  );
+  const indicatorHtml =
+    indicatorTableKey !== null &&
+    typeof rawIndicator === "string" &&
+    rawIndicator.startsWith("data:image/svg+xml")
+      ? `<figure class="cf-eccentricity-indicator"><img src="${escapeHtml(rawIndicator)}" alt="Posições de excentricidade" /></figure>`
+      : "";
+
   const gridsHtml = grids
-    .map((grid) => renderResultGrid(grid, layout))
+    .map((grid) => {
+      const gridHtml = renderResultGrid(grid, layout);
+      // attach after the LAST grid of the indicator's table (após-ajuste side
+      // when the method is phase-split)
+      const isIndicatorGrid =
+        grid.tableKey === indicatorTableKey &&
+        grid === grids.filter((g) => g.tableKey === indicatorTableKey).at(-1);
+      return isIndicatorGrid ? `${gridHtml}${indicatorHtml}` : gridHtml;
+    })
     .join("");
   const scalarHtml =
     scalarRows.length === 0

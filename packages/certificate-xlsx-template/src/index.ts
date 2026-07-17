@@ -30,12 +30,14 @@ export {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   fillCertificateWorkbook,
   renderEccentricityIndicatorPng,
+  renderEccentricityIndicatorSvgMarkup,
   resolveCertificateImageBindings,
   workbookImageFromDataUrl,
   type CertificateImageContext,
 } from "./render.js";
 export {
   buildCertificateData,
+  certificateImageContextFromJob,
   renderCertificateWorkbook,
   type AssetSnapshot,
   type BuildCertificateDataOptions,
