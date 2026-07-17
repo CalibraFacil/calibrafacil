@@ -40,8 +40,8 @@ describe("canonicalJsonStringify", () => {
   it("produces different hashes for different documents", () => {
     const doc = newWysiwygStarterDocument();
     const edited = JSON.parse(JSON.stringify(doc));
-    // content[0] is the masthead locked block; content[1] is the H1 title.
-    edited.content[1].content[0].text = "Certificado de Ensaio";
+    // content[0] is the top identity band; content[2] is the H1 title.
+    edited.content[2].content[0].text = "Certificado de Ensaio";
     expect(hashCertificateDocument(doc)).not.toBe(hashCertificateDocument(edited));
   });
 });

@@ -89,6 +89,7 @@ import {
 import {
   CERTIFICATE_PDF_MARGINS,
   compileCertificateHtml,
+  extractCertificatePageFooterHtml,
   sampleCertificateInputData,
 } from "@calibra-facil/certificate-html-template";
 
@@ -2461,7 +2462,10 @@ async function processXlsxPreviewJob(
         env,
         compiled.html.replace(/^<!DOCTYPE html>\s*/i, ""),
         { ...A4_PAPER, printBackground: "true", ...CERTIFICATE_PDF_MARGINS },
-        { "footer.html": DOC_PAGE_FOOTER_HTML },
+        {
+          "footer.html":
+            extractCertificatePageFooterHtml(compiled.html) ?? DOC_PAGE_FOOTER_HTML,
+        },
       );
 
       const previewOrg: OrgRef = {
@@ -2962,6 +2966,9 @@ async function processHtmlIssuedCertificate(
 
     // gotenbergHtmlToPdf prepends the doctype; the compiled artifact keeps its own.
     const htmlForChromium = compiled.html.replace(/^<!DOCTYPE html>\s*/i, "");
+    // M-B: the compiled artifact embeds its own footer identity band
+    // (<template id="cf-page-footer">, carries pageNumber/totalPages).
+    // Pre-M-B artifacts fall back to the plain page-number footer.
     const pdfBytes = await gotenbergHtmlToPdf(
       env,
       htmlForChromium,
@@ -2970,7 +2977,10 @@ async function processHtmlIssuedCertificate(
         printBackground: "true",
         ...CERTIFICATE_PDF_MARGINS,
       },
-      { "footer.html": DOC_PAGE_FOOTER_HTML },
+      {
+        "footer.html":
+          extractCertificatePageFooterHtml(compiled.html) ?? DOC_PAGE_FOOTER_HTML,
+      },
     );
 
     const signed = await signPdfWithUnitCertificate(

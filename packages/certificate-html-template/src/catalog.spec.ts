@@ -86,10 +86,12 @@ describe("PLACEHOLDER_CATALOG", () => {
   });
 
   it("findUnknownPlaceholderPaths flags only unknown paths in a document", () => {
+    const starter = newWysiwygStarterDocument();
     const document = parseCertificateDocument({
-      ...JSON.parse(JSON.stringify(newWysiwygStarterDocument())),
+      ...JSON.parse(JSON.stringify(starter)),
       content: [
-        ...newWysiwygStarterDocument().content,
+        // Insert the paragraph in the BODY, before the trailing footer band.
+        ...starter.content.slice(0, -1),
         {
           type: "paragraph",
           content: [
@@ -97,6 +99,7 @@ describe("PLACEHOLDER_CATALOG", () => {
             { type: "placeholder", attrs: { path: "made.up.path" } },
           ],
         },
+        ...starter.content.slice(-1),
       ],
     });
     expect(findUnknownPlaceholderPaths(document)).toEqual(["made.up.path"]);

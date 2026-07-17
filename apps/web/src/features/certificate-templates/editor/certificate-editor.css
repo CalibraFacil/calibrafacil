@@ -184,3 +184,67 @@
   outline: 2px solid rgba(37, 99, 235, 0.55);
   outline-offset: 2px;
 }
+
+/* ── band lanes (M-B) ── */
+.cf-band-view {
+  position: relative;
+  border-radius: 4px;
+  outline: 1px dashed transparent;
+  outline-offset: 3px;
+  transition: outline-color 120ms ease;
+  cursor: pointer;
+}
+
+.cf-band-view:hover,
+.cf-band-view.ProseMirror-selectednode {
+  outline-color: rgba(100, 116, 139, 0.5);
+}
+
+.cf-band-view__header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: rgb(100, 116, 139);
+  padding: 0.125rem 0.25rem;
+  margin-bottom: 1mm;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.cf-band-view:hover .cf-band-view__header,
+.cf-band-view.ProseMirror-selectednode .cf-band-view__header {
+  opacity: 1;
+}
+
+.cf-band-view__label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-band-view__hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cf-band-view__empty {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: rgb(148, 163, 184);
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: 4px;
+  padding: 0.375rem 0.5rem;
+}
+
+.cf-band-view--footer {
+  margin-top: 6mm;
+}
+
+/* the footer preview carries its inline print styles; neutralize the lane box */
+.cf-band-footer-preview > div {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}

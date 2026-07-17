@@ -19,6 +19,11 @@ import {
   escapeHtml,
   renderLockedBlockInner,
 } from "./blocks.js";
+import {
+  embedCertificatePageFooter,
+  renderBandPageFooterTemplate,
+  renderBandTopIdentityInner,
+} from "./bands.js";
 import { certificateEditorExtensions } from "./extensions.js";
 import { buildCertificateFontCss } from "./fonts.js";
 import {
@@ -167,9 +172,38 @@ export async function compileCertificateHtml(
               : "";
           return `<figure class="cf-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}"${width} /></figure>`;
         },
+        // Bands render OUTSIDE the flow (thead / footerTemplate below); the
+        // static renderer must still know them so the flow skips them.
+        bandTopIdentity() {
+          return "";
+        },
+        bandPageFooter() {
+          return "";
+        },
       },
     },
   });
+
+  // Bands: pinned first/last by the schema (unreachable throws regardless).
+  const topBandNode = document.content[0];
+  const footerBandNode = document.content[document.content.length - 1];
+  if (
+    topBandNode?.type !== "bandTopIdentity" ||
+    footerBandNode?.type !== "bandPageFooter"
+  ) {
+    throw new CertificateDocumentInvalidError([
+      { path: "content", message: "band nodes missing after validation" },
+    ]);
+  }
+  const topBandInner = renderBandTopIdentityInner(topBandNode.attrs, inputData);
+  const documentHeader =
+    topBandInner === ""
+      ? ""
+      : `<thead class="cf-doc-header"><tr><td><div class="cf-band-top-identity">${topBandInner}</div></td></tr></thead>\n`;
+  const footerTemplate = renderBandPageFooterTemplate(
+    footerBandNode.attrs,
+    inputData,
+  );
 
   const certificateNumber = resolvePlaceholder(inputData, "certificate.number");
   const theme = document.attrs.theme;
@@ -183,7 +217,12 @@ export async function compileCertificateHtml(
 ${CERTIFICATE_PRINT_CSS}</style>
 </head>
 <body class="cf-certificate ${certificateThemeClass(theme)}">
+<table class="cf-doc">
+${documentHeader}<tbody class="cf-doc-body"><tr><td>
 ${body}
+</td></tr></tbody>
+</table>
+${embedCertificatePageFooter(footerTemplate)}
 </body>
 </html>`;
 

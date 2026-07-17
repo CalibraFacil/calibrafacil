@@ -85,27 +85,17 @@ describe('EditorWorkbench (jsdom)', () => {
     const editorRoot = await screen.findByRole('toolbar')
     expect(editorRoot).toBeDefined()
 
-    // drive the change handler through the real editor: type into the title
+    // drive the change handler through the real editor: type into the title.
+    // jsdom's beforeinput pipeline does not reach ProseMirror reliably, so
+    // dispatch two quick REAL transactions via the editor instance TipTap
+    // exposes on its root element — the debounce contract is what's under
+    // test, not the browser input pipeline.
     const proseMirror = document.querySelector('.ProseMirror')
     expect(proseMirror).not.toBeNull()
-
-    // TipTap in jsdom: dispatch two quick transactions via keyboard events is
-    // unreliable; instead assert the debounce contract through the exposed
-    // save-state badge after a real editor update (insertContent via the
-    // placeholder path is covered elsewhere). Here we call the editor through
-    // the DOM: focus + beforeinput text insertion.
-    fireEvent.focus(proseMirror!)
-
-    // fall back to dispatching an input event the editor listens to
-    // (ProseMirror handles beforeinput in jsdom)
-    proseMirror!.dispatchEvent(
-      new InputEvent('beforeinput', {
-        inputType: 'insertText',
-        data: 'X',
-        bubbles: true,
-        cancelable: true,
-      }),
-    )
+    const editor = proseMirror ? Reflect.get(proseMirror, 'editor') : null
+    expect(editor).toBeTruthy()
+    editor.commands.insertContent('X')
+    editor.commands.insertContent('Y')
 
     await waitFor(() => {
       expect(screen.getByTestId('save-state').textContent).toMatch(

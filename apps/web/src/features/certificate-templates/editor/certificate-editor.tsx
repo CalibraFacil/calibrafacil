@@ -8,6 +8,8 @@ import {
   type NodeViewProps,
 } from '@tiptap/react'
 import {
+  BandPageFooter,
+  BandTopIdentity,
   CERTIFICATE_PRINT_CSS,
   CertPlaceholder,
   LockedBlock,
@@ -15,10 +17,14 @@ import {
   certificateEditorExtensions,
   certificateThemeClass,
   certificateThemeTokens,
+  renderBandPageFooterTemplate,
+  renderBandTopIdentityInner,
   renderLockedBlockInner,
   resolvePlaceholder,
   sampleCertificateInputData,
   CERTIFICATE_THEMES,
+  type BandPageFooterNode,
+  type BandTopIdentityNode,
   type CertificateTheme,
   type LockedBlockKey,
 } from '@calibra-facil/certificate-html-template'
@@ -219,6 +225,108 @@ function PlaceholderView(props: NodeViewProps) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Band lanes (M-B): page furniture that repeats on every printed page. The
+// lanes render the REAL band renderers against the sample data; clicking a
+// lane selects the band node so the inspector exposes its config.
+// ---------------------------------------------------------------------------
+
+function readTopBandAttrs(
+  attrs: Record<string, unknown>,
+): BandTopIdentityNode['attrs'] {
+  return {
+    enabled: attrs.enabled === true,
+    showLabName: attrs.showLabName === true,
+    showCertificateNumber: attrs.showCertificateNumber === true,
+    showTitle: attrs.showTitle === true,
+    showSealText: attrs.showSealText === true,
+  }
+}
+
+function readFooterBandAttrs(
+  attrs: Record<string, unknown>,
+): BandPageFooterNode['attrs'] {
+  return {
+    enabled: attrs.enabled === true,
+    showCertificateNumber: attrs.showCertificateNumber === true,
+    showLabName: attrs.showLabName === true,
+    showIssueDate: attrs.showIssueDate === true,
+  }
+}
+
+function BandTopIdentityView(props: NodeViewProps) {
+  let inner = ''
+  try {
+    inner = renderBandTopIdentityInner(
+      readTopBandAttrs(props.node.attrs),
+      EDITOR_SAMPLE_DATA,
+    )
+  } catch {
+    inner = ''
+  }
+  return (
+    <NodeViewWrapper className="cf-band-view" data-band-view="bandTopIdentity">
+      <div className="cf-band-view__header" contentEditable={false}>
+        <span className="cf-band-view__label">Identificação no topo</span>
+        <span className="cf-band-view__hint">repete em todas as páginas</span>
+      </div>
+      {inner !== '' ? (
+        <div
+          className="cf-band-top-identity"
+          contentEditable={false}
+          // Trusted output of the same band renderer the compiler runs.
+          dangerouslySetInnerHTML={{ __html: inner }}
+        />
+      ) : (
+        <div className="cf-band-view__empty" contentEditable={false}>
+          Faixa desativada — nenhuma identificação repetida no topo.
+        </div>
+      )}
+    </NodeViewWrapper>
+  )
+}
+
+function BandPageFooterView(props: NodeViewProps) {
+  // The footer band compiles to a Chromium footerTemplate; the lane previews
+  // its body with sample page numbers (real values only exist at print time).
+  let inner = ''
+  try {
+    const template = renderBandPageFooterTemplate(
+      readFooterBandAttrs(props.node.attrs),
+      EDITOR_SAMPLE_DATA,
+    )
+    inner = (/<body>([\s\S]*)<\/body>/.exec(template)?.[1] ?? '')
+      .replace('<span class="pageNumber"></span>', '1')
+      .replace('<span class="totalPages"></span>', '2')
+  } catch {
+    inner = ''
+  }
+  return (
+    <NodeViewWrapper
+      className="cf-band-view cf-band-view--footer"
+      data-band-view="bandPageFooter"
+    >
+      <div className="cf-band-view__header" contentEditable={false}>
+        <span className="cf-band-view__label">Rodapé do certificado</span>
+        <span className="cf-band-view__hint">
+          repete em todas as páginas · numeração obrigatória
+        </span>
+      </div>
+      {inner !== '' ? (
+        <div
+          className="cf-band-footer-preview"
+          contentEditable={false}
+          dangerouslySetInnerHTML={{ __html: inner }}
+        />
+      ) : (
+        <div className="cf-band-view__empty" contentEditable={false}>
+          Rodapé indisponível.
+        </div>
+      )}
+    </NodeViewWrapper>
+  )
+}
+
 const LockedBlockWithView = LockedBlock.extend({
   addNodeView() {
     return ReactNodeViewRenderer(LockedBlockView)
@@ -231,11 +339,25 @@ const PlaceholderWithView = CertPlaceholder.extend({
   },
 })
 
+const BandTopIdentityWithView = BandTopIdentity.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(BandTopIdentityView)
+  },
+})
+
+const BandPageFooterWithView = BandPageFooter.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(BandPageFooterView)
+  },
+})
+
 function editorExtensions() {
   return [
     ...certificateEditorExtensions().map((extension) => {
       if (extension.name === 'lockedBlock') return LockedBlockWithView
       if (extension.name === 'placeholder') return PlaceholderWithView
+      if (extension.name === 'bandTopIdentity') return BandTopIdentityWithView
+      if (extension.name === 'bandPageFooter') return BandPageFooterWithView
       return extension
     }),
     LockedBlockGuard,
@@ -261,6 +383,7 @@ export function CertificateEditor({
   // Read-only (published) views open in certificate form; drafts open showing
   // the editable tokens.
   const [showSampleValues, setShowSampleValues] = useState(!editable)
+  const [zoomPercent, setZoomPercent] = useState(100)
   const [theme, setTheme] = useState<CertificateTheme>(
     readDocumentTheme(initialDocument),
   )
@@ -269,7 +392,19 @@ export function CertificateEditor({
     content: initialDocument,
     editable,
     immediatelyRender,
-    onCreate: ({ editor: created }) => onEditorReady?.(created),
+    onCreate: ({ editor: created }) => {
+      // The doc opens with the band atom first; land the caret on the first
+      // EDITABLE position instead so typing never targets the band node.
+      let firstTextPos = -1
+      created.state.doc.descendants((node, pos) => {
+        if (firstTextPos === -1 && node.isTextblock) firstTextPos = pos
+        return firstTextPos === -1
+      })
+      if (firstTextPos >= 0) {
+        created.commands.setTextSelection(firstTextPos + 1)
+      }
+      onEditorReady?.(created)
+    },
     onUpdate: ({ editor: updated }) => {
       const json = updated.getJSON()
       setTheme(readDocumentTheme(json))
@@ -312,6 +447,21 @@ export function CertificateEditor({
               ))}
             </NativeSelect>
           )}
+          <NativeSelect
+            aria-label="Zoom da página"
+            value={String(zoomPercent)}
+            className="h-8 w-22 text-xs"
+            onChange={(event) => {
+              const parsed = Number(event.target.value)
+              setZoomPercent(Number.isFinite(parsed) && parsed > 0 ? parsed : 100)
+            }}
+          >
+            {[50, 75, 100, 125, 150].map((level) => (
+              <NativeSelectOption key={level} value={String(level)}>
+                {level}%
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           <Button
             type="button"
             variant={showSampleValues ? 'secondary' : 'ghost'}
@@ -328,7 +478,11 @@ export function CertificateEditor({
             {showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'}
           </Button>
         </div>
-        <div className="cf-editor__paper">
+        <div
+          className="cf-editor__paper"
+          data-zoom={zoomPercent}
+          style={zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }}
+        >
           <EditorContent
             editor={editor}
             className={cn(

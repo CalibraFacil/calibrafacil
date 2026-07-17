@@ -114,11 +114,25 @@ function makeRecordingEnv(): {
 
 const realFetch = globalThis.fetch;
 
+/** footer.html files sent to Gotenberg, in call order (M-B band assertions). */
+const gotenbergFooters: string[] = [];
+
+async function recordGotenbergFooter(init: unknown): Promise<void> {
+  if (!init || typeof init !== "object") return;
+  const body = Reflect.get(init, "body");
+  if (!(body instanceof FormData)) return;
+  for (const [key, value] of body.entries()) {
+    if (key !== "files" || !(value instanceof File)) continue;
+    if (value.name === "footer.html") gotenbergFooters.push(await value.text());
+  }
+}
+
 beforeEach(async () => {
   await truncateAll();
+  gotenbergFooters.length = 0;
   vi.stubGlobal(
     "fetch",
-    (input: unknown, init?: unknown): Promise<Response> => {
+    async (input: unknown, init?: unknown): Promise<Response> => {
       const url =
         typeof input === "string"
           ? input
@@ -128,12 +142,11 @@ beforeEach(async () => {
               ? input.url
               : String(input);
       if (url.startsWith(GOTENBERG_TEST_URL)) {
-        return Promise.resolve(
-          new Response(FAKE_PDF_BYTES, {
-            status: 200,
-            headers: { "content-type": "application/pdf" },
-          }),
-        );
+        await recordGotenbergFooter(init);
+        return new Response(FAKE_PDF_BYTES, {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        });
       }
       // Everything else (there should be nothing else) hits the real network.
       const request = input instanceof Request ? input : new Request(url, init && typeof init === "object" ? init : undefined);
@@ -219,6 +232,44 @@ describe("processHtmlIssuedCertificate (worker real-DB integration — M1)", () 
       expect(html).toContain('class="cf-unit-row"');
       expect(html).toContain('data-locked-block="end_of_document"');
     }
+  });
+
+  it("REQ-WYS-007 [M-B] bands: compiled artifact carries the repeating thead identity band + embedded footer, and the footer identity box is SENT to Chromium", async () => {
+    const { env, stored } = makeRecordingEnv();
+    const org = await seedOrg({ orgId: "org-1", userId: USER_ID });
+    const job = await seedIssuableJob({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.userId,
+      engine: "wysiwyg",
+    });
+
+    await processBackgroundJob(env, {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: org.userId,
+    });
+
+    const snapshots = await issuedSnapshotRows(job.jobId);
+    const htmlKey = asString(snapshots[0]?.compiled_html_r2_key);
+    const storedHtml = stored.get(htmlKey);
+    expect(storedHtml).toBeDefined();
+    if (storedHtml) {
+      const html = new TextDecoder().decode(storedHtml.body);
+      // v2 docs upgrade on read: the artifact gains the band structure.
+      expect(html.match(/<thead class="cf-doc-header">/g)?.length).toBe(1);
+      expect(html).toContain('<table class="cf-doc">');
+      expect(html).toContain('class="cf-band-cert"');
+      expect(html.match(/<template id="cf-page-footer">/g)?.length).toBe(1);
+    }
+
+    // The embedded footer band (NOT the static fallback) reached Chromium:
+    // it carries the certificate number alongside the mandatory page numbers.
+    expect(gotenbergFooters.length).toBeGreaterThan(0);
+    const footer = gotenbergFooters[gotenbergFooters.length - 1] ?? "";
+    expect(footer).toContain('<span class="pageNumber"></span>');
+    expect(footer).toContain('<span class="totalPages"></span>');
+    expect(footer).toContain(`Certificado ${job.jobNumber}`);
   });
 
   it("REQ-WYS-002 idempotency: a second CERTIFICATE message re-serves the frozen snapshot (no second render, same pdf key)", async () => {

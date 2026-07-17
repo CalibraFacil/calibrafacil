@@ -8,17 +8,25 @@ import {
 } from "./document-schema.js";
 import { newWysiwygStarterDocument } from "./starter-document.js";
 
+/**
+ * Mutate the starter document's BODY (between the pinned bands): appended
+ * blocks land before the trailing bandPageFooter, matching what any editing
+ * gesture can actually produce.
+ */
 function starterWithBlocks(
   mutate: (content: Record<string, unknown>[]) => Record<string, unknown>[],
 ): unknown {
   const raw: { type: string; content: Record<string, unknown>[] } = JSON.parse(
     JSON.stringify(newWysiwygStarterDocument()),
   );
-  return { ...raw, content: mutate(raw.content) };
+  const [topBand, ...rest] = raw.content;
+  const footerBand = rest.pop();
+  if (!topBand || !footerBand) throw new Error("starter must carry both bands");
+  return { ...raw, content: [topBand, ...mutate(rest), footerBand] };
 }
 
-describe("documentJson v2 (reframe T20)", () => {
-  it("upgrades a v1 document (no attrs) losslessly to v2 defaults", () => {
+describe("documentJson upgrades (reframe T20/T26)", () => {
+  it("upgrades a v1 document (no attrs) losslessly to v3 defaults", () => {
     const v1: Record<string, unknown> = JSON.parse(
       JSON.stringify(newWysiwygStarterDocument()),
     );
@@ -26,9 +34,54 @@ describe("documentJson v2 (reframe T20)", () => {
     const result = validateCertificateDocument(v1);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.document.attrs.schemaVersion).toBe(2);
+      expect(result.document.attrs.schemaVersion).toBe(3);
       expect(result.document.attrs.theme).toBe("technical-form");
       expect(result.document.content).toEqual(newWysiwygStarterDocument().content);
+    }
+  });
+
+  it("upgrades a v2 document (no bands) to v3 with default band nodes first/last", () => {
+    const v2: { attrs: Record<string, unknown>; content: unknown[] } = JSON.parse(
+      JSON.stringify(newWysiwygStarterDocument()),
+    );
+    v2.attrs = { schemaVersion: 2, theme: "institute-classic" };
+    v2.content = v2.content.filter((node) => {
+      const type = node && typeof node === "object" ? Reflect.get(node, "type") : "";
+      return type !== "bandTopIdentity" && type !== "bandPageFooter";
+    });
+    const result = validateCertificateDocument(v2);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.document.attrs.schemaVersion).toBe(3);
+      expect(result.document.attrs.theme).toBe("institute-classic");
+      expect(result.document.content[0]?.type).toBe("bandTopIdentity");
+      expect(result.document.content[result.document.content.length - 1]?.type).toBe(
+        "bandPageFooter",
+      );
+    }
+  });
+
+  it("converts vestigial v2 pageHeader/pageFooter flow nodes into paragraphs", () => {
+    const v2: { attrs: Record<string, unknown>; content: unknown[] } = JSON.parse(
+      JSON.stringify(newWysiwygStarterDocument()),
+    );
+    v2.attrs = { schemaVersion: 2, theme: "technical-form" };
+    v2.content = [
+      { type: "pageHeader", content: [{ type: "text", text: "Cabeçalho antigo" }] },
+      ...v2.content.filter((node) => {
+        const type = node && typeof node === "object" ? Reflect.get(node, "type") : "";
+        return type !== "bandTopIdentity" && type !== "bandPageFooter";
+      }),
+      { type: "pageFooter", content: [{ type: "text", text: "Rodapé antigo" }] },
+    ];
+    const result = validateCertificateDocument(v2);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const paragraphTexts = result.document.content
+        .filter((node) => node.type === "paragraph")
+        .map((node) => JSON.stringify(node.content ?? []));
+      expect(paragraphTexts.some((text) => text.includes("Cabeçalho antigo"))).toBe(true);
+      expect(paragraphTexts.some((text) => text.includes("Rodapé antigo"))).toBe(true);
     }
   });
 
@@ -218,17 +271,50 @@ describe("certificateDocumentSchema", () => {
     expect(collectPlaceholderPaths(document)).toContain("asset.tag");
   });
 
-  it("rejects more than one pageHeader", () => {
+  it("rejects vestigial pageHeader nodes inside v3 documents (closed catalog)", () => {
     const header = {
       type: "pageHeader",
       content: [{ type: "text", text: "Cabeçalho" }],
     };
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [header, { ...header }, ...content]),
+      starterWithBlocks((content) => [header, ...content]),
     );
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.issues.some((i) => i.message.includes("pageHeader"))).toBe(true);
+  });
+
+  it("rejects a duplicated band and a band out of position", () => {
+    const duplicated = validateCertificateDocument(
+      starterWithBlocks((content) => [
+        ...content,
+        {
+          type: "bandTopIdentity",
+          attrs: {
+            enabled: true,
+            showLabName: true,
+            showCertificateNumber: true,
+            showTitle: false,
+            showSealText: true,
+          },
+        },
+      ]),
+    );
+    expect(duplicated.ok).toBe(false);
+    if (!duplicated.ok) {
+      expect(duplicated.issues.some((i) => i.message.includes("bandTopIdentity"))).toBe(true);
+    }
+
+    const raw: { content: unknown[] } = JSON.parse(
+      JSON.stringify(newWysiwygStarterDocument()),
+    );
+    // Move the footer band away from the last position.
+    const footer = raw.content.pop();
+    raw.content.splice(1, 0, footer);
+    const outOfPosition = validateCertificateDocument(raw);
+    expect(outOfPosition.ok).toBe(false);
+    if (!outOfPosition.ok) {
+      expect(
+        outOfPosition.issues.some((i) => i.message.includes("bandPageFooter")),
+      ).toBe(true);
     }
   });
 

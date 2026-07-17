@@ -208,4 +208,34 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 
 .cf-image { margin: 0 0 7pt; }
 .cf-image img { max-width: 100%; }
+
+/* ── document band structure (M-B) ──
+   The whole document rides inside table.cf-doc so Chromium repeats the thead
+   (top identity band) on every printed page. The structural table must be
+   invisible: kill every generic/theme table rule with higher-specificity
+   selectors, keep these LAST in the sheet. */
+.cf-certificate table.cf-doc{ border: none; margin: 0; width: 100%; }
+.cf-certificate table.cf-doc > thead > tr,
+.cf-certificate table.cf-doc > tbody > tr{ break-inside: auto; }
+.cf-certificate table.cf-doc > thead > tr > td,
+.cf-certificate table.cf-doc > tbody > tr > td{
+  border: none; padding: 0; font-size: var(--size-body); vertical-align: top;
+}
+.cf-certificate.cf-theme-institute-classic table.cf-doc{ border-top: none; }
+
+/* top identity band (repeats via thead) */
+.cf-band-top-identity{
+  padding: 0 0 3pt; border-bottom: 0.9pt solid var(--line-strong);
+  margin: 0 0 8pt;
+}
+.cf-band-identity-row{
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10pt;
+}
+.cf-band-lab{ font-weight: 700; font-size: var(--size-label); }
+.cf-band-title{ font-size: var(--size-label); color: var(--muted); }
+.cf-band-cert{
+  font-family: var(--font-mono);
+  font-size: var(--size-label); font-weight: 600;
+}
+.cf-band-seal-text{ font-size: var(--size-caption); color: var(--muted); margin-top: 1pt; }
 `;

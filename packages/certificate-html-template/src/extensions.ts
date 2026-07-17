@@ -67,30 +67,63 @@ export const LockedBlock = Node.create({
   },
 });
 
-export const PageHeader = Node.create({
-  name: "pageHeader",
-  group: "block",
-  content: "inline*",
+/**
+ * Certificate doc node (M-B): bands are pinned structurally — the content
+ * expression makes bandTopIdentity the first and bandPageFooter the last child
+ * of every document, so no editing gesture can remove, duplicate or move them.
+ */
+export const CertificateDoc = Node.create({
+  name: "doc",
+  topNode: true,
+  content: "bandTopIdentity block+ bandPageFooter",
+});
+
+/**
+ * Page bands (M-B): LEAF nodes — their rendered content is derived from the
+ * certificate input data + config attrs, never authored inline. Deliberately
+ * no `group: "block"` (they cannot be inserted into the body) and not
+ * draggable (position is fixed by the doc content expression).
+ */
+export const BandTopIdentity = Node.create({
+  name: "bandTopIdentity",
+  atom: true,
+  isolating: true,
+  selectable: true,
   addAttributes() {
-    return {};
+    return {
+      enabled: { default: true },
+      showLabName: { default: true },
+      showCertificateNumber: { default: true },
+      showTitle: { default: false },
+      showSealText: { default: true },
+    };
   },
   parseHTML() {
-    return [{ tag: "header[data-page-header]" }];
+    return [{ tag: "div[data-band-top-identity]" }];
   },
   renderHTML() {
-    return ["header", { "data-page-header": "true", class: "cf-page-header" }, 0];
+    return ["div", { "data-band-top-identity": "true", class: "cf-band-top-identity" }];
   },
 });
 
-export const PageFooter = Node.create({
-  name: "pageFooter",
-  group: "block",
-  content: "inline*",
+export const BandPageFooter = Node.create({
+  name: "bandPageFooter",
+  atom: true,
+  isolating: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      enabled: { default: true },
+      showCertificateNumber: { default: true },
+      showLabName: { default: false },
+      showIssueDate: { default: false },
+    };
+  },
   parseHTML() {
-    return [{ tag: "footer[data-page-footer]" }];
+    return [{ tag: "div[data-band-page-footer]" }];
   },
   renderHTML() {
-    return ["footer", { "data-page-footer": "true", class: "cf-page-footer" }, 0];
+    return ["div", { "data-band-page-footer": "true", class: "cf-band-page-footer" }];
   },
 });
 
@@ -133,7 +166,7 @@ const CertificateDocAttributes = Extension.create({
       {
         types: ["doc"],
         attributes: {
-          schemaVersion: { default: 2 },
+          schemaVersion: { default: 3 },
           theme: { default: "technical-form" },
         },
       },
@@ -144,7 +177,9 @@ const CertificateDocAttributes = Extension.create({
 export function certificateEditorExtensions(): Extensions {
   return [
     CertificateDocAttributes,
+    CertificateDoc,
     StarterKit.configure({
+      document: false,
       blockquote: false,
       codeBlock: false,
       code: false,
@@ -162,8 +197,8 @@ export function certificateEditorExtensions(): Extensions {
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     LockedBlock,
     CertPlaceholder,
-    PageHeader,
-    PageFooter,
+    BandTopIdentity,
+    BandPageFooter,
     CertImage,
   ];
 }

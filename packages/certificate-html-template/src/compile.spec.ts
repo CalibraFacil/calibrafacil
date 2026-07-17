@@ -19,7 +19,11 @@ const clone = (value: unknown): LooseData => JSON.parse(JSON.stringify(value));
 
 function starterPlus(blocks: Record<string, unknown>[]): Record<string, unknown> {
   const starter = clone(newWysiwygStarterDocument());
-  return { ...starter, content: [...starter.content, ...blocks] };
+  // Body blocks land before the trailing bandPageFooter (pinned last).
+  return {
+    ...starter,
+    content: [...starter.content.slice(0, -1), ...blocks, ...starter.content.slice(-1)],
+  };
 }
 
 describe("compileCertificateHtml", () => {

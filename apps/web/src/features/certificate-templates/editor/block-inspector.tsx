@@ -30,23 +30,31 @@ type SelectedLockedBlock = {
   layout: CertificateBlockLayout
 }
 
-function selectedLockedBlock(
-  editor: Editor | null,
-): SelectedLockedBlock | null {
+function selectedNode(editor: Editor | null): {
+  typeName: string
+  attrs: Record<string, unknown>
+} | null {
   if (!editor) return null
   const { selection } = editor.state
   const node = 'node' in selection ? selection.node : null
-  if (
-    !node ||
-    typeof node !== 'object' ||
-    Reflect.get(node, 'type')?.name !== 'lockedBlock'
-  ) {
-    return null
-  }
-  const attrs = Reflect.get(node, 'attrs') ?? {}
-  const rawLayout = Reflect.get(attrs, 'layout')
+  if (!node || typeof node !== 'object') return null
+  const typeName = Reflect.get(node, 'type')?.name
+  if (typeof typeName !== 'string') return null
+  const attrs = Reflect.get(node, 'attrs')
   return {
-    blockKey: String(Reflect.get(attrs, 'blockKey')),
+    typeName,
+    attrs: attrs && typeof attrs === 'object' ? { ...attrs } : {},
+  }
+}
+
+function selectedLockedBlock(
+  editor: Editor | null,
+): SelectedLockedBlock | null {
+  const node = selectedNode(editor)
+  if (!node || node.typeName !== 'lockedBlock') return null
+  const rawLayout = node.attrs.layout
+  return {
+    blockKey: String(node.attrs.blockKey),
     layout: rawLayout && typeof rawLayout === 'object' ? { ...rawLayout } : {},
   }
 }
@@ -68,8 +76,15 @@ function writeLayout(editor: Editor, layout: CertificateBlockLayout) {
 }
 
 export function BlockInspector({ editor }: { editor: Editor | null }) {
+  const node = selectedNode(editor)
+  if (!editor || !editor.isEditable || !node) return null
+
+  if (node.typeName === 'bandTopIdentity' || node.typeName === 'bandPageFooter') {
+    return <BandInspector editor={editor} typeName={node.typeName} attrs={node.attrs} />
+  }
+
   const selected = selectedLockedBlock(editor)
-  if (!editor || !editor.isEditable || !selected) return null
+  if (!selected) return null
 
   const label = LOCKED_BLOCK_LABELS[selected.blockKey] ?? selected.blockKey
   const isResults = selected.blockKey === 'results_table'
@@ -128,6 +143,71 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
           </label>
         </div>
       )}
+    </div>
+  )
+}
+
+const BAND_LABELS: Record<string, string> = {
+  bandTopIdentity: 'Identificação no topo',
+  bandPageFooter: 'Rodapé do certificado',
+}
+
+const BAND_TOGGLES: Record<string, { attr: string; label: string }[]> = {
+  bandTopIdentity: [
+    { attr: 'enabled', label: 'Exibir faixa no topo' },
+    { attr: 'showLabName', label: 'Nome do laboratório' },
+    { attr: 'showCertificateNumber', label: 'Número do certificado' },
+    { attr: 'showTitle', label: 'Título "Certificado de Calibração"' },
+    { attr: 'showSealText', label: 'Acreditação em texto' },
+  ],
+  bandPageFooter: [
+    { attr: 'enabled', label: 'Exibir identificação no rodapé' },
+    { attr: 'showCertificateNumber', label: 'Número do certificado' },
+    { attr: 'showLabName', label: 'Nome do laboratório' },
+    { attr: 'showIssueDate', label: 'Data de emissão' },
+  ],
+}
+
+function BandInspector({
+  editor,
+  typeName,
+  attrs,
+}: {
+  editor: Editor
+  typeName: string
+  attrs: Record<string, unknown>
+}) {
+  const toggles = BAND_TOGGLES[typeName] ?? []
+  const enabled = attrs.enabled === true
+  return (
+    <div
+      className="space-y-2.5 rounded-xl border p-3"
+      data-testid="band-inspector"
+    >
+      <h2 className="text-sm font-semibold">{BAND_LABELS[typeName]}</h2>
+      <p className="text-xs text-muted-foreground">
+        {typeName === 'bandPageFooter'
+          ? 'Repete em todas as páginas. A numeração "Página X de Y" é obrigatória e sempre presente.'
+          : 'Repete em todas as páginas, inclusive na primeira.'}
+      </p>
+      <div className="flex flex-col gap-1">
+        {toggles.map(({ attr, label }) => (
+          <label key={attr} className="flex items-center gap-2 text-xs">
+            <Checkbox
+              checked={attrs[attr] === true}
+              disabled={attr !== 'enabled' && !enabled}
+              onCheckedChange={(checked) => {
+                editor
+                  .chain()
+                  .focus()
+                  .updateAttributes(typeName, { [attr]: checked === true })
+                  .run()
+              }}
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
     </div>
   )
 }

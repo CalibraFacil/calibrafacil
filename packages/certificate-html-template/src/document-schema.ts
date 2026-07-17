@@ -19,7 +19,7 @@ import { z } from "zod";
 export const CERTIFICATE_THEMES = ["technical-form", "institute-classic"] as const;
 export type CertificateTheme = (typeof CERTIFICATE_THEMES)[number];
 
-export const CERTIFICATE_DOCUMENT_SCHEMA_VERSION = 2;
+export const CERTIFICATE_DOCUMENT_SCHEMA_VERSION = 3;
 
 export const LOCKED_BLOCK_KEYS = [
   "certificate_identification",
@@ -184,15 +184,61 @@ const horizontalRuleNodeSchema = z.strictObject({
   type: z.literal("horizontalRule"),
 });
 
-const pageHeaderNodeSchema = z.strictObject({
-  type: z.literal("pageHeader"),
-  content: z.array(inlineNodeSchema).min(1),
+// ---------------------------------------------------------------------------
+// Bands (reframe M-B) — page furniture that repeats on EVERY page.
+//
+// `bandTopIdentity` compiles into the <thead> of the document-wrapping table:
+// Chromium repeats it on every printed page, page 1 included (a thead cannot
+// vary per page — NIE-CGCRE-009 wants the certificate identity on every page,
+// so the page-1 "variant" is simply identity band + full masthead).
+// `bandPageFooter` compiles into the Chromium footerTemplate (the only place
+// pageNumber/totalPages exist), embedded in the html artifact as
+// <template id="cf-page-footer"> and extracted by the worker.
+//
+// Both are LEAF nodes: their content is derived from inputData + these config
+// attrs, never authored inline. Exactly-once, pinned first/last in `content`.
+// ---------------------------------------------------------------------------
+
+const bandTopIdentityNodeSchema = z.strictObject({
+  type: z.literal("bandTopIdentity"),
+  attrs: z.strictObject({
+    enabled: z.boolean(),
+    showLabName: z.boolean(),
+    showCertificateNumber: z.boolean(),
+    showTitle: z.boolean(),
+    /** Accreditation-as-text on every page (the seal IMAGE stays page-1 only). */
+    showSealText: z.boolean(),
+  }),
 });
 
-const pageFooterNodeSchema = z.strictObject({
-  type: z.literal("pageFooter"),
-  content: z.array(inlineNodeSchema).min(1),
+const bandPageFooterNodeSchema = z.strictObject({
+  type: z.literal("bandPageFooter"),
+  attrs: z.strictObject({
+    enabled: z.boolean(),
+    showCertificateNumber: z.boolean(),
+    showLabName: z.boolean(),
+    showIssueDate: z.boolean(),
+    // "Página X de Y" is mandatory (NIE-CGCRE-009) — always rendered.
+  }),
 });
+
+export type BandTopIdentityNode = z.infer<typeof bandTopIdentityNodeSchema>;
+export type BandPageFooterNode = z.infer<typeof bandPageFooterNodeSchema>;
+
+export const DEFAULT_BAND_TOP_IDENTITY_ATTRS = {
+  enabled: true,
+  showLabName: true,
+  showCertificateNumber: true,
+  showTitle: false,
+  showSealText: true,
+} satisfies BandTopIdentityNode["attrs"];
+
+export const DEFAULT_BAND_PAGE_FOOTER_ATTRS = {
+  enabled: true,
+  showCertificateNumber: true,
+  showLabName: false,
+  showIssueDate: false,
+} satisfies BandPageFooterNode["attrs"];
 
 /**
  * Block-layout envelope (reframe M-A): per-block presentation choices. The
@@ -231,8 +277,19 @@ const topLevelBlockSchema = z.discriminatedUnion("type", [
   tableNodeSchema,
   imageNodeSchema,
   horizontalRuleNodeSchema,
-  pageHeaderNodeSchema,
-  pageFooterNodeSchema,
+]);
+
+const contentNodeSchema = z.discriminatedUnion("type", [
+  lockedBlockNodeSchema,
+  paragraphNodeSchema,
+  headingNodeSchema,
+  bulletListNodeSchema,
+  orderedListNodeSchema,
+  tableNodeSchema,
+  imageNodeSchema,
+  horizontalRuleNodeSchema,
+  bandTopIdentityNodeSchema,
+  bandPageFooterNodeSchema,
 ]);
 
 export type CertificateDocumentBlock = z.infer<typeof topLevelBlockSchema>;
@@ -246,12 +303,15 @@ export const certificateDocumentSchema = z
       schemaVersion: z.literal(CERTIFICATE_DOCUMENT_SCHEMA_VERSION),
       theme: z.enum(CERTIFICATE_THEMES),
     }),
-    content: z.array(topLevelBlockSchema).min(1),
+    // Band nodes pinned: bandTopIdentity first, bandPageFooter last, body
+    // blocks in between (>= 1). Mirrors the ProseMirror doc content
+    // expression "bandTopIdentity block+ bandPageFooter".
+    content: z.array(contentNodeSchema).min(3),
   })
   .superRefine((doc, ctx) => {
     const lockedCounts = new Map<string, number>();
-    let headers = 0;
-    let footers = 0;
+    let topBands = 0;
+    let footerBands = 0;
     for (const block of doc.content) {
       if (block.type === "lockedBlock") {
         lockedCounts.set(
@@ -259,8 +319,8 @@ export const certificateDocumentSchema = z
           (lockedCounts.get(block.attrs.blockKey) ?? 0) + 1,
         );
       }
-      if (block.type === "pageHeader") headers += 1;
-      if (block.type === "pageFooter") footers += 1;
+      if (block.type === "bandTopIdentity") topBands += 1;
+      if (block.type === "bandPageFooter") footerBands += 1;
     }
     for (const key of LOCKED_BLOCK_KEYS) {
       const count = lockedCounts.get(key) ?? 0;
@@ -272,38 +332,86 @@ export const certificateDocumentSchema = z
         });
       }
     }
-    if (headers > 1) {
-      ctx.addIssue({ code: "custom", path: ["content"], message: "at most one pageHeader" });
+    if (topBands !== 1 || doc.content[0]?.type !== "bandTopIdentity") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: `bandTopIdentity must appear exactly once, as the first node (found ${topBands})`,
+      });
     }
-    if (footers > 1) {
-      ctx.addIssue({ code: "custom", path: ["content"], message: "at most one pageFooter" });
+    if (
+      footerBands !== 1 ||
+      doc.content[doc.content.length - 1]?.type !== "bandPageFooter"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: `bandPageFooter must appear exactly once, as the last node (found ${footerBands})`,
+      });
     }
   });
 
 export type CertificateDocument = z.infer<typeof certificateDocumentSchema>;
 
 /**
- * v1 documents (pre-reframe: no doc attrs, no block layout) upgrade losslessly
- * to v2: default theme, empty layout envelopes. Applied on READ everywhere
- * (compile, validation, editor load) so persisted v1 drafts keep working.
+ * Older documents upgrade losslessly on READ (compile, validation, editor
+ * load), so persisted drafts keep working:
+ * - v1 (pre-reframe): no doc attrs, no block layout -> default theme.
+ * - v2 (M-A): no bands -> default band nodes inserted first/last; the
+ *   vestigial v1/v2 `pageHeader`/`pageFooter` flow nodes (free inline text,
+ *   never repeating) are converted to plain paragraphs so no authored text is
+ *   lost.
  */
 export function upgradeCertificateDocument(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
   const record = Object.fromEntries(Object.entries(input));
   if (record.type !== "doc") return input;
   const attrs = record.attrs;
-  const hasVersion =
-    attrs &&
-    typeof attrs === "object" &&
-    Reflect.get(attrs, "schemaVersion") === CERTIFICATE_DOCUMENT_SCHEMA_VERSION;
-  if (hasVersion) return input;
+  const version =
+    attrs && typeof attrs === "object" ? Reflect.get(attrs, "schemaVersion") : undefined;
+  if (version === CERTIFICATE_DOCUMENT_SCHEMA_VERSION) return input;
+
+  const upgradedAttrs = {
+    theme: "technical-form",
+    ...(attrs && typeof attrs === "object" ? attrs : {}),
+    schemaVersion: CERTIFICATE_DOCUMENT_SCHEMA_VERSION,
+  };
+
+  const rawContent = Array.isArray(record.content) ? record.content : [];
+  const body: unknown[] = [];
+  let topBand: unknown = null;
+  let footerBand: unknown = null;
+  for (const node of rawContent) {
+    if (!node || typeof node !== "object") continue;
+    const type = Reflect.get(node, "type");
+    if (type === "bandTopIdentity") {
+      topBand = node;
+    } else if (type === "bandPageFooter") {
+      footerBand = node;
+    } else if (type === "pageHeader" || type === "pageFooter") {
+      const content = Reflect.get(node, "content");
+      if (Array.isArray(content) && content.length > 0) {
+        body.push({ type: "paragraph", content });
+      }
+    } else {
+      body.push(node);
+    }
+  }
+
   return {
     ...record,
-    attrs: {
-      schemaVersion: CERTIFICATE_DOCUMENT_SCHEMA_VERSION,
-      theme: "technical-form",
-      ...(attrs && typeof attrs === "object" ? attrs : {}),
-    },
+    attrs: upgradedAttrs,
+    content: [
+      topBand ?? {
+        type: "bandTopIdentity",
+        attrs: { ...DEFAULT_BAND_TOP_IDENTITY_ATTRS },
+      },
+      ...body,
+      footerBand ?? {
+        type: "bandPageFooter",
+        attrs: { ...DEFAULT_BAND_PAGE_FOOTER_ATTRS },
+      },
+    ],
   };
 }
 
@@ -341,8 +449,6 @@ export function collectPlaceholderPaths(document: CertificateDocument): string[]
     switch (block.type) {
       case "paragraph":
       case "heading":
-      case "pageHeader":
-      case "pageFooter":
         visitInline(block.content);
         break;
       case "bulletList":

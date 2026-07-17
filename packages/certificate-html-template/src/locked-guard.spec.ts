@@ -34,10 +34,36 @@ function findLockedPositions(doc: PmNode): { pos: number; blockKey: string }[] {
   return found;
 }
 
+function countBands(doc: PmNode): number {
+  let count = 0;
+  doc.descendants((node) => {
+    if (node.type.name === "bandTopIdentity" || node.type.name === "bandPageFooter") {
+      count += 1;
+    }
+    return true;
+  });
+  return count;
+}
+
 describe("locked-block guard (headless ProseMirror)", () => {
   it("parses the starter document into the TipTap schema with all 12 locked blocks", () => {
     const state = makeState();
     expect(countLocked(state.doc)).toBe(12);
+    expect(countBands(state.doc)).toBe(2);
+  });
+
+  it("rejects deleting a band node (guard + doc content expression)", () => {
+    const state = makeState();
+    const top = state.doc.child(0);
+    expect(top.type.name).toBe("bandTopIdentity");
+    let resulting = state.doc;
+    try {
+      const tr = state.tr.delete(0, top.nodeSize);
+      resulting = state.applyTransaction(tr).state.doc;
+    } catch {
+      // a structure violation may throw at the transform layer — also a rejection
+    }
+    expect(countBands(resulting)).toBe(2);
   });
 
   it("rejects select-all + delete wholesale", () => {
@@ -88,7 +114,11 @@ describe("locked-block guard (headless ProseMirror)", () => {
     expect(node?.type.name).toBe("lockedBlock");
     if (!node) return;
     const tr = state.tr.delete(target.pos, target.pos + node.nodeSize);
-    tr.insert(tr.doc.content.size, node);
+    // Re-insert at the end of the BODY (before the trailing bandPageFooter —
+    // the doc content expression forbids blocks after it).
+    const footer = tr.doc.child(tr.doc.childCount - 1);
+    expect(footer.type.name).toBe("bandPageFooter");
+    tr.insert(tr.doc.content.size - footer.nodeSize, node);
     const applied = state.applyTransaction(tr);
     expect(applied.state.doc.eq(state.doc)).toBe(false);
     expect(countLocked(applied.state.doc)).toBe(12);

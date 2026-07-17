@@ -21,6 +21,13 @@ function lockedBlockCounts(doc: PmNode): Map<string, number> {
       const key = String(node.attrs.blockKey);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
+    // Bands (M-B) join the multiset: the doc content expression already pins
+    // their position, this guard adds delete/duplicate protection on the same
+    // seam as the locked blocks (defense in depth).
+    if (node.type.name === "bandTopIdentity" || node.type.name === "bandPageFooter") {
+      const key = `band:${node.type.name}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
     return true;
   });
   return counts;

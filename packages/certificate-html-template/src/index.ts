@@ -7,6 +7,8 @@ export {
   BANNED_PLACEHOLDER_SEGMENTS,
   CERTIFICATE_DOCUMENT_SCHEMA_VERSION,
   CERTIFICATE_THEMES,
+  DEFAULT_BAND_PAGE_FOOTER_ATTRS,
+  DEFAULT_BAND_TOP_IDENTITY_ATTRS,
   LOCKED_BLOCK_KEYS,
   upgradeCertificateDocument,
   certificateDocumentSchema,
@@ -15,6 +17,8 @@ export {
   validateCertificateDocument,
 } from "./document-schema.js";
 export type {
+  BandPageFooterNode,
+  BandTopIdentityNode,
   CertificateBlockLayout,
   CertificateDocument,
   CertificateTheme,
@@ -34,11 +38,11 @@ export {
 } from "./catalog.js";
 export type { PlaceholderCatalogEntry } from "./catalog.js";
 export {
+  BandPageFooter,
+  BandTopIdentity,
   CertImage,
   CertPlaceholder,
   LockedBlock,
-  PageFooter,
-  PageHeader,
   certificateEditorExtensions,
 } from "./extensions.js";
 export { PlaceholderFormatError, applyPlaceholderFormat } from "./format.js";
@@ -55,6 +59,12 @@ export {
   escapeHtml,
   renderLockedBlockInner,
 } from "./blocks.js";
+export {
+  embedCertificatePageFooter,
+  extractCertificatePageFooterHtml,
+  renderBandPageFooterTemplate,
+  renderBandTopIdentityInner,
+} from "./bands.js";
 export type { LockedBlockRenderContext } from "./blocks.js";
 export {
   CertificateDocumentInvalidError,

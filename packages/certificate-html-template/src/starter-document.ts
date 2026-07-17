@@ -12,8 +12,18 @@ import {
 export function newWysiwygStarterDocument(): CertificateDocument {
   return parseCertificateDocument({
     type: "doc",
-    attrs: { schemaVersion: 2, theme: "technical-form" },
+    attrs: { schemaVersion: 3, theme: "technical-form" },
     content: [
+      {
+        type: "bandTopIdentity",
+        attrs: {
+          enabled: true,
+          showLabName: true,
+          showCertificateNumber: true,
+          showTitle: false,
+          showSealText: true,
+        },
+      },
       { type: "lockedBlock", attrs: { blockKey: "lab_identification" } },
       {
         type: "heading",
@@ -45,6 +55,15 @@ export function newWysiwygStarterDocument(): CertificateDocument {
       { type: "lockedBlock", attrs: { blockKey: "signature_block" } },
       { type: "lockedBlock", attrs: { blockKey: "verification_qr" } },
       { type: "lockedBlock", attrs: { blockKey: "end_of_document" } },
+      {
+        type: "bandPageFooter",
+        attrs: {
+          enabled: true,
+          showCertificateNumber: true,
+          showLabName: false,
+          showIssueDate: false,
+        },
+      },
     ],
   });
 }

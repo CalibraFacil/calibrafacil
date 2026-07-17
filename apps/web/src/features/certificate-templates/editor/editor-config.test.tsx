@@ -163,3 +163,85 @@ describe('editor config UI (T24)', () => {
     })
   })
 })
+
+function findBandPos(editor: Editor, typeName: string): number {
+  let found = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (found === -1 && node.type.name === typeName) found = pos
+    return found === -1
+  })
+  return found
+}
+
+describe('band lanes + page-aware shell (M-B T29)', () => {
+  it('renders both band lanes with the sample identity content', async () => {
+    await mountWithInspector()
+    const top = document.querySelector('[data-band-view="bandTopIdentity"]')
+    expect(top).not.toBeNull()
+    expect(top?.innerHTML).toContain('Laboratório Exemplo')
+    expect(top?.innerHTML).toContain('CAL-2026-0042')
+    const footer = document.querySelector('[data-band-view="bandPageFooter"]')
+    expect(footer).not.toBeNull()
+    // footer preview shows sample pagination
+    expect(footer?.textContent).toContain('Página')
+  })
+
+  it('band inspector toggles write band attrs and the document stays valid', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setNodeSelection(findBandPos(editor, 'bandTopIdentity'))
+    await waitFor(() => {
+      expect(screen.getByTestId('band-inspector')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Acreditação em texto' }))
+    await waitFor(() => {
+      const json = editor.getJSON()
+      const band = Array.isArray(json.content) ? json.content[0] : null
+      expect(band?.attrs?.showSealText).toBe(false)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+    // the lane re-renders without the accreditation text line
+    await waitFor(() => {
+      const top = document.querySelector('[data-band-view="bandTopIdentity"]')
+      expect(top?.innerHTML).not.toContain('cf-band-seal-text')
+    })
+  })
+
+  it('disabling the top band shows the empty lane and stays schema-valid', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setNodeSelection(findBandPos(editor, 'bandTopIdentity'))
+    await waitFor(() => {
+      expect(screen.getByTestId('band-inspector')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Exibir faixa no topo' }))
+    await waitFor(() => {
+      const top = document.querySelector('[data-band-view="bandTopIdentity"]')
+      expect(top?.textContent).toContain('Faixa desativada')
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
+  it('zoom control scales the page frame', async () => {
+    await mountWithInspector()
+    const paper = document.querySelector('.cf-editor__paper')
+    expect(paper?.getAttribute('data-zoom')).toBe('100')
+    fireEvent.change(screen.getByLabelText('Zoom da página'), {
+      target: { value: '75' },
+    })
+    await waitFor(() => {
+      expect(
+        document.querySelector('.cf-editor__paper')?.getAttribute('data-zoom'),
+      ).toBe('75')
+    })
+  })
+
+  it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.selectAll()
+    editor.commands.deleteSelection()
+    const json = editor.getJSON()
+    const content = Array.isArray(json.content) ? json.content : []
+    expect(content[0]?.type).toBe('bandTopIdentity')
+    expect(content[content.length - 1]?.type).toBe('bandPageFooter')
+    expect(validateCertificateDocument(json).ok).toBe(true)
+  })
+})

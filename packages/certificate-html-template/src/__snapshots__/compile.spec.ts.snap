@@ -177,9 +177,42 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 
 .cf-image { margin: 0 0 7pt; }
 .cf-image img { max-width: 100%; }
+
+/* ── document band structure (M-B) ──
+   The whole document rides inside table.cf-doc so Chromium repeats the thead
+   (top identity band) on every printed page. The structural table must be
+   invisible: kill every generic/theme table rule with higher-specificity
+   selectors, keep these LAST in the sheet. */
+.cf-certificate table.cf-doc{ border: none; margin: 0; width: 100%; }
+.cf-certificate table.cf-doc > thead > tr,
+.cf-certificate table.cf-doc > tbody > tr{ break-inside: auto; }
+.cf-certificate table.cf-doc > thead > tr > td,
+.cf-certificate table.cf-doc > tbody > tr > td{
+  border: none; padding: 0; font-size: var(--size-body); vertical-align: top;
+}
+.cf-certificate.cf-theme-institute-classic table.cf-doc{ border-top: none; }
+
+/* top identity band (repeats via thead) */
+.cf-band-top-identity{
+  padding: 0 0 3pt; border-bottom: 0.9pt solid var(--line-strong);
+  margin: 0 0 8pt;
+}
+.cf-band-identity-row{
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10pt;
+}
+.cf-band-lab{ font-weight: 700; font-size: var(--size-label); }
+.cf-band-title{ font-size: var(--size-label); color: var(--muted); }
+.cf-band-cert{
+  font-family: var(--font-mono);
+  font-size: var(--size-label); font-weight: 600;
+}
+.cf-band-seal-text{ font-size: var(--size-caption); color: var(--muted); margin-top: 1pt; }
 </style>
 </head>
 <body class="cf-certificate cf-theme-technical-form">
+<table class="cf-doc">
+<thead class="cf-doc-header"><tr><td><div class="cf-band-top-identity"><div class="cf-band-identity-row"><div class="cf-band-left"><span class="cf-band-lab">Laboratório Exemplo de Calibração Ltda</span></div><div class="cf-band-right"><span class="cf-band-cert">Certificado CAL-2026-0042</span></div></div><div class="cf-band-seal-text">Laboratório de calibração acreditado pela Cgcre sob o nº CAL 9999</div></div></td></tr></thead>
+<tbody class="cf-doc-body"><tr><td>
 <section data-locked-block="lab_identification" class="cf-locked-block"><div class="cf-masthead"><div class="cf-masthead-id"><div class="cf-masthead-name">Laboratório Exemplo de Calibração Ltda</div><div class="cf-masthead-lines"><b>CNPJ</b> 12.345.678/0001-90 &nbsp;·&nbsp; <b>Acreditação Cgcre</b> n.º CAL 9999<br/>Rua das Medições, 100 — Canoas/RS — CEP 92000-000<br/>(51) 3000-0000 &nbsp;·&nbsp; lab@exemplo.com.br &nbsp;·&nbsp; https://lab.exemplo.com.br<br/>Maria da Silva — Responsável Técnica</div></div></div><div class="cf-rule"></div></section><h1 style="text-align: left">Certificado de Calibração</h1><section data-locked-block="certificate_identification" class="cf-locked-block"><div class="cf-certrow"><dl class="cf-field-list">
 <dt>Data de emissão</dt><dd>01/07/2026</dd>
 <dt>Data da calibração</dt><dd>28/06/2026</dd>
@@ -206,6 +239,9 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 <dt>Pressão atmosférica</dt><dd>1013 hPa</dd>
 <dt>Dentro dos limites</dt><dd>Sim</dd>
 </dl></section><section data-locked-block="results_table" class="cf-locked-block"><div class="cf-block-title">Resultados da calibração</div><p class="cf-grid-caption">Pontos de calibração — indicação de massa</p><table><thead><tr><th>Carga nominal</th><th>Indicação como recebido</th><th>Indicação como deixado</th><th>Erro de indicação</th><th>Incerteza expandida</th><th>EMA</th></tr><tr><th class="cf-unit-row">[kg]</th><th class="cf-unit-row">[kg]</th><th class="cf-unit-row">[kg]</th><th class="cf-unit-row">[kg]</th><th class="cf-unit-row">[kg]</th><th class="cf-unit-row">[kg]</th></tr></thead><tbody><tr><td class="cf-num">500</td><td class="cf-num">500</td><td class="cf-num">500</td><td class="cf-num">0</td><td class="cf-num">0,29</td><td class="cf-num">0,5</td></tr><tr><td class="cf-num">1.000</td><td class="cf-num">999</td><td class="cf-num">1.000</td><td class="cf-num">0</td><td class="cf-num">0,3</td><td class="cf-num">0,5</td></tr><tr><td class="cf-num">1.500</td><td class="cf-num">1.498,5</td><td class="cf-num">1.499,5</td><td class="cf-num">-0,5</td><td class="cf-num">0,31</td><td class="cf-num">0,75</td></tr><tr><td class="cf-num">2.000</td><td class="cf-num">1.998</td><td class="cf-num">2.000</td><td class="cf-num">0</td><td class="cf-num">0,54</td><td class="cf-num">0,75</td></tr></tbody></table><table><thead><tr><th>Grandeza</th><th class="cf-num">Resultado</th></tr></thead><tbody><tr><td>Erro de indicação (10 kg)</td><td class="cf-num">0,0001 kg</td></tr><tr><td>Incerteza expandida</td><td class="cf-num">0,0004 kg</td></tr><tr><td>Fator de abrangência</td><td class="cf-num">2</td></tr><tr><td>Margem de conformidade (após)</td><td class="cf-num">62,5 %</td></tr></tbody></table></section><section data-locked-block="uncertainty_statement" class="cf-locked-block"><div class="cf-block-title">Incerteza de medição</div><p>A incerteza expandida de medição relatada é U = 0,0004 kg, declarada como a incerteza padrão combinada multiplicada pelo fator de abrangência k = 2, correspondendo a uma probabilidade de abrangência de aproximadamente 95%, conforme o Guia para a Expressão da Incerteza de Medição (GUM).</p></section><h2>Observações</h2><p>Os resultados deste certificado referem-se exclusivamente ao item calibrado.</p><section data-locked-block="accreditation_seal" class="cf-locked-block"><div class="cf-accreditation-seal"></div></section><section data-locked-block="signature_block" class="cf-locked-block"><div class="cf-signature-block"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20280%2096%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%231e2a3a%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20stroke-width%3D%222.4%22%20d%3D%22M14%2070%20C%2022%2066%2030%2052%2034%2034%20C%2036%2026%2038%2020%2040%2022%20C%2043%2025%2040%2048%2037%2064%20C%2042%2048%2050%2032%2055%2033%20C%2059%2034%2057%2052%2054%2066%20C%2060%2050%2068%2036%2073%2037%20C%2077%2038%2075%2054%2072%2068%22%2F%3E%3Cpath%20stroke-width%3D%222.2%22%20d%3D%22M78%2058%20C%2084%2048%2092%2046%2095%2052%20C%2098%2058%2092%2066%2087%2064%20C%2082%2062%2086%2052%2094%2051%20C%20104%2050%20108%2058%20112%2056%20C%20120%2052%20126%2044%20132%2046%20C%20137%2048%20134%2058%20130%2060%20C%20138%2056%20148%2046%20156%2048%20C%20163%2050%20160%2058%20156%2060%20C%20166%2056%20180%2050%20192%2052%20C%20202%2054%20210%2052%20220%2048%22%2F%3E%3Cpath%20stroke-width%3D%221.9%22%20d%3D%22M52%2080%20C%2044%2088%2032%2086%2036%2078%20C%2040%2071%2060%2074%2084%2076%20C%20130%2080%20190%2074%20244%2062%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E" alt="Assinatura" /><div><span class="cf-signature-line"><span class="cf-signature-name">Maria da Silva</span><br/><span class="cf-signature-title">Signatário autorizado</span></span></div></div></section><section data-locked-block="verification_qr" class="cf-locked-block"><div class="cf-verification"><img src="data:image/png;base64,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" alt="QR code de verificação" /><div class="cf-verification-text">Verifique a autenticidade deste certificado em:<br/><strong>https://verify.calibrafacil.com/v/00000000-0000-4000-8000-000000000042</strong></div></div></section><section data-locked-block="end_of_document" class="cf-locked-block"><div class="cf-end-of-document"><div class="cf-end-marker">— FIM DO CERTIFICADO CAL-2026-0042 —</div><div class="cf-end-note">Este certificado atende aos requisitos da NBR ISO/IEC 17025 e não pode ser reproduzido, exceto integralmente, sem aprovação por escrito do laboratório.</div></div></section>
+</td></tr></tbody>
+</table>
+<template id="cf-page-footer"><!DOCTYPE html><html><head><meta charset="utf-8" /></head><body><div style="width:100%;box-sizing:border-box;padding:0 15mm;display:flex;justify-content:space-between;align-items:baseline;border-top:0.6pt solid #1a1a1a;padding-top:4pt;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:8.5pt;color:#1a1a1a;"><div>Certificado CAL-2026-0042</div><div>Página <span class="pageNumber"></span> de <span class="totalPages"></span></div></div></body></html></template>
 </body>
 </html>"
 `;
