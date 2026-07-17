@@ -1714,6 +1714,31 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getWysiwygDocument",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getPlaceholderCatalog",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "saveWysiwygDocument",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "validateWysiwygDocument",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createWysiwygVersion",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "competences",
           "policy": "cloud-only",

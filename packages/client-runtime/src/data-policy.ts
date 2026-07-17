@@ -481,6 +481,11 @@ export const calibraApiPolicyRegistry = {
     getXlsxPreview: "cloud-only",
     publishXlsx: "cloud-only",
     createXlsxAssignment: "cloud-only",
+    getWysiwygDocument: "cloud-only",
+    getPlaceholderCatalog: "cloud-only",
+    saveWysiwygDocument: "cloud-only",
+    validateWysiwygDocument: "cloud-only",
+    createWysiwygVersion: "cloud-only",
   },
   competences: {
     list: "cloud-only",

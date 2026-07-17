@@ -199,7 +199,7 @@ export interface CertificateDescriptor {
 
 function descriptiveCertificateFilename(
   descriptor: CertificateDescriptor,
-  extension: "pdf" | "xlsx",
+  extension: "pdf" | "xlsx" | "html",
 ): string {
   const segments = [
     slugify(descriptor.certNumber),
@@ -224,7 +224,7 @@ export interface IssuedCertificateKeyParams extends CertificateDescriptor {
 
 function issuedCertificateKey(
   params: IssuedCertificateKeyParams,
-  extension: "pdf" | "xlsx",
+  extension: "pdf" | "xlsx" | "html",
 ): StorageObject {
   const part = orgPartition(params.org);
   const jobId = encodeKeyPart("jobId", params.jobId);
@@ -246,6 +246,13 @@ export function issuedCertificateXlsxKey(
   params: IssuedCertificateKeyParams,
 ): StorageObject {
   return issuedCertificateKey(params, "xlsx");
+}
+
+/** Compiled-HTML artifact of a wysiwyg-engine issued certificate (epic wysiwyg). */
+export function issuedCertificateHtmlKey(
+  params: IssuedCertificateKeyParams,
+): StorageObject {
+  return issuedCertificateKey(params, "html");
 }
 
 export interface JobLabelKeyParams {
@@ -316,7 +323,7 @@ export function serviceOrderDocKey(
 export interface TemplatePreviewKeyParams {
   org: OrgRef;
   previewId: number;
-  extension: "xlsx" | "pdf";
+  extension: "xlsx" | "pdf" | "html";
 }
 
 export function templatePreviewKey(

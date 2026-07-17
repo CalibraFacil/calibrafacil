@@ -1268,6 +1268,25 @@ export type CertificateXlsxRenderPolicy = {
   converter: "gotenberg-libreoffice";
 };
 
+/**
+ * Which authoring/render engine a template version uses. `xlsx` = uploaded
+ * workbook filled cell-by-cell (Gotenberg LibreOffice); `wysiwyg` = block
+ * document compiled to HTML (packages/certificate-html-template + Gotenberg
+ * Chromium). Lives on the VERSION: a template may migrate engines by
+ * publishing a new version.
+ */
+export type CertificateTemplateEngine = "xlsx" | "wysiwyg";
+
+export type CertificateHtmlRenderPolicy = {
+  converter: "gotenberg-chromium";
+  compiler: "certificate-html-template";
+  compilerVersion: string;
+};
+
+export type CertificateRenderPolicy =
+  | CertificateXlsxRenderPolicy
+  | CertificateHtmlRenderPolicy;
+
 export const certificateTemplateVersion = pgTable(
   "certificate_template_version",
   {
@@ -1283,14 +1302,24 @@ export const certificateTemplateVersion = pgTable(
       .$type<CertificateXlsxTemplateVersionStatus>()
       .default("DRAFT")
       .notNull(),
-    xlsxR2Key: text("xlsx_r2_key").notNull(),
-    xlsxSha256: text("xlsx_sha256").notNull(),
-    bindingManifest: jsonb("binding_manifest")
-      .$type<Record<string, unknown>>()
+    // Engine discriminator (migration 0086). A CHECK constraint guarantees:
+    // engine='xlsx' rows carry the xlsx/bindingManifest artifacts;
+    // engine='wysiwyg' rows carry documentJson + documentSha256.
+    engine: text("engine")
+      .$type<CertificateTemplateEngine>()
+      .default("xlsx")
       .notNull(),
-    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    xlsxR2Key: text("xlsx_r2_key"),
+    xlsxSha256: text("xlsx_sha256"),
+    bindingManifest: jsonb("binding_manifest").$type<Record<string, unknown>>(),
+    bindingManifestSha256: text("binding_manifest_sha256"),
+    // wysiwyg engine: the editor document (ProseMirror JSON) + its canonical
+    // content hash (sha256 over key-sorted JSON), computed SERVER-SIDE only.
+    // Immutable once the version leaves DRAFT.
+    documentJson: jsonb("document_json").$type<Record<string, unknown>>(),
+    documentSha256: text("document_sha256"),
     renderPolicy: jsonb("render_policy")
-      .$type<CertificateXlsxRenderPolicy>()
+      .$type<CertificateRenderPolicy>()
       .notNull(),
     analysis: jsonb("analysis").$type<Record<string, unknown>>(),
     validationResult:
@@ -1434,13 +1463,21 @@ export const issuedCertificateSnapshot = pgTable(
         onDelete: "restrict",
       }),
     certificateNumber: text("certificate_number"),
-    filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
-    filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
+    // Engine discriminator (migration 0086). CHECK: xlsx rows have the filled
+    // XLSX artifacts; wysiwyg rows have the compiled-HTML artifacts.
+    engine: text("engine")
+      .$type<CertificateTemplateEngine>()
+      .default("xlsx")
+      .notNull(),
+    filledXlsxR2Key: text("filled_xlsx_r2_key"),
+    filledXlsxSha256: text("filled_xlsx_sha256"),
+    compiledHtmlR2Key: text("compiled_html_r2_key"),
+    compiledHtmlSha256: text("compiled_html_sha256"),
     pdfR2Key: text("pdf_r2_key").notNull(),
     pdfSha256: text("pdf_sha256").notNull(),
-    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    bindingManifestSha256: text("binding_manifest_sha256"),
     renderPolicy: jsonb("render_policy")
-      .$type<CertificateXlsxRenderPolicy>()
+      .$type<CertificateRenderPolicy>()
       .notNull(),
     renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
     inputDataSnapshot: jsonb("input_data_snapshot")

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   AlertCircleIcon,
   BookOpen02Icon,
@@ -47,6 +48,7 @@ import {
 } from '@/runtime/sync-status'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { calibraApi } from '@/utils/api'
+import { isWysiwygEditorEnabled } from './wysiwyg-flag'
 import { cn } from '@/lib/utils'
 import {
   useCertificateTemplateAssignmentOptions,
@@ -134,6 +136,7 @@ export function CertificateTemplatesPage() {
     null,
   )
   const [newTemplateName, setNewTemplateName] = useState('')
+  const navigate = useNavigate()
   const [xlsxWorkbench, setXlsxWorkbench] = useState<XlsxWorkbenchState | null>(
     null,
   )
@@ -440,6 +443,32 @@ export function CertificateTemplatesPage() {
     },
   })
 
+  const createWysiwygMutation = useMutation({
+    mutationFn: async () => {
+      const name = newTemplateName.trim()
+      return calibraApi.certificateTemplates.create<{
+        item: TemplateItem
+        initialVersion: { id: number } | null
+      }>({ name, engine: 'wysiwyg' })
+    },
+    onSuccess: async (data) => {
+      toast.success('Modelo criado no editor visual')
+      setNewTemplateName('')
+      await refreshTemplates()
+      if (data.item.id) {
+        await navigate({
+          to: '/dashboard/certificate-templates/$templateId/editor',
+          params: { templateId: String(data.item.id) },
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao criar modelo',
+      )
+    },
+  })
+
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedTemplate?.id) {
@@ -611,7 +640,8 @@ export function CertificateTemplatesPage() {
     ? detectedCount
     : (currentXlsxVersion?.placeholderCount ?? 0)
   const mappingComplete = scalarBindings.length > 0 && requiredPending === 0
-  const fullyBound = scalarBindings.length > 0 && boundCount === scalarBindings.length
+  const fullyBound =
+    scalarBindings.length > 0 && boundCount === scalarBindings.length
   // Verification is concluded once the version reached a validated/published
   // state on the server — not just when a preview was rendered this session.
   const xlsxStatus = currentXlsxVersion?.status
@@ -646,10 +676,12 @@ export function CertificateTemplatesPage() {
     draft.name.trim().length > 0 &&
     draft.name.trim() !== (selectedTemplate?.name ?? '')
   const showTokenAside =
-    hasWorkbench && (effectiveStage === 'mapping' || effectiveStage === 'verify')
+    hasWorkbench &&
+    (effectiveStage === 'mapping' || effectiveStage === 'verify')
   const goToSource = () => setActiveStage('source')
 
-  const warningsPreview = activeXlsxWorkbench?.analysis.warnings.slice(0, 4) ?? []
+  const warningsPreview =
+    activeXlsxWorkbench?.analysis.warnings.slice(0, 4) ?? []
 
   return (
     <div className="space-y-5">
@@ -777,6 +809,22 @@ export function CertificateTemplatesPage() {
           >
             Tornar padrão
           </Button>
+          {isWysiwygEditorEnabled() &&
+            selectedTemplate?.id &&
+            selectedTemplate.currentXlsxVersion?.engine === 'wysiwyg' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  navigate({
+                    to: '/dashboard/certificate-templates/$templateId/editor',
+                    params: { templateId: String(selectedTemplate.id) },
+                  })
+                }
+              >
+                Abrir no editor
+              </Button>
+            )}
         </div>
 
         {canManageTemplates && (
@@ -802,6 +850,19 @@ export function CertificateTemplatesPage() {
             >
               Criar
             </Button>
+            {isWysiwygEditorEnabled() && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => createWysiwygMutation.mutate()}
+                disabled={
+                  !newTemplateName.trim() || createWysiwygMutation.isPending
+                }
+              >
+                Criar no editor visual
+              </Button>
+            )}
           </form>
         )}
       </Panel>
@@ -969,7 +1030,10 @@ export function CertificateTemplatesPage() {
                     className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 px-6 py-12 text-center transition-colors hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <HugeiconsIcon icon={CloudUploadIcon} className="size-6" />
+                      <HugeiconsIcon
+                        icon={CloudUploadIcon}
+                        className="size-6"
+                      />
                     </span>
                     <span className="text-sm font-medium">
                       Envie a planilha oficial do certificado
@@ -1139,8 +1203,8 @@ export function CertificateTemplatesPage() {
                       ))
                     ) : (
                       <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                        Nenhum placeholder gerou vínculos. Envie uma planilha com
-                        células no formato{' '}
+                        Nenhum placeholder gerou vínculos. Envie uma planilha
+                        com células no formato{' '}
                         <code className="font-mono">{'{{campo}}'}</code>.
                       </div>
                     )}
@@ -1206,7 +1270,9 @@ export function CertificateTemplatesPage() {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <Badge
-                            variant={hasRenderedPreview ? 'default' : 'secondary'}
+                            variant={
+                              hasRenderedPreview ? 'default' : 'secondary'
+                            }
                           >
                             Prévia {xlsxPreviewQuery.data.item.status}
                           </Badge>
@@ -1516,7 +1582,9 @@ function XlsxAssignmentPanel({
               inputMode="numeric"
               value={draft.priority}
               disabled={formDisabled}
-              onChange={(event) => updateDraft({ priority: event.target.value })}
+              onChange={(event) =>
+                updateDraft({ priority: event.target.value })
+              }
               className="h-9 text-xs tabular-nums"
             />
           </label>
@@ -1533,7 +1601,11 @@ function XlsxAssignmentPanel({
               Maior prioridade vence
             </span>
           </div>
-          <Button type="submit" size="sm" disabled={formDisabled || optionsLoading}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={formDisabled || optionsLoading}
+          >
             {assignmentPending ? 'Atribuindo...' : 'Atribuir versão'}
           </Button>
         </div>

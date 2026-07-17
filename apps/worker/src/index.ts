@@ -28,6 +28,7 @@ import { Workbook } from "@cj-tech-master/excelts";
 import React from "react";
 import QRCode from "qrcode";
 import {
+  buildCertificateData,
   createConfiguredXlsxToPdfConverter,
   ExcelTsCertificateWorkbookEngine,
   fillCertificateWorkbook,
@@ -70,6 +71,7 @@ import {
   getLogoKeyFromUrl,
   getYear,
   getYearMonth,
+  issuedCertificateHtmlKey,
   issuedCertificatePdfKey,
   issuedCertificateXlsxKey,
   jobLabelKey,
@@ -84,6 +86,11 @@ import {
   notifyAuditPackReady,
   notifyCertificateReady,
 } from "@calibra-facil/notifications";
+import {
+  CERTIFICATE_PDF_MARGINS,
+  compileCertificateHtml,
+  sampleCertificateInputData,
+} from "@calibra-facil/certificate-html-template";
 
 export interface R2BucketBinding {
   get(key: string): Promise<{
@@ -517,34 +524,43 @@ async function fetchJobData(
   };
 }
 
-type XlsxTemplateSelection = {
+type CertificateTemplateSelection = {
+  engine: "xlsx" | "wysiwyg";
   templateId: number;
   templateVersionId: number;
-  xlsxR2Key: string;
+  xlsxR2Key: string | null;
   bindingManifest: unknown;
-  bindingManifestSha256: string;
+  bindingManifestSha256: string | null;
+  documentJson: unknown;
+  documentSha256: string | null;
   renderPolicy: unknown;
 };
 
-async function fetchXlsxTemplateSelectionForJob(
+async function fetchCertificateTemplateSelectionForJob(
   client: Client,
   jobId: number,
-): Promise<XlsxTemplateSelection | null> {
+): Promise<CertificateTemplateSelection | null> {
   const result = await client.query<{
+    engine: string;
     template_id: number;
     template_version_id: number;
-    xlsx_r2_key: string;
+    xlsx_r2_key: string | null;
     binding_manifest: unknown;
-    binding_manifest_sha256: string;
+    binding_manifest_sha256: string | null;
+    document_json: unknown;
+    document_sha256: string | null;
     render_policy: unknown;
   }>(
     `
       select
+        v.engine,
         a.template_id,
         a.template_version_id,
         v.xlsx_r2_key,
         v.binding_manifest,
         v.binding_manifest_sha256,
+        v.document_json,
+        v.document_sha256,
         v.render_policy
       from calibration_job cj
       left join service s on s.id = cj.service_id
@@ -571,13 +587,30 @@ async function fetchXlsxTemplateSelectionForJob(
   if (!row) return null;
 
   return {
+    engine: row.engine === "wysiwyg" ? "wysiwyg" : "xlsx",
     templateId: row.template_id,
     templateVersionId: row.template_version_id,
     xlsxR2Key: row.xlsx_r2_key,
     bindingManifest: row.binding_manifest,
     bindingManifestSha256: row.binding_manifest_sha256,
+    documentJson: row.document_json,
+    documentSha256: row.document_sha256,
     renderPolicy: row.render_policy,
   };
+}
+
+/** Engine dispatch: one selection query, two render pipelines (spec 02 §3.1). */
+async function processIssuedCertificateBySelection(
+  env: Env,
+  jobId: number,
+  job: JobData,
+  userId: string,
+  selection: CertificateTemplateSelection,
+): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  if (selection.engine === "wysiwyg") {
+    return processHtmlIssuedCertificate(env, jobId, job, userId, selection);
+  }
+  return processXlsxIssuedCertificate(env, jobId, job, userId, selection);
 }
 
 function inferImageContentType(buffer: ArrayBuffer) {
@@ -1794,7 +1827,10 @@ function requireGotenbergUrl(env: Env): string {
   if (!env.GOTENBERG_URL) {
     throw new Error("GOTENBERG_URL is required for HTML to PDF conversion.");
   }
-  return env.GOTENBERG_URL.replace(/\/$/, "");
+  // Tolerate scheme-less values (fetch() rejects them with the opaque
+  // "fetch() URL is invalid"): default to https.
+  const raw = env.GOTENBERG_URL.trim().replace(/\/$/, "");
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
 async function gotenbergHtmlToPdf(
@@ -1913,16 +1949,16 @@ async function processJob(
       return { success: false, error: "Job not found" };
     }
 
-    const xlsxSelection = await withDbClient(env, (client) =>
-      fetchXlsxTemplateSelectionForJob(client, jobId),
+    const selection = await withDbClient(env, (client) =>
+      fetchCertificateTemplateSelectionForJob(client, jobId),
     );
-    if (xlsxSelection) {
-      return processXlsxIssuedCertificate(
+    if (selection) {
+      return processIssuedCertificateBySelection(
         env,
         jobId,
         job,
         userId,
-        xlsxSelection,
+        selection,
       );
     }
 
@@ -2294,20 +2330,20 @@ async function processXlsxCertificateMessageIfSelected(
     throw new Error("Job not found");
   }
 
-  const xlsxSelection = await withDbClient(env, (client) =>
-    fetchXlsxTemplateSelectionForJob(client, message.jobId),
+  const selection = await withDbClient(env, (client) =>
+    fetchCertificateTemplateSelectionForJob(client, message.jobId),
   );
 
-  if (!xlsxSelection) {
+  if (!selection) {
     return false;
   }
 
-  const result = await processXlsxIssuedCertificate(
+  const result = await processIssuedCertificateBySelection(
     env,
     message.jobId,
     job,
     message.userId,
-    xlsxSelection,
+    selection,
   );
 
   if (!result.success) {
@@ -2343,22 +2379,30 @@ async function processXlsxPreviewJob(
         id: number;
         organization_id: string;
         organization_slug: string | null;
+        organization_logo: string | null;
         sample_data: Record<string, unknown> | null;
-        xlsx_r2_key: string;
-        xlsx_sha256: string;
+        engine: string;
+        xlsx_r2_key: string | null;
+        xlsx_sha256: string | null;
         binding_manifest: unknown;
-        binding_manifest_sha256: string;
+        binding_manifest_sha256: string | null;
+        document_json: unknown;
+        document_sha256: string | null;
       }>(
         `
           select
             p.id,
             p.organization_id,
             o.slug as organization_slug,
+            o.logo as organization_logo,
             p.sample_data,
+            v.engine,
             v.xlsx_r2_key,
             v.xlsx_sha256,
             v.binding_manifest,
-            v.binding_manifest_sha256
+            v.binding_manifest_sha256,
+            v.document_json,
+            v.document_sha256
           from certificate_template_preview p
           inner join certificate_template_version v
             on v.id = p.template_version_id
@@ -2374,6 +2418,116 @@ async function processXlsxPreviewJob(
 
     if (!preview) {
       throw new Error("XLSX preview not found");
+    }
+
+    if (preview.engine === "wysiwyg") {
+      // wysiwyg preview: compile documentJson against the provided sample data
+      // (falling back to the package's canonical sample) and render via the
+      // same Chromium route + margins as real issuance.
+      if (!preview.document_json) {
+        throw new Error("wysiwyg template version is missing its documentJson");
+      }
+      const sampleData =
+        preview.sample_data && Object.keys(preview.sample_data).length > 0
+          ? preview.sample_data
+          : sampleCertificateInputData;
+      // Previews render with the ORG'S REAL LOGO: resolve organization.logo
+      // exactly like issuance does and inject it into a CLONE (never mutate
+      // the shared canonical sample). An explicit lab.logoDataUrl in custom
+      // sample data wins.
+      const previewInput: Record<string, unknown> = JSON.parse(
+        JSON.stringify(sampleData),
+      );
+      const previewLab = Reflect.get(previewInput, "lab");
+      if (
+        previewLab &&
+        typeof previewLab === "object" &&
+        Reflect.get(previewLab, "logoDataUrl") == null
+      ) {
+        const previewLogoDataUrl = await resolveOrganizationLogoDataUrl(
+          env,
+          preview.organization_logo,
+          preview.id,
+        );
+        if (previewLogoDataUrl) {
+          Reflect.set(previewLab, "logoDataUrl", previewLogoDataUrl);
+        }
+      }
+      const compiled = await compileCertificateHtml(
+        preview.document_json,
+        previewInput,
+      );
+      const pdfBytes = await gotenbergHtmlToPdf(
+        env,
+        compiled.html.replace(/^<!DOCTYPE html>\s*/i, ""),
+        { ...A4_PAPER, printBackground: "true", ...CERTIFICATE_PDF_MARGINS },
+        { "footer.html": DOC_PAGE_FOOTER_HTML },
+      );
+
+      const previewOrg: OrgRef = {
+        id: preview.organization_id,
+        slug: preview.organization_slug ?? "",
+      };
+      const htmlPreview = templatePreviewKey({
+        org: previewOrg,
+        previewId: preview.id,
+        extension: "html",
+      });
+      const pdfPreview = templatePreviewKey({
+        org: previewOrg,
+        previewId: preview.id,
+        extension: "pdf",
+      });
+
+      await bucketBinding(env, htmlPreview.bucket).put(
+        htmlPreview.key,
+        new TextEncoder().encode(compiled.html),
+        { httpMetadata: { contentType: "text/html; charset=utf-8" } },
+      );
+      await bucketBinding(env, pdfPreview.bucket).put(
+        pdfPreview.key,
+        pdfBytes,
+        { httpMetadata: { contentType: "application/pdf" } },
+      );
+
+      const wysiwygRenderMetadata = {
+        engine: "wysiwyg",
+        compiledHtmlSha256: compiled.sha256,
+        compiledHtmlR2Key: htmlPreview.key,
+        compilerVersion: compiled.compilerVersion,
+        documentSha256: preview.document_sha256,
+        durationMs: Math.round(performance.now() - totalStart),
+      };
+
+      await withDbClient(env, (client) =>
+        client.query(
+          `
+            update certificate_template_preview
+            set status = 'RENDERED',
+                pdf_r2_key = $1,
+                pdf_sha256 = $2,
+                render_metadata = $3::jsonb,
+                error = null,
+                updated_at = now()
+            where id = $4
+          `,
+          [
+            pdfPreview.key,
+            sha256Hex(pdfBytes),
+            JSON.stringify(wysiwygRenderMetadata),
+            preview.id,
+          ],
+        ),
+      );
+
+      console.log(
+        `[WYSIWYG PREVIEW ${message.previewId}] DONE in ${Math.round(performance.now() - totalStart)}ms`,
+      );
+      return;
+    }
+
+    if (preview.xlsx_r2_key === null) {
+      throw new Error("xlsx template version is missing its artifacts");
     }
 
     const sourceObject = await getStoredObject(
@@ -2507,8 +2661,18 @@ async function processXlsxIssuedCertificate(
   jobId: number,
   job: JobData,
   userId: string,
-  selection: XlsxTemplateSelection,
+  selection: CertificateTemplateSelection,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  // CHECK constraint ctv_engine_payload_check guarantees these for engine='xlsx';
+  // narrow (and fail loud) rather than assume.
+  const xlsxR2Key = selection.xlsxR2Key;
+  const bindingManifestSha256 = selection.bindingManifestSha256;
+  if (xlsxR2Key === null || bindingManifestSha256 === null) {
+    return {
+      success: false,
+      error: "xlsx template version is missing its artifacts",
+    };
+  }
   const existingSnapshot = await withDbClient(env, async (client) => {
     const result = await client.query<{
       pdf_r2_key: string;
@@ -2547,13 +2711,9 @@ async function processXlsxIssuedCertificate(
   }
 
   try {
-    const sourceObject = await getStoredObject(
-      env,
-      "media",
-      selection.xlsxR2Key,
-    );
+    const sourceObject = await getStoredObject(env, "media", xlsxR2Key);
     if (!sourceObject) {
-      throw new Error(`Template XLSX not found: ${selection.xlsxR2Key}`);
+      throw new Error(`Template XLSX not found: ${xlsxR2Key}`);
     }
 
     const manifest = validateCertificateXlsxBindingManifest(
@@ -2665,8 +2825,246 @@ async function processXlsxIssuedCertificate(
           sha256Hex(filled.workbook),
           pdfR2Key,
           sha256Hex(pdfBuffer),
-          selection.bindingManifestSha256,
+          bindingManifestSha256,
           JSON.stringify(selection.renderPolicy),
+          JSON.stringify(renderMetadata),
+          JSON.stringify(inputDataSnapshot),
+          userId,
+        ],
+      );
+
+      const insertedSnapshotPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
+      const existingSnapshotAfterConflict = insertedSnapshotPdfR2Key
+        ? null
+        : (
+            await client.query<{
+              pdf_r2_key: string;
+              signature_metadata: unknown;
+            }>(
+              `
+                select ics.pdf_r2_key, cj.signature_metadata
+                from issued_certificate_snapshot ics
+                join calibration_job cj on cj.id = ics.job_id
+                where ics.job_id = $1
+                limit 1
+              `,
+              [jobId],
+            )
+          ).rows[0];
+      const snapshotPdfR2Key =
+        insertedSnapshotPdfR2Key ?? existingSnapshotAfterConflict?.pdf_r2_key;
+
+      if (!snapshotPdfR2Key) {
+        throw new Error("Issued certificate snapshot was not persisted");
+      }
+
+      const snapshotCertificateUrl = `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`;
+      await updateJobWithCertificate(
+        client,
+        jobId,
+        snapshotCertificateUrl,
+        userId,
+        insertedSnapshotPdfR2Key
+          ? signed.signatureMetadata
+          : parseSignatureMetadata(
+              existingSnapshotAfterConflict?.signature_metadata,
+            ),
+        insertedSnapshotPdfR2Key ? signed.signatureVerdict : undefined,
+        { preserveSignatureMetadata: !insertedSnapshotPdfR2Key },
+      );
+      return snapshotPdfR2Key;
+    });
+
+    const certificateUrl = `https://certificates.calibrafacil.com/${issuedPdfR2Key}`;
+    return { success: true, certificateUrl };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * wysiwyg-engine issuance (epic wysiwyg, spec 02 §3.1): compile the template's
+ * documentJson against the frozen job data, render via Gotenberg Chromium,
+ * sign, upload the compiled HTML + signed PDF, freeze the snapshot. Mirrors
+ * processXlsxIssuedCertificate step-for-step — same idempotency, same signing
+ * call, same fail-loud posture (a compile error FAILS the job, never issues a
+ * certificate with silently missing content).
+ */
+async function processHtmlIssuedCertificate(
+  env: Env,
+  jobId: number,
+  job: JobData,
+  userId: string,
+  selection: CertificateTemplateSelection,
+): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  const existingSnapshot = await withDbClient(env, async (client) => {
+    const result = await client.query<{
+      pdf_r2_key: string;
+      signature_metadata: unknown;
+    }>(
+      `
+        select ics.pdf_r2_key, cj.signature_metadata
+        from issued_certificate_snapshot ics
+        join calibration_job cj on cj.id = ics.job_id
+        where ics.job_id = $1
+        limit 1
+      `,
+      [jobId],
+    );
+    return result.rows[0] ?? null;
+  });
+
+  if (existingSnapshot) {
+    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
+    await withDbClient(env, (client) =>
+      updateJobWithCertificate(
+        client,
+        jobId,
+        certificateUrl,
+        userId,
+        parseSignatureMetadata(existingSnapshot.signature_metadata),
+        undefined,
+        { preserveSignatureMetadata: true },
+      ),
+    );
+    return { success: true, certificateUrl };
+  }
+
+  if (!job.organizationId) {
+    return { success: false, error: "Missing organization_id" };
+  }
+
+  try {
+    if (!selection.documentJson || selection.documentSha256 === null) {
+      // CHECK constraint ctv_engine_payload_check makes this unreachable.
+      throw new Error("wysiwyg template version is missing its documentJson");
+    }
+
+    const inputDataSnapshot = buildCertificateData(job, {
+      renderAccreditationSeal: renderAccreditationSealDataUrl,
+    });
+    // Letterhead: resolve the org logo to a data URL (same resolver the XLSX
+    // image binding uses) and freeze it INTO the input snapshot — the stored
+    // snapshot must be the exact compile input for reproducibility.
+    const labLogoDataUrl = await resolveOrganizationLogoDataUrl(
+      env,
+      job.lab.logo,
+      jobId,
+    );
+    const labRecord = Reflect.get(inputDataSnapshot, "lab");
+    if (labRecord && typeof labRecord === "object") {
+      Reflect.set(labRecord, "logoDataUrl", labLogoDataUrl);
+    }
+    const compiled = await compileCertificateHtml(
+      selection.documentJson,
+      inputDataSnapshot,
+    );
+
+    // gotenbergHtmlToPdf prepends the doctype; the compiled artifact keeps its own.
+    const htmlForChromium = compiled.html.replace(/^<!DOCTYPE html>\s*/i, "");
+    const pdfBytes = await gotenbergHtmlToPdf(
+      env,
+      htmlForChromium,
+      {
+        ...A4_PAPER,
+        printBackground: "true",
+        ...CERTIFICATE_PDF_MARGINS,
+      },
+      { "footer.html": DOC_PAGE_FOOTER_HTML },
+    );
+
+    const signed = await signPdfWithUnitCertificate(
+      env,
+      jobId,
+      job.organizationId,
+      job.unitId,
+      Buffer.from(pdfBytes),
+    );
+    const pdfBuffer = signed.pdfBuffer;
+
+    const year = getYear(
+      job.approvedAt ?? job.performedAt,
+      "approvedAt/performedAt",
+    );
+    const issuedObjectId = randomUUID();
+    const certDescriptor = {
+      org: {
+        id: job.organizationId,
+        slug: job.organizationSlug ?? "",
+      },
+      jobId: job.jobId,
+      issuedId: issuedObjectId,
+      certNumber: job.certificateName ?? job.jobId,
+      year,
+      companyName: job.customer.name,
+      assetTag: job.asset.tag,
+      brand: job.asset.manufacturer,
+    };
+    const pdf = issuedCertificatePdfKey(certDescriptor);
+    const compiledHtml = issuedCertificateHtmlKey(certDescriptor);
+    const pdfR2Key = pdf.key;
+    const compiledHtmlR2Key = compiledHtml.key;
+
+    await bucketBinding(env, compiledHtml.bucket).put(
+      compiledHtmlR2Key,
+      new TextEncoder().encode(compiled.html),
+      {
+        httpMetadata: { contentType: "text/html; charset=utf-8" },
+      },
+    );
+    await bucketBinding(env, pdf.bucket).put(pdfR2Key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+
+    const renderPolicy = {
+      converter: "gotenberg-chromium",
+      compiler: "certificate-html-template",
+      compilerVersion: compiled.compilerVersion,
+    };
+    const renderMetadata = {
+      compiledHtmlSha256: compiled.sha256,
+      documentSha256: selection.documentSha256,
+      signature: signed.signatureMetadata
+        ? { signed: true, signerName: signed.signatureMetadata.signerName }
+        : { signed: false },
+      renderedAt: new Date().toISOString(),
+    };
+
+    const issuedPdfR2Key = await withDbClient(env, async (client) => {
+      const insertResult = await client.query<{ pdf_r2_key: string }>(
+        `
+          insert into issued_certificate_snapshot (
+            organization_id,
+            job_id,
+            template_id,
+            template_version_id,
+            certificate_number,
+            engine,
+            compiled_html_r2_key,
+            compiled_html_sha256,
+            pdf_r2_key,
+            pdf_sha256,
+            render_policy,
+            render_metadata,
+            input_data_snapshot,
+            status,
+            issued_by
+          )
+          values ($1, $2, $3, $4, $5, 'wysiwyg', $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, 'ISSUED', $13)
+          on conflict (job_id) do nothing
+          returning pdf_r2_key
+        `,
+        [
+          job.organizationId,
+          jobId,
+          selection.templateId,
+          selection.templateVersionId,
+          job.jobId,
+          compiledHtmlR2Key,
+          compiled.sha256,
+          pdfR2Key,
+          sha256Hex(pdfBuffer),
+          JSON.stringify(renderPolicy),
           JSON.stringify(renderMetadata),
           JSON.stringify(inputDataSnapshot),
           userId,

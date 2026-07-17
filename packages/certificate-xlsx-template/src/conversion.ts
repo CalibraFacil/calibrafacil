@@ -36,7 +36,9 @@ export class GotenbergXlsxToPdfConverter implements XlsxToPdfConverter {
       throw new Error("GOTENBERG_URL is required for XLSX to PDF conversion.");
     }
 
-    this.url = url.replace(/\/$/, "");
+    // Tolerate scheme-less values (fetch() rejects them): default to https.
+    const raw = url.trim().replace(/\/$/, "");
+    this.url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     this.token = token || undefined;
   }
 

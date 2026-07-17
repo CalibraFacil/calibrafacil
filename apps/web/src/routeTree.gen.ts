@@ -21,7 +21,6 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as OnboardingOrganizationRouteImport } from './routes/onboarding/organization'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
 import { Route as DashboardCustomerSuccessRouteImport } from './routes/dashboard/customer-success'
-import { Route as DashboardCertificateTemplatesRouteImport } from './routes/dashboard/certificate-templates'
 import { Route as CheckoutTokenRouteImport } from './routes/checkout/$token'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
@@ -55,6 +54,7 @@ import { Route as DashboardMaterialsIndexRouteImport } from './routes/dashboard/
 import { Route as DashboardJobsIndexRouteImport } from './routes/dashboard/jobs/index'
 import { Route as DashboardFinanceIndexRouteImport } from './routes/dashboard/finance/index'
 import { Route as DashboardClientsIndexRouteImport } from './routes/dashboard/clients/index'
+import { Route as DashboardCertificateTemplatesIndexRouteImport } from './routes/dashboard/certificate-templates/index'
 import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/index'
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
@@ -147,6 +147,7 @@ import { Route as DashboardClientsIdInfoRouteImport } from './routes/dashboard/c
 import { Route as DashboardClientsIdComplianceRouteImport } from './routes/dashboard/clients/$id/compliance'
 import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/dashboard/clients/$id/calibrations'
 import { Route as DashboardClientsIdAssetsRouteImport } from './routes/dashboard/clients/$id/assets'
+import { Route as DashboardCertificateTemplatesTemplateIdEditorRouteImport } from './routes/dashboard/certificate-templates/$templateId/editor'
 import { Route as DashboardAssetsIdEditRouteImport } from './routes/dashboard/assets/$id/edit'
 import { Route as DashboardClientsGroupsGroupIdRouteRouteImport } from './routes/dashboard/clients/groups/$groupId/route'
 import { Route as DashboardClientsGroupsGroupIdIndexRouteImport } from './routes/dashboard/clients/groups/$groupId/index'
@@ -213,12 +214,6 @@ const DashboardCustomerSuccessRoute =
   DashboardCustomerSuccessRouteImport.update({
     id: '/customer-success',
     path: '/customer-success',
-    getParentRoute: () => DashboardRouteRoute,
-  } as any)
-const DashboardCertificateTemplatesRoute =
-  DashboardCertificateTemplatesRouteImport.update({
-    id: '/certificate-templates',
-    path: '/certificate-templates',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
 const CheckoutTokenRoute = CheckoutTokenRouteImport.update({
@@ -390,6 +385,12 @@ const DashboardClientsIndexRoute = DashboardClientsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardClientsRouteRoute,
 } as any)
+const DashboardCertificateTemplatesIndexRoute =
+  DashboardCertificateTemplatesIndexRouteImport.update({
+    id: '/certificate-templates/',
+    path: '/certificate-templates/',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 const DashboardCapaIndexRoute = DashboardCapaIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -911,6 +912,12 @@ const DashboardClientsIdAssetsRoute =
     path: '/assets',
     getParentRoute: () => DashboardClientsIdRouteRoute,
   } as any)
+const DashboardCertificateTemplatesTemplateIdEditorRoute =
+  DashboardCertificateTemplatesTemplateIdEditorRouteImport.update({
+    id: '/certificate-templates/$templateId/editor',
+    path: '/certificate-templates/$templateId/editor',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 const DashboardAssetsIdEditRoute = DashboardAssetsIdEditRouteImport.update({
   id: '/edit',
   path: '/edit',
@@ -973,7 +980,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -1037,6 +1043,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/capa/': typeof DashboardCapaIndexRoute
+  '/dashboard/certificate-templates/': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/finance/': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
@@ -1053,6 +1060,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
+  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1103,7 +1111,6 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -1162,6 +1169,7 @@ export interface FileRoutesByTo {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
   '/dashboard/capa': typeof DashboardCapaIndexRoute
+  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients': typeof DashboardClientsIndexRoute
   '/dashboard/finance': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs': typeof DashboardJobsIndexRoute
@@ -1177,6 +1185,7 @@ export interface FileRoutesByTo {
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
   '/dashboard/visits': typeof DashboardVisitsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
+  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1244,7 +1253,6 @@ export interface FileRoutesById {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -1308,6 +1316,7 @@ export interface FileRoutesById {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/capa/': typeof DashboardCapaIndexRoute
+  '/dashboard/certificate-templates/': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/finance/': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
@@ -1324,6 +1333,7 @@ export interface FileRoutesById {
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
+  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1392,7 +1402,6 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/checkout/$token'
-    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1456,6 +1465,7 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
     | '/dashboard/capa/'
+    | '/dashboard/certificate-templates/'
     | '/dashboard/clients/'
     | '/dashboard/finance/'
     | '/dashboard/jobs/'
@@ -1472,6 +1482,7 @@ export interface FileRouteTypes {
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
+    | '/dashboard/certificate-templates/$templateId/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -1522,7 +1533,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/checkout/$token'
-    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1581,6 +1591,7 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets'
     | '/dashboard/capa'
+    | '/dashboard/certificate-templates'
     | '/dashboard/clients'
     | '/dashboard/finance'
     | '/dashboard/jobs'
@@ -1596,6 +1607,7 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/dashboard/visits'
     | '/dashboard/assets/$id/edit'
+    | '/dashboard/certificate-templates/$templateId/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -1662,7 +1674,6 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/checkout/$token'
-    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1726,6 +1737,7 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
     | '/dashboard/capa/'
+    | '/dashboard/certificate-templates/'
     | '/dashboard/clients/'
     | '/dashboard/finance/'
     | '/dashboard/jobs/'
@@ -1742,6 +1754,7 @@ export interface FileRouteTypes {
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
+    | '/dashboard/certificate-templates/$templateId/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -1881,13 +1894,6 @@ declare module '@tanstack/react-router' {
       path: '/customer-success'
       fullPath: '/dashboard/customer-success'
       preLoaderRoute: typeof DashboardCustomerSuccessRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/certificate-templates': {
-      id: '/dashboard/certificate-templates'
-      path: '/certificate-templates'
-      fullPath: '/dashboard/certificate-templates'
-      preLoaderRoute: typeof DashboardCertificateTemplatesRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/checkout/$token': {
@@ -2120,6 +2126,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/clients/'
       preLoaderRoute: typeof DashboardClientsIndexRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
+    }
+    '/dashboard/certificate-templates/': {
+      id: '/dashboard/certificate-templates/'
+      path: '/certificate-templates'
+      fullPath: '/dashboard/certificate-templates/'
+      preLoaderRoute: typeof DashboardCertificateTemplatesIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/capa/': {
       id: '/dashboard/capa/'
@@ -2765,6 +2778,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClientsIdAssetsRouteImport
       parentRoute: typeof DashboardClientsIdRouteRoute
     }
+    '/dashboard/certificate-templates/$templateId/editor': {
+      id: '/dashboard/certificate-templates/$templateId/editor'
+      path: '/certificate-templates/$templateId/editor'
+      fullPath: '/dashboard/certificate-templates/$templateId/editor'
+      preLoaderRoute: typeof DashboardCertificateTemplatesTemplateIdEditorRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/assets/$id/edit': {
       id: '/dashboard/assets/$id/edit'
       path: '/edit'
@@ -3331,12 +3351,13 @@ interface DashboardRouteRouteChildren {
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardSpcRouteRoute: typeof DashboardSpcRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
-  DashboardCertificateTemplatesRoute: typeof DashboardCertificateTemplatesRoute
   DashboardCustomerSuccessRoute: typeof DashboardCustomerSuccessRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
+  DashboardCertificateTemplatesIndexRoute: typeof DashboardCertificateTemplatesIndexRoute
   DashboardVisitsIndexRoute: typeof DashboardVisitsIndexRoute
+  DashboardCertificateTemplatesTemplateIdEditorRoute: typeof DashboardCertificateTemplatesTemplateIdEditorRoute
   DashboardVisitsIdIndexRoute: typeof DashboardVisitsIdIndexRoute
 }
 
@@ -3360,12 +3381,15 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardSpcRouteRoute: DashboardSpcRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,
-  DashboardCertificateTemplatesRoute: DashboardCertificateTemplatesRoute,
   DashboardCustomerSuccessRoute: DashboardCustomerSuccessRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardSyncConflictsRoute: DashboardSyncConflictsRoute,
+  DashboardCertificateTemplatesIndexRoute:
+    DashboardCertificateTemplatesIndexRoute,
   DashboardVisitsIndexRoute: DashboardVisitsIndexRoute,
+  DashboardCertificateTemplatesTemplateIdEditorRoute:
+    DashboardCertificateTemplatesTemplateIdEditorRoute,
   DashboardVisitsIdIndexRoute: DashboardVisitsIdIndexRoute,
 }
 

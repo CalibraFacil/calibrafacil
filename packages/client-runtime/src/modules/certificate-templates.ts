@@ -168,5 +168,53 @@ export function createCertificateTemplatesApi(
         "Falha ao atribuir template",
       );
     },
+    // ---- wysiwyg engine (epic wysiwyg, spec 02 §6.1) ----
+    async getWysiwygDocument<TResponse = unknown>(
+      templateId: string | number,
+      versionId: string | number,
+    ) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${templateId}/versions/${versionId}/document`,
+        { method: "GET" },
+        "Falha ao carregar o documento do modelo",
+      );
+    },
+    async getPlaceholderCatalog<TResponse = unknown>() {
+      return fetchJson<TResponse>(
+        "/api/certificate-templates/placeholder-catalog",
+        { method: "GET" },
+        "Falha ao carregar o catálogo de campos",
+      );
+    },
+    async saveWysiwygDocument<TResponse = unknown>(
+      templateId: string | number,
+      versionId: string | number,
+      input: { documentJson: Record<string, unknown> },
+    ) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${templateId}/versions/${versionId}/document`,
+        { method: "PUT", body: JSON.stringify(input) },
+        "Falha ao salvar o documento do modelo",
+      );
+    },
+    async validateWysiwygDocument<TResponse = unknown>(
+      templateId: string | number,
+      versionId: string | number,
+    ) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${templateId}/versions/${versionId}/validate-document`,
+        { method: "POST" },
+        "Falha ao validar o documento do modelo",
+      );
+    },
+    async createWysiwygVersion<TResponse = unknown>(
+      templateId: string | number,
+    ) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${templateId}/versions/wysiwyg`,
+        { method: "POST" },
+        "Falha ao criar nova versão do modelo",
+      );
+    },
   };
 }

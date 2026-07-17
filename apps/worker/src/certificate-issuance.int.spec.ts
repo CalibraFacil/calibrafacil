@@ -83,6 +83,10 @@ vi.mock("@calibra-facil/certificate-xlsx-template", async (importOriginal) => {
     ExcelTsCertificateWorkbookEngine: FakeWorkbookEngine,
     GotenbergXlsxToPdfConverter: FakeConverter,
     LocalLibreOfficeXlsxToPdfConverter: FakeConverter,
+    // Since #764 the worker resolves its converter through this factory, whose
+    // internal `new LocalLibreOffice...` closes over the REAL class — overriding
+    // the class exports above no longer intercepts it, so mock the factory too.
+    createConfiguredXlsxToPdfConverter: () => new FakeConverter(),
   };
 });
 

@@ -1,0 +1,186 @@
+/* On-screen fonts matching the embedded print families (reframe T21). */
+@import '@fontsource/source-sans-3/400.css';
+@import '@fontsource/source-sans-3/600.css';
+@import '@fontsource/source-sans-3/700.css';
+@import '@fontsource/source-serif-4/400.css';
+@import '@fontsource/source-serif-4/600.css';
+@import '@fontsource/source-serif-4/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+
+/* Editor chrome for the wysiwyg certificate-template editor (epic wysiwyg).
+   T17: the content area is an A4 "paper" styled by the REAL print CSS
+   (injected scoped by certificate-editor.tsx); rules here cover only the
+   chrome around it and the editor-only affordances. */
+
+.cf-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cf-editor__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+  background: hsl(var(--muted) / 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.cf-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.cf-editor__toolbar-divider {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: hsl(var(--border));
+}
+
+.cf-editor__bar > button:last-child {
+  margin-left: auto;
+}
+
+/* A4 paper: real page width + the real print margins as padding
+   (CERTIFICATE_PDF_MARGINS: 16mm top, 15mm sides, 18mm bottom). */
+.cf-editor__paper {
+  overflow-x: auto;
+  padding: 1.5rem 0.5rem 2rem;
+  background: hsl(var(--muted) / 0.45);
+  border-radius: 1rem;
+}
+
+/* Base text styles the print stylesheet declares on `body` — a nested body
+   selector matches nothing, so the page frame carries them itself. Tokens are
+   injected inline by certificate-editor.tsx (CERTIFICATE_CSS_TOKENS). */
+.cf-page {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 16mm 15mm 18mm 15mm;
+  background: #fff;
+  font-family: var(--font-body, 'Source Sans 3', system-ui, sans-serif);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ink, #161e2c);
+  -webkit-font-smoothing: antialiased;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.07),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    0 24px 48px -12px rgba(15, 23, 42, 0.22);
+}
+
+.cf-page--readonly {
+  opacity: 0.96;
+}
+
+.cf-page .ProseMirror {
+  outline: none;
+  min-height: 240mm;
+}
+
+/* Inline typed placeholder chips */
+.cf-page .cf-placeholder {
+  display: inline;
+  border-radius: 0.25rem;
+  padding: 0 0.2em;
+  background: rgba(37, 99, 235, 0.1);
+  color: rgb(29, 78, 216);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+/* Sample-data view: chips read as certificate text, faint tint marks origin */
+.cf-page .cf-placeholder--value {
+  font-family: inherit;
+  color: inherit;
+  background: rgba(37, 99, 235, 0.07);
+  box-shadow: inset 0 -1.5px 0 rgba(37, 99, 235, 0.35);
+}
+
+.cf-page .cf-placeholder--invalid {
+  background: rgba(220, 38, 38, 0.12);
+  color: rgb(185, 28, 28);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.45);
+}
+
+/* Sealed locked blocks: slim header strip + the REAL rendered content */
+.cf-locked-block-view {
+  position: relative;
+  border-radius: 0.375rem;
+  margin: 0 0 3mm;
+  cursor: grab;
+}
+
+.cf-locked-block-view:active {
+  cursor: grabbing;
+}
+
+.cf-locked-block-view__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: rgb(100, 116, 139);
+  border-bottom: 1px dashed rgba(100, 116, 139, 0.35);
+  padding: 0.125rem 0.25rem;
+  margin-bottom: 1.5mm;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.cf-locked-block-view:hover .cf-locked-block-view__header,
+.cf-locked-block-view.ProseMirror-selectednode .cf-locked-block-view__header {
+  opacity: 1;
+}
+
+.cf-locked-block-view__lock {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(100, 116, 139);
+}
+
+.cf-locked-block-view__label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-locked-block-view__hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cf-locked-block-view__body {
+  pointer-events: none;
+}
+
+.cf-locked-block-view__fallback {
+  font-size: 0.75rem;
+  color: rgb(100, 116, 139);
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+
+.cf-locked-block-view.ProseMirror-selectednode {
+  outline: 2px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}

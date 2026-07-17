@@ -708,6 +708,13 @@
       "when": 1784563500000,
       "tag": "0100_accredited_scope_valid_until_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1784563600000,
+      "tag": "0101_certificate_template_wysiwyg_engine",
+      "breakpoints": true
     }
   ]
 }

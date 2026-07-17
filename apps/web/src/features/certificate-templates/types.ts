@@ -46,8 +46,10 @@ export interface XlsxVersionSummary {
   templateId: number
   version: number
   status: string
-  xlsxSha256: string
-  bindingManifestSha256: string
+  engine?: 'xlsx' | 'wysiwyg'
+  documentSha256?: string | null
+  xlsxSha256: string | null
+  bindingManifestSha256: string | null
   sheetCount?: number
   placeholderCount?: number
   warningCount?: number
@@ -108,4 +110,43 @@ export type XlsxAssignmentOption = {
   id: number
   label: string
   detail?: string | null
+}
+
+// ---- wysiwyg engine (epic wysiwyg) ----
+
+export interface PlaceholderCatalogEntry {
+  path: string
+  label: string
+  group: string
+  type: 'text' | 'number' | 'date' | 'boolean'
+  source: string
+  required: boolean
+  format: string
+  instrumentSpecific?: boolean
+}
+
+export interface PlaceholderCatalogResponse {
+  items: PlaceholderCatalogEntry[]
+  lockedBlocks: string[]
+  compilerVersion: string
+}
+
+export interface WysiwygVersionDetail {
+  id: number
+  templateId: number
+  version: number
+  status: string
+  engine: 'wysiwyg'
+  documentJson: Record<string, unknown>
+  documentSha256: string
+  validationResult: {
+    ok?: boolean
+    issues?: Array<{ path: string; message: string }>
+  } | null
+  publishedAt: string | null
+  updatedAt: string | null
+}
+
+export interface WysiwygDocumentResponse {
+  item: WysiwygVersionDetail
 }
