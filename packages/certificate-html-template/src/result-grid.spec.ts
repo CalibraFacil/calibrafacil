@@ -137,3 +137,114 @@ describe("real-certificate calibration (Exemplo FOR 50/51 ground truth)", () => 
     expect(keys).not.toContain("u_combinada_antes");
   });
 });
+
+describe("phase-split grids + calc-input column exclusion (calibration follow-up)", () => {
+  const taggedExemploShaped = {
+    methodSnapshot: {
+      dataFields: [
+        {
+          key: "pontos_indicacao",
+          label: "Resultados de indicação",
+          type: "table",
+          columns: [
+            { key: "valor_padrao", label: "Valor convencional", unit: "g" },
+            // calc inputs the certificate must not print (opt-out flag)
+            { key: "erro_maximo_pesos", label: "Erro máximo dos pesos", unit: "g", includeInCertificate: false },
+            { key: "antes_leitura_1", label: "Leitura 1", unit: "g", phase: "before" },
+            { key: "apos_leitura_1", label: "Leitura 1", unit: "g", phase: "after" },
+          ],
+        },
+      ],
+      formulas: [
+        {
+          outputKey: "media_indicacao_antes",
+          label: "Média",
+          unit: "g",
+          scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+          reporting: { role: "primary_result", group: "calibration_result", includeInCertificate: true, phase: "before" },
+        },
+        {
+          outputKey: "incerteza_expandida_antes",
+          label: "Incerteza expandida",
+          unit: "g",
+          scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+          reporting: { role: "expanded_uncertainty", group: "calibration_result", includeInCertificate: true, phase: "before" },
+        },
+        {
+          outputKey: "media_indicacao_apos",
+          label: "Média",
+          unit: "g",
+          scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+          reporting: { role: "primary_result", group: "calibration_result", includeInCertificate: true, phase: "after" },
+        },
+      ],
+    },
+    data: {
+      pontos_indicacao: [
+        {
+          valor_padrao: 100,
+          erro_maximo_pesos: 0.005,
+          antes_leitura_1: 100.001,
+          apos_leitura_1: 100.0,
+        },
+      ],
+    },
+    results: {
+      media_indicacao_antes: [100.001],
+      incerteza_expandida_antes: [0.002],
+      media_indicacao_apos: [100.0],
+    },
+  };
+
+  it("phase-tagged formulas split into como-recebido / após-ajuste tables", () => {
+    const grids = deriveResultGrids(taggedExemploShaped);
+    expect(grids).toHaveLength(2);
+    const [antes, apos] = grids;
+    expect(antes?.phase).toBe("before");
+    expect(antes?.title).toBe("Resultados de indicação — antes do ajuste");
+    expect(antes?.columns.map((column) => column.key)).toEqual([
+      "valor_padrao",
+      "antes_leitura_1",
+      "media_indicacao_antes",
+      "incerteza_expandida_antes",
+    ]);
+    expect(apos?.phase).toBe("after");
+    expect(apos?.columns.map((column) => column.key)).toEqual([
+      "valor_padrao",
+      "apos_leitura_1",
+      "media_indicacao_apos",
+    ]);
+    // rows align per grid
+    expect(antes?.rows[0]).toEqual([100, 100.001, 100.001, 0.002]);
+    expect(apos?.rows[0]).toEqual([100, 100.0, 100.0]);
+  });
+
+  it("columns with includeInCertificate=false never print", () => {
+    const grids = deriveResultGrids(taggedExemploShaped);
+    for (const grid of grids) {
+      expect(grid.columns.map((column) => column.key)).not.toContain(
+        "erro_maximo_pesos",
+      );
+    }
+  });
+
+  it("untagged methods keep the single wide grid (phase null)", () => {
+    const untagged = JSON.parse(JSON.stringify(taggedExemploShaped));
+    for (const formula of untagged.methodSnapshot.formulas) {
+      delete formula.reporting.phase;
+    }
+    const grids = deriveResultGrids(untagged);
+    expect(grids).toHaveLength(1);
+    expect(grids[0]?.phase).toBeNull();
+  });
+
+  it("hiddenColumns still applies inside split grids", () => {
+    const grids = deriveResultGrids(taggedExemploShaped, {
+      hiddenColumns: ["incerteza_expandida_antes"],
+    });
+    const antes = grids.find((grid) => grid.phase === "before");
+    expect(antes?.columns.map((column) => column.key)).not.toContain(
+      "incerteza_expandida_antes",
+    );
+  });
+});

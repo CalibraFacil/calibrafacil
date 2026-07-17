@@ -33,6 +33,7 @@ export interface MethodDraftTableColumn {
   unit?: string
   role?: 'standard_value' | 'mass_standard_composition'
   quantityKind?: MethodDraftQuantityKind
+  includeInCertificate?: boolean
   massComposition?: {
     targetUnit?: 'mg' | 'g' | 'kg'
     optionSource?: 'certified_values' | 'composition_profiles'
@@ -153,6 +154,7 @@ export interface MethodDraftFormula {
       | 'uncertainty_component'
       | 'auxiliary'
     group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
+    phase?: 'before' | 'after'
   }
 }
 

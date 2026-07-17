@@ -91,6 +91,8 @@ export const TableColumnSchema = z
       ])
       .optional(),
     phase: z.enum(["before", "after", "always"]).optional(),
+    /** Presentation: false keeps a calc-input column out of the certificate grid. */
+    includeInCertificate: z.boolean().optional(),
     massComposition: z
       .object({
         targetUnit: z.enum(["mg", "g", "kg"]).optional(),
@@ -236,6 +238,12 @@ export const MethodFormulaSchema = z
         group: z
           .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
           .optional(),
+        /**
+         * Presentation phase for table_row outputs: lets the certificate
+         * grid split "como recebido" / "após ajuste" tables (a *_antes/_apos
+         * outputKey suffix carries no structural meaning).
+         */
+        phase: z.enum(["before", "after"]).optional(),
       })
       .strict()
       .optional(),

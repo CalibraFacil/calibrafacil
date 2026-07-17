@@ -22,6 +22,8 @@ const tableColumnSchema = z.object({
   type: z.string().optional(),
   unit: z.string().nullish(),
   phase: z.enum(["before", "after", "always"]).nullish(),
+  /** Calibration ground truth: calc-input columns opt OUT of the grid. */
+  includeInCertificate: z.boolean().nullish(),
 });
 
 const tableFieldSchema = z.object({
@@ -41,6 +43,8 @@ const tableRowFormulaSchema = z.object({
       includeInCertificate: z.boolean().nullish(),
       role: z.string().nullish(),
       group: z.string().nullish(),
+      /** Presentation phase — enables the como-recebido/após-ajuste split. */
+      phase: z.enum(["before", "after"]).nullish(),
     })
     .nullish(),
 });
@@ -77,6 +81,8 @@ export type ResultGridColumn = {
 export type ResultGrid = {
   tableKey: string;
   title: string | null;
+  /** Set when the grid is one side of a como-recebido/após-ajuste split. */
+  phase: "before" | "after" | null;
   columns: ResultGridColumn[];
   /** row-major cell values, aligned with `columns`. */
   rows: (string | number | null)[][];
@@ -130,7 +136,10 @@ export function deriveResultGrids(
     if (!Array.isArray(tableRows) || tableRows.length === 0) continue;
 
     const inputColumns: ResultGridColumn[] = (field.columns ?? [])
-      .filter((column) => !hidden.has(column.key))
+      .filter(
+        (column) =>
+          column.includeInCertificate !== false && !hidden.has(column.key),
+      )
       .map((column) => ({
         key: column.key,
         label: column.label,
@@ -140,37 +149,29 @@ export function deriveResultGrids(
         role: null,
       }));
 
-    const computedColumns: ResultGridColumn[] = rowFormulas
-      .filter(
-        (formula) =>
-          formula.scope.tableKey === field.key &&
-          formula.reporting?.includeInCertificate !== false &&
-          !isBudgetInternal(formula.reporting) &&
-          !hidden.has(formula.outputKey),
-      )
-      .map((formula) => ({
+    const tableFormulas = rowFormulas.filter(
+      (formula) =>
+        formula.scope.tableKey === field.key &&
+        formula.reporting?.includeInCertificate !== false &&
+        !isBudgetInternal(formula.reporting) &&
+        !hidden.has(formula.outputKey),
+    );
+    const computedColumns: ResultGridColumn[] = tableFormulas.map(
+      (formula) => ({
         key: formula.outputKey,
         label: formula.label ?? formula.outputKey,
         unit: formula.unit ?? null,
         kind: "computed",
-        phase: "always",
+        phase: formula.reporting?.phase ?? "always",
         role: formula.reporting?.role ?? null,
-      }));
+      }),
+    );
 
-    // Stable order: always-phase inputs, as-found inputs, as-left inputs,
-    // then computed columns in method order.
-    const columns = [
-      ...inputColumns.sort(
-        (left, right) =>
-          (PHASE_ORDER[left.phase] ?? 0) - (PHASE_ORDER[right.phase] ?? 0),
-      ),
-      ...computedColumns,
-    ];
-    if (columns.length === 0) continue;
-
-    const rows: (string | number | null)[][] = tableRows.map(
-      (row, rowIndex) => {
-        return columns.map((column) => {
+    const buildRows = (
+      columns: ResultGridColumn[],
+    ): (string | number | null)[][] =>
+      tableRows.map((row, rowIndex) =>
+        columns.map((column) => {
           if (column.kind === "input") {
             const value = isRecord(row) ? Reflect.get(row, column.key) : null;
             return typeof value === "number" || typeof value === "string"
@@ -184,15 +185,76 @@ export function deriveResultGrids(
           return typeof value === "number" || typeof value === "string"
             ? value
             : null;
-        });
-      },
+        }),
+      );
+
+    // Phase split (real-certificate calibration follow-up): when the method
+    // tags computed columns with a presentation phase, render SEPARATE
+    // como-recebido / após-ajuste tables — the shape real accredited
+    // certificates use — instead of one before+after-wide grid. Untagged
+    // methods keep the single grid unchanged.
+    const taggedPhases = new Set(
+      computedColumns
+        .filter((column) => column.phase === "before" || column.phase === "after")
+        .map((column) => column.phase),
     );
+
+    if (taggedPhases.size > 0) {
+      const phaseTitles: Record<"before" | "after", string> = {
+        before: "antes do ajuste",
+        after: "após o ajuste",
+      };
+      for (const phase of ["before", "after"] as const) {
+        const phaseInputs = inputColumns.filter(
+          (column) => column.phase === "always" || column.phase === phase,
+        );
+        const phaseComputed = computedColumns.filter(
+          (column) => column.phase === "always" || column.phase === phase,
+        );
+        // A side with no phase-specific content at all is not emitted
+        // (e.g. a method that only reports the as-found state).
+        const hasPhaseContent =
+          phaseComputed.some((column) => column.phase === phase) ||
+          phaseInputs.some((column) => column.phase === phase);
+        if (!hasPhaseContent) continue;
+        const columns = [
+          ...phaseInputs.sort(
+            (left, right) =>
+              (PHASE_ORDER[left.phase] ?? 0) - (PHASE_ORDER[right.phase] ?? 0),
+          ),
+          ...phaseComputed,
+        ];
+        if (columns.length === 0) continue;
+        grids.push({
+          tableKey: field.key,
+          title: field.label
+            ? `${field.label} — ${phaseTitles[phase]}`
+            : phaseTitles[phase],
+          phase,
+          columns,
+          rows: buildRows(columns),
+        });
+      }
+      continue;
+    }
+
+    // Stable order: always-phase inputs, as-found inputs, as-left inputs,
+    // then computed columns in method order.
+    const columns = [
+      ...inputColumns.sort(
+        (left, right) =>
+          (PHASE_ORDER[left.phase] ?? 0) - (PHASE_ORDER[right.phase] ?? 0),
+      ),
+      ...computedColumns,
+    ];
+    if (columns.length === 0) continue;
 
     grids.push({
       tableKey: field.key,
       title: field.label ?? null,
+      phase: null,
       columns,
-      rows,
+      rows: buildRows(columns),
     });
   }
   return grids;

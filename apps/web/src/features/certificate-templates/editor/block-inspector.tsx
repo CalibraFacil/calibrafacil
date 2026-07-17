@@ -343,7 +343,18 @@ function ResultsGridControls({
   layout: CertificateBlockLayout
 }) {
   // Full column universe (ignoring current hides) so re-enabling is possible.
+  // Phase-split grids repeat their shared columns (e.g. the nominal value) —
+  // hiding is by column KEY across every grid, so dedupe the checkbox list.
   const grids = deriveResultGrids(EDITOR_SAMPLE_DATA)
+  const seenColumns = new Set<string>()
+  const columnRows = grids.flatMap((grid) =>
+    grid.columns.flatMap((column) => {
+      const dedupeKey = `${grid.tableKey}:${column.key}`
+      if (seenColumns.has(dedupeKey)) return []
+      seenColumns.add(dedupeKey)
+      return [{ grid, column, dedupeKey }]
+    }),
+  )
   const hidden = new Set(layout.hiddenColumns ?? [])
 
   return (
@@ -353,10 +364,9 @@ function ResultsGridControls({
           Colunas da tabela de pontos
         </div>
         <div className="flex flex-col gap-1">
-          {grids.flatMap((grid) =>
-            grid.columns.map((column) => (
+          {columnRows.map(({ column, dedupeKey }) => (
               <label
-                key={`${grid.tableKey}:${column.key}`}
+                key={dedupeKey}
                 className="flex items-center gap-2 text-xs"
               >
                 <Checkbox
@@ -379,8 +389,7 @@ function ResultsGridControls({
                   </span>
                 )}
               </label>
-            )),
-          )}
+          ))}
         </div>
       </div>
       <label className="flex flex-col gap-1 text-xs">

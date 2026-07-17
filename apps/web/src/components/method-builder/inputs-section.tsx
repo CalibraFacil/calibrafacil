@@ -672,6 +672,17 @@ function TableColumnsEditor({
               }
             />
           </div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={column.includeInCertificate !== false}
+              onCheckedChange={(checked) =>
+                updateColumn(index, {
+                  includeInCertificate: checked === true ? undefined : false,
+                })
+              }
+            />
+            Incluir no certificado (desmarque colunas de cálculo interno)
+          </label>
           {column.type === 'number' && (
             <div className="md:max-w-xs">
               <QuantityKindField

@@ -193,6 +193,7 @@ export type TableColumn = {
     | "resolution"
     | "other";
   phase?: CalibrationPhase | "always";
+  includeInCertificate?: boolean;
   massComposition?: {
     targetUnit?: "mg" | "g" | "kg";
     optionSource?: "certified_values" | "composition_profiles";
@@ -297,6 +298,7 @@ export type MethodFormula = {
       | "uncertainty_component"
       | "auxiliary";
     group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+    phase?: CalibrationPhase;
   };
   metadata?: SafeMetadata;
 };

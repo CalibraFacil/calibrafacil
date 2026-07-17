@@ -48,6 +48,12 @@ function parseReportingGroup(
   }
 }
 
+function parseReportingPhase(
+  value: string | null,
+): NonNullable<MethodDraftFormula['reporting']>['phase'] {
+  return value === 'before' || value === 'after' ? value : undefined
+}
+
 function parseReportingRole(
   value: string | null,
 ): NonNullable<MethodDraftFormula['reporting']>['role'] {
@@ -233,6 +239,37 @@ export function FormulaEditor({
               </SelectContent>
             </Select>
           </Field>
+          {formula.scope?.kind === 'table_row' && (
+            <Field label="Fase no certificado">
+              <Select
+                value={formula.reporting.phase ?? 'none'}
+                onValueChange={(value) =>
+                  onChange({
+                    reporting: {
+                      ...formula.reporting,
+                      includeInCertificate: true,
+                      phase: parseReportingPhase(value),
+                    },
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <span>
+                    {formula.reporting.phase === 'before'
+                      ? 'Antes do ajuste'
+                      : formula.reporting.phase === 'after'
+                        ? 'Após o ajuste'
+                        : 'Sem fase (tabela única)'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem fase (tabela única)</SelectItem>
+                  <SelectItem value="before">Antes do ajuste</SelectItem>
+                  <SelectItem value="after">Após o ajuste</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
         </div>
       )}
     </div>
