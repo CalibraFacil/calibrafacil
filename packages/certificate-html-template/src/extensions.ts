@@ -196,6 +196,9 @@ export function certificateEditorExtensions(): Extensions {
       underline: false,
       horizontalRule: {},
       heading: { levels: [1, 2, 3, 4] },
+      // Editor-only visual: a clear insertion bar while dragging blocks
+      // (no effect on compiled output).
+      dropcursor: { color: "var(--accent, #1F3A5F)", width: 3 },
     }),
     Table,
     TableRow,

@@ -550,3 +550,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── empty-paragraph hint (Placeholder ext, editable drafts only) ── */
+.cf-page p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: rgb(100, 116, 139);
+  opacity: 0.7;
+  pointer-events: none;
+  font-size: 9pt;
+}

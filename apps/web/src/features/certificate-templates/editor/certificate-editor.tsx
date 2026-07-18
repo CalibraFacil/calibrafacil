@@ -17,6 +17,7 @@ import {
 import { NodeSelection } from '@tiptap/pm/state'
 import { toast } from 'sonner'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
+import Placeholder from '@tiptap/extension-placeholder'
 
 /**
  * MUST be render-stable: DragHandle re-registers its ProseMirror plugin when
@@ -25,6 +26,24 @@ import { DragHandle } from '@tiptap/extension-drag-handle-react'
  * which silently killed the '/' and {{ suggestion menus.
  */
 const DRAG_HANDLE_POSITION = { placement: 'left-start' } as const
+
+/**
+ * Slim drag preview: clone only these CSS props onto the browser drag image
+ * so dragging reads as a light outline, not a full-block screenshot.
+ * MUST be render-stable (same rule as DRAG_HANDLE_POSITION).
+ */
+const DRAG_IMAGE_PROPERTIES = ['width', 'opacity', 'border-radius', 'background']
+
+/**
+ * Empty-paragraph hint. TipTap's Placeholder extension is renamed on extend —
+ * its default name collides with our `placeholder` FIELD node.
+ */
+const EmptyParagraphHint = Placeholder.extend({ name: 'cfEmptyHint' }).configure(
+  {
+    placeholder: "Digite '/' para inserir um bloco ou '{{' para um campo",
+    showOnlyWhenEditable: true,
+  },
+)
 import type { EditorView } from '@tiptap/pm/view'
 import {
   BandPageFooter,
@@ -584,6 +603,7 @@ function editorExtensions() {
     LockedBlockGuard,
     FieldSuggestion,
     SlashMenu,
+    EmptyParagraphHint,
   ]
 }
 
@@ -911,6 +931,7 @@ export function CertificateEditor({
           <DragHandle
             editor={editor}
             computePositionConfig={DRAG_HANDLE_POSITION}
+            dragImageProperties={DRAG_IMAGE_PROPERTIES}
             onNodeChange={handleHoverNodeChange}
           >
             <div className="cf-gutter-handles">
