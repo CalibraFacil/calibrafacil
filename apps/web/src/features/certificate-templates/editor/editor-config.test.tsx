@@ -8,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import type { Editor } from '@tiptap/react'
 import {
@@ -303,6 +304,57 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     const json = editor.getJSON()
     expect(JSON.stringify(json)).toContain('"colspan":2')
     expect(validateCertificateDocument(json).ok).toBe(true)
+  })
+
+  it('in-context config: the pill opens a popover on the block and edits apply without closing it', async () => {
+    const editor = await mountWithInspector()
+    const pill = screen.getByRole('button', {
+      name: 'Configurar Tabela de resultados',
+    })
+    fireEvent.click(pill)
+    await waitFor(() => {
+      expect(screen.getByTestId('block-config-popover')).toBeDefined()
+    })
+    // opening the popover selected the block (sidebar + outline stay in sync)
+    const selection = editor.state.selection
+    expect('node' in selection && selection.node?.attrs?.blockKey).toBe(
+      'results_table',
+    )
+    // toggle a column INSIDE the popover — the edit applies and the popover
+    // must survive (mutation handlers no longer refocus the editor)
+    const popover = screen.getByTestId('block-config-popover')
+    const checkbox = within(popover).getByLabelText('Indicação como recebido')
+    fireEvent.click(checkbox)
+    await waitFor(() => {
+      const layout = blockLayout(editor, 'results_table')
+      expect(
+        layout && typeof layout === 'object'
+          ? Reflect.get(layout, 'hiddenColumns')
+          : null,
+      ).toEqual(['leitura_antes'])
+    })
+    expect(screen.getByTestId('block-config-popover')).toBeDefined()
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
+  it('band lanes expose the same in-context pill', async () => {
+    await mountWithInspector()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Configurar Identificação no topo' }),
+    )
+    await waitFor(() => {
+      const popover = screen.getByTestId('block-config-popover')
+      expect(
+        within(popover).getByRole('checkbox', { name: 'Acreditação em texto' }),
+      ).toBeDefined()
+    })
+  })
+
+  it('blocks with nothing to configure show no pill', async () => {
+    await mountWithInspector()
+    expect(
+      screen.queryByRole('button', { name: 'Configurar QR de verificação' }),
+    ).toBeNull()
   })
 
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
