@@ -602,6 +602,28 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
+  it('block actions menu moves a block by keyboard-reachable UI', async () => {
+    const editor = await mountWithInspector()
+    const orderOf = () =>
+      (editor.getJSON().content ?? []).map((block) =>
+        block.type === 'lockedBlock'
+          ? String(block.attrs?.blockKey)
+          : String(block.type),
+      )
+    const before = orderOf()
+    const resultsIndex = before.indexOf('results_table')
+
+    const trigger = screen.getByLabelText(
+      'Ações do bloco Tabela de resultados',
+    )
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByText('Mover para cima (Alt+↑)'))
+    await waitFor(() => {
+      expect(orderOf().indexOf('results_table')).toBe(resultsIndex - 1)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
   it('Alt+Arrow moves the selected block; bands stay pinned; doc stays valid', async () => {
     const editor = await mountWithInspector()
     const orderOf = () =>

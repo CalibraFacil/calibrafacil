@@ -127,6 +127,7 @@ import {
   ViewIcon,
   ViewOffIcon,
   DragDropVerticalIcon,
+  MoreVerticalCircle01Icon,
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
@@ -355,6 +356,73 @@ function LockedBlockView(props: NodeViewProps) {
           >
             <HugeiconsIcon icon={Delete02Icon} size={12} strokeWidth={2} />
           </button>
+        )}
+        {props.editor.isEditable && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="cf-config-pill"
+                  aria-label={`Ações do bloco ${label}`}
+                  title="Ações do bloco (teclado)"
+                  onMouseDown={(event) => {
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    selectSelf()
+                  }}
+                >
+                  <HugeiconsIcon
+                    icon={MoreVerticalCircle01Icon}
+                    size={12}
+                    strokeWidth={2}
+                  />
+                </button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  const pos = props.getPos()
+                  if (typeof pos !== 'number') return
+                  const after = pos + props.node.nodeSize
+                  props.editor
+                    .chain()
+                    .focus()
+                    .insertContentAt(after, { type: 'paragraph' })
+                    .setTextSelection(after + 1)
+                    .insertContent('/')
+                    .scrollIntoView()
+                    .run()
+                }}
+              >
+                Inserir bloco abaixo
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  selectSelf()
+                  moveTopLevelBlock(props.editor.view, -1)
+                }}
+              >
+                Mover para cima (Alt+↑)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  selectSelf()
+                  moveTopLevelBlock(props.editor.view, 1)
+                }}
+              >
+                Mover para baixo (Alt+↓)
+              </DropdownMenuItem>
+              {isOptional && (
+                <DropdownMenuItem onClick={removeSelf}>
+                  Remover bloco
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         {props.editor.isEditable && lockedBlockHasConfig(blockKey) && (
           <ConfigPill
