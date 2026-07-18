@@ -29,6 +29,7 @@ import { certificateEditorExtensions } from "./extensions.js";
 import { buildCertificateFontCss } from "./fonts.js";
 import {
   CERTIFICATE_PRINT_CSS,
+  certificateStyleTokenOverrides,
   certificateThemeClass,
   certificateThemeTokens,
 } from "./print-css.js";
@@ -215,7 +216,7 @@ export async function compileCertificateHtml(
 <meta charset="utf-8" />
 <title>Certificado ${escapeHtml(certificateNumber)}</title>
 <style>${buildCertificateFontCss(theme)}
-:root{${certificateThemeTokens(theme)}}
+:root{${certificateThemeTokens(theme)}${certificateStyleTokenOverrides(document.attrs.styleTokens)}}
 ${CERTIFICATE_PRINT_CSS}</style>
 </head>
 <body class="cf-certificate ${certificateThemeClass(theme)}">

@@ -104,6 +104,35 @@ describe('editor config UI (T24)', () => {
     })
   })
 
+  it('style tokens: swatch + text-scale write doc attrs.styleTokens; doc stays valid', async () => {
+    const editor = await mountWithInspector()
+
+    fireEvent.click(screen.getByLabelText('Cor de destaque'))
+    const swatch = await screen.findByLabelText('Vinho')
+    fireEvent.click(swatch)
+    await waitFor(() => {
+      expect(editor.getJSON().attrs?.styleTokens?.accent).toBe('#7A1F1F')
+    })
+
+    fireEvent.change(screen.getByLabelText('Tamanho do texto'), {
+      target: { value: '1.1' },
+    })
+    await waitFor(() => {
+      expect(editor.getJSON().attrs?.styleTokens?.fontScale).toBe(1.1)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+
+    // resetting both returns the attr to null (additive default)
+    fireEvent.change(screen.getByLabelText('Tamanho do texto'), {
+      target: { value: '1' },
+    })
+    fireEvent.click(await screen.findByText('Usar cor padrão do registro'))
+    await waitFor(() => {
+      expect(editor.getJSON().attrs?.styleTokens ?? null).toBeNull()
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
   it('results inspector: hiding a column writes layout.hiddenColumns; doc stays valid', async () => {
     const editor = await mountWithInspector()
     editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))

@@ -14,7 +14,10 @@
  * Constant per compiler version. Any change requires a
  * CERT_HTML_COMPILER_VERSION bump.
  */
-import type { CertificateTheme } from "./document-schema.js";
+import type {
+  CertificateStyleTokens,
+  CertificateTheme,
+} from "./document-schema.js";
 
 /**
  * Chromium print margins (Gotenberg form-field inches): 16mm top, 15mm sides,
@@ -55,6 +58,54 @@ const THEME_TOKEN_MAP: Record<CertificateTheme, string> = {
 /** Token declarations for a theme (used by :root in print, `.cf-page` in the editor). */
 export function certificateThemeTokens(theme: CertificateTheme): string {
   return THEME_TOKEN_MAP[theme];
+}
+
+/**
+ * Size tokens the `fontScale` style token multiplies, with the R3 print
+ * floors. Scaled values are rounded to one decimal and clamped at the floor,
+ * so a 0.9 scale can never undercut the legibility contract enforced by
+ * `print-css.spec.ts`.
+ */
+const SCALABLE_SIZE_TOKENS: Array<{
+  token: string;
+  basePt: number;
+  floorPt: number;
+}> = [
+  { token: "--size-body", basePt: 10, floorPt: 10 },
+  { token: "--size-cell", basePt: 9, floorPt: 9 },
+  { token: "--size-label", basePt: 8.5, floorPt: 8.5 },
+  { token: "--size-caption", basePt: 8, floorPt: 8 },
+  { token: "--size-h1", basePt: 17, floorPt: 10 },
+  { token: "--size-h2", basePt: 12, floorPt: 10 },
+  { token: "--size-h3", basePt: 10.5, floorPt: 10 },
+  { token: "--size-certno", basePt: 13, floorPt: 10 },
+];
+
+/**
+ * CSS custom-property OVERRIDES for the optional template style tokens.
+ * Emitted AFTER `certificateThemeTokens` so later declarations win. Returns
+ * "" when nothing deviates from the theme defaults.
+ */
+export function certificateStyleTokenOverrides(
+  styleTokens: CertificateStyleTokens | null | undefined,
+): string {
+  if (!styleTokens) return "";
+  const declarations: string[] = [];
+  if (styleTokens.accent) {
+    declarations.push(`--accent:${styleTokens.accent};`);
+  }
+  const scale = styleTokens.fontScale;
+  if (scale !== undefined && scale !== 1) {
+    for (const { token, basePt, floorPt } of SCALABLE_SIZE_TOKENS) {
+      const scaled = Math.max(
+        floorPt,
+        Math.round(basePt * scale * 10) / 10,
+      );
+      declarations.push(`${token}:${scaled}pt;`);
+    }
+  }
+  if (declarations.length === 0) return "";
+  return `\n  ${declarations.join(" ")}\n`;
 }
 
 /** Body class the compiler stamps so structural per-theme rules can hook in. */

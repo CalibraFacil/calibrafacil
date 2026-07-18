@@ -52,6 +52,25 @@ describe("compileCertificateHtml", () => {
     expect(standard.html).toContain("Source Sans 3")
   })
 
+  it("style tokens: accent + fontScale overrides land after the theme tokens", async () => {
+    const styled = clone(newWysiwygStarterDocument())
+    styled.attrs.styleTokens = { accent: "#7A1F1F", fontScale: 1.1 }
+    const compiled = await compileCertificateHtml(styled, sampleCertificateInputData)
+    expect(compiled.html).toContain("--accent:#7A1F1F;")
+    expect(compiled.html).toContain("--size-body:11pt;")
+    // override comes AFTER the theme's own --accent so it wins in the cascade
+    const themeAccent = compiled.html.indexOf("--accent:#1F3A5F")
+    const override = compiled.html.indexOf("--accent:#7A1F1F")
+    expect(themeAccent).toBeGreaterThan(-1)
+    expect(override).toBeGreaterThan(themeAccent)
+
+    const neutral = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      sampleCertificateInputData,
+    )
+    expect(neutral.html).not.toContain("--accent:#7A1F1F")
+  })
+
   it("is deterministic: 10 compiles, one sha256", async () => {
     const hashes = new Set<string>();
     for (let index = 0; index < 10; index += 1) {

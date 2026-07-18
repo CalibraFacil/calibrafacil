@@ -17,6 +17,7 @@ import {
   LockedBlock,
   LockedBlockGuard,
   certificateEditorExtensions,
+  certificateStyleTokenOverrides,
   certificateThemeClass,
   certificateThemeTokens,
   renderBandPageFooterTemplate,
@@ -26,6 +27,8 @@ import {
   CERTIFICATE_THEMES,
   type BandPageFooterNode,
   type BandTopIdentityNode,
+  type CertificateFontScale,
+  type CertificateStyleTokens,
   type CertificateTheme,
 } from '@calibra-facil/certificate-html-template'
 
@@ -605,6 +608,9 @@ export function CertificateEditor({
   const [theme, setTheme] = useState<CertificateTheme>(
     readDocumentTheme(initialDocument),
   )
+  const [styleTokens, setStyleTokens] = useState<CertificateStyleTokens | null>(
+    readDocumentStyleTokens(initialDocument),
+  )
   const editor = useEditor({
     extensions: editorExtensions(),
     content: initialDocument,
@@ -636,6 +642,7 @@ export function CertificateEditor({
     onUpdate: ({ editor: updated }) => {
       const json = updated.getJSON()
       setTheme(readDocumentTheme(json))
+      setStyleTokens(readDocumentStyleTokens(json))
       onDocumentChange?.(json)
     },
     onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
@@ -706,7 +713,7 @@ export function CertificateEditor({
             nesting. Nested :root/body selectors match nothing, so the design
             TOKENS are re-declared directly on .cf-page (base text styles live
             in certificate-editor.css). */}
-        <style>{`.cf-page{${certificateThemeTokens(theme)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
+        <style>{`.cf-page{${certificateThemeTokens(theme)}${certificateStyleTokenOverrides(styleTokens)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
         <div className="cf-editor__bar">
           {editable && <EditorToolbar editor={editor} />}
           {editable && <FieldPalette editor={editor} catalog={catalog} />}
@@ -735,6 +742,9 @@ export function CertificateEditor({
                 </NativeSelectOption>
               ))}
             </NativeSelect>
+          )}
+          {editable && (
+            <StyleTokenControls editor={editor} styleTokens={styleTokens} />
           )}
           <NativeSelect
             aria-label="Zoom da página"
@@ -1052,6 +1062,155 @@ function ToolbarButton({
       <HugeiconsIcon icon={icon} size={16} strokeWidth={1.8} />
     </Button>
   )
+}
+
+/** Curated accent swatches (no raw CSS smuggling — schema only accepts hex). */
+const ACCENT_SWATCHES: Array<{ value: string; label: string }> = [
+  { value: '#1F3A5F', label: 'Azul técnico' },
+  { value: '#111418', label: 'Grafite' },
+  { value: '#0F5132', label: 'Verde escuro' },
+  { value: '#7A1F1F', label: 'Vinho' },
+  { value: '#0E7490', label: 'Petróleo' },
+  { value: '#92400E', label: 'Âmbar escuro' },
+]
+
+const FONT_SCALE_LABELS: Record<string, string> = {
+  '0.9': 'Texto 90%',
+  '1': 'Texto 100%',
+  '1.1': 'Texto 110%',
+}
+
+function writeStyleTokens(
+  editor: Editor,
+  next: CertificateStyleTokens | null,
+) {
+  const normalized =
+    next && (next.accent || (next.fontScale !== undefined && next.fontScale !== 1))
+      ? next
+      : null
+  editor
+    .chain()
+    .focus()
+    .command(({ tr }) => {
+      tr.setDocAttribute('styleTokens', normalized)
+      return true
+    })
+    .run()
+}
+
+function StyleTokenControls({
+  editor,
+  styleTokens,
+}: {
+  editor: Editor | null
+  styleTokens: CertificateStyleTokens | null
+}) {
+  if (!editor) return null
+  const accent = styleTokens?.accent
+  const fontScale = styleTokens?.fontScale ?? 1
+  return (
+    <>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Cor de destaque"
+              className="gap-1.5 transition-[transform,background-color] active:scale-[0.96]"
+            >
+              <span
+                aria-hidden
+                className="size-3.5 rounded-full border border-black/20"
+                style={{ backgroundColor: accent ?? 'var(--accent, #1F3A5F)' }}
+              />
+              Cor
+            </Button>
+          }
+        />
+        <PopoverContent align="start" className="w-56 p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Cor de destaque
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ACCENT_SWATCHES.map((swatch) => (
+              <button
+                key={swatch.value}
+                type="button"
+                title={swatch.label}
+                aria-label={swatch.label}
+                aria-pressed={accent === swatch.value}
+                className={cn(
+                  'flex size-8 items-center justify-center rounded-full border transition-[transform,box-shadow] active:scale-[0.96]',
+                  accent === swatch.value
+                    ? 'border-foreground shadow-[0_0_0_2px_var(--background),0_0_0_3.5px_currentColor]'
+                    : 'border-black/15',
+                )}
+                style={{ backgroundColor: swatch.value }}
+                onClick={() =>
+                  writeStyleTokens(editor, {
+                    ...styleTokens,
+                    accent: swatch.value,
+                  })
+                }
+              />
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full text-xs"
+            disabled={!accent}
+            onClick={() => {
+              const next = { ...styleTokens }
+              delete next.accent
+              writeStyleTokens(editor, next)
+            }}
+          >
+            Usar cor padrão do registro
+          </Button>
+        </PopoverContent>
+      </Popover>
+      <NativeSelect
+        aria-label="Tamanho do texto"
+        value={String(fontScale)}
+        className="h-8 w-28 text-xs"
+        onChange={(event) => {
+          const parsed = Number(event.target.value)
+          const next: CertificateFontScale =
+            parsed === 0.9 ? 0.9 : parsed === 1.1 ? 1.1 : 1
+          writeStyleTokens(editor, { ...styleTokens, fontScale: next })
+        }}
+      >
+        {['0.9', '1', '1.1'].map((scale) => (
+          <NativeSelectOption key={scale} value={scale}>
+            {FONT_SCALE_LABELS[scale]}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    </>
+  )
+}
+
+function readDocumentStyleTokens(
+  documentJson: Record<string, unknown>,
+): CertificateStyleTokens | null {
+  const attrs = Reflect.get(documentJson, 'attrs')
+  const raw =
+    attrs && typeof attrs === 'object' ? Reflect.get(attrs, 'styleTokens') : null
+  if (!raw || typeof raw !== 'object') return null
+  const accentRaw = Reflect.get(raw, 'accent')
+  const scaleRaw = Reflect.get(raw, 'fontScale')
+  const tokens: CertificateStyleTokens = {}
+  if (typeof accentRaw === 'string' && /^#[0-9A-Fa-f]{6}$/.test(accentRaw)) {
+    tokens.accent = accentRaw
+  }
+  if (scaleRaw === 0.9 || scaleRaw === 1 || scaleRaw === 1.1) {
+    tokens.fontScale = scaleRaw
+  }
+  return tokens.accent || tokens.fontScale !== undefined ? tokens : null
 }
 
 function readDocumentTheme(

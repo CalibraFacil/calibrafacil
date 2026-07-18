@@ -292,6 +292,28 @@ const blockLayoutSchema = z.strictObject({
 
 export type CertificateBlockLayout = z.infer<typeof blockLayoutSchema>;
 
+/**
+ * Template-level style tokens (roadmap item 7). Additive and optional, like
+ * band slots: `accent` overrides the theme's `--accent` (curated swatches in
+ * the editor; any 6-digit hex validates), `fontScale` multiplies the `--size-*`
+ * tokens — the print floors (body 10pt / cell 9pt / label 8.5pt / caption 8pt)
+ * are clamped by the compiler, never undercut.
+ */
+export const CERTIFICATE_FONT_SCALES = [0.9, 1, 1.1] as const;
+export type CertificateFontScale = (typeof CERTIFICATE_FONT_SCALES)[number];
+
+const styleTokensSchema = z.strictObject({
+  accent: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
+  fontScale: z
+    .union([z.literal(0.9), z.literal(1), z.literal(1.1)])
+    .optional(),
+});
+
+export type CertificateStyleTokens = z.infer<typeof styleTokensSchema>;
+
 const lockedBlockNodeSchema = z.strictObject({
   type: z.literal("lockedBlock"),
   attrs: z.strictObject({
@@ -338,6 +360,7 @@ export const certificateDocumentSchema = z
     attrs: z.strictObject({
       schemaVersion: z.literal(CERTIFICATE_DOCUMENT_SCHEMA_VERSION),
       theme: z.enum(CERTIFICATE_THEMES),
+      styleTokens: styleTokensSchema.nullish(),
     }),
     // Band nodes pinned: bandTopIdentity first, bandPageFooter last, body
     // blocks in between (>= 1). Mirrors the ProseMirror doc content

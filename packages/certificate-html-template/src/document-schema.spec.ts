@@ -337,3 +337,40 @@ describe("certificateDocumentSchema", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe("styleTokens doc attr (roadmap item 7)", () => {
+  function starterWithStyleTokens(styleTokens: unknown) {
+    const document: Record<string, unknown> = JSON.parse(
+      JSON.stringify(newWysiwygStarterDocument()),
+    );
+    const attrs = document.attrs;
+    if (attrs && typeof attrs === "object") {
+      document.attrs = { ...attrs, styleTokens };
+    }
+    return document;
+  }
+
+  it("accepts curated accent + fontScale", () => {
+    const result = validateCertificateDocument(
+      starterWithStyleTokens({ accent: "#7A1F1F", fontScale: 0.9 }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts null / absent styleTokens (additive attr)", () => {
+    expect(validateCertificateDocument(starterWithStyleTokens(null)).ok).toBe(true);
+    expect(validateCertificateDocument(newWysiwygStarterDocument()).ok).toBe(true);
+  });
+
+  it("rejects a non-hex accent (no raw CSS smuggling)", () => {
+    for (const accent of ["red", "#12345", "#GGGGGG", "url(x)", "#123456;color:red"]) {
+      const result = validateCertificateDocument(starterWithStyleTokens({ accent }));
+      expect(result.ok, accent).toBe(false);
+    }
+  });
+
+  it("rejects a fontScale outside the curated steps and unknown token keys", () => {
+    expect(validateCertificateDocument(starterWithStyleTokens({ fontScale: 0.5 })).ok).toBe(false);
+    expect(validateCertificateDocument(starterWithStyleTokens({ fontFamily: "Comic Sans" })).ok).toBe(false);
+  });
+});

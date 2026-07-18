@@ -6,6 +6,7 @@ export {
 export {
   BANNED_PLACEHOLDER_SEGMENTS,
   CERTIFICATE_DOCUMENT_SCHEMA_VERSION,
+  CERTIFICATE_FONT_SCALES,
   CERTIFICATE_THEMES,
   DEFAULT_BAND_PAGE_FOOTER_ATTRS,
   DEFAULT_BAND_TOP_IDENTITY_ATTRS,
@@ -22,6 +23,8 @@ export type {
   BandTopIdentityNode,
   CertificateBlockLayout,
   CertificateDocument,
+  CertificateFontScale,
+  CertificateStyleTokens,
   CertificateTheme,
   CertificateDocumentBlock,
   CertificateDocumentIssue,
@@ -79,6 +82,7 @@ export type { CompileCertificateOptions, CompiledCertificate } from "./compile.j
 export {
   CERTIFICATE_PDF_MARGINS,
   CERTIFICATE_PRINT_CSS,
+  certificateStyleTokenOverrides,
   certificateThemeClass,
   certificateThemeTokens,
 } from "./print-css.js";

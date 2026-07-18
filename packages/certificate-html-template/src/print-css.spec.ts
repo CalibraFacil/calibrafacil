@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CERTIFICATE_THEMES } from "./document-schema.js";
 import {
   CERTIFICATE_PRINT_CSS,
+  certificateStyleTokenOverrides,
   certificateThemeTokens,
 } from "./print-css.js";
 
@@ -49,6 +50,54 @@ describe("print CSS floors (reframe R3)", () => {
         const b = parseInt(value.slice(4, 6), 16);
         const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         expect(luminance, `${theme} ${name} #${value}`).toBeLessThan(90);
+      }
+    }
+  });
+});
+
+describe("style token overrides (roadmap item 7)", () => {
+  it("returns nothing for absent or neutral tokens", () => {
+    expect(certificateStyleTokenOverrides(null)).toBe("");
+    expect(certificateStyleTokenOverrides(undefined)).toBe("");
+    expect(certificateStyleTokenOverrides({})).toBe("");
+    expect(certificateStyleTokenOverrides({ fontScale: 1 })).toBe("");
+  });
+
+  it("emits an accent override", () => {
+    expect(certificateStyleTokenOverrides({ accent: "#7A1F1F" })).toContain(
+      "--accent:#7A1F1F;",
+    );
+  });
+
+  it("fontScale 1.1 scales sizes up (one decimal)", () => {
+    const css = certificateStyleTokenOverrides({ fontScale: 1.1 });
+    expect(css).toContain("--size-body:11pt;");
+    expect(css).toContain("--size-cell:9.9pt;");
+    expect(css).toContain("--size-label:9.4pt;");
+    expect(css).toContain("--size-h1:18.7pt;");
+  });
+
+  it("fontScale 0.9 clamps at the R3 floors — nothing under 8pt, body never under 10pt", () => {
+    const css = certificateStyleTokenOverrides({ fontScale: 0.9 });
+    expect(css).toContain("--size-body:10pt;");
+    expect(css).toContain("--size-cell:9pt;");
+    expect(css).toContain("--size-label:8.5pt;");
+    expect(css).toContain("--size-caption:8pt;");
+    // headings do shrink, but stay at/above the body floor
+    expect(css).toContain("--size-h1:15.3pt;");
+    for (const match of css.matchAll(/--size-[a-z0-9]+:\s*([\d.]+)pt/g)) {
+      expect(Number(match[1])).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("themed tokens + overrides still satisfy the floor sweep", () => {
+    for (const theme of CERTIFICATE_THEMES) {
+      const css =
+        certificateThemeTokens(theme) +
+        certificateStyleTokenOverrides({ fontScale: 0.9 }) +
+        CERTIFICATE_PRINT_CSS;
+      for (const size of allFontSizesPt(css)) {
+        expect(size).toBeGreaterThanOrEqual(FLOOR_PT);
       }
     }
   });
