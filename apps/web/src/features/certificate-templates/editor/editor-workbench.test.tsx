@@ -152,10 +152,12 @@ describe('EditorWorkbench (jsdom)', () => {
     renderWorkbench()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Validar' }))
-    await waitFor(() => {
-      expect(screen.getByTestId('validation-issues')).toBeDefined()
-    })
-    expect(screen.getByText(/made\.up/)).toBeDefined()
+    // floating chip appears with the count…
+    const chip = await screen.findByTestId('validation-issues')
+    expect(chip.textContent).toContain('1 problema')
+    // …and opening it lists the mapped issues
+    fireEvent.click(chip)
+    expect(await screen.findByText(/made\.up/)).toBeDefined()
     expect(
       screen.getByRole('button', { name: 'Publicar' }).hasAttribute('disabled'),
     ).toBe(true)

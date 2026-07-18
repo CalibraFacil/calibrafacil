@@ -464,6 +464,76 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
+  it('validation issues render as inline badges on the offending block (step 3)', async () => {
+    const holder: { editor: Editor | null } = { editor: null }
+    function Harness() {
+      return (
+        <CertificateEditor
+          initialDocument={newWysiwygStarterDocument()}
+          issues={[
+            { path: 'content.8.attrs', message: 'problema no bloco de resultados' },
+          ]}
+          immediatelyRender
+          onEditorReady={(editor) => {
+            holder.editor = editor
+          }}
+        />
+      )
+    }
+    render(<Harness />)
+    await waitFor(() => {
+      if (!holder.editor) throw new Error('editor not ready')
+    })
+    const badge = await screen.findByTestId('block-issue-badge')
+    expect(badge.textContent).toBe('1')
+    const owner = badge.closest('[data-locked-block-view]')
+    expect(owner?.getAttribute('data-locked-block-view')).toBe('results_table')
+  })
+
+  it('selection dock names the selected block and opens its ConfigPill (step 4)', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))
+    const dock = await screen.findByTestId('selection-dock')
+    expect(dock.textContent).toContain('Tabela de resultados')
+    fireEvent.click(within(dock).getByRole('button', { name: 'Configurar' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('block-config-popover')).toBeDefined()
+    })
+    // non-configurable selections show no Configurar action
+    editor.commands.setNodeSelection(findLockedPos(editor, 'verification_qr'))
+    await waitFor(() => {
+      const qrDock = screen.getByTestId('selection-dock')
+      expect(qrDock.textContent).toContain('QR de verificação')
+      expect(
+        within(qrDock).queryByRole('button', { name: 'Configurar' }),
+      ).toBeNull()
+    })
+  })
+
+  it('zoom shortcuts: Ctrl+= / Ctrl+- / Ctrl+0 step and reset (step 5)', async () => {
+    await mountWithInspector()
+    const proseMirror = document.querySelector('.ProseMirror')
+    expect(proseMirror).not.toBeNull()
+    fireEvent.keyDown(proseMirror!, { key: '=', ctrlKey: true })
+    await waitFor(() => {
+      expect(
+        document.querySelector('.cf-editor__paper')?.getAttribute('data-zoom'),
+      ).toBe('125')
+    })
+    fireEvent.keyDown(proseMirror!, { key: '0', ctrlKey: true })
+    await waitFor(() => {
+      expect(
+        document.querySelector('.cf-editor__paper')?.getAttribute('data-zoom'),
+      ).toBe('100')
+    })
+    fireEvent.keyDown(proseMirror!, { key: '-', ctrlKey: true })
+    await waitFor(() => {
+      expect(
+        document.querySelector('.cf-editor__paper')?.getAttribute('data-zoom'),
+      ).toBe('75')
+    })
+  })
+
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
     const editor = await mountWithInspector()
     editor.commands.selectAll()

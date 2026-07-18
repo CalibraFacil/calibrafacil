@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
 import {
   EditorContent,
   NodeViewWrapper,
@@ -51,6 +51,10 @@ import {
   QR_PLACEHOLDER_SVG,
   isLockedBlockKey,
 } from './editor-sample-data'
+import { FieldPalette } from './field-palette'
+import { FieldSuggestion } from './field-suggestion'
+import { issueBlockIndex, type ValidationIssue } from './forms'
+import type { PlaceholderCatalogEntry } from '../types'
 
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -100,6 +104,34 @@ export { EDITOR_SAMPLE_DATA, LOCKED_BLOCK_LABELS } from './editor-sample-data'
 const PreviewContext = createContext<{ showSampleValues: boolean }>({
   showSampleValues: false,
 })
+
+/** Validation issues grouped by top-level block index (inline badges). */
+const IssuesContext = createContext<Map<number, string[]>>(new Map())
+
+function useBlockIssues(props: NodeViewProps): string[] {
+  const byIndex = useContext(IssuesContext)
+  if (byIndex.size === 0) return []
+  const pos = props.getPos()
+  if (typeof pos !== 'number') return []
+  try {
+    return byIndex.get(props.editor.state.doc.resolve(pos).index(0)) ?? []
+  } catch {
+    return []
+  }
+}
+
+function BlockIssueBadge({ messages }: { messages: string[] }) {
+  if (messages.length === 0) return null
+  return (
+    <span
+      className="cf-block-issue-badge"
+      title={messages.join('\n')}
+      data-testid="block-issue-badge"
+    >
+      {messages.length}
+    </span>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Node views
@@ -173,6 +205,7 @@ function LockedBlockView(props: NodeViewProps) {
   const blockKey = String(props.node.attrs.blockKey)
   const label = LOCKED_BLOCK_LABELS[blockKey] ?? blockKey
   const [configOpen, setConfigOpen] = useState(false)
+  const blockIssues = useBlockIssues(props)
   const optionalKeys: readonly string[] = OPTIONAL_BLOCK_KEYS
   const isOptional = optionalKeys.includes(blockKey)
   const selectSelf = () => {
@@ -220,6 +253,7 @@ function LockedBlockView(props: NodeViewProps) {
           </span>
         )}
         <span className="cf-locked-block-view__label">{label}</span>
+        <BlockIssueBadge messages={blockIssues} />
         <span className="cf-locked-block-view__hint">
           {isOptional
             ? 'bloco opcional — preenchido na emissão'
@@ -492,11 +526,16 @@ function editorExtensions() {
       return extension
     }),
     LockedBlockGuard,
+    FieldSuggestion,
   ]
 }
 
 export type CertificateEditorProps = {
   initialDocument: Record<string, unknown>
+  /** Placeholder catalog for the {{ autocomplete + Campos palette. */
+  catalog?: PlaceholderCatalogEntry[]
+  /** Server validation issues — rendered as inline badges on the blocks. */
+  issues?: ValidationIssue[]
   editable?: boolean
   onDocumentChange?: (documentJson: Record<string, unknown>) => void
   onEditorReady?: (editor: Editor) => void
@@ -506,15 +545,29 @@ export type CertificateEditorProps = {
 
 export function CertificateEditor({
   initialDocument,
+  catalog = [],
+  issues = [],
   editable = true,
   onDocumentChange,
   onEditorReady,
   immediatelyRender = false,
 }: CertificateEditorProps) {
+  // The suggestion plugin closes over a GETTER so a late-loading catalog
+  // never requires re-initializing the editor.
+  const catalogRef = useRef<PlaceholderCatalogEntry[]>(catalog)
+  catalogRef.current = catalog
   // Read-only (published) views open in certificate form; drafts open showing
   // the editable tokens.
   const [showSampleValues, setShowSampleValues] = useState(!editable)
   const [zoomPercent, setZoomPercent] = useState(100)
+  const [, setSelectionTick] = useState(0)
+  const paperRef = useRef<HTMLDivElement | null>(null)
+  // A4 width at CSS 96dpi: 210mm ≈ 794px (fit-width baseline).
+  const fitWidthPercent = () => {
+    const width = paperRef.current?.clientWidth
+    if (!width) return 100
+    return Math.max(50, Math.min(150, Math.floor((width / 794) * 100)))
+  }
   const [theme, setTheme] = useState<CertificateTheme>(
     readDocumentTheme(initialDocument),
   )
@@ -524,6 +577,17 @@ export function CertificateEditor({
     editable,
     immediatelyRender,
     onCreate: ({ editor: created }) => {
+      const suggestionStorage = Reflect.get(
+        created.storage,
+        'fieldSuggestion',
+      )
+      if (suggestionStorage && typeof suggestionStorage === 'object') {
+        Reflect.set(
+          suggestionStorage,
+          'getCatalog',
+          () => catalogRef.current,
+        )
+      }
       // The doc opens with the band atom first; land the caret on the first
       // EDITABLE position instead so typing never targets the band node.
       let firstTextPos = -1
@@ -541,9 +605,39 @@ export function CertificateEditor({
       setTheme(readDocumentTheme(json))
       onDocumentChange?.(json)
     },
+    onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
+    editorProps: {
+      handleKeyDown: (_view, event) => {
+        if (!(event.ctrlKey || event.metaKey)) return false
+        if (event.key === '=' || event.key === '+') {
+          event.preventDefault()
+          setZoomPercent((zoom) => Math.min(150, zoom + 25))
+          return true
+        }
+        if (event.key === '-') {
+          event.preventDefault()
+          setZoomPercent((zoom) => Math.max(50, zoom - 25))
+          return true
+        }
+        if (event.key === '0') {
+          event.preventDefault()
+          setZoomPercent(100)
+          return true
+        }
+        return false
+      },
+    },
   })
 
+  const issuesByIndex = new Map<number, string[]>()
+  for (const issue of issues) {
+    const index = issueBlockIndex(issue.path)
+    if (index === null) continue
+    issuesByIndex.set(index, [...(issuesByIndex.get(index) ?? []), issue.message])
+  }
+
   return (
+    <IssuesContext.Provider value={issuesByIndex}>
     <PreviewContext.Provider value={{ showSampleValues }}>
       <div className="cf-editor">
         {/* The REAL print stylesheet, scoped to the page frame via native CSS
@@ -553,6 +647,7 @@ export function CertificateEditor({
         <style>{`.cf-page{${certificateThemeTokens(theme)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
         <div className="cf-editor__bar">
           {editable && <EditorToolbar editor={editor} />}
+          {editable && <FieldPalette editor={editor} catalog={catalog} />}
           {editable && (
             <NativeSelect
               aria-label="Registro visual"
@@ -580,9 +675,17 @@ export function CertificateEditor({
           )}
           <NativeSelect
             aria-label="Zoom da página"
-            value={String(zoomPercent)}
+            value={
+              [50, 75, 100, 125, 150].includes(zoomPercent)
+                ? String(zoomPercent)
+                : 'fit'
+            }
             className="h-8 w-22 text-xs"
             onChange={(event) => {
+              if (event.target.value === 'fit') {
+                setZoomPercent(fitWidthPercent())
+                return
+              }
               const parsed = Number(event.target.value)
               setZoomPercent(Number.isFinite(parsed) && parsed > 0 ? parsed : 100)
             }}
@@ -592,13 +695,18 @@ export function CertificateEditor({
                 {level}%
               </NativeSelectOption>
             ))}
+            <NativeSelectOption value="fit">Ajustar largura</NativeSelectOption>
           </NativeSelect>
           <Button
             type="button"
             variant={showSampleValues ? 'secondary' : 'ghost'}
             size="sm"
             aria-pressed={showSampleValues}
-            className="gap-1.5 transition-[transform,background-color] active:scale-[0.96]"
+            aria-label={
+              showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'
+            }
+            title={showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'}
+            className="size-8 p-0 transition-[transform,background-color] active:scale-[0.96]"
             onClick={() => setShowSampleValues((value) => !value)}
           >
             <HugeiconsIcon
@@ -606,10 +714,10 @@ export function CertificateEditor({
               size={15}
               strokeWidth={1.8}
             />
-            {showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'}
           </Button>
         </div>
         <div
+          ref={paperRef}
           className="cf-editor__paper"
           data-zoom={zoomPercent}
           style={zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }}
@@ -623,8 +731,68 @@ export function CertificateEditor({
             )}
           />
         </div>
+        <SelectionDock editor={editor} />
       </div>
     </PreviewContext.Provider>
+    </IssuesContext.Provider>
+  )
+}
+
+/**
+ * Floating selection dock (shell reframe step 4): a slim bottom bar naming
+ * the selected block/band with a Configurar action that scrolls the block
+ * into view and opens ITS OWN ConfigPill — it never duplicates the pill's
+ * content, so there is exactly one config surface.
+ */
+function SelectionDock({ editor }: { editor: Editor | null }) {
+  if (!editor || !editor.isEditable) return null
+  const { selection } = editor.state
+  const node = 'node' in selection ? selection.node : null
+  if (!node || typeof node !== 'object') return null
+  const typeName = Reflect.get(node, 'type')?.name
+  let label: string | null = null
+  let configurable = false
+  if (typeName === 'lockedBlock') {
+    const blockKey = String(Reflect.get(node, 'attrs')?.blockKey ?? '')
+    label = LOCKED_BLOCK_LABELS[blockKey] ?? blockKey
+    configurable = lockedBlockHasConfig(blockKey)
+  } else if (typeName === 'bandTopIdentity' || typeName === 'bandPageFooter') {
+    label = BAND_LABELS[typeName] ?? typeName
+    configurable = true
+  }
+  if (!label) return null
+
+  const openConfig = () => {
+    const dom = editor.view.nodeDOM(selection.from)
+    if (dom instanceof HTMLElement) {
+      if (typeof dom.scrollIntoView === 'function') {
+        dom.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+      if (configurable) {
+        dom
+          .querySelector<HTMLButtonElement>(
+            'button.cf-config-pill[aria-label^="Configurar"]',
+          )
+          ?.click()
+      }
+    }
+  }
+
+  return (
+    <div className="cf-selection-dock" data-testid="selection-dock">
+      <span className="cf-selection-dock__label">{label}</span>
+      {configurable && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-7 px-2.5 text-xs transition-[transform,background-color] active:scale-[0.96]"
+          onClick={openConfig}
+        >
+          Configurar
+        </Button>
+      )}
+    </div>
   )
 }
 

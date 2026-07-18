@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 
 import {
@@ -27,9 +26,7 @@ import {
   useSaveWysiwygDocument,
   useValidateWysiwygDocument,
 } from './mutations'
-import { BlockInspector } from './block-inspector'
-import { PlaceholderPanel } from './placeholder-panel'
-import { ValidationIssuesPanel } from './validation-issues-panel'
+import { ValidationChip } from './validation-chip'
 
 const AUTOSAVE_DEBOUNCE_MS = 1500
 
@@ -73,8 +70,6 @@ export function EditorWorkbench({
   )
   const [previewId, setPreviewId] = useState<number | null>(null)
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
-  const [editorInstance, setEditorInstance] = useState<Editor | null>(null)
-  const [, setSelectionTick] = useState(0)
 
   const latestDocumentRef = useRef<Record<string, unknown>>(
     version.documentJson,
@@ -336,28 +331,22 @@ export function EditorWorkbench({
         )}
       </div>
 
-      <ValidationIssuesPanel
+      <ValidationChip
         issues={issues}
         documentJson={latestDocumentRef.current}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <CertificateEditor
-          initialDocument={version.documentJson}
-          editable={editable}
-          onDocumentChange={handleDocumentChange}
-          onEditorReady={(editor) => {
-            setEditorInstance(editor)
-            editor.on('selectionUpdate', () =>
-              setSelectionTick((tick) => tick + 1),
-            )
-          }}
-        />
-        <div className="space-y-4">
-          <BlockInspector editor={editorInstance} />
-          <PlaceholderPanel editor={editorInstance} catalog={catalog} />
-        </div>
-      </div>
+      {/* Shell reframe: full-width canvas — the sidebar column is gone;
+          fields live in the toolbar palette + {{ autocomplete, config in the
+          per-block popover. */}
+      <CertificateEditor
+        initialDocument={version.documentJson}
+        catalog={catalog}
+        issues={issues}
+        editable={editable}
+        onDocumentChange={handleDocumentChange}
+
+      />
     </div>
   )
 }

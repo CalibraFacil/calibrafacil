@@ -301,3 +301,103 @@
 .cf-band-view__header {
   min-height: 24px;
 }
+
+/* ── inline {{ field autocomplete (plain-DOM suggestion popup) ── */
+.cf-field-suggest {
+  position: fixed;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 4px;
+  border-radius: 10px;
+  background: hsl(var(--popover, 0 0% 100%));
+  color: inherit;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.cf-field-suggest__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition-property: background-color;
+  transition-duration: 100ms;
+}
+
+.cf-field-suggest__item:hover,
+.cf-field-suggest__item--active {
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.cf-field-suggest__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.cf-field-suggest__path {
+  font-family: ui-monospace, monospace;
+  font-size: 0.625rem;
+  color: rgb(100, 116, 139);
+}
+
+.cf-field-suggest__empty {
+  padding: 8px;
+  font-size: 0.75rem;
+  color: rgb(148, 163, 184);
+}
+
+/* inline validation badge on the offending block's header */
+.cf-block-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.12);
+  color: rgb(153, 27, 27);
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* keep the header visible when its block has issues */
+.cf-locked-block-view:has(.cf-block-issue-badge) .cf-locked-block-view__header {
+  opacity: 1;
+}
+
+/* ── floating selection dock ── */
+.cf-selection-dock {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  background: hsl(var(--popover, 0 0% 100%));
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.cf-selection-dock__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
