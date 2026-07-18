@@ -1689,6 +1689,11 @@ export interface CertificateTemplatesApi {
   ): Promise<TResponse>;
   duplicate<TResponse = unknown>(id: string | number): Promise<TResponse>;
   archive<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  listAssignments<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  archiveAssignment<TResponse = unknown>(
+    id: string | number,
+    assignmentId: string | number,
+  ): Promise<TResponse>;
   setDefault<TResponse = unknown>(id: string | number): Promise<TResponse>;
   getXlsxVersion<TResponse = unknown>(
     templateId: string | number,

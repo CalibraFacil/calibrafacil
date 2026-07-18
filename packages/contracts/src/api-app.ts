@@ -112,6 +112,8 @@ type ApiRoutePath =
   | "/api/certificate-templates/placeholder-catalog"
   | "/api/certificate-templates/:id/default"
   | "/api/certificate-templates/:id/archive"
+  | "/api/certificate-templates/:id/assignments"
+  | "/api/certificate-templates/:id/assignments/:assignmentId/archive"
   | "/api/certificate-templates/:id/duplicate"
   | "/api/certificate-templates/:id/versions/wysiwyg"
   | "/api/certificate-templates/:id/versions/:versionId/document"

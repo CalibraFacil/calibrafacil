@@ -1752,6 +1752,107 @@ export const certificateTemplatesRouter = new Hono<{
       return c.json({ item: updated });
     },
   )
+  .get(
+    "/:id/assignments",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    async (c) => {
+      const member = c.get("member");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isFinite(id)) {
+        return c.json({ error: "Template inválido" }, 400);
+      }
+      // Assignments were WRITE-ONLY: created but never listable, so admins
+      // could not answer "who uses this template" without a DB console.
+      const rows = await db
+        .select({
+          id: certificateTemplateAssignment.id,
+          templateVersionId: certificateTemplateAssignment.templateVersionId,
+          versionNumber: certificateTemplateVersion.version,
+          unitId: certificateTemplateAssignment.unitId,
+          unitName: organizationUnit.name,
+          serviceId: certificateTemplateAssignment.serviceId,
+          serviceName: service.name,
+          methodId: certificateTemplateAssignment.methodId,
+          priority: certificateTemplateAssignment.priority,
+          status: certificateTemplateAssignment.status,
+          createdAt: certificateTemplateAssignment.createdAt,
+        })
+        .from(certificateTemplateAssignment)
+        .innerJoin(
+          certificateTemplateVersion,
+          eq(
+            certificateTemplateVersion.id,
+            certificateTemplateAssignment.templateVersionId,
+          ),
+        )
+        .leftJoin(
+          organizationUnit,
+          eq(organizationUnit.id, certificateTemplateAssignment.unitId),
+        )
+        .leftJoin(
+          service,
+          eq(service.id, certificateTemplateAssignment.serviceId),
+        )
+        .where(
+          and(
+            eq(certificateTemplateAssignment.templateId, id),
+            eq(
+              certificateTemplateAssignment.organizationId,
+              member.organizationId,
+            ),
+            eq(certificateTemplateAssignment.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(
+          desc(certificateTemplateAssignment.priority),
+          desc(certificateTemplateAssignment.createdAt),
+        );
+      return c.json({ items: rows });
+    },
+  )
+  .patch(
+    "/:id/assignments/:assignmentId/archive",
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_templates"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      const assignmentId = Number.parseInt(c.req.param("assignmentId"), 10);
+      if (!Number.isFinite(id) || !Number.isFinite(assignmentId)) {
+        return c.json({ error: "Atribuição inválida" }, 400);
+      }
+      const [updated] = await db
+        .update(certificateTemplateAssignment)
+        .set({ status: "ARCHIVED" })
+        .where(
+          and(
+            eq(certificateTemplateAssignment.id, assignmentId),
+            eq(certificateTemplateAssignment.templateId, id),
+            eq(
+              certificateTemplateAssignment.organizationId,
+              member.organizationId,
+            ),
+          ),
+        )
+        .returning();
+      if (!updated) {
+        return c.json({ error: "Atribuição não encontrada" }, 404);
+      }
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "certificate_template.assignment_archived",
+        entityType: "certificate_template_assignment",
+        entityId: String(updated.id),
+        details: { templateId: id },
+      });
+      return c.json({ item: updated });
+    },
+  )
   .post(
     "/:id/versions/:versionId/assignments",
     ...withLabPermission({ organization: ["update"] }),
@@ -2218,6 +2319,30 @@ export const certificateTemplatesRouter = new Hono<{
         return c.json(
           { error: "Defina outro template como padrão antes de arquivar este" },
           400,
+        );
+      }
+
+      const [liveAssignment] = await db
+        .select({ id: certificateTemplateAssignment.id })
+        .from(certificateTemplateAssignment)
+        .where(
+          and(
+            eq(certificateTemplateAssignment.templateId, existing.id),
+            eq(
+              certificateTemplateAssignment.organizationId,
+              member.organizationId,
+            ),
+            eq(certificateTemplateAssignment.status, "ACTIVE"),
+          ),
+        )
+        .limit(1);
+      if (liveAssignment) {
+        return c.json(
+          {
+            error:
+              "Este template tem atribuições ativas — remova as atribuições antes de arquivar, ou os certificados dessas calibrações falharão",
+          },
+          409,
         );
       }
 

@@ -475,6 +475,8 @@ export const calibraApiPolicyRegistry = {
     create: "cloud-only",
     update: "cloud-only",
     archive: "cloud-only",
+    listAssignments: "cloud-only",
+    archiveAssignment: "cloud-only",
     duplicate: "cloud-only",
     setDefault: "cloud-only",
     getXlsxVersion: "cloud-only",

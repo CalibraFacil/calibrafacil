@@ -1684,6 +1684,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listAssignments",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "archiveAssignment",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
           "method": "duplicate",
           "namespace": "certificateTemplates",
           "policy": "cloud-only",

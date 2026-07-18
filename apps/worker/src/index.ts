@@ -140,7 +140,7 @@ export interface Env {
 type JobData = CertificateJobData;
 
 const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
-  "Certificate generation requires a published XLSX certificate template assignment";
+  "Nenhuma atribuição de template corresponde a esta calibração — publique um template (XLSX ou visual) e crie uma atribuição na etapa Atribuição";
 
 export type QueueMessage = BackgroundJobMessage;
 

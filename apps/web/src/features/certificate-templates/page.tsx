@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   AlertCircleIcon,
@@ -429,6 +429,48 @@ export function CertificateTemplatesPage() {
     },
   })
 
+  const assignmentsQuery = useQuery({
+    queryKey: [
+      'certificate-templates',
+      selectedTemplate?.id ?? 'none',
+      'assignments',
+    ],
+    queryFn: () => {
+      if (!selectedTemplate?.id) throw new Error('unreachable')
+      return calibraApi.certificateTemplates.listAssignments<{
+        items: Array<{
+          id: number
+          versionNumber: number
+          unitName: string | null
+          serviceName: string | null
+          methodId: number | null
+          priority: number
+          createdAt: string | null
+        }>
+      }>(selectedTemplate.id)
+    },
+    enabled: selectedTemplate?.id != null,
+  })
+
+  const archiveAssignmentMutation = useMutation({
+    mutationFn: async (assignmentId: number) => {
+      if (!selectedTemplate?.id) throw new Error('Selecione um template')
+      return calibraApi.certificateTemplates.archiveAssignment(
+        selectedTemplate.id,
+        assignmentId,
+      )
+    },
+    onSuccess: () => {
+      toast.success('Atribuição removida')
+      void assignmentsQuery.refetch()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao remover atribuição',
+      )
+    },
+  })
+
   const archiveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedTemplate?.id) throw new Error('Selecione um template')
@@ -467,6 +509,7 @@ export function CertificateTemplatesPage() {
     onSuccess: () => {
       toast.success('Template atribuído')
       void refreshTemplates()
+      void assignmentsQuery.refetch()
     },
     onError: (error) => {
       toast.error(
@@ -959,6 +1002,12 @@ export function CertificateTemplatesPage() {
           >
             Tornar padrão
           </Button>
+          <span
+            className="text-[11px] text-muted-foreground"
+            title="A emissão de certificados usa APENAS as atribuições da etapa Atribuição — 'padrão' afeta a ordenação desta lista"
+          >
+            padrão ≠ emissão
+          </span>
           {isWysiwygEditorEnabled() &&
             selectedTemplate?.id &&
             selectedTemplate.currentXlsxVersion?.engine !== 'wysiwyg' &&
@@ -1551,6 +1600,11 @@ export function CertificateTemplatesPage() {
               <XlsxAssignmentPanel
                 engine="wysiwyg"
                 disabled={isReadOnly}
+                assignments={assignmentsQuery.data?.items ?? []}
+                onRemoveAssignment={(assignmentId) =>
+                  archiveAssignmentMutation.mutate(assignmentId)
+                }
+                removePending={archiveAssignmentMutation.isPending}
                 isPublished
                 canPublish={false}
                 hasRenderedPreview={false}
@@ -1587,6 +1641,11 @@ export function CertificateTemplatesPage() {
             (hasWorkbench ? (
               <XlsxAssignmentPanel
                 disabled={isReadOnly || !activeXlsxWorkbench}
+                assignments={assignmentsQuery.data?.items ?? []}
+                onRemoveAssignment={(assignmentId) =>
+                  archiveAssignmentMutation.mutate(assignmentId)
+                }
+                removePending={archiveAssignmentMutation.isPending}
                 isPublished={isXlsxPublished}
                 canPublish={canPublishXlsx}
                 hasRenderedPreview={Boolean(hasRenderedPreview)}
@@ -1656,10 +1715,22 @@ function StageLocked({
   )
 }
 
+type AssignmentRow = {
+  id: number
+  versionNumber: number
+  unitName: string | null
+  serviceName: string | null
+  methodId: number | null
+  priority: number
+}
+
 function XlsxAssignmentPanel({
   engine = 'xlsx',
   disabled,
   isPublished,
+  assignments = [],
+  onRemoveAssignment,
+  removePending = false,
   canPublish,
   hasRenderedPreview,
   publishPending,
@@ -1677,6 +1748,9 @@ function XlsxAssignmentPanel({
   engine?: 'xlsx' | 'wysiwyg'
   disabled: boolean
   isPublished: boolean
+  assignments?: AssignmentRow[]
+  onRemoveAssignment?: (assignmentId: number) => void
+  removePending?: boolean
   canPublish: boolean
   hasRenderedPreview: boolean
   publishPending: boolean
@@ -1748,6 +1822,55 @@ function XlsxAssignmentPanel({
             : hasRenderedPreview
               ? 'Prévia concluída. Publique a versão para liberar a atribuição.'
               : 'Valide o XLSX e gere uma prévia PDF concluída antes de publicar.'}
+        </div>
+      )}
+
+      {assignments.length > 0 && (
+        <div className="border-b px-4 py-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Atribuições ativas — a de maior prioridade que corresponder à
+            calibração vence
+          </p>
+          <ul className="space-y-1.5">
+            {assignments.map((assignment) => (
+              <li
+                key={assignment.id}
+                className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs"
+              >
+                <Badge variant="outline">v{assignment.versionNumber}</Badge>
+                <span>
+                  {[
+                    assignment.unitName
+                      ? `Unidade: ${assignment.unitName}`
+                      : null,
+                    assignment.serviceName
+                      ? `Serviço: ${assignment.serviceName}`
+                      : null,
+                    assignment.methodId != null
+                      ? `Método #${assignment.methodId}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Todas as calibrações (curinga)'}
+                </span>
+                <span className="text-muted-foreground">
+                  prioridade {assignment.priority}
+                </span>
+                {onRemoveAssignment && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-6 px-2 text-xs text-destructive"
+                    disabled={disabled || removePending}
+                    onClick={() => onRemoveAssignment(assignment.id)}
+                  >
+                    Remover
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

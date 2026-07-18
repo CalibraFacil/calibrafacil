@@ -70,6 +70,23 @@ export function createCertificateTemplatesApi(
         "Falha ao duplicar template",
       );
     },
+    async listAssignments<TResponse = unknown>(id: string | number) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${id}/assignments`,
+        { method: "GET" },
+        "Falha ao carregar atribuições",
+      );
+    },
+    async archiveAssignment<TResponse = unknown>(
+      id: string | number,
+      assignmentId: string | number,
+    ) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${id}/assignments/${assignmentId}/archive`,
+        { method: "PATCH" },
+        "Falha ao remover atribuição",
+      );
+    },
     async archive<TResponse = unknown>(id: string | number) {
       return fetchJson<TResponse>(
         `/api/certificate-templates/${id}/archive`,
