@@ -83,6 +83,8 @@ export {
   certificateThemeTokens,
 } from "./print-css.js";
 export { deriveResultGrids } from "./result-grid.js";
+export { deriveResultCharts } from "./result-chart.js";
+export type { ResultChartConfig } from "./result-chart.js";
 export type { ResultGrid, ResultGridColumn } from "./result-grid.js";
 export { newWysiwygStarterDocument } from "./starter-document.js";
 export { CERT_HTML_COMPILER_VERSION } from "./version.js";

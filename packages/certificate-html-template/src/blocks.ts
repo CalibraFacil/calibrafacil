@@ -7,6 +7,7 @@ import type {
 } from "./document-schema.js";
 import { applyPlaceholderFormat } from "./format.js";
 import { deriveResultGrids, type ResultGrid } from "./result-grid.js";
+import { deriveResultCharts } from "./result-chart.js";
 
 /**
  * Locked-block renderers (spec 02 §2, §5). Each returns the INNER HTML of the
@@ -364,15 +365,27 @@ function renderResultsTable(
       ? `<figure class="cf-eccentricity-indicator"><img src="${escapeHtml(rawIndicator)}" alt="Posições de excentricidade" /></figure>`
       : "";
 
+  // Calibration curve charts (roadmap item 1): method-configured, attached
+  // after the LAST grid of their table (like the eccentricity indicator).
+  const chartsFor = (tableKey: string): string =>
+    deriveResultCharts(data, tableKey)
+      .map(
+        (chart) =>
+          `<figure class="cf-result-chart"><figcaption class="cf-grid-caption">${escapeHtml(chart.label)}</figcaption>${chart.svg}</figure>`,
+      )
+      .join("");
+
   const gridsHtml = grids
     .map((grid) => {
       const gridHtml = renderResultGrid(grid, layout);
-      // attach after the LAST grid of the indicator's table (após-ajuste side
-      // when the method is phase-split)
+      const isLastOfTable =
+        grid === grids.filter((g) => g.tableKey === grid.tableKey).at(-1);
       const isIndicatorGrid =
-        grid.tableKey === indicatorTableKey &&
-        grid === grids.filter((g) => g.tableKey === indicatorTableKey).at(-1);
-      return isIndicatorGrid ? `${gridHtml}${indicatorHtml}` : gridHtml;
+        grid.tableKey === indicatorTableKey && isLastOfTable;
+      const suffix = `${isIndicatorGrid ? indicatorHtml : ""}${
+        isLastOfTable ? chartsFor(grid.tableKey) : ""
+      }`;
+      return `${gridHtml}${suffix}`;
     })
     .join("");
   const scalarHtml =

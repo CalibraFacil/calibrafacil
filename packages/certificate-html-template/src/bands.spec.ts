@@ -352,3 +352,63 @@ describe("optional blocks: budget annex + decision rule (backlog #11)", () => {
     expect(html).toContain(">Não conforme<");
   });
 });
+
+describe("calibration curve charts (roadmap item 1)", () => {
+  function chartData(): Record<string, unknown> {
+    const data = JSON.parse(JSON.stringify(sampleCertificateInputData));
+    const methodSnapshot = Reflect.get(data, "methodSnapshot");
+    Reflect.set(methodSnapshot, "certificateContent", {
+      resultCharts: [
+        {
+          tableKey: "pontos",
+          xKey: "nominal",
+          yKey: "erro_ponto",
+          uncertaintyKey: "incerteza_ponto",
+        },
+      ],
+    });
+    const results = Reflect.get(data, "results");
+    Reflect.set(results, "incerteza_ponto", [0.002, 0.003]);
+    return data;
+  }
+
+  it("renders a deterministic SVG with U bars after the table's grid when configured", async () => {
+    const { html } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      chartData(),
+    );
+    expect(html).toContain('class="cf-result-chart"');
+    expect(html).toContain("Curva de calibração");
+    expect(html).toContain("<svg");
+    // twice-compiled = byte-identical (determinism)
+    const { html: again } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      chartData(),
+    );
+    expect(again).toBe(html);
+  });
+
+  it("silently omits without config or with a missing series", async () => {
+    const { html } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      sampleCertificateInputData,
+    );
+    expect(html).not.toContain('class="cf-result-chart"');
+
+    const broken = chartData();
+    const methodSnapshot = Reflect.get(broken, "methodSnapshot");
+    if (!methodSnapshot || typeof methodSnapshot !== "object") {
+      throw new Error("fixture methodSnapshot missing");
+    }
+    Reflect.set(methodSnapshot, "certificateContent", {
+      resultCharts: [
+        { tableKey: "pontos", xKey: "nominal", yKey: "nao_existe" },
+      ],
+    });
+    const { html: omitted } = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      broken,
+    );
+    expect(omitted).not.toContain('class="cf-result-chart"');
+  });
+});

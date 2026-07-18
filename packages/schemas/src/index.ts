@@ -1350,6 +1350,18 @@ export const MethodCertificateContentSchema = z.object({
   massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
   uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
   decisionRuleStatement: z.string().max(2000).optional(),
+  resultCharts: z
+    .array(
+      z.object({
+        tableKey: z.string().min(1),
+        xKey: z.string().min(1),
+        yKey: z.string().min(1),
+        uncertaintyKey: z.string().nullish(),
+        label: z.string().max(120).nullish(),
+      }),
+    )
+    .max(4)
+    .optional(),
   sections: z.array(MethodCertificateContentSectionSchema).default([]),
 });
 

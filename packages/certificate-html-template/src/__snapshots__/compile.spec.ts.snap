@@ -219,6 +219,10 @@ td.cf-verdict--ok{ color: #14532D; }
 td.cf-verdict--critical{ color: #7F1D1D; }
 .cf-decision-rule{ font-size: var(--size-label); line-height: 1.5; }
 
+/* calibration curve charts */
+.cf-result-chart{ break-inside: avoid; margin: 4pt 0 8pt; }
+.cf-result-chart svg{ width: 150mm; max-width: 100%; display: block; }
+
 /* ── placement presets (M-C) ── */
 .cf-accreditation-seal.cf-preset-seal-left{ align-items: flex-start; }
 .cf-accreditation-seal.cf-preset-seal-center{ align-items: center; }

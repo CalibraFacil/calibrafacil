@@ -3365,6 +3365,13 @@ export type MethodCertificateContent = {
   massCompositionDisplay?: "full" | "hidden";
   uncertaintyBudgetDisplay?: "full" | "hidden";
   decisionRuleStatement?: string;
+  resultCharts?: Array<{
+    tableKey: string;
+    xKey: string;
+    yKey: string;
+    uncertaintyKey?: string | null;
+    label?: string | null;
+  }>;
   sections?: MethodCertificateContentSection[];
 };
 
