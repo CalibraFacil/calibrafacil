@@ -561,3 +561,24 @@
   pointer-events: none;
   font-size: 9pt;
 }
+
+/* ── floating selection toolbar (BubbleMenu) ── */
+.cf-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--popover, #fff);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.08);
+  z-index: 55;
+}
+
+.dark .cf-selection-toolbar {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.5);
+}

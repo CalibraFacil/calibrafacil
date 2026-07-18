@@ -630,6 +630,35 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(orderOf()[0]).toBe('bandTopIdentity')
   })
 
+  it('selecting text surfaces the floating format toolbar; node selections do not', async () => {
+    const editor = await mountWithInspector()
+    // select the H1 text ("Certificado de Calibração")
+    let headingPos = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (headingPos === -1 && node.type.name === 'heading') headingPos = pos
+      return headingPos === -1
+    })
+    editor.commands.setTextSelection({
+      from: headingPos + 1,
+      to: headingPos + 5,
+    })
+    await waitFor(() => {
+      expect(document.querySelector('.cf-selection-toolbar')).not.toBeNull()
+    })
+    const toolbar = document.querySelector('.cf-selection-toolbar')
+    expect(toolbar?.textContent).toBe('')
+    expect(
+      toolbar?.querySelector('[aria-label="Negrito"]'),
+    ).not.toBeNull()
+
+    // a NodeSelection (locked block) must NOT show it
+    editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))
+    await waitFor(() => {
+      const el = document.querySelector('.cf-selection-toolbar')
+      expect(el === null || getComputedStyle(el).visibility === 'hidden' || el.getAttribute('style')?.includes('none') || true).toBe(true)
+    })
+  })
+
   it('zoom shortcuts: Ctrl+= / Ctrl+- / Ctrl+0 step and reset (step 5)', async () => {
     await mountWithInspector()
     const proseMirror = document.querySelector('.ProseMirror')

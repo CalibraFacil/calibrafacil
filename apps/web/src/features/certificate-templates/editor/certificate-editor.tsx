@@ -17,6 +17,8 @@ import {
 import { NodeSelection } from '@tiptap/pm/state'
 import { toast } from 'sonner'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
+import { BubbleMenu } from '@tiptap/react/menus'
+import { CellSelection } from '@tiptap/pm/tables'
 import Placeholder from '@tiptap/extension-placeholder'
 
 /**
@@ -116,6 +118,9 @@ import {
   Redo02Icon,
   SquareLock02Icon,
   Table01Icon,
+  TextAlignCenterIcon,
+  TextAlignLeftIcon,
+  TextAlignRightIcon,
   TextBoldIcon,
   TextItalicIcon,
   Undo02Icon,
@@ -147,6 +152,26 @@ export { EDITOR_SAMPLE_DATA, LOCKED_BLOCK_LABELS } from './editor-sample-data'
 // ---------------------------------------------------------------------------
 // Preview context: token view vs sample-data view for placeholder chips
 // ---------------------------------------------------------------------------
+
+/**
+ * BubbleMenu gate: only PLAIN TEXT selections get the floating format bar.
+ * Node selections (locked blocks, bands, images) have the dock/ConfigPill;
+ * cell selections have the table dock.
+ */
+function shouldShowSelectionToolbar({
+  editor: menuEditor,
+  state,
+}: {
+  editor: Editor
+  state: { selection: { empty: boolean } }
+}): boolean {
+  if (!menuEditor.isEditable) return false
+  const { selection } = state
+  if (selection.empty) return false
+  if ('node' in selection) return false
+  if (selection instanceof CellSelection) return false
+  return true
+}
 
 /** The org's real logo URL — swapped into the lab block's sample render. */
 const LabLogoContext = createContext<string | null>(null)
@@ -979,6 +1004,47 @@ export function CertificateEditor({
               </span>
             </div>
           </DragHandle>
+        )}
+        {editable && editor && (
+          <BubbleMenu
+            editor={editor}
+            shouldShow={shouldShowSelectionToolbar}
+            className="cf-selection-toolbar"
+          >
+            <ToolbarButton
+              label="Negrito"
+              icon={TextBoldIcon}
+              active={editor.isActive('bold')}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+            />
+            <ToolbarButton
+              label="Itálico"
+              icon={TextItalicIcon}
+              active={editor.isActive('italic')}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+            />
+            <span className="cf-editor__toolbar-divider" />
+            <ToolbarButton
+              label="Alinhar à esquerda"
+              icon={TextAlignLeftIcon}
+              active={editor.isActive({ textAlign: 'left' })}
+              onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            />
+            <ToolbarButton
+              label="Centralizar"
+              icon={TextAlignCenterIcon}
+              active={editor.isActive({ textAlign: 'center' })}
+              onClick={() =>
+                editor.chain().focus().setTextAlign('center').run()
+              }
+            />
+            <ToolbarButton
+              label="Alinhar à direita"
+              icon={TextAlignRightIcon}
+              active={editor.isActive({ textAlign: 'right' })}
+              onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            />
+          </BubbleMenu>
         )}
         <SelectionDock editor={editor} />
       </div>
