@@ -904,6 +904,10 @@ export function CertificateEditor({
                   .insertContentAt(after, { type: 'paragraph' })
                   .setTextSelection(after + 1)
                   .insertContent('/')
+                  // The insertion point can be half off-screen (the handle
+                  // sits at the block's TOP row); bring the caret — and the
+                  // menu that anchors to it — fully into view.
+                  .scrollIntoView()
                   .run()
               }}
             >
