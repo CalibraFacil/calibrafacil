@@ -149,7 +149,7 @@ th{
   background: var(--head-bg); vertical-align: bottom;
 }
 th.cf-unit-row{ font-weight: 400; font-size: var(--size-caption); color: var(--muted); }
-td { padding: 3pt 5pt; border: var(--cell-border); font-size: var(--size-cell); }
+td { padding: 3pt 5pt; border: var(--cell-border); font-size: var(--size-cell); overflow-wrap: anywhere; }
 tr { break-inside: avoid; }
 tbody tr:last-child td { border-bottom: var(--cell-border); }
 td.cf-num, th.cf-num { text-align: right; }
@@ -160,7 +160,9 @@ td.cf-num, th.cf-num { text-align: right; }
 .cf-theme-institute-classic table{ border-top: 0.9pt solid var(--line-strong); }
 
 /* ── locked blocks ── */
-.cf-locked-block { break-inside: avoid; margin: 0 0 9pt; }
+/* No blanket break-inside: results_table can be arbitrarily long and MUST
+   paginate row-by-row; the small fixed blocks declare their own avoid. */
+.cf-locked-block { margin: 0 0 9pt; }
 
 /* section label */
 .cf-locked-block .cf-block-title{
@@ -173,6 +175,7 @@ td.cf-num, th.cf-num { text-align: right; }
 
 /* key/value grid */
 .cf-field-list{ display: grid; grid-template-columns: max-content 1fr; gap: 2pt 10pt; }
+.cf-field-list dt, .cf-field-list dd{ min-width: 0; overflow-wrap: anywhere; }
 .cf-field-list dt{
   font-family: var(--font-body);
   font-size: var(--size-label); font-weight: 700; color: var(--label);
@@ -188,7 +191,7 @@ td.cf-num, th.cf-num { text-align: right; }
 .cf-masthead{ display: flex; align-items: flex-start; gap: 14pt; }
 .cf-lab-logo{ max-height: 16mm; max-width: 44mm; object-fit: contain; display: block; }
 .cf-masthead-id{ flex: 1; min-width: 0; padding-top: 1pt; }
-.cf-masthead-name{ font-size: 13pt; font-weight: 700; }
+.cf-masthead-name{ font-size: 13pt; font-weight: 700; overflow-wrap: anywhere; }
 .cf-masthead-lines{ color: var(--muted); font-size: var(--size-label); line-height: 1.55; margin-top: 2pt; }
 .cf-masthead-lines b{ font-weight: 700; color: var(--ink); }
 .cf-rule{ height: 1.6pt; background: var(--ink); margin-top: 7pt; }
@@ -203,6 +206,7 @@ td.cf-num, th.cf-num { text-align: right; }
   font-family: var(--font-mono);
   font-size: var(--size-certno); font-weight: 600; color: var(--accent);
   margin-top: 1pt;
+  overflow-wrap: anywhere;
 }
 .cf-certrow .cf-field-list{ flex: 1; }
 
@@ -282,7 +286,7 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 .cf-band-identity-row{
   display: flex; justify-content: space-between; align-items: baseline; gap: 10pt;
 }
-.cf-band-lab{ font-weight: 700; font-size: var(--size-label); }
+.cf-band-lab{ font-weight: 700; font-size: var(--size-label); overflow-wrap: anywhere; }
 .cf-band-title{ font-size: var(--size-label); color: var(--muted); }
 .cf-band-cert{
   font-family: var(--font-mono);
