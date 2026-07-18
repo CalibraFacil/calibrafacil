@@ -57,11 +57,14 @@ export function EditorWorkbench({
   version,
   catalog,
   labLogoUrl = null,
+  canEdit = true,
 }: {
   templateId: string
   version: WysiwygVersionDetail
   catalog: PlaceholderCatalogEntry[]
   labLogoUrl?: string | null
+  /** RBAC: admins/owners with the custom_templates feature. */
+  canEdit?: boolean
 }) {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState(version.status)
@@ -124,7 +127,10 @@ export function EditorWorkbench({
     }
   })
 
-  const editable = status === 'DRAFT' && remoteLock === null
+  // Permission gates editing UP FRONT: without it, a quality user gets a
+  // live canvas whose every autosave silently 403s (server enforces
+  // admin/owner on the PUT).
+  const editable = status === 'DRAFT' && remoteLock === null && canEdit
 
   const saveMutation = useSaveWysiwygDocument(templateId, version.id)
   const validateMutation = useValidateWysiwygDocument(templateId, version.id)
@@ -512,6 +518,21 @@ export function EditorWorkbench({
           </>
         )}
       </div>
+
+      {!canEdit && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground"
+          data-testid="permission-banner"
+        >
+          <span className="font-medium text-foreground">
+            Somente leitura — permissão insuficiente.
+          </span>
+          <span>
+            Editar modelos de certificado exige papel de administrador e o
+            recurso de modelos personalizados no plano.
+          </span>
+        </div>
+      )}
 
       {!editable && status !== 'DRAFT' && remoteLock === null && (
         <div

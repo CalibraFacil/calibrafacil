@@ -306,6 +306,25 @@ describe('EditorWorkbench (jsdom)', () => {
     })
   })
 
+  it('canEdit=false renders read-only with a permission banner (no silent 403s)', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EditorWorkbench
+          templateId="5"
+          version={makeVersion()}
+          catalog={[]}
+          canEdit={false}
+        />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByTestId('permission-banner')).toBeDefined()
+    expect(screen.queryByRole('toolbar')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Publicar' })).toBeNull()
+  })
+
   it('published versions render read-only: no toolbar, no publish actions', async () => {
     renderWorkbench(makeVersion({ status: 'PUBLISHED' }))
     await waitFor(() => {

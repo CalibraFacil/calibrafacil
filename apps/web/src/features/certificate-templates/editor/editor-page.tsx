@@ -21,6 +21,7 @@ import { calibraApi } from '@/utils/api'
 import type { WysiwygDocumentResponse } from '../types'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 import { isWysiwygEditorEnabled } from '../wysiwyg-flag'
 import { EditorWorkbench } from './editor-workbench'
 import {
@@ -57,6 +58,9 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
   const catalogQuery = usePlaceholderCatalog()
   const activeOrganization = useActiveOrganization()
   const labLogoUrl = activeOrganization.data?.logo ?? null
+  const accessQuery = usePlanAccess()
+  const canEdit =
+    (accessQuery.data?.hasCustomTemplates ?? false) && context.canManage
   const queryClient = useQueryClient()
   const [discardNonce, setDiscardNonce] = useState(0)
 
@@ -227,6 +231,7 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
             version={version}
             catalog={catalogQuery.data?.items ?? []}
             labLogoUrl={labLogoUrl}
+            canEdit={canEdit}
           />
           <BackToListButton />
         </div>

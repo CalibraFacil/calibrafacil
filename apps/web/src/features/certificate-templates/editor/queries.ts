@@ -55,6 +55,8 @@ export type EditorTemplateContext = {
   template: TemplateItem | null
   /** The wysiwyg version the editor should open (DRAFT preferred). */
   wysiwygVersionId: number | null
+  /** Server-side template-management permission (same flag the list uses). */
+  canManage: boolean
 }
 
 /**
@@ -88,6 +90,7 @@ export function useEditorTemplateContext(slug: string): EditorTemplateContext {
     isLoading: listQuery.isLoading,
     template,
     wysiwygVersionId: resolveEditorWysiwygVersionId(template),
+    canManage: list?.canManage ?? false,
   }
 }
 
