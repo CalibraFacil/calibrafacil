@@ -57,7 +57,7 @@ export function FieldPalette({
             size="sm"
             aria-label="Campos do certificado"
             title="Inserir campo do certificado (ou digite {{ no texto)"
-            className="h-8 gap-1 px-2 text-xs transition-[transform,background-color] active:scale-[0.96]"
+            className="h-8 gap-1 pl-1.5 pr-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
           >
             <HugeiconsIcon icon={PuzzleIcon} size={15} strokeWidth={1.8} />
             Campos
@@ -104,7 +104,7 @@ export function FieldPalette({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-auto w-full justify-start rounded-lg px-2 py-1.5 text-left transition-[transform,background-color] active:scale-[0.98]"
+                    className="h-auto w-full justify-start rounded-sm px-2 py-1.5 text-left transition-[scale,background-color] active:scale-[0.98]"
                     disabled={!editor || !editor.isEditable}
                     onClick={() => insert(entry)}
                     title={entry.source}

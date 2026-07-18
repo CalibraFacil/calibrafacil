@@ -33,7 +33,7 @@ export function ValidationChip({
             <button
               type="button"
               data-testid="validation-issues"
-              className="flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive shadow-lg backdrop-blur transition-[transform,background-color] hover:bg-destructive/15 active:scale-[0.96]"
+              className="flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs font-semibold text-destructive shadow-lg backdrop-blur transition-[scale,background-color] hover:bg-destructive/15 active:scale-[0.96]"
             >
               <HugeiconsIcon icon={Alert02Icon} size={14} strokeWidth={2} />
               {issues.length === 1

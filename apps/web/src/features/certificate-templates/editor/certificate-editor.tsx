@@ -152,6 +152,7 @@ function BlockIssueBadge({ messages }: { messages: string[] }) {
     <span
       className="cf-block-issue-badge"
       title={messages.join('\n')}
+      aria-label={`${messages.length} problema(s) de validação: ${messages.join('; ')}`}
       data-testid="block-issue-badge"
     >
       {messages.length}
@@ -291,7 +292,7 @@ function LockedBlockView(props: NodeViewProps) {
         {isOptional && props.editor.isEditable && (
           <button
             type="button"
-            className="cf-config-pill"
+            className="cf-config-pill cf-config-pill--compact"
             aria-label={`Remover ${label}`}
             title={`Remover ${label}`}
             onMouseDown={(event) => {
@@ -529,6 +530,7 @@ function CertImageView(props: NodeViewProps) {
   return (
     <NodeViewWrapper className="cf-image" data-media-id={mediaId} draggable>
       <img
+        className="cf-image-outline"
         src={`/api/organization-media/library/${mediaId}/file`}
         alt={alt}
         style={widthMm ? { width: `${widthMm}mm` } : undefined}
@@ -732,6 +734,7 @@ export function CertificateEditor({
           {editable && <EditorToolbar editor={editor} />}
           {editable && <FieldPalette editor={editor} catalog={catalog} />}
           {editable && <ImagePicker editor={editor} />}
+          {editable && <span className="cf-editor__toolbar-divider" />}
           {editable && (
             <NativeSelect
               aria-label="Registro visual"
@@ -767,7 +770,7 @@ export function CertificateEditor({
               size="sm"
               aria-pressed={bilingual}
               aria-label="Rótulos bilíngues (PT/EN)"
-              className="text-xs transition-[transform,background-color] active:scale-[0.96]"
+              className="text-xs transition-[scale,background-color] active:scale-[0.96]"
               onClick={() => {
                 if (!editor) return
                 const next = !bilingual
@@ -792,6 +795,7 @@ export function CertificateEditor({
               PT/EN
             </Button>
           )}
+          {editable && <span className="cf-editor__toolbar-divider" />}
           <NativeSelect
             aria-label="Zoom da página"
             value={
@@ -823,10 +827,11 @@ export function CertificateEditor({
             aria-pressed={showPageMarks}
             aria-label="Quebras de página (aproximadas)"
             title="Mostrar quebras de página aproximadas — a paginação final é decidida na geração do PDF"
-            className="size-8 p-0 transition-[transform,background-color] active:scale-[0.96]"
+            className="h-8 gap-1 px-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
             onClick={() => setShowPageMarks((value) => !value)}
           >
             <HugeiconsIcon icon={DashedLine01Icon} size={15} strokeWidth={1.8} />
+            Págs.
           </Button>
           <Button
             type="button"
@@ -837,7 +842,7 @@ export function CertificateEditor({
               showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'
             }
             title={showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'}
-            className="size-8 p-0 transition-[transform,background-color] active:scale-[0.96]"
+            className="size-8 p-0 transition-[scale,background-color] active:scale-[0.96]"
             onClick={() => setShowSampleValues((value) => !value)}
           >
             <HugeiconsIcon
@@ -975,7 +980,7 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
             type="button"
             variant="secondary"
             size="sm"
-            className="h-7 px-2.5 text-xs transition-[transform,background-color] active:scale-[0.96]"
+            className="h-9 px-3 text-xs transition-[scale,background-color] active:scale-[0.96]"
             onClick={() => editor.chain().focus().deleteTable().run()}
           >
             Remover tabela
@@ -1022,7 +1027,7 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
           type="button"
           variant="secondary"
           size="sm"
-          className="h-7 px-2.5 text-xs transition-[transform,background-color] active:scale-[0.96]"
+          className="h-7 px-2.5 text-xs transition-[scale,background-color] active:scale-[0.96]"
           onClick={openConfig}
         >
           Configurar
@@ -1111,7 +1116,7 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
               size="sm"
               aria-label="Inserir bloco"
               title="Inserir bloco opcional"
-              className="h-8 gap-1 px-2 text-xs transition-[transform,background-color] active:scale-[0.96]"
+              className="h-8 gap-1 pl-1.5 pr-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
             >
               <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} />
               Bloco
@@ -1181,7 +1186,7 @@ function ToolbarButton({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className="size-8 p-0 transition-[transform,background-color,color] active:scale-[0.96]"
+      className="size-8 p-0 transition-[scale,background-color,color] active:scale-[0.96]"
       onClick={onClick}
     >
       <HugeiconsIcon icon={icon} size={16} strokeWidth={1.8} />
@@ -1243,7 +1248,7 @@ function StyleTokenControls({
               variant="ghost"
               size="sm"
               aria-label="Cor de destaque"
-              className="gap-1.5 transition-[transform,background-color] active:scale-[0.96]"
+              className="gap-1.5 transition-[scale,background-color] active:scale-[0.96]"
             >
               <span
                 aria-hidden
@@ -1267,7 +1272,7 @@ function StyleTokenControls({
                 aria-label={swatch.label}
                 aria-pressed={accent === swatch.value}
                 className={cn(
-                  'flex size-8 items-center justify-center rounded-full border transition-[transform,box-shadow] active:scale-[0.96]',
+                  'flex size-8 items-center justify-center rounded-full border transition-[scale,box-shadow] active:scale-[0.96]',
                   accent === swatch.value
                     ? 'border-foreground shadow-[0_0_0_2px_var(--background),0_0_0_3.5px_currentColor]'
                     : 'border-black/15',

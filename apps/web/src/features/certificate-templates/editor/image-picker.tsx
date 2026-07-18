@@ -67,7 +67,7 @@ export function ImagePicker({ editor }: { editor: Editor | null }) {
             size="sm"
             aria-label="Inserir imagem"
             title="Inserir imagem da biblioteca da organização"
-            className="size-8 p-0 transition-[transform,background-color] active:scale-[0.96]"
+            className="size-8 p-0 transition-[scale,background-color] active:scale-[0.96]"
           >
             <HugeiconsIcon icon={Image01Icon} size={16} strokeWidth={1.8} />
           </Button>
@@ -110,14 +110,14 @@ export function ImagePicker({ editor }: { editor: Editor | null }) {
             <button
               key={item.id}
               type="button"
-              className="group flex flex-col gap-1 rounded-lg border p-1.5 text-left transition-[transform,border-color] hover:border-foreground/30 active:scale-[0.97]"
+              className="group flex flex-col gap-1 rounded-sm border p-1.5 text-left transition-[scale,border-color] hover:border-foreground/30 active:scale-[0.97]"
               onClick={() => insert(item.id, item.fileName)}
               title={item.fileName}
             >
               <img
                 src={`/api/organization-media/library/${item.id}/file`}
                 alt={item.fileName}
-                className="h-16 w-full rounded object-contain"
+                className="h-16 w-full rounded object-contain outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
                 loading="lazy"
               />
               <span className="truncate text-[10px] text-muted-foreground">

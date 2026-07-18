@@ -76,6 +76,9 @@ export function createSuggestPopup<Item>({
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'cf-field-suggest__item'
+      button.setAttribute('role', 'option')
+      button.id = testId + '-opt-' + index
+      button.setAttribute('aria-selected', String(index === selectedIndex))
       if (index === selectedIndex) {
         button.classList.add('cf-field-suggest__item--active')
       }
@@ -117,6 +120,11 @@ export function createSuggestPopup<Item>({
       element = document.createElement('div')
       element.className = 'cf-field-suggest'
       element.setAttribute('data-testid', testId)
+      element.setAttribute('role', 'listbox')
+      element.setAttribute(
+        'aria-label',
+        testId === 'slash-menu-popup' ? 'Inserir bloco' : 'Sugestões de campos',
+      )
       document.body.appendChild(element)
       document.addEventListener('pointerdown', onOutsidePointerDown, true)
       document.addEventListener('scroll', reposition, true)

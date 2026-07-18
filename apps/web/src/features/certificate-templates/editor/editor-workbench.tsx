@@ -355,7 +355,7 @@ export function EditorWorkbench({
                 href={previewPdfUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background px-3 text-xs font-medium shadow-xs transition-[transform,background-color] hover:bg-muted/50 active:scale-[0.96]"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background px-3 text-xs font-medium shadow-xs transition-[scale,background-color] hover:bg-muted/50 active:scale-[0.96]"
               >
                 <span
                   className="size-1.5 rounded-full bg-emerald-500"
