@@ -690,6 +690,12 @@ async function resolveDocumentMediaUrls(
     ),
   );
   const mediaUrls: Record<number, string> = {};
+  // Fail-loud payload budget: every image is base64-embedded into the
+  // compiled artifact that gets hashed, persisted and handed to Gotenberg —
+  // an unbounded document (20 × 2MB uploads ≈ 53MB of base64) must error
+  // clearly instead of timing out downstream.
+  const MAX_EMBEDDED_MEDIA_BYTES = 15 * 1024 * 1024;
+  let embeddedBytes = 0;
   for (const row of rows.rows) {
     const id = Number(Reflect.get(row, "id"));
     const key = String(Reflect.get(row, "r2_key"));
@@ -697,6 +703,12 @@ async function resolveDocumentMediaUrls(
     const object = await getStoredObject(env, "media", key);
     if (!object) continue;
     const buffer = await object.arrayBuffer();
+    embeddedBytes += buffer.byteLength;
+    if (embeddedBytes > MAX_EMBEDDED_MEDIA_BYTES) {
+      throw new Error(
+        "Imagens do modelo somam mais de 15 MB — remova ou reduza imagens para gerar o certificado",
+      );
+    }
     mediaUrls[id] = `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
   }
   return mediaUrls;
