@@ -465,6 +465,24 @@ export function organizationLogoKey(
   };
 }
 
+export interface OrganizationMediaKeyParams {
+  org: OrgRef;
+  uniqueId: string;
+  fileName: string;
+}
+
+/** Org media-library files (wysiwyg editor images). */
+export function organizationMediaKey(
+  params: OrganizationMediaKeyParams,
+): StorageObject {
+  const part = orgPartition(params.org);
+  const safe = params.fileName.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 80);
+  return {
+    bucket: bucketFor("ORG_LOGO"),
+    key: `org/${part}/media-library/${params.uniqueId}-${safe}`,
+  };
+}
+
 export interface MemberSignatureKeyParams {
   org: OrgRef;
   memberId: string;

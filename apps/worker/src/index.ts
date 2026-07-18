@@ -652,6 +652,56 @@ function inferImageContentType(buffer: ArrayBuffer) {
   return "application/octet-stream";
 }
 
+/** mediaIds referenced by image nodes in a wysiwyg documentJson. */
+function collectDocumentMediaIds(documentJson: unknown): number[] {
+  const ids = new Set<number>();
+  const visit = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    if (Reflect.get(node, "type") === "image") {
+      const attrs = Reflect.get(node, "attrs");
+      const mediaId =
+        attrs && typeof attrs === "object" ? Reflect.get(attrs, "mediaId") : null;
+      if (typeof mediaId === "number") ids.add(mediaId);
+    }
+    const content = Reflect.get(node, "content");
+    if (Array.isArray(content)) content.forEach(visit);
+  };
+  visit(documentJson);
+  return [...ids];
+}
+
+/**
+ * Resolve the document's org-media images to data URLs for the compiler
+ * (options.mediaUrls). Ids are tenant-scoped; anything unresolved stays out
+ * of the map so compileCertificateHtml fails loud (never a broken <img>).
+ */
+async function resolveDocumentMediaUrls(
+  env: Env,
+  organizationId: string,
+  documentJson: unknown,
+): Promise<Record<number, string>> {
+  const ids = collectDocumentMediaIds(documentJson);
+  if (ids.length === 0) return {};
+  const rows = await withDbClient(env, (client) =>
+    client.query(
+      `select id, r2_key, content_type from organization_media
+       where organization_id = $1 and id = any($2::int[])`,
+      [organizationId, ids],
+    ),
+  );
+  const mediaUrls: Record<number, string> = {};
+  for (const row of rows.rows) {
+    const id = Number(Reflect.get(row, "id"));
+    const key = String(Reflect.get(row, "r2_key"));
+    const contentType = String(Reflect.get(row, "content_type"));
+    const object = await getStoredObject(env, "media", key);
+    if (!object) continue;
+    const buffer = await object.arrayBuffer();
+    mediaUrls[id] = `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
+  }
+  return mediaUrls;
+}
+
 async function resolveOrganizationLogoDataUrl(
   env: Env,
   logoUrl: string | null | undefined,
@@ -2459,6 +2509,13 @@ async function processXlsxPreviewJob(
       const compiled = await compileCertificateHtml(
         preview.document_json,
         previewInput,
+        {
+          mediaUrls: await resolveDocumentMediaUrls(
+            env,
+            preview.organization_id,
+            preview.document_json,
+          ),
+        },
       );
       const pdfBytes = await gotenbergHtmlToPdf(
         env,
@@ -2983,6 +3040,13 @@ async function processHtmlIssuedCertificate(
     const compiled = await compileCertificateHtml(
       selection.documentJson,
       inputDataSnapshot,
+      {
+        mediaUrls: await resolveDocumentMediaUrls(
+          env,
+          job.organizationId,
+          selection.documentJson,
+        ),
+      },
     );
 
     // gotenbergHtmlToPdf prepends the doctype; the compiled artifact keeps its own.

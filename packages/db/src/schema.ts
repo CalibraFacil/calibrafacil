@@ -1211,6 +1211,35 @@ export const organizationEmailDomain = pgTable(
   ],
 );
 
+/**
+ * Org media library (wysiwyg roadmap item 3): images the certificate editor
+ * can reference by id (`image` node attrs.mediaId). Files live in the media
+ * R2 bucket under org/<partition>/media/<id>-<name>; the worker resolves ids
+ * to data URLs at compile time (stable, deterministic per snapshot).
+ */
+export const organizationMedia = pgTable(
+  "organization_media",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    r2Key: text("r2_key").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_media_org_idx").on(table.organizationId),
+  ],
+);
+
+export type OrganizationMedia = typeof organizationMedia.$inferSelect;
+
 export const certificateTemplate = pgTable(
   "certificate_template",
   {

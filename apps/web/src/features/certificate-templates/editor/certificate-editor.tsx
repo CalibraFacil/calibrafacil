@@ -12,6 +12,7 @@ import {
   BandTopIdentity,
   CERTIFICATE_PRINT_CSS,
   OPTIONAL_BLOCK_KEYS,
+  CertImage,
   CertPlaceholder,
   LockedBlock,
   LockedBlockGuard,
@@ -83,6 +84,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
+import { ImagePicker } from './image-picker'
 import './certificate-editor.css'
 
 export { EDITOR_SAMPLE_DATA, LOCKED_BLOCK_LABELS } from './editor-sample-data'
@@ -494,6 +496,29 @@ function BandPageFooterView(props: NodeViewProps) {
   )
 }
 
+function CertImageView(props: NodeViewProps) {
+  const mediaId = Number(props.node.attrs.mediaId)
+  const alt = typeof props.node.attrs.alt === 'string' ? props.node.attrs.alt : ''
+  const widthMm =
+    typeof props.node.attrs.widthMm === 'number' ? props.node.attrs.widthMm : null
+  return (
+    <NodeViewWrapper className="cf-image" data-media-id={mediaId} draggable>
+      <img
+        src={`/api/organization-media/library/${mediaId}/file`}
+        alt={alt}
+        style={widthMm ? { width: `${widthMm}mm` } : undefined}
+        contentEditable={false}
+      />
+    </NodeViewWrapper>
+  )
+}
+
+const CertImageWithView = CertImage.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(CertImageView)
+  },
+})
+
 const LockedBlockWithView = LockedBlock.extend({
   addNodeView() {
     return ReactNodeViewRenderer(LockedBlockView)
@@ -525,6 +550,7 @@ function editorExtensions() {
       if (extension.name === 'placeholder') return PlaceholderWithView
       if (extension.name === 'bandTopIdentity') return BandTopIdentityWithView
       if (extension.name === 'bandPageFooter') return BandPageFooterWithView
+      if (extension.name === 'image') return CertImageWithView
       return extension
     }),
     LockedBlockGuard,
@@ -684,6 +710,7 @@ export function CertificateEditor({
         <div className="cf-editor__bar">
           {editable && <EditorToolbar editor={editor} />}
           {editable && <FieldPalette editor={editor} catalog={catalog} />}
+          {editable && <ImagePicker editor={editor} />}
           {editable && (
             <NativeSelect
               aria-label="Registro visual"

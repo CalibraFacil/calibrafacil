@@ -10,6 +10,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
 import { newWysiwygStarterDocument } from '@calibra-facil/certificate-html-template'
 
@@ -63,7 +64,11 @@ async function mountEditor() {
       />
     )
   }
-  render(<Harness />)
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Harness />
+    </QueryClientProvider>,
+  )
   await waitFor(() => {
     if (!holder.editor) throw new Error('editor not ready')
   })

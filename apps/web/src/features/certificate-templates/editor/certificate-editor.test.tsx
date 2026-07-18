@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
 import { newWysiwygStarterDocument } from '@calibra-facil/certificate-html-template'
 
@@ -30,14 +31,16 @@ function countLockedBlocks(editor: Editor): number {
 async function mountEditor(options?: { editable?: boolean }): Promise<Editor> {
   const holder: { editor: Editor | null } = { editor: null }
   render(
-    <CertificateEditor
-      initialDocument={newWysiwygStarterDocument()}
-      editable={options?.editable ?? true}
-      immediatelyRender
-      onEditorReady={(editor) => {
-        holder.editor = editor
-      }}
-    />,
+    <QueryClientProvider client={new QueryClient()}>
+      <CertificateEditor
+        initialDocument={newWysiwygStarterDocument()}
+        editable={options?.editable ?? true}
+        immediatelyRender
+        onEditorReady={(editor) => {
+          holder.editor = editor
+        }}
+      />
+    </QueryClientProvider>,
   )
   await waitFor(() => {
     if (!holder.editor) throw new Error('editor not ready')

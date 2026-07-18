@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import type { Env } from "@calibra-facil/worker";
 import { db, truncateAll } from "../test/integration/db";
+import { organizationMedia } from "@calibra-facil/db/schema";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
 import { seedIssuableJob, WYSIWYG_JOB_RESULTS } from "../test/integration/seed-certificate";
@@ -236,6 +237,45 @@ describe("processHtmlIssuedCertificate (worker real-DB integration — M1)", () 
       expect(html).toContain('class="cf-eccentricity-indicator"');
       expect(html).toContain("data:image/svg+xml");
     }
+  });
+
+  it("REQ-WYS-008 authored org-media images resolve to data URLs in the compiled artifact", async () => {
+    const { env, stored } = makeRecordingEnv();
+    const org = await seedOrg({ orgId: "org-1", userId: USER_ID });
+    // seed a library image + its R2 object
+    const mediaKey = "org/o/org-1/media-library/img-1-selo.png";
+    const [mediaRow] = await db
+      .insert(organizationMedia)
+      .values({
+        organizationId: org.orgId,
+        fileName: "selo.png",
+        r2Key: mediaKey,
+        contentType: "image/png",
+        sizeBytes: 4,
+        createdBy: org.userId,
+      })
+      .returning();
+    if (!mediaRow) throw new Error("media seed failed");
+    await env.MEDIA_BUCKET.put(mediaKey, new Uint8Array([1, 2, 3, 4]));
+    const job = await seedIssuableJob({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.userId,
+      engine: "wysiwyg",
+      imageMediaId: mediaRow.id,
+    });
+    await processBackgroundJob(env, {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: org.userId,
+    });
+    const snapshots = await issuedSnapshotRows(job.jobId);
+    expect(snapshots).toHaveLength(1);
+    const html = new TextDecoder().decode(
+      stored.get(asString(snapshots[0]?.compiled_html_r2_key))?.body ?? new Uint8Array(),
+    );
+    expect(html).toContain('class="cf-image"');
+    expect(html).toContain("data:image/png;base64,");
   });
 
   it("REQ-WYS-007 [M-B] bands: compiled artifact carries the repeating thead identity band + embedded footer, and the footer identity box is SENT to Chromium", async () => {

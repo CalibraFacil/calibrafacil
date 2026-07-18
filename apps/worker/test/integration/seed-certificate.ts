@@ -200,6 +200,8 @@ export async function seedIssuableJob(params: {
   /** Approver user id written to approved_by (defaults to params.userId). */
   approvedBy?: string;
   customerName?: string;
+  /** Org-media id to reference from an authored image node (wysiwyg only). */
+  imageMediaId?: number;
   /** Template engine to seed ("xlsx" default; "wysiwyg" seeds documentJson). */
   engine?: "xlsx" | "wysiwyg";
   /** wysiwyg only: override the frozen job results (e.g. drop U for fail-loud tests). */
@@ -209,7 +211,20 @@ export async function seedIssuableJob(params: {
   const jobNumber = params.jobNumber ?? "CAL-2026-0001";
   const xlsxR2Key = params.xlsxR2Key ?? `media/templates/${jobNumber}.xlsx`;
   const bindingManifestSha256 = `sha256-manifest-${jobNumber}`;
-  const wysiwygDocument = engine === "wysiwyg" ? newWysiwygStarterDocument() : null;
+  const wysiwygDocument = (() => {
+    if (engine !== "wysiwyg") return null;
+    const doc: { content: Record<string, unknown>[] } = JSON.parse(
+      JSON.stringify(newWysiwygStarterDocument()),
+    );
+    if (params.imageMediaId) {
+      // authored org-media image before the trailing band (roadmap item 3)
+      doc.content.splice(doc.content.length - 1, 0, {
+        type: "image",
+        attrs: { mediaId: params.imageMediaId, alt: "logo interno", widthMm: 40 },
+      });
+    }
+    return doc;
+  })();
   const documentSha256 = wysiwygDocument
     ? hashCertificateDocument(wysiwygDocument)
     : null;

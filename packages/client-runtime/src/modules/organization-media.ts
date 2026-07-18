@@ -46,5 +46,43 @@ export function createOrganizationMediaApi(
         "Falha ao remover logo",
       );
     },
+    async listLibrary() {
+      const response = await (options.fetch ?? fetch)(
+        new URL("/api/organization-media/library", options.baseUrl),
+        {
+          credentials: "include",
+          headers: createCloudHeaders(options.activeUnitProvider),
+        },
+      );
+      return readJsonResponse(response, "Falha ao listar imagens");
+    },
+    async uploadLibrary(file, input) {
+      const formData = new FormData();
+      appendNamedBlob(formData, "file", file, input?.fileName);
+      const response = await (options.fetch ?? fetch)(
+        new URL("/api/organization-media/library", options.baseUrl),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: createCloudHeaders(options.activeUnitProvider),
+          body: formData,
+        },
+      );
+      return readJsonResponse(response, "Falha ao enviar imagem");
+    },
+    async deleteLibrary(mediaId) {
+      const response = await (options.fetch ?? fetch)(
+        new URL(
+          `/api/organization-media/library/${mediaId}`,
+          options.baseUrl,
+        ),
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: createCloudHeaders(options.activeUnitProvider),
+        },
+      );
+      return readJsonResponse(response, "Falha ao remover imagem");
+    },
   };
 }

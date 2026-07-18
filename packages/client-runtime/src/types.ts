@@ -2999,12 +2999,26 @@ export type OrganizationLogoDeleteResponse = {
   logoUrl: null;
 };
 
+export interface OrganizationMediaLibraryItem {
+  id: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string | null;
+}
+
 export interface OrganizationMediaApi {
   uploadLogo(
     file: Blob,
     input?: { fileName?: string },
   ): Promise<OrganizationLogoUploadResponse>;
   deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
+  listLibrary(): Promise<{ items: OrganizationMediaLibraryItem[] }>;
+  uploadLibrary(
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<{ item: OrganizationMediaLibraryItem }>;
+  deleteLibrary(mediaId: number): Promise<{ ok: boolean }>;
 }
 
 export type SigningCertificateStatus =

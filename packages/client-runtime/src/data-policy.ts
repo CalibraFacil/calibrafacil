@@ -224,6 +224,9 @@ export const calibraApiPolicyRegistry = {
   organizationMedia: {
     uploadLogo: "cloud-only",
     deleteLogo: "cloud-only",
+    listLibrary: "cloud-only",
+    uploadLibrary: "cloud-only",
+    deleteLibrary: "cloud-only",
   },
   signingCertificates: {
     list: "cloud-only",

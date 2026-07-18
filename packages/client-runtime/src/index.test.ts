@@ -724,6 +724,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "listLibrary",
+          "namespace": "organizationMedia",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "uploadLibrary",
+          "namespace": "organizationMedia",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "deleteLibrary",
+          "namespace": "organizationMedia",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "signingCertificates",
           "policy": "cloud-only",

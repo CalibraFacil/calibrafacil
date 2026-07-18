@@ -715,6 +715,13 @@
       "when": 1784563600000,
       "tag": "0101_certificate_template_wysiwyg_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1784563601000,
+      "tag": "0102_organization_media",
+      "breakpoints": true
     }
   ]
 }
