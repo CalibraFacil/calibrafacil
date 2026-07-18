@@ -254,6 +254,7 @@ function LockedBlockView(props: NodeViewProps) {
         configOpen && 'cf-config-open',
       )}
       data-locked-block-view={blockKey}
+      onClick={selectSelf}
     >
       <div className="cf-locked-block-view__header" contentEditable={false}>
         {props.editor.isEditable && (
@@ -679,8 +680,11 @@ export function CertificateEditor({
           })
           if (!posInfo) return false
           try {
-            const resolved = view.state.doc.resolve(posInfo.pos)
-            const blockPos = resolved.before(1)
+            // posAtCoords lands AFTER atom NodeViews; `inside` names the node
+            // the pointer is actually over, so prefer it when present.
+            const basePos = posInfo.inside >= 0 ? posInfo.inside : posInfo.pos
+            const resolved = view.state.doc.resolve(basePos)
+            const blockPos = resolved.depth === 0 ? basePos : resolved.before(1)
             const dom = view.nodeDOM(blockPos)
             if (dom instanceof HTMLElement) {
               const paperRect = paperRef.current?.getBoundingClientRect()

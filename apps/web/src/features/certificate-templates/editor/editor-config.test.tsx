@@ -566,6 +566,24 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
   })
 
+  it('clicking a locked block selects it and surfaces the selection dock', async () => {
+    const editor = await mountWithInspector()
+    const view = document.querySelector('[data-locked-block-view="results_table"]')
+    expect(view).not.toBeNull()
+    fireEvent.click(view!)
+    await waitFor(() => {
+      const dock = screen.getByTestId('selection-dock')
+      expect(dock.textContent).toContain('Tabela de resultados')
+    })
+    const selectedNode =
+      'node' in editor.state.selection ? editor.state.selection.node : null
+    expect(
+      selectedNode && typeof selectedNode === 'object'
+        ? Reflect.get(Reflect.get(selectedNode, 'type') ?? {}, 'name')
+        : null,
+    ).toBe('lockedBlock')
+  })
+
   it('zoom shortcuts: Ctrl+= / Ctrl+- / Ctrl+0 step and reset (step 5)', async () => {
     await mountWithInspector()
     const proseMirror = document.querySelector('.ProseMirror')
