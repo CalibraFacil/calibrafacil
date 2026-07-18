@@ -702,10 +702,6 @@ export function CertificateEditor({
           }
           return false
         },
-        mouseleave: () => {
-          setHoverBlock(null)
-          return false
-        },
       },
       handleKeyDown: (_view, event) => {
         if (!(event.ctrlKey || event.metaKey)) return false
@@ -869,6 +865,9 @@ export function CertificateEditor({
           className="cf-editor__paper"
           data-zoom={zoomPercent}
           style={zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }}
+          // Hover state clears when leaving the PAPER (page + gutter), never
+          // when merely crossing from the page toward the ＋ in the gutter.
+          onMouseLeave={() => setHoverBlock(null)}
         >
           <EditorContent
             editor={editor}
