@@ -65,6 +65,12 @@ const CreateTemplateSchema = z.object({
 
 const UpdateWysiwygDocumentSchema = z.object({
   documentJson: z.record(z.string(), z.unknown()),
+  /**
+   * Optimistic-concurrency token: the documentSha256 the CLIENT last saw.
+   * When present and stale, the save is refused (409 document_conflict)
+   * instead of silently overwriting another session's work.
+   */
+  expectedDocumentSha256: z.string().length(64).optional(),
 });
 
 const DEFAULT_WYSIWYG_RENDER_POLICY = {
@@ -760,7 +766,25 @@ export const certificateTemplatesRouter = new Hono<{
       // Immutability (spec 02 §1 rule 1): documentJson is writable ONLY in DRAFT.
       if (existing.status !== "DRAFT") {
         return c.json(
-          { error: "Versões validadas/publicadas são imutáveis — crie uma nova versão" },
+          {
+            error: "Versões validadas/publicadas são imutáveis — crie uma nova versão",
+            code: "version_immutable",
+          },
+          409,
+        );
+      }
+
+      if (
+        input.expectedDocumentSha256 &&
+        input.expectedDocumentSha256 !== existing.documentSha256
+      ) {
+        return c.json(
+          {
+            error:
+              "O modelo foi alterado em outra aba ou sessão — recarregue a página antes de continuar",
+            code: "document_conflict",
+            documentSha256: existing.documentSha256,
+          },
           409,
         );
       }

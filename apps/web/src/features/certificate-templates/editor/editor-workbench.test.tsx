@@ -191,6 +191,83 @@ describe('EditorWorkbench (jsdom)', () => {
     )
   })
 
+  it('save failure blocks publish, resets validation and offers retry', async () => {
+    mocks.validateWysiwygDocument.mockResolvedValue({ ok: true, issues: [] })
+    mocks.saveWysiwygDocument.mockRejectedValueOnce(new Error('rede caiu'))
+    renderWorkbench()
+
+    await screen.findByRole('toolbar')
+    fireEvent.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole('button', { name: 'Publicar' })
+          .hasAttribute('disabled'),
+      ).toBe(false)
+    })
+
+    // an edit whose autosave FAILS must re-block publish
+    const proseMirror = document.querySelector('.ProseMirror')
+    expect(proseMirror).not.toBeNull()
+    const editor = proseMirror ? Reflect.get(proseMirror, 'editor') : null
+    editor.commands.insertContent('X')
+    // force the failing save through the retry-visible path
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('save-state').textContent).toBe(
+          'Falha ao salvar',
+        )
+      },
+      { timeout: 4000 },
+    )
+    expect(
+      screen.getByRole('button', { name: 'Publicar' }).hasAttribute('disabled'),
+    ).toBe(true)
+
+    // retry succeeds -> saved, but validation must be required again
+    mocks.saveWysiwygDocument.mockResolvedValue({
+      item: {
+        id: 77,
+        version: 1,
+        status: 'DRAFT',
+        documentSha256: 'b'.repeat(64),
+        updatedAt: null,
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('save-state').textContent).toBe('Salvo')
+    })
+    expect(
+      screen.getByRole('button', { name: 'Publicar' }).hasAttribute('disabled'),
+    ).toBe(true)
+  })
+
+  it('a 409 conflict from another session hard-locks the editor with a banner', async () => {
+    const { CalibraApiError } = await import('@calibra-facil/client-runtime')
+    mocks.saveWysiwygDocument.mockRejectedValue(
+      new CalibraApiError('conflito', 409, {
+        error: 'alterado em outra sessão',
+        code: 'document_conflict',
+      }),
+    )
+    renderWorkbench()
+    await screen.findByRole('toolbar')
+    const proseMirror = document.querySelector('.ProseMirror')
+    const editor = proseMirror ? Reflect.get(proseMirror, 'editor') : null
+    editor.commands.insertContent('X')
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('remote-lock-banner')).toBeDefined()
+      },
+      { timeout: 4000 },
+    )
+    // editor flips read-only: the toolbar is gone
+    await waitFor(() => {
+      expect(screen.queryByRole('toolbar')).toBeNull()
+    })
+  })
+
   it('published versions render read-only: no toolbar, no publish actions', async () => {
     renderWorkbench(makeVersion({ status: 'PUBLISHED' }))
     await waitFor(() => {

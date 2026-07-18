@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { CalibraApiError } from '@calibra-facil/client-runtime'
 
 import {
   AlertDialog,
@@ -71,16 +72,52 @@ export function EditorWorkbench({
   const [previewId, setPreviewId] = useState<number | null>(null)
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
 
+  /**
+   * Remote lock: another tab/session validated or published this version (the
+   * save PUT 409s "version_immutable"), or saved over it ("document_conflict").
+   * Editing is hard-disabled until reload — typing into a document that can
+   * never persist again is worse than stopping the user.
+   */
+  const [remoteLock, setRemoteLock] = useState<
+    'conflict' | 'immutable' | null
+  >(null)
+
   const latestDocumentRef = useRef<Record<string, unknown>>(
     version.documentJson,
   )
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const documentShaRef = useRef(version.documentSha256)
+  const saveStateRef = useRef<SaveState>('idle')
+  const pendingSaveRef = useRef<Promise<boolean> | null>(null)
+  const saveQueuedRef = useRef(false)
+  const remoteLockRef = useRef<'conflict' | 'immutable' | null>(null)
 
-  useMountEffect(() => () => {
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+  const markSaveState = (next: SaveState) => {
+    saveStateRef.current = next
+    setSaveState(next)
+  }
+
+  useMountEffect(() => {
+    // Edits inside the debounce window (or a failed save) must not vanish on
+    // tab close — regulated templates, not scratch notes.
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const state = saveStateRef.current
+      if (state === 'dirty' || state === 'saving' || state === 'error') {
+        event.preventDefault()
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+      // In-app navigation: last-chance fire-and-forget flush of pending edits.
+      if (saveStateRef.current === 'dirty' && !remoteLockRef.current) {
+        void saveNow()
+      }
+    }
   })
 
-  const editable = status === 'DRAFT'
+  const editable = status === 'DRAFT' && remoteLock === null
 
   const saveMutation = useSaveWysiwygDocument(templateId, version.id)
   const validateMutation = useValidateWysiwygDocument(templateId, version.id)
@@ -108,20 +145,41 @@ export function EditorWorkbench({
     },
   })
 
-  const saveNow = async (): Promise<boolean> => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current)
-      autosaveTimerRef.current = null
-    }
-    setSaveState('saving')
+  const runSave = async (): Promise<boolean> => {
+    markSaveState('saving')
     try {
-      const response = await saveMutation.mutateAsync(latestDocumentRef.current)
-      if (response.item) setDocumentSha(response.item.documentSha256)
-      setSaveState('saved')
+      const response = await saveMutation.mutateAsync({
+        documentJson: latestDocumentRef.current,
+        expectedDocumentSha256: documentShaRef.current,
+      })
+      if (!response.item) {
+        throw new Error('Falha ao salvar — resposta sem conteúdo')
+      }
+      documentShaRef.current = response.item.documentSha256
+      setDocumentSha(response.item.documentSha256)
+      markSaveState('saved')
       setValidatedOk(false)
       return true
     } catch (error) {
-      setSaveState('error')
+      markSaveState('error')
+      setValidatedOk(false)
+      if (error instanceof CalibraApiError) {
+        const payload =
+          error.payload && typeof error.payload === 'object'
+            ? error.payload
+            : null
+        const code = payload ? Reflect.get(payload, 'code') : null
+        if (error.status === 409) {
+          const kind = code === 'document_conflict' ? 'conflict' : 'immutable'
+          remoteLockRef.current = kind
+          setRemoteLock(kind)
+          return false
+        }
+        if (error.status === 422 && payload) {
+          const parsed = parseValidationIssues(payload)
+          if (parsed.length > 0) setIssues(parsed)
+        }
+      }
       toast.error(
         error instanceof Error ? error.message : 'Falha ao salvar o modelo',
       )
@@ -129,17 +187,51 @@ export function EditorWorkbench({
     }
   }
 
+  /**
+   * Single-flight saving: never lets two PUTs overlap (out-of-order responses
+   * would silently persist stale content). Edits made while a save is in
+   * flight queue exactly one follow-up save on the same promise.
+   */
+  const saveNow = (): Promise<boolean> => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    if (pendingSaveRef.current) {
+      saveQueuedRef.current = true
+      return pendingSaveRef.current
+    }
+    const flight = (async () => {
+      let ok = await runSave()
+      while (ok && saveQueuedRef.current) {
+        saveQueuedRef.current = false
+        ok = await runSave()
+      }
+      saveQueuedRef.current = false
+      pendingSaveRef.current = null
+      return ok
+    })()
+    pendingSaveRef.current = flight
+    return flight
+  }
+
   const handleDocumentChange = (documentJson: Record<string, unknown>) => {
     latestDocumentRef.current = documentJson
-    setSaveState('dirty')
+    if (saveStateRef.current !== 'saving') markSaveState('dirty')
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
       void saveNow()
     }, AUTOSAVE_DEBOUNCE_MS)
   }
 
+  /** Wait for ALL pending work (in-flight + queued) before acting on the doc. */
   const ensureSaved = async (): Promise<boolean> => {
-    if (saveState === 'dirty' || saveState === 'error') return saveNow()
+    if (pendingSaveRef.current) {
+      const ok = await pendingSaveRef.current
+      if (!ok) return false
+    }
+    const state = saveStateRef.current
+    if (state === 'dirty' || state === 'error') return saveNow()
     return true
   }
 
@@ -189,6 +281,16 @@ export function EditorWorkbench({
   }
 
   const handlePublish = async () => {
+    // Flush pending edits and re-gate: a publish must reflect exactly the
+    // validated, persisted document — never a stale or unsaved one.
+    if (!(await ensureSaved())) {
+      toast.error('Salve o documento antes de publicar')
+      return
+    }
+    if (saveStateRef.current !== 'saved' && saveStateRef.current !== 'idle') {
+      toast.error('Salve o documento antes de publicar')
+      return
+    }
     try {
       const published = await publishMutation.mutateAsync()
       setStatus(published.item.status)
@@ -207,6 +309,7 @@ export function EditorWorkbench({
     !editable ||
     saveState === 'dirty' ||
     saveState === 'saving' ||
+    saveState === 'error' ||
     issues.length > 0 ||
     !validatedOk
 
@@ -232,6 +335,17 @@ export function EditorWorkbench({
           >
             {SAVE_LABELS[saveState]}
           </Badge>
+        )}
+        {saveState === 'error' && remoteLock === null && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => void saveNow()}
+          >
+            Tentar novamente
+          </Button>
         )}
         <span className="flex-1" />
         {previewStatus && (
@@ -330,6 +444,32 @@ export function EditorWorkbench({
           </>
         )}
       </div>
+
+      {remoteLock !== null && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          data-testid="remote-lock-banner"
+        >
+          <span className="font-medium">
+            {remoteLock === 'conflict'
+              ? 'Este modelo foi alterado em outra aba ou sessão.'
+              : 'Esta versão foi validada ou publicada em outra aba ou sessão.'}
+          </span>
+          <span className="text-destructive/80">
+            A edição foi bloqueada para não sobrescrever o outro trabalho —
+            recarregue a página para continuar.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Recarregar
+          </Button>
+        </div>
+      )}
 
       <ValidationChip
         issues={issues}

@@ -196,7 +196,10 @@ export function createCertificateTemplatesApi(
     async saveWysiwygDocument<TResponse = unknown>(
       templateId: string | number,
       versionId: string | number,
-      input: { documentJson: Record<string, unknown> },
+      input: {
+        documentJson: Record<string, unknown>;
+        expectedDocumentSha256?: string;
+      },
     ) {
       return fetchJson<TResponse>(
         `/api/certificate-templates/${templateId}/versions/${versionId}/document`,

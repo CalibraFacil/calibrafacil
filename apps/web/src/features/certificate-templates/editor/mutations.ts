@@ -43,12 +43,15 @@ export function useSaveWysiwygDocument(
   versionId: number | null,
 ) {
   return useMutation({
-    mutationFn: async (documentJson: Record<string, unknown>) => {
+    mutationFn: async (input: {
+      documentJson: Record<string, unknown>
+      expectedDocumentSha256?: string
+    }) => {
       if (versionId === null) throw new Error('Versão indisponível')
       return calibraApi.certificateTemplates.saveWysiwygDocument<SaveDocumentResponse>(
         templateId,
         versionId,
-        { documentJson },
+        input,
       )
     },
   })
