@@ -36,6 +36,7 @@ export function createSuggestPopup<Item>({
   let items: Item[] = []
   let selectedIndex = 0
   let command: (item: Item) => void = () => undefined
+  let clientRect: (() => DOMRect | null) | null = null
 
   // Clicking anywhere outside the popup dismisses it — Suggestion's onExit
   // only fires on editor-state changes, so an outside click on non-editor
@@ -46,10 +47,18 @@ export function createSuggestPopup<Item>({
     hide()
   }
 
+  // The popup is position:fixed, so page/container scrolls move the caret out
+  // from under it — track them (capture catches nested scrollers) and flip
+  // above the caret when the viewport bottom would clip the menu.
+  const reposition = () => position()
+
   const hide = () => {
     element?.remove()
     element = null
+    clientRect = null
     document.removeEventListener('pointerdown', onOutsidePointerDown, true)
+    document.removeEventListener('scroll', reposition, true)
+    window.removeEventListener('resize', reposition)
   }
 
   const renderItems = () => {
@@ -89,11 +98,18 @@ export function createSuggestPopup<Item>({
     })
   }
 
-  const position = (clientRect?: (() => DOMRect | null) | null) => {
+  const position = () => {
     const rect = clientRect?.()
     if (!rect || !element) return
-    element.style.left = `${rect.left}px`
-    element.style.top = `${rect.bottom + 4}px`
+    const height = element.offsetHeight
+    const width = element.offsetWidth
+    const below = rect.bottom + 4
+    const clipsBottom = below + height > window.innerHeight - 8
+    const fitsAbove = rect.top - height - 4 > 8
+    const top = clipsBottom && fitsAbove ? rect.top - height - 4 : below
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+    element.style.left = `${left}px`
+    element.style.top = `${top}px`
   }
 
   return {
@@ -103,18 +119,22 @@ export function createSuggestPopup<Item>({
       element.setAttribute('data-testid', testId)
       document.body.appendChild(element)
       document.addEventListener('pointerdown', onOutsidePointerDown, true)
+      document.addEventListener('scroll', reposition, true)
+      window.addEventListener('resize', reposition)
       items = props.items
       selectedIndex = 0
       command = props.command
+      clientRect = props.clientRect ?? null
       renderItems()
-      position(props.clientRect)
+      position()
     },
     onUpdate: (props) => {
       items = props.items
       selectedIndex = Math.min(selectedIndex, Math.max(items.length - 1, 0))
       command = props.command
+      clientRect = props.clientRect ?? null
       renderItems()
-      position(props.clientRect)
+      position()
     },
     onKeyDown: ({ event }) => {
       if (!element) return false
