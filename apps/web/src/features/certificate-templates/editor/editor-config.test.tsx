@@ -584,6 +584,24 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     ).toBe('lockedBlock')
   })
 
+  it('a caret inside an authored table surfaces Remover tabela in the dock', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.setTextSelection(3)
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: true })
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).toContain('"table"')
+    })
+    await waitFor(() => {
+      const dock = screen.getByTestId('selection-dock')
+      expect(dock.textContent).toContain('Tabela')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remover tabela' }))
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).not.toContain('"table"')
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
   it('zoom shortcuts: Ctrl+= / Ctrl+- / Ctrl+0 step and reset (step 5)', async () => {
     await mountWithInspector()
     const proseMirror = document.querySelector('.ProseMirror')

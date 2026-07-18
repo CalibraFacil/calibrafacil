@@ -932,7 +932,28 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
   if (!editor || !editor.isEditable) return null
   const { selection } = editor.state
   const node = 'node' in selection ? selection.node : null
-  if (!node || typeof node !== 'object') return null
+  if (!node || typeof node !== 'object') {
+    // Authored tables are not atoms — the caret lives INSIDE them, and
+    // TipTap only removes a table via an explicit command. Surface it here,
+    // or an inserted table is impossible to delete.
+    if (editor.isActive('table')) {
+      return (
+        <div className="cf-selection-dock" data-testid="selection-dock">
+          <span className="cf-selection-dock__label">Tabela</span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 px-2.5 text-xs transition-[transform,background-color] active:scale-[0.96]"
+            onClick={() => editor.chain().focus().deleteTable().run()}
+          >
+            Remover tabela
+          </Button>
+        </div>
+      )
+    }
+    return null
+  }
   const typeName = Reflect.get(node, 'type')?.name
   let label: string | null = null
   let configurable = false
