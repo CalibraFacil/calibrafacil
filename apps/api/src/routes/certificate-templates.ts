@@ -865,7 +865,17 @@ export const certificateTemplatesRouter = new Hono<{
             validationResult: { ok: false, issues: validated.issues },
             updatedAt: new Date(),
           })
-          .where(eq(certificateTemplateVersion.id, existing.id));
+          .where(
+            and(
+              eq(certificateTemplateVersion.id, existing.id),
+              // A concurrent save mid-trial-compile must not get stamped
+              // VALIDATED for content that was never compiled.
+              eq(
+                certificateTemplateVersion.documentSha256,
+                existing.documentSha256 ?? "",
+              ),
+            ),
+          );
         return c.json({ ok: false, issues: validated.issues });
       }
 
@@ -890,7 +900,15 @@ export const certificateTemplatesRouter = new Hono<{
             status: nextStatus,
             updatedAt: new Date(),
           })
-          .where(eq(certificateTemplateVersion.id, existing.id));
+          .where(
+            and(
+              eq(certificateTemplateVersion.id, existing.id),
+              eq(
+                certificateTemplateVersion.documentSha256,
+                existing.documentSha256 ?? "",
+              ),
+            ),
+          );
         return c.json({ ok: true, issues: [], trialCompile: validationResult.trialCompile, status: nextStatus });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -931,51 +949,83 @@ export const certificateTemplatesRouter = new Hono<{
       }
 
       // Fork: new DRAFT copying the latest wysiwyg version's document (or the
-      // starter document when none exists yet).
-      const [latest] = await db
-        .select({
-          version: certificateTemplateVersion.version,
-          engine: certificateTemplateVersion.engine,
-          documentJson: certificateTemplateVersion.documentJson,
-        })
-        .from(certificateTemplateVersion)
-        .where(
-          and(
-            eq(certificateTemplateVersion.templateId, id),
-            eq(certificateTemplateVersion.organizationId, member.organizationId),
-          ),
-        )
-        .orderBy(desc(certificateTemplateVersion.version))
-        .limit(1);
+      // starter document when none exists yet). Serialized under the same
+      // advisory lock as the XLSX upload path — two concurrent "Nova versão"
+      // clicks must not race the version counter, and the UI's at-most-one-
+      // DRAFT invariant is enforced here by returning the existing DRAFT
+      // (idempotent fork) instead of inserting a sibling.
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`certificate-template-version:${id}`}))`,
+        );
 
-      const sourceDocument =
-        latest?.engine === "wysiwyg" && latest.documentJson
-          ? latest.documentJson
-          : newWysiwygStarterDocument();
-      const validated = validateCertificateTemplateDocument(sourceDocument);
-      if (!validated.ok) {
+        const versions = await tx
+          .select({
+            id: certificateTemplateVersion.id,
+            version: certificateTemplateVersion.version,
+            status: certificateTemplateVersion.status,
+            engine: certificateTemplateVersion.engine,
+            documentJson: certificateTemplateVersion.documentJson,
+          })
+          .from(certificateTemplateVersion)
+          .where(
+            and(
+              eq(certificateTemplateVersion.templateId, id),
+              eq(
+                certificateTemplateVersion.organizationId,
+                member.organizationId,
+              ),
+            ),
+          )
+          .orderBy(desc(certificateTemplateVersion.version));
+
+        const existingDraft = versions.find(
+          (candidate) =>
+            candidate.status === "DRAFT" && candidate.engine === "wysiwyg",
+        );
+        if (existingDraft) {
+          const [row] = await tx
+            .select()
+            .from(certificateTemplateVersion)
+            .where(eq(certificateTemplateVersion.id, existingDraft.id))
+            .limit(1);
+          return { created: row ?? null, reused: true };
+        }
+
+        const latest = versions[0];
+        const sourceDocument =
+          latest?.engine === "wysiwyg" && latest.documentJson
+            ? latest.documentJson
+            : newWysiwygStarterDocument();
+        const validated = validateCertificateTemplateDocument(sourceDocument);
+        if (!validated.ok) {
+          return { created: null, reused: false, invalid: validated.issues };
+        }
+
+        const [created] = await tx
+          .insert(certificateTemplateVersion)
+          .values({
+            organizationId: member.organizationId,
+            templateId: id,
+            version: (latest?.version ?? 0) + 1,
+            status: "DRAFT",
+            engine: "wysiwyg",
+            documentJson: toRecord(validated.document),
+            documentSha256: hashCertificateDocument(validated.document),
+            renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
+            createdBy: session.user.id,
+          })
+          .returning();
+        return { created: created ?? null, reused: false };
+      });
+
+      if (result.invalid) {
         return c.json(
-          { error: "Documento de origem inválido", issues: validated.issues },
+          { error: "Documento de origem inválido", issues: result.invalid },
           409,
         );
       }
-
-      const [created] = await db
-        .insert(certificateTemplateVersion)
-        .values({
-          organizationId: member.organizationId,
-          templateId: id,
-          version: (latest?.version ?? 0) + 1,
-          status: "DRAFT",
-          engine: "wysiwyg",
-          documentJson: toRecord(validated.document),
-          documentSha256: hashCertificateDocument(validated.document),
-          renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
-          createdBy: session.user.id,
-        })
-        .returning();
-
-      return c.json({ item: created }, 201);
+      return c.json({ item: result.created }, result.reused ? 200 : 201);
     },
   )
   .post(
@@ -1595,6 +1645,24 @@ export const certificateTemplatesRouter = new Hono<{
         return c.json({ error: "Versão XLSX não encontrada" }, 404);
       }
 
+      // Publishing onto an archived template would create an ARCHIVED
+      // template with a fresh PUBLISHED version — incoherent audit trail.
+      const parentTemplate = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.id, id),
+          eq(certificateTemplate.organizationId, member.organizationId),
+        ),
+      });
+      if (!parentTemplate || parentTemplate.status !== "ACTIVE") {
+        return c.json(
+          {
+            error:
+              "Template arquivado — restaure-o antes de publicar novas versões",
+          },
+          409,
+        );
+      }
+
       if (existing.engine === "wysiwyg") {
         // wysiwyg publish (epic wysiwyg, spec 02 §6.1): structure + catalog +
         // trial compile must pass HERE, at the gate that makes the version
@@ -1647,8 +1715,17 @@ export const certificateTemplatesRouter = new Hono<{
             publishedBy: session.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(certificateTemplateVersion.id, existing.id))
+          .where(
+            and(
+              eq(certificateTemplateVersion.id, existing.id),
+              inArray(certificateTemplateVersion.status, ["DRAFT", "VALIDATED"]),
+            ),
+          )
           .returning();
+
+        if (!published) {
+          return c.json({ error: "Versão já publicada" }, 409);
+        }
 
         await writeOrganizationAuditEvent({
           organizationId: member.organizationId,
@@ -1731,7 +1808,12 @@ export const certificateTemplatesRouter = new Hono<{
           publishedBy: session.user.id,
           updatedAt: new Date(),
         })
-        .where(eq(certificateTemplateVersion.id, existing.id))
+        .where(
+          and(
+            eq(certificateTemplateVersion.id, existing.id),
+            inArray(certificateTemplateVersion.status, ["DRAFT", "VALIDATED"]),
+          ),
+        )
         .returning();
 
       await writeOrganizationAuditEvent({
@@ -1995,8 +2077,49 @@ export const certificateTemplatesRouter = new Hono<{
         }
       }
 
-      const [assignment] = await db
-        .insert(certificateTemplateAssignment)
+      const assignment = await db.transaction(async (tx) => {
+        // Serialize with template-archive (TOCTOU: archive checks "no live
+        // assignments" then flips status; this insert checks "template
+        // ACTIVE" then writes — without a common lock the two interleave
+        // into an ACTIVE assignment on an ARCHIVED template).
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`certificate-template:${id}`}))`,
+        );
+        const [templateNow] = await tx
+          .select({ status: certificateTemplate.status })
+          .from(certificateTemplate)
+          .where(eq(certificateTemplate.id, id))
+          .limit(1);
+        if (!templateNow || templateNow.status !== "ACTIVE") return null;
+        // Identical-scope dedup: a second concurrent submit must not create
+        // indistinguishable duplicate ACTIVE rows.
+        const [duplicate] = await tx
+          .select({ id: certificateTemplateAssignment.id })
+          .from(certificateTemplateAssignment)
+          .where(
+            and(
+              eq(certificateTemplateAssignment.templateId, id),
+              eq(
+                certificateTemplateAssignment.organizationId,
+                member.organizationId,
+              ),
+              eq(certificateTemplateAssignment.status, "ACTIVE"),
+              input.unitId != null
+                ? eq(certificateTemplateAssignment.unitId, input.unitId)
+                : sql`${certificateTemplateAssignment.unitId} is null`,
+              input.serviceId != null
+                ? eq(certificateTemplateAssignment.serviceId, input.serviceId)
+                : sql`${certificateTemplateAssignment.serviceId} is null`,
+              input.methodId != null
+                ? eq(certificateTemplateAssignment.methodId, input.methodId)
+                : sql`${certificateTemplateAssignment.methodId} is null`,
+            ),
+          )
+          .limit(1);
+        if (duplicate) return { duplicateOf: duplicate.id };
+        const [created] = await tx
+          .insert(certificateTemplateAssignment)
+
         .values({
           organizationId: member.organizationId,
           templateId: id,
@@ -2010,6 +2133,21 @@ export const certificateTemplatesRouter = new Hono<{
           createdBy: session.user.id,
         })
         .returning();
+        return created ?? null;
+      });
+
+      if (assignment && "duplicateOf" in assignment) {
+        return c.json(
+          { error: "Já existe uma atribuição ativa idêntica para este escopo" },
+          409,
+        );
+      }
+      if (!assignment) {
+        return c.json(
+          { error: "Template não está ativo — atualize a página" },
+          409,
+        );
+      }
 
       await writeOrganizationAuditEvent({
         organizationId: member.organizationId,

@@ -1934,8 +1934,8 @@ async function gotenbergHtmlToPdf(
     });
     if (!response.ok) {
       throw new Error(
-        `Gotenberg HTML conversion failed with ${response.status} ${response.statusText}`,
-      );
+      `Falha na renderização do PDF — o serviço de conversão retornou ${response.status}. Tente novamente; se persistir, contate o suporte.`,
+    );
     }
     return new Uint8Array(await response.arrayBuffer());
   } finally {
