@@ -673,33 +673,39 @@ export function CertificateEditor({
         // Notion-idiom ＋ gutter: track the hovered TOP-LEVEL block so the
         // insert handle can sit beside it.
         mousemove: (view, event) => {
-          if (!(event.target instanceof Node)) return false
-          const posInfo = view.posAtCoords({
-            left: event.clientX,
-            top: event.clientY,
-          })
-          if (!posInfo) return false
-          try {
-            // posAtCoords lands AFTER atom NodeViews; `inside` names the node
-            // the pointer is actually over, so prefer it when present.
-            const basePos = posInfo.inside >= 0 ? posInfo.inside : posInfo.pos
-            const resolved = view.state.doc.resolve(basePos)
-            const blockPos = resolved.depth === 0 ? basePos : resolved.before(1)
-            const dom = view.nodeDOM(blockPos)
-            if (dom instanceof HTMLElement) {
-              const paperRect = paperRef.current?.getBoundingClientRect()
-              if (!paperRect) return false
-              const blockRect = dom.getBoundingClientRect()
-              const top = blockRect.top - paperRect.top
-              setHoverBlock((current) =>
-                current?.pos === blockPos && current.top === top
-                  ? current
-                  : { pos: blockPos, top },
-              )
+          // Resolve the hovered TOP-LEVEL block from the event target's DOM —
+          // posAtCoords lands after atom NodeViews and pointed the handle at
+          // the FOLLOWING block; the DOM ancestry cannot be off.
+          const target = event.target instanceof Element ? event.target : null
+          const paperEl = paperRef.current
+          if (!target || !paperEl) return false
+          const holder: {
+            hit: { pos: number; dom: HTMLElement } | null
+          } = { hit: null }
+          view.state.doc.forEach((_node, offset) => {
+            if (holder.hit) return
+            const dom = view.nodeDOM(offset)
+            if (
+              dom instanceof HTMLElement &&
+              (dom === target || dom.contains(target))
+            ) {
+              holder.hit = { pos: offset, dom }
             }
-          } catch {
-            // resolving at doc edges can throw — no handle there
-          }
+          })
+          if (!holder.hit) return false
+          const { pos: blockPos, dom: blockDom } = holder.hit
+          const zoomFactor =
+            Number(paperEl.getAttribute('data-zoom') ?? '100') / 100 || 1
+          const paperRect = paperEl.getBoundingClientRect()
+          const blockRect = blockDom.getBoundingClientRect()
+          const top = Math.round(
+            (blockRect.top - paperRect.top) / zoomFactor,
+          )
+          setHoverBlock((current) =>
+            current?.pos === blockPos && current.top === top
+              ? current
+              : { pos: blockPos, top },
+          )
           return false
         },
       },
