@@ -912,6 +912,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
+      fuzzysort:
+        specifier: ^3.1.0
+        version: 3.1.0
       hono:
         specifier: ^4.12.25
         version: 4.12.25

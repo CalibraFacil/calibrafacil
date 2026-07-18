@@ -582,3 +582,12 @@
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 8px 24px rgba(0, 0, 0, 0.5);
 }
+
+.cf-field-suggest__group {
+  padding: 6px 8px 2px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(100, 116, 139);
+}

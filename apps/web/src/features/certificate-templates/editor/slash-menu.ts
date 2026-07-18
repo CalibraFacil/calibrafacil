@@ -17,6 +17,7 @@ import { createSuggestPopup } from './suggest-popup'
 export type SlashMenuItem = {
   title: string
   hint?: string
+  group?: string
   keywords: string
   run: (editor: Editor, range: Range) => void
 }
@@ -52,6 +53,7 @@ export function buildSlashMenuItems(
     ).map((blockKey) => ({
       title: OPTIONAL_BLOCK_TITLES[blockKey] ?? blockKey,
       hint: 'bloco opcional',
+      group: 'Blocos',
       keywords: `${OPTIONAL_BLOCK_TITLES[blockKey] ?? ''} bloco opcional anexo incerteza decisão`,
       run: (runEditor: Editor, range: Range) => {
         runEditor
@@ -66,6 +68,7 @@ export function buildSlashMenuItems(
     })) satisfies SlashMenuItem[]),
     {
       title: 'Tabela',
+      group: 'Estrutura',
       hint: '2×2 com cabeçalho',
       keywords: 'tabela table grade',
       run: (runEditor, range) => {
@@ -79,6 +82,7 @@ export function buildSlashMenuItems(
     },
     {
       title: 'Título',
+      group: 'Estrutura',
       hint: 'nível 2',
       keywords: 'título heading h2 seção',
       run: (runEditor, range) => {
@@ -92,6 +96,7 @@ export function buildSlashMenuItems(
     },
     {
       title: 'Subtítulo',
+      group: 'Estrutura',
       hint: 'nível 3',
       keywords: 'subtítulo heading h3',
       run: (runEditor, range) => {
@@ -105,6 +110,7 @@ export function buildSlashMenuItems(
     },
     {
       title: 'Divisor',
+      group: 'Estrutura',
       hint: 'linha horizontal',
       keywords: 'divisor divider linha hr separador',
       run: (runEditor, range) => {
@@ -131,6 +137,7 @@ export function buildSlashMenuItems(
     .map((entry) => ({
       title: entry.label,
       hint: `{{${entry.path}}}`,
+      group: 'Campos',
       keywords: entry.path,
       run: (runEditor: Editor, range: Range) => {
         runEditor
@@ -166,7 +173,11 @@ export const SlashMenu = Extension.create<
     const extensionEditor = this.editor
     const popup = createSuggestPopup<SlashMenuItem>({
       testId: 'slash-menu-popup',
-      toView: (item) => ({ title: item.title, hint: item.hint }),
+      toView: (item) => ({
+        title: item.title,
+        hint: item.hint,
+        group: item.group,
+      }),
     })
 
     return [

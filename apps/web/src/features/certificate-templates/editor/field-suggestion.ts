@@ -4,6 +4,7 @@ import { PluginKey } from '@tiptap/pm/state'
 
 import type { PlaceholderCatalogEntry } from '../types'
 import { createSuggestPopup } from './suggest-popup'
+import fuzzysort from 'fuzzysort'
 
 /**
  * Inline `{{` placeholder autocomplete (shell reframe step 2, r1 pattern #1):
@@ -20,17 +21,21 @@ export function filterFieldSuggestions(
   catalog: readonly PlaceholderCatalogEntry[],
   query: string,
 ): PlaceholderCatalogEntry[] {
-  const normalized = query.trim().toLowerCase()
-  const matches =
-    normalized === ''
-      ? [...catalog]
-      : catalog.filter(
-          (entry) =>
-            entry.label.toLowerCase().includes(normalized) ||
-            entry.path.toLowerCase().includes(normalized) ||
-            entry.group.toLowerCase().includes(normalized),
-        )
-  return matches.slice(0, 8)
+  const normalized = query.trim()
+  if (normalized === '') return [...catalog].slice(0, 8)
+  // Fuzzy over label > path > group: "razsoc" still finds "Razão social".
+  const results = fuzzysort.go(normalized, [...catalog], {
+    keys: ['label', 'path', 'group'],
+    scoreFn: (result) =>
+      Math.max(
+        result[0] ? result[0].score * 1.2 : Number.NEGATIVE_INFINITY,
+        result[1] ? result[1].score : Number.NEGATIVE_INFINITY,
+        result[2] ? result[2].score * 0.8 : Number.NEGATIVE_INFINITY,
+      ),
+    limit: 8,
+    threshold: 0.3,
+  })
+  return results.map((result) => result.obj)
 }
 
 export type FieldSuggestionStorage = {
@@ -54,6 +59,7 @@ export const FieldSuggestion = Extension.create<
       toView: (entry) => ({
         title: entry.label,
         hint: `{{${entry.path}}}`,
+        group: entry.group,
       }),
     })
 

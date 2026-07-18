@@ -8,6 +8,8 @@
 export type SuggestItemView = {
   title: string
   hint?: string
+  /** Section header rendered above the first item of each group. */
+  group?: string
 }
 
 export type SuggestPopupController<Item> = {
@@ -71,8 +73,16 @@ export function createSuggestPopup<Item>({
       element.appendChild(empty)
       return
     }
+    let lastGroup: string | null = null
     items.forEach((item, index) => {
       const view = toView(item)
+      if (view.group && view.group !== lastGroup) {
+        const header = document.createElement('div')
+        header.className = 'cf-field-suggest__group'
+        header.textContent = view.group
+        element?.appendChild(header)
+      }
+      lastGroup = view.group ?? lastGroup
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'cf-field-suggest__item'
@@ -163,6 +173,11 @@ export function createSuggestPopup<Item>({
         return true
       }
       if (event.key === 'Escape') {
+        hide()
+        return true
+      }
+      if (event.key === 'Tab') {
+        // Convention: Tab dismisses and typing continues in the editor.
         hide()
         return true
       }
