@@ -1211,35 +1211,6 @@ export const organizationEmailDomain = pgTable(
   ],
 );
 
-/**
- * Org media library (wysiwyg roadmap item 3): images the certificate editor
- * can reference by id (`image` node attrs.mediaId). Files live in the media
- * R2 bucket under org/<partition>/media/<id>-<name>; the worker resolves ids
- * to data URLs at compile time (stable, deterministic per snapshot).
- */
-export const organizationMedia = pgTable(
-  "organization_media",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    fileName: text("file_name").notNull(),
-    r2Key: text("r2_key").notNull(),
-    contentType: text("content_type").notNull(),
-    sizeBytes: integer("size_bytes").notNull(),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("organization_media_org_idx").on(table.organizationId),
-  ],
-);
-
-export type OrganizationMedia = typeof organizationMedia.$inferSelect;
-
 export const certificateTemplate = pgTable(
   "certificate_template",
   {
@@ -1297,24 +1268,7 @@ export type CertificateXlsxRenderPolicy = {
   converter: "gotenberg-libreoffice";
 };
 
-/**
- * Which authoring/render engine a template version uses. `xlsx` = uploaded
- * workbook filled cell-by-cell (Gotenberg LibreOffice); `wysiwyg` = block
- * document compiled to HTML (packages/certificate-html-template + Gotenberg
- * Chromium). Lives on the VERSION: a template may migrate engines by
- * publishing a new version.
- */
-export type CertificateTemplateEngine = "xlsx" | "wysiwyg";
-
-export type CertificateHtmlRenderPolicy = {
-  converter: "gotenberg-chromium";
-  compiler: "certificate-html-template";
-  compilerVersion: string;
-};
-
-export type CertificateRenderPolicy =
-  | CertificateXlsxRenderPolicy
-  | CertificateHtmlRenderPolicy;
+export type CertificateRenderPolicy = CertificateXlsxRenderPolicy;
 
 export const certificateTemplateVersion = pgTable(
   "certificate_template_version",
@@ -1331,22 +1285,12 @@ export const certificateTemplateVersion = pgTable(
       .$type<CertificateXlsxTemplateVersionStatus>()
       .default("DRAFT")
       .notNull(),
-    // Engine discriminator (migration 0086). A CHECK constraint guarantees:
-    // engine='xlsx' rows carry the xlsx/bindingManifest artifacts;
-    // engine='wysiwyg' rows carry documentJson + documentSha256.
-    engine: text("engine")
-      .$type<CertificateTemplateEngine>()
-      .default("xlsx")
+    xlsxR2Key: text("xlsx_r2_key").notNull(),
+    xlsxSha256: text("xlsx_sha256").notNull(),
+    bindingManifest: jsonb("binding_manifest")
+      .$type<Record<string, unknown>>()
       .notNull(),
-    xlsxR2Key: text("xlsx_r2_key"),
-    xlsxSha256: text("xlsx_sha256"),
-    bindingManifest: jsonb("binding_manifest").$type<Record<string, unknown>>(),
-    bindingManifestSha256: text("binding_manifest_sha256"),
-    // wysiwyg engine: the editor document (ProseMirror JSON) + its canonical
-    // content hash (sha256 over key-sorted JSON), computed SERVER-SIDE only.
-    // Immutable once the version leaves DRAFT.
-    documentJson: jsonb("document_json").$type<Record<string, unknown>>(),
-    documentSha256: text("document_sha256"),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
     renderPolicy: jsonb("render_policy")
       .$type<CertificateRenderPolicy>()
       .notNull(),
@@ -1492,19 +1436,11 @@ export const issuedCertificateSnapshot = pgTable(
         onDelete: "restrict",
       }),
     certificateNumber: text("certificate_number"),
-    // Engine discriminator (migration 0086). CHECK: xlsx rows have the filled
-    // XLSX artifacts; wysiwyg rows have the compiled-HTML artifacts.
-    engine: text("engine")
-      .$type<CertificateTemplateEngine>()
-      .default("xlsx")
-      .notNull(),
-    filledXlsxR2Key: text("filled_xlsx_r2_key"),
-    filledXlsxSha256: text("filled_xlsx_sha256"),
-    compiledHtmlR2Key: text("compiled_html_r2_key"),
-    compiledHtmlSha256: text("compiled_html_sha256"),
+    filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
+    filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
     pdfR2Key: text("pdf_r2_key").notNull(),
     pdfSha256: text("pdf_sha256").notNull(),
-    bindingManifestSha256: text("binding_manifest_sha256"),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
     renderPolicy: jsonb("render_policy")
       .$type<CertificateRenderPolicy>()
       .notNull(),

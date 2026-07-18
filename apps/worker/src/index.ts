@@ -73,7 +73,6 @@ import {
   getLogoKeyFromUrl,
   getYear,
   getYearMonth,
-  issuedCertificateHtmlKey,
   issuedCertificatePdfKey,
   issuedCertificateXlsxKey,
   jobLabelKey,
@@ -88,12 +87,6 @@ import {
   notifyAuditPackReady,
   notifyCertificateReady,
 } from "@calibra-facil/notifications";
-import {
-  CERTIFICATE_PDF_MARGINS,
-  compileCertificateHtml,
-  extractCertificatePageFooterHtml,
-  sampleCertificateInputData,
-} from "@calibra-facil/certificate-html-template";
 
 export interface R2BucketBinding {
   get(key: string): Promise<{
@@ -140,7 +133,7 @@ export interface Env {
 type JobData = CertificateJobData;
 
 const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
-  "Nenhuma atribuição de template corresponde a esta calibração — publique um template (XLSX ou visual) e crie uma atribuição na etapa Atribuição";
+  "Nenhuma atribuição de template corresponde a esta calibração — publique um template XLSX e crie uma atribuição na etapa Atribuição";
 
 export type QueueMessage = BackgroundJobMessage;
 
@@ -528,14 +521,11 @@ async function fetchJobData(
 }
 
 type CertificateTemplateSelection = {
-  engine: "xlsx" | "wysiwyg";
   templateId: number;
   templateVersionId: number;
   xlsxR2Key: string | null;
   bindingManifest: unknown;
   bindingManifestSha256: string | null;
-  documentJson: unknown;
-  documentSha256: string | null;
   renderPolicy: unknown;
 };
 
@@ -544,26 +534,20 @@ async function fetchCertificateTemplateSelectionForJob(
   jobId: number,
 ): Promise<CertificateTemplateSelection | null> {
   const result = await client.query<{
-    engine: string;
     template_id: number;
     template_version_id: number;
     xlsx_r2_key: string | null;
     binding_manifest: unknown;
     binding_manifest_sha256: string | null;
-    document_json: unknown;
-    document_sha256: string | null;
     render_policy: unknown;
   }>(
     `
       select
-        v.engine,
         a.template_id,
         a.template_version_id,
         v.xlsx_r2_key,
         v.binding_manifest,
         v.binding_manifest_sha256,
-        v.document_json,
-        v.document_sha256,
         v.render_policy
       from calibration_job cj
       left join service s on s.id = cj.service_id
@@ -590,30 +574,13 @@ async function fetchCertificateTemplateSelectionForJob(
   if (!row) return null;
 
   return {
-    engine: row.engine === "wysiwyg" ? "wysiwyg" : "xlsx",
     templateId: row.template_id,
     templateVersionId: row.template_version_id,
     xlsxR2Key: row.xlsx_r2_key,
     bindingManifest: row.binding_manifest,
     bindingManifestSha256: row.binding_manifest_sha256,
-    documentJson: row.document_json,
-    documentSha256: row.document_sha256,
     renderPolicy: row.render_policy,
   };
-}
-
-/** Engine dispatch: one selection query, two render pipelines (spec 02 §3.1). */
-async function processIssuedCertificateBySelection(
-  env: Env,
-  jobId: number,
-  job: JobData,
-  userId: string,
-  selection: CertificateTemplateSelection,
-): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  if (selection.engine === "wysiwyg") {
-    return processHtmlIssuedCertificate(env, jobId, job, userId, selection);
-  }
-  return processXlsxIssuedCertificate(env, jobId, job, userId, selection);
 }
 
 function inferImageContentType(buffer: ArrayBuffer) {
@@ -650,68 +617,6 @@ function inferImageContentType(buffer: ArrayBuffer) {
   }
 
   return "application/octet-stream";
-}
-
-/** mediaIds referenced by image nodes in a wysiwyg documentJson. */
-function collectDocumentMediaIds(documentJson: unknown): number[] {
-  const ids = new Set<number>();
-  const visit = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    if (Reflect.get(node, "type") === "image") {
-      const attrs = Reflect.get(node, "attrs");
-      const mediaId =
-        attrs && typeof attrs === "object" ? Reflect.get(attrs, "mediaId") : null;
-      if (typeof mediaId === "number") ids.add(mediaId);
-    }
-    const content = Reflect.get(node, "content");
-    if (Array.isArray(content)) content.forEach(visit);
-  };
-  visit(documentJson);
-  return [...ids];
-}
-
-/**
- * Resolve the document's org-media images to data URLs for the compiler
- * (options.mediaUrls). Ids are tenant-scoped; anything unresolved stays out
- * of the map so compileCertificateHtml fails loud (never a broken <img>).
- */
-async function resolveDocumentMediaUrls(
-  env: Env,
-  organizationId: string,
-  documentJson: unknown,
-): Promise<Record<number, string>> {
-  const ids = collectDocumentMediaIds(documentJson);
-  if (ids.length === 0) return {};
-  const rows = await withDbClient(env, (client) =>
-    client.query(
-      `select id, r2_key, content_type from organization_media
-       where organization_id = $1 and id = any($2::int[])`,
-      [organizationId, ids],
-    ),
-  );
-  const mediaUrls: Record<number, string> = {};
-  // Fail-loud payload budget: every image is base64-embedded into the
-  // compiled artifact that gets hashed, persisted and handed to Gotenberg —
-  // an unbounded document (20 × 2MB uploads ≈ 53MB of base64) must error
-  // clearly instead of timing out downstream.
-  const MAX_EMBEDDED_MEDIA_BYTES = 15 * 1024 * 1024;
-  let embeddedBytes = 0;
-  for (const row of rows.rows) {
-    const id = Number(Reflect.get(row, "id"));
-    const key = String(Reflect.get(row, "r2_key"));
-    const contentType = String(Reflect.get(row, "content_type"));
-    const object = await getStoredObject(env, "media", key);
-    if (!object) continue;
-    const buffer = await object.arrayBuffer();
-    embeddedBytes += buffer.byteLength;
-    if (embeddedBytes > MAX_EMBEDDED_MEDIA_BYTES) {
-      throw new Error(
-        "Imagens do modelo somam mais de 15 MB — remova ou reduza imagens para gerar o certificado",
-      );
-    }
-    mediaUrls[id] = `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
-  }
-  return mediaUrls;
 }
 
 async function resolveOrganizationLogoDataUrl(
@@ -1934,8 +1839,8 @@ async function gotenbergHtmlToPdf(
     });
     if (!response.ok) {
       throw new Error(
-      `Falha na renderização do PDF — o serviço de conversão retornou ${response.status}. Tente novamente; se persistir, contate o suporte.`,
-    );
+        `Falha na renderização do PDF — o serviço de conversão retornou ${response.status}. Tente novamente; se persistir, contate o suporte.`,
+      );
     }
     return new Uint8Array(await response.arrayBuffer());
   } finally {
@@ -2018,13 +1923,7 @@ async function processJob(
       fetchCertificateTemplateSelectionForJob(client, jobId),
     );
     if (selection) {
-      return processIssuedCertificateBySelection(
-        env,
-        jobId,
-        job,
-        userId,
-        selection,
-      );
+      return processXlsxIssuedCertificate(env, jobId, job, userId, selection);
     }
 
     const totalMs = Math.round(performance.now() - totalStart);
@@ -2403,7 +2302,7 @@ async function processXlsxCertificateMessageIfSelected(
     return false;
   }
 
-  const result = await processIssuedCertificateBySelection(
+  const result = await processXlsxIssuedCertificate(
     env,
     message.jobId,
     job,
@@ -2444,30 +2343,22 @@ async function processXlsxPreviewJob(
         id: number;
         organization_id: string;
         organization_slug: string | null;
-        organization_logo: string | null;
         sample_data: Record<string, unknown> | null;
-        engine: string;
         xlsx_r2_key: string | null;
         xlsx_sha256: string | null;
         binding_manifest: unknown;
         binding_manifest_sha256: string | null;
-        document_json: unknown;
-        document_sha256: string | null;
       }>(
         `
           select
             p.id,
             p.organization_id,
             o.slug as organization_slug,
-            o.logo as organization_logo,
             p.sample_data,
-            v.engine,
             v.xlsx_r2_key,
             v.xlsx_sha256,
             v.binding_manifest,
-            v.binding_manifest_sha256,
-            v.document_json,
-            v.document_sha256
+            v.binding_manifest_sha256
           from certificate_template_preview p
           inner join certificate_template_version v
             on v.id = p.template_version_id
@@ -2483,122 +2374,6 @@ async function processXlsxPreviewJob(
 
     if (!preview) {
       throw new Error("XLSX preview not found");
-    }
-
-    if (preview.engine === "wysiwyg") {
-      // wysiwyg preview: compile documentJson against the provided sample data
-      // (falling back to the package's canonical sample) and render via the
-      // same Chromium route + margins as real issuance.
-      if (!preview.document_json) {
-        throw new Error("wysiwyg template version is missing its documentJson");
-      }
-      const sampleData =
-        preview.sample_data && Object.keys(preview.sample_data).length > 0
-          ? preview.sample_data
-          : sampleCertificateInputData;
-      // Previews render with the ORG'S REAL LOGO: resolve organization.logo
-      // exactly like issuance does and inject it into a CLONE (never mutate
-      // the shared canonical sample). An explicit lab.logoDataUrl in custom
-      // sample data wins.
-      const previewInput: Record<string, unknown> = JSON.parse(
-        JSON.stringify(sampleData),
-      );
-      const previewLab = Reflect.get(previewInput, "lab");
-      if (
-        previewLab &&
-        typeof previewLab === "object" &&
-        Reflect.get(previewLab, "logoDataUrl") == null
-      ) {
-        const previewLogoDataUrl = await resolveOrganizationLogoDataUrl(
-          env,
-          preview.organization_logo,
-          preview.id,
-        );
-        if (previewLogoDataUrl) {
-          Reflect.set(previewLab, "logoDataUrl", previewLogoDataUrl);
-        }
-      }
-      const compiled = await compileCertificateHtml(
-        preview.document_json,
-        previewInput,
-        {
-          mediaUrls: await resolveDocumentMediaUrls(
-            env,
-            preview.organization_id,
-            preview.document_json,
-          ),
-        },
-      );
-      const pdfBytes = await gotenbergHtmlToPdf(
-        env,
-        compiled.html.replace(/^<!DOCTYPE html>\s*/i, ""),
-        { ...A4_PAPER, printBackground: "true", ...CERTIFICATE_PDF_MARGINS },
-        {
-          "footer.html":
-            extractCertificatePageFooterHtml(compiled.html) ?? DOC_PAGE_FOOTER_HTML,
-        },
-      );
-
-      const previewOrg: OrgRef = {
-        id: preview.organization_id,
-        slug: preview.organization_slug ?? "",
-      };
-      const htmlPreview = templatePreviewKey({
-        org: previewOrg,
-        previewId: preview.id,
-        extension: "html",
-      });
-      const pdfPreview = templatePreviewKey({
-        org: previewOrg,
-        previewId: preview.id,
-        extension: "pdf",
-      });
-
-      await bucketBinding(env, htmlPreview.bucket).put(
-        htmlPreview.key,
-        new TextEncoder().encode(compiled.html),
-        { httpMetadata: { contentType: "text/html; charset=utf-8" } },
-      );
-      await bucketBinding(env, pdfPreview.bucket).put(
-        pdfPreview.key,
-        pdfBytes,
-        { httpMetadata: { contentType: "application/pdf" } },
-      );
-
-      const wysiwygRenderMetadata = {
-        engine: "wysiwyg",
-        compiledHtmlSha256: compiled.sha256,
-        compiledHtmlR2Key: htmlPreview.key,
-        compilerVersion: compiled.compilerVersion,
-        documentSha256: preview.document_sha256,
-        durationMs: Math.round(performance.now() - totalStart),
-      };
-
-      await withDbClient(env, (client) =>
-        client.query(
-          `
-            update certificate_template_preview
-            set status = 'RENDERED',
-                pdf_r2_key = $1,
-                pdf_sha256 = $2,
-                render_metadata = $3::jsonb,
-                error = null,
-                updated_at = now()
-            where id = $4
-          `,
-          [
-            pdfPreview.key,
-            sha256Hex(pdfBytes),
-            JSON.stringify(wysiwygRenderMetadata),
-            preview.id,
-          ],
-        ),
-      );
-
-      console.log(
-        `[WYSIWYG PREVIEW ${message.previewId}] DONE in ${Math.round(performance.now() - totalStart)}ms`,
-      );
-      return;
     }
 
     if (preview.xlsx_r2_key === null) {
@@ -2902,276 +2677,6 @@ async function processXlsxIssuedCertificate(
           sha256Hex(pdfBuffer),
           bindingManifestSha256,
           JSON.stringify(selection.renderPolicy),
-          JSON.stringify(renderMetadata),
-          JSON.stringify(inputDataSnapshot),
-          userId,
-        ],
-      );
-
-      const insertedSnapshotPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
-      const existingSnapshotAfterConflict = insertedSnapshotPdfR2Key
-        ? null
-        : (
-            await client.query<{
-              pdf_r2_key: string;
-              signature_metadata: unknown;
-            }>(
-              `
-                select ics.pdf_r2_key, cj.signature_metadata
-                from issued_certificate_snapshot ics
-                join calibration_job cj on cj.id = ics.job_id
-                where ics.job_id = $1
-                limit 1
-              `,
-              [jobId],
-            )
-          ).rows[0];
-      const snapshotPdfR2Key =
-        insertedSnapshotPdfR2Key ?? existingSnapshotAfterConflict?.pdf_r2_key;
-
-      if (!snapshotPdfR2Key) {
-        throw new Error("Issued certificate snapshot was not persisted");
-      }
-
-      const snapshotCertificateUrl = `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`;
-      await updateJobWithCertificate(
-        client,
-        jobId,
-        snapshotCertificateUrl,
-        userId,
-        insertedSnapshotPdfR2Key
-          ? signed.signatureMetadata
-          : parseSignatureMetadata(
-              existingSnapshotAfterConflict?.signature_metadata,
-            ),
-        insertedSnapshotPdfR2Key ? signed.signatureVerdict : undefined,
-        { preserveSignatureMetadata: !insertedSnapshotPdfR2Key },
-      );
-      return snapshotPdfR2Key;
-    });
-
-    const certificateUrl = `https://certificates.calibrafacil.com/${issuedPdfR2Key}`;
-    return { success: true, certificateUrl };
-  } catch (error) {
-    return { success: false, error: getErrorMessage(error) };
-  }
-}
-
-/**
- * wysiwyg-engine issuance (epic wysiwyg, spec 02 §3.1): compile the template's
- * documentJson against the frozen job data, render via Gotenberg Chromium,
- * sign, upload the compiled HTML + signed PDF, freeze the snapshot. Mirrors
- * processXlsxIssuedCertificate step-for-step — same idempotency, same signing
- * call, same fail-loud posture (a compile error FAILS the job, never issues a
- * certificate with silently missing content).
- */
-async function processHtmlIssuedCertificate(
-  env: Env,
-  jobId: number,
-  job: JobData,
-  userId: string,
-  selection: CertificateTemplateSelection,
-): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  const existingSnapshot = await withDbClient(env, async (client) => {
-    const result = await client.query<{
-      pdf_r2_key: string;
-      signature_metadata: unknown;
-    }>(
-      `
-        select ics.pdf_r2_key, cj.signature_metadata
-        from issued_certificate_snapshot ics
-        join calibration_job cj on cj.id = ics.job_id
-        where ics.job_id = $1
-        limit 1
-      `,
-      [jobId],
-    );
-    return result.rows[0] ?? null;
-  });
-
-  if (existingSnapshot) {
-    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
-    await withDbClient(env, (client) =>
-      updateJobWithCertificate(
-        client,
-        jobId,
-        certificateUrl,
-        userId,
-        parseSignatureMetadata(existingSnapshot.signature_metadata),
-        undefined,
-        { preserveSignatureMetadata: true },
-      ),
-    );
-    return { success: true, certificateUrl };
-  }
-
-  if (!job.organizationId) {
-    return { success: false, error: "Missing organization_id" };
-  }
-
-  try {
-    if (!selection.documentJson || selection.documentSha256 === null) {
-      // CHECK constraint ctv_engine_payload_check makes this unreachable.
-      throw new Error("wysiwyg template version is missing its documentJson");
-    }
-
-    const inputDataSnapshot = buildCertificateData(job, {
-      renderAccreditationSeal: renderAccreditationSealDataUrl,
-    });
-    // Letterhead: resolve the org logo to a data URL (same resolver the XLSX
-    // image binding uses) and freeze it INTO the input snapshot — the stored
-    // snapshot must be the exact compile input for reproducibility.
-    const labLogoDataUrl = await resolveOrganizationLogoDataUrl(
-      env,
-      job.lab.logo,
-      jobId,
-    );
-    const labRecord = Reflect.get(inputDataSnapshot, "lab");
-    if (labRecord && typeof labRecord === "object") {
-      Reflect.set(labRecord, "logoDataUrl", labLogoDataUrl);
-    }
-    // Eccentricity indicator (weighing methods): render the SVG the xlsx
-    // pipeline rasterizes, frozen into the snapshot as a data URL — the html
-    // renderer prints it after the indicator table's grid. Deterministic for
-    // equal job inputs; absent when the method declares no indicator.
-    const eccentricitySvg = renderEccentricityIndicatorSvgMarkup(
-      certificateImageContextFromJob(job),
-      inputDataSnapshot,
-    );
-    if (eccentricitySvg) {
-      const rawGraphics = Reflect.get(inputDataSnapshot, "graphics");
-      const graphics =
-        rawGraphics && typeof rawGraphics === "object" ? rawGraphics : {};
-      Reflect.set(
-        graphics,
-        "eccentricityIndicatorSvg",
-        `data:image/svg+xml;utf8,${encodeURIComponent(eccentricitySvg)}`,
-      );
-      Reflect.set(inputDataSnapshot, "graphics", graphics);
-    }
-    const compiled = await compileCertificateHtml(
-      selection.documentJson,
-      inputDataSnapshot,
-      {
-        mediaUrls: await resolveDocumentMediaUrls(
-          env,
-          job.organizationId,
-          selection.documentJson,
-        ),
-      },
-    );
-
-    // gotenbergHtmlToPdf prepends the doctype; the compiled artifact keeps its own.
-    const htmlForChromium = compiled.html.replace(/^<!DOCTYPE html>\s*/i, "");
-    // M-B: the compiled artifact embeds its own footer identity band
-    // (<template id="cf-page-footer">, carries pageNumber/totalPages).
-    // Pre-M-B artifacts fall back to the plain page-number footer.
-    const pdfBytes = await gotenbergHtmlToPdf(
-      env,
-      htmlForChromium,
-      {
-        ...A4_PAPER,
-        printBackground: "true",
-        ...CERTIFICATE_PDF_MARGINS,
-      },
-      {
-        "footer.html":
-          extractCertificatePageFooterHtml(compiled.html) ?? DOC_PAGE_FOOTER_HTML,
-      },
-    );
-
-    const signed = await signPdfWithUnitCertificate(
-      env,
-      jobId,
-      job.organizationId,
-      job.unitId,
-      Buffer.from(pdfBytes),
-    );
-    const pdfBuffer = signed.pdfBuffer;
-
-    const year = getYear(
-      job.approvedAt ?? job.performedAt,
-      "approvedAt/performedAt",
-    );
-    const issuedObjectId = randomUUID();
-    const certDescriptor = {
-      org: {
-        id: job.organizationId,
-        slug: job.organizationSlug ?? "",
-      },
-      jobId: job.jobId,
-      issuedId: issuedObjectId,
-      certNumber: job.certificateName ?? job.jobId,
-      year,
-      companyName: job.customer.name,
-      assetTag: job.asset.tag,
-      brand: job.asset.manufacturer,
-    };
-    const pdf = issuedCertificatePdfKey(certDescriptor);
-    const compiledHtml = issuedCertificateHtmlKey(certDescriptor);
-    const pdfR2Key = pdf.key;
-    const compiledHtmlR2Key = compiledHtml.key;
-
-    await bucketBinding(env, compiledHtml.bucket).put(
-      compiledHtmlR2Key,
-      new TextEncoder().encode(compiled.html),
-      {
-        httpMetadata: { contentType: "text/html; charset=utf-8" },
-      },
-    );
-    await bucketBinding(env, pdf.bucket).put(pdfR2Key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
-    });
-
-    const renderPolicy = {
-      converter: "gotenberg-chromium",
-      compiler: "certificate-html-template",
-      compilerVersion: compiled.compilerVersion,
-    };
-    const renderMetadata = {
-      compiledHtmlSha256: compiled.sha256,
-      documentSha256: selection.documentSha256,
-      signature: signed.signatureMetadata
-        ? { signed: true, signerName: signed.signatureMetadata.signerName }
-        : { signed: false },
-      renderedAt: new Date().toISOString(),
-    };
-
-    const issuedPdfR2Key = await withDbClient(env, async (client) => {
-      const insertResult = await client.query<{ pdf_r2_key: string }>(
-        `
-          insert into issued_certificate_snapshot (
-            organization_id,
-            job_id,
-            template_id,
-            template_version_id,
-            certificate_number,
-            engine,
-            compiled_html_r2_key,
-            compiled_html_sha256,
-            pdf_r2_key,
-            pdf_sha256,
-            render_policy,
-            render_metadata,
-            input_data_snapshot,
-            status,
-            issued_by
-          )
-          values ($1, $2, $3, $4, $5, 'wysiwyg', $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, 'ISSUED', $13)
-          on conflict (job_id) do nothing
-          returning pdf_r2_key
-        `,
-        [
-          job.organizationId,
-          jobId,
-          selection.templateId,
-          selection.templateVersionId,
-          job.jobId,
-          compiledHtmlR2Key,
-          compiled.sha256,
-          pdfR2Key,
-          sha256Hex(pdfBuffer),
-          JSON.stringify(renderPolicy),
           JSON.stringify(renderMetadata),
           JSON.stringify(inputDataSnapshot),
           userId,

@@ -305,7 +305,7 @@ function getDriftR2Env(): R2Env | null {
   };
 }
 
-// Certificate drift detection (wysiwyg roadmap item 6): re-hash a sample of
+// Certificate drift detection: re-hash a sample of
 // stored issued-certificate artifacts vs their frozen hashes; mismatches
 // become org audit events. Read-only over regulated records.
 async function handleCertificateDrift(request: Request) {

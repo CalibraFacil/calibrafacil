@@ -6,8 +6,8 @@ import { issuedCertificateSnapshot } from "@calibra-facil/db/schema";
 import { writeOrganizationAuditEvent } from "./audit";
 
 /**
- * Certificate drift detection (wysiwyg roadmap item 6; epic backlog #1):
- * re-hash the STORED artifacts of recent issued-certificate snapshots and
+ * Certificate drift detection: re-hash the STORED PDF of recent
+ * issued-certificate snapshots and
  * compare against the hashes frozen at issuance. Reproducibility stops being
  * forensic-only — silent artifact corruption/tampering surfaces as an audit
  * event instead of at the next audit.
@@ -29,7 +29,7 @@ export type DriftCheckResult = {
   details: Array<{
     snapshotId: number;
     organizationId: string;
-    artifact: "pdf" | "compiled_html";
+    artifact: "pdf";
     kind: "hash_mismatch" | "object_missing";
   }>;
 };
@@ -49,8 +49,6 @@ export async function runCertificateDriftCheck(
       organizationId: issuedCertificateSnapshot.organizationId,
       pdfR2Key: issuedCertificateSnapshot.pdfR2Key,
       pdfSha256: issuedCertificateSnapshot.pdfSha256,
-      compiledHtmlR2Key: issuedCertificateSnapshot.compiledHtmlR2Key,
-      compiledHtmlSha256: issuedCertificateSnapshot.compiledHtmlSha256,
     })
     .from(issuedCertificateSnapshot)
     .where(isNotNull(issuedCertificateSnapshot.pdfR2Key))
@@ -66,17 +64,10 @@ export async function runCertificateDriftCheck(
 
   for (const row of rows) {
     const artifacts: Array<{
-      artifact: "pdf" | "compiled_html";
+      artifact: "pdf";
       key: string | null;
       expected: string | null;
-    }> = [
-      { artifact: "pdf", key: row.pdfR2Key, expected: row.pdfSha256 },
-      {
-        artifact: "compiled_html",
-        key: row.compiledHtmlR2Key,
-        expected: row.compiledHtmlSha256,
-      },
-    ];
+    }> = [{ artifact: "pdf", key: row.pdfR2Key, expected: row.pdfSha256 }];
     for (const { artifact, key, expected } of artifacts) {
       if (!key || !expected) continue;
       result.checked += 1;

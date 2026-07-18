@@ -24,17 +24,6 @@ import {
   type WorkbookAnalysis,
 } from "@calibra-facil/certificate-xlsx-template";
 import {
-  CERT_HTML_COMPILER_VERSION,
-  LOCKED_BLOCK_KEYS,
-  PLACEHOLDER_CATALOG,
-  compileCertificateHtml,
-  hashCertificateDocument,
-  newWysiwygStarterDocument,
-  buildMigratedDocumentFromXlsxBindings,
-  sampleCertificateInputData,
-  validateCertificateTemplateDocument,
-} from "@calibra-facil/certificate-html-template";
-import {
   type AuthVariables,
   requireLabProtected,
   requireOrgType,
@@ -59,25 +48,7 @@ import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 const CreateTemplateSchema = z.object({
   name: z.string().trim().min(3).max(80),
-  /** Template engine; "wysiwyg" also creates a v1 DRAFT with the starter document. */
-  engine: z.enum(["xlsx", "wysiwyg"]).default("xlsx"),
 });
-
-const UpdateWysiwygDocumentSchema = z.object({
-  documentJson: z.record(z.string(), z.unknown()),
-  /**
-   * Optimistic-concurrency token: the documentSha256 the CLIENT last saw.
-   * When present and stale, the save is refused (409 document_conflict)
-   * instead of silently overwriting another session's work.
-   */
-  expectedDocumentSha256: z.string().length(64).optional(),
-});
-
-const DEFAULT_WYSIWYG_RENDER_POLICY = {
-  converter: "gotenberg-chromium",
-  compiler: "certificate-html-template",
-  compilerVersion: CERT_HTML_COMPILER_VERSION,
-} as const;
 
 const UpdateTemplateSchema = z.object({
   name: z.string().trim().min(3).max(80).optional(),
@@ -328,8 +299,6 @@ function summarizeXlsxVersion(
     templateId: version.templateId,
     version: version.version,
     status: version.status,
-    engine: version.engine,
-    documentSha256: version.documentSha256,
     xlsxSha256: version.xlsxSha256,
     bindingManifestSha256: version.bindingManifestSha256,
     sheetCount: sheets.length,
@@ -393,18 +362,6 @@ export const certificateTemplatesRouter = new Hono<{
       number,
       ReturnType<typeof summarizeXlsxVersion>
     >();
-    // wysiwyg version summaries (newest first): the editor entry point needs
-    // DRAFT versions to stay reachable even when they are not the template's
-    // latest version overall.
-    const wysiwygVersionsByTemplateId = new Map<
-      number,
-      Array<{
-        id: number;
-        version: number;
-        status: string;
-        updatedAt: Date | null;
-      }>
-    >();
 
     for (const version of versions) {
       if (!currentVersionByTemplateId.has(version.templateId)) {
@@ -412,16 +369,6 @@ export const certificateTemplatesRouter = new Hono<{
           version.templateId,
           summarizeXlsxVersion(version),
         );
-      }
-      if (version.engine === "wysiwyg") {
-        const bucket = wysiwygVersionsByTemplateId.get(version.templateId) ?? [];
-        bucket.push({
-          id: version.id,
-          version: version.version,
-          status: version.status,
-          updatedAt: version.updatedAt ?? null,
-        });
-        wysiwygVersionsByTemplateId.set(version.templateId, bucket);
       }
     }
 
@@ -433,8 +380,6 @@ export const certificateTemplatesRouter = new Hono<{
               ...template,
               currentXlsxVersion:
                 currentVersionByTemplateId.get(template.id) ?? null,
-              wysiwygVersions:
-                wysiwygVersionsByTemplateId.get(template.id) ?? [],
             }))
           : [
               {
@@ -451,20 +396,6 @@ export const certificateTemplatesRouter = new Hono<{
             ],
     });
   })
-  // Typed placeholder catalog (epic wysiwyg, spec 02 §2/§6.1): feeds the editor
-  // autocomplete/inspector. Static from code; readable by any lab member.
-  .get(
-    "/placeholder-catalog",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    (c) => {
-      return c.json({
-        items: PLACEHOLDER_CATALOG,
-        lockedBlocks: LOCKED_BLOCK_KEYS,
-        compilerVersion: CERT_HTML_COMPILER_VERSION,
-      });
-    },
-  )
   .post(
     "/",
     ...withLabPermission({ organization: ["update"] }),
@@ -527,505 +458,11 @@ export const certificateTemplatesRouter = new Hono<{
             slug: created.slug,
             isDefault: created.isDefault,
             status: created.status,
-            engine: input.engine,
           },
         });
       }
 
-      // wysiwyg engine: bootstrap v1 as a DRAFT carrying the starter document
-      // (every §7.8.2.1 locked block present) so the editor opens ready-to-edit.
-      let initialVersion = null;
-      if (created && input.engine === "wysiwyg") {
-        const starterDocument = newWysiwygStarterDocument();
-        const [versionRow] = await db
-          .insert(certificateTemplateVersion)
-          .values({
-            organizationId: member.organizationId,
-            templateId: created.id,
-            version: 1,
-            status: "DRAFT",
-            engine: "wysiwyg",
-            documentJson: toRecord(starterDocument),
-            documentSha256: hashCertificateDocument(starterDocument),
-            renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
-            createdBy: session.user.id,
-          })
-          .returning();
-        initialVersion = versionRow ?? null;
-      }
-
-      return c.json(
-        {
-          item: created,
-          initialVersion,
-        },
-        201,
-      );
-    },
-  )
-  // XLSX -> wysiwyg migration assistant (roadmap item 5): scaffold a NEW
-  // wysiwyg template from an xlsx template's binding manifest. The generated
-  // document is starter-based (all locked blocks) + per-sheet imported-field
-  // sections; only catalog-known paths are imported so it always validates.
-  .post(
-    "/:id/migrate-to-wysiwyg",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const templateId = Number.parseInt(c.req.param("id"), 10);
-      if (!Number.isFinite(templateId)) {
-        return c.json({ error: "Id inválido" }, 400);
-      }
-      const source = await db.query.certificateTemplate.findFirst({
-        where: and(
-          eq(certificateTemplate.id, templateId),
-          eq(certificateTemplate.organizationId, member.organizationId),
-        ),
-      });
-      if (!source) return c.json({ error: "Template não encontrado" }, 404);
-
-      const [latestXlsx] = await db
-        .select()
-        .from(certificateTemplateVersion)
-        .where(
-          and(
-            eq(certificateTemplateVersion.templateId, templateId),
-            eq(
-              certificateTemplateVersion.organizationId,
-              member.organizationId,
-            ),
-          ),
-        )
-        .orderBy(desc(certificateTemplateVersion.version))
-        .limit(1);
-      if (!latestXlsx || latestXlsx.engine === "wysiwyg") {
-        return c.json(
-          { error: "Este template já usa o editor visual" },
-          400,
-        );
-      }
-      const manifest = latestXlsx.bindingManifest;
-      const rawBindings =
-        manifest && typeof manifest === "object"
-          ? Reflect.get(manifest, "scalarBindings")
-          : null;
-      const bindings = (Array.isArray(rawBindings) ? rawBindings : []).flatMap(
-        (binding) => {
-          if (!binding || typeof binding !== "object") return [];
-          const sheet = Reflect.get(binding, "sheet");
-          const cell = Reflect.get(binding, "cell");
-          const fieldPath = Reflect.get(binding, "fieldPath");
-          return typeof sheet === "string" &&
-            typeof cell === "string" &&
-            typeof fieldPath === "string"
-            ? [{ sheet, cell, fieldPath }]
-            : [];
-        },
-      );
-      const { document, importedPaths, skippedPaths } =
-        buildMigratedDocumentFromXlsxBindings(bindings);
-
-      const name = `${source.name} (visual)`;
-      const slug = slugifyTemplateName(name);
-      const existing = await db.query.certificateTemplate.findFirst({
-        where: and(
-          eq(certificateTemplate.organizationId, member.organizationId),
-          eq(certificateTemplate.slug, slug),
-        ),
-      });
-      if (existing) {
-        return c.json(
-          { error: "Já existe um template migrado com esse nome" },
-          409,
-        );
-      }
-      const [created] = await db
-        .insert(certificateTemplate)
-        .values({
-          organizationId: member.organizationId,
-          name,
-          slug,
-          version: 1,
-          status: "ACTIVE",
-          isDefault: false,
-          createdBy: session.user.id,
-        })
-        .returning();
-      if (!created) return c.json({ error: "Falha ao criar template" }, 500);
-      const [versionRow] = await db
-        .insert(certificateTemplateVersion)
-        .values({
-          organizationId: member.organizationId,
-          templateId: created.id,
-          version: 1,
-          status: "DRAFT",
-          engine: "wysiwyg",
-          documentJson: toRecord(document),
-          documentSha256: hashCertificateDocument(document),
-          renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
-          createdBy: session.user.id,
-        })
-        .returning();
-      await writeOrganizationAuditEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "certificate_template.migrated_to_wysiwyg",
-        entityType: "certificate_template",
-        entityId: String(created.id),
-        details: {
-          sourceTemplateId: templateId,
-          importedPaths: importedPaths.length,
-          skippedPaths,
-        },
-      });
-      return c.json(
-        {
-          item: created,
-          initialVersion: versionRow ?? null,
-          importedPaths,
-          skippedPaths,
-        },
-        201,
-      );
-    },
-  )
-  // ---- wysiwyg engine routes (epic wysiwyg, spec 02 §6.1) -----------------
-  .get(
-    "/:id/versions/:versionId/document",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    async (c) => {
-      const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      const versionId = Number.parseInt(c.req.param("versionId"), 10);
-
-      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
-        return c.json({ error: "Template ou versão inválidos" }, 400);
-      }
-
-      const version = await db.query.certificateTemplateVersion.findFirst({
-        where: and(
-          eq(certificateTemplateVersion.id, versionId),
-          eq(certificateTemplateVersion.templateId, id),
-          eq(certificateTemplateVersion.organizationId, member.organizationId),
-        ),
-      });
-
-      if (!version || version.engine !== "wysiwyg") {
-        return c.json({ error: "Versão do editor não encontrada" }, 404);
-      }
-
-      return c.json({
-        item: {
-          id: version.id,
-          templateId: version.templateId,
-          version: version.version,
-          status: version.status,
-          engine: version.engine,
-          documentJson: version.documentJson,
-          documentSha256: version.documentSha256,
-          validationResult: version.validationResult,
-          publishedAt: version.publishedAt,
-          updatedAt: version.updatedAt,
-        },
-      });
-    },
-  )
-  .put(
-    "/:id/versions/:versionId/document",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    zValidator("json", UpdateWysiwygDocumentSchema),
-    async (c) => {
-      const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      const versionId = Number.parseInt(c.req.param("versionId"), 10);
-      const input = c.req.valid("json");
-
-      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
-        return c.json({ error: "Template ou versão inválidos" }, 400);
-      }
-
-      const existing = await db.query.certificateTemplateVersion.findFirst({
-        where: and(
-          eq(certificateTemplateVersion.id, versionId),
-          eq(certificateTemplateVersion.templateId, id),
-          eq(certificateTemplateVersion.organizationId, member.organizationId),
-        ),
-      });
-
-      if (!existing || existing.engine !== "wysiwyg") {
-        return c.json({ error: "Versão do editor não encontrada" }, 404);
-      }
-
-      // Immutability (spec 02 §1 rule 1): documentJson is writable ONLY in DRAFT.
-      if (existing.status !== "DRAFT") {
-        return c.json(
-          {
-            error: "Versões validadas/publicadas são imutáveis — crie uma nova versão",
-            code: "version_immutable",
-          },
-          409,
-        );
-      }
-
-      if (
-        input.expectedDocumentSha256 &&
-        input.expectedDocumentSha256 !== existing.documentSha256
-      ) {
-        return c.json(
-          {
-            error:
-              "O modelo foi alterado em outra aba ou sessão — recarregue a página antes de continuar",
-            code: "document_conflict",
-            documentSha256: existing.documentSha256,
-          },
-          409,
-        );
-      }
-
-      // Invariant: documentJson persisted in the DB is ALWAYS valid (structure +
-      // placeholder catalog). The editor's guard should make violations
-      // impossible; a 422 here signals a client bug, never lost admin work.
-      const validated = validateCertificateTemplateDocument(input.documentJson);
-      if (!validated.ok) {
-        return c.json(
-          { error: "Documento inválido", issues: validated.issues },
-          422,
-        );
-      }
-
-      const documentSha256 = hashCertificateDocument(validated.document);
-      const [updated] = await db
-        .update(certificateTemplateVersion)
-        .set({
-          documentJson: toRecord(validated.document),
-          documentSha256,
-          validationResult: { ok: true, issues: [] },
-          updatedAt: new Date(),
-        })
-        .where(eq(certificateTemplateVersion.id, existing.id))
-        // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
-        .returning();
-
-      return c.json({
-        item: updated
-          ? {
-              id: updated.id,
-              version: updated.version,
-              status: updated.status,
-              documentSha256: updated.documentSha256,
-              updatedAt: updated.updatedAt,
-            }
-          : null,
-      });
-    },
-  )
-  .post(
-    "/:id/versions/:versionId/validate-document",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    async (c) => {
-      const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      const versionId = Number.parseInt(c.req.param("versionId"), 10);
-
-      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
-        return c.json({ error: "Template ou versão inválidos" }, 400);
-      }
-
-      const existing = await db.query.certificateTemplateVersion.findFirst({
-        where: and(
-          eq(certificateTemplateVersion.id, versionId),
-          eq(certificateTemplateVersion.templateId, id),
-          eq(certificateTemplateVersion.organizationId, member.organizationId),
-        ),
-      });
-
-      if (!existing || existing.engine !== "wysiwyg") {
-        return c.json({ error: "Versão do editor não encontrada" }, 404);
-      }
-      if (!existing.documentJson) {
-        return c.json({ error: "Versão sem documento" }, 409);
-      }
-
-      // Structure + catalog + TRIAL COMPILE against the canonical sample data —
-      // the same compiler that runs at issuance (fail-loud parity).
-      const validated = validateCertificateTemplateDocument(existing.documentJson);
-      if (!validated.ok) {
-        await db
-          .update(certificateTemplateVersion)
-          .set({
-            validationResult: { ok: false, issues: validated.issues },
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(certificateTemplateVersion.id, existing.id),
-              // A concurrent save mid-trial-compile must not get stamped
-              // VALIDATED for content that was never compiled.
-              eq(
-                certificateTemplateVersion.documentSha256,
-                existing.documentSha256 ?? "",
-              ),
-            ),
-          );
-        return c.json({ ok: false, issues: validated.issues });
-      }
-
-      try {
-        const compiled = await compileCertificateHtml(
-          validated.document,
-          sampleCertificateInputData,
-        );
-        const validationResult = {
-          ok: true,
-          issues: [],
-          trialCompile: {
-            compiledHtmlSha256: compiled.sha256,
-            compilerVersion: compiled.compilerVersion,
-          },
-        };
-        const nextStatus = existing.status === "DRAFT" ? "VALIDATED" : existing.status;
-        await db
-          .update(certificateTemplateVersion)
-          .set({
-            validationResult,
-            status: nextStatus,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(certificateTemplateVersion.id, existing.id),
-              eq(
-                certificateTemplateVersion.documentSha256,
-                existing.documentSha256 ?? "",
-              ),
-            ),
-          );
-        return c.json({ ok: true, issues: [], trialCompile: validationResult.trialCompile, status: nextStatus });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const issues = [{ path: "compile", message }];
-        await db
-          .update(certificateTemplateVersion)
-          .set({
-            validationResult: { ok: false, issues },
-            updatedAt: new Date(),
-          })
-          .where(eq(certificateTemplateVersion.id, existing.id));
-        return c.json({ ok: false, issues });
-      }
-    },
-  )
-  .post(
-    "/:id/versions/wysiwyg",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
-
-      if (!Number.isFinite(id)) {
-        return c.json({ error: "Template inválido" }, 400);
-      }
-
-      const template = await db.query.certificateTemplate.findFirst({
-        where: and(
-          eq(certificateTemplate.id, id),
-          eq(certificateTemplate.organizationId, member.organizationId),
-        ),
-      });
-      if (!template) {
-        return c.json({ error: "Template não encontrado" }, 404);
-      }
-
-      // Fork: new DRAFT copying the latest wysiwyg version's document (or the
-      // starter document when none exists yet). Serialized under the same
-      // advisory lock as the XLSX upload path — two concurrent "Nova versão"
-      // clicks must not race the version counter, and the UI's at-most-one-
-      // DRAFT invariant is enforced here by returning the existing DRAFT
-      // (idempotent fork) instead of inserting a sibling.
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`certificate-template-version:${id}`}))`,
-        );
-
-        const versions = await tx
-          .select({
-            id: certificateTemplateVersion.id,
-            version: certificateTemplateVersion.version,
-            status: certificateTemplateVersion.status,
-            engine: certificateTemplateVersion.engine,
-            documentJson: certificateTemplateVersion.documentJson,
-          })
-          .from(certificateTemplateVersion)
-          .where(
-            and(
-              eq(certificateTemplateVersion.templateId, id),
-              eq(
-                certificateTemplateVersion.organizationId,
-                member.organizationId,
-              ),
-            ),
-          )
-          .orderBy(desc(certificateTemplateVersion.version));
-
-        const existingDraft = versions.find(
-          (candidate) =>
-            candidate.status === "DRAFT" && candidate.engine === "wysiwyg",
-        );
-        if (existingDraft) {
-          const [row] = await tx
-            .select()
-            .from(certificateTemplateVersion)
-            .where(eq(certificateTemplateVersion.id, existingDraft.id))
-            .limit(1);
-          return { created: row ?? null, reused: true };
-        }
-
-        const latest = versions[0];
-        const sourceDocument =
-          latest?.engine === "wysiwyg" && latest.documentJson
-            ? latest.documentJson
-            : newWysiwygStarterDocument();
-        const validated = validateCertificateTemplateDocument(sourceDocument);
-        if (!validated.ok) {
-          return { created: null, reused: false, invalid: validated.issues };
-        }
-
-        const [created] = await tx
-          .insert(certificateTemplateVersion)
-          .values({
-            organizationId: member.organizationId,
-            templateId: id,
-            version: (latest?.version ?? 0) + 1,
-            status: "DRAFT",
-            engine: "wysiwyg",
-            documentJson: toRecord(validated.document),
-            documentSha256: hashCertificateDocument(validated.document),
-            renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
-            createdBy: session.user.id,
-          })
-          .returning();
-        return { created: created ?? null, reused: false };
-      });
-
-      if (result.invalid) {
-        return c.json(
-          { error: "Documento de origem inválido", issues: result.invalid },
-          409,
-        );
-      }
-      return c.json({ item: result.created }, result.reused ? 200 : 201);
+      return c.json({ item: created }, 201);
     },
   )
   .post(
@@ -1663,88 +1100,6 @@ export const certificateTemplatesRouter = new Hono<{
         );
       }
 
-      if (existing.engine === "wysiwyg") {
-        // wysiwyg publish (epic wysiwyg, spec 02 §6.1): structure + catalog +
-        // trial compile must pass HERE, at the gate that makes the version
-        // selectable for real issuance. No preview requirement in v1 — the
-        // trial compile is the determinism/compliance guarantee; previews are
-        // a visual aid.
-        if (!existing.documentJson) {
-          return c.json({ error: "Versão sem documento" }, 409);
-        }
-        const validated = validateCertificateTemplateDocument(
-          existing.documentJson,
-        );
-        if (!validated.ok) {
-          return c.json(
-            { error: "Documento inválido para publicação", issues: validated.issues },
-            409,
-          );
-        }
-        let trialCompileSha: string;
-        try {
-          const compiled = await compileCertificateHtml(
-            validated.document,
-            sampleCertificateInputData,
-          );
-          trialCompileSha = compiled.sha256;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          return c.json(
-            {
-              error: "Falha na compilação de teste do documento",
-              issues: [{ path: "compile", message }],
-            },
-            409,
-          );
-        }
-
-        const [published] = await db
-          .update(certificateTemplateVersion)
-          .set({
-            status: "PUBLISHED",
-            validationResult: {
-              ok: true,
-              issues: [],
-              trialCompile: {
-                compiledHtmlSha256: trialCompileSha,
-                compilerVersion: CERT_HTML_COMPILER_VERSION,
-              },
-            },
-            publishedAt: new Date(),
-            publishedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(certificateTemplateVersion.id, existing.id),
-              inArray(certificateTemplateVersion.status, ["DRAFT", "VALIDATED"]),
-            ),
-          )
-          .returning();
-
-        if (!published) {
-          return c.json({ error: "Versão já publicada" }, 409);
-        }
-
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "certificate_template.wysiwyg_published",
-          entityType: "certificate_template_version",
-          entityId: String(existing.id),
-          details: {
-            templateId: id,
-            versionId,
-            documentSha256: existing.documentSha256,
-            trialCompileSha256: trialCompileSha,
-          },
-        });
-
-        return c.json({ item: published });
-      }
-
       if (
         existing.xlsxSha256 === null ||
         existing.bindingManifestSha256 === null
@@ -2333,15 +1688,12 @@ export const certificateTemplatesRouter = new Hono<{
               templateId: created.id,
               version: 1,
               status: "DRAFT",
-              engine: sourceVersion.engine,
               // Immutable artifacts (R2 objects) are shared by reference —
               // both rows point at the same frozen upload.
               xlsxR2Key: sourceVersion.xlsxR2Key,
               xlsxSha256: sourceVersion.xlsxSha256,
               bindingManifest: sourceVersion.bindingManifest,
               bindingManifestSha256: sourceVersion.bindingManifestSha256,
-              documentJson: sourceVersion.documentJson,
-              documentSha256: sourceVersion.documentSha256,
               renderPolicy: sourceVersion.renderPolicy,
               validationResult: null,
               createdBy: session.user.id,

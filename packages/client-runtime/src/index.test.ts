@@ -724,21 +724,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "listLibrary",
-          "namespace": "organizationMedia",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "uploadLibrary",
-          "namespace": "organizationMedia",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "deleteLibrary",
-          "namespace": "organizationMedia",
-          "policy": "cloud-only",
-        },
-        {
           "method": "list",
           "namespace": "signingCertificates",
           "policy": "cloud-only",
@@ -1740,36 +1725,6 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "createXlsxAssignment",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getWysiwygDocument",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getPlaceholderCatalog",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "saveWysiwygDocument",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "validateWysiwygDocument",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createWysiwygVersion",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "migrateToWysiwyg",
           "namespace": "certificateTemplates",
           "policy": "cloud-only",
         },

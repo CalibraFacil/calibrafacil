@@ -124,9 +124,9 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
       jobId: jobRow!.id,
       templateId: templateRow!.id,
       templateVersionId: versionRow!.id,
-      engine: "xlsx",
       filledXlsxR2Key: "certs/drift.xlsx",
       filledXlsxSha256: "sha-fx",
+      bindingManifestSha256: "sha-manifest",
       pdfR2Key: "certs/drift.pdf",
       pdfSha256: PDF_SHA,
       renderPolicy: {

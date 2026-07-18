@@ -223,15 +223,3 @@ export async function copyTextToClipboard(value: string): Promise<boolean> {
     document.body.removeChild(textarea)
   }
 }
-
-/** Wysiwyg version-status labels — same values as xlsx today, own map so the
- * engines can diverge without silently sharing strings. */
-export function getWysiwygVersionStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    DRAFT: "Rascunho",
-    VALIDATED: "Validado",
-    PUBLISHED: "Publicado",
-    ARCHIVED: "Arquivado",
-  }
-  return labels[status] ?? status
-}

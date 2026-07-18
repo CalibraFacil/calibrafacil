@@ -224,9 +224,6 @@ export const calibraApiPolicyRegistry = {
   organizationMedia: {
     uploadLogo: "cloud-only",
     deleteLogo: "cloud-only",
-    listLibrary: "cloud-only",
-    uploadLibrary: "cloud-only",
-    deleteLibrary: "cloud-only",
   },
   signingCertificates: {
     list: "cloud-only",
@@ -487,13 +484,7 @@ export const calibraApiPolicyRegistry = {
     getXlsxPreview: "cloud-only",
     publishXlsx: "cloud-only",
     createXlsxAssignment: "cloud-only",
-    getWysiwygDocument: "cloud-only",
-    getPlaceholderCatalog: "cloud-only",
-    saveWysiwygDocument: "cloud-only",
-    validateWysiwygDocument: "cloud-only",
-    createWysiwygVersion: "cloud-only",
-  
-    migrateToWysiwyg: "cloud-only",},
+  },
   competences: {
     list: "cloud-only",
     matrix: "cloud-only",

@@ -248,13 +248,6 @@ export function issuedCertificateXlsxKey(
   return issuedCertificateKey(params, "xlsx");
 }
 
-/** Compiled-HTML artifact of a wysiwyg-engine issued certificate (epic wysiwyg). */
-export function issuedCertificateHtmlKey(
-  params: IssuedCertificateKeyParams,
-): StorageObject {
-  return issuedCertificateKey(params, "html");
-}
-
 export interface JobLabelKeyParams {
   org: OrgRef;
   jobId: string;
@@ -462,24 +455,6 @@ export function organizationLogoKey(
   return {
     bucket: bucketFor("ORG_LOGO"),
     key: `${ORGANIZATION_LOGO_KEY_PREFIX}${part}/${params.timestamp}-${params.uniqueId}`,
-  };
-}
-
-export interface OrganizationMediaKeyParams {
-  org: OrgRef;
-  uniqueId: string;
-  fileName: string;
-}
-
-/** Org media-library files (wysiwyg editor images). */
-export function organizationMediaKey(
-  params: OrganizationMediaKeyParams,
-): StorageObject {
-  const part = orgPartition(params.org);
-  const safe = params.fileName.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 80);
-  return {
-    bucket: bucketFor("ORG_LOGO"),
-    key: `org/${part}/media-library/${params.uniqueId}-${safe}`,
   };
 }
 

@@ -722,6 +722,13 @@
       "when": 1784563601000,
       "tag": "0102_organization_media",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1784563602000,
+      "tag": "0103_drop_wysiwyg_editor",
+      "breakpoints": true
     }
   ]
 }

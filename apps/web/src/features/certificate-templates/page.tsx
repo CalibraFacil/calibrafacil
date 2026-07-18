@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
 import {
   AlertCircleIcon,
   BookOpen02Icon,
@@ -48,7 +47,6 @@ import {
 } from '@/runtime/sync-status'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { calibraApi } from '@/utils/api'
-import { isWysiwygEditorEnabled } from './wysiwyg-flag'
 import { cn } from '@/lib/utils'
 import {
   useCertificateTemplateAssignmentOptions,
@@ -124,31 +122,6 @@ const CERTIFICATE_STAGES: ReadonlyArray<{
   },
 ]
 
-/**
- * Visual (wysiwyg) templates skip the XLSX-only stages: the editor owns
- * create/validate/publish, the list page owns assignment. Reusing the XLSX
- * rail sent visual-template users to "Envie uma planilha" — a dead end.
- */
-const WYSIWYG_STAGES: ReadonlyArray<{
-  id: StageId
-  label: string
-  hint: string
-  icon: typeof CloudUploadIcon
-}> = [
-  {
-    id: 'source',
-    label: 'Editor visual',
-    hint: 'Criar, validar e publicar',
-    icon: DocumentValidationIcon,
-  },
-  {
-    id: 'publish',
-    label: 'Atribuição',
-    hint: 'Quem usa esta versão',
-    icon: RocketIcon,
-  },
-]
-
 export function CertificateTemplatesPage() {
   const queryClient = useQueryClient()
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
@@ -161,7 +134,6 @@ export function CertificateTemplatesPage() {
     null,
   )
   const [newTemplateName, setNewTemplateName] = useState('')
-  const navigate = useNavigate()
   const [xlsxWorkbench, setXlsxWorkbench] = useState<XlsxWorkbenchState | null>(
     null,
   )
@@ -490,12 +462,7 @@ export function CertificateTemplatesPage() {
 
   const xlsxAssignmentMutation = useMutation({
     mutationFn: async () => {
-      const publishedWysiwyg =
-        [...(selectedTemplate?.wysiwygVersions ?? [])]
-          .filter((wysiwygVersion) => wysiwygVersion.status === 'PUBLISHED')
-          .sort((a, b) => b.version - a.version)[0] ?? null
-      const targetVersionId =
-        publishedWysiwyg?.id ?? activeXlsxWorkbench?.version.id ?? null
+      const targetVersionId = activeXlsxWorkbench?.version.id ?? null
       if (!selectedTemplate?.id || targetVersionId === null) {
         throw new Error('Publique uma versão antes de atribuir')
       }
@@ -535,72 +502,6 @@ export function CertificateTemplatesPage() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : 'Falha ao criar template',
-      )
-    },
-  })
-
-  const migrateMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedTemplate?.id) throw new Error('Nenhum template selecionado')
-      return calibraApi.certificateTemplates.migrateToWysiwyg<{
-        item: TemplateItem
-        importedPaths: string[]
-        skippedPaths: string[]
-      }>(selectedTemplate.id)
-    },
-    onSuccess: async (data) => {
-      if (data.skippedPaths.length > 0) {
-        // Silent field loss on a certificate template is how a lab discovers
-        // a gap only when a customer does — name every dropped binding.
-        toast.warning(
-          `Template migrado — ${data.importedPaths.length} campos importados, ` +
-            `${data.skippedPaths.length} não reconhecidos e NÃO importados: ` +
-            data.skippedPaths.join(', '),
-          { duration: 15000 },
-        )
-      } else {
-        toast.success(
-          `Novo modelo visual criado a partir de «${selectedTemplate?.name ?? 'modelo'}» — ` +
-            `${data.importedPaths.length} campos importados. O modelo XLSX original permanece intacto.`,
-          { duration: 10000 },
-        )
-      }
-      await refreshTemplates()
-      setSelectedTemplateKey(String(data.item.id))
-      await navigate({
-        to: '/dashboard/certificate-templates/$slug/editor',
-        params: { slug: data.item.slug },
-      })
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao migrar template',
-      )
-    },
-  })
-
-  const createWysiwygMutation = useMutation({
-    mutationFn: async () => {
-      const name = newTemplateName.trim()
-      return calibraApi.certificateTemplates.create<{
-        item: TemplateItem
-        initialVersion: { id: number } | null
-      }>({ name, engine: 'wysiwyg' })
-    },
-    onSuccess: async (data) => {
-      toast.success('Modelo criado no editor visual')
-      setNewTemplateName('')
-      await refreshTemplates()
-      if (data.item.id) {
-        await navigate({
-          to: '/dashboard/certificate-templates/$slug/editor',
-          params: { slug: data.item.slug },
-        })
-      }
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao criar modelo',
       )
     },
   })
@@ -701,13 +602,6 @@ export function CertificateTemplatesPage() {
   const isReadOnly = !canManageTemplates || isSystemTemplate
   const currentXlsxVersion =
     activeXlsxWorkbench?.version ?? selectedTemplate?.currentXlsxVersion ?? null
-  const isWysiwygTemplate =
-    (selectedTemplate?.wysiwygVersions?.length ?? 0) > 0 ||
-    selectedTemplate?.currentXlsxVersion?.engine === 'wysiwyg'
-  const publishedWysiwygVersion =
-    [...(selectedTemplate?.wysiwygVersions ?? [])]
-      .filter((wysiwygVersion) => wysiwygVersion.status === 'PUBLISHED')
-      .sort((a, b) => b.version - a.version)[0] ?? null
   const isCurrentXlsxLoading =
     Boolean(selectedCurrentXlsxVersionId) && currentXlsxVersionQuery.isLoading
   const placeholderRows =
@@ -794,50 +688,26 @@ export function CertificateTemplatesPage() {
     xlsxStatus === 'ARCHIVED' ||
     Boolean(hasRenderedPreview)
 
-  const stageDone: Record<StageId, boolean> = isWysiwygTemplate
-    ? {
-        source: publishedWysiwygVersion !== null,
-        mapping: false,
-        verify: false,
-        publish: publishedWysiwygVersion !== null,
-      }
-    : {
-        source: Boolean(currentXlsxVersion),
-        mapping: mappingComplete,
-        verify: isXlsxVerified,
-        publish: isXlsxPublished,
-      }
-  const stageBlocked: Record<StageId, boolean> = isWysiwygTemplate
-    ? {
-        source: false,
-        mapping: true,
-        verify: true,
-        publish: publishedWysiwygVersion === null,
-      }
-    : {
-        source: false,
-        mapping: !currentXlsxVersion,
-        verify: !currentXlsxVersion,
-        publish: !isXlsxPublished && !canPublishXlsx,
-      }
-  const defaultStage: StageId = isWysiwygTemplate
-    ? publishedWysiwygVersion
-      ? 'publish'
-      : 'source'
-    : !currentXlsxVersion
-      ? 'source'
-      : !mappingComplete
-        ? 'mapping'
-        : !isXlsxVerified
-          ? 'verify'
-          : 'publish'
-  const rawStage: StageId = activeStage ?? defaultStage
-  // A stale activeStage from an XLSX template must not land a visual
-  // template on the spreadsheet-only stages.
-  const effectiveStage: StageId =
-    isWysiwygTemplate && (rawStage === 'mapping' || rawStage === 'verify')
-      ? defaultStage
-      : rawStage
+  const stageDone: Record<StageId, boolean> = {
+    source: Boolean(currentXlsxVersion),
+    mapping: mappingComplete,
+    verify: isXlsxVerified,
+    publish: isXlsxPublished,
+  }
+  const stageBlocked: Record<StageId, boolean> = {
+    source: false,
+    mapping: !currentXlsxVersion,
+    verify: !currentXlsxVersion,
+    publish: !isXlsxPublished && !canPublishXlsx,
+  }
+  const defaultStage: StageId = !currentXlsxVersion
+    ? 'source'
+    : !mappingComplete
+      ? 'mapping'
+      : !isXlsxVerified
+        ? 'verify'
+        : 'publish'
+  const effectiveStage: StageId = activeStage ?? defaultStage
   const templateNameDirty =
     !isReadOnly &&
     draft.name.trim().length > 0 &&
@@ -902,8 +772,7 @@ export function CertificateTemplatesPage() {
               )}
               {currentXlsxVersion && (
                 <Badge variant="outline">
-                  {currentXlsxVersion.engine === 'wysiwyg' ? 'Visual' : 'XLSX'}{' '}
-                  v{currentXlsxVersion.version} ·{' '}
+                  XLSX v{currentXlsxVersion.version} ·{' '}
                   {getXlsxStatusLabel(currentXlsxVersion.status)}
                 </Badge>
               )}
@@ -946,12 +815,6 @@ export function CertificateTemplatesPage() {
                 key={certificateTemplateKey(template)}
                 value={certificateTemplateKey(template)}
               >
-                {template.currentXlsxVersion?.engine === 'wysiwyg' ||
-                (template.wysiwygVersions?.length ?? 0) > 0
-                  ? '[Visual] '
-                  : template.currentXlsxVersion
-                    ? '[XLSX] '
-                    : ''}
                 {template.name}
               </NativeSelectOption>
             ))}
@@ -1008,43 +871,6 @@ export function CertificateTemplatesPage() {
           >
             padrão ≠ emissão
           </span>
-          {isWysiwygEditorEnabled() &&
-            selectedTemplate?.id &&
-            selectedTemplate.currentXlsxVersion?.engine !== 'wysiwyg' &&
-            (selectedTemplate.wysiwygVersions?.length ?? 0) === 0 &&
-            selectedTemplate.currentXlsxVersion != null && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => migrateMutation.mutate()}
-                disabled={!canManageTemplates || migrateMutation.isPending}
-              >
-                {migrateMutation.isPending
-                  ? 'Migrando…'
-                  : 'Migrar para o editor visual'}
-              </Button>
-            )}
-          {isWysiwygEditorEnabled() &&
-            selectedTemplate?.id &&
-            ((selectedTemplate.wysiwygVersions?.length ?? 0) > 0 ||
-              selectedTemplate.currentXlsxVersion?.engine === 'wysiwyg') && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  navigate({
-                    to: '/dashboard/certificate-templates/$slug/editor',
-                    params: { slug: selectedTemplate.slug },
-                  })
-                }
-              >
-                {selectedTemplate.wysiwygVersions?.some(
-                  (version) => version.status === 'DRAFT',
-                )
-                  ? 'Abrir rascunho no editor'
-                  : 'Abrir no editor'}
-              </Button>
-            )}
         </div>
 
         {canManageTemplates && (
@@ -1070,19 +896,6 @@ export function CertificateTemplatesPage() {
             >
               Criar
             </Button>
-            {isWysiwygEditorEnabled() && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => createWysiwygMutation.mutate()}
-                disabled={
-                  !newTemplateName.trim() || createWysiwygMutation.isPending
-                }
-              >
-                Criar no editor visual
-              </Button>
-            )}
           </form>
         )}
       </Panel>
@@ -1100,7 +913,7 @@ export function CertificateTemplatesPage() {
           className="flex items-stretch gap-1 overflow-x-auto"
           aria-label="Etapas do template de certificado"
         >
-          {(isWysiwygTemplate ? WYSIWYG_STAGES : CERTIFICATE_STAGES).map((stage, index) => {
+          {CERTIFICATE_STAGES.map((stage, index) => {
             const done = stageDone[stage.id]
             const blocked = stageBlocked[stage.id] && !done
             const active = stage.id === effectiveStage
@@ -1160,42 +973,7 @@ export function CertificateTemplatesPage() {
         )}
       >
         <div className="min-w-0 space-y-4">
-          {effectiveStage === 'source' && isWysiwygTemplate && (
-            <Panel className="p-5">
-              <PanelHeader
-                eyebrow="Etapa 1"
-                title="Editor visual"
-                description="Monte o layout, valide e publique a versão diretamente no editor. Depois de publicada, a etapa de atribuição define quem usa o modelo."
-                action={
-                  <Button
-                    type="button"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() =>
-                      selectedTemplate &&
-                      navigate({
-                        to: '/dashboard/certificate-templates/$slug/editor',
-                        params: { slug: selectedTemplate.slug },
-                      })
-                    }
-                  >
-                    Abrir no editor
-                  </Button>
-                }
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(selectedTemplate?.wysiwygVersions ?? []).map(
-                  (wysiwygVersion) => (
-                    <Badge key={wysiwygVersion.id} variant="outline">
-                      v{wysiwygVersion.version} ·{' '}
-                      {getXlsxStatusLabel(wysiwygVersion.status)}
-                    </Badge>
-                  ),
-                )}
-              </div>
-            </Panel>
-          )}
-
-          {effectiveStage === 'source' && !isWysiwygTemplate && (
+          {effectiveStage === 'source' && (
             <Panel className="p-5">
               <PanelHeader
                 eyebrow="Etapa 1"
@@ -1595,49 +1373,7 @@ export function CertificateTemplatesPage() {
               />
             ))}
 
-          {effectiveStage === 'publish' && isWysiwygTemplate && (
-            publishedWysiwygVersion ? (
-              <XlsxAssignmentPanel
-                engine="wysiwyg"
-                disabled={isReadOnly}
-                assignments={assignmentsQuery.data?.items ?? []}
-                onRemoveAssignment={(assignmentId) =>
-                  archiveAssignmentMutation.mutate(assignmentId)
-                }
-                removePending={archiveAssignmentMutation.isPending}
-                isPublished
-                canPublish={false}
-                hasRenderedPreview={false}
-                publishPending={false}
-                assignmentPending={xlsxAssignmentMutation.isPending}
-                draft={assignmentDraft}
-                methods={methodsQuery.data ?? []}
-                services={servicesQuery.data ?? []}
-                units={unitsQuery.data ?? []}
-                optionsLoading={
-                  methodsQuery.isLoading ||
-                  servicesQuery.isLoading ||
-                  unitsQuery.isLoading
-                }
-                optionsError={
-                  methodsQuery.isError ||
-                  servicesQuery.isError ||
-                  unitsQuery.isError
-                }
-                onDraftChange={setAssignmentDraft}
-                onPublish={() => undefined}
-                onAssign={() => xlsxAssignmentMutation.mutate()}
-              />
-            ) : (
-              <StageLocked
-                message="Publique uma versão no editor visual para liberar a atribuição."
-                onGoToSource={goToSource}
-              />
-            )
-          )}
-
           {effectiveStage === 'publish' &&
-            !isWysiwygTemplate &&
             (hasWorkbench ? (
               <XlsxAssignmentPanel
                 disabled={isReadOnly || !activeXlsxWorkbench}
@@ -1725,7 +1461,6 @@ type AssignmentRow = {
 }
 
 function XlsxAssignmentPanel({
-  engine = 'xlsx',
   disabled,
   isPublished,
   assignments = [],
@@ -1745,7 +1480,6 @@ function XlsxAssignmentPanel({
   onPublish,
   onAssign,
 }: {
-  engine?: 'xlsx' | 'wysiwyg'
   disabled: boolean
   isPublished: boolean
   assignments?: AssignmentRow[]
@@ -1782,46 +1516,39 @@ function XlsxAssignmentPanel({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {engine === 'wysiwyg' ? 'Etapa 2' : 'Etapa 4'}
+              Etapa 4
             </p>
             <Badge variant={isPublished ? 'default' : 'secondary'}>
               {isPublished ? 'Publicado' : 'Não publicado'}
             </Badge>
           </div>
-          <h2 className="text-base font-semibold">
-            {engine === 'wysiwyg' ? 'Atribuição' : 'Publicação e atribuição'}
-          </h2>
+          <h2 className="text-base font-semibold">Publicação e atribuição</h2>
           <p className="text-xs text-muted-foreground">
-            {engine === 'wysiwyg'
-              ? 'Defina quais calibrações usam esta versão do modelo visual quando o certificado for emitido.'
-              : 'Defina quais calibrações usam esta versão XLSX quando o certificado for emitido.'}
+            Defina quais calibrações usam esta versão XLSX quando o certificado
+            for emitido.
           </p>
         </div>
-        {engine === 'xlsx' && (
-          <Button
-            type="button"
-            variant={isPublished ? 'outline' : 'default'}
-            size="sm"
-            disabled={disabled || isPublished || !canPublish || publishPending}
-            onClick={onPublish}
-          >
-            <HugeiconsIcon icon={RocketIcon} className="mr-2 size-4" />
-            {publishPending
-              ? 'Publicando...'
-              : isPublished
-                ? 'Publicado'
-                : 'Publicar versão'}
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant={isPublished ? 'outline' : 'default'}
+          size="sm"
+          disabled={disabled || isPublished || !canPublish || publishPending}
+          onClick={onPublish}
+        >
+          <HugeiconsIcon icon={RocketIcon} className="mr-2 size-4" />
+          {publishPending
+            ? 'Publicando...'
+            : isPublished
+              ? 'Publicado'
+              : 'Publicar versão'}
+        </Button>
       </div>
 
       {!isPublished && (
         <div className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
-          {engine === 'wysiwyg'
-            ? 'Publique uma versão no editor visual para liberar a atribuição.'
-            : hasRenderedPreview
-              ? 'Prévia concluída. Publique a versão para liberar a atribuição.'
-              : 'Valide o XLSX e gere uma prévia PDF concluída antes de publicar.'}
+          {hasRenderedPreview
+            ? 'Prévia concluída. Publique a versão para liberar a atribuição.'
+            : 'Valide o XLSX e gere uma prévia PDF concluída antes de publicar.'}
         </div>
       )}
 

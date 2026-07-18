@@ -1662,8 +1662,6 @@ export interface SpcApi {
 
 export type CertificateTemplateCreateInput = {
   name: string;
-  /** Template engine; "wysiwyg" bootstraps a v1 DRAFT starter version. */
-  engine?: "xlsx" | "wysiwyg";
 };
 
 export type CertificateTemplateUpdateInput = {
@@ -1731,30 +1729,6 @@ export interface CertificateTemplatesApi {
     templateId: string | number,
     versionId: string | number,
     input: CertificateTemplateXlsxAssignmentInput,
-  ): Promise<TResponse>;
-  // ---- wysiwyg engine (epic wysiwyg) ----
-  getWysiwygDocument<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-  ): Promise<TResponse>;
-  getPlaceholderCatalog<TResponse = unknown>(): Promise<TResponse>;
-  saveWysiwygDocument<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-    input: {
-      documentJson: Record<string, unknown>;
-      expectedDocumentSha256?: string;
-    },
-  ): Promise<TResponse>;
-  validateWysiwygDocument<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-  ): Promise<TResponse>;
-  createWysiwygVersion<TResponse = unknown>(
-    templateId: string | number,
-  ): Promise<TResponse>;
-  migrateToWysiwyg<TResponse = unknown>(
-    templateId: string | number,
   ): Promise<TResponse>;
 }
 
@@ -3011,26 +2985,12 @@ export type OrganizationLogoDeleteResponse = {
   logoUrl: null;
 };
 
-export interface OrganizationMediaLibraryItem {
-  id: number;
-  fileName: string;
-  contentType: string;
-  sizeBytes: number;
-  createdAt: string | null;
-}
-
 export interface OrganizationMediaApi {
   uploadLogo(
     file: Blob,
     input?: { fileName?: string },
   ): Promise<OrganizationLogoUploadResponse>;
   deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
-  listLibrary(): Promise<{ items: OrganizationMediaLibraryItem[] }>;
-  uploadLibrary(
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<{ item: OrganizationMediaLibraryItem }>;
-  deleteLibrary(mediaId: number): Promise<{ ok: boolean }>;
 }
 
 export type SigningCertificateStatus =
