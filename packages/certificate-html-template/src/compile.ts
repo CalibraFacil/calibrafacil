@@ -190,26 +190,24 @@ export async function compileCertificateHtml(
     },
   });
 
-  // Bands: pinned first/last by the schema (unreachable throws regardless).
-  const topBandNode = document.content[0];
-  const footerBandNode = document.content[document.content.length - 1];
-  if (
-    topBandNode?.type !== "bandTopIdentity" ||
-    footerBandNode?.type !== "bandPageFooter"
-  ) {
-    throw new CertificateDocumentInvalidError([
-      { path: "content", message: "band nodes missing after validation" },
-    ]);
-  }
-  const topBandInner = renderBandTopIdentityInner(topBandNode.attrs, inputData);
+  // Bands are optional (free canvas): render them only when present.
+  const first = document.content[0];
+  const last = document.content[document.content.length - 1];
+  const topBandNode = first?.type === "bandTopIdentity" ? first : null;
+  const footerBandNode = last?.type === "bandPageFooter" ? last : null;
+  const topBandInner = topBandNode
+    ? renderBandTopIdentityInner(topBandNode.attrs, inputData)
+    : "";
   const documentHeader =
     topBandInner === ""
       ? ""
       : `<thead class="cf-doc-header"><tr><td><div class="cf-band-top-identity">${topBandInner}</div></td></tr></thead>\n`;
-  const footerTemplate = renderBandPageFooterTemplate(
-    footerBandNode.attrs,
-    inputData,
-  );
+  const footerTemplate = footerBandNode
+    ? renderBandPageFooterTemplate(footerBandNode.attrs, inputData)
+    : renderBandPageFooterTemplate(
+        { enabled: true, showCertificateNumber: false, showLabName: false, showIssueDate: false, identitySide: "left" },
+        inputData,
+      );
 
   const certificateNumber = resolvePlaceholder(inputData, "certificate.number");
   const theme = document.attrs.theme;

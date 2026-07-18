@@ -12,7 +12,7 @@ import {
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
-import { newWysiwygStarterDocument } from '@calibra-facil/certificate-html-template'
+import { completeWysiwygDocument } from '@calibra-facil/certificate-html-template'
 
 import type { PlaceholderCatalogEntry } from '../types'
 import { CertificateEditor } from './certificate-editor'
@@ -54,7 +54,7 @@ async function mountEditor() {
     const [, setTick] = useState(0)
     return (
       <CertificateEditor
-        initialDocument={newWysiwygStarterDocument()}
+        initialDocument={completeWysiwygDocument()}
         catalog={CATALOG}
         immediatelyRender
         onEditorReady={(editor) => {

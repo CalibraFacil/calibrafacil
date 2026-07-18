@@ -11,7 +11,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   hashCertificateDocument,
-  newWysiwygStarterDocument,
+  completeWysiwygDocument,
 } from '@calibra-facil/certificate-html-template'
 
 import type { WysiwygVersionDetail } from '../types'
@@ -35,7 +35,7 @@ function makeVersion(
   overrides?: Partial<WysiwygVersionDetail>,
 ): WysiwygVersionDetail {
   const documentJson: Record<string, unknown> = JSON.parse(
-    JSON.stringify(newWysiwygStarterDocument()),
+    JSON.stringify(completeWysiwygDocument()),
   )
   return {
     id: 77,

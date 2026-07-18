@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import { certificateEditorExtensions } from "./extensions.js";
 import { validateCertificateDocument } from "./document-schema.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 
 const schema = getSchema(certificateEditorExtensions());
 
 /** Splice body blocks in before the trailing bandPageFooter. */
 function starterWithBody(extra: Record<string, unknown>[]): Record<string, unknown> {
-  const starter = newWysiwygStarterDocument();
+  const starter = completeWysiwygDocument();
   return {
     ...starter,
     content: [...starter.content.slice(0, -1), ...extra, ...starter.content.slice(-1)],
@@ -44,11 +44,11 @@ describe("certificateEditorExtensions <-> document-schema round-trip", () => {
   });
 
   it("the doc content expression pins bands first and last", () => {
-    expect(schema.nodes.doc?.spec.content).toBe("bandTopIdentity block+ bandPageFooter");
+    expect(schema.nodes.doc?.spec.content).toBe("bandTopIdentity? block+ bandPageFooter?");
   });
 
   it("starter document round-trips: Zod -> ProseMirror -> toJSON -> Zod", () => {
-    const starter = newWysiwygStarterDocument();
+    const starter = completeWysiwygDocument();
     const pmDoc = schema.nodeFromJSON(starter);
     const roundTripped = pmDoc.toJSON();
     const result = validateCertificateDocument(roundTripped);
@@ -111,7 +111,7 @@ describe("certificateEditorExtensions <-> document-schema round-trip", () => {
 
   it("band config attrs survive the round-trip", () => {
     const starter: { content: Record<string, unknown>[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     const top = starter.content[0];
     if (!top) throw new Error("starter missing top band");

@@ -147,10 +147,11 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
     expect(body.initialVersion.engine).toBe("wysiwyg");
     expect(body.initialVersion.status).toBe("DRAFT");
     expect(body.initialVersion.documentSha256).toMatch(/^[0-9a-f]{64}$/);
+    // Free canvas: the starter is BLANK — the user composes the certificate.
     const lockedBlocks = (body.initialVersion.documentJson.content ?? []).filter(
       (block: { type: string }) => block.type === "lockedBlock",
     );
-    expect(lockedBlocks).toHaveLength(12);
+    expect(lockedBlocks).toHaveLength(0);
   });
 
   it("REQ-WTPL-012 POST /:id/duplicate copies the source's latest version CONTENT as a DRAFT v1", async () => {
@@ -311,12 +312,10 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
     const okBody = await okRes.json();
     expect(okBody.item.documentSha256).toBe(hashCertificateDocument(valid));
 
-    // invalid: mandatory block removed — 422 with issues; row NOT clobbered.
+    // invalid: unknown node type (free canvas allows removals) — 422; row
+    // NOT clobbered.
     const invalid = JSON.parse(JSON.stringify(valid));
-    invalid.content = invalid.content.filter(
-      (block: { attrs?: { blockKey?: string } }) =>
-        block.attrs?.blockKey !== "results_table",
-    );
+    invalid.content = [...invalid.content, { type: "htmlBlock", html: "x" }];
     const badRes = await certificateTemplatesRouter.request(
       `/${templateId}/versions/${versionId}/document`,
       { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ documentJson: invalid }) },
@@ -324,9 +323,10 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
     expect(badRes.status).toBe(422);
     const badBody = await badRes.json();
     expect(
-      badBody.issues.some((issue: { message: string }) =>
-        issue.message.includes("results_table"),
-      ),
+      badBody.issues.length > 0 &&
+        badBody.issues.every(
+          (issue: { message: string }) => typeof issue.message === "string",
+        ),
     ).toBe(true);
     const row = await versionRowById(versionId);
     expect(row?.documentSha256).toBe(hashCertificateDocument(valid));
@@ -402,14 +402,10 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
     // publish gate must catch it independently (defense in depth).
     const invalidDoc: { type: string; content: Record<string, unknown>[] } =
       JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
-    invalidDoc.content = invalidDoc.content.filter(
-      (block) =>
-        !(
-          typeof block.attrs === "object" &&
-          block.attrs !== null &&
-          Reflect.get(block.attrs, "blockKey") === "uncertainty_statement"
-        ),
-    );
+    invalidDoc.content = [
+      ...invalidDoc.content,
+      { type: "placeholder", attrs: { path: "job.nextCalibrationDate" } },
+    ];
     const bad = await seedWysiwygTemplate({
       organizationId: org.orgId,
       createdBy: org.userId,

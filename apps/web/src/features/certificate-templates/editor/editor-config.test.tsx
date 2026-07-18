@@ -13,7 +13,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
 import {
-  newWysiwygStarterDocument,
+  completeWysiwygDocument,
   validateCertificateDocument,
 } from '@calibra-facil/certificate-html-template'
 
@@ -57,7 +57,7 @@ async function mountWithInspector() {
     return (
       <div>
         <CertificateEditor
-          initialDocument={newWysiwygStarterDocument()}
+          initialDocument={completeWysiwygDocument()}
           immediatelyRender
           onEditorReady={(editor) => {
             holder.editor = editor
@@ -525,7 +525,7 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     function Harness() {
       return (
         <CertificateEditor
-          initialDocument={newWysiwygStarterDocument()}
+          initialDocument={completeWysiwygDocument()}
           issues={[
             {
               path: 'content.8.attrs',
@@ -732,14 +732,15 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
   })
 
-  it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
+  it('free canvas: select-all + delete empties the page and stays schema-valid', async () => {
     const editor = await mountWithInspector()
     editor.commands.selectAll()
     editor.commands.deleteSelection()
     const json = editor.getJSON()
     const content = Array.isArray(json.content) ? json.content : []
-    expect(content[0]?.type).toBe('bandTopIdentity')
-    expect(content[content.length - 1]?.type).toBe('bandPageFooter')
+    expect(
+      content.filter((node) => node.type === 'lockedBlock').length,
+    ).toBe(0)
     expect(validateCertificateDocument(json).ok).toBe(true)
   })
 })

@@ -57,7 +57,9 @@ import {
   BandPageFooter,
   BandTopIdentity,
   CERTIFICATE_PRINT_CSS,
+  LOCKED_BLOCK_KEYS,
   OPTIONAL_BLOCK_KEYS,
+  completeWysiwygDocument,
   CertImage,
   CertPlaceholder,
   LockedBlock,
@@ -899,11 +901,14 @@ export function CertificateEditor({
             in certificate-editor.css). */}
             <style>{`.cf-page{${certificateThemeTokens(theme)}${certificateStyleTokenOverrides(styleTokens)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
             <div className="cf-editor__bar">
-              {editable && <EditorToolbar editor={editor} />}
+              <div className="cf-editor__bar-group">
+                          {editable && <EditorToolbar editor={editor} />}
               {editable && <FieldPalette editor={editor} catalog={catalog} />}
               {editable && <ImagePicker editor={editor} />}
-              {editable && <span className="cf-editor__toolbar-divider" />}
+              </div>
               {editable && (
+                <div className="cf-editor__bar-group">
+{editable && (
                 <NativeSelect
                   size="sm"
                   aria-label="Registro visual"
@@ -964,7 +969,9 @@ export function CertificateEditor({
                   PT/EN
                 </Button>
               )}
-              {editable && <span className="cf-editor__toolbar-divider" />}
+                </div>
+              )}
+              <div className="cf-editor__bar-group cf-editor__bar-group--view">
               <NativeSelect
                 size="sm"
                 aria-label="Zoom da página"
@@ -1031,6 +1038,7 @@ export function CertificateEditor({
                   strokeWidth={1.8}
                 />
               </Button>
+              </div>
             </div>
             <div
               ref={paperRef}
@@ -1314,13 +1322,14 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
   )
 }
 
+/** Free canvas: EVERY block is insertable (when absent) — the user composes. */
 const OPTIONAL_BLOCK_ITEMS: Array<{ blockKey: string; label: string }> = [
-  {
-    blockKey: 'uncertainty_budget_annex',
-    label: 'Balanço de incertezas (anexo)',
-  },
-  { blockKey: 'decision_rule_statement', label: 'Regra de decisão' },
-]
+  ...LOCKED_BLOCK_KEYS,
+  ...OPTIONAL_BLOCK_KEYS,
+].map((blockKey) => ({
+  blockKey,
+  label: LOCKED_BLOCK_LABELS[blockKey] ?? blockKey,
+}))
 
 function hasLockedBlock(editor: Editor, blockKey: string): boolean {
   let found = false
@@ -1424,6 +1433,26 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
           }
         />
         <DropdownMenuContent align="start">
+          <DropdownMenuItem
+            onClick={() => {
+              const complete = completeWysiwygDocument()
+              editor
+                .chain()
+                .focus()
+                .insertContent(
+                  complete.content.filter(
+                    (node) =>
+                      !(
+                        node.type === 'lockedBlock' &&
+                        hasLockedBlock(editor, String(node.attrs.blockKey))
+                      ),
+                  ),
+                )
+                .run()
+            }}
+          >
+            Modelo completo (todos os blocos)
+          </DropdownMenuItem>
           {/* items disable once present — the guard would reject a duplicate
               anyway, but a silent no-op reads as "nothing happened" */}
           {OPTIONAL_BLOCK_ITEMS.map(({ blockKey, label }) => {

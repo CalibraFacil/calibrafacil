@@ -76,7 +76,7 @@ export const LockedBlock = Node.create({
 export const CertificateDoc = Node.create({
   name: "doc",
   topNode: true,
-  content: "bandTopIdentity block+ bandPageFooter",
+  content: "bandTopIdentity? block+ bandPageFooter?",
 });
 
 /**

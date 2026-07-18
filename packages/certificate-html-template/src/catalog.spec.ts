@@ -10,7 +10,7 @@ import {
 } from "./catalog.js";
 import { BANNED_PLACEHOLDER_SEGMENTS, parseCertificateDocument } from "./document-schema.js";
 import { sampleCertificateInputData } from "./fixtures/sample-input-data.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 
 describe("PLACEHOLDER_CATALOG", () => {
   it("has unique paths and pt-BR labels", () => {
@@ -86,7 +86,7 @@ describe("PLACEHOLDER_CATALOG", () => {
   });
 
   it("findUnknownPlaceholderPaths flags only unknown paths in a document", () => {
-    const starter = newWysiwygStarterDocument();
+    const starter = completeWysiwygDocument();
     const document = parseCertificateDocument({
       ...JSON.parse(JSON.stringify(starter)),
       content: [

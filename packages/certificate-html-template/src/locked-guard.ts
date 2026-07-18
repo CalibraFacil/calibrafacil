@@ -33,36 +33,24 @@ function lockedBlockCounts(doc: PmNode): Map<string, number> {
   return counts;
 }
 
-function countsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [key, count] of a) {
-    if (b.get(key) !== count) return false;
-  }
-  return true;
-}
 
 export const lockedBlockGuardKey = new PluginKey("cfLockedBlockGuard");
 
-const OPTIONAL_KEYS = new Set([
-  "uncertainty_budget_annex",
-  "decision_rule_statement",
-]);
 
 export function createLockedBlockGuardPlugin(): Plugin {
   return new Plugin({
     key: lockedBlockGuardKey,
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
-      const before = lockedBlockCounts(state.doc);
+      // FREE CANVAS: removal is always allowed — the user owns composition.
+      // The only invariant left is at-most-once per block/band (a pasted
+      // duplicate "results table" is never intent).
       const after = lockedBlockCounts(tr.doc);
-      // Optional blocks may be inserted (0->1) and deleted (1->0), never
-      // duplicated; everything else keeps the strict multiset equality.
-      for (const key of OPTIONAL_KEYS) {
-        if ((after.get(key) ?? 0) > 1) return false;
-        before.delete(key);
-        after.delete(key);
+      for (const count of after.values()) {
+        if (count > 1) return false;
       }
-      return countsEqual(before, after);
+      void state;
+      return true;
     },
   });
 }

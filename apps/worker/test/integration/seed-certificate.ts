@@ -13,7 +13,7 @@ import type { JobStatus, MethodSnapshot } from "@calibra-facil/db/schema";
 import {
   CERT_HTML_COMPILER_VERSION,
   hashCertificateDocument,
-  newWysiwygStarterDocument,
+  completeWysiwygDocument,
 } from "@calibra-facil/certificate-html-template";
 
 // Seed helpers SPECIFIC to the worker's XLSX certificate-issuance handler
@@ -214,7 +214,7 @@ export async function seedIssuableJob(params: {
   const wysiwygDocument = (() => {
     if (engine !== "wysiwyg") return null;
     const doc: { content: Record<string, unknown>[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     if (params.imageMediaId) {
       // authored org-media image before the trailing band (roadmap item 3)

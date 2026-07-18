@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { certificateEditorExtensions } from "./extensions.js";
 import { createLockedBlockGuardPlugin } from "./locked-guard.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 
 const schema = getSchema(certificateEditorExtensions());
 
@@ -19,7 +19,7 @@ function countLocked(doc: PmNode): number {
 }
 
 function makeState(): EditorState {
-  const doc = schema.nodeFromJSON(newWysiwygStarterDocument());
+  const doc = schema.nodeFromJSON(completeWysiwygDocument());
   return EditorState.create({ doc, plugins: [createLockedBlockGuardPlugin()] });
 }
 
@@ -52,46 +52,23 @@ describe("locked-block guard (headless ProseMirror)", () => {
     expect(countBands(state.doc)).toBe(2);
   });
 
-  it("rejects deleting a band node (guard + doc content expression)", () => {
+  it("free canvas: deleting a band is ALLOWED (bands optional)", () => {
     const state = makeState();
     const top = state.doc.child(0);
     expect(top.type.name).toBe("bandTopIdentity");
-    let resulting = state.doc;
-    try {
-      const tr = state.tr.delete(0, top.nodeSize);
-      resulting = state.applyTransaction(tr).state.doc;
-    } catch {
-      // a structure violation may throw at the transform layer — also a rejection
-    }
-    expect(countBands(resulting)).toBe(2);
-  });
-
-  it("rejects select-all + delete wholesale", () => {
-    const state = makeState();
-    const tr = state.tr.setSelection(new AllSelection(state.tr.doc)).deleteSelection();
+    const tr = state.tr.delete(0, top.nodeSize);
     const applied = state.applyTransaction(tr);
-    expect(applied.state.doc.eq(state.doc)).toBe(true);
-    expect(countLocked(applied.state.doc)).toBe(12);
+    expect(countBands(applied.state.doc)).toBe(1);
   });
 
-  it("rejects a targeted deletion of a range containing a locked block", () => {
+  it("free canvas: a targeted block deletion is ALLOWED", () => {
     const state = makeState();
     const target = findLockedPositions(state.doc)[0];
     expect(target).toBeDefined();
     if (!target) return;
     const tr = state.tr.delete(target.pos, target.pos + 2);
     const applied = state.applyTransaction(tr);
-    expect(countLocked(applied.state.doc)).toBe(12);
-  });
-
-  it("rejects adjacent-range deletes that swallow a locked block (backspace-at-boundary class)", () => {
-    const state = makeState();
-    const target = findLockedPositions(state.doc)[2];
-    expect(target).toBeDefined();
-    if (!target) return;
-    const tr = state.tr.delete(Math.max(0, target.pos - 1), target.pos + 1);
-    const applied = state.applyTransaction(tr);
-    expect(countLocked(applied.state.doc)).toBe(12);
+    expect(countLocked(applied.state.doc)).toBe(11);
   });
 
   it("rejects pasting/inserting a DUPLICATE locked block (exactly-once)", () => {

@@ -10,7 +10,7 @@ import {
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
-import { newWysiwygStarterDocument } from '@calibra-facil/certificate-html-template'
+import { completeWysiwygDocument } from '@calibra-facil/certificate-html-template'
 
 import { CertificateEditor } from './certificate-editor'
 
@@ -33,7 +33,7 @@ async function mountEditor(options?: { editable?: boolean }): Promise<Editor> {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <CertificateEditor
-        initialDocument={newWysiwygStarterDocument()}
+        initialDocument={completeWysiwygDocument()}
         editable={options?.editable ?? true}
         immediatelyRender
         onEditorReady={(editor) => {
@@ -67,11 +67,11 @@ describe('CertificateEditor (jsdom)', () => {
     expect(screen.getByRole('toolbar')).toBeDefined()
   })
 
-  it('select-all + delete leaves every locked block in place', async () => {
+  it('free canvas: select-all + delete clears the document (user owns composition)', async () => {
     const editor = await mountEditor()
     editor.commands.selectAll()
     editor.commands.deleteSelection()
-    expect(countLockedBlocks(editor)).toBe(12)
+    expect(countLockedBlocks(editor)).toBe(0)
   })
 
   it('editable text still edits (title retitled), locked blocks intact', async () => {
@@ -124,7 +124,7 @@ describe('CertificateEditor (jsdom)', () => {
     expect(countLockedBlocks(editor)).toBe(12)
   })
 
-  it('cut (NodeSelection + delete) of a locked block is rejected', async () => {
+  it('free canvas: deleting a selected block is allowed; undo restores it', async () => {
     const editor = await mountEditor()
     let lockedPos = -1
     editor.state.doc.descendants((node, pos) => {
@@ -134,29 +134,17 @@ describe('CertificateEditor (jsdom)', () => {
     expect(lockedPos).toBeGreaterThan(-1)
     editor.commands.setNodeSelection(lockedPos)
     editor.commands.deleteSelection()
-    expect(countLockedBlocks(editor)).toBe(12)
-  })
-
-  it('boundary range deletes that swallow a locked block are rejected', async () => {
-    const editor = await mountEditor()
-    let lockedPos = -1
-    editor.state.doc.descendants((node, pos) => {
-      if (node.type.name === 'lockedBlock' && lockedPos === -1) lockedPos = pos
-      return true
-    })
-    editor.commands.deleteRange({
-      from: Math.max(0, lockedPos - 1),
-      to: lockedPos + 2,
-    })
-    expect(countLockedBlocks(editor)).toBe(12)
-  })
-
-  it('redo after a blocked deletion cannot smuggle it back', async () => {
-    const editor = await mountEditor()
-    editor.commands.selectAll()
-    editor.commands.deleteSelection()
+    expect(countLockedBlocks(editor)).toBe(11)
     editor.commands.undo()
-    editor.commands.redo()
+    expect(countLockedBlocks(editor)).toBe(12)
+  })
+
+  it('duplicate blocks stay forbidden (paste of an existing block is a no-op)', async () => {
+    const editor = await mountEditor()
+    editor.commands.insertContent({
+      type: 'lockedBlock',
+      attrs: { blockKey: 'results_table' },
+    })
     expect(countLockedBlocks(editor)).toBe(12)
   })
 

@@ -6,18 +6,18 @@ import {
   parseCertificateDocument,
   validateCertificateDocument,
 } from "./document-schema.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument, newWysiwygStarterDocument } from "./starter-document.js";
 
 /**
  * Mutate the starter document's BODY (between the pinned bands): appended
  * blocks land before the trailing bandPageFooter, matching what any editing
  * gesture can actually produce.
  */
-function starterWithBlocks(
+function completeWithBlocks(
   mutate: (content: Record<string, unknown>[]) => Record<string, unknown>[],
 ): unknown {
   const raw: { type: string; content: Record<string, unknown>[] } = JSON.parse(
-    JSON.stringify(newWysiwygStarterDocument()),
+    JSON.stringify(completeWysiwygDocument()),
   );
   const [topBand, ...rest] = raw.content;
   const footerBand = rest.pop();
@@ -28,7 +28,7 @@ function starterWithBlocks(
 describe("documentJson upgrades (reframe T20/T26)", () => {
   it("upgrades a v1 document (no attrs) losslessly to v3 defaults", () => {
     const v1: Record<string, unknown> = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     delete v1.attrs;
     const result = validateCertificateDocument(v1);
@@ -36,13 +36,13 @@ describe("documentJson upgrades (reframe T20/T26)", () => {
     if (result.ok) {
       expect(result.document.attrs.schemaVersion).toBe(3);
       expect(result.document.attrs.theme).toBe("technical-form");
-      expect(result.document.content).toEqual(newWysiwygStarterDocument().content);
+      expect(result.document.content).toEqual(completeWysiwygDocument().content);
     }
   });
 
   it("upgrades a v2 document (no bands) to v3 with default band nodes first/last", () => {
     const v2: { attrs: Record<string, unknown>; content: unknown[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     v2.attrs = { schemaVersion: 2, theme: "institute-classic" };
     v2.content = v2.content.filter((node) => {
@@ -63,7 +63,7 @@ describe("documentJson upgrades (reframe T20/T26)", () => {
 
   it("converts vestigial v2 pageHeader/pageFooter flow nodes into paragraphs", () => {
     const v2: { attrs: Record<string, unknown>; content: unknown[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     v2.attrs = { schemaVersion: 2, theme: "technical-form" };
     v2.content = [
@@ -87,7 +87,7 @@ describe("documentJson upgrades (reframe T20/T26)", () => {
 
   it("rejects an unknown theme", () => {
     const doc: Record<string, unknown> = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     doc.attrs = { schemaVersion: 2, theme: "vaporwave" };
     expect(validateCertificateDocument(doc).ok).toBe(false);
@@ -95,7 +95,7 @@ describe("documentJson upgrades (reframe T20/T26)", () => {
 
   it("accepts and preserves a block layout envelope; rejects unknown layout keys", () => {
     const doc: { content: Record<string, unknown>[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     const customer = doc.content.find(
       (block) =>
@@ -117,24 +117,27 @@ describe("documentJson upgrades (reframe T20/T26)", () => {
 });
 
 describe("certificateDocumentSchema", () => {
-  it("accepts the starter document with every mandatory block exactly once", () => {
-    const document = newWysiwygStarterDocument();
+  it("free canvas: the BLANK starter is valid; the complete document carries every block", () => {
+    expect(validateCertificateDocument(newWysiwygStarterDocument()).ok).toBe(true);
+    const document = completeWysiwygDocument();
     const lockedKeys = document.content
       .filter((block) => block.type === "lockedBlock")
       .map((block) => (block.type === "lockedBlock" ? block.attrs.blockKey : ""));
-    expect([...lockedKeys].sort()).toEqual([...LOCKED_BLOCK_KEYS].sort());
+    for (const key of LOCKED_BLOCK_KEYS) {
+      expect(lockedKeys).toContain(key);
+    }
   });
 
   it("rejects an unknown block type (closed catalog)", () => {
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [...content, { type: "htmlBlock", html: "<b>x</b>" }]),
+      completeWithBlocks((content) => [...content, { type: "htmlBlock", html: "<b>x</b>" }]),
     );
     expect(result.ok).toBe(false);
   });
 
-  it("rejects a document missing a mandatory locked block, naming the key", () => {
+  it("free canvas: removing any block is ALLOWED (no mandatory content)", () => {
     const result = validateCertificateDocument(
-      starterWithBlocks((content) =>
+      completeWithBlocks((content) =>
         content.filter(
           (block) =>
             !(
@@ -146,16 +149,12 @@ describe("certificateDocumentSchema", () => {
         ),
       ),
     );
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.issues.some((i) => i.message.includes('"results_table"'))).toBe(true);
-      expect(result.issues.some((i) => i.message.includes("found 0"))).toBe(true);
-    }
+    expect(result.ok).toBe(true);
   });
 
   it("rejects a duplicated locked block", () => {
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         { type: "lockedBlock", attrs: { blockKey: "results_table" } },
       ]),
@@ -168,7 +167,7 @@ describe("certificateDocumentSchema", () => {
 
   it("rejects an unknown locked blockKey", () => {
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         { type: "lockedBlock", attrs: { blockKey: "my_custom_block" } },
       ]),
@@ -179,7 +178,7 @@ describe("certificateDocumentSchema", () => {
   it("rejects banned placeholder paths (§7.8.4.3) at any depth", () => {
     for (const banned of ["asset.nextCalibrationDate", "asset.calibrationIntervalMonths"]) {
       const result = validateCertificateDocument(
-        starterWithBlocks((content) => [
+        completeWithBlocks((content) => [
           ...content,
           {
             type: "paragraph",
@@ -196,7 +195,7 @@ describe("certificateDocumentSchema", () => {
 
   it("accepts valid placeholders and collects their paths", () => {
     const document = parseCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         {
           type: "paragraph",
@@ -233,24 +232,24 @@ describe("certificateDocumentSchema", () => {
     });
     expect(
       validateCertificateDocument(
-        starterWithBlocks((content) => [...content, tableWith(2, 3)]),
+        completeWithBlocks((content) => [...content, tableWith(2, 3)]),
       ).ok,
     ).toBe(true);
     expect(
       validateCertificateDocument(
-        starterWithBlocks((content) => [...content, tableWith(50, 1)]),
+        completeWithBlocks((content) => [...content, tableWith(50, 1)]),
       ).ok,
     ).toBe(false);
     expect(
       validateCertificateDocument(
-        starterWithBlocks((content) => [...content, tableWith(1, 99)]),
+        completeWithBlocks((content) => [...content, tableWith(1, 99)]),
       ).ok,
     ).toBe(false);
   });
 
   it("accepts a plain authored table and collects placeholders inside cells", () => {
     const document = parseCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         {
           type: "table",
@@ -286,14 +285,14 @@ describe("certificateDocumentSchema", () => {
       content: [{ type: "text", text: "Cabeçalho" }],
     };
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [header, ...content]),
+      completeWithBlocks((content) => [header, ...content]),
     );
     expect(result.ok).toBe(false);
   });
 
   it("rejects a duplicated band and a band out of position", () => {
     const duplicated = validateCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         {
           type: "bandTopIdentity",
@@ -313,7 +312,7 @@ describe("certificateDocumentSchema", () => {
     }
 
     const raw: { content: unknown[] } = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     // Move the footer band away from the last position.
     const footer = raw.content.pop();
@@ -329,7 +328,7 @@ describe("certificateDocumentSchema", () => {
 
   it("rejects images with raw src instead of org mediaId", () => {
     const result = validateCertificateDocument(
-      starterWithBlocks((content) => [
+      completeWithBlocks((content) => [
         ...content,
         { type: "image", attrs: { src: "https://evil.example/x.png" } },
       ]),
@@ -341,7 +340,7 @@ describe("certificateDocumentSchema", () => {
 describe("styleTokens doc attr (roadmap item 7)", () => {
   function starterWithStyleTokens(styleTokens: unknown) {
     const document: Record<string, unknown> = JSON.parse(
-      JSON.stringify(newWysiwygStarterDocument()),
+      JSON.stringify(completeWysiwygDocument()),
     );
     const attrs = document.attrs;
     if (attrs && typeof attrs === "object") {
@@ -377,7 +376,7 @@ describe("styleTokens doc attr (roadmap item 7)", () => {
 
 describe("bilingual doc attr (roadmap item 8)", () => {
   it("accepts true/false/null and rejects non-boolean values", () => {
-    const base = JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
+    const base = JSON.parse(JSON.stringify(completeWysiwygDocument()));
     for (const value of [true, false, null]) {
       const result = validateCertificateDocument({
         ...base,

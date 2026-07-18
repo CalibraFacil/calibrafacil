@@ -9,7 +9,7 @@ import {
   validateCertificateTemplateDocument,
 } from "./compile.js";
 import { sampleCertificateInputData } from "./fixtures/sample-input-data.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 import { CERT_HTML_COMPILER_VERSION } from "./version.js";
 
 // Deep-clone with a deliberately loose type: specs mutate nested fixture data
@@ -18,7 +18,7 @@ type LooseData = { [key: string]: any };
 const clone = (value: unknown): LooseData => JSON.parse(JSON.stringify(value));
 
 function starterPlus(blocks: Record<string, unknown>[]): Record<string, unknown> {
-  const starter = clone(newWysiwygStarterDocument());
+  const starter = clone(completeWysiwygDocument());
   // Body blocks land before the trailing bandPageFooter (pinned last).
   return {
     ...starter,
@@ -29,7 +29,7 @@ function starterPlus(blocks: Record<string, unknown>[]): Record<string, unknown>
 describe("compileCertificateHtml", () => {
   it("compiles the starter document against the sample data (full-document snapshot)", async () => {
     const compiled = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(compiled.compilerVersion).toBe(CERT_HTML_COMPILER_VERSION);
@@ -37,7 +37,7 @@ describe("compileCertificateHtml", () => {
   });
 
   it("themes: institute-classic compiles with serif body + theme class; technical-form is default", async () => {
-    const classic = clone(newWysiwygStarterDocument())
+    const classic = clone(completeWysiwygDocument())
     classic.attrs.theme = "institute-classic"
     const compiled = await compileCertificateHtml(classic, sampleCertificateInputData)
     expect(compiled.html).toContain("cf-theme-institute-classic")
@@ -45,7 +45,7 @@ describe("compileCertificateHtml", () => {
     expect(compiled.html).not.toContain("Source Sans 3")
 
     const standard = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     )
     expect(standard.html).toContain("cf-theme-technical-form")
@@ -53,7 +53,7 @@ describe("compileCertificateHtml", () => {
   })
 
   it("style tokens: accent + fontScale overrides land after the theme tokens", async () => {
-    const styled = clone(newWysiwygStarterDocument())
+    const styled = clone(completeWysiwygDocument())
     styled.attrs.styleTokens = { accent: "#7A1F1F", fontScale: 1.1 }
     const compiled = await compileCertificateHtml(styled, sampleCertificateInputData)
     expect(compiled.html).toContain("--accent:#7A1F1F;")
@@ -65,14 +65,14 @@ describe("compileCertificateHtml", () => {
     expect(override).toBeGreaterThan(themeAccent)
 
     const neutral = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     )
     expect(neutral.html).not.toContain("--accent:#7A1F1F")
   })
 
   it("bilingual: doc attr renders PT / EN labels; values stay pt-BR; default stays PT-only", async () => {
-    const bilingual = clone(newWysiwygStarterDocument())
+    const bilingual = clone(completeWysiwygDocument())
     bilingual.attrs.bilingual = true
     const compiled = await compileCertificateHtml(bilingual, sampleCertificateInputData)
     expect(compiled.html).toContain("Cliente / Customer")
@@ -82,7 +82,7 @@ describe("compileCertificateHtml", () => {
     expect(compiled.html).toContain("incerteza expandida de medi")
 
     const plain = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     )
     expect(plain.html).not.toContain("/ Customer")
@@ -93,7 +93,7 @@ describe("compileCertificateHtml", () => {
     const hashes = new Set<string>();
     for (let index = 0; index < 10; index += 1) {
       const compiled = await compileCertificateHtml(
-        clone(newWysiwygStarterDocument()),
+        clone(completeWysiwygDocument()),
         clone(sampleCertificateInputData),
       );
       hashes.add(compiled.sha256);
@@ -103,7 +103,7 @@ describe("compileCertificateHtml", () => {
 
   it("renders every locked block with its data-locked-block anchor", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     for (const key of [
@@ -126,7 +126,7 @@ describe("compileCertificateHtml", () => {
 
   it("results table honors includeInCertificate and group filtering", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html).toContain("Erro de indicação (10 kg)");
@@ -144,13 +144,13 @@ describe("compileCertificateHtml", () => {
     // remove the multi-point table too — no grids AND no scalar rows
     data.methodSnapshot = { dataFields: [], formulas: [] };
     await expect(
-      compileCertificateHtml(newWysiwygStarterDocument(), data),
+      compileCertificateHtml(completeWysiwygDocument(), data),
     ).rejects.toThrow(CertificateRenderDataError);
   });
 
   it("multi-point grid renders DOQ-shape: two-row unit header, phase order, no ±", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html).toContain("Carga nominal");
@@ -164,7 +164,7 @@ describe("compileCertificateHtml", () => {
   });
 
   it("metadata layout presets: columns + density classes land on the block section", async () => {
-    const doc = clone(newWysiwygStarterDocument());
+    const doc = clone(completeWysiwygDocument());
     const customer = doc.content.find(
       (block: LooseData) => block.attrs?.blockKey === "customer_identification",
     );
@@ -176,7 +176,7 @@ describe("compileCertificateHtml", () => {
   });
 
   it("template hiddenColumns + borders override apply via the block layout envelope", async () => {
-    const doc = clone(newWysiwygStarterDocument());
+    const doc = clone(completeWysiwygDocument());
     const resultsBlock = doc.content.find(
       (block: LooseData) => block.attrs?.blockKey === "results_table",
     );
@@ -191,7 +191,7 @@ describe("compileCertificateHtml", () => {
 
   it("uncertainty statement carries U and k; fails loud when they are missing", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html).toContain("U = 0,0004 kg");
@@ -200,13 +200,13 @@ describe("compileCertificateHtml", () => {
     const data = clone(sampleCertificateInputData);
     data.uncertainty = { expanded: null, coverageFactor: null, budget: [] };
     await expect(
-      compileCertificateHtml(newWysiwygStarterDocument(), data),
+      compileCertificateHtml(completeWysiwygDocument(), data),
     ).rejects.toThrow(CertificateRenderDataError);
   });
 
   it("accreditation seal renders only when accredited; box is layout-stable", async () => {
     const accredited = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       {
         ...clone(sampleCertificateInputData),
         lab: {
@@ -220,7 +220,7 @@ describe("compileCertificateHtml", () => {
     const data = clone(sampleCertificateInputData);
     data.accreditation.accredited = false;
     data.lab.accreditationSealPng = null;
-    const notAccredited = await compileCertificateHtml(newWysiwygStarterDocument(), data);
+    const notAccredited = await compileCertificateHtml(completeWysiwygDocument(), data);
     expect(notAccredited.html).not.toContain('alt="Selo de acreditação"');
     expect(notAccredited.html).toContain('class="cf-accreditation-seal"');
   });
@@ -228,12 +228,12 @@ describe("compileCertificateHtml", () => {
   it("lab logo renders as letterhead when the worker resolved it; absent -> no img", async () => {
     const withLogo = clone(sampleCertificateInputData)
     withLogo.lab.logoDataUrl = "data:image/png;base64,AAAA"
-    const { html } = await compileCertificateHtml(newWysiwygStarterDocument(), withLogo)
+    const { html } = await compileCertificateHtml(completeWysiwygDocument(), withLogo)
     expect(html).toContain('class="cf-lab-logo"')
     expect(html).toContain('src="data:image/png;base64,AAAA"')
 
     const withoutLogo = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     )
     // the print CSS always carries the .cf-lab-logo selector; assert on the ELEMENT
@@ -256,13 +256,21 @@ describe("compileCertificateHtml", () => {
   });
 
   it("throws CertificateDocumentInvalidError for a structurally invalid document", async () => {
-    const starter = clone(newWysiwygStarterDocument());
-    starter.content = starter.content.filter(
-      (block: LooseData) => block.attrs?.blockKey !== "results_table",
-    );
+    const starter = clone(completeWysiwygDocument());
+    // free canvas: MISSING blocks are fine — an unknown node type is not
+    starter.content = [...starter.content, { type: "htmlBlock", html: "x" }];
     await expect(
       compileCertificateHtml(starter, sampleCertificateInputData),
     ).rejects.toThrow(CertificateDocumentInvalidError);
+  });
+
+  it("free canvas: compiles WITHOUT any locked block (user removed them all)", async () => {
+    const bare = clone(completeWysiwygDocument());
+    bare.content = bare.content.filter(
+      (block: LooseData) => block.type !== "lockedBlock",
+    );
+    const compiled = await compileCertificateHtml(bare, sampleCertificateInputData);
+    expect(compiled.html).toContain("cf-certificate");
   });
 
   it("throws UnknownPlaceholderError for uncataloged placeholders", async () => {
@@ -281,14 +289,14 @@ describe("compileCertificateHtml", () => {
     const data = clone(sampleCertificateInputData);
     delete data.approval.approvedBy.name;
     await expect(
-      compileCertificateHtml(newWysiwygStarterDocument(), data),
+      compileCertificateHtml(completeWysiwygDocument(), data),
     ).rejects.toThrow(MissingRequiredPlaceholderError);
   });
 
   it("escapes hostile data — no markup injection through customer fields", async () => {
     const data = clone(sampleCertificateInputData);
     data.customer.name = `<script>alert("xss")</script> & Cia`;
-    const { html } = await compileCertificateHtml(newWysiwygStarterDocument(), data);
+    const { html } = await compileCertificateHtml(completeWysiwygDocument(), data);
     expect(html).not.toContain("<script>alert");
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain("&amp; Cia");
@@ -350,7 +358,7 @@ describe("compileCertificateHtml", () => {
 
 describe("validateCertificateTemplateDocument", () => {
   it("accepts the starter document", () => {
-    expect(validateCertificateTemplateDocument(newWysiwygStarterDocument()).ok).toBe(true);
+    expect(validateCertificateTemplateDocument(completeWysiwygDocument()).ok).toBe(true);
   });
 
   it("reports unknown placeholder paths as issues (no throw)", () => {

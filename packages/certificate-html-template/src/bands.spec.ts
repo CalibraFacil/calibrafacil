@@ -9,7 +9,7 @@ import {
 import { compileCertificateHtml } from "./compile.js";
 import { validateCertificateDocument } from "./document-schema.js";
 import { sampleCertificateInputData } from "./fixtures/sample-input-data.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 
 const TOP_DEFAULTS = {
   enabled: true,
@@ -102,7 +102,7 @@ describe("footer embed/extract", () => {
 describe("compiled band structure", () => {
   it("emits exactly one repeating thead band and one embedded footer template", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html.match(/<thead class="cf-doc-header">/g)?.length).toBe(1);
@@ -114,7 +114,7 @@ describe("compiled band structure", () => {
 
   it("omits the thead entirely when the top band is disabled", async () => {
     const doc: { content: { type: string; attrs?: Record<string, unknown> }[] } =
-      JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
+      JSON.parse(JSON.stringify(completeWysiwygDocument()));
     const top = doc.content[0];
     if (!top || top.type !== "bandTopIdentity") throw new Error("missing top band");
     top.attrs = { ...TOP_DEFAULTS, enabled: false };
@@ -129,7 +129,7 @@ describe("compiled band structure", () => {
 describe("placement presets (M-C)", () => {
   it("seal and masthead presets emit whitelisted modifier classes only", async () => {
     const doc: { content: { type: string; attrs?: Record<string, unknown> }[] } =
-      JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
+      JSON.parse(JSON.stringify(completeWysiwygDocument()));
     for (const node of doc.content) {
       const attrs = node.attrs ?? {};
       if (Reflect.get(attrs, "blockKey") === "accreditation_seal") {
@@ -219,7 +219,7 @@ describe("eccentricity indicator figure (calibration finding 3)", () => {
 
   it("prints after the indicator table's grid when method + svg agree", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       withIndicator(),
     );
     expect(html).toContain('class="cf-eccentricity-indicator"');
@@ -230,7 +230,7 @@ describe("eccentricity indicator figure (calibration finding 3)", () => {
     const data = withIndicator();
     Reflect.set(data, "graphics", {});
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       data,
     );
     expect(html).not.toContain('class="cf-eccentricity-indicator"');
@@ -238,7 +238,7 @@ describe("eccentricity indicator figure (calibration finding 3)", () => {
 
   it("the default sample data renders no indicator (no method opt-in)", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html).not.toContain('class="cf-eccentricity-indicator"');
@@ -247,7 +247,7 @@ describe("eccentricity indicator figure (calibration finding 3)", () => {
 
 describe("optional blocks: budget annex + decision rule (backlog #11)", () => {
   function withOptionalBlock(blockKey: string): Record<string, unknown> {
-    const starter = newWysiwygStarterDocument();
+    const starter = completeWysiwygDocument();
     return {
       ...starter,
       content: [
@@ -285,7 +285,7 @@ describe("optional blocks: budget annex + decision rule (backlog #11)", () => {
   }
 
   it("schema: optional blocks accept 0 and 1, reject 2", () => {
-    expect(validateCertificateDocument(newWysiwygStarterDocument()).ok).toBe(true);
+    expect(validateCertificateDocument(completeWysiwygDocument()).ok).toBe(true);
     const one = withOptionalBlock("uncertainty_budget_annex");
     expect(validateCertificateDocument(one).ok).toBe(true);
     const two = {
@@ -345,7 +345,7 @@ describe("optional blocks: budget annex + decision rule (backlog #11)", () => {
       "Conforme",
       "Não conforme",
     ]);
-    const { html } = await compileCertificateHtml(newWysiwygStarterDocument(), data);
+    const { html } = await compileCertificateHtml(completeWysiwygDocument(), data);
     expect(html).toContain('class="cf-verdict cf-verdict--ok"');
     expect(html).toContain('class="cf-verdict cf-verdict--critical"');
     expect(html).toContain(">Conforme<");
@@ -374,7 +374,7 @@ describe("calibration curve charts (roadmap item 1)", () => {
 
   it("renders a deterministic SVG with U bars after the table's grid when configured", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       chartData(),
     );
     expect(html).toContain('class="cf-result-chart"');
@@ -382,7 +382,7 @@ describe("calibration curve charts (roadmap item 1)", () => {
     expect(html).toContain("<svg");
     // twice-compiled = byte-identical (determinism)
     const { html: again } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       chartData(),
     );
     expect(again).toBe(html);
@@ -390,7 +390,7 @@ describe("calibration curve charts (roadmap item 1)", () => {
 
   it("silently omits without config or with a missing series", async () => {
     const { html } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       sampleCertificateInputData,
     );
     expect(html).not.toContain('class="cf-result-chart"');
@@ -406,7 +406,7 @@ describe("calibration curve charts (roadmap item 1)", () => {
       ],
     });
     const { html: omitted } = await compileCertificateHtml(
-      newWysiwygStarterDocument(),
+      completeWysiwygDocument(),
       broken,
     );
     expect(omitted).not.toContain('class="cf-result-chart"');

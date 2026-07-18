@@ -1,7 +1,10 @@
 import { Extension, type Editor, type Range } from '@tiptap/react'
 import Suggestion from '@tiptap/suggestion'
 import { PluginKey } from '@tiptap/pm/state'
-import { OPTIONAL_BLOCK_KEYS } from '@calibra-facil/certificate-html-template'
+import {
+  LOCKED_BLOCK_KEYS,
+  OPTIONAL_BLOCK_KEYS,
+} from '@calibra-facil/certificate-html-template'
 
 import type { PlaceholderCatalogEntry } from '../types'
 import { filterFieldSuggestions } from './field-suggestion'
@@ -22,10 +25,9 @@ export type SlashMenuItem = {
   run: (editor: Editor, range: Range) => void
 }
 
-const OPTIONAL_BLOCK_TITLES: Record<string, string> = {
-  uncertainty_budget_annex: 'Balanço de incertezas (anexo)',
-  decision_rule_statement: 'Regra de decisão',
-}
+import { LOCKED_BLOCK_LABELS } from './editor-sample-data'
+
+const OPTIONAL_BLOCK_TITLES: Record<string, string> = LOCKED_BLOCK_LABELS
 
 function hasOptionalBlock(editor: Editor, blockKey: string): boolean {
   let found = false
@@ -48,13 +50,13 @@ export function buildSlashMenuItems(
   query: string,
 ): SlashMenuItem[] {
   const structural: SlashMenuItem[] = [
-    ...(OPTIONAL_BLOCK_KEYS.filter(
+    ...([...LOCKED_BLOCK_KEYS, ...OPTIONAL_BLOCK_KEYS].filter(
       (blockKey) => !hasOptionalBlock(editor, blockKey),
     ).map((blockKey) => ({
       title: OPTIONAL_BLOCK_TITLES[blockKey] ?? blockKey,
-      hint: 'bloco opcional',
+      hint: 'bloco do certificado',
       group: 'Blocos',
-      keywords: `${OPTIONAL_BLOCK_TITLES[blockKey] ?? ''} bloco opcional anexo incerteza decisão`,
+      keywords: `${OPTIONAL_BLOCK_TITLES[blockKey] ?? ''} bloco ${blockKey}`,
       run: (runEditor: Editor, range: Range) => {
         runEditor
           .chain()

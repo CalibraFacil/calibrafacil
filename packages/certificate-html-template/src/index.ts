@@ -90,7 +90,10 @@ export { deriveResultGrids } from "./result-grid.js";
 export { deriveResultCharts } from "./result-chart.js";
 export type { ResultChartConfig } from "./result-chart.js";
 export type { ResultGrid, ResultGridColumn } from "./result-grid.js";
-export { newWysiwygStarterDocument } from "./starter-document.js";
+export {
+  completeWysiwygDocument,
+  newWysiwygStarterDocument,
+} from "./starter-document.js";
 export { buildMigratedDocumentFromXlsxBindings } from "./migrate-xlsx.js";
 export type { XlsxScalarBindingRef } from "./migrate-xlsx.js";
 export { CERT_HTML_COMPILER_VERSION } from "./version.js";

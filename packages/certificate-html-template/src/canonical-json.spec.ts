@@ -4,7 +4,7 @@ import {
   canonicalJsonStringify,
   hashCertificateDocument,
 } from "./canonical-json.js";
-import { newWysiwygStarterDocument } from "./starter-document.js";
+import { completeWysiwygDocument } from "./starter-document.js";
 
 describe("canonicalJsonStringify", () => {
   it("is independent of object key insertion order", () => {
@@ -29,16 +29,16 @@ describe("canonicalJsonStringify", () => {
   });
 
   it("hashes the starter document stably (64-hex sha256)", () => {
-    const first = hashCertificateDocument(newWysiwygStarterDocument());
+    const first = hashCertificateDocument(completeWysiwygDocument());
     const second = hashCertificateDocument(
-      JSON.parse(JSON.stringify(newWysiwygStarterDocument())),
+      JSON.parse(JSON.stringify(completeWysiwygDocument())),
     );
     expect(first).toMatch(/^[0-9a-f]{64}$/);
     expect(first).toBe(second);
   });
 
   it("produces different hashes for different documents", () => {
-    const doc = newWysiwygStarterDocument();
+    const doc = completeWysiwygDocument();
     const edited = JSON.parse(JSON.stringify(doc));
     // content[0] is the top identity band; content[2] is the H1 title.
     edited.content[2].content[0].text = "Certificado de Ensaio";

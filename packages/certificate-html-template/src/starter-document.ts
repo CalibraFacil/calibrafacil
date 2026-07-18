@@ -4,12 +4,24 @@ import {
 } from "./document-schema.js";
 
 /**
- * Starter document for a new `wysiwyg` certificate template: every mandatory
- * locked block present exactly once, in the conventional reading order, plus
- * minimal editable defaults. Created server-side when a template is created
- * with `engine: "wysiwyg"` (spec 02 §6.1). Visual polish lands in T14.
+ * Starter document (free-canvas pivot): a BLANK page. The user composes the
+ * certificate — every block is available from the '/' menu and the Bloco
+ * dropdown; nothing is pre-inserted or mandatory.
  */
 export function newWysiwygStarterDocument(): CertificateDocument {
+  return parseCertificateDocument({
+    type: "doc",
+    attrs: { schemaVersion: 3, theme: "technical-form" },
+    content: [{ type: "paragraph" }],
+  });
+}
+
+/**
+ * The COMPLETE reference layout (previous mandatory starter): every block +
+ * bands in conventional order. Users insert it onto the blank canvas in one
+ * action ("Modelo completo"); specs use it to exercise every renderer.
+ */
+export function completeWysiwygDocument(): CertificateDocument {
   return parseCertificateDocument({
     type: "doc",
     attrs: { schemaVersion: 3, theme: "technical-form" },

@@ -364,10 +364,11 @@ export const certificateDocumentSchema = z
       /** Render block titles / field labels as "PT / EN" (item 8). Labels only. */
       bilingual: z.boolean().nullish(),
     }),
-    // Band nodes pinned: bandTopIdentity first, bandPageFooter last, body
-    // blocks in between (>= 1). Mirrors the ProseMirror doc content
-    // expression "bandTopIdentity block+ bandPageFooter".
-    content: z.array(contentNodeSchema).min(3),
+    // FREE CANVAS (product pivot 2026-07-18): nothing is mandatory — the
+    // user composes the certificate; bands are optional but pinned to the
+    // edges WHEN present. Mirrors the ProseMirror doc content expression
+    // "bandTopIdentity? block+ bandPageFooter?".
+    content: z.array(contentNodeSchema).min(1),
   })
   .superRefine((doc, ctx) => {
     const lockedCounts = new Map<string, number>();
@@ -383,41 +384,34 @@ export const certificateDocumentSchema = z
       if (block.type === "bandTopIdentity") topBands += 1;
       if (block.type === "bandPageFooter") footerBands += 1;
     }
-    for (const key of LOCKED_BLOCK_KEYS) {
-      const count = lockedCounts.get(key) ?? 0;
-      if (count !== 1) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["content"],
-          message: `mandatory locked block "${key}" must appear exactly once (found ${count})`,
-        });
-      }
-    }
-    for (const key of OPTIONAL_BLOCK_KEYS) {
+    // Every block is 0-or-1: the user decides WHAT the certificate carries;
+    // duplicates stay forbidden because two "results tables" is never intent.
+    for (const key of [...LOCKED_BLOCK_KEYS, ...OPTIONAL_BLOCK_KEYS]) {
       const count = lockedCounts.get(key) ?? 0;
       if (count > 1) {
         ctx.addIssue({
           code: "custom",
           path: ["content"],
-          message: `optional block "${key}" must appear at most once (found ${count})`,
+          message: `block "${key}" must appear at most once (found ${count})`,
         });
       }
     }
-    if (topBands !== 1 || doc.content[0]?.type !== "bandTopIdentity") {
+    if (topBands > 1 || (topBands === 1 && doc.content[0]?.type !== "bandTopIdentity")) {
       ctx.addIssue({
         code: "custom",
         path: ["content"],
-        message: `bandTopIdentity must appear exactly once, as the first node (found ${topBands})`,
+        message: "bandTopIdentity, when present, must be the first node",
       });
     }
     if (
-      footerBands !== 1 ||
-      doc.content[doc.content.length - 1]?.type !== "bandPageFooter"
+      footerBands > 1 ||
+      (footerBands === 1 &&
+        doc.content[doc.content.length - 1]?.type !== "bandPageFooter")
     ) {
       ctx.addIssue({
         code: "custom",
         path: ["content"],
-        message: `bandPageFooter must appear exactly once, as the last node (found ${footerBands})`,
+        message: "bandPageFooter, when present, must be the last node",
       });
     }
   });
