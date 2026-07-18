@@ -4,7 +4,9 @@
   "installCommand": "pnpm install --frozen-lockfile --filter \"@calibra-facil/api...\"",
   "buildCommand": "bun scripts/build-vercel-deployment.mjs",
   "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs api",
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "functions": {
     "api/index.js": {
       "maxDuration": 30
@@ -70,6 +72,10 @@
     {
       "path": "/api/cron/email-domain-health",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/certificate-drift",
+      "schedule": "0 6 * * *"
     }
   ],
   "rewrites": [

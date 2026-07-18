@@ -16,6 +16,13 @@ import {
 } from "../../src/services/commercial/reconcile-subscriptions";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
+import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
+import {
+  createR2Client,
+  downloadFromR2,
+  resolveBucketName,
+  type R2Env,
+} from "../../src/lib/storage";
 
 // One function serves all Vercel cron jobs so Vercel packages a single bundle
 // instead of one per job. The vercel.json crons hit the semantic paths
@@ -278,6 +285,56 @@ async function handleEmailDomainHealth(request: Request) {
   );
 }
 
+function getDriftR2Env(): R2Env | null {
+  const str = (value: unknown) =>
+    typeof value === "string" && value !== "" ? value : null;
+  const accountId = str(process.env.R2_ACCOUNT_ID);
+  const accessKeyId = str(process.env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = str(process.env.R2_SECRET_ACCESS_KEY);
+  const bucketName = str(process.env.R2_BUCKET_NAME);
+  const mediaBucketName = str(process.env.R2_MEDIA_BUCKET_NAME);
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !mediaBucketName) {
+    return null;
+  }
+  return {
+    R2_ACCOUNT_ID: accountId,
+    R2_ACCESS_KEY_ID: accessKeyId,
+    R2_SECRET_ACCESS_KEY: secretAccessKey,
+    R2_BUCKET_NAME: bucketName,
+    R2_MEDIA_BUCKET_NAME: mediaBucketName,
+  };
+}
+
+// Certificate drift detection (wysiwyg roadmap item 6): re-hash a sample of
+// stored issued-certificate artifacts vs their frozen hashes; mismatches
+// become org audit events. Read-only over regulated records.
+async function handleCertificateDrift(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("certificate-drift", { leaseSeconds: 300 }, () => {
+    const r2Env = getDriftR2Env();
+    if (!r2Env) {
+      console.warn("[drift-check] R2 env unconfigured — skipping");
+      return Promise.resolve({ checked: 0, drifted: 0, missing: 0, details: [] });
+    }
+    const client = createR2Client(r2Env);
+    return runCertificateDriftCheck(async (_bucket, key) => {
+      try {
+        const bytes = await downloadFromR2(
+          client,
+          resolveBucketName(r2Env, "documents"),
+          key,
+        );
+        return bytes ?? null;
+      } catch {
+        return null;
+      }
+    });
+  });
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -294,6 +351,7 @@ export const JOB_HANDLERS: Record<
   "subscription-reconciliation": handleSubscriptionReconciliation,
   "spc-recompute": handleSpcRecompute,
   "email-domain-health": handleEmailDomainHealth,
+  "certificate-drift": handleCertificateDrift,
 };
 
 function resolveJob(request: Request) {
