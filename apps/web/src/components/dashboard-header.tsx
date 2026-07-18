@@ -175,6 +175,7 @@ const routeLabels: Record<string, string> = {
 
   // Certificate Templates
   '/dashboard/certificate-templates': 'Templates de Certificados',
+  '/dashboard/certificate-templates/$slug/editor': 'Editor Visual',
 
   // Settings (extra pages)
   '/dashboard/settings/accredited-scope': 'Escopo Acreditado',
@@ -600,6 +601,25 @@ export function DashboardHeader({
     competenceLabel,
   ])
 
+  // Editor crumb: show the TEMPLATE NAME (from the cached list) instead of
+  // the generic label when we can resolve the slug in the URL.
+  const templateSlugMatch = /\/dashboard\/certificate-templates\/([^/]+)\/editor/.exec(
+    pathname,
+  )
+  const editorTemplateSlug = templateSlugMatch?.[1] ?? null
+  const editorTemplateLabel = editorTemplateSlug
+    ? getCachedLabel(queryClient, [['certificate-templates']], (cached) => {
+        if (!cached || typeof cached !== 'object') return undefined
+        const items = Reflect.get(cached, 'items')
+        if (!Array.isArray(items)) return undefined
+        const item = items.find(
+          (candidate) =>
+            stringProperty(candidate, 'slug') === editorTemplateSlug,
+        )
+        return stringProperty(item, 'name')
+      })
+    : null
+
   const breadcrumbs = useMemo(() => {
     return (
       matches
@@ -625,6 +645,14 @@ export function DashboardHeader({
             : m.routeId
 
           let label = routeLabels[normalizedRouteId]
+
+          if (
+            normalizedRouteId ===
+              '/dashboard/certificate-templates/$slug/editor' &&
+            editorTemplateLabel
+          ) {
+            label = editorTemplateLabel
+          }
 
           // For routes that end with $id (entity routes), try to get entity name
           // Only replace for routes like /clients/$id, not /clients/$id/info
@@ -652,7 +680,7 @@ export function DashboardHeader({
         // Filter out breadcrumbs with empty labels
         .filter((crumb) => crumb.label.trim() !== '')
     )
-  }, [matches, entityNames])
+  }, [matches, entityNames, editorTemplateLabel])
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">

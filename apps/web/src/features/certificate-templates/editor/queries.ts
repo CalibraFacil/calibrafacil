@@ -42,7 +42,7 @@ export function wysiwygDocumentQueryOptions(
 
 export function loadCertificateTemplateEditorData(
   queryClient: QueryClient,
-  _templateId: string,
+  _slug: string,
 ) {
   return prewarmRouteQueries(queryClient, [
     certificateTemplatesQueryOptions(),
@@ -53,27 +53,41 @@ export function loadCertificateTemplateEditorData(
 export type EditorTemplateContext = {
   isLoading: boolean
   template: TemplateItem | null
-  /** The template's current version id when (and only when) it is wysiwyg. */
+  /** The wysiwyg version the editor should open (DRAFT preferred). */
   wysiwygVersionId: number | null
 }
 
-export function useEditorTemplateContext(
-  templateId: string,
-): EditorTemplateContext {
+/**
+ * Which wysiwyg version the editor opens for a template: the DRAFT if one
+ * exists (there is at most one), else the LATEST wysiwyg version (published,
+ * read-only in the workbench). Falls back to currentXlsxVersion for API
+ * responses that predate `wysiwygVersions` (deploy skew).
+ */
+export function resolveEditorWysiwygVersionId(
+  template: TemplateItem | null,
+): number | null {
+  if (!template) return null
+  const versions = template.wysiwygVersions ?? []
+  const draft = versions.find((version) => version.status === 'DRAFT')
+  if (draft) return draft.id
+  const latest = versions[0]
+  if (latest) return latest.id
+  const currentVersion = template.currentXlsxVersion ?? null
+  return currentVersion && currentVersion.engine === 'wysiwyg'
+    ? currentVersion.id
+    : null
+}
+
+/** Routes address templates by their org-scoped SLUG — never the numeric id. */
+export function useEditorTemplateContext(slug: string): EditorTemplateContext {
   const listQuery = useQuery(certificateTemplatesQueryOptions())
   const list: TemplateListResponse | undefined = listQuery.data
-  const numericId = Number.parseInt(templateId, 10)
-  const template = list?.items.find((item) => item.id === numericId) ?? null
-  const currentVersion = template?.currentXlsxVersion ?? null
-  const wysiwygVersionId =
-    currentVersion && currentVersion.engine === 'wysiwyg'
-      ? currentVersion.id
-      : null
+  const template = list?.items.find((item) => item.slug === slug) ?? null
 
   return {
     isLoading: listQuery.isLoading,
     template,
-    wysiwygVersionId,
+    wysiwygVersionId: resolveEditorWysiwygVersionId(template),
   }
 }
 

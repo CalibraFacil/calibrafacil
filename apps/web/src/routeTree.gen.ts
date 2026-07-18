@@ -147,7 +147,7 @@ import { Route as DashboardClientsIdInfoRouteImport } from './routes/dashboard/c
 import { Route as DashboardClientsIdComplianceRouteImport } from './routes/dashboard/clients/$id/compliance'
 import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/dashboard/clients/$id/calibrations'
 import { Route as DashboardClientsIdAssetsRouteImport } from './routes/dashboard/clients/$id/assets'
-import { Route as DashboardCertificateTemplatesTemplateIdEditorRouteImport } from './routes/dashboard/certificate-templates/$templateId/editor'
+import { Route as DashboardCertificateTemplatesSlugEditorRouteImport } from './routes/dashboard/certificate-templates/$slug/editor'
 import { Route as DashboardAssetsIdEditRouteImport } from './routes/dashboard/assets/$id/edit'
 import { Route as DashboardClientsGroupsGroupIdRouteRouteImport } from './routes/dashboard/clients/groups/$groupId/route'
 import { Route as DashboardClientsGroupsGroupIdIndexRouteImport } from './routes/dashboard/clients/groups/$groupId/index'
@@ -912,10 +912,10 @@ const DashboardClientsIdAssetsRoute =
     path: '/assets',
     getParentRoute: () => DashboardClientsIdRouteRoute,
   } as any)
-const DashboardCertificateTemplatesTemplateIdEditorRoute =
-  DashboardCertificateTemplatesTemplateIdEditorRouteImport.update({
-    id: '/certificate-templates/$templateId/editor',
-    path: '/certificate-templates/$templateId/editor',
+const DashboardCertificateTemplatesSlugEditorRoute =
+  DashboardCertificateTemplatesSlugEditorRouteImport.update({
+    id: '/certificate-templates/$slug/editor',
+    path: '/certificate-templates/$slug/editor',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
 const DashboardAssetsIdEditRoute = DashboardAssetsIdEditRouteImport.update({
@@ -1060,7 +1060,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
-  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
+  '/dashboard/certificate-templates/$slug/editor': typeof DashboardCertificateTemplatesSlugEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1185,7 +1185,7 @@ export interface FileRoutesByTo {
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
   '/dashboard/visits': typeof DashboardVisitsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
-  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
+  '/dashboard/certificate-templates/$slug/editor': typeof DashboardCertificateTemplatesSlugEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1333,7 +1333,7 @@ export interface FileRoutesById {
   '/dashboard/visits/': typeof DashboardVisitsIndexRoute
   '/dashboard/clients/groups/$groupId': typeof DashboardClientsGroupsGroupIdRouteRouteWithChildren
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
-  '/dashboard/certificate-templates/$templateId/editor': typeof DashboardCertificateTemplatesTemplateIdEditorRoute
+  '/dashboard/certificate-templates/$slug/editor': typeof DashboardCertificateTemplatesSlugEditorRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
   '/dashboard/clients/$id/compliance': typeof DashboardClientsIdComplianceRoute
@@ -1482,7 +1482,7 @@ export interface FileRouteTypes {
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
-    | '/dashboard/certificate-templates/$templateId/editor'
+    | '/dashboard/certificate-templates/$slug/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -1607,7 +1607,7 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/dashboard/visits'
     | '/dashboard/assets/$id/edit'
-    | '/dashboard/certificate-templates/$templateId/editor'
+    | '/dashboard/certificate-templates/$slug/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -1754,7 +1754,7 @@ export interface FileRouteTypes {
     | '/dashboard/visits/'
     | '/dashboard/clients/groups/$groupId'
     | '/dashboard/assets/$id/edit'
-    | '/dashboard/certificate-templates/$templateId/editor'
+    | '/dashboard/certificate-templates/$slug/editor'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
     | '/dashboard/clients/$id/compliance'
@@ -2778,11 +2778,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardClientsIdAssetsRouteImport
       parentRoute: typeof DashboardClientsIdRouteRoute
     }
-    '/dashboard/certificate-templates/$templateId/editor': {
-      id: '/dashboard/certificate-templates/$templateId/editor'
-      path: '/certificate-templates/$templateId/editor'
-      fullPath: '/dashboard/certificate-templates/$templateId/editor'
-      preLoaderRoute: typeof DashboardCertificateTemplatesTemplateIdEditorRouteImport
+    '/dashboard/certificate-templates/$slug/editor': {
+      id: '/dashboard/certificate-templates/$slug/editor'
+      path: '/certificate-templates/$slug/editor'
+      fullPath: '/dashboard/certificate-templates/$slug/editor'
+      preLoaderRoute: typeof DashboardCertificateTemplatesSlugEditorRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/assets/$id/edit': {
@@ -3357,7 +3357,7 @@ interface DashboardRouteRouteChildren {
   DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
   DashboardCertificateTemplatesIndexRoute: typeof DashboardCertificateTemplatesIndexRoute
   DashboardVisitsIndexRoute: typeof DashboardVisitsIndexRoute
-  DashboardCertificateTemplatesTemplateIdEditorRoute: typeof DashboardCertificateTemplatesTemplateIdEditorRoute
+  DashboardCertificateTemplatesSlugEditorRoute: typeof DashboardCertificateTemplatesSlugEditorRoute
   DashboardVisitsIdIndexRoute: typeof DashboardVisitsIdIndexRoute
 }
 
@@ -3388,8 +3388,8 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardCertificateTemplatesIndexRoute:
     DashboardCertificateTemplatesIndexRoute,
   DashboardVisitsIndexRoute: DashboardVisitsIndexRoute,
-  DashboardCertificateTemplatesTemplateIdEditorRoute:
-    DashboardCertificateTemplatesTemplateIdEditorRoute,
+  DashboardCertificateTemplatesSlugEditorRoute:
+    DashboardCertificateTemplatesSlugEditorRoute,
   DashboardVisitsIdIndexRoute: DashboardVisitsIdIndexRoute,
 }
 

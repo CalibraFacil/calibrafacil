@@ -8,6 +8,15 @@ export interface TemplateItem {
   createdAt: string | null
   updatedAt: string | null
   currentXlsxVersion?: XlsxVersionSummary | null
+  /** wysiwyg version summaries, newest first (editor entry needs DRAFTs). */
+  wysiwygVersions?: WysiwygVersionSummary[]
+}
+
+export interface WysiwygVersionSummary {
+  id: number
+  version: number
+  status: string
+  updatedAt?: string | null
 }
 
 export interface TemplateListResponse {

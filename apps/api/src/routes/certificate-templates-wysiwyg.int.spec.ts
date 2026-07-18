@@ -84,7 +84,8 @@ function starterWithExtraParagraph(): Record<string, unknown> {
   const doc: { type: string; content: Record<string, unknown>[] } = JSON.parse(
     JSON.stringify(newWysiwygStarterDocument()),
   );
-  doc.content.push({
+  // Body blocks land BEFORE the trailing bandPageFooter (pinned last since M-B).
+  doc.content.splice(doc.content.length - 1, 0, {
     type: "paragraph",
     content: [
       { type: "text", text: "Cliente: " },
@@ -126,6 +127,30 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
       (block: { type: string }) => block.type === "lockedBlock",
     );
     expect(lockedBlocks).toHaveLength(12);
+  });
+
+  it("REQ-WTPL-010 GET / lists wysiwygVersions summaries so DRAFTs stay reachable from the templates page", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await seedProfessionalSubscription(org.orgId);
+    const { versionId } = await seedWysiwygTemplate({
+      organizationId: org.orgId,
+      createdBy: org.userId,
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await certificateTemplatesRouter.request("/");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const item = body.items.find(
+      (candidate: { wysiwygVersions?: Array<{ id: number }> }) =>
+        (candidate.wysiwygVersions ?? []).some(
+          (version) => version.id === versionId,
+        ),
+    );
+    expect(item).toBeDefined();
+    expect(typeof item.slug).toBe("string");
+    expect(item.wysiwygVersions[0].status).toBe("DRAFT");
+    expect(item.wysiwygVersions[0].version).toBe(1);
   });
 
   it("REQ-WTPL-002 GET /placeholder-catalog serves the typed catalog to any lab member; 401 unauthenticated", async () => {

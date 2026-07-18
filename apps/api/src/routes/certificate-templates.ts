@@ -386,6 +386,18 @@ export const certificateTemplatesRouter = new Hono<{
       number,
       ReturnType<typeof summarizeXlsxVersion>
     >();
+    // wysiwyg version summaries (newest first): the editor entry point needs
+    // DRAFT versions to stay reachable even when they are not the template's
+    // latest version overall.
+    const wysiwygVersionsByTemplateId = new Map<
+      number,
+      Array<{
+        id: number;
+        version: number;
+        status: string;
+        updatedAt: Date | null;
+      }>
+    >();
 
     for (const version of versions) {
       if (!currentVersionByTemplateId.has(version.templateId)) {
@@ -393,6 +405,16 @@ export const certificateTemplatesRouter = new Hono<{
           version.templateId,
           summarizeXlsxVersion(version),
         );
+      }
+      if (version.engine === "wysiwyg") {
+        const bucket = wysiwygVersionsByTemplateId.get(version.templateId) ?? [];
+        bucket.push({
+          id: version.id,
+          version: version.version,
+          status: version.status,
+          updatedAt: version.updatedAt ?? null,
+        });
+        wysiwygVersionsByTemplateId.set(version.templateId, bucket);
       }
     }
 
@@ -404,6 +426,8 @@ export const certificateTemplatesRouter = new Hono<{
               ...template,
               currentXlsxVersion:
                 currentVersionByTemplateId.get(template.id) ?? null,
+              wysiwygVersions:
+                wysiwygVersionsByTemplateId.get(template.id) ?? [],
             }))
           : [
               {

@@ -4,18 +4,18 @@ import { CertificateTemplateEditorPage } from '@/features/certificate-templates/
 import { loadCertificateTemplateEditorData } from '@/features/certificate-templates/editor/queries'
 
 export const Route = createFileRoute(
-  '/dashboard/certificate-templates/$templateId/editor',
+  '/dashboard/certificate-templates/$slug/editor',
 )({
   head: () => ({
     meta: [{ title: 'Editor de Certificado | CalibraFácil' }],
   }),
   loader: ({ context, params }) =>
-    loadCertificateTemplateEditorData(context.queryClient, params.templateId),
+    loadCertificateTemplateEditorData(context.queryClient, params.slug),
   component: CertificateTemplateEditorRoute,
 })
 
 function CertificateTemplateEditorRoute() {
-  const { templateId } = Route.useParams()
+  const { slug } = Route.useParams()
 
-  return <CertificateTemplateEditorPage templateId={templateId} />
+  return <CertificateTemplateEditorPage slug={slug} />
 }

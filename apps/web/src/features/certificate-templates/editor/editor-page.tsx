@@ -12,13 +12,14 @@ import {
   useWysiwygDocument,
 } from './queries'
 
-export function CertificateTemplateEditorPage({
-  templateId,
-}: {
-  templateId: string
-}) {
-  const context = useEditorTemplateContext(templateId)
-  const documentQuery = useWysiwygDocument(templateId, context.wysiwygVersionId)
+export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
+  const context = useEditorTemplateContext(slug)
+  // API calls stay keyed by the numeric id; only the URL carries the slug.
+  const templateId = context.template?.id != null ? String(context.template.id) : null
+  const documentQuery = useWysiwygDocument(
+    templateId ?? '',
+    templateId !== null ? context.wysiwygVersionId : null,
+  )
   const catalogQuery = usePlaceholderCatalog()
 
   if (!isWysiwygEditorEnabled()) {
@@ -52,7 +53,7 @@ export function CertificateTemplateEditorPage({
     )
   }
 
-  if (context.wysiwygVersionId === null) {
+  if (templateId === null || context.wysiwygVersionId === null) {
     return (
       <EditorShell title={context.template.name}>
         <p className="text-sm text-muted-foreground">

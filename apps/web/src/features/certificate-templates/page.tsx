@@ -457,8 +457,8 @@ export function CertificateTemplatesPage() {
       await refreshTemplates()
       if (data.item.id) {
         await navigate({
-          to: '/dashboard/certificate-templates/$templateId/editor',
-          params: { templateId: String(data.item.id) },
+          to: '/dashboard/certificate-templates/$slug/editor',
+          params: { slug: data.item.slug },
         })
       }
     },
@@ -811,18 +811,23 @@ export function CertificateTemplatesPage() {
           </Button>
           {isWysiwygEditorEnabled() &&
             selectedTemplate?.id &&
-            selectedTemplate.currentXlsxVersion?.engine === 'wysiwyg' && (
+            ((selectedTemplate.wysiwygVersions?.length ?? 0) > 0 ||
+              selectedTemplate.currentXlsxVersion?.engine === 'wysiwyg') && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() =>
                   navigate({
-                    to: '/dashboard/certificate-templates/$templateId/editor',
-                    params: { templateId: String(selectedTemplate.id) },
+                    to: '/dashboard/certificate-templates/$slug/editor',
+                    params: { slug: selectedTemplate.slug },
                   })
                 }
               >
-                Abrir no editor
+                {selectedTemplate.wysiwygVersions?.some(
+                  (version) => version.status === 'DRAFT',
+                )
+                  ? 'Abrir rascunho no editor'
+                  : 'Abrir no editor'}
               </Button>
             )}
         </div>
