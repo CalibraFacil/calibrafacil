@@ -36,7 +36,10 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
   const node = selectedNode(editor)
   if (!editor || !editor.isEditable || !node) return null
 
-  if (node.typeName === 'bandTopIdentity' || node.typeName === 'bandPageFooter') {
+  if (
+    node.typeName === 'bandTopIdentity' ||
+    node.typeName === 'bandPageFooter'
+  ) {
     return (
       <div
         className="space-y-2.5 rounded-xl border p-3"

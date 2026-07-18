@@ -19,10 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { calibraApi } from '@/utils/api'
 import type { WysiwygDocumentResponse } from '../types'
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isWysiwygEditorEnabled } from '../wysiwyg-flag'
 import { EditorWorkbench } from './editor-workbench'
@@ -42,7 +39,8 @@ const VERSION_STATUS_LABELS: Record<string, string> = {
 export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
   const context = useEditorTemplateContext(slug)
   // API calls stay keyed by the numeric id; only the URL carries the slug.
-  const templateId = context.template?.id != null ? String(context.template.id) : null
+  const templateId =
+    context.template?.id != null ? String(context.template.id) : null
   // Version history: default follows the DRAFT-preferred resolution, but any
   // version can be opened (published ones render read-only).
   const [versionOverride, setVersionOverride] = useState<number | null>(null)
@@ -156,9 +154,10 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
           <Badge variant="outline">Editor visual</Badge>
           {wysiwygVersions.length > 1 && (
             <NativeSelect
+              size="sm"
               aria-label="Histórico de versões"
               value={String(activeVersionId ?? '')}
-              className="h-8 w-52 text-xs"
+              className="w-52 text-xs"
               onChange={(event) => {
                 const parsed = Number(event.target.value)
                 setVersionOverride(Number.isFinite(parsed) ? parsed : null)
@@ -208,9 +207,7 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => discardMutation.mutate()}
-                    >
+                    <AlertDialogAction onClick={() => discardMutation.mutate()}>
                       Descartar rascunho
                     </AlertDialogAction>
                   </AlertDialogFooter>

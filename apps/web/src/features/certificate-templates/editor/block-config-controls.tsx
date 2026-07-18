@@ -209,8 +209,9 @@ export function LockedBlockConfigBody({
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-muted-foreground">{placement.label}</span>
           <NativeSelect
+            size="sm"
             aria-label={placement.label}
-            className="h-8 text-xs"
+            className="text-xs"
             value={layout.preset ?? ''}
             onChange={(event) => {
               const preset = event.target.value
@@ -245,8 +246,9 @@ export function LockedBlockConfigBody({
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-muted-foreground">Colunas</span>
             <NativeSelect
+              size="sm"
               aria-label="Colunas do bloco"
-              className="h-8 text-xs"
+              className="text-xs"
               value={String(layout.columns ?? 1)}
               onChange={(event) => {
                 const columns = Number(event.target.value)
@@ -264,8 +266,9 @@ export function LockedBlockConfigBody({
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-muted-foreground">Densidade</span>
             <NativeSelect
+              size="sm"
               aria-label="Densidade do bloco"
-              className="h-8 text-xs"
+              className="text-xs"
               value={layout.density ?? 'normal'}
               onChange={(event) => {
                 const density = event.target.value
@@ -328,9 +331,12 @@ export function BandConfigBody({
             <label key={attr} className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">{label}</span>
               <NativeSelect
+                size="sm"
                 aria-label={label}
-                className="h-8 text-xs"
-                value={typeof attrs[attr] === 'string' ? String(attrs[attr]) : ''}
+                className="text-xs"
+                value={
+                  typeof attrs[attr] === 'string' ? String(attrs[attr]) : ''
+                }
                 onChange={(event) => {
                   const slot = event.target.value
                   patch({ [attr]: slot === '' ? null : slot })
@@ -407,8 +413,9 @@ function ResultsGridControls({
       <label className="flex flex-col gap-1 text-xs">
         <span className="text-muted-foreground">Bordas das tabelas</span>
         <NativeSelect
+          size="sm"
           aria-label="Bordas das tabelas"
-          className="h-8 text-xs"
+          className="text-xs"
           value={layout.borders ?? 'theme'}
           onChange={(event) => {
             const borders = event.target.value

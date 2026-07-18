@@ -73,7 +73,6 @@ export function isLockedBlockKey(value: string): value is LockedBlockKey {
   return value in LOCKED_BLOCK_LABELS
 }
 
-
 /**
  * Sample data with the ORG'S REAL logo swapped in: a lab manager designing
  * their certificate should see their own mark, not a placeholder glyph.

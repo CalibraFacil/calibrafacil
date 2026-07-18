@@ -85,9 +85,9 @@ export function EditorWorkbench({
    * Editing is hard-disabled until reload — typing into a document that can
    * never persist again is worse than stopping the user.
    */
-  const [remoteLock, setRemoteLock] = useState<
-    'conflict' | 'immutable' | null
-  >(null)
+  const [remoteLock, setRemoteLock] = useState<'conflict' | 'immutable' | null>(
+    null,
+  )
 
   const latestDocumentRef = useRef<Record<string, unknown>>(
     version.documentJson,
@@ -559,7 +559,6 @@ export function EditorWorkbench({
         editable={editable}
         labLogoUrl={labLogoUrl}
         onDocumentChange={handleDocumentChange}
-
       />
     </div>
   )

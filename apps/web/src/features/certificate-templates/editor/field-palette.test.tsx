@@ -91,9 +91,7 @@ describe('FieldPalette (shell reframe step 2)', () => {
     const palette = await screen.findByTestId('field-palette')
     fireEvent.click(within(palette).getByText('Razão social do cliente'))
     expect(collectPlaceholderPaths(editor)).toEqual(['customer.name'])
-    expect(JSON.stringify(editor.getJSON())).toContain(
-      '"path":"customer.name"',
-    )
+    expect(JSON.stringify(editor.getJSON())).toContain('"path":"customer.name"')
   })
 
   it('search filters the catalog', async () => {
@@ -133,13 +131,14 @@ describe('filterFieldSuggestions ({{ autocomplete)', () => {
     editor.commands.setTextSelection(2)
     editor.commands.insertContent('{{')
     await waitFor(() => {
-      expect(document.querySelector('[data-testid="field-suggest-popup"]')).not.toBeNull()
+      expect(
+        document.querySelector('[data-testid="field-suggest-popup"]'),
+      ).not.toBeNull()
     })
     const popup = document.querySelector('[data-testid="field-suggest-popup"]')
     expect(popup?.textContent).toContain('Razão social do cliente')
   })
 })
-
 
 describe('slash menu (roadmap item 4)', () => {
   it('clicking outside the slash menu dismisses it', async () => {

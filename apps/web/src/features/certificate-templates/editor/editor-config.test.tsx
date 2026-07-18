@@ -245,7 +245,9 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('band-inspector')).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Acreditação em texto' }))
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Acreditação em texto' }),
+    )
     await waitFor(() => {
       const json = editor.getJSON()
       const band = Array.isArray(json.content) ? json.content[0] : null
@@ -265,7 +267,9 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('band-inspector')).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Exibir faixa no topo' }))
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Exibir faixa no topo' }),
+    )
     await waitFor(() => {
       const top = document.querySelector('[data-band-view="bandTopIdentity"]')
       expect(top?.textContent).toContain('Faixa desativada')
@@ -523,7 +527,10 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
         <CertificateEditor
           initialDocument={newWysiwygStarterDocument()}
           issues={[
-            { path: 'content.8.attrs', message: 'problema no bloco de resultados' },
+            {
+              path: 'content.8.attrs',
+              message: 'problema no bloco de resultados',
+            },
           ]}
           immediatelyRender
           onEditorReady={(editor) => {
@@ -568,7 +575,9 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
 
   it('clicking a locked block selects it and surfaces the selection dock', async () => {
     const editor = await mountWithInspector()
-    const view = document.querySelector('[data-locked-block-view="results_table"]')
+    const view = document.querySelector(
+      '[data-locked-block-view="results_table"]',
+    )
     expect(view).not.toBeNull()
     fireEvent.click(view!)
     await waitFor(() => {
@@ -613,9 +622,7 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     const before = orderOf()
     const resultsIndex = before.indexOf('results_table')
 
-    const trigger = screen.getByLabelText(
-      'Ações do bloco Tabela de resultados',
-    )
+    const trigger = screen.getByLabelText('Ações do bloco Tabela de resultados')
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByText('Mover para cima (Alt+↑)'))
     await waitFor(() => {
@@ -669,15 +676,18 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
     const toolbar = document.querySelector('.cf-selection-toolbar')
     expect(toolbar?.textContent).toBe('')
-    expect(
-      toolbar?.querySelector('[aria-label="Negrito"]'),
-    ).not.toBeNull()
+    expect(toolbar?.querySelector('[aria-label="Negrito"]')).not.toBeNull()
 
     // a NodeSelection (locked block) must NOT show it
     editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))
     await waitFor(() => {
       const el = document.querySelector('.cf-selection-toolbar')
-      expect(el === null || getComputedStyle(el).visibility === 'hidden' || el.getAttribute('style')?.includes('none') || true).toBe(true)
+      expect(
+        el === null ||
+          getComputedStyle(el).visibility === 'hidden' ||
+          el.getAttribute('style')?.includes('none') ||
+          true,
+      ).toBe(true)
     })
   })
 

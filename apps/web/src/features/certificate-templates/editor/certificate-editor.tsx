@@ -34,18 +34,23 @@ const DRAG_HANDLE_POSITION = { placement: 'left-start' } as const
  * so dragging reads as a light outline, not a full-block screenshot.
  * MUST be render-stable (same rule as DRAG_HANDLE_POSITION).
  */
-const DRAG_IMAGE_PROPERTIES = ['width', 'opacity', 'border-radius', 'background']
+const DRAG_IMAGE_PROPERTIES = [
+  'width',
+  'opacity',
+  'border-radius',
+  'background',
+]
 
 /**
  * Empty-paragraph hint. TipTap's Placeholder extension is renamed on extend —
  * its default name collides with our `placeholder` FIELD node.
  */
-const EmptyParagraphHint = Placeholder.extend({ name: 'cfEmptyHint' }).configure(
-  {
-    placeholder: "Digite '/' para inserir um bloco ou '{{' para um campo",
-    showOnlyWhenEditable: true,
-  },
-)
+const EmptyParagraphHint = Placeholder.extend({
+  name: 'cfEmptyHint',
+}).configure({
+  placeholder: "Digite '/' para inserir um bloco ou '{{' para um campo",
+  showOnlyWhenEditable: true,
+})
 import type { EditorView } from '@tiptap/pm/view'
 import {
   BandPageFooter,
@@ -319,15 +324,11 @@ function LockedBlockView(props: NodeViewProps) {
 
   return (
     <NodeViewWrapper
-      className={cn(
-        'cf-locked-block-view',
-        configOpen && 'cf-config-open',
-      )}
+      className={cn('cf-locked-block-view', configOpen && 'cf-config-open')}
       data-locked-block-view={blockKey}
       onClick={selectSelf}
     >
       <div className="cf-locked-block-view__header" contentEditable={false}>
-
         {!isOptional && (
           <span className="cf-locked-block-view__lock" aria-hidden>
             <HugeiconsIcon icon={SquareLock02Icon} size={11} strokeWidth={2} />
@@ -642,9 +643,12 @@ function BandPageFooterView(props: NodeViewProps) {
 
 function CertImageView(props: NodeViewProps) {
   const mediaId = Number(props.node.attrs.mediaId)
-  const alt = typeof props.node.attrs.alt === 'string' ? props.node.attrs.alt : ''
+  const alt =
+    typeof props.node.attrs.alt === 'string' ? props.node.attrs.alt : ''
   const widthMm =
-    typeof props.node.attrs.widthMm === 'number' ? props.node.attrs.widthMm : null
+    typeof props.node.attrs.widthMm === 'number'
+      ? props.node.attrs.widthMm
+      : null
   return (
     <NodeViewWrapper className="cf-image" data-media-id={mediaId} draggable>
       <img
@@ -776,11 +780,7 @@ export function CertificateEditor({
       for (const storageKey of ['fieldSuggestion', 'slashMenu']) {
         const suggestionStorage = Reflect.get(created.storage, storageKey)
         if (suggestionStorage && typeof suggestionStorage === 'object') {
-          Reflect.set(
-            suggestionStorage,
-            'getCatalog',
-            () => catalogRef.current,
-          )
+          Reflect.set(suggestionStorage, 'getCatalog', () => catalogRef.current)
         }
       }
       // The doc opens with the band atom first; land the caret on the first
@@ -874,250 +874,271 @@ export function CertificateEditor({
   for (const issue of issues) {
     const index = issueBlockIndex(issue.path)
     if (index === null) continue
-    issuesByIndex.set(index, [...(issuesByIndex.get(index) ?? []), issue.message])
+    issuesByIndex.set(index, [
+      ...(issuesByIndex.get(index) ?? []),
+      issue.message,
+    ])
   }
 
   return (
     <IssuesContext.Provider value={issuesByIndex}>
-    <LabLogoContext.Provider value={labLogoUrl}>
-    <PreviewContext.Provider value={{ showSampleValues }}>
-      <div className="cf-editor">
-        {/* The REAL print stylesheet, scoped to the page frame via native CSS
+      <LabLogoContext.Provider value={labLogoUrl}>
+        <PreviewContext.Provider value={{ showSampleValues }}>
+          <div className="cf-editor">
+            {/* The REAL print stylesheet, scoped to the page frame via native CSS
             nesting. Nested :root/body selectors match nothing, so the design
             TOKENS are re-declared directly on .cf-page (base text styles live
             in certificate-editor.css). */}
-        <style>{`.cf-page{${certificateThemeTokens(theme)}${certificateStyleTokenOverrides(styleTokens)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
-        <div className="cf-editor__bar">
-          {editable && <EditorToolbar editor={editor} />}
-          {editable && <FieldPalette editor={editor} catalog={catalog} />}
-          {editable && <ImagePicker editor={editor} />}
-          {editable && <span className="cf-editor__toolbar-divider" />}
-          {editable && (
-            <NativeSelect
-              aria-label="Registro visual"
-              value={theme}
-              className="h-8 w-44 text-xs"
-              onChange={(event) => {
-                const next = event.target.value
-                if (!editor) return
-                editor
-                  .chain()
-                  .focus()
-                  .command(({ tr }) => {
-                    tr.setDocAttribute('theme', next)
-                    return true
-                  })
-                  .run()
-              }}
-            >
-              {CERTIFICATE_THEMES.map((themeOption) => (
-                <NativeSelectOption key={themeOption} value={themeOption}>
-                  {THEME_LABELS[themeOption]}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          )}
-          {editable && (
-            <StyleTokenControls editor={editor} styleTokens={styleTokens} />
-          )}
-          {editable && (
-            <Button
-              type="button"
-              variant={bilingual ? 'secondary' : 'ghost'}
-              size="sm"
-              aria-pressed={bilingual}
-              aria-label="Rótulos bilíngues (PT/EN)"
-              className="text-xs transition-[scale,background-color] active:scale-[0.96]"
-              onClick={() => {
-                if (!editor) return
-                const next = !bilingual
-                editor
-                  .chain()
-                  .focus()
-                  .command(({ tr }) => {
-                    tr.setDocAttribute('bilingual', next ? true : null)
-                    // No-op remap of each locked block so its NodeView
-                    // re-renders with the new label language immediately.
-                    tr.doc.descendants((node, pos) => {
-                      if (node.type.name === 'lockedBlock') {
-                        tr.setNodeMarkup(pos, undefined, { ...node.attrs })
-                      }
-                      return false
-                    })
-                    return true
-                  })
-                  .run()
-              }}
-            >
-              PT/EN
-            </Button>
-          )}
-          {editable && <span className="cf-editor__toolbar-divider" />}
-          <NativeSelect
-            aria-label="Zoom da página"
-            value={
-              [50, 75, 100, 125, 150].includes(zoomPercent)
-                ? String(zoomPercent)
-                : 'fit'
-            }
-            className="h-8 w-22 text-xs"
-            onChange={(event) => {
-              if (event.target.value === 'fit') {
-                setZoomPercent(fitWidthPercent())
-                return
-              }
-              const parsed = Number(event.target.value)
-              setZoomPercent(Number.isFinite(parsed) && parsed > 0 ? parsed : 100)
-            }}
-          >
-            {[50, 75, 100, 125, 150].map((level) => (
-              <NativeSelectOption key={level} value={String(level)}>
-                {level}%
-              </NativeSelectOption>
-            ))}
-            <NativeSelectOption value="fit">Ajustar largura</NativeSelectOption>
-          </NativeSelect>
-          <Button
-            type="button"
-            variant={showPageMarks ? 'secondary' : 'ghost'}
-            size="sm"
-            aria-pressed={showPageMarks}
-            aria-label="Quebras de página (aproximadas)"
-            title="Mostrar quebras de página aproximadas — a paginação final é decidida na geração do PDF"
-            className="h-8 gap-1 px-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
-            onClick={() => setShowPageMarks((value) => !value)}
-          >
-            <HugeiconsIcon icon={DashedLine01Icon} size={15} strokeWidth={1.8} />
-            Págs.
-          </Button>
-          <Button
-            type="button"
-            variant={showSampleValues ? 'secondary' : 'ghost'}
-            size="sm"
-            aria-pressed={showSampleValues}
-            aria-label={
-              showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'
-            }
-            title={showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'}
-            className="size-8 p-0 transition-[scale,background-color] active:scale-[0.96]"
-            onClick={() => setShowSampleValues((value) => !value)}
-          >
-            <HugeiconsIcon
-              icon={showSampleValues ? ViewOffIcon : ViewIcon}
-              size={15}
-              strokeWidth={1.8}
-            />
-          </Button>
-        </div>
-        <div
-          ref={paperRef}
-          className="cf-editor__paper"
-          data-zoom={zoomPercent}
-          style={zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }}
-        >
-          <EditorContent
-            editor={editor}
-            className={cn(
-              'cf-page',
-              certificateThemeClass(theme),
-              !editable && 'cf-page--readonly',
-              editable && !showSampleValues && 'cf-page--tokens',
-              showPageMarks && 'cf-page--pagemarks',
-            )}
-          />
-        </div>
-        {editable && editor && (
-          /* One Notion-style gutter group per hovered block: ＋ inserts
-             below, the grip is TipTap's official drag handle (native PM
-             drag + drop cursor; the content guard keeps moves legal). */
-          <DragHandle
-            editor={editor}
-            computePositionConfig={DRAG_HANDLE_POSITION}
-            dragImageProperties={DRAG_IMAGE_PROPERTIES}
-            onNodeChange={handleHoverNodeChange}
-          >
-            <div className="cf-gutter-handles">
-              <button
-                type="button"
-                className="cf-insert-handle"
-                aria-label="Inserir bloco abaixo"
-                title="Inserir abaixo (abre o menu /)"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  const hovered = hoverNodeRef.current
-                  if (!hovered) return
-                  const after = hovered.pos + hovered.size
-                  editor
-                    .chain()
-                    .focus()
-                    .insertContentAt(after, { type: 'paragraph' })
-                    .setTextSelection(after + 1)
-                    .insertContent('/')
-                    .scrollIntoView()
-                    .run()
+            <style>{`.cf-page{${certificateThemeTokens(theme)}${certificateStyleTokenOverrides(styleTokens)}}\n.cf-page { ${CERTIFICATE_PRINT_CSS} }`}</style>
+            <div className="cf-editor__bar">
+              {editable && <EditorToolbar editor={editor} />}
+              {editable && <FieldPalette editor={editor} catalog={catalog} />}
+              {editable && <ImagePicker editor={editor} />}
+              {editable && <span className="cf-editor__toolbar-divider" />}
+              {editable && (
+                <NativeSelect
+                  size="sm"
+                  aria-label="Registro visual"
+                  value={theme}
+                  className="w-44 text-xs"
+                  onChange={(event) => {
+                    const next = event.target.value
+                    if (!editor) return
+                    editor
+                      .chain()
+                      .focus()
+                      .command(({ tr }) => {
+                        tr.setDocAttribute('theme', next)
+                        return true
+                      })
+                      .run()
+                  }}
+                >
+                  {CERTIFICATE_THEMES.map((themeOption) => (
+                    <NativeSelectOption key={themeOption} value={themeOption}>
+                      {THEME_LABELS[themeOption]}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+              {editable && (
+                <StyleTokenControls editor={editor} styleTokens={styleTokens} />
+              )}
+              {editable && (
+                <Button
+                  type="button"
+                  variant={bilingual ? 'secondary' : 'ghost'}
+                  size="sm"
+                  aria-pressed={bilingual}
+                  aria-label="Rótulos bilíngues (PT/EN)"
+                  className="text-xs transition-[scale,background-color] active:scale-[0.96]"
+                  onClick={() => {
+                    if (!editor) return
+                    const next = !bilingual
+                    editor
+                      .chain()
+                      .focus()
+                      .command(({ tr }) => {
+                        tr.setDocAttribute('bilingual', next ? true : null)
+                        // No-op remap of each locked block so its NodeView
+                        // re-renders with the new label language immediately.
+                        tr.doc.descendants((node, pos) => {
+                          if (node.type.name === 'lockedBlock') {
+                            tr.setNodeMarkup(pos, undefined, { ...node.attrs })
+                          }
+                          return false
+                        })
+                        return true
+                      })
+                      .run()
+                  }}
+                >
+                  PT/EN
+                </Button>
+              )}
+              {editable && <span className="cf-editor__toolbar-divider" />}
+              <NativeSelect
+                size="sm"
+                aria-label="Zoom da página"
+                value={
+                  [50, 75, 100, 125, 150].includes(zoomPercent)
+                    ? String(zoomPercent)
+                    : 'fit'
+                }
+                className="w-22 text-xs"
+                onChange={(event) => {
+                  if (event.target.value === 'fit') {
+                    setZoomPercent(fitWidthPercent())
+                    return
+                  }
+                  const parsed = Number(event.target.value)
+                  setZoomPercent(
+                    Number.isFinite(parsed) && parsed > 0 ? parsed : 100,
+                  )
                 }}
               >
-                +
-              </button>
-              <span
-                className="cf-drag-grip"
-                title="Arrastar para reordenar"
-                aria-hidden
+                {[50, 75, 100, 125, 150].map((level) => (
+                  <NativeSelectOption key={level} value={String(level)}>
+                    {level}%
+                  </NativeSelectOption>
+                ))}
+                <NativeSelectOption value="fit">
+                  Ajustar largura
+                </NativeSelectOption>
+              </NativeSelect>
+              <Button
+                type="button"
+                variant={showPageMarks ? 'secondary' : 'ghost'}
+                size="sm"
+                aria-pressed={showPageMarks}
+                aria-label="Quebras de página (aproximadas)"
+                title="Mostrar quebras de página aproximadas — a paginação final é decidida na geração do PDF"
+                className="h-8 gap-1 px-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
+                onClick={() => setShowPageMarks((value) => !value)}
               >
                 <HugeiconsIcon
-                  icon={DragDropVerticalIcon}
-                  size={13}
-                  strokeWidth={2}
+                  icon={DashedLine01Icon}
+                  size={15}
+                  strokeWidth={1.8}
                 />
-              </span>
+                Págs.
+              </Button>
+              <Button
+                type="button"
+                variant={showSampleValues ? 'secondary' : 'ghost'}
+                size="sm"
+                aria-pressed={showSampleValues}
+                aria-label={
+                  showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'
+                }
+                title={
+                  showSampleValues ? 'Ver campos' : 'Ver com dados de exemplo'
+                }
+                className="size-8 p-0 transition-[scale,background-color] active:scale-[0.96]"
+                onClick={() => setShowSampleValues((value) => !value)}
+              >
+                <HugeiconsIcon
+                  icon={showSampleValues ? ViewOffIcon : ViewIcon}
+                  size={15}
+                  strokeWidth={1.8}
+                />
+              </Button>
             </div>
-          </DragHandle>
-        )}
-        {editable && editor && (
-          <BubbleMenu
-            editor={editor}
-            shouldShow={shouldShowSelectionToolbar}
-            className="cf-selection-toolbar"
-          >
-            <ToolbarButton
-              label="Negrito"
-              icon={TextBoldIcon}
-              active={editor.isActive('bold')}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-            />
-            <ToolbarButton
-              label="Itálico"
-              icon={TextItalicIcon}
-              active={editor.isActive('italic')}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-            />
-            <span className="cf-editor__toolbar-divider" />
-            <ToolbarButton
-              label="Alinhar à esquerda"
-              icon={TextAlignLeftIcon}
-              active={editor.isActive({ textAlign: 'left' })}
-              onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            />
-            <ToolbarButton
-              label="Centralizar"
-              icon={TextAlignCenterIcon}
-              active={editor.isActive({ textAlign: 'center' })}
-              onClick={() =>
-                editor.chain().focus().setTextAlign('center').run()
+            <div
+              ref={paperRef}
+              className="cf-editor__paper"
+              data-zoom={zoomPercent}
+              style={
+                zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }
               }
-            />
-            <ToolbarButton
-              label="Alinhar à direita"
-              icon={TextAlignRightIcon}
-              active={editor.isActive({ textAlign: 'right' })}
-              onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            />
-          </BubbleMenu>
-        )}
-        <SelectionDock editor={editor} />
-      </div>
-    </PreviewContext.Provider>
-    </LabLogoContext.Provider>
+            >
+              <EditorContent
+                editor={editor}
+                className={cn(
+                  'cf-page',
+                  certificateThemeClass(theme),
+                  !editable && 'cf-page--readonly',
+                  editable && !showSampleValues && 'cf-page--tokens',
+                  showPageMarks && 'cf-page--pagemarks',
+                )}
+              />
+            </div>
+            {editable && editor && (
+              /* One Notion-style gutter group per hovered block: ＋ inserts
+             below, the grip is TipTap's official drag handle (native PM
+             drag + drop cursor; the content guard keeps moves legal). */
+              <DragHandle
+                editor={editor}
+                computePositionConfig={DRAG_HANDLE_POSITION}
+                dragImageProperties={DRAG_IMAGE_PROPERTIES}
+                onNodeChange={handleHoverNodeChange}
+              >
+                <div className="cf-gutter-handles">
+                  <button
+                    type="button"
+                    className="cf-insert-handle"
+                    aria-label="Inserir bloco abaixo"
+                    title="Inserir abaixo (abre o menu /)"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const hovered = hoverNodeRef.current
+                      if (!hovered) return
+                      const after = hovered.pos + hovered.size
+                      editor
+                        .chain()
+                        .focus()
+                        .insertContentAt(after, { type: 'paragraph' })
+                        .setTextSelection(after + 1)
+                        .insertContent('/')
+                        .scrollIntoView()
+                        .run()
+                    }}
+                  >
+                    +
+                  </button>
+                  <span
+                    className="cf-drag-grip"
+                    title="Arrastar para reordenar"
+                    aria-hidden
+                  >
+                    <HugeiconsIcon
+                      icon={DragDropVerticalIcon}
+                      size={13}
+                      strokeWidth={2}
+                    />
+                  </span>
+                </div>
+              </DragHandle>
+            )}
+            {editable && editor && (
+              <BubbleMenu
+                editor={editor}
+                shouldShow={shouldShowSelectionToolbar}
+                className="cf-selection-toolbar"
+              >
+                <ToolbarButton
+                  label="Negrito"
+                  icon={TextBoldIcon}
+                  active={editor.isActive('bold')}
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                />
+                <ToolbarButton
+                  label="Itálico"
+                  icon={TextItalicIcon}
+                  active={editor.isActive('italic')}
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                />
+                <span className="cf-editor__toolbar-divider" />
+                <ToolbarButton
+                  label="Alinhar à esquerda"
+                  icon={TextAlignLeftIcon}
+                  active={editor.isActive({ textAlign: 'left' })}
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('left').run()
+                  }
+                />
+                <ToolbarButton
+                  label="Centralizar"
+                  icon={TextAlignCenterIcon}
+                  active={editor.isActive({ textAlign: 'center' })}
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('center').run()
+                  }
+                />
+                <ToolbarButton
+                  label="Alinhar à direita"
+                  icon={TextAlignRightIcon}
+                  active={editor.isActive({ textAlign: 'right' })}
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign('right').run()
+                  }
+                />
+              </BubbleMenu>
+            )}
+            <SelectionDock editor={editor} />
+          </div>
+        </PreviewContext.Provider>
+      </LabLogoContext.Provider>
     </IssuesContext.Provider>
   )
 }
@@ -1209,9 +1230,10 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
       <div className="cf-selection-dock" data-testid="selection-dock">
         <span className="cf-selection-dock__label">Imagem</span>
         <NativeSelect
+          size="sm"
           aria-label="Largura da imagem"
           value={String(currentWidth)}
-          className="h-8 w-28 text-xs"
+          className="w-28 text-xs"
           onChange={(event) => {
             const parsed = Number(event.target.value)
             if (!Number.isFinite(parsed)) return
@@ -1285,7 +1307,10 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
 }
 
 const OPTIONAL_BLOCK_ITEMS: Array<{ blockKey: string; label: string }> = [
-  { blockKey: 'uncertainty_budget_annex', label: 'Balanço de incertezas (anexo)' },
+  {
+    blockKey: 'uncertainty_budget_annex',
+    label: 'Balanço de incertezas (anexo)',
+  },
   { blockKey: 'decision_rule_statement', label: 'Regra de decisão' },
 ]
 
@@ -1482,12 +1507,10 @@ const FONT_SCALE_LABELS: Record<string, string> = {
   '1.1': 'Texto 110%',
 }
 
-function writeStyleTokens(
-  editor: Editor,
-  next: CertificateStyleTokens | null,
-) {
+function writeStyleTokens(editor: Editor, next: CertificateStyleTokens | null) {
   const normalized =
-    next && (next.accent || (next.fontScale !== undefined && next.fontScale !== 1))
+    next &&
+    (next.accent || (next.fontScale !== undefined && next.fontScale !== 1))
       ? next
       : null
   editor
@@ -1576,9 +1599,10 @@ function StyleTokenControls({
         </PopoverContent>
       </Popover>
       <NativeSelect
+        size="sm"
         aria-label="Tamanho do texto"
         value={String(fontScale)}
-        className="h-8 w-28 text-xs"
+        className="w-28 text-xs"
         onChange={(event) => {
           const parsed = Number(event.target.value)
           const next: CertificateFontScale =
@@ -1601,7 +1625,9 @@ function readDocumentStyleTokens(
 ): CertificateStyleTokens | null {
   const attrs = Reflect.get(documentJson, 'attrs')
   const raw =
-    attrs && typeof attrs === 'object' ? Reflect.get(attrs, 'styleTokens') : null
+    attrs && typeof attrs === 'object'
+      ? Reflect.get(attrs, 'styleTokens')
+      : null
   if (!raw || typeof raw !== 'object') return null
   const accentRaw = Reflect.get(raw, 'accent')
   const scaleRaw = Reflect.get(raw, 'fontScale')
