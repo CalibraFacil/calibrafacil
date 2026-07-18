@@ -495,10 +495,13 @@ export function CertificateTemplatesPage() {
         )
       } else {
         toast.success(
-          `Template migrado — ${data.importedPaths.length} campos importados`,
+          `Novo modelo visual criado a partir de «${selectedTemplate?.name ?? 'modelo'}» — ` +
+            `${data.importedPaths.length} campos importados. O modelo XLSX original permanece intacto.`,
+          { duration: 10000 },
         )
       }
       await refreshTemplates()
+      setSelectedTemplateKey(String(data.item.id))
       await navigate({
         to: '/dashboard/certificate-templates/$slug/editor',
         params: { slug: data.item.slug },
@@ -878,6 +881,12 @@ export function CertificateTemplatesPage() {
                 key={certificateTemplateKey(template)}
                 value={certificateTemplateKey(template)}
               >
+                {template.currentXlsxVersion?.engine === 'wysiwyg' ||
+                (template.wysiwygVersions?.length ?? 0) > 0
+                  ? '[Visual] '
+                  : template.currentXlsxVersion
+                    ? '[XLSX] '
+                    : ''}
                 {template.name}
               </NativeSelectOption>
             ))}

@@ -16,6 +16,7 @@ import {
 } from '@tiptap/react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { toast } from 'sonner'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { CellSelection } from '@tiptap/pm/tables'
@@ -742,6 +743,13 @@ export function CertificateEditor({
   // the editable tokens.
   const [showSampleValues, setShowSampleValues] = useState(!editable)
   const [zoomPercent, setZoomPercent] = useState(100)
+  // First open fits the page to the available width (shrink-only): an A4 at
+  // 794px easily overflows a laptop content column, and a horizontally
+  // clipped canvas is a terrible first impression.
+  useMountEffect(() => {
+    const fitted = fitWidthPercent()
+    if (fitted < 100) setZoomPercent(fitted)
+  })
   const [, setSelectionTick] = useState(0)
   const hoverNodeRef = useRef<{ pos: number; size: number } | null>(null)
   const handleHoverNodeChange = useCallback(

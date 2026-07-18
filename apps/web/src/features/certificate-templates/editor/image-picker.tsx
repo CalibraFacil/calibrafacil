@@ -21,6 +21,7 @@ import { calibraApi } from '@/utils/api'
 export function ImagePicker({ editor }: { editor: Editor | null }) {
   const [open, setOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const MAX_IMAGE_BYTES = 2 * 1024 * 1024
   const queryClient = useQueryClient()
 
   const libraryQuery = useQuery({
@@ -67,9 +68,10 @@ export function ImagePicker({ editor }: { editor: Editor | null }) {
             size="sm"
             aria-label="Inserir imagem"
             title="Inserir imagem da biblioteca da organização"
-            className="size-8 p-0 transition-[scale,background-color] active:scale-[0.96]"
+            className="h-8 gap-1 pl-1.5 pr-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
           >
-            <HugeiconsIcon icon={Image01Icon} size={16} strokeWidth={1.8} />
+            <HugeiconsIcon icon={Image01Icon} size={15} strokeWidth={1.8} />
+            Imagem
           </Button>
         }
       />
@@ -100,7 +102,11 @@ export function ImagePicker({ editor }: { editor: Editor | null }) {
             aria-label="Enviar imagem"
             onChange={(event) => {
               const file = event.target.files?.[0]
-              if (file) uploadMutation.mutate(file)
+              if (file && file.size > MAX_IMAGE_BYTES) {
+                toast.error(
+                  'Imagem acima de 2 MB — reduza o arquivo antes de enviar',
+                )
+              } else if (file) uploadMutation.mutate(file)
               event.target.value = ''
             }}
           />

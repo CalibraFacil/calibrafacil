@@ -32,6 +32,7 @@ import {
   useSaveWysiwygDocument,
   useValidateWysiwygDocument,
 } from './mutations'
+import { getWysiwygVersionStatusLabel } from '../model'
 import { ValidationChip } from './validation-chip'
 
 const AUTOSAVE_DEBOUNCE_MS = 1500
@@ -371,7 +372,7 @@ export function EditorWorkbench({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">
-          v{version.version} · {statusLabel(status)}
+          v{version.version} · {getWysiwygVersionStatusLabel(status)}
         </Badge>
         <span
           className="font-mono text-xs text-muted-foreground"
@@ -614,12 +615,4 @@ export function EditorWorkbench({
   )
 }
 
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    DRAFT: 'Rascunho',
-    VALIDATED: 'Validado',
-    PUBLISHED: 'Publicado',
-    ARCHIVED: 'Arquivado',
-  }
-  return labels[status] ?? status
-}
+

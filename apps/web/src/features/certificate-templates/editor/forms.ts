@@ -1,4 +1,5 @@
 import type { PlaceholderCatalogEntry } from '../types'
+import { LOCKED_BLOCK_LABELS } from './editor-sample-data'
 
 /**
  * Pure, testable logic for the editor's placeholder UX (schema-first rule:
@@ -77,6 +78,15 @@ export function describeIssueLocation(
   const block = content[index]
   const type =
     block && typeof block === 'object' ? String(Reflect.get(block, 'type')) : ''
+  if (type === 'lockedBlock' && block && typeof block === 'object') {
+    const attrs = Reflect.get(block, 'attrs')
+    const blockKey =
+      attrs && typeof attrs === 'object'
+        ? String(Reflect.get(attrs, 'blockKey') ?? '')
+        : ''
+    const label = LOCKED_BLOCK_LABELS[blockKey]
+    if (label) return `Bloco ${index + 1} — ${label}`
+  }
   return `Bloco ${index + 1} — ${BLOCK_TYPE_LABELS[type] ?? type}`
 }
 

@@ -68,8 +68,9 @@ describe('issue mapping', () => {
     expect(describeIssueLocation(documentJson, 'content.2.content.0')).toBe(
       'Bloco 3 — Parágrafo',
     )
+    // locked blocks name their SPECIFIC block, not the generic type
     expect(describeIssueLocation(documentJson, 'content.1')).toBe(
-      'Bloco 2 — Bloco obrigatório',
+      'Bloco 2 — Tabela de resultados',
     )
     expect(describeIssueLocation(documentJson, 'compile')).toBeNull()
   })

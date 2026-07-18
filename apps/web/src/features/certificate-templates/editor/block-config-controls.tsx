@@ -13,7 +13,7 @@ import { EDITOR_SAMPLE_DATA, LOCKED_BLOCK_LABELS } from './editor-sample-data'
 /**
  * Shared per-block/per-band configuration controls. Rendered in TWO hosts:
  * the in-context popover anchored to the selected block (primary surface) and
- * the sidebar BlockInspector (orientation/fallback). One implementation, two
+ * the tests' standalone BlockInspector harness. One implementation, two
  * mounts — never fork these.
  *
  * IMPORTANT: mutation handlers must NOT call editor.chain().focus() —

@@ -22,6 +22,7 @@ import type { WysiwygDocumentResponse } from '../types'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlanAccess } from '@/hooks/use-plan-access'
+import { getWysiwygVersionStatusLabel } from '../model'
 import { isWysiwygEditorEnabled } from '../wysiwyg-flag'
 import { EditorWorkbench } from './editor-workbench'
 import {
@@ -30,12 +31,7 @@ import {
   useWysiwygDocument,
 } from './queries'
 
-const VERSION_STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Rascunho',
-  VALIDATED: 'Validado',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
-}
+
 
 export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
   const context = useEditorTemplateContext(slug)
@@ -173,8 +169,7 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
                   value={String(wysiwygVersion.id)}
                 >
                   v{wysiwygVersion.version} ·{' '}
-                  {VERSION_STATUS_LABELS[wysiwygVersion.status] ??
-                    wysiwygVersion.status}
+                  {getWysiwygVersionStatusLabel(wysiwygVersion.status)}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
@@ -256,6 +251,7 @@ function EditorShell({
   return (
     <div className="space-y-4 p-4">
       <div className="flex flex-wrap items-center gap-3">
+        <BackToListButton />
         <h1 className="text-xl font-semibold">{title}</h1>
         {badges}
       </div>
