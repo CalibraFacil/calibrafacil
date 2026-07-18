@@ -361,6 +361,8 @@ export const certificateDocumentSchema = z
       schemaVersion: z.literal(CERTIFICATE_DOCUMENT_SCHEMA_VERSION),
       theme: z.enum(CERTIFICATE_THEMES),
       styleTokens: styleTokensSchema.nullish(),
+      /** Render block titles / field labels as "PT / EN" (item 8). Labels only. */
+      bilingual: z.boolean().nullish(),
     }),
     // Band nodes pinned: bandTopIdentity first, bandPageFooter last, body
     // blocks in between (>= 1). Mirrors the ProseMirror doc content

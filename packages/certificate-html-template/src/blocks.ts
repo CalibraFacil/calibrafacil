@@ -37,17 +37,75 @@ export function escapeHtml(value: string): string {
 
 type Data = Record<string, unknown>;
 
+/**
+ * Bilingual label rendering (roadmap item 8). When the doc attr `bilingual`
+ * is set, section titles and field labels render as "PT / EN". LABELS ONLY —
+ * values, statements and derived text stay pt-BR (the legally binding text).
+ * Flag is set per render by `renderLockedBlockInner` (renderers are fully
+ * synchronous, so a module flag cannot interleave).
+ */
+let bilingualRender = false;
+
+const LABEL_EN: Record<string, string> = {
+  // section titles
+  Cliente: "Customer",
+  "Item calibrado": "Calibrated item",
+  "Método e rastreabilidade metrológica": "Method and metrological traceability",
+  "Condições ambientais": "Environmental conditions",
+  "Resultados da calibração": "Calibration results",
+  "Incerteza de medição": "Measurement uncertainty",
+  "Balanço de incertezas": "Uncertainty budget",
+  "Regra de decisão": "Decision rule",
+  // field labels
+  "Data de emissão": "Date of issue",
+  "Data da calibração": "Date of calibration",
+  "Local da calibração": "Calibration site",
+  "Retificação nº": "Amendment No.",
+  "Substitui o certificado": "Supersedes certificate",
+  Motivo: "Reason",
+  "Razão social": "Company name",
+  "CNPJ/CPF": "Tax ID",
+  Endereço: "Address",
+  Item: "Item",
+  "Nº de série": "Serial number",
+  Fabricante: "Manufacturer",
+  Modelo: "Model",
+  Capacidade: "Capacity",
+  Divisão: "Division",
+  "Registro Inmetro": "Inmetro registration",
+  Método: "Method",
+  Procedimento: "Procedure",
+  "Normas de referência": "Reference standards",
+  Temperatura: "Temperature",
+  "Umidade relativa": "Relative humidity",
+  "Pressão atmosférica": "Atmospheric pressure",
+  "Dentro dos limites": "Within limits",
+  Justificativa: "Justification",
+};
+
+function bilingualLabel(label: string): string {
+  const english = LABEL_EN[label];
+  return bilingualRender && english && english !== label
+    ? `${label} / ${english}`
+    : label;
+}
+
 /** Escaped catalog resolution (required-ness comes from the catalog). */
 function field(data: Data, path: string): string {
   return escapeHtml(resolvePlaceholder(data, path));
 }
 
 function fieldRow(label: string, value: string): string {
-  return value === "" ? "" : `<dt>${escapeHtml(label)}</dt><dd>${value}</dd>`;
+  return value === ""
+    ? ""
+    : `<dt>${escapeHtml(bilingualLabel(label))}</dt><dd>${value}</dd>`;
 }
 
 function section(title: string | null, inner: string): string {
-  const heading = title === null ? "" : `<div class="cf-block-title">${escapeHtml(title)}</div>`;
+  const heading =
+    title === null
+      ? ""
+      : `<div class="cf-block-title">${escapeHtml(bilingualLabel(title))}</div>`;
   return `${heading}${inner}`;
 }
 
@@ -648,6 +706,8 @@ function renderDecisionRuleStatement(data: Data): string {
 export type LockedBlockRenderContext = {
   /** QR code for `certificate.verificationUrl`, as a data URL. */
   qrDataUrl: string;
+  /** Render section titles / field labels as "PT / EN" (doc attr). */
+  bilingual?: boolean;
 };
 
 export function renderLockedBlockInner(
@@ -656,6 +716,7 @@ export function renderLockedBlockInner(
   context: LockedBlockRenderContext,
   layout?: CertificateBlockLayout | null,
 ): string {
+  bilingualRender = context.bilingual === true;
   switch (blockKey) {
     case "certificate_identification":
       return renderCertificateIdentification(data);

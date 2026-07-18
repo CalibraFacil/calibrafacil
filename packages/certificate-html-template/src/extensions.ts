@@ -174,6 +174,7 @@ const CertificateDocAttributes = Extension.create({
           schemaVersion: { default: 3 },
           theme: { default: "technical-form" },
           styleTokens: { default: null },
+          bilingual: { default: null },
         },
       },
     ];

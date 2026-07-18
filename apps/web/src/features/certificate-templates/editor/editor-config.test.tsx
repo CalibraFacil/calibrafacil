@@ -133,6 +133,24 @@ describe('editor config UI (T24)', () => {
     expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
+  it('bilingual toggle writes doc attrs.bilingual and block labels render PT / EN', async () => {
+    const editor = await mountWithInspector()
+    fireEvent.click(screen.getByLabelText('Rótulos bilíngues (PT/EN)'))
+    await waitFor(() => {
+      expect(editor.getJSON().attrs?.bilingual).toBe(true)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('Cliente / Customer')
+    })
+
+    fireEvent.click(screen.getByLabelText('Rótulos bilíngues (PT/EN)'))
+    await waitFor(() => {
+      expect(editor.getJSON().attrs?.bilingual ?? null).toBeNull()
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
   it('results inspector: hiding a column writes layout.hiddenColumns; doc stays valid', async () => {
     const editor = await mountWithInspector()
     editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))

@@ -374,3 +374,21 @@ describe("styleTokens doc attr (roadmap item 7)", () => {
     expect(validateCertificateDocument(starterWithStyleTokens({ fontFamily: "Comic Sans" })).ok).toBe(false);
   });
 });
+
+describe("bilingual doc attr (roadmap item 8)", () => {
+  it("accepts true/false/null and rejects non-boolean values", () => {
+    const base = JSON.parse(JSON.stringify(newWysiwygStarterDocument()));
+    for (const value of [true, false, null]) {
+      const result = validateCertificateDocument({
+        ...base,
+        attrs: { ...base.attrs, bilingual: value },
+      });
+      expect(result.ok, String(value)).toBe(true);
+    }
+    const bad = validateCertificateDocument({
+      ...base,
+      attrs: { ...base.attrs, bilingual: "yes" },
+    });
+    expect(bad.ok).toBe(false);
+  });
+});

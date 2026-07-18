@@ -71,6 +71,24 @@ describe("compileCertificateHtml", () => {
     expect(neutral.html).not.toContain("--accent:#7A1F1F")
   })
 
+  it("bilingual: doc attr renders PT / EN labels; values stay pt-BR; default stays PT-only", async () => {
+    const bilingual = clone(newWysiwygStarterDocument())
+    bilingual.attrs.bilingual = true
+    const compiled = await compileCertificateHtml(bilingual, sampleCertificateInputData)
+    expect(compiled.html).toContain("Cliente / Customer")
+    expect(compiled.html).toContain("Item calibrado / Calibrated item")
+    expect(compiled.html).toContain("Raz&atilde;o social / Company name".replace("&atilde;", "ã"))
+    // statements/values remain pt-BR only
+    expect(compiled.html).toContain("incerteza expandida de medi")
+
+    const plain = await compileCertificateHtml(
+      newWysiwygStarterDocument(),
+      sampleCertificateInputData,
+    )
+    expect(plain.html).not.toContain("/ Customer")
+    expect(plain.html).not.toContain("/ Calibration results")
+  })
+
   it("is deterministic: 10 compiles, one sha256", async () => {
     const hashes = new Set<string>();
     for (let index = 0; index < 10; index += 1) {

@@ -235,7 +235,10 @@ function LockedBlockView(props: NodeViewProps) {
       renderedInner = renderLockedBlockInner(
         blockKey,
         EDITOR_SAMPLE_DATA,
-        { qrDataUrl: QR_PLACEHOLDER_SVG },
+        {
+          qrDataUrl: QR_PLACEHOLDER_SVG,
+          bilingual: props.editor.state.doc.attrs.bilingual === true,
+        },
         rawLayout && typeof rawLayout === 'object' ? rawLayout : null,
       )
     } catch {
@@ -611,6 +614,9 @@ export function CertificateEditor({
   const [styleTokens, setStyleTokens] = useState<CertificateStyleTokens | null>(
     readDocumentStyleTokens(initialDocument),
   )
+  const [bilingual, setBilingual] = useState(
+    readDocumentBilingual(initialDocument),
+  )
   const editor = useEditor({
     extensions: editorExtensions(),
     content: initialDocument,
@@ -643,6 +649,7 @@ export function CertificateEditor({
       const json = updated.getJSON()
       setTheme(readDocumentTheme(json))
       setStyleTokens(readDocumentStyleTokens(json))
+      setBilingual(readDocumentBilingual(json))
       onDocumentChange?.(json)
     },
     onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
@@ -745,6 +752,38 @@ export function CertificateEditor({
           )}
           {editable && (
             <StyleTokenControls editor={editor} styleTokens={styleTokens} />
+          )}
+          {editable && (
+            <Button
+              type="button"
+              variant={bilingual ? 'secondary' : 'ghost'}
+              size="sm"
+              aria-pressed={bilingual}
+              aria-label="Rótulos bilíngues (PT/EN)"
+              className="text-xs transition-[transform,background-color] active:scale-[0.96]"
+              onClick={() => {
+                if (!editor) return
+                const next = !bilingual
+                editor
+                  .chain()
+                  .focus()
+                  .command(({ tr }) => {
+                    tr.setDocAttribute('bilingual', next ? true : null)
+                    // No-op remap of each locked block so its NodeView
+                    // re-renders with the new label language immediately.
+                    tr.doc.descendants((node, pos) => {
+                      if (node.type.name === 'lockedBlock') {
+                        tr.setNodeMarkup(pos, undefined, { ...node.attrs })
+                      }
+                      return false
+                    })
+                    return true
+                  })
+                  .run()
+              }}
+            >
+              PT/EN
+            </Button>
           )}
           <NativeSelect
             aria-label="Zoom da página"
@@ -1211,6 +1250,15 @@ function readDocumentStyleTokens(
     tokens.fontScale = scaleRaw
   }
   return tokens.accent || tokens.fontScale !== undefined ? tokens : null
+}
+
+function readDocumentBilingual(documentJson: Record<string, unknown>): boolean {
+  const attrs = Reflect.get(documentJson, 'attrs')
+  return (
+    (attrs && typeof attrs === 'object'
+      ? Reflect.get(attrs, 'bilingual')
+      : null) === true
+  )
 }
 
 function readDocumentTheme(

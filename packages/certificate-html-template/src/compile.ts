@@ -132,7 +132,10 @@ export async function compileCertificateHtml(
     margin: 1,
     width: 160,
   });
-  const context: LockedBlockRenderContext = { qrDataUrl };
+  const context: LockedBlockRenderContext = {
+    qrDataUrl,
+    bilingual: document.attrs.bilingual === true,
+  };
 
   const body = renderToHTMLString({
     content: document,
