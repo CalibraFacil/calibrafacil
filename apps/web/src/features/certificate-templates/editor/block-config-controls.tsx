@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
   deriveResultGrids,
@@ -116,6 +117,44 @@ const BAND_SLOTS: Record<
   ],
 }
 
+/**
+ * FRESH-STATE readers: config bodies never trust snapshot props — the popover
+ * can outlive several transactions, and a stale snapshot made sequential
+ * toggles resurrect the previous edit (prod bug). blockKeys and band type
+ * names are unique in a document, so lookup by key is unambiguous.
+ */
+export function findLockedBlockLayout(
+  editor: Editor,
+  blockKey: string,
+): CertificateBlockLayout {
+  let layout: CertificateBlockLayout = {}
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'lockedBlock' && node.attrs.blockKey === blockKey) {
+      const rawLayout = node.attrs.layout
+      layout =
+        rawLayout && typeof rawLayout === 'object' ? { ...rawLayout } : {}
+      return false
+    }
+    return true
+  })
+  return layout
+}
+
+export function findBandAttrs(
+  editor: Editor,
+  typeName: string,
+): Record<string, unknown> {
+  let attrs: Record<string, unknown> = {}
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === typeName) {
+      attrs = { ...node.attrs }
+      return false
+    }
+    return true
+  })
+  return attrs
+}
+
 /** Does this locked block have anything to configure? Drives the pill. */
 export function lockedBlockHasConfig(blockKey: string): boolean {
   return (
@@ -147,12 +186,18 @@ function writeLayout(editor: Editor, layout: CertificateBlockLayout) {
 export function LockedBlockConfigBody({
   editor,
   blockKey,
-  layout,
 }: {
   editor: Editor
   blockKey: string
-  layout: CertificateBlockLayout
 }) {
+  // Re-render after every mutation so controlled controls track the doc even
+  // when the hosting NodeView/panel does not re-render (prod stale-toggle bug).
+  const [, bump] = useState(0)
+  const layout = findLockedBlockLayout(editor, blockKey)
+  const write = (next: CertificateBlockLayout) => {
+    writeLayout(editor, next)
+    bump((tick) => tick + 1)
+  }
   const isResults = blockKey === 'results_table'
   const isMetadata = METADATA_BLOCKS.has(blockKey)
   const placement = PLACEMENT_BLOCKS[blockKey]
@@ -168,7 +213,7 @@ export function LockedBlockConfigBody({
             value={layout.preset ?? ''}
             onChange={(event) => {
               const preset = event.target.value
-              writeLayout(editor, {
+              write({
                 ...layout,
                 preset: preset === '' ? undefined : preset,
               })
@@ -183,7 +228,7 @@ export function LockedBlockConfigBody({
         </label>
       )}
 
-      {isResults && <ResultsGridControls editor={editor} layout={layout} />}
+      {isResults && <ResultsGridControls layout={layout} write={write} />}
 
       {isMetadata && (
         <div className="grid grid-cols-2 gap-2">
@@ -195,7 +240,7 @@ export function LockedBlockConfigBody({
               value={String(layout.columns ?? 1)}
               onChange={(event) => {
                 const columns = Number(event.target.value)
-                writeLayout(editor, {
+                write({
                   ...layout,
                   columns: columns > 1 ? columns : undefined,
                 })
@@ -214,7 +259,7 @@ export function LockedBlockConfigBody({
               value={layout.density ?? 'normal'}
               onChange={(event) => {
                 const density = event.target.value
-                writeLayout(editor, {
+                write({
                   ...layout,
                   density: density === 'compact' ? 'compact' : undefined,
                 })
@@ -233,12 +278,16 @@ export function LockedBlockConfigBody({
 export function BandConfigBody({
   editor,
   typeName,
-  attrs,
 }: {
   editor: Editor
   typeName: string
-  attrs: Record<string, unknown>
 }) {
+  const [, bump] = useState(0)
+  const attrs = findBandAttrs(editor, typeName)
+  const patch = (patchAttrs: Record<string, unknown>) => {
+    editor.commands.updateAttributes(typeName, patchAttrs)
+    bump((tick) => tick + 1)
+  }
   const toggles = BAND_TOGGLES[typeName] ?? []
   const slots = BAND_SLOTS[typeName] ?? []
   const enabled = attrs.enabled === true
@@ -256,9 +305,7 @@ export function BandConfigBody({
               checked={attrs[attr] === true}
               disabled={attr !== 'enabled' && !enabled}
               onCheckedChange={(checked) => {
-                editor.commands.updateAttributes(typeName, {
-                  [attr]: checked === true,
-                })
+                patch({ [attr]: checked === true })
               }}
             />
             <span>{label}</span>
@@ -276,9 +323,7 @@ export function BandConfigBody({
                 value={typeof attrs[attr] === 'string' ? String(attrs[attr]) : ''}
                 onChange={(event) => {
                   const slot = event.target.value
-                  editor.commands.updateAttributes(typeName, {
-                    [attr]: slot === '' ? null : slot,
-                  })
+                  patch({ [attr]: slot === '' ? null : slot })
                 }}
               >
                 {options.map((option) => (
@@ -296,11 +341,11 @@ export function BandConfigBody({
 }
 
 function ResultsGridControls({
-  editor,
   layout,
+  write,
 }: {
-  editor: Editor
   layout: CertificateBlockLayout
+  write: (next: CertificateBlockLayout) => void
 }) {
   // Full column universe (ignoring current hides) so re-enabling is possible.
   // Phase-split grids repeat their shared columns (e.g. the nominal value) —
@@ -333,7 +378,7 @@ function ResultsGridControls({
                   const next = new Set(hidden)
                   if (checked === true) next.delete(column.key)
                   else next.add(column.key)
-                  writeLayout(editor, {
+                  write({
                     ...layout,
                     hiddenColumns: [...next].sort(),
                   })
@@ -357,7 +402,7 @@ function ResultsGridControls({
           value={layout.borders ?? 'theme'}
           onChange={(event) => {
             const borders = event.target.value
-            writeLayout(editor, {
+            write({
               ...layout,
               borders:
                 borders === 'grid' || borders === 'rules' ? borders : undefined,

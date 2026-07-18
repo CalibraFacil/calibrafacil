@@ -11,6 +11,7 @@ import {
   BandPageFooter,
   BandTopIdentity,
   CERTIFICATE_PRINT_CSS,
+  OPTIONAL_BLOCK_KEYS,
   CertPlaceholder,
   LockedBlock,
   LockedBlockGuard,
@@ -43,7 +44,6 @@ import {
   BandConfigBody,
   LockedBlockConfigBody,
   lockedBlockHasConfig,
-  readBlockLayout,
 } from './block-config-controls'
 import {
   EDITOR_SAMPLE_DATA,
@@ -55,6 +55,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
+  Delete02Icon,
   Heading02Icon,
   SlidersHorizontalIcon,
   Heading03Icon,
@@ -172,9 +173,19 @@ function LockedBlockView(props: NodeViewProps) {
   const blockKey = String(props.node.attrs.blockKey)
   const label = LOCKED_BLOCK_LABELS[blockKey] ?? blockKey
   const [configOpen, setConfigOpen] = useState(false)
+  const optionalKeys: readonly string[] = OPTIONAL_BLOCK_KEYS
+  const isOptional = optionalKeys.includes(blockKey)
   const selectSelf = () => {
     const pos = props.getPos()
     if (typeof pos === 'number') props.editor.commands.setNodeSelection(pos)
+  }
+  const removeSelf = () => {
+    const pos = props.getPos()
+    if (typeof pos !== 'number') return
+    props.editor.commands.deleteRange({
+      from: pos,
+      to: pos + props.node.nodeSize,
+    })
   }
 
   let renderedInner: string | null = null
@@ -203,13 +214,34 @@ function LockedBlockView(props: NodeViewProps) {
       draggable
     >
       <div className="cf-locked-block-view__header" contentEditable={false}>
-        <span className="cf-locked-block-view__lock" aria-hidden>
-          <HugeiconsIcon icon={SquareLock02Icon} size={11} strokeWidth={2} />
-        </span>
+        {!isOptional && (
+          <span className="cf-locked-block-view__lock" aria-hidden>
+            <HugeiconsIcon icon={SquareLock02Icon} size={11} strokeWidth={2} />
+          </span>
+        )}
         <span className="cf-locked-block-view__label">{label}</span>
         <span className="cf-locked-block-view__hint">
-          dados de exemplo — preenchido na emissão
+          {isOptional
+            ? 'bloco opcional — preenchido na emissão'
+            : 'dados de exemplo — preenchido na emissão'}
         </span>
+        {isOptional && props.editor.isEditable && (
+          <button
+            type="button"
+            className="cf-config-pill"
+            aria-label={`Remover ${label}`}
+            title={`Remover ${label}`}
+            onMouseDown={(event) => {
+              event.stopPropagation()
+            }}
+            onClick={(event) => {
+              event.stopPropagation()
+              removeSelf()
+            }}
+          >
+            <HugeiconsIcon icon={Delete02Icon} size={12} strokeWidth={2} />
+          </button>
+        )}
         {props.editor.isEditable && lockedBlockHasConfig(blockKey) && (
           <ConfigPill
             open={configOpen}
@@ -218,11 +250,7 @@ function LockedBlockView(props: NodeViewProps) {
             label={label}
             align={blockKey === 'accreditation_seal' ? 'end' : 'start'}
           >
-            <LockedBlockConfigBody
-              editor={props.editor}
-              blockKey={blockKey}
-              layout={readBlockLayout(props.node.attrs)}
-            />
+            <LockedBlockConfigBody editor={props.editor} blockKey={blockKey} />
           </ConfigPill>
         )}
       </div>
@@ -350,11 +378,7 @@ function BandTopIdentityView(props: NodeViewProps) {
             onBeforeOpen={selectSelf}
             label={BAND_LABELS.bandTopIdentity ?? 'Faixa'}
           >
-            <BandConfigBody
-              editor={props.editor}
-              typeName="bandTopIdentity"
-              attrs={props.node.attrs}
-            />
+            <BandConfigBody editor={props.editor} typeName="bandTopIdentity" />
           </ConfigPill>
         )}
       </div>
@@ -415,11 +439,7 @@ function BandPageFooterView(props: NodeViewProps) {
             label={BAND_LABELS.bandPageFooter ?? 'Rodapé'}
             align="end"
           >
-            <BandConfigBody
-              editor={props.editor}
-              typeName="bandPageFooter"
-              attrs={props.node.attrs}
-            />
+            <BandConfigBody editor={props.editor} typeName="bandPageFooter" />
           </ConfigPill>
         )}
       </div>

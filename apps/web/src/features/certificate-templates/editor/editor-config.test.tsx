@@ -402,6 +402,68 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
+  it('sequential popover toggles accumulate and re-checking un-hides (stale-state regression)', async () => {
+    const editor = await mountWithInspector()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Configurar Tabela de resultados' }),
+    )
+    const popover = await screen.findByTestId('block-config-popover')
+    fireEvent.click(within(popover).getByLabelText('Indicação como recebido'))
+    await waitFor(() => {
+      const layout = blockLayout(editor, 'results_table')
+      expect(
+        layout && typeof layout === 'object'
+          ? Reflect.get(layout, 'hiddenColumns')
+          : null,
+      ).toEqual(['leitura_antes'])
+    })
+    // second toggle must ACCUMULATE, not resurrect the first
+    fireEvent.click(within(popover).getByLabelText('Indicação como deixado'))
+    await waitFor(() => {
+      const layout = blockLayout(editor, 'results_table')
+      expect(
+        layout && typeof layout === 'object'
+          ? Reflect.get(layout, 'hiddenColumns')
+          : null,
+      ).toEqual(['leitura_antes', 'leitura_apos'])
+    })
+    // re-checking un-hides (was permanently stuck with the stale snapshot)
+    fireEvent.click(within(popover).getByLabelText('Indicação como recebido'))
+    await waitFor(() => {
+      const layout = blockLayout(editor, 'results_table')
+      expect(
+        layout && typeof layout === 'object'
+          ? Reflect.get(layout, 'hiddenColumns')
+          : null,
+      ).toEqual(['leitura_apos'])
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
+  it('optional blocks show a remove affordance instead of the padlock', async () => {
+    const editor = await mountWithInspector()
+    editor.commands.insertContent({
+      type: 'lockedBlock',
+      attrs: { blockKey: 'uncertainty_budget_annex' },
+    })
+    const remove = await screen.findByRole('button', {
+      name: 'Remover Balanço de incertezas (anexo)',
+    })
+    const view = document.querySelector(
+      '[data-locked-block-view="uncertainty_budget_annex"]',
+    )
+    expect(view?.querySelector('.cf-locked-block-view__lock')).toBeNull()
+    fireEvent.click(remove)
+    await waitFor(() => {
+      expect(
+        (editor.getJSON().content ?? []).filter(
+          (node) => node.attrs?.blockKey === 'uncertainty_budget_annex',
+        ).length,
+      ).toBe(0)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+  })
+
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
     const editor = await mountWithInspector()
     editor.commands.selectAll()

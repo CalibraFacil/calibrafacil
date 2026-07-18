@@ -6,7 +6,6 @@ import {
   LOCKED_BLOCK_LABELS,
   LockedBlockConfigBody,
   lockedBlockHasConfig,
-  readBlockLayout,
 } from './block-config-controls'
 
 /**
@@ -44,11 +43,7 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
         data-testid="band-inspector"
       >
         <h2 className="text-sm font-semibold">{BAND_LABELS[node.typeName]}</h2>
-        <BandConfigBody
-          editor={editor}
-          typeName={node.typeName}
-          attrs={node.attrs}
-        />
+        <BandConfigBody editor={editor} typeName={node.typeName} />
       </div>
     )
   }
@@ -65,11 +60,7 @@ export function BlockInspector({ editor }: { editor: Editor | null }) {
       <h2 className="text-sm font-semibold">
         {LOCKED_BLOCK_LABELS[blockKey] ?? blockKey}
       </h2>
-      <LockedBlockConfigBody
-        editor={editor}
-        blockKey={blockKey}
-        layout={readBlockLayout(node.attrs)}
-      />
+      <LockedBlockConfigBody editor={editor} blockKey={blockKey} />
     </div>
   )
 }
