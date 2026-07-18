@@ -2069,6 +2069,49 @@ export const certificateTemplatesRouter = new Hono<{
         })
         .returning();
 
+      // Copy the CONTENT, not just the shell: a duplicate that arrives with
+      // no versions silently loses the entire layout ("same template, new
+      // unit" is the #1 duplication use case). Prefer the latest PUBLISHED
+      // version, else the latest of any status; the copy lands as DRAFT v1.
+      let copiedVersionId: number | null = null;
+      if (created) {
+        const sourceVersions = await db.query.certificateTemplateVersion.findMany({
+          where: and(
+            eq(certificateTemplateVersion.templateId, existing.id),
+            eq(certificateTemplateVersion.organizationId, member.organizationId),
+          ),
+          orderBy: [desc(certificateTemplateVersion.version)],
+        });
+        const sourceVersion =
+          sourceVersions.find((candidate) => candidate.status === "PUBLISHED") ??
+          sourceVersions[0] ??
+          null;
+        if (sourceVersion) {
+          const [copiedVersion] = await db
+            .insert(certificateTemplateVersion)
+            .values({
+              organizationId: member.organizationId,
+              templateId: created.id,
+              version: 1,
+              status: "DRAFT",
+              engine: sourceVersion.engine,
+              // Immutable artifacts (R2 objects) are shared by reference —
+              // both rows point at the same frozen upload.
+              xlsxR2Key: sourceVersion.xlsxR2Key,
+              xlsxSha256: sourceVersion.xlsxSha256,
+              bindingManifest: sourceVersion.bindingManifest,
+              bindingManifestSha256: sourceVersion.bindingManifestSha256,
+              documentJson: sourceVersion.documentJson,
+              documentSha256: sourceVersion.documentSha256,
+              renderPolicy: sourceVersion.renderPolicy,
+              validationResult: null,
+              createdBy: session.user.id,
+            })
+            .returning();
+          copiedVersionId = copiedVersion?.id ?? null;
+        }
+      }
+
       if (created) {
         await writeOrganizationAuditEvent({
           organizationId: member.organizationId,
@@ -2082,6 +2125,7 @@ export const certificateTemplatesRouter = new Hono<{
             sourceTemplateName: existing.name,
             name: created.name,
             slug: created.slug,
+            copiedVersionId,
           },
         });
       }

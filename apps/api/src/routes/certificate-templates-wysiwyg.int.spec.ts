@@ -153,6 +153,48 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
     expect(lockedBlocks).toHaveLength(12);
   });
 
+  it("REQ-WTPL-012 POST /:id/duplicate copies the source's latest version CONTENT as a DRAFT v1", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await seedProfessionalSubscription(org.orgId);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const createRes = await certificateTemplatesRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: "Origem Visual", engine: "wysiwyg" }),
+    });
+    const created = await createRes.json();
+
+    const dupRes = await certificateTemplatesRouter.request(
+      `/${created.item.id}/duplicate`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+    expect(dupRes.status).toBe(201);
+    const dup = await dupRes.json();
+
+    const listRes = await certificateTemplatesRouter.request("/", {
+      method: "GET",
+    });
+    const list = await listRes.json();
+    const duplicated = (list.items ?? []).find(
+      (item: { id: number }) => item.id === dup.item.id,
+    );
+    expect(duplicated).toBeDefined();
+    // the duplicate is NOT an empty shell: a DRAFT v1 with the source's doc
+    expect(duplicated.wysiwygVersions?.length ?? 0).toBeGreaterThan(0);
+    const version = duplicated.wysiwygVersions[0];
+    expect(version.status).toBe("DRAFT");
+    expect(version.version).toBe(1);
+
+    const docRes = await certificateTemplatesRouter.request(
+      `/${dup.item.id}/versions/${version.id}/document`,
+      { method: "GET" },
+    );
+    expect(docRes.status).toBe(200);
+    const doc = await docRes.json();
+    expect(doc.item.documentSha256).toBe(created.initialVersion.documentSha256);
+  });
+
   it("REQ-WTPL-011 POST /:id/migrate-to-wysiwyg scaffolds a NEW wysiwyg template from the xlsx binding manifest", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
     await seedProfessionalSubscription(org.orgId);
