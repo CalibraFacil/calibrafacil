@@ -299,7 +299,10 @@ export function EditorWorkbench({
     try {
       const published = await publishMutation.mutateAsync()
       setStatus(published.item.status)
-      toast.success('Versão publicada — pronta para emissão')
+      toast.success(
+        'Versão publicada — defina quem usa este modelo na etapa Atribuição da página de templates',
+        { duration: 8000 },
+      )
       await queryClient.invalidateQueries({
         queryKey: ['certificate-templates'],
       })
