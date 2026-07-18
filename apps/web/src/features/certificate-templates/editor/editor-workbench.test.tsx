@@ -269,6 +269,29 @@ describe('EditorWorkbench (jsdom)', () => {
     })
   })
 
+  it('stale issue badges clear when blocks are reordered (index-keyed paths)', async () => {
+    mocks.validateWysiwygDocument.mockResolvedValue({
+      ok: false,
+      issues: [{ path: 'content.8.attrs', message: 'problema no bloco' }],
+    })
+    renderWorkbench()
+    await screen.findByRole('toolbar')
+    fireEvent.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('validation-issues')).toBeDefined()
+    })
+
+    // reorder: move a block — indexes shift, stale badges would lie
+    const proseMirror = document.querySelector('.ProseMirror')
+    fireEvent.keyDown(proseMirror!, { key: 'ArrowUp', altKey: true })
+    const editor = proseMirror ? Reflect.get(proseMirror, 'editor') : null
+    editor.commands.setNodeSelection(3)
+    fireEvent.keyDown(proseMirror!, { key: 'ArrowDown', altKey: true })
+    await waitFor(() => {
+      expect(screen.queryByTestId('validation-issues')).toBeNull()
+    })
+  })
+
   it('compile-path validation failures render the dedicated banner', async () => {
     mocks.validateWysiwygDocument.mockResolvedValue({
       ok: false,

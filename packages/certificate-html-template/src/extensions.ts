@@ -2,6 +2,7 @@ import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import type { Extensions } from "@tiptap/core";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { TextAlign } from "@tiptap/extension-text-align";
+import { ListItem } from "@tiptap/extension-list";
 import { StarterKit } from "@tiptap/starter-kit";
 
 /**
@@ -194,12 +195,17 @@ export function certificateEditorExtensions(): Extensions {
       strike: false,
       link: false,
       underline: false,
+      // Replaced below: the closed catalog forbids nested lists, so the
+      // ProseMirror schema must too — otherwise Tab (sinkListItem) creates a
+      // document the server rejects on every autosave (permanent 422 loop).
+      listItem: false,
       horizontalRule: {},
       heading: { levels: [1, 2, 3, 4] },
       // Editor-only visual: a clear insertion bar while dragging blocks
       // (no effect on compiled output).
       dropcursor: { color: "var(--accent, #1F3A5F)", width: 3 },
     }),
+    ListItem.extend({ content: "paragraph" }),
     Table,
     TableRow,
     TableCell,

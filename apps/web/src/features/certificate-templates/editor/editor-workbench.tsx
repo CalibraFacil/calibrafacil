@@ -222,8 +222,37 @@ export function EditorWorkbench({
     return flight
   }
 
+  /**
+   * Validation issues are keyed by TOP-LEVEL BLOCK INDEX (Zod paths like
+   * content.5.…). A structural edit — reorder, insert, delete of a block —
+   * shifts those indexes, and stale badges would then decorate the WRONG
+   * blocks. Signature = the ordered list of block types/keys.
+   */
+  const blockSignature = (documentJson: Record<string, unknown>): string => {
+    const content = Reflect.get(documentJson, 'content')
+    if (!Array.isArray(content)) return ''
+    return content
+      .map((node) => {
+        if (!node || typeof node !== 'object') return '?'
+        const type = String(Reflect.get(node, 'type') ?? '?')
+        const attrs = Reflect.get(node, 'attrs')
+        const blockKey =
+          attrs && typeof attrs === 'object'
+            ? Reflect.get(attrs, 'blockKey')
+            : null
+        return blockKey ? `${type}:${String(blockKey)}` : type
+      })
+      .join('|')
+  }
+  const blockSignatureRef = useRef(blockSignature(version.documentJson))
+
   const handleDocumentChange = (documentJson: Record<string, unknown>) => {
     latestDocumentRef.current = documentJson
+    const signature = blockSignature(documentJson)
+    if (signature !== blockSignatureRef.current) {
+      blockSignatureRef.current = signature
+      setIssues((current) => (current.length > 0 ? [] : current))
+    }
     if (saveStateRef.current !== 'saving') markSaveState('dirty')
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {

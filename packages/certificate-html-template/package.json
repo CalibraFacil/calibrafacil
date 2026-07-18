@@ -20,23 +20,24 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "zod": "^4.4.3",
     "@tiptap/core": "^3.27.2",
-    "@tiptap/pm": "^3.27.2",
-    "@tiptap/starter-kit": "^3.27.2",
+    "@tiptap/extension-list": "3.27.2",
     "@tiptap/extension-table": "^3.27.2",
     "@tiptap/extension-text-align": "^3.27.2",
+    "@tiptap/pm": "^3.27.2",
+    "@tiptap/starter-kit": "^3.27.2",
     "@tiptap/static-renderer": "^3.27.2",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:^",
-    "@types/node": "^24.13.0",
-    "typescript": "^7.0.2",
-    "vitest": "^4.0.17",
-    "@types/qrcode": "^1.5.6",
+    "@fontsource/ibm-plex-mono": "^5.2.5",
     "@fontsource/source-sans-3": "^5.2.5",
     "@fontsource/source-serif-4": "^5.2.5",
-    "@fontsource/ibm-plex-mono": "^5.2.5"
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.17"
   }
 }

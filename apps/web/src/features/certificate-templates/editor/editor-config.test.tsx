@@ -682,12 +682,12 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))
     await waitFor(() => {
       const el = document.querySelector('.cf-selection-toolbar')
-      expect(
+      const hidden =
         el === null ||
-          getComputedStyle(el).visibility === 'hidden' ||
-          el.getAttribute('style')?.includes('none') ||
-          true,
-      ).toBe(true)
+        el.getBoundingClientRect().width === 0 ||
+        getComputedStyle(el).visibility === 'hidden' ||
+        getComputedStyle(el).display === 'none'
+      expect(hidden).toBe(true)
     })
   })
 
