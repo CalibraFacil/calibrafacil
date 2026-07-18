@@ -7,6 +7,9 @@ import {
   type Editor,
   type NodeViewProps,
 } from '@tiptap/react'
+import { NodeSelection } from '@tiptap/pm/state'
+import { DragHandle } from '@tiptap/extension-drag-handle-react'
+import type { EditorView } from '@tiptap/pm/view'
 import {
   BandPageFooter,
   BandTopIdentity,
@@ -257,21 +260,7 @@ function LockedBlockView(props: NodeViewProps) {
       onClick={selectSelf}
     >
       <div className="cf-locked-block-view__header" contentEditable={false}>
-        {props.editor.isEditable && (
-          <span
-            className="cf-drag-grip"
-            data-drag-handle
-            draggable
-            title="Arrastar para reordenar"
-            aria-hidden
-          >
-            <HugeiconsIcon
-              icon={DragDropVerticalIcon}
-              size={12}
-              strokeWidth={2}
-            />
-          </span>
-        )}
+
         {!isOptional && (
           <span className="cf-locked-block-view__lock" aria-hidden>
             <HugeiconsIcon icon={SquareLock02Icon} size={11} strokeWidth={2} />
@@ -611,10 +600,7 @@ export function CertificateEditor({
   const [showSampleValues, setShowSampleValues] = useState(!editable)
   const [zoomPercent, setZoomPercent] = useState(100)
   const [, setSelectionTick] = useState(0)
-  const [hoverBlock, setHoverBlock] = useState<{
-    pos: number
-    top: number
-  } | null>(null)
+  const hoverNodeRef = useRef<{ pos: number; size: number } | null>(null)
   const paperRef = useRef<HTMLDivElement | null>(null)
   // A4 width at CSS 96dpi: 210mm ≈ 794px (fit-width baseline).
   const fitWidthPercent = () => {
@@ -669,47 +655,17 @@ export function CertificateEditor({
     },
     onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
     editorProps: {
-      handleDOMEvents: {
-        // Notion-idiom ＋ gutter: track the hovered TOP-LEVEL block so the
-        // insert handle can sit beside it.
-        mousemove: (view, event) => {
-          // Resolve the hovered TOP-LEVEL block from the event target's DOM —
-          // posAtCoords lands after atom NodeViews and pointed the handle at
-          // the FOLLOWING block; the DOM ancestry cannot be off.
-          const target = event.target instanceof Element ? event.target : null
-          const paperEl = paperRef.current
-          if (!target || !paperEl) return false
-          const holder: {
-            hit: { pos: number; dom: HTMLElement } | null
-          } = { hit: null }
-          view.state.doc.forEach((_node, offset) => {
-            if (holder.hit) return
-            const dom = view.nodeDOM(offset)
-            if (
-              dom instanceof HTMLElement &&
-              (dom === target || dom.contains(target))
-            ) {
-              holder.hit = { pos: offset, dom }
-            }
-          })
-          if (!holder.hit) return false
-          const { pos: blockPos, dom: blockDom } = holder.hit
-          const zoomFactor =
-            Number(paperEl.getAttribute('data-zoom') ?? '100') / 100 || 1
-          const paperRect = paperEl.getBoundingClientRect()
-          const blockRect = blockDom.getBoundingClientRect()
-          const top = Math.round(
-            (blockRect.top - paperRect.top) / zoomFactor,
-          )
-          setHoverBlock((current) =>
-            current?.pos === blockPos && current.top === top
-              ? current
-              : { pos: blockPos, top },
-          )
-          return false
-        },
-      },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
+        if (event.altKey && !event.ctrlKey && !event.metaKey) {
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            return moveTopLevelBlock(view, -1)
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            return moveTopLevelBlock(view, 1)
+          }
+        }
         if (!(event.ctrlKey || event.metaKey)) return false
         if (event.key === '=' || event.key === '+') {
           event.preventDefault()
@@ -871,9 +827,6 @@ export function CertificateEditor({
           className="cf-editor__paper"
           data-zoom={zoomPercent}
           style={zoomPercent === 100 ? undefined : { zoom: zoomPercent / 100 }}
-          // Hover state clears when leaving the PAPER (page + gutter), never
-          // when merely crossing from the page toward the ＋ in the gutter.
-          onMouseLeave={() => setHoverBlock(null)}
         >
           <EditorContent
             editor={editor}
@@ -885,36 +838,55 @@ export function CertificateEditor({
               showPageMarks && 'cf-page--pagemarks',
             )}
           />
-          {editable && editor && hoverBlock !== null && (
-            <button
-              type="button"
-              className="cf-insert-handle"
-              style={{ top: hoverBlock.top }}
-              aria-label="Inserir bloco abaixo"
-              title="Inserir abaixo (abre o menu /)"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                const { doc } = editor.state
-                const node = doc.nodeAt(hoverBlock.pos)
-                if (!node) return
-                const after = hoverBlock.pos + node.nodeSize
-                editor
-                  .chain()
-                  .focus()
-                  .insertContentAt(after, { type: 'paragraph' })
-                  .setTextSelection(after + 1)
-                  .insertContent('/')
-                  // The insertion point can be half off-screen (the handle
-                  // sits at the block's TOP row); bring the caret — and the
-                  // menu that anchors to it — fully into view.
-                  .scrollIntoView()
-                  .run()
-              }}
-            >
-              +
-            </button>
-          )}
         </div>
+        {editable && editor && (
+          /* One Notion-style gutter group per hovered block: ＋ inserts
+             below, the grip is TipTap's official drag handle (native PM
+             drag + drop cursor; the content guard keeps moves legal). */
+          <DragHandle
+            editor={editor}
+            computePositionConfig={{ placement: 'left-start' }}
+            onNodeChange={({ node, pos }) => {
+              hoverNodeRef.current = node ? { pos, size: node.nodeSize } : null
+            }}
+          >
+            <div className="cf-gutter-handles">
+              <button
+                type="button"
+                className="cf-insert-handle"
+                aria-label="Inserir bloco abaixo"
+                title="Inserir abaixo (abre o menu /)"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  const hovered = hoverNodeRef.current
+                  if (!hovered) return
+                  const after = hovered.pos + hovered.size
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContentAt(after, { type: 'paragraph' })
+                    .setTextSelection(after + 1)
+                    .insertContent('/')
+                    .scrollIntoView()
+                    .run()
+                }}
+              >
+                +
+              </button>
+              <span
+                className="cf-drag-grip"
+                title="Arrastar para reordenar"
+                aria-hidden
+              >
+                <HugeiconsIcon
+                  icon={DragDropVerticalIcon}
+                  size={13}
+                  strokeWidth={2}
+                />
+              </span>
+            </div>
+          </DragHandle>
+        )}
         <SelectionDock editor={editor} />
       </div>
     </PreviewContext.Provider>
@@ -928,6 +900,42 @@ export function CertificateEditor({
  * into view and opens ITS OWN ConfigPill — it never duplicates the pill's
  * content, so there is exactly one config surface.
  */
+const PINNED_TYPES = new Set(['bandTopIdentity', 'bandPageFooter'])
+
+/**
+ * Move the top-level block containing the selection one slot up/down.
+ * Content is regulated — POSITION is the user's (bands stay pinned
+ * first/last by the doc content expression). One delete+insert transaction,
+ * so the locked-block guard's multiset invariant holds.
+ */
+function moveTopLevelBlock(view: EditorView, direction: -1 | 1): boolean {
+  const { state } = view
+  const doc = state.doc
+  const index = state.selection.$from.index(0)
+  const node = doc.maybeChild(index)
+  if (!node || PINNED_TYPES.has(node.type.name)) return false
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= doc.childCount) return false
+  const target = doc.child(targetIndex)
+  if (PINNED_TYPES.has(target.type.name)) return false
+
+  let from = 0
+  for (let child = 0; child < index; child += 1) {
+    from += doc.child(child).nodeSize
+  }
+  const to = from + node.nodeSize
+  const insertAt =
+    direction === -1 ? from - target.nodeSize : from + target.nodeSize
+
+  const tr = state.tr.delete(from, to).insert(insertAt, node)
+  if (node.type.spec.selectable !== false) {
+    tr.setSelection(NodeSelection.create(tr.doc, insertAt))
+  }
+  view.dispatch(tr.scrollIntoView())
+  view.focus()
+  return true
+}
+
 function SelectionDock({ editor }: { editor: Editor | null }) {
   if (!editor || !editor.isEditable) return null
   const { selection } = editor.state

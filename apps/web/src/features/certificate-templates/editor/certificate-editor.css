@@ -435,10 +435,15 @@
   position: relative;
 }
 
-.cf-insert-handle {
-  position: absolute;
-  left: max(8px, calc(50% - 105mm - 34px));
+.cf-gutter-handles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
   z-index: 30;
+}
+
+.cf-insert-handle {
   width: 24px;
   height: 24px;
   border: none;

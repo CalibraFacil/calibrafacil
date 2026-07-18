@@ -602,6 +602,34 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
+  it('Alt+Arrow moves the selected block; bands stay pinned; doc stays valid', async () => {
+    const editor = await mountWithInspector()
+    const orderOf = () =>
+      (editor.getJSON().content ?? []).map((block) =>
+        block.type === 'lockedBlock'
+          ? String(block.attrs?.blockKey)
+          : String(block.type),
+      )
+    const before = orderOf()
+    const resultsIndex = before.indexOf('results_table')
+    const proseMirror = document.querySelector('.ProseMirror')
+    expect(proseMirror).not.toBeNull()
+
+    editor.commands.setNodeSelection(findLockedPos(editor, 'results_table'))
+    fireEvent.keyDown(proseMirror!, { key: 'ArrowUp', altKey: true })
+    await waitFor(() => {
+      expect(orderOf().indexOf('results_table')).toBe(resultsIndex - 1)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+
+    fireEvent.keyDown(proseMirror!, { key: 'ArrowDown', altKey: true })
+    await waitFor(() => {
+      expect(orderOf().indexOf('results_table')).toBe(resultsIndex)
+    })
+    expect(orderOf()).toEqual(before)
+    expect(orderOf()[0]).toBe('bandTopIdentity')
+  })
+
   it('zoom shortcuts: Ctrl+= / Ctrl+- / Ctrl+0 step and reset (step 5)', async () => {
     await mountWithInspector()
     const proseMirror = document.querySelector('.ProseMirror')
