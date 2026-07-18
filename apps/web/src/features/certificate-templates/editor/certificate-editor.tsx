@@ -1,4 +1,11 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   EditorContent,
   NodeViewWrapper,
@@ -9,6 +16,14 @@ import {
 } from '@tiptap/react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
+
+/**
+ * MUST be render-stable: DragHandle re-registers its ProseMirror plugin when
+ * these props change identity, and a re-register per render reconfigures the
+ * editor state — destroying/recreating EVERY plugin view on each keystroke,
+ * which silently killed the '/' and {{ suggestion menus.
+ */
+const DRAG_HANDLE_POSITION = { placement: 'left-start' } as const
 import type { EditorView } from '@tiptap/pm/view'
 import {
   BandPageFooter,
@@ -601,6 +616,16 @@ export function CertificateEditor({
   const [zoomPercent, setZoomPercent] = useState(100)
   const [, setSelectionTick] = useState(0)
   const hoverNodeRef = useRef<{ pos: number; size: number } | null>(null)
+  const handleHoverNodeChange = useCallback(
+    (data: { node: { nodeSize: number } | null; pos: number }) => {
+      // Moving from the block ONTO the handle reports node: null — keep the
+      // LAST hovered block so the ＋ click still knows its target.
+      if (data.node) {
+        hoverNodeRef.current = { pos: data.pos, size: data.node.nodeSize }
+      }
+    },
+    [],
+  )
   const paperRef = useRef<HTMLDivElement | null>(null)
   // A4 width at CSS 96dpi: 210mm ≈ 794px (fit-width baseline).
   const fitWidthPercent = () => {
@@ -845,13 +870,8 @@ export function CertificateEditor({
              drag + drop cursor; the content guard keeps moves legal). */
           <DragHandle
             editor={editor}
-            computePositionConfig={{ placement: 'left-start' }}
-            onNodeChange={({ node, pos }) => {
-              // Moving from the block ONTO the handle reports node: null —
-              // keep the LAST hovered block so the ＋ click still knows its
-              // target (the handle is only visible while one is current).
-              if (node) hoverNodeRef.current = { pos, size: node.nodeSize }
-            }}
+            computePositionConfig={DRAG_HANDLE_POSITION}
+            onNodeChange={handleHoverNodeChange}
           >
             <div className="cf-gutter-handles">
               <button
