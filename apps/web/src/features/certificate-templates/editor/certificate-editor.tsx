@@ -53,6 +53,7 @@ import {
 } from './editor-sample-data'
 import { FieldPalette } from './field-palette'
 import { FieldSuggestion } from './field-suggestion'
+import { SlashMenu } from './slash-menu'
 import { issueBlockIndex, type ValidationIssue } from './forms'
 import type { PlaceholderCatalogEntry } from '../types'
 
@@ -527,6 +528,7 @@ function editorExtensions() {
     }),
     LockedBlockGuard,
     FieldSuggestion,
+    SlashMenu,
   ]
 }
 
@@ -561,6 +563,10 @@ export function CertificateEditor({
   const [showSampleValues, setShowSampleValues] = useState(!editable)
   const [zoomPercent, setZoomPercent] = useState(100)
   const [, setSelectionTick] = useState(0)
+  const [hoverBlock, setHoverBlock] = useState<{
+    pos: number
+    top: number
+  } | null>(null)
   const paperRef = useRef<HTMLDivElement | null>(null)
   // A4 width at CSS 96dpi: 210mm ≈ 794px (fit-width baseline).
   const fitWidthPercent = () => {
@@ -577,16 +583,15 @@ export function CertificateEditor({
     editable,
     immediatelyRender,
     onCreate: ({ editor: created }) => {
-      const suggestionStorage = Reflect.get(
-        created.storage,
-        'fieldSuggestion',
-      )
-      if (suggestionStorage && typeof suggestionStorage === 'object') {
-        Reflect.set(
-          suggestionStorage,
-          'getCatalog',
-          () => catalogRef.current,
-        )
+      for (const storageKey of ['fieldSuggestion', 'slashMenu']) {
+        const suggestionStorage = Reflect.get(created.storage, storageKey)
+        if (suggestionStorage && typeof suggestionStorage === 'object') {
+          Reflect.set(
+            suggestionStorage,
+            'getCatalog',
+            () => catalogRef.current,
+          )
+        }
       }
       // The doc opens with the band atom first; land the caret on the first
       // EDITABLE position instead so typing never targets the band node.
@@ -607,6 +612,35 @@ export function CertificateEditor({
     },
     onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
     editorProps: {
+      handleDOMEvents: {
+        // Notion-idiom ＋ gutter: track the hovered TOP-LEVEL block so the
+        // insert handle can sit beside it.
+        mousemove: (view, event) => {
+          if (!(event.target instanceof Node)) return false
+          const posInfo = view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          })
+          if (!posInfo) return false
+          try {
+            const resolved = view.state.doc.resolve(posInfo.pos)
+            const blockPos = resolved.before(1)
+            const dom = view.nodeDOM(blockPos)
+            if (dom instanceof HTMLElement) {
+              const editorRect = view.dom.getBoundingClientRect()
+              const blockRect = dom.getBoundingClientRect()
+              setHoverBlock((current) =>
+                current?.pos === blockPos
+                  ? current
+                  : { pos: blockPos, top: blockRect.top - editorRect.top },
+              )
+            }
+          } catch {
+            // resolving at doc edges can throw — no handle there
+          }
+          return false
+        },
+      },
       handleKeyDown: (_view, event) => {
         if (!(event.ctrlKey || event.metaKey)) return false
         if (event.key === '=' || event.key === '+') {
@@ -731,6 +765,31 @@ export function CertificateEditor({
             )}
           />
         </div>
+        {editable && editor && hoverBlock !== null && (
+          <button
+            type="button"
+            className="cf-insert-handle"
+            style={{ top: hoverBlock.top }}
+            aria-label="Inserir bloco abaixo"
+            title="Inserir abaixo (abre o menu /)"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              const { doc } = editor.state
+              const node = doc.nodeAt(hoverBlock.pos)
+              if (!node) return
+              const after = hoverBlock.pos + node.nodeSize
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(after, { type: 'paragraph' })
+                .setTextSelection(after + 1)
+                .insertContent('/')
+                .run()
+            }}
+          >
+            +
+          </button>
+        )}
         <SelectionDock editor={editor} />
       </div>
     </PreviewContext.Provider>

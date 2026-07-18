@@ -134,3 +134,50 @@ describe('filterFieldSuggestions ({{ autocomplete)', () => {
     expect(popup?.textContent).toContain('Razão social do cliente')
   })
 })
+
+
+describe('slash menu (roadmap item 4)', () => {
+  it("typing '/' opens the unified menu; picking Divisor inserts a horizontalRule", async () => {
+    const { editor } = await mountEditor()
+    editor.commands.setTextSelection(3)
+    editor.commands.insertContent('/')
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="slash-menu-popup"]'),
+      ).not.toBeNull()
+    })
+    const popup = document.querySelector('[data-testid="slash-menu-popup"]')
+    expect(popup?.textContent).toContain('Tabela')
+    expect(popup?.textContent).toContain('Balanço de incertezas (anexo)')
+    // pick Divisor via mousedown (popup uses mousedown to keep editor focus)
+    const buttons = [...(popup?.querySelectorAll('button') ?? [])]
+    const divisor = buttons.find((button) =>
+      button.textContent?.includes('Divisor'),
+    )
+    expect(divisor).toBeDefined()
+    divisor?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).toContain('horizontalRule')
+    })
+  })
+
+  it('field entries in the slash menu insert typed placeholders', async () => {
+    const { editor } = await mountEditor()
+    editor.commands.setTextSelection(3)
+    editor.commands.insertContent('/razão')
+    await waitFor(() => {
+      const popup = document.querySelector('[data-testid="slash-menu-popup"]')
+      expect(popup?.textContent).toContain('Razão social do cliente')
+    })
+    const popup = document.querySelector('[data-testid="slash-menu-popup"]')
+    const entry = [...(popup?.querySelectorAll('button') ?? [])].find(
+      (button) => button.textContent?.includes('Razão social'),
+    )
+    entry?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).toContain(
+        '"path":"customer.name"',
+      )
+    })
+  })
+})

@@ -1,7 +1,9 @@
 import { Extension, type Editor, type Range } from '@tiptap/react'
 import Suggestion from '@tiptap/suggestion'
+import { PluginKey } from '@tiptap/pm/state'
 
 import type { PlaceholderCatalogEntry } from '../types'
+import { createSuggestPopup } from './suggest-popup'
 
 /**
  * Inline `{{` placeholder autocomplete (shell reframe step 2, r1 pattern #1):
@@ -31,56 +33,6 @@ export function filterFieldSuggestions(
   return matches.slice(0, 8)
 }
 
-type SuggestionPopup = {
-  element: HTMLDivElement
-  items: PlaceholderCatalogEntry[]
-  selectedIndex: number
-  command: (entry: PlaceholderCatalogEntry) => void
-}
-
-function renderPopupItems(popup: SuggestionPopup) {
-  popup.element.innerHTML = ''
-  if (popup.items.length === 0) {
-    const empty = document.createElement('div')
-    empty.className = 'cf-field-suggest__empty'
-    empty.textContent = 'Nenhum campo encontrado'
-    popup.element.appendChild(empty)
-    return
-  }
-  popup.items.forEach((entry, index) => {
-    const item = document.createElement('button')
-    item.type = 'button'
-    item.className = 'cf-field-suggest__item'
-    if (index === popup.selectedIndex) {
-      item.classList.add('cf-field-suggest__item--active')
-    }
-    const label = document.createElement('span')
-    label.className = 'cf-field-suggest__label'
-    label.textContent = entry.label
-    const path = document.createElement('span')
-    path.className = 'cf-field-suggest__path'
-    path.textContent = `{{${entry.path}}}`
-    item.appendChild(label)
-    item.appendChild(path)
-    item.addEventListener('mousedown', (event) => {
-      // mousedown (not click): the editor must not lose focus first
-      event.preventDefault()
-      popup.command(entry)
-    })
-    popup.element.appendChild(item)
-  })
-}
-
-function positionPopup(
-  popup: SuggestionPopup,
-  clientRect: (() => DOMRect | null) | null | undefined,
-) {
-  const rect = clientRect?.()
-  if (!rect) return
-  popup.element.style.left = `${rect.left}px`
-  popup.element.style.top = `${rect.bottom + 4}px`
-}
-
 export type FieldSuggestionStorage = {
   getCatalog: () => readonly PlaceholderCatalogEntry[]
 }
@@ -97,10 +49,17 @@ export const FieldSuggestion = Extension.create<
 
   addProseMirrorPlugins() {
     const storage = this.storage
-    let popup: SuggestionPopup | null = null
+    const popup = createSuggestPopup<PlaceholderCatalogEntry>({
+      testId: 'field-suggest-popup',
+      toView: (entry) => ({
+        title: entry.label,
+        hint: `{{${entry.path}}}`,
+      }),
+    })
 
     return [
       Suggestion({
+        pluginKey: new PluginKey('cfFieldSuggestion'),
         editor: this.editor,
         char: '{{',
         allowSpaces: false,
@@ -124,64 +83,7 @@ export const FieldSuggestion = Extension.create<
             })
             .run()
         },
-        render: () => ({
-          onStart: (props) => {
-            const element = document.createElement('div')
-            element.className = 'cf-field-suggest'
-            element.setAttribute('data-testid', 'field-suggest-popup')
-            document.body.appendChild(element)
-            popup = {
-              element,
-              items: props.items,
-              selectedIndex: 0,
-              command: (entry) => props.command(entry),
-            }
-            renderPopupItems(popup)
-            positionPopup(popup, props.clientRect)
-          },
-          onUpdate: (props) => {
-            if (!popup) return
-            popup.items = props.items
-            popup.selectedIndex = Math.min(
-              popup.selectedIndex,
-              Math.max(props.items.length - 1, 0),
-            )
-            popup.command = (entry) => props.command(entry)
-            renderPopupItems(popup)
-            positionPopup(popup, props.clientRect)
-          },
-          onKeyDown: (props) => {
-            if (!popup) return false
-            if (props.event.key === 'ArrowDown') {
-              popup.selectedIndex =
-                (popup.selectedIndex + 1) % Math.max(popup.items.length, 1)
-              renderPopupItems(popup)
-              return true
-            }
-            if (props.event.key === 'ArrowUp') {
-              popup.selectedIndex =
-                (popup.selectedIndex - 1 + Math.max(popup.items.length, 1)) %
-                Math.max(popup.items.length, 1)
-              renderPopupItems(popup)
-              return true
-            }
-            if (props.event.key === 'Enter') {
-              const entry = popup.items[popup.selectedIndex]
-              if (entry) popup.command(entry)
-              return true
-            }
-            if (props.event.key === 'Escape') {
-              popup.element.remove()
-              popup = null
-              return true
-            }
-            return false
-          },
-          onExit: () => {
-            popup?.element.remove()
-            popup = null
-          },
-        }),
+        render: () => popup,
       }),
     ]
   },
