@@ -37,6 +37,21 @@ export function createSuggestPopup<Item>({
   let selectedIndex = 0
   let command: (item: Item) => void = () => undefined
 
+  // Clicking anywhere outside the popup dismisses it — Suggestion's onExit
+  // only fires on editor-state changes, so an outside click on non-editor
+  // chrome would otherwise leave the menu stranded.
+  const onOutsidePointerDown = (event: PointerEvent) => {
+    if (!element) return
+    if (event.target instanceof Node && element.contains(event.target)) return
+    hide()
+  }
+
+  const hide = () => {
+    element?.remove()
+    element = null
+    document.removeEventListener('pointerdown', onOutsidePointerDown, true)
+  }
+
   const renderItems = () => {
     if (!element) return
     element.innerHTML = ''
@@ -87,6 +102,7 @@ export function createSuggestPopup<Item>({
       element.className = 'cf-field-suggest'
       element.setAttribute('data-testid', testId)
       document.body.appendChild(element)
+      document.addEventListener('pointerdown', onOutsidePointerDown, true)
       items = props.items
       selectedIndex = 0
       command = props.command
@@ -119,15 +135,13 @@ export function createSuggestPopup<Item>({
         return true
       }
       if (event.key === 'Escape') {
-        element.remove()
-        element = null
+        hide()
         return true
       }
       return false
     },
     onExit: () => {
-      element?.remove()
-      element = null
+      hide()
     },
   }
 }

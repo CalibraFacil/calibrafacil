@@ -142,6 +142,25 @@ describe('filterFieldSuggestions ({{ autocomplete)', () => {
 
 
 describe('slash menu (roadmap item 4)', () => {
+  it('clicking outside the slash menu dismisses it', async () => {
+    const { editor } = await mountEditor()
+    editor.commands.setTextSelection(3)
+    editor.commands.insertContent('/')
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="slash-menu-popup"]'),
+      ).not.toBeNull()
+    })
+    document.body.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true }),
+    )
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="slash-menu-popup"]'),
+      ).toBeNull()
+    })
+  })
+
   it("typing '/' opens the unified menu; picking Divisor inserts a horizontalRule", async () => {
     const { editor } = await mountEditor()
     editor.commands.setTextSelection(3)

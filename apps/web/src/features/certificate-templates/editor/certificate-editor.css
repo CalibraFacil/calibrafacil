@@ -124,7 +124,31 @@
   position: relative;
   border-radius: 0.375rem;
   margin: 0 0 3mm;
+}
+
+/* dedicated drag grip — dragging the whole block painted a giant ghost */
+.cf-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  color: rgb(100, 116, 139);
   cursor: grab;
+  border-radius: 4px;
+}
+
+.cf-drag-grip::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.cf-drag-grip:hover {
+  color: rgb(51, 65, 85);
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.cf-drag-grip:active {
+  cursor: grabbing;
 }
 
 .cf-locked-block-view:active {
@@ -389,11 +413,13 @@
   gap: 10px;
   padding: 6px 8px 6px 14px;
   border-radius: 999px;
-  background: hsl(var(--popover, 0 0% 100%));
+  background: rgba(17, 20, 24, 0.92);
+  color: #fff;
+  backdrop-filter: blur(6px);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.08),
-    0 4px 12px rgba(0, 0, 0, 0.12),
-    0 12px 32px rgba(0, 0, 0, 0.08);
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.28),
+    0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
 .cf-selection-dock__label {
@@ -452,4 +478,18 @@
   );
   background-position: 0 60px;
   background-repeat: repeat-y;
+}
+
+/* Draft default: block previews are EXAMPLE data — mute them until the
+   "ver com dados de exemplo" toggle is on, so a new template reads as a
+   template, not as an already-issued certificate. */
+.cf-page--tokens .cf-locked-block-view__body {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+  transition-property: opacity, filter;
+  transition-duration: 150ms;
+}
+
+.cf-page--tokens .cf-locked-block-view:hover .cf-locked-block-view__body {
+  opacity: 0.8;
 }

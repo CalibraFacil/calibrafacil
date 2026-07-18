@@ -82,6 +82,7 @@ import {
   Undo02Icon,
   ViewIcon,
   ViewOffIcon,
+  DragDropVerticalIcon,
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
@@ -253,10 +254,23 @@ function LockedBlockView(props: NodeViewProps) {
         configOpen && 'cf-config-open',
       )}
       data-locked-block-view={blockKey}
-      data-drag-handle
-      draggable
     >
       <div className="cf-locked-block-view__header" contentEditable={false}>
+        {props.editor.isEditable && (
+          <span
+            className="cf-drag-grip"
+            data-drag-handle
+            draggable
+            title="Arrastar para reordenar"
+            aria-hidden
+          >
+            <HugeiconsIcon
+              icon={DragDropVerticalIcon}
+              size={12}
+              strokeWidth={2}
+            />
+          </span>
+        )}
         {!isOptional && (
           <span className="cf-locked-block-view__lock" aria-hidden>
             <HugeiconsIcon icon={SquareLock02Icon} size={11} strokeWidth={2} />
@@ -669,17 +683,23 @@ export function CertificateEditor({
             const blockPos = resolved.before(1)
             const dom = view.nodeDOM(blockPos)
             if (dom instanceof HTMLElement) {
-              const editorRect = view.dom.getBoundingClientRect()
+              const paperRect = paperRef.current?.getBoundingClientRect()
+              if (!paperRect) return false
               const blockRect = dom.getBoundingClientRect()
+              const top = blockRect.top - paperRect.top
               setHoverBlock((current) =>
-                current?.pos === blockPos
+                current?.pos === blockPos && current.top === top
                   ? current
-                  : { pos: blockPos, top: blockRect.top - editorRect.top },
+                  : { pos: blockPos, top },
               )
             }
           } catch {
             // resolving at doc edges can throw — no handle there
           }
+          return false
+        },
+        mouseleave: () => {
+          setHoverBlock(null)
           return false
         },
       },
@@ -852,35 +872,36 @@ export function CertificateEditor({
               'cf-page',
               certificateThemeClass(theme),
               !editable && 'cf-page--readonly',
+              editable && !showSampleValues && 'cf-page--tokens',
               showPageMarks && 'cf-page--pagemarks',
             )}
           />
+          {editable && editor && hoverBlock !== null && (
+            <button
+              type="button"
+              className="cf-insert-handle"
+              style={{ top: hoverBlock.top }}
+              aria-label="Inserir bloco abaixo"
+              title="Inserir abaixo (abre o menu /)"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const { doc } = editor.state
+                const node = doc.nodeAt(hoverBlock.pos)
+                if (!node) return
+                const after = hoverBlock.pos + node.nodeSize
+                editor
+                  .chain()
+                  .focus()
+                  .insertContentAt(after, { type: 'paragraph' })
+                  .setTextSelection(after + 1)
+                  .insertContent('/')
+                  .run()
+              }}
+            >
+              +
+            </button>
+          )}
         </div>
-        {editable && editor && hoverBlock !== null && (
-          <button
-            type="button"
-            className="cf-insert-handle"
-            style={{ top: hoverBlock.top }}
-            aria-label="Inserir bloco abaixo"
-            title="Inserir abaixo (abre o menu /)"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              const { doc } = editor.state
-              const node = doc.nodeAt(hoverBlock.pos)
-              if (!node) return
-              const after = hoverBlock.pos + node.nodeSize
-              editor
-                .chain()
-                .focus()
-                .insertContentAt(after, { type: 'paragraph' })
-                .setTextSelection(after + 1)
-                .insertContent('/')
-                .run()
-            }}
-          >
-            +
-          </button>
-        )}
         <SelectionDock editor={editor} />
       </div>
     </PreviewContext.Provider>
@@ -916,7 +937,7 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
     const dom = editor.view.nodeDOM(selection.from)
     if (dom instanceof HTMLElement) {
       if (typeof dom.scrollIntoView === 'function') {
-        dom.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        dom.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
       }
       if (configurable) {
         dom
