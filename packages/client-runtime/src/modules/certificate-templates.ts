@@ -70,6 +70,13 @@ export function createCertificateTemplatesApi(
         "Falha ao duplicar template",
       );
     },
+    async archive<TResponse = unknown>(id: string | number) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${id}/archive`,
+        { method: "POST" },
+        "Falha ao arquivar template",
+      );
+    },
     async setDefault<TResponse = unknown>(id: string | number) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api["certificate-templates"][":id"][

@@ -186,7 +186,12 @@ export function CertificateTemplatesPage() {
   })
 
   const templates = useMemo(
-    () => templatesQuery.data?.items ?? [],
+    // Archived templates leave the working set — that's the point of
+    // archiving (declutter the picker; they remain in the DB/audit trail).
+    () =>
+      (templatesQuery.data?.items ?? []).filter(
+        (template) => template.status !== 'ARCHIVED',
+      ),
     [templatesQuery.data?.items],
   )
   const defaultTemplateKey = useMemo(
@@ -420,6 +425,23 @@ export function CertificateTemplatesPage() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : 'Falha ao publicar XLSX',
+      )
+    },
+  })
+
+  const archiveMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate?.id) throw new Error('Selecione um template')
+      return calibraApi.certificateTemplates.archive(selectedTemplate.id)
+    },
+    onSuccess: () => {
+      toast.success('Template arquivado')
+      setSelectedTemplateKey(null)
+      void refreshTemplates()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao arquivar template',
       )
     },
   })
@@ -903,6 +925,25 @@ export function CertificateTemplatesPage() {
             }
           >
             Duplicar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => archiveMutation.mutate()}
+            disabled={
+              !canManageTemplates ||
+              !selectedTemplate?.id ||
+              selectedTemplate.isDefault ||
+              archiveMutation.isPending
+            }
+            title={
+              selectedTemplate?.isDefault
+                ? 'O template padrão não pode ser arquivado'
+                : 'Arquivar (sai da lista de seleção)'
+            }
+          >
+            Arquivar
           </Button>
           <Button
             type="button"
