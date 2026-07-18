@@ -1744,6 +1744,9 @@ export interface CertificateTemplatesApi {
   createWysiwygVersion<TResponse = unknown>(
     templateId: string | number,
   ): Promise<TResponse>;
+  migrateToWysiwyg<TResponse = unknown>(
+    templateId: string | number,
+  ): Promise<TResponse>;
 }
 
 export type CompetenceListInput = {

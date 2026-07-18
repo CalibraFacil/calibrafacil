@@ -489,7 +489,8 @@ export const calibraApiPolicyRegistry = {
     saveWysiwygDocument: "cloud-only",
     validateWysiwygDocument: "cloud-only",
     createWysiwygVersion: "cloud-only",
-  },
+  
+    migrateToWysiwyg: "cloud-only",},
   competences: {
     list: "cloud-only",
     matrix: "cloud-only",

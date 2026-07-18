@@ -443,6 +443,32 @@ export function CertificateTemplatesPage() {
     },
   })
 
+  const migrateMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate?.id) throw new Error('Nenhum template selecionado')
+      return calibraApi.certificateTemplates.migrateToWysiwyg<{
+        item: TemplateItem
+        importedPaths: string[]
+        skippedPaths: string[]
+      }>(selectedTemplate.id)
+    },
+    onSuccess: async (data) => {
+      toast.success(
+        `Template migrado — ${data.importedPaths.length} campos importados`,
+      )
+      await refreshTemplates()
+      await navigate({
+        to: '/dashboard/certificate-templates/$slug/editor',
+        params: { slug: data.item.slug },
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao migrar template',
+      )
+    },
+  })
+
   const createWysiwygMutation = useMutation({
     mutationFn: async () => {
       const name = newTemplateName.trim()
@@ -809,6 +835,22 @@ export function CertificateTemplatesPage() {
           >
             Tornar padrão
           </Button>
+          {isWysiwygEditorEnabled() &&
+            selectedTemplate?.id &&
+            selectedTemplate.currentXlsxVersion?.engine !== 'wysiwyg' &&
+            (selectedTemplate.wysiwygVersions?.length ?? 0) === 0 &&
+            selectedTemplate.currentXlsxVersion != null && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => migrateMutation.mutate()}
+                disabled={!canManageTemplates || migrateMutation.isPending}
+              >
+                {migrateMutation.isPending
+                  ? 'Migrando…'
+                  : 'Migrar para o editor visual'}
+              </Button>
+            )}
           {isWysiwygEditorEnabled() &&
             selectedTemplate?.id &&
             ((selectedTemplate.wysiwygVersions?.length ?? 0) > 0 ||

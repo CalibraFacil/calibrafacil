@@ -43,6 +43,9 @@ async function seedWysiwygTemplate(params: {
   name?: string;
   versionStatus?: "DRAFT" | "VALIDATED" | "PUBLISHED";
   documentJson?: Record<string, unknown>;
+  /** "xlsx" seeds a legacy version carrying bindingManifest (migration tests). */
+  engine?: "wysiwyg" | "xlsx";
+  bindingManifest?: Record<string, unknown>;
 }): Promise<{ templateId: number; versionId: number }> {
   const name = params.name ?? "Modelo Editor";
   const documentJson =
@@ -58,23 +61,44 @@ async function seedWysiwygTemplate(params: {
     })
     .returning({ id: certificateTemplate.id });
   if (!templateRow) throw new Error("seedWysiwygTemplate: template failed");
+  const engine = params.engine ?? "wysiwyg";
   const [versionRow] = await db
     .insert(certificateTemplateVersion)
-    .values({
-      organizationId: params.organizationId,
-      templateId: templateRow.id,
-      version: 1,
-      status: params.versionStatus ?? "DRAFT",
-      engine: "wysiwyg",
-      documentJson,
-      documentSha256: hashCertificateDocument(documentJson),
-      renderPolicy: {
-        converter: "gotenberg-chromium",
-        compiler: "certificate-html-template",
-        compilerVersion: "0.1.0",
-      },
-      createdBy: params.createdBy,
-    })
+    .values(
+      engine === "xlsx"
+        ? {
+            organizationId: params.organizationId,
+            templateId: templateRow.id,
+            version: 1,
+            status: params.versionStatus ?? "PUBLISHED",
+            xlsxR2Key: `media/templates/${templateRow.id}.xlsx`,
+            xlsxSha256: "sha256-xlsx-migration-test",
+            bindingManifest: params.bindingManifest ?? {},
+            bindingManifestSha256: "sha256-manifest-migration-test",
+            renderPolicy: {
+              formulas: "preserve",
+              macros: "reject",
+              externalLinks: "reject",
+              converter: "gotenberg-libreoffice",
+            },
+            createdBy: params.createdBy,
+          }
+        : {
+            organizationId: params.organizationId,
+            templateId: templateRow.id,
+            version: 1,
+            status: params.versionStatus ?? "DRAFT",
+            engine: "wysiwyg",
+            documentJson,
+            documentSha256: hashCertificateDocument(documentJson),
+            renderPolicy: {
+              converter: "gotenberg-chromium",
+              compiler: "certificate-html-template",
+              compilerVersion: "0.1.0",
+            },
+            createdBy: params.createdBy,
+          },
+    )
     .returning({ id: certificateTemplateVersion.id });
   if (!versionRow) throw new Error("seedWysiwygTemplate: version failed");
   return { templateId: templateRow.id, versionId: versionRow.id };
@@ -127,6 +151,54 @@ describe("certificate-templates wysiwyg routes — real DB + real middleware", (
       (block: { type: string }) => block.type === "lockedBlock",
     );
     expect(lockedBlocks).toHaveLength(12);
+  });
+
+  it("REQ-WTPL-011 POST /:id/migrate-to-wysiwyg scaffolds a NEW wysiwyg template from the xlsx binding manifest", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await seedProfessionalSubscription(org.orgId);
+    // xlsx template with a Exemplo-shaped manifest
+    const { templateId } = await seedWysiwygTemplate({
+      organizationId: org.orgId,
+      createdBy: org.userId,
+      engine: "xlsx",
+      bindingManifest: {
+        schemaVersion: "calibrafacil.certificateXlsxBinding.v1",
+        requiredFields: [],
+        governedFields: [],
+        scalarBindings: [
+          { id: "P1:D10:customer.name", sheet: "Página 1", cell: "D10", fieldPath: "customer.name" },
+          { id: "P1:L3:certificate.number", sheet: "Página 1", cell: "L3", fieldPath: "certificate.number" },
+          { id: "P1:Z9:made.up", sheet: "Página 1", cell: "Z9", fieldPath: "made.up.path" },
+        ],
+        imageBindings: [],
+        tableBindings: [],
+        renderPolicy: {
+          formulas: "preserve",
+          macros: "reject",
+          externalLinks: "reject",
+          converter: "gotenberg-libreoffice",
+        },
+      },
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await certificateTemplatesRouter.request(
+      `/${templateId}/migrate-to-wysiwyg`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.item.name).toContain("(visual)");
+    expect(body.initialVersion.engine).toBe("wysiwyg");
+    expect(body.initialVersion.status).toBe("DRAFT");
+    expect(body.importedPaths).toEqual([
+      "certificate.number",
+      "customer.name",
+    ]);
+    expect(body.skippedPaths).toContain("made.up.path");
+    const text = JSON.stringify(body.initialVersion.documentJson);
+    expect(text).toContain("Importado da planilha — Página 1");
+    expect(text).not.toContain("made.up.path");
   });
 
   it("REQ-WTPL-010 GET / lists wysiwygVersions summaries so DRAFTs stay reachable from the templates page", async () => {

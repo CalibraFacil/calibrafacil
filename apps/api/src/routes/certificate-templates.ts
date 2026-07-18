@@ -30,6 +30,7 @@ import {
   compileCertificateHtml,
   hashCertificateDocument,
   newWysiwygStarterDocument,
+  buildMigratedDocumentFromXlsxBindings,
   sampleCertificateInputData,
   validateCertificateTemplateDocument,
 } from "@calibra-facil/certificate-html-template";
@@ -551,6 +552,136 @@ export const certificateTemplatesRouter = new Hono<{
         {
           item: created,
           initialVersion,
+        },
+        201,
+      );
+    },
+  )
+  // XLSX -> wysiwyg migration assistant (roadmap item 5): scaffold a NEW
+  // wysiwyg template from an xlsx template's binding manifest. The generated
+  // document is starter-based (all locked blocks) + per-sheet imported-field
+  // sections; only catalog-known paths are imported so it always validates.
+  .post(
+    "/:id/migrate-to-wysiwyg",
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_templates"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const templateId = Number.parseInt(c.req.param("id"), 10);
+      if (!Number.isFinite(templateId)) {
+        return c.json({ error: "Id inválido" }, 400);
+      }
+      const source = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.id, templateId),
+          eq(certificateTemplate.organizationId, member.organizationId),
+        ),
+      });
+      if (!source) return c.json({ error: "Template não encontrado" }, 404);
+
+      const [latestXlsx] = await db
+        .select()
+        .from(certificateTemplateVersion)
+        .where(
+          and(
+            eq(certificateTemplateVersion.templateId, templateId),
+            eq(
+              certificateTemplateVersion.organizationId,
+              member.organizationId,
+            ),
+          ),
+        )
+        .orderBy(desc(certificateTemplateVersion.version))
+        .limit(1);
+      if (!latestXlsx || latestXlsx.engine === "wysiwyg") {
+        return c.json(
+          { error: "Este template já usa o editor visual" },
+          400,
+        );
+      }
+      const manifest = latestXlsx.bindingManifest;
+      const rawBindings =
+        manifest && typeof manifest === "object"
+          ? Reflect.get(manifest, "scalarBindings")
+          : null;
+      const bindings = (Array.isArray(rawBindings) ? rawBindings : []).flatMap(
+        (binding) => {
+          if (!binding || typeof binding !== "object") return [];
+          const sheet = Reflect.get(binding, "sheet");
+          const cell = Reflect.get(binding, "cell");
+          const fieldPath = Reflect.get(binding, "fieldPath");
+          return typeof sheet === "string" &&
+            typeof cell === "string" &&
+            typeof fieldPath === "string"
+            ? [{ sheet, cell, fieldPath }]
+            : [];
+        },
+      );
+      const { document, importedPaths, skippedPaths } =
+        buildMigratedDocumentFromXlsxBindings(bindings);
+
+      const name = `${source.name} (visual)`;
+      const slug = slugifyTemplateName(name);
+      const existing = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.organizationId, member.organizationId),
+          eq(certificateTemplate.slug, slug),
+        ),
+      });
+      if (existing) {
+        return c.json(
+          { error: "Já existe um template migrado com esse nome" },
+          409,
+        );
+      }
+      const [created] = await db
+        .insert(certificateTemplate)
+        .values({
+          organizationId: member.organizationId,
+          name,
+          slug,
+          version: 1,
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: session.user.id,
+        })
+        .returning();
+      if (!created) return c.json({ error: "Falha ao criar template" }, 500);
+      const [versionRow] = await db
+        .insert(certificateTemplateVersion)
+        .values({
+          organizationId: member.organizationId,
+          templateId: created.id,
+          version: 1,
+          status: "DRAFT",
+          engine: "wysiwyg",
+          documentJson: toRecord(document),
+          documentSha256: hashCertificateDocument(document),
+          renderPolicy: { ...DEFAULT_WYSIWYG_RENDER_POLICY },
+          createdBy: session.user.id,
+        })
+        .returning();
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "certificate_template.migrated_to_wysiwyg",
+        entityType: "certificate_template",
+        entityId: String(created.id),
+        details: {
+          sourceTemplateId: templateId,
+          importedPaths: importedPaths.length,
+          skippedPaths,
+        },
+      });
+      return c.json(
+        {
+          item: created,
+          initialVersion: versionRow ?? null,
+          importedPaths,
+          skippedPaths,
         },
         201,
       );

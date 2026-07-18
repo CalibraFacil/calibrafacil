@@ -168,6 +168,13 @@ export function createCertificateTemplatesApi(
         "Falha ao atribuir template",
       );
     },
+    async migrateToWysiwyg<TResponse = unknown>(templateId: string | number) {
+      return fetchJson<TResponse>(
+        `/api/certificate-templates/${templateId}/migrate-to-wysiwyg`,
+        { method: "POST" },
+        "Falha ao migrar template para o editor visual",
+      );
+    },
     // ---- wysiwyg engine (epic wysiwyg, spec 02 §6.1) ----
     async getWysiwygDocument<TResponse = unknown>(
       templateId: string | number,
