@@ -75,6 +75,7 @@ const LABEL_EN: Record<string, string> = {
   "Registro Inmetro": "Inmetro registration",
   Método: "Method",
   Procedimento: "Procedure",
+  "Versão do método": "Method version",
   "Normas de referência": "Reference standards",
   Temperatura: "Temperature",
   "Umidade relativa": "Relative humidity",
@@ -270,6 +271,7 @@ function renderMethodTraceability(data: Data): string {
     `<dl class="cf-field-list">
 ${fieldRow("Método", field(data, "method.name"))}
 ${fieldRow("Procedimento", field(data, "method.procedureCode"))}
+${fieldRow("Versão do método", field(data, "method.version"))}
 ${fieldRow("Normas de referência", field(data, "method.referenceStandardsText"))}</dl>
 ${standardsTable}
 <p>Os resultados apresentados possuem rastreabilidade metrológica ao Sistema Internacional de Unidades (SI) por meio dos padrões relacionados acima.</p>`,

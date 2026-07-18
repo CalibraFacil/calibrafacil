@@ -149,10 +149,15 @@ export function renderBandPageFooterTemplate(
   const pageNumbersHtml =
     'Página <span class="pageNumber"></span> de <span class="totalPages"></span>';
   // M-C slot: identity side (default left); page numbers take the other side.
+  // Inline wrap containment on each cell: footerTemplates ignore external
+  // CSS, so a 200-char lab name would otherwise overflow the 18mm bottom
+  // margin with no stylesheet escape hatch.
+  const cellStyle =
+    "min-width:0;max-width:70%;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;";
   const cells =
     (attrs.identitySide ?? "left") === "left"
-      ? `<div>${identityHtml}</div><div>${pageNumbersHtml}</div>`
-      : `<div>${pageNumbersHtml}</div><div>${identityHtml}</div>`;
+      ? `<div style="${cellStyle}">${identityHtml}</div><div style="min-width:0;">${pageNumbersHtml}</div>`
+      : `<div style="min-width:0;">${pageNumbersHtml}</div><div style="${cellStyle}">${identityHtml}</div>`;
   // Inline styles only: Chromium footerTemplates ignore external CSS and
   // @font-face. 8.5pt >= the R3 8pt print floor; near-black ink.
   const baseStyle =

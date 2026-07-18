@@ -219,7 +219,7 @@ td.cf-num, th.cf-num { text-align: right; }
   display: inline-block; min-width: 70mm;
   border-top: 0.9pt solid var(--ink); padding-top: 4pt; margin-top: 3pt;
 }
-.cf-signature-name{ font-weight: 700; font-size: var(--size-body); }
+.cf-signature-name{ font-weight: 700; font-size: var(--size-body); overflow-wrap: anywhere; }
 .cf-signature-title{ font-size: var(--size-label); color: var(--muted); margin-top: 1pt; }
 
 /* accreditation seal */
@@ -290,8 +290,7 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 .cf-band-title{ font-size: var(--size-label); color: var(--muted); }
 .cf-band-cert{
   font-family: var(--font-mono);
-  font-size: var(--size-label); font-weight: 600;
-}
+  font-size: var(--size-label); font-weight: 600; overflow-wrap: anywhere; }
 .cf-band-seal-text{ font-size: var(--size-caption); color: var(--muted); margin-top: 1pt; }
 .cf-band-seal-inline{ font-size: var(--size-caption); color: var(--muted); }
 
