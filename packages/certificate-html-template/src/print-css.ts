@@ -244,6 +244,12 @@ table.cf-borders-rules td{ border-bottom: 0.5pt solid var(--line); }
 .cf-eccentricity-indicator{ break-inside: avoid; margin: 4pt 0 7pt; }
 .cf-eccentricity-indicator img{ width: 52mm; max-width: 100%; display: block; }
 
+/* verdict + decision rule (optional blocks) */
+td.cf-verdict{ font-weight: 700; }
+td.cf-verdict--ok{ color: #14532D; }
+td.cf-verdict--critical{ color: #7F1D1D; }
+.cf-decision-rule{ font-size: var(--size-label); line-height: 1.5; }
+
 /* ── placement presets (M-C) ── */
 .cf-accreditation-seal.cf-preset-seal-left{ align-items: flex-start; }
 .cf-accreditation-seal.cf-preset-seal-center{ align-items: center; }

@@ -33,6 +33,12 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   BAND_LABELS,
   BandConfigBody,
   LockedBlockConfigBody,
@@ -48,6 +54,7 @@ import {
 
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  Add01Icon,
   Heading02Icon,
   SlidersHorizontalIcon,
   Heading03Icon,
@@ -670,6 +677,52 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
         icon={MinusSignIcon}
         onClick={() => run().setHorizontalRule().run()}
       />
+      <span className="cf-editor__toolbar-divider" />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Inserir bloco"
+              title="Inserir bloco opcional"
+              className="h-8 gap-1 px-2 text-xs transition-[transform,background-color] active:scale-[0.96]"
+            >
+              <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} />
+              Bloco
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="start">
+          {/* the guard enforces at-most-one: inserting an already-present
+              optional block is a rejected transaction (harmless no-op) */}
+          <DropdownMenuItem
+            onClick={() =>
+              run()
+                .insertContent({
+                  type: 'lockedBlock',
+                  attrs: { blockKey: 'uncertainty_budget_annex' },
+                })
+                .run()
+            }
+          >
+            Balanço de incertezas (anexo)
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() =>
+              run()
+                .insertContent({
+                  type: 'lockedBlock',
+                  attrs: { blockKey: 'decision_rule_statement' },
+                })
+                .run()
+            }
+          >
+            Regra de decisão
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <span className="cf-editor__toolbar-divider" />
       <ToolbarButton
         label="Desfazer"

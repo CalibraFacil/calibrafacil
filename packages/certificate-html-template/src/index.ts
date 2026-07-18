@@ -10,6 +10,7 @@ export {
   DEFAULT_BAND_PAGE_FOOTER_ATTRS,
   DEFAULT_BAND_TOP_IDENTITY_ATTRS,
   LOCKED_BLOCK_KEYS,
+  OPTIONAL_BLOCK_KEYS,
   upgradeCertificateDocument,
   certificateDocumentSchema,
   collectPlaceholderPaths,

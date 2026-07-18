@@ -266,8 +266,16 @@ function renderResultGrid(
       (row) =>
         `<tr>${row
           .map((cell, index) => {
+            const column = grid.columns[index];
+            // conformity_verdict: TEXT computed by the METHOD — never number-
+            // formatted, optionally toned by EXACT string match (presentation
+            // of method-supplied text, never a renderer-side comparison).
+            if (column?.role === "conformity_verdict") {
+              const text = typeof cell === "string" ? cell : "";
+              return `<td class="cf-verdict${verdictToneClass(text)}">${escapeHtml(text)}</td>`;
+            }
             const numeric = typeof cell === "number";
-            return `<td${numeric || grid.columns[index]?.kind === "computed" ? ' class="cf-num"' : ""}>${formatGridCell(cell)}</td>`;
+            return `<td${numeric || column?.kind === "computed" ? ' class="cf-num"' : ""}>${formatGridCell(cell)}</td>`;
           })
           .join("")}</tr>`,
     )
@@ -430,6 +438,199 @@ function renderEndOfDocument(data: Data): string {
   return `<div class="cf-end-of-document"><div class="cf-end-marker">— FIM DO CERTIFICADO ${field(data, "certificate.number")} —</div><div class="cf-end-note">Este certificado atende aos requisitos da NBR ISO/IEC 17025 e não pode ser reproduzido, exceto integralmente, sem aprovação por escrito do laboratório.</div></div>`;
 }
 
+const VERDICT_TONES: Record<string, string> = {
+  Conforme: " cf-verdict--ok",
+  Aprovado: " cf-verdict--ok",
+  "Não conforme": " cf-verdict--critical",
+  Reprovado: " cf-verdict--critical",
+};
+
+function verdictToneClass(text: string): string {
+  return VERDICT_TONES[text] ?? "";
+}
+
+function certificateContent(data: Data): Record<string, unknown> | null {
+  const methodSnapshot = Reflect.get(data, "methodSnapshot");
+  if (!methodSnapshot || typeof methodSnapshot !== "object") return null;
+  const content = Reflect.get(methodSnapshot, "certificateContent");
+  return content && typeof content === "object" ? content : null;
+}
+
+/**
+ * Optional block: per-point uncertainty-budget annex (backlog #11). Renders
+ * the components `isBudgetInternal` keeps OUT of the results grid, plus a
+ * scalar-budget fallback for scalar-only methods. Gated on the method's
+ * `certificateContent.uncertaintyBudgetDisplay === "full"` opt-in; silently
+ * empty otherwise (accreditation-seal pattern — safe across methods).
+ */
+function renderUncertaintyBudgetAnnex(data: Data): string {
+  if (
+    Reflect.get(certificateContent(data) ?? {}, "uncertaintyBudgetDisplay") !==
+    "full"
+  ) {
+    return "";
+  }
+  const grids = deriveBudgetAnnexGrids(data);
+  const tables = grids
+    .map(
+      (grid) =>
+        `${grid.title ? `<p class="cf-grid-caption">${escapeHtml(grid.title)}</p>` : ""}<table><thead><tr>${grid.columns
+          .map((column) => `<th>${escapeHtml(column.label)}</th>`)
+          .join("")}</tr>${
+          grid.columns.some((column) => column.unit)
+            ? `<tr>${grid.columns
+                .map(
+                  (column) =>
+                    `<th class="cf-unit-row">${column.unit ? `[${escapeHtml(column.unit)}]` : ""}</th>`,
+                )
+                .join("")}</tr>`
+            : ""
+        }</thead><tbody>${grid.rows
+          .map(
+            (row) =>
+              `<tr>${row
+                .map(
+                  (cell, index) =>
+                    `<td${index === 0 ? "" : ' class="cf-num"'}>${formatGridCell(cell)}</td>`,
+                )
+                .join("")}</tr>`,
+          )
+          .join("")}</tbody></table>`,
+    )
+    .join("");
+  if (tables === "") {
+    // scalar fallback: frozen resultRows with group uncertainty_budget
+    const parsed = resultRowsSchema.safeParse(Reflect.get(data, "resultRows"));
+    const budgetRows = parsed.success
+      ? parsed.data.filter(
+          (row) =>
+            row.group === "uncertainty_budget" &&
+            (row.includeInCertificate ?? true) &&
+            (typeof row.value === "number" || typeof row.value === "string"),
+        )
+      : [];
+    if (budgetRows.length === 0) return "";
+    return section(
+      "Balanço de incertezas",
+      `<table><thead><tr><th>Grandeza</th><th class="cf-num">Valor</th></tr></thead><tbody>${budgetRows
+        .map(
+          (row) =>
+            `<tr><td>${escapeHtml(row.label)}</td><td class="cf-num">${formatRowValue({
+              value:
+                typeof row.value === "number" ? row.value : String(row.value),
+              unit: row.unit,
+            })}</td></tr>`,
+        )
+        .join("")}</tbody></table>`,
+    );
+  }
+  return section("Balanço de incertezas", tables);
+}
+
+type AnnexGrid = {
+  title: string | null;
+  columns: { label: string; unit: string | null }[];
+  rows: (string | number | null)[][];
+};
+
+/** Per-table budget grids: rows = points, columns = budget components. */
+function deriveBudgetAnnexGrids(data: Data): AnnexGrid[] {
+  const methodSnapshot = Reflect.get(data, "methodSnapshot");
+  if (!methodSnapshot || typeof methodSnapshot !== "object") return [];
+  const rawFields = Reflect.get(methodSnapshot, "dataFields");
+  const rawFormulas = Reflect.get(methodSnapshot, "formulas");
+  const tableData = Reflect.get(data, "data");
+  const results = Reflect.get(data, "results");
+  if (!Array.isArray(rawFields) || !Array.isArray(rawFormulas)) return [];
+
+  const grids: AnnexGrid[] = [];
+  for (const field of rawFields) {
+    if (!field || typeof field !== "object") continue;
+    if (Reflect.get(field, "type") !== "table") continue;
+    const tableKey = Reflect.get(field, "key");
+    if (typeof tableKey !== "string") continue;
+    const rows =
+      tableData && typeof tableData === "object"
+        ? Reflect.get(tableData, tableKey)
+        : null;
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+
+    const components = rawFormulas.flatMap((formula) => {
+      if (!formula || typeof formula !== "object") return [];
+      const scope = Reflect.get(formula, "scope");
+      const reporting = Reflect.get(formula, "reporting");
+      if (
+        !scope ||
+        typeof scope !== "object" ||
+        Reflect.get(scope, "kind") !== "table_row" ||
+        Reflect.get(scope, "tableKey") !== tableKey ||
+        !reporting ||
+        typeof reporting !== "object"
+      ) {
+        return [];
+      }
+      const role = Reflect.get(reporting, "role");
+      const group = Reflect.get(reporting, "group");
+      const isBudget =
+        role === "uncertainty_component" ||
+        (group === "uncertainty_budget" && role === "expanded_uncertainty");
+      if (!isBudget) return [];
+      const outputKey = Reflect.get(formula, "outputKey");
+      if (typeof outputKey !== "string") return [];
+      const label = Reflect.get(formula, "label");
+      const unit = Reflect.get(formula, "unit");
+      return [
+        {
+          key: outputKey,
+          label: typeof label === "string" ? label : outputKey,
+          unit: typeof unit === "string" ? unit : null,
+        },
+      ];
+    });
+    if (components.length === 0) continue;
+
+    const label = Reflect.get(field, "label");
+    grids.push({
+      title: typeof label === "string" ? label : null,
+      columns: [
+        { label: "Ponto", unit: null },
+        ...components.map(({ label: l, unit }) => ({ label: l, unit })),
+      ],
+      rows: rows.map((_row, rowIndex) => [
+        rowIndex + 1,
+        ...components.map(({ key }) => {
+          const series =
+            results && typeof results === "object"
+              ? Reflect.get(results, key)
+              : null;
+          const value = Array.isArray(series) ? series[rowIndex] : null;
+          return typeof value === "number" || typeof value === "string"
+            ? value
+            : null;
+        }),
+      ]),
+    });
+  }
+  return grids;
+}
+
+/**
+ * Optional block: decision-rule statement (ISO/IEC 17025 §7.8.6). The TEXT
+ * comes from the method (`certificateContent.decisionRuleStatement`) — the
+ * renderer never derives a rule. Silently empty when the method has none.
+ */
+function renderDecisionRuleStatement(data: Data): string {
+  const statement = Reflect.get(
+    certificateContent(data) ?? {},
+    "decisionRuleStatement",
+  );
+  if (typeof statement !== "string" || statement.trim() === "") return "";
+  return section(
+    "Regra de decisão",
+    `<p class="cf-decision-rule">${escapeHtml(statement.trim())}</p>`,
+  );
+}
+
 /** Render context computed once per compile (async pre-steps live here). */
 export type LockedBlockRenderContext = {
   /** QR code for `certificate.verificationUrl`, as a data URL. */
@@ -467,5 +668,9 @@ export function renderLockedBlockInner(
       return renderVerificationQr(data, context.qrDataUrl);
     case "end_of_document":
       return renderEndOfDocument(data);
+    case "uncertainty_budget_annex":
+      return renderUncertaintyBudgetAnnex(data);
+    case "decision_rule_statement":
+      return renderDecisionRuleStatement(data);
   }
 }

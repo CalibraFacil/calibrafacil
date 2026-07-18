@@ -43,12 +43,26 @@ function countsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
 
 export const lockedBlockGuardKey = new PluginKey("cfLockedBlockGuard");
 
+const OPTIONAL_KEYS = new Set([
+  "uncertainty_budget_annex",
+  "decision_rule_statement",
+]);
+
 export function createLockedBlockGuardPlugin(): Plugin {
   return new Plugin({
     key: lockedBlockGuardKey,
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
-      return countsEqual(lockedBlockCounts(state.doc), lockedBlockCounts(tr.doc));
+      const before = lockedBlockCounts(state.doc);
+      const after = lockedBlockCounts(tr.doc);
+      // Optional blocks may be inserted (0->1) and deleted (1->0), never
+      // duplicated; everything else keeps the strict multiset equality.
+      for (const key of OPTIONAL_KEYS) {
+        if ((after.get(key) ?? 0) > 1) return false;
+        before.delete(key);
+        after.delete(key);
+      }
+      return countsEqual(before, after);
     },
   });
 }

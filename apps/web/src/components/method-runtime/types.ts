@@ -103,6 +103,7 @@ export interface MethodFormulaReporting {
     | 'expanded_uncertainty'
     | 'coverage_factor'
     | 'conformity_margin'
+    | 'conformity_verdict'
     | 'uncertainty_component'
     | 'auxiliary'
   group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'

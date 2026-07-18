@@ -7,6 +7,7 @@ import {
   renderBandTopIdentityInner,
 } from "./bands.js";
 import { compileCertificateHtml } from "./compile.js";
+import { validateCertificateDocument } from "./document-schema.js";
 import { sampleCertificateInputData } from "./fixtures/sample-input-data.js";
 import { newWysiwygStarterDocument } from "./starter-document.js";
 
@@ -241,5 +242,113 @@ describe("eccentricity indicator figure (calibration finding 3)", () => {
       sampleCertificateInputData,
     );
     expect(html).not.toContain('class="cf-eccentricity-indicator"');
+  });
+});
+
+describe("optional blocks: budget annex + decision rule (backlog #11)", () => {
+  function withOptionalBlock(blockKey: string): Record<string, unknown> {
+    const starter = newWysiwygStarterDocument();
+    return {
+      ...starter,
+      content: [
+        ...starter.content.slice(0, -1),
+        { type: "lockedBlock", attrs: { blockKey } },
+        ...starter.content.slice(-1),
+      ],
+    };
+  }
+
+  function budgetData(display: "full" | "hidden"): Record<string, unknown> {
+    const data = JSON.parse(JSON.stringify(sampleCertificateInputData));
+    const methodSnapshot = Reflect.get(data, "methodSnapshot");
+    Reflect.set(methodSnapshot, "certificateContent", {
+      uncertaintyBudgetDisplay: display,
+      decisionRuleStatement:
+        "Regra de decisão: aceitação simples conforme ILAC-G8, sem banda de guarda.",
+    });
+    const formulas = Reflect.get(methodSnapshot, "formulas");
+    if (!Array.isArray(formulas)) throw new Error("fixture missing formulas");
+    formulas.push({
+      outputKey: "u_resolucao",
+      label: "Incerteza da resolução",
+      unit: "kg",
+      scope: { kind: "table_row", tableKey: "pontos" },
+      reporting: {
+        role: "uncertainty_component",
+        group: "uncertainty_budget",
+        includeInCertificate: true,
+      },
+    });
+    const results = Reflect.get(data, "results");
+    Reflect.set(results, "u_resolucao", [0.0001, 0.0002]);
+    return data;
+  }
+
+  it("schema: optional blocks accept 0 and 1, reject 2", () => {
+    expect(validateCertificateDocument(newWysiwygStarterDocument()).ok).toBe(true);
+    const one = withOptionalBlock("uncertainty_budget_annex");
+    expect(validateCertificateDocument(one).ok).toBe(true);
+    const two = {
+      ...one,
+      content: [
+        ...JSON.parse(JSON.stringify(one)).content.slice(0, -1),
+        { type: "lockedBlock", attrs: { blockKey: "uncertainty_budget_annex" } },
+        ...JSON.parse(JSON.stringify(one)).content.slice(-1),
+      ],
+    };
+    const rejected = validateCertificateDocument(two);
+    expect(rejected.ok).toBe(false);
+  });
+
+  it("annex renders the budget components the grid excludes — only when the method opts in", async () => {
+    const doc = withOptionalBlock("uncertainty_budget_annex");
+    const { html } = await compileCertificateHtml(doc, budgetData("full"));
+    expect(html).toContain("Balanço de incertezas");
+    expect(html).toContain("Incerteza da resolução");
+    // the main grid still excludes the component (0.9.0 keeps #807's rule)
+    const gridSection = html.split("Balanço de incertezas")[0] ?? "";
+    expect(gridSection).not.toContain("Incerteza da resolução");
+
+    const { html: hidden } = await compileCertificateHtml(doc, budgetData("hidden"));
+    expect(hidden).not.toContain("Balanço de incertezas");
+  });
+
+  it("decision-rule block prints the METHOD's statement verbatim; silent without one", async () => {
+    const doc = withOptionalBlock("decision_rule_statement");
+    const { html } = await compileCertificateHtml(doc, budgetData("full"));
+    expect(html).toContain("Regra de decisão");
+    expect(html).toContain("aceitação simples conforme ILAC-G8");
+
+    const { html: bare } = await compileCertificateHtml(
+      doc,
+      sampleCertificateInputData,
+    );
+    expect(bare).not.toContain('class="cf-decision-rule"');
+  });
+
+  it("conformity_verdict computed columns render as TONED TEXT, never number-formatted", async () => {
+    const data = JSON.parse(JSON.stringify(sampleCertificateInputData));
+    const methodSnapshot = Reflect.get(data, "methodSnapshot");
+    const formulas = Reflect.get(methodSnapshot, "formulas");
+    if (!Array.isArray(formulas)) throw new Error("fixture missing formulas");
+    formulas.push({
+      outputKey: "veredito",
+      label: "Veredito",
+      scope: { kind: "table_row", tableKey: "pontos" },
+      reporting: {
+        role: "conformity_verdict",
+        group: "calibration_result",
+        includeInCertificate: true,
+      },
+    });
+    Reflect.set(Reflect.get(data, "results"), "veredito", [
+      "Conforme",
+      "Não conforme",
+    ]);
+    const { html } = await compileCertificateHtml(newWysiwygStarterDocument(), data);
+    expect(html).toContain('class="cf-verdict cf-verdict--ok"');
+    expect(html).toContain('class="cf-verdict cf-verdict--critical"');
+    expect(html).toContain(">Conforme<");
+    expect(html).toContain(">Não conforme<");
   });
 });

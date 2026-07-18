@@ -231,6 +231,7 @@ export const MethodFormulaSchema = z
             "expanded_uncertainty",
             "coverage_factor",
             "conformity_margin",
+            "conformity_verdict",
             "uncertainty_component",
             "auxiliary",
           ])

@@ -26,6 +26,7 @@ const reportingRoles: Array<
   'expanded_uncertainty',
   'coverage_factor',
   'conformity_margin',
+  'conformity_verdict',
   'uncertainty_component',
   'auxiliary',
 ]
@@ -62,6 +63,7 @@ function parseReportingRole(
     case 'expanded_uncertainty':
     case 'coverage_factor':
     case 'conformity_margin':
+    case 'conformity_verdict':
     case 'uncertainty_component':
       return value
     default:

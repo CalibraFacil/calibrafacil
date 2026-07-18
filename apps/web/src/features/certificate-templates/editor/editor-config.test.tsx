@@ -317,9 +317,12 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
     // opening the popover selected the block (sidebar + outline stay in sync)
     const selection = editor.state.selection
-    expect('node' in selection && selection.node?.attrs?.blockKey).toBe(
-      'results_table',
-    )
+    const selectedNode = 'node' in selection ? selection.node : null
+    expect(
+      selectedNode && typeof selectedNode === 'object'
+        ? Reflect.get(Reflect.get(selectedNode, 'attrs') ?? {}, 'blockKey')
+        : null,
+    ).toBe('results_table')
     // toggle a column INSIDE the popover — the edit applies and the popover
     // must survive (mutation handlers no longer refocus the editor)
     const popover = screen.getByTestId('block-config-popover')
@@ -355,6 +358,48 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     expect(
       screen.queryByRole('button', { name: 'Configurar QR de verificação' }),
     ).toBeNull()
+  })
+
+  it('optional blocks: toolbar insert adds the annex once; duplicate insert is a no-op', async () => {
+    const editor = await mountWithInspector()
+    fireEvent.click(screen.getByRole('button', { name: 'Inserir bloco' }))
+    const item = await screen.findByText('Balanço de incertezas (anexo)')
+    fireEvent.click(item)
+    await waitFor(() => {
+      const json = editor.getJSON()
+      const count = (json.content ?? []).filter(
+        (node) => node.attrs?.blockKey === 'uncertainty_budget_annex',
+      ).length
+      expect(count).toBe(1)
+    })
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
+    // second insert: rejected by the guard (at-most-one)
+    editor.commands.insertContent({
+      type: 'lockedBlock',
+      attrs: { blockKey: 'uncertainty_budget_annex' },
+    })
+    const json = editor.getJSON()
+    expect(
+      (json.content ?? []).filter(
+        (node) => node.attrs?.blockKey === 'uncertainty_budget_annex',
+      ).length,
+    ).toBe(1)
+    // and deleting it again is allowed (optional, not mandatory)
+    let pos = -1
+    editor.state.doc.descendants((node, nodePos) => {
+      if (pos === -1 && node.attrs?.blockKey === 'uncertainty_budget_annex') {
+        pos = nodePos
+      }
+      return pos === -1
+    })
+    editor.commands.setNodeSelection(pos)
+    editor.commands.deleteSelection()
+    expect(
+      (editor.getJSON().content ?? []).filter(
+        (node) => node.attrs?.blockKey === 'uncertainty_budget_annex',
+      ).length,
+    ).toBe(0)
+    expect(validateCertificateDocument(editor.getJSON()).ok).toBe(true)
   })
 
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {

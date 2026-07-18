@@ -1045,6 +1045,7 @@ export const MethodFormulaReportingSchema = z.object({
       "expanded_uncertainty",
       "coverage_factor",
       "conformity_margin",
+      "conformity_verdict",
       "uncertainty_component",
       "auxiliary",
     ])
@@ -1348,6 +1349,7 @@ export const MethodCertificateContentSchema = z.object({
   certifiedValuesDisplay: z.enum(["full", "hidden"]).optional(),
   massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
   uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
+  decisionRuleStatement: z.string().max(2000).optional(),
   sections: z.array(MethodCertificateContentSectionSchema).default([]),
 });
 

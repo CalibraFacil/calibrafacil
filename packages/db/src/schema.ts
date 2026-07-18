@@ -3239,6 +3239,7 @@ export type MethodFormulaReporting = {
     | "expanded_uncertainty"
     | "coverage_factor"
     | "conformity_margin"
+    | "conformity_verdict"
     | "uncertainty_component"
     | "auxiliary";
   group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
@@ -3363,6 +3364,7 @@ export type MethodCertificateContent = {
   certifiedValuesDisplay?: "full" | "hidden";
   massCompositionDisplay?: "full" | "hidden";
   uncertaintyBudgetDisplay?: "full" | "hidden";
+  decisionRuleStatement?: string;
   sections?: MethodCertificateContentSection[];
 };
 

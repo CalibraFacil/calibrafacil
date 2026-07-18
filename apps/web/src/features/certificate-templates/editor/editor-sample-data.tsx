@@ -25,6 +25,9 @@ export const LOCKED_BLOCK_LABELS: Record<string, string> = {
   accreditation_seal: 'Selo de acreditação',
   verification_qr: 'QR de verificação',
   end_of_document: 'Fim do certificado',
+  // optional blocks (0-or-1)
+  uncertainty_budget_annex: 'Balanço de incertezas (anexo)',
+  decision_rule_statement: 'Regra de decisão',
 }
 
 // ---------------------------------------------------------------------------

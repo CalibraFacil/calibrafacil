@@ -75,6 +75,18 @@ export function CertificateContentSection({
             }
           />
         </div>
+        <Field label="Regra de decisão (ISO/IEC 17025 §7.8.6)">
+          <Textarea
+            value={certificate?.decisionRuleStatement ?? ''}
+            onChange={(event) =>
+              onCertificateChange({
+                decisionRuleStatement: event.target.value || undefined,
+              })
+            }
+            placeholder="Texto impresso no certificado quando o modelo incluir o bloco de regra de decisão"
+            rows={2}
+          />
+        </Field>
         <Field label="Padrões de referência">
           <Textarea
             value={(certificate?.referenceStandards ?? []).join('\n')}

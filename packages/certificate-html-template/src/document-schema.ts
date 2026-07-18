@@ -36,9 +36,24 @@ export const LOCKED_BLOCK_KEYS = [
   "end_of_document",
 ] as const;
 
-export type LockedBlockKey = (typeof LOCKED_BLOCK_KEYS)[number];
+/**
+ * Optional blocks (backlog #11): 0-or-1 occurrences, same lockedBlock node
+ * type. Content renders from frozen method data and SILENTLY omits when the
+ * method does not opt in — safe to leave in a template used across methods.
+ */
+export const OPTIONAL_BLOCK_KEYS = [
+  "uncertainty_budget_annex",
+  "decision_rule_statement",
+] as const;
 
-const lockedBlockKeySchema = z.enum(LOCKED_BLOCK_KEYS);
+export type LockedBlockKey =
+  | (typeof LOCKED_BLOCK_KEYS)[number]
+  | (typeof OPTIONAL_BLOCK_KEYS)[number];
+
+const lockedBlockKeySchema = z.enum([
+  ...LOCKED_BLOCK_KEYS,
+  ...OPTIONAL_BLOCK_KEYS,
+]);
 
 /**
  * §7.8.4.3: a calibration certificate must not recommend a calibration
@@ -350,6 +365,16 @@ export const certificateDocumentSchema = z
           code: "custom",
           path: ["content"],
           message: `mandatory locked block "${key}" must appear exactly once (found ${count})`,
+        });
+      }
+    }
+    for (const key of OPTIONAL_BLOCK_KEYS) {
+      const count = lockedCounts.get(key) ?? 0;
+      if (count > 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["content"],
+          message: `optional block "${key}" must appear at most once (found ${count})`,
         });
       }
     }

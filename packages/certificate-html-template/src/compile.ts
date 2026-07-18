@@ -12,6 +12,7 @@ import {
   type CertificateDocumentIssue,
   type LockedBlockKey,
   LOCKED_BLOCK_KEYS,
+  OPTIONAL_BLOCK_KEYS,
   validateCertificateDocument,
 } from "./document-schema.js";
 import {
@@ -72,7 +73,8 @@ export type CompiledCertificate = {
 function isLockedBlockKey(value: unknown): value is LockedBlockKey {
   return (
     typeof value === "string" &&
-    (LOCKED_BLOCK_KEYS as readonly string[]).includes(value)
+    ((LOCKED_BLOCK_KEYS as readonly string[]).includes(value) ||
+      (OPTIONAL_BLOCK_KEYS as readonly string[]).includes(value))
   );
 }
 
