@@ -124,7 +124,7 @@ import {
   SplitIcon,
   Redo02Icon,
   SquareLock02Icon,
-  Table01Icon,
+  TableIcon,
   TextAlignCenterIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
@@ -1387,7 +1387,7 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
       <span className="cf-editor__toolbar-divider" />
       <ToolbarButton
         label="Tabela"
-        icon={Table01Icon}
+        icon={TableIcon}
         onClick={() =>
           run().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run()
         }
