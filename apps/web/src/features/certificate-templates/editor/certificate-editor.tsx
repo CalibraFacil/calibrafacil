@@ -60,6 +60,7 @@ import type { PlaceholderCatalogEntry } from '../types'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
+  DashedLine01Icon,
   Delete02Icon,
   Heading02Icon,
   SlidersHorizontalIcon,
@@ -574,6 +575,7 @@ export function CertificateEditor({
     if (!width) return 100
     return Math.max(50, Math.min(150, Math.floor((width / 794) * 100)))
   }
+  const [showPageMarks, setShowPageMarks] = useState(false)
   const [theme, setTheme] = useState<CertificateTheme>(
     readDocumentTheme(initialDocument),
   )
@@ -733,6 +735,18 @@ export function CertificateEditor({
           </NativeSelect>
           <Button
             type="button"
+            variant={showPageMarks ? 'secondary' : 'ghost'}
+            size="sm"
+            aria-pressed={showPageMarks}
+            aria-label="Quebras de página (aproximadas)"
+            title="Mostrar quebras de página aproximadas — a paginação final é decidida na geração do PDF"
+            className="size-8 p-0 transition-[transform,background-color] active:scale-[0.96]"
+            onClick={() => setShowPageMarks((value) => !value)}
+          >
+            <HugeiconsIcon icon={DashedLine01Icon} size={15} strokeWidth={1.8} />
+          </Button>
+          <Button
+            type="button"
             variant={showSampleValues ? 'secondary' : 'ghost'}
             size="sm"
             aria-pressed={showSampleValues}
@@ -762,6 +776,7 @@ export function CertificateEditor({
               'cf-page',
               certificateThemeClass(theme),
               !editable && 'cf-page--readonly',
+              showPageMarks && 'cf-page--pagemarks',
             )}
           />
         </div>

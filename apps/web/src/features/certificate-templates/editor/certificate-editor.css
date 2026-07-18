@@ -437,3 +437,19 @@
 .cf-insert-handle:active {
   scale: 0.96;
 }
+
+/* ── approximate page-break ghosts (toggle) ──
+   A4 content height ≈ 297mm − 16mm top − 18mm bottom = 263mm ≈ 994px @96dpi;
+   the paper's top padding (16mm ≈ 60px) offsets the first boundary. Chromium
+   decides the REAL breaks at PDF time — these are orientation ghosts only. */
+.cf-page--pagemarks {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 993px,
+    rgba(220, 38, 38, 0.35) 993px,
+    rgba(220, 38, 38, 0.35) 994px
+  );
+  background-position: 0 60px;
+  background-repeat: repeat-y;
+}

@@ -534,6 +534,23 @@ describe('band lanes + page-aware shell (M-B T29)', () => {
     })
   })
 
+  it('page-break ghosts toggle on and off (roadmap item 2)', async () => {
+    await mountWithInspector()
+    expect(document.querySelector('.cf-page--pagemarks')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Quebras de página (aproximadas)' }),
+    )
+    await waitFor(() => {
+      expect(document.querySelector('.cf-page--pagemarks')).not.toBeNull()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Quebras de página (aproximadas)' }),
+    )
+    await waitFor(() => {
+      expect(document.querySelector('.cf-page--pagemarks')).toBeNull()
+    })
+  })
+
   it('bands cannot be deleted: select-all + delete keeps both lanes', async () => {
     const editor = await mountWithInspector()
     editor.commands.selectAll()
