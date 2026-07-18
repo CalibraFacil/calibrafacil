@@ -1132,6 +1132,53 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
   } else if (typeName === 'bandTopIdentity' || typeName === 'bandPageFooter') {
     label = BAND_LABELS[typeName] ?? typeName
     configurable = true
+  } else if (typeName === 'image') {
+    const attrs = Reflect.get(node, 'attrs')
+    const widthMm =
+      attrs && typeof attrs === 'object' ? Reflect.get(attrs, 'widthMm') : null
+    const currentWidth = typeof widthMm === 'number' ? widthMm : 60
+    return (
+      <div className="cf-selection-dock" data-testid="selection-dock">
+        <span className="cf-selection-dock__label">Imagem</span>
+        <NativeSelect
+          aria-label="Largura da imagem"
+          value={String(currentWidth)}
+          className="h-8 w-28 text-xs"
+          onChange={(event) => {
+            const parsed = Number(event.target.value)
+            if (!Number.isFinite(parsed)) return
+            editor
+              .chain()
+              .focus()
+              .command(({ tr, state }) => {
+                const active = state.selection
+                if (!(active instanceof NodeSelection)) return false
+                tr.setNodeMarkup(active.from, undefined, {
+                  ...active.node.attrs,
+                  widthMm: parsed,
+                })
+                return true
+              })
+              .run()
+          }}
+        >
+          {[40, 60, 90, 120, 180].map((width) => (
+            <NativeSelectOption key={width} value={String(width)}>
+              {width} mm
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-9 px-3 text-xs transition-[scale,background-color] active:scale-[0.96]"
+          onClick={() => editor.chain().focus().deleteSelection().run()}
+        >
+          Remover imagem
+        </Button>
+      </div>
+    )
   }
   if (!label) return null
 
