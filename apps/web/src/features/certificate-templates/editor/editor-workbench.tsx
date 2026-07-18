@@ -4,6 +4,11 @@ import { toast } from 'sonner'
 import { CalibraApiError } from '@calibra-facil/client-runtime'
 
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -313,6 +318,12 @@ export function EditorWorkbench({
     issues.length > 0 ||
     !validatedOk
 
+  // Trial-compile failures can't be pinned to a block (path: "compile"), so
+  // they get their own banner instead of vanishing into the chip.
+  const compileIssues = issues.filter(
+    (issue) => !issue.path.startsWith('content'),
+  )
+
   const previewStatus = previewQuery.data?.item.status ?? null
   const previewPdfUrl = previewQuery.data?.pdfUrl ?? null
 
@@ -364,12 +375,35 @@ export function EditorWorkbench({
                 Abrir prévia em PDF
               </a>
             ) : previewStatus === 'FAILED' ? (
-              <span
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/5 px-3 text-xs font-medium text-destructive"
-                title={previewQuery.data?.item.error ?? undefined}
-              >
-                Falha na prévia
-              </span>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/5 px-3 text-xs font-medium text-destructive transition-[scale,background-color] hover:bg-destructive/10 active:scale-[0.96]"
+                    >
+                      Falha na prévia
+                    </button>
+                  }
+                />
+                <PopoverContent align="end" className="w-80">
+                  <p className="text-sm font-medium text-destructive">
+                    A prévia não pôde ser gerada
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {previewQuery.data?.item.error ??
+                      'Erro desconhecido durante a renderização.'}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handlePreview()}
+                  >
+                    Tentar novamente
+                  </Button>
+                </PopoverContent>
+              </Popover>
             ) : (
               <span className="inline-flex h-8 items-center gap-2 rounded-full border bg-background px-3 text-xs text-muted-foreground">
                 <span
@@ -444,6 +478,40 @@ export function EditorWorkbench({
           </>
         )}
       </div>
+
+      {!editable && status !== 'DRAFT' && remoteLock === null && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground"
+          data-testid="readonly-banner"
+        >
+          <span className="font-medium text-foreground">
+            {status === 'PUBLISHED'
+              ? 'Versão publicada — somente leitura.'
+              : 'Versão validada — somente leitura.'}
+          </span>
+          <span>
+            Para alterar o modelo, crie uma nova versão com o botão “Nova
+            versão”.
+          </span>
+        </div>
+      )}
+
+      {compileIssues.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          data-testid="compile-error-banner"
+        >
+          <p className="font-medium">
+            Falha na compilação de teste — não é possível publicar até corrigir:
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-destructive/90">
+            {compileIssues.map((issue, index) => (
+              <li key={index}>{issue.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {remoteLock !== null && (
         <div

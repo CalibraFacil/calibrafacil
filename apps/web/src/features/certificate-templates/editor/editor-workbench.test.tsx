@@ -157,7 +157,8 @@ describe('EditorWorkbench (jsdom)', () => {
     expect(chip.textContent).toContain('1 problema')
     // …and opening it lists the mapped issues
     fireEvent.click(chip)
-    expect(await screen.findByText(/made\.up/)).toBeDefined()
+    // the unmappable issue shows in the chip AND the non-block banner
+    expect((await screen.findAllByText(/made\.up/)).length).toBeGreaterThan(0)
     expect(
       screen.getByRole('button', { name: 'Publicar' }).hasAttribute('disabled'),
     ).toBe(true)
@@ -265,6 +266,20 @@ describe('EditorWorkbench (jsdom)', () => {
     // editor flips read-only: the toolbar is gone
     await waitFor(() => {
       expect(screen.queryByRole('toolbar')).toBeNull()
+    })
+  })
+
+  it('compile-path validation failures render the dedicated banner', async () => {
+    mocks.validateWysiwygDocument.mockResolvedValue({
+      ok: false,
+      issues: [{ path: 'compile', message: 'placeholder desconhecido: x.y' }],
+    })
+    renderWorkbench()
+    fireEvent.click(screen.getByRole('button', { name: 'Validar' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('compile-error-banner').textContent).toContain(
+        'placeholder desconhecido: x.y',
+      )
     })
   })
 

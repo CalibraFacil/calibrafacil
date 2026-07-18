@@ -15,6 +15,7 @@ import {
   type NodeViewProps,
 } from '@tiptap/react'
 import { NodeSelection } from '@tiptap/pm/state'
+import { toast } from 'sonner'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
 
 /**
@@ -683,6 +684,40 @@ export function CertificateEditor({
     onSelectionUpdate: () => setSelectionTick((tick) => tick + 1),
     editorProps: {
       handleKeyDown: (view, event) => {
+        // A deleted mandatory block/band is a REJECTED transaction — without
+        // feedback that reads as "the editor is broken". Explain instead.
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+          const { selection } = view.state
+          const node = 'node' in selection ? selection.node : null
+          if (node && typeof node === 'object') {
+            const typeName = Reflect.get(node, 'type')?.name
+            if (typeName === 'lockedBlock') {
+              const blockKey = String(
+                Reflect.get(node, 'attrs')?.blockKey ?? '',
+              )
+              const optionalKeys: readonly string[] = OPTIONAL_BLOCK_KEYS
+              if (!optionalKeys.includes(blockKey)) {
+                event.preventDefault()
+                toast.error(
+                  'Este bloco é obrigatório no certificado (ISO/IEC 17025) e não pode ser removido — arraste para reposicionar',
+                  { id: 'cf-locked-delete' },
+                )
+                return true
+              }
+            }
+            if (
+              typeName === 'bandTopIdentity' ||
+              typeName === 'bandPageFooter'
+            ) {
+              event.preventDefault()
+              toast.error(
+                'As faixas de topo e rodapé são fixas — configure-as pelo ícone de ajustes',
+                { id: 'cf-locked-delete' },
+              )
+              return true
+            }
+          }
+        }
         if (event.altKey && !event.ctrlKey && !event.metaKey) {
           if (event.key === 'ArrowUp') {
             event.preventDefault()
@@ -1037,6 +1072,24 @@ function SelectionDock({ editor }: { editor: Editor | null }) {
   )
 }
 
+const OPTIONAL_BLOCK_ITEMS: Array<{ blockKey: string; label: string }> = [
+  { blockKey: 'uncertainty_budget_annex', label: 'Balanço de incertezas (anexo)' },
+  { blockKey: 'decision_rule_statement', label: 'Regra de decisão' },
+]
+
+function hasLockedBlock(editor: Editor, blockKey: string): boolean {
+  let found = false
+  editor.state.doc.forEach((node) => {
+    if (
+      node.type.name === 'lockedBlock' &&
+      String(node.attrs.blockKey) === blockKey
+    ) {
+      found = true
+    }
+  })
+  return found
+}
+
 function EditorToolbar({ editor }: { editor: Editor | null }) {
   if (!editor) return null
   const run = () => editor.chain().focus()
@@ -1094,11 +1147,13 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
       <ToolbarButton
         label="Mesclar células"
         icon={CombineIcon}
+        disabled={!editor.can().mergeCells()}
         onClick={() => run().mergeCells().run()}
       />
       <ToolbarButton
         label="Dividir célula"
         icon={SplitIcon}
+        disabled={!editor.can().splitCell()}
         onClick={() => run().splitCell().run()}
       />
       <ToolbarButton
@@ -1124,43 +1179,45 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
           }
         />
         <DropdownMenuContent align="start">
-          {/* the guard enforces at-most-one: inserting an already-present
-              optional block is a rejected transaction (harmless no-op) */}
-          <DropdownMenuItem
-            onClick={() =>
-              run()
-                .insertContent({
-                  type: 'lockedBlock',
-                  attrs: { blockKey: 'uncertainty_budget_annex' },
-                })
-                .run()
-            }
-          >
-            Balanço de incertezas (anexo)
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              run()
-                .insertContent({
-                  type: 'lockedBlock',
-                  attrs: { blockKey: 'decision_rule_statement' },
-                })
-                .run()
-            }
-          >
-            Regra de decisão
-          </DropdownMenuItem>
+          {/* items disable once present — the guard would reject a duplicate
+              anyway, but a silent no-op reads as "nothing happened" */}
+          {OPTIONAL_BLOCK_ITEMS.map(({ blockKey, label }) => {
+            const present = hasLockedBlock(editor, blockKey)
+            return (
+              <DropdownMenuItem
+                key={blockKey}
+                disabled={present}
+                onClick={() =>
+                  run()
+                    .insertContent({
+                      type: 'lockedBlock',
+                      attrs: { blockKey },
+                    })
+                    .run()
+                }
+              >
+                {label}
+                {present && (
+                  <span className="ml-auto pl-3 text-xs text-muted-foreground">
+                    já inserido
+                  </span>
+                )}
+              </DropdownMenuItem>
+            )
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
       <span className="cf-editor__toolbar-divider" />
       <ToolbarButton
         label="Desfazer"
         icon={Undo02Icon}
+        disabled={!editor.can().undo()}
         onClick={() => run().undo().run()}
       />
       <ToolbarButton
         label="Refazer"
         icon={Redo02Icon}
+        disabled={!editor.can().redo()}
         onClick={() => run().redo().run()}
       />
     </div>
@@ -1171,11 +1228,13 @@ function ToolbarButton({
   label,
   icon,
   active,
+  disabled,
   onClick,
 }: {
   label: string
   icon: typeof TextBoldIcon
   active?: boolean
+  disabled?: boolean
   onClick: () => void
 }) {
   return (
@@ -1185,6 +1244,7 @@ function ToolbarButton({
       size="sm"
       aria-label={label}
       aria-pressed={active}
+      disabled={disabled}
       title={label}
       className="size-8 p-0 transition-[scale,background-color,color] active:scale-[0.96]"
       onClick={onClick}
