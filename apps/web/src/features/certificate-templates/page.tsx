@@ -453,9 +453,20 @@ export function CertificateTemplatesPage() {
       }>(selectedTemplate.id)
     },
     onSuccess: async (data) => {
-      toast.success(
-        `Template migrado — ${data.importedPaths.length} campos importados`,
-      )
+      if (data.skippedPaths.length > 0) {
+        // Silent field loss on a certificate template is how a lab discovers
+        // a gap only when a customer does — name every dropped binding.
+        toast.warning(
+          `Template migrado — ${data.importedPaths.length} campos importados, ` +
+            `${data.skippedPaths.length} não reconhecidos e NÃO importados: ` +
+            data.skippedPaths.join(', '),
+          { duration: 15000 },
+        )
+      } else {
+        toast.success(
+          `Template migrado — ${data.importedPaths.length} campos importados`,
+        )
+      }
       await refreshTemplates()
       await navigate({
         to: '/dashboard/certificate-templates/$slug/editor',
