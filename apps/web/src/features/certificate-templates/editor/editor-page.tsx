@@ -73,16 +73,27 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
       if (!templateId || !draftVersion || !latestPublished) {
         throw new Error('Não há rascunho ou versão publicada para restaurar')
       }
-      const published =
-        await calibraApi.certificateTemplates.getWysiwygDocument<WysiwygDocumentResponse>(
+      const [published, draft] = await Promise.all([
+        calibraApi.certificateTemplates.getWysiwygDocument<WysiwygDocumentResponse>(
           templateId,
           latestPublished.id,
-        )
+        ),
+        calibraApi.certificateTemplates.getWysiwygDocument<WysiwygDocumentResponse>(
+          templateId,
+          draftVersion.id,
+        ),
+      ])
       if (!published.item) throw new Error('Versão publicada indisponível')
+      if (!draft.item) throw new Error('Rascunho indisponível')
+      // OCC-guarded restore: if an in-flight autosave lands between the read
+      // and this write, the 409 surfaces instead of silently racing.
       return calibraApi.certificateTemplates.saveWysiwygDocument(
         templateId,
         draftVersion.id,
-        { documentJson: published.item.documentJson },
+        {
+          documentJson: published.item.documentJson,
+          expectedDocumentSha256: draft.item.documentSha256,
+        },
       )
     },
     onSuccess: async () => {
@@ -221,12 +232,17 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
       ) : version ? (
         <div className="space-y-3">
           <EditorWorkbench
-            key={`${version.id}:${discardNonce}`}
+            // Key includes status+sha: a background refetch that reveals a
+            // change made elsewhere (validated/published/saved in another
+            // tab) must resync this session instead of leaving frozen
+            // mount-time state.
+            key={`${version.id}:${version.status}:${version.documentSha256}:${discardNonce}`}
             templateId={templateId}
             version={version}
             catalog={catalogQuery.data?.items ?? []}
             labLogoUrl={labLogoUrl}
             canEdit={canEdit}
+            onForked={(versionId) => setVersionOverride(versionId)}
           />
           <BackToListButton />
         </div>

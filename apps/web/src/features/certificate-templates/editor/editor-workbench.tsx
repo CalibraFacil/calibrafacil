@@ -59,6 +59,7 @@ export function EditorWorkbench({
   catalog,
   labLogoUrl = null,
   canEdit = true,
+  onForked,
 }: {
   templateId: string
   version: WysiwygVersionDetail
@@ -66,6 +67,8 @@ export function EditorWorkbench({
   labLogoUrl?: string | null
   /** RBAC: admins/owners with the custom_templates feature. */
   canEdit?: boolean
+  /** Fired with the NEW draft's id after "Nova versão" succeeds. */
+  onForked?: (versionId: number) => void
 }) {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState(version.status)
@@ -255,6 +258,9 @@ export function EditorWorkbench({
 
   const handleDocumentChange = (documentJson: Record<string, unknown>) => {
     latestDocumentRef.current = documentJson
+    // A rendered preview no longer matches an edited draft — retire the pill
+    // instead of offering a stale "Abrir prévia em PDF".
+    if (previewId !== null) setPreviewId(null)
     const signature = blockSignature(documentJson)
     if (signature !== blockSignatureRef.current) {
       blockSignatureRef.current = signature
@@ -311,6 +317,7 @@ export function EditorWorkbench({
     try {
       const created = await forkMutation.mutateAsync()
       toast.success(`Nova versão v${created.item.version} criada como rascunho`)
+      onForked?.(created.item.id)
       // The list refetch flips the template's current version to the new
       // DRAFT; the page remounts the workbench (key={version.id}).
       await queryClient.invalidateQueries({
@@ -604,6 +611,11 @@ export function EditorWorkbench({
           fields live in the toolbar palette + {{ autocomplete, config in the
           per-block popover. */}
       <CertificateEditor
+        // TipTap's useEditor deliberately ignores post-mount `editable`
+        // changes — without this key a mid-session lock (validate, 409
+        // remote-lock) hides the toolbar while the CANVAS keeps accepting
+        // keystrokes into a document that can never save again.
+        key={`canvas:${editable}`}
         initialDocument={version.documentJson}
         catalog={catalog}
         issues={issues}
