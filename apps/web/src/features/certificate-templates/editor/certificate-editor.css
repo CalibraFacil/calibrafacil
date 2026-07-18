@@ -591,3 +591,17 @@
   text-transform: uppercase;
   color: rgb(100, 116, 139);
 }
+
+/* ── bar groups: formatting/insert · document style · view (pinned right) ── */
+.cf-editor__bar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cf-editor__bar-group--view {
+  margin-left: auto;
+  flex-wrap: nowrap;
+}

@@ -113,7 +113,6 @@ import type { PlaceholderCatalogEntry } from '../types'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
-  DashedLine01Icon,
   Delete02Icon,
   Heading02Icon,
   SlidersHorizontalIcon,
@@ -1011,12 +1010,7 @@ export function CertificateEditor({
                 className="h-8 gap-1 px-2 text-xs transition-[scale,background-color] active:scale-[0.96]"
                 onClick={() => setShowPageMarks((value) => !value)}
               >
-                <HugeiconsIcon
-                  icon={DashedLine01Icon}
-                  size={15}
-                  strokeWidth={1.8}
-                />
-                Págs.
+                Quebras
               </Button>
               <Button
                 type="button"
@@ -1585,7 +1579,7 @@ function StyleTokenControls({
               <span
                 aria-hidden
                 className="size-3.5 rounded-full border border-black/20"
-                style={{ backgroundColor: accent ?? 'var(--accent, #1F3A5F)' }}
+                style={{ backgroundColor: accent ?? '#1F3A5F' }}
               />
               Cor
             </Button>
@@ -1639,7 +1633,7 @@ function StyleTokenControls({
         size="sm"
         aria-label="Tamanho do texto"
         value={String(fontScale)}
-        className="w-28 text-xs"
+        className="w-32 text-xs"
         onChange={(event) => {
           const parsed = Number(event.target.value)
           const next: CertificateFontScale =
