@@ -847,7 +847,10 @@ export function CertificateEditor({
             editor={editor}
             computePositionConfig={{ placement: 'left-start' }}
             onNodeChange={({ node, pos }) => {
-              hoverNodeRef.current = node ? { pos, size: node.nodeSize } : null
+              // Moving from the block ONTO the handle reports node: null —
+              // keep the LAST hovered block so the ＋ click still knows its
+              // target (the handle is only visible while one is current).
+              if (node) hoverNodeRef.current = { pos, size: node.nodeSize }
             }}
           >
             <div className="cf-gutter-handles">
