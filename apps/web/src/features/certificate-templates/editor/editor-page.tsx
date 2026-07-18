@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -56,6 +57,8 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
     templateId !== null ? activeVersionId : null,
   )
   const catalogQuery = usePlaceholderCatalog()
+  const activeOrganization = useActiveOrganization()
+  const labLogoUrl = activeOrganization.data?.logo ?? null
   const queryClient = useQueryClient()
   const [discardNonce, setDiscardNonce] = useState(0)
 
@@ -226,6 +229,7 @@ export function CertificateTemplateEditorPage({ slug }: { slug: string }) {
             templateId={templateId}
             version={version}
             catalog={catalogQuery.data?.items ?? []}
+            labLogoUrl={labLogoUrl}
           />
           <BackToListButton />
         </div>

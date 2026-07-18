@@ -91,6 +91,7 @@ import {
   EDITOR_SAMPLE_DATA,
   LOCKED_BLOCK_LABELS,
   QR_PLACEHOLDER_SVG,
+  editorSampleDataWithLogo,
   isLockedBlockKey,
 } from './editor-sample-data'
 import { FieldPalette } from './field-palette'
@@ -146,6 +147,9 @@ export { EDITOR_SAMPLE_DATA, LOCKED_BLOCK_LABELS } from './editor-sample-data'
 // ---------------------------------------------------------------------------
 // Preview context: token view vs sample-data view for placeholder chips
 // ---------------------------------------------------------------------------
+
+/** The org's real logo URL — swapped into the lab block's sample render. */
+const LabLogoContext = createContext<string | null>(null)
 
 const PreviewContext = createContext<{ showSampleValues: boolean }>({
   showSampleValues: false,
@@ -268,13 +272,14 @@ function LockedBlockView(props: NodeViewProps) {
     })
   }
 
+  const labLogoUrl = useContext(LabLogoContext)
   let renderedInner: string | null = null
   if (isLockedBlockKey(blockKey)) {
     try {
       const rawLayout = props.node.attrs.layout
       renderedInner = renderLockedBlockInner(
         blockKey,
-        EDITOR_SAMPLE_DATA,
+        editorSampleDataWithLogo(labLogoUrl),
         {
           qrDataUrl: QR_PLACEHOLDER_SVG,
           bilingual: props.editor.state.doc.attrs.bilingual === true,
@@ -616,6 +621,8 @@ export type CertificateEditorProps = {
   editable?: boolean
   onDocumentChange?: (documentJson: Record<string, unknown>) => void
   onEditorReady?: (editor: Editor) => void
+  /** The org's real logo URL, previewed inside the lab block. */
+  labLogoUrl?: string | null
   /** Tests (jsdom, no SSR) pass true; the app default follows TipTap SSR guidance. */
   immediatelyRender?: boolean
 }
@@ -627,6 +634,7 @@ export function CertificateEditor({
   editable = true,
   onDocumentChange,
   onEditorReady,
+  labLogoUrl = null,
   immediatelyRender = false,
 }: CertificateEditorProps) {
   // The suggestion plugin closes over a GETTER so a late-loading catalog
@@ -778,6 +786,7 @@ export function CertificateEditor({
 
   return (
     <IssuesContext.Provider value={issuesByIndex}>
+    <LabLogoContext.Provider value={labLogoUrl}>
     <PreviewContext.Provider value={{ showSampleValues }}>
       <div className="cf-editor">
         {/* The REAL print stylesheet, scoped to the page frame via native CSS
@@ -974,6 +983,7 @@ export function CertificateEditor({
         <SelectionDock editor={editor} />
       </div>
     </PreviewContext.Provider>
+    </LabLogoContext.Provider>
     </IssuesContext.Provider>
   )
 }

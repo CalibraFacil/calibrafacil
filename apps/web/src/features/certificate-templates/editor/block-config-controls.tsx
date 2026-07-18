@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
@@ -226,6 +227,15 @@ export function LockedBlockConfigBody({
             ))}
           </NativeSelect>
         </label>
+      )}
+
+      {blockKey === 'lab_identification' && (
+        <Link
+          to="/dashboard/settings/organization"
+          className="block text-xs text-primary underline-offset-2 hover:underline"
+        >
+          Editar logo e dados do laboratório →
+        </Link>
       )}
 
       {isResults && <ResultsGridControls layout={layout} write={write} />}

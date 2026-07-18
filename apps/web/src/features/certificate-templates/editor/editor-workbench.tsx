@@ -56,10 +56,12 @@ export function EditorWorkbench({
   templateId,
   version,
   catalog,
+  labLogoUrl = null,
 }: {
   templateId: string
   version: WysiwygVersionDetail
   catalog: PlaceholderCatalogEntry[]
+  labLogoUrl?: string | null
 }) {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState(version.status)
@@ -555,6 +557,7 @@ export function EditorWorkbench({
         catalog={catalog}
         issues={issues}
         editable={editable}
+        labLogoUrl={labLogoUrl}
         onDocumentChange={handleDocumentChange}
 
       />
