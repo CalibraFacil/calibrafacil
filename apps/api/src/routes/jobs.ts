@@ -100,7 +100,7 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { syncVisitStatusFromJobs } from "../lib/visits";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 import {
-  getEffectiveCertificateTemplateSnapshot,
+  resolveMethodCertificateTemplate,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
 import {
@@ -1811,19 +1811,17 @@ export const jobsRouter = new Hono<{
       // (#427 Phase 0). Classified here so the technician and the signer see
       // the warning during review; approval re-classifies at the emission
       // date and is authoritative. Warn-only: never blocks the submit.
-      const { compliance: scopeCompliance } = await classifyJobScopeCompliance(
-        {
-          organizationId: memberData.organizationId,
-          unitId: existing.unitId,
-          methodSnapshot: existing.methodSnapshot,
-          assetSnapshot: nextAssetSnapshot,
-          data: nextData ?? null,
-          results: nextResults ?? null,
-          // `now`, not performedAt: predicts the seal decision approval will
-          // make at the emission date (backdated executions stay comparable).
-          atDate: now,
-        },
-      );
+      const { compliance: scopeCompliance } = await classifyJobScopeCompliance({
+        organizationId: memberData.organizationId,
+        unitId: existing.unitId,
+        methodSnapshot: existing.methodSnapshot,
+        assetSnapshot: nextAssetSnapshot,
+        data: nextData ?? null,
+        results: nextResults ?? null,
+        // `now`, not performedAt: predicts the seal decision approval will
+        // make at the emission date (backdated executions stay comparable).
+        atDate: now,
+      });
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
@@ -2235,6 +2233,18 @@ export const jobsRouter = new Hono<{
             },
             400,
           );
+        case "certificate_template_required":
+          return c.json(
+            {
+              error:
+                result.reason === "template_unpublished"
+                  ? "O modelo de certificado vinculado ao método não possui versão publicada. Publique uma versão do modelo antes de aprovar."
+                  : "O método desta calibração não possui modelo de certificado vinculado. Vincule um modelo publicado ao método antes de aprovar.",
+              code: "CERTIFICATE_TEMPLATE_REQUIRED",
+              reason: result.reason,
+            },
+            422,
+          );
         case "scope_violation":
           return c.json(
             {
@@ -2554,9 +2564,17 @@ export const jobsRouter = new Hono<{
         certificateTemplateSnapshotFromUnknown(
           originalJob.certificateTemplateSnapshot,
         ) ??
-        (await getEffectiveCertificateTemplateSnapshot(
-          originalJob.organizationId,
-        ));
+        (await (async () => {
+          // Amendment of a job frozen before per-method templates (0104):
+          // resolve from the original's method; when even that is unlinked,
+          // leave null — the amendment starts in DRAFT and its own approval
+          // enforces the link before anything renders.
+          const resolved = await resolveMethodCertificateTemplate({
+            organizationId: originalJob.organizationId,
+            methodId: originalJob.methodSnapshot?.methodId ?? null,
+          });
+          return resolved.ok ? resolved.snapshot : null;
+        })());
 
       // Create new job as a clone of the original
       const [amendedJob] = await db
@@ -2574,10 +2592,14 @@ export const jobsRouter = new Hono<{
           methodSnapshot: originalJob.methodSnapshot,
           standardsSnapshot: originalJob.standardsSnapshot,
           certificateTemplateId:
-            originalJob.certificateTemplateId ?? amendmentTemplateSnapshot.id,
+            originalJob.certificateTemplateId ??
+            amendmentTemplateSnapshot?.id ??
+            null,
           certificateTemplateSnapshot:
             originalJob.certificateTemplateSnapshot ??
-            serializeCertificateTemplateSnapshot(amendmentTemplateSnapshot),
+            (amendmentTemplateSnapshot
+              ? serializeCertificateTemplateSnapshot(amendmentTemplateSnapshot)
+              : null),
           status: "DRAFT", // Start in DRAFT for corrections
           dueDate: originalJob.dueDate,
           data: originalJob.data, // Clone calibration data

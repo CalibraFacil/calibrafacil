@@ -1155,7 +1155,10 @@ export type OrganizationEmailDomainStatus =
   | "partially_verified"
   | "partially_failed";
 
-export type OrganizationEmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
+export type OrganizationEmailDomainKeyStatus =
+  | "ok"
+  | "invalid"
+  | "rate_limited";
 
 /**
  * Lab-owned email sending domain (issue #584). One per lab org. The lab brings
@@ -1249,7 +1252,6 @@ export type CertificateXlsxTemplateVersionStatus =
   | "PUBLISHED"
   | "ARCHIVED";
 
-export type CertificateXlsxTemplateAssignmentStatus = "ACTIVE" | "ARCHIVED";
 export type CertificateXlsxTemplatePreviewStatus =
   | "PENDING"
   | "RENDERED"
@@ -1319,59 +1321,6 @@ export const certificateTemplateVersion = pgTable(
       table.templateId,
       table.version,
     ),
-  ],
-);
-
-export const certificateTemplateAssignment = pgTable(
-  "certificate_template_assignment",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    templateId: integer("template_id")
-      .notNull()
-      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
-    templateVersionId: integer("template_version_id")
-      .notNull()
-      .references(() => certificateTemplateVersion.id, {
-        onDelete: "restrict",
-      }),
-    unitId: integer("unit_id").references(() => organizationUnit.id, {
-      onDelete: "cascade",
-    }),
-    serviceId: integer("service_id").references(() => service.id, {
-      onDelete: "cascade",
-    }),
-    methodId: integer("method_id").references(() => calibrationMethod.id, {
-      onDelete: "cascade",
-    }),
-    certificateType: text("certificate_type").default("calibration").notNull(),
-    status: text("status")
-      .$type<CertificateXlsxTemplateAssignmentStatus>()
-      .default("ACTIVE")
-      .notNull(),
-    priority: integer("priority").default(0).notNull(),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    archivedAt: timestamp("archived_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("certificate_template_assignment_org_idx").on(table.organizationId),
-    index("certificate_template_assignment_template_idx").on(table.templateId),
-    index("certificate_template_assignment_version_idx").on(
-      table.templateVersionId,
-    ),
-    index("certificate_template_assignment_unit_idx").on(table.unitId),
-    index("certificate_template_assignment_service_idx").on(table.serviceId),
-    index("certificate_template_assignment_method_idx").on(table.methodId),
-    index("certificate_template_assignment_status_idx").on(table.status),
   ],
 );
 
@@ -2223,7 +2172,6 @@ export const userRelations = relations(user, ({ many }) => ({
   emailDomains: many(organizationEmailDomain),
   certificateTemplates: many(certificateTemplate),
   certificateTemplateVersions: many(certificateTemplateVersion),
-  certificateTemplateAssignments: many(certificateTemplateAssignment),
   certificateTemplatePreviews: many(certificateTemplatePreview),
   issuedCertificateSnapshots: many(issuedCertificateSnapshot),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
@@ -2273,7 +2221,6 @@ export const organizationRelations = relations(
     emailDomain: one(organizationEmailDomain),
     certificateTemplates: many(certificateTemplate),
     certificateTemplateVersions: many(certificateTemplateVersion),
-    certificateTemplateAssignments: many(certificateTemplateAssignment),
     certificateTemplatePreviews: many(certificateTemplatePreview),
     issuedCertificateSnapshots: many(issuedCertificateSnapshot),
     apiKeys: many(organizationApiKey),
@@ -2487,7 +2434,6 @@ export const certificateTemplateRelations = relations(
       references: [user.id],
     }),
     versions: many(certificateTemplateVersion),
-    assignments: many(certificateTemplateAssignment),
     issuedSnapshots: many(issuedCertificateSnapshot),
     jobs: many(calibrationJob),
   }),
@@ -2514,43 +2460,8 @@ export const certificateTemplateVersionRelations = relations(
       references: [user.id],
       relationName: "certificateTemplateVersionPublisher",
     }),
-    assignments: many(certificateTemplateAssignment),
     previews: many(certificateTemplatePreview),
     issuedSnapshots: many(issuedCertificateSnapshot),
-  }),
-);
-
-export const certificateTemplateAssignmentRelations = relations(
-  certificateTemplateAssignment,
-  ({ one }) => ({
-    organization: one(organization, {
-      fields: [certificateTemplateAssignment.organizationId],
-      references: [organization.id],
-    }),
-    template: one(certificateTemplate, {
-      fields: [certificateTemplateAssignment.templateId],
-      references: [certificateTemplate.id],
-    }),
-    templateVersion: one(certificateTemplateVersion, {
-      fields: [certificateTemplateAssignment.templateVersionId],
-      references: [certificateTemplateVersion.id],
-    }),
-    unit: one(organizationUnit, {
-      fields: [certificateTemplateAssignment.unitId],
-      references: [organizationUnit.id],
-    }),
-    service: one(service, {
-      fields: [certificateTemplateAssignment.serviceId],
-      references: [service.id],
-    }),
-    method: one(calibrationMethod, {
-      fields: [certificateTemplateAssignment.methodId],
-      references: [calibrationMethod.id],
-    }),
-    createdByUser: one(user, {
-      fields: [certificateTemplateAssignment.createdBy],
-      references: [user.id],
-    }),
   }),
 );
 
@@ -3365,6 +3276,15 @@ export const calibrationMethod = pgTable(
     // ISO 17025 accredited scope: certificates issued from this method may
     // carry the accreditation seal (traceable-only methods keep this off).
     accreditedScope: boolean("accredited_scope").default(false).notNull(),
+    // Certificate template this method issues with (migration 0104). One
+    // explicit link per method — issuance renders the template's latest
+    // PUBLISHED version; job approval blocks while this is null. Operational
+    // setting (editable on published methods via a dedicated audited route),
+    // never part of methodFingerprint.
+    certificateTemplateId: integer("certificate_template_id").references(
+      () => certificateTemplate.id,
+      { onDelete: "set null" },
+    ),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
     variableBindings: jsonb("variable_bindings")
@@ -3422,6 +3342,7 @@ export const calibrationMethod = pgTable(
   (table) => [
     index("method_organization_id_idx").on(table.organizationId),
     index("method_asset_type_id_idx").on(table.assetTypeId),
+    index("method_certificate_template_id_idx").on(table.certificateTemplateId),
     index("method_status_idx").on(table.status),
     index("method_parent_id_idx").on(table.parentId),
     uniqueIndex("method_org_name_version_uidx").on(
@@ -3506,7 +3427,10 @@ export const calibrationMethodRelations = relations(
       relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
-    certificateTemplateAssignments: many(certificateTemplateAssignment),
+    certificateTemplate: one(certificateTemplate, {
+      fields: [calibrationMethod.certificateTemplateId],
+      references: [certificateTemplate.id],
+    }),
   }),
 );
 
@@ -3633,7 +3557,6 @@ export const serviceRelations = relations(service, ({ one, many }) => ({
     references: [assetType.id],
   }),
   auditLogs: many(serviceAuditLog),
-  certificateTemplateAssignments: many(certificateTemplateAssignment),
 }));
 
 export const serviceAuditLogRelations = relations(
@@ -6717,7 +6640,6 @@ export const organizationUnitRelations = relations(
     calibrationRequests: many(calibrationRequest),
     assets: many(asset),
     eventLogs: many(organizationEventLog),
-    certificateTemplateAssignments: many(certificateTemplateAssignment),
   }),
 );
 
@@ -6876,7 +6798,8 @@ export const accreditedScopeLine = pgTable(
     // CMC expression: CMC(x) = cmcA + cmcB·|x| with x in rangeUnit and the
     // result in cmcUnit ('fixed' ignores cmcB). Cgcre's "table" format is
     // just multiple lines over sub-ranges; percent-of-reading maps to cmcB.
-    cmcType: text("cmc_type").$type<CmcExpressionType>()
+    cmcType: text("cmc_type")
+      .$type<CmcExpressionType>()
       .default("fixed")
       .notNull(),
     cmcA: doublePrecision("cmc_a").notNull(),
@@ -6899,9 +6822,7 @@ export const accreditedScopeLine = pgTable(
       .notNull(),
   },
   (table) => [
-    index("accredited_scope_line_organization_id_idx").on(
-      table.organizationId,
-    ),
+    index("accredited_scope_line_organization_id_idx").on(table.organizationId),
     index("accredited_scope_line_unit_id_idx").on(table.unitId),
   ],
 );

@@ -103,9 +103,3 @@ export type XlsxPreviewResponse = {
   item: XlsxPreviewItem
   pdfUrl?: string | null
 }
-
-export type XlsxAssignmentOption = {
-  id: number
-  label: string
-  detail?: string | null
-}

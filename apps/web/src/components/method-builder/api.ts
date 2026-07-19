@@ -25,8 +25,11 @@ function optionalString(value: unknown) {
   return typeof value === 'string' ? value : undefined
 }
 
-function normalizeFormulaScope(value: unknown): MethodNormalizedFormula['scope'] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+function normalizeFormulaScope(
+  value: unknown,
+): MethodNormalizedFormula['scope'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
   const record = Object.fromEntries(Object.entries(value))
   if (record.kind === 'table_row' && typeof record.tableKey === 'string') {
     return { kind: 'table_row', tableKey: record.tableKey }

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   AlertCircleIcon,
   BookOpen02Icon,
@@ -49,13 +50,12 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { calibraApi } from '@/utils/api'
 import { cn } from '@/lib/utils'
 import {
-  useCertificateTemplateAssignmentOptions,
+  useCertificateTemplateLinkedMethods,
   useCertificateTemplatesData,
   useCertificateTemplateXlsxPreviewData,
   useCertificateTemplateXlsxVersionData,
 } from '@/features/certificate-templates/queries'
 import {
-  buildXlsxAssignmentPayload,
   buildXlsxBindingManifestForSave,
   certificateTemplateKey,
   copyTextToClipboard,
@@ -69,7 +69,6 @@ import {
   getXlsxStatusLabel,
   updateXlsxScalarBinding,
   type TemplateDraft,
-  type XlsxAssignmentDraft,
 } from '@/features/certificate-templates/model'
 import {
   XLSX_TOKEN_CATALOG,
@@ -79,7 +78,6 @@ import {
 import type {
   TemplateItem,
   WorkbookAnalysis,
-  XlsxAssignmentOption,
   XlsxBindingManifest,
   XlsxPreviewItem,
   XlsxPreviewReference,
@@ -117,7 +115,7 @@ const CERTIFICATE_STAGES: ReadonlyArray<{
   {
     id: 'publish',
     label: 'Publicação',
-    hint: 'Publicar e atribuir',
+    hint: 'Publicar e vincular',
     icon: RocketIcon,
   },
 ]
@@ -143,12 +141,6 @@ export function CertificateTemplatesPage() {
   const [tokenSearch, setTokenSearch] = useState('')
   const [activeTokenGroup, setActiveTokenGroup] = useState('all')
   const [activeStage, setActiveStage] = useState<StageId | null>(null)
-  const [assignmentDraft, setAssignmentDraft] = useState<XlsxAssignmentDraft>({
-    unitId: '',
-    serviceId: '',
-    methodId: '',
-    priority: '100',
-  })
   const [draftsByTemplateKey, setDraftsByTemplateKey] = useState<
     Record<string, TemplateDraft>
   >({})
@@ -182,11 +174,9 @@ export function CertificateTemplatesPage() {
   const canManageTemplateActions =
     (accessQuery.data?.hasCustomTemplates ?? false) &&
     (templatesQuery.data?.canManage ?? false)
-  const assignmentOptionsEnabled = !cloudOnlyUnavailable
-  const { methodsQuery, servicesQuery, unitsQuery } =
-    useCertificateTemplateAssignmentOptions({
-      enabled: assignmentOptionsEnabled,
-    })
+  const linkedMethodsQuery = useCertificateTemplateLinkedMethods({
+    enabled: !cloudOnlyUnavailable,
+  })
   const selectedCurrentXlsxVersionId =
     selectedTemplate?.currentXlsxVersion?.id ?? null
   const currentXlsxVersionQuery = useCertificateTemplateXlsxVersionData({
@@ -401,48 +391,6 @@ export function CertificateTemplatesPage() {
     },
   })
 
-  const assignmentsQuery = useQuery({
-    queryKey: [
-      'certificate-templates',
-      selectedTemplate?.id ?? 'none',
-      'assignments',
-    ],
-    queryFn: () => {
-      if (!selectedTemplate?.id) throw new Error('unreachable')
-      return calibraApi.certificateTemplates.listAssignments<{
-        items: Array<{
-          id: number
-          versionNumber: number
-          unitName: string | null
-          serviceName: string | null
-          methodId: number | null
-          priority: number
-          createdAt: string | null
-        }>
-      }>(selectedTemplate.id)
-    },
-    enabled: selectedTemplate?.id != null,
-  })
-
-  const archiveAssignmentMutation = useMutation({
-    mutationFn: async (assignmentId: number) => {
-      if (!selectedTemplate?.id) throw new Error('Selecione um template')
-      return calibraApi.certificateTemplates.archiveAssignment(
-        selectedTemplate.id,
-        assignmentId,
-      )
-    },
-    onSuccess: () => {
-      toast.success('Atribuição removida')
-      void assignmentsQuery.refetch()
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao remover atribuição',
-      )
-    },
-  })
-
   const archiveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedTemplate?.id) throw new Error('Selecione um template')
@@ -456,31 +404,6 @@ export function CertificateTemplatesPage() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : 'Falha ao arquivar template',
-      )
-    },
-  })
-
-  const xlsxAssignmentMutation = useMutation({
-    mutationFn: async () => {
-      const targetVersionId = activeXlsxWorkbench?.version.id ?? null
-      if (!selectedTemplate?.id || targetVersionId === null) {
-        throw new Error('Publique uma versão antes de atribuir')
-      }
-
-      const payload = buildXlsxAssignmentPayload(assignmentDraft)
-
-      return calibraApi.certificateTemplates.createXlsxAssignment<{
-        item: unknown
-      }>(selectedTemplate.id, targetVersionId, payload)
-    },
-    onSuccess: () => {
-      toast.success('Template atribuído')
-      void refreshTemplates()
-      void assignmentsQuery.refetch()
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao atribuir template',
       )
     },
   })
@@ -867,7 +790,7 @@ export function CertificateTemplatesPage() {
           </Button>
           <span
             className="text-[11px] text-muted-foreground"
-            title="A emissão de certificados usa APENAS as atribuições da etapa Atribuição — 'padrão' afeta a ordenação desta lista"
+            title="A emissão usa o modelo vinculado ao MÉTODO da calibração — 'padrão' afeta apenas a ordenação desta lista"
           >
             padrão ≠ emissão
           </span>
@@ -1375,39 +1298,24 @@ export function CertificateTemplatesPage() {
 
           {effectiveStage === 'publish' &&
             (hasWorkbench ? (
-              <XlsxAssignmentPanel
+              <XlsxPublishPanel
                 disabled={isReadOnly || !activeXlsxWorkbench}
-                assignments={assignmentsQuery.data?.items ?? []}
-                onRemoveAssignment={(assignmentId) =>
-                  archiveAssignmentMutation.mutate(assignmentId)
-                }
-                removePending={archiveAssignmentMutation.isPending}
                 isPublished={isXlsxPublished}
                 canPublish={canPublishXlsx}
                 hasRenderedPreview={Boolean(hasRenderedPreview)}
                 publishPending={xlsxPublishMutation.isPending}
-                assignmentPending={xlsxAssignmentMutation.isPending}
-                draft={assignmentDraft}
-                methods={methodsQuery.data ?? []}
-                services={servicesQuery.data ?? []}
-                units={unitsQuery.data ?? []}
-                optionsLoading={
-                  methodsQuery.isLoading ||
-                  servicesQuery.isLoading ||
-                  unitsQuery.isLoading
-                }
-                optionsError={
-                  methodsQuery.isError ||
-                  servicesQuery.isError ||
-                  unitsQuery.isError
-                }
-                onDraftChange={setAssignmentDraft}
+                linkedMethods={(linkedMethodsQuery.data ?? []).filter(
+                  (method) =>
+                    selectedTemplate?.id != null &&
+                    method.certificateTemplateId === selectedTemplate.id,
+                )}
+                methodsLoading={linkedMethodsQuery.isLoading}
+                methodsError={linkedMethodsQuery.isError}
                 onPublish={() => xlsxPublishMutation.mutate()}
-                onAssign={() => xlsxAssignmentMutation.mutate()}
               />
             ) : (
               <StageLocked
-                message="Envie e verifique uma planilha antes de publicar e atribuir."
+                message="Envie e verifique uma planilha antes de publicar."
                 onGoToSource={goToSource}
               />
             ))}
@@ -1451,65 +1359,46 @@ function StageLocked({
   )
 }
 
-type AssignmentRow = {
-  id: number
-  versionNumber: number
-  unitName: string | null
-  serviceName: string | null
-  methodId: number | null
-  priority: number
+const METHOD_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Rascunho',
+  PENDING_APPROVAL: 'Em aprovação',
+  TECHNICAL_REVIEWED: 'Revisão técnica',
+  PUBLISHED: 'Publicado',
+  ARCHIVED: 'Arquivado',
 }
 
-function XlsxAssignmentPanel({
+function getMethodStatusLabel(status: string) {
+  return METHOD_STATUS_LABELS[status] ?? status
+}
+
+type LinkedMethodRow = {
+  id: number
+  name: string
+  version: number
+  status: string
+}
+
+function XlsxPublishPanel({
   disabled,
   isPublished,
-  assignments = [],
-  onRemoveAssignment,
-  removePending = false,
   canPublish,
   hasRenderedPreview,
   publishPending,
-  assignmentPending,
-  draft,
-  methods,
-  services,
-  units,
-  optionsLoading,
-  optionsError,
-  onDraftChange,
+  linkedMethods,
+  methodsLoading,
+  methodsError,
   onPublish,
-  onAssign,
 }: {
   disabled: boolean
   isPublished: boolean
-  assignments?: AssignmentRow[]
-  onRemoveAssignment?: (assignmentId: number) => void
-  removePending?: boolean
   canPublish: boolean
   hasRenderedPreview: boolean
   publishPending: boolean
-  assignmentPending: boolean
-  draft: XlsxAssignmentDraft
-  methods: XlsxAssignmentOption[]
-  services: XlsxAssignmentOption[]
-  units: XlsxAssignmentOption[]
-  optionsLoading: boolean
-  optionsError: boolean
-  onDraftChange: (draft: XlsxAssignmentDraft) => void
+  linkedMethods: LinkedMethodRow[]
+  methodsLoading: boolean
+  methodsError: boolean
   onPublish: () => void
-  onAssign: () => void
 }) {
-  const formDisabled = disabled || !isPublished || assignmentPending
-  const selectedScopeCount = [
-    draft.unitId,
-    draft.serviceId,
-    draft.methodId,
-  ].filter(Boolean).length
-
-  const updateDraft = (patch: Partial<XlsxAssignmentDraft>) => {
-    onDraftChange({ ...draft, ...patch })
-  }
-
   return (
     <Panel className="overflow-hidden p-0">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
@@ -1522,10 +1411,10 @@ function XlsxAssignmentPanel({
               {isPublished ? 'Publicado' : 'Não publicado'}
             </Badge>
           </div>
-          <h2 className="text-base font-semibold">Publicação e atribuição</h2>
+          <h2 className="text-base font-semibold">Publicação</h2>
           <p className="text-xs text-muted-foreground">
-            Defina quais calibrações usam esta versão XLSX quando o certificado
-            for emitido.
+            Publicar libera esta versão para emissão. Cada método emite com o
+            modelo vinculado a ele — configure o vínculo na página do método.
           </p>
         </div>
         <Button
@@ -1547,171 +1436,51 @@ function XlsxAssignmentPanel({
       {!isPublished && (
         <div className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
           {hasRenderedPreview
-            ? 'Prévia concluída. Publique a versão para liberar a atribuição.'
+            ? 'Prévia concluída. Publique a versão para liberar a emissão.'
             : 'Valide o XLSX e gere uma prévia PDF concluída antes de publicar.'}
         </div>
       )}
 
-      {assignments.length > 0 && (
-        <div className="border-b px-4 py-3">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Atribuições ativas — a de maior prioridade que corresponder à
-            calibração vence
+      <div className="px-4 py-4">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">
+          Métodos que usam este modelo
+        </p>
+        {methodsError ? (
+          <p className="text-xs text-amber-950 dark:text-amber-200">
+            Não foi possível carregar os métodos. Atualize a página e tente
+            novamente.
           </p>
+        ) : methodsLoading ? (
+          <p className="text-xs text-muted-foreground">Carregando métodos...</p>
+        ) : linkedMethods.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum método usa este modelo ainda. Abra o método e vincule o
+            modelo em “Modelo de certificado” — sem o vínculo, a aprovação das
+            calibrações daquele método é bloqueada.
+          </p>
+        ) : (
           <ul className="space-y-1.5">
-            {assignments.map((assignment) => (
+            {linkedMethods.map((method) => (
               <li
-                key={assignment.id}
+                key={method.id}
                 className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs"
               >
-                <Badge variant="outline">v{assignment.versionNumber}</Badge>
-                <span>
-                  {[
-                    assignment.unitName
-                      ? `Unidade: ${assignment.unitName}`
-                      : null,
-                    assignment.serviceName
-                      ? `Serviço: ${assignment.serviceName}`
-                      : null,
-                    assignment.methodId != null
-                      ? `Método #${assignment.methodId}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || 'Todas as calibrações (curinga)'}
-                </span>
+                <Link
+                  to="/dashboard/methods/$id"
+                  params={{ id: String(method.id) }}
+                  className="font-medium hover:underline"
+                >
+                  {method.name}
+                </Link>
+                <Badge variant="outline">v{method.version}</Badge>
                 <span className="text-muted-foreground">
-                  prioridade {assignment.priority}
+                  {getMethodStatusLabel(method.status)}
                 </span>
-                {onRemoveAssignment && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto h-6 px-2 text-xs text-destructive"
-                    disabled={disabled || removePending}
-                    onClick={() => onRemoveAssignment(assignment.id)}
-                  >
-                    Remover
-                  </Button>
-                )}
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {optionsError && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-          Não foi possível carregar todos os métodos, serviços ou unidades.
-          Atualize a página e tente novamente.
-        </div>
-      )}
-
-      <form
-        className="space-y-3 px-4 py-4"
-        onSubmit={(event) => {
-          event.preventDefault()
-          onAssign()
-        }}
-      >
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="space-y-1">
-            <span className="text-xs font-medium">Método</span>
-            <NativeSelect
-              value={draft.methodId}
-              disabled={formDisabled || optionsLoading}
-              onChange={(event) =>
-                updateDraft({ methodId: event.target.value })
-              }
-              className="h-9 text-xs"
-            >
-              <NativeSelectOption value="">Todos os métodos</NativeSelectOption>
-              {methods.map((method) => (
-                <NativeSelectOption key={method.id} value={String(method.id)}>
-                  {method.label}
-                  {method.detail ? ` · ${method.detail}` : ''}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-xs font-medium">Serviço</span>
-            <NativeSelect
-              value={draft.serviceId}
-              disabled={formDisabled || optionsLoading}
-              onChange={(event) =>
-                updateDraft({ serviceId: event.target.value })
-              }
-              className="h-9 text-xs"
-            >
-              <NativeSelectOption value="">
-                Todos os serviços
-              </NativeSelectOption>
-              {services.map((service) => (
-                <NativeSelectOption key={service.id} value={String(service.id)}>
-                  {service.label}
-                  {service.detail ? ` · ${service.detail}` : ''}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-xs font-medium">Unidade</span>
-            <NativeSelect
-              value={draft.unitId}
-              disabled={formDisabled || optionsLoading}
-              onChange={(event) => updateDraft({ unitId: event.target.value })}
-              className="h-9 text-xs"
-            >
-              <NativeSelectOption value="">
-                Todas as unidades
-              </NativeSelectOption>
-              {units.map((unit) => (
-                <NativeSelectOption key={unit.id} value={String(unit.id)}>
-                  {unit.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-xs font-medium">Prioridade</span>
-            <Input
-              type="number"
-              inputMode="numeric"
-              value={draft.priority}
-              disabled={formDisabled}
-              onChange={(event) =>
-                updateDraft({ priority: event.target.value })
-              }
-              className="h-9 text-xs tabular-nums"
-            />
-          </label>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-            <span className="rounded bg-muted px-2 py-1">
-              {selectedScopeCount === 0
-                ? 'Escopo amplo'
-                : `${selectedScopeCount} filtro${selectedScopeCount === 1 ? '' : 's'}`}
-            </span>
-            <span className="rounded bg-muted px-2 py-1">
-              Maior prioridade vence
-            </span>
-          </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={formDisabled || optionsLoading}
-          >
-            {assignmentPending ? 'Atribuindo...' : 'Atribuir versão'}
-          </Button>
-        </div>
-      </form>
+        )}
+      </div>
     </Panel>
   )
 }

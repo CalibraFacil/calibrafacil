@@ -1386,6 +1386,12 @@ export const CreateMethodSchema = z.object({
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
   accreditedScope: z.boolean().optional(),
+  certificateTemplateId: z.coerce
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -2212,14 +2218,10 @@ export const AccreditedScopeLineSchema = z
     message: "CMC linear exige o coeficiente por unidade de leitura",
     path: ["cmcB"],
   })
-  .refine(
-    (line) =>
-      line.cmcType === "linear" || line.cmcA > 0,
-    {
-      message: "CMC fixa deve ser maior que zero",
-      path: ["cmcA"],
-    },
-  );
+  .refine((line) => line.cmcType === "linear" || line.cmcA > 0, {
+    message: "CMC fixa deve ser maior que zero",
+    path: ["cmcA"],
+  });
 
 export type AccreditedScopeLineInput = z.infer<
   typeof AccreditedScopeLineSchema

@@ -16,7 +16,6 @@ import {
   customerAuditLog,
   jobAuditLog,
   organization,
-  organizationApiKey,
   organizationUnit,
   publicApiResourceRef,
   publicApiWebhookDelivery,
@@ -72,7 +71,7 @@ import {
   upsertResourceExternalId,
 } from "../lib/public-api";
 import {
-  getEffectiveCertificateTemplateSnapshot,
+  resolveMethodCertificateTemplate,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
 import { isUniqueViolation } from "../lib/db-errors";
@@ -233,27 +232,6 @@ function toIdempotencyResponseStatus(status: number): 200 | 201 | 202 | 204 {
     default:
       return 200;
   }
-}
-
-function toCertificateTemplateSnapshot(
-  value: unknown,
-): CertificateTemplateSnapshot | null {
-  const record = toRecord(value);
-  if (
-    (typeof record.id !== "number" && record.id !== null) ||
-    typeof record.name !== "string" ||
-    typeof record.slug !== "string" ||
-    typeof record.version !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    id: record.id,
-    name: record.name,
-    slug: record.slug,
-    version: record.version,
-  };
 }
 
 function resolvePeriodRange(
@@ -3773,11 +3751,24 @@ publicApiV2Router
           };
         }
 
-        const effectiveTemplateSnapshot =
-          toCertificateTemplateSnapshot(existing.certificateTemplateSnapshot) ??
-          (await getEffectiveCertificateTemplateSnapshot(
-            apiKey.organizationId,
-          ));
+        // Per-method certificate template (0104): same gate as the interactive
+        // approval — the frozen method must own a renderable template, or the
+        // worker would strand the job in GENERATING_PDF.
+        const templateResolution = await resolveMethodCertificateTemplate({
+          organizationId: apiKey.organizationId,
+          methodId: existing.methodSnapshot?.methodId ?? null,
+        });
+        if (!templateResolution.ok) {
+          return {
+            status: 422,
+            body: buildPublicApiError({
+              code: "certificate_template_required",
+              message:
+                "O método desta calibração não possui modelo de certificado vinculado — vincule um modelo publicado ao método",
+            }),
+          };
+        }
+        const effectiveTemplateSnapshot = templateResolution.snapshot;
 
         const [updated] = await db
           .update(calibrationJob)
@@ -3785,11 +3776,10 @@ publicApiV2Router
             status: "GENERATING_PDF",
             approvedBy: apiKey.createdBy,
             approvedAt: new Date(),
-            certificateTemplateId:
-              existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
-            certificateTemplateSnapshot:
-              existing.certificateTemplateSnapshot ??
-              serializeCertificateTemplateSnapshot(effectiveTemplateSnapshot),
+            certificateTemplateId: effectiveTemplateSnapshot.id,
+            certificateTemplateSnapshot: serializeCertificateTemplateSnapshot(
+              effectiveTemplateSnapshot,
+            ),
             rejectedBy: null,
             rejectedAt: null,
             rejectionReason: null,

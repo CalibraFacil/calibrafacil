@@ -72,6 +72,21 @@ export function createMethodsApi(rawCloudClient: any): MethodsApi {
         "Erro ao arquivar método",
       );
     },
+    async setCertificateTemplate(
+      id: string | number,
+      input: { certificateTemplateId: number | null },
+    ) {
+      return readJsonResponse<{
+        ok: boolean;
+        certificateTemplateId: number | null;
+      }>(
+        await rawCloudClient.api.methods[":id"]["certificate-template"].$put({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao vincular modelo de certificado",
+      );
+    },
     async createNewVersion(id: string | number) {
       return readJsonResponse<MethodDetailData>(
         await rawCloudClient.api.methods[":id"]["new-version"].$post({

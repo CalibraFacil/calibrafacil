@@ -78,7 +78,10 @@ export function CertificateContentSection({
         <Field label="Gráfico da curva de calibração (motor visual)">
           <div className="space-y-2">
             {(certificate?.resultCharts ?? []).map((chart, index) => (
-              <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+              <div
+                key={index}
+                className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+              >
                 <Input
                   value={chart.tableKey}
                   onChange={(event) => {

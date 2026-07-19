@@ -994,6 +994,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "setCertificateTemplate",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
           "method": "createNewVersion",
           "namespace": "methods",
           "policy": "cloud-only",
@@ -1669,16 +1674,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "listAssignments",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "archiveAssignment",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
           "method": "duplicate",
           "namespace": "certificateTemplates",
           "policy": "cloud-only",
@@ -1720,11 +1715,6 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "publishXlsx",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createXlsxAssignment",
           "namespace": "certificateTemplates",
           "policy": "cloud-only",
         },
@@ -3158,10 +3148,6 @@ describe("certificate templates XLSX runtime adapter", () => {
     });
     await client.certificateTemplates.getXlsxPreview(1, 10, 20);
     await client.certificateTemplates.publishXlsx(1, 10);
-    await client.certificateTemplates.createXlsxAssignment(1, 10, {
-      certificateType: "calibration",
-      priority: 100,
-    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/certificate-templates/1/versions/10",
@@ -3171,7 +3157,6 @@ describe("certificate templates XLSX runtime adapter", () => {
       "https://api.example.test/api/certificate-templates/1/versions/10/preview",
       "https://api.example.test/api/certificate-templates/1/versions/10/previews/20",
       "https://api.example.test/api/certificate-templates/1/versions/10/publish",
-      "https://api.example.test/api/certificate-templates/1/versions/10/assignments",
     ]);
     expect(fetchCalls.map(([, init]) => init?.method)).toEqual([
       "GET",
@@ -3181,13 +3166,12 @@ describe("certificate templates XLSX runtime adapter", () => {
       "POST",
       "GET",
       "POST",
-      "POST",
     ]);
     expect(
       fetchCalls.map(([, init]) =>
         new Headers(init?.headers).get("x-active-unit-id"),
       ),
-    ).toEqual(["20", "20", "20", "20", "20", "20", "20", "20"]);
+    ).toEqual(["20", "20", "20", "20", "20", "20", "20"]);
     expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
     expect(formDataBody(fetchCalls[1]?.[1]).get("xlsx")).toBeInstanceOf(Blob);
     expect(new Headers(fetchCalls[3]?.[1]?.headers).get("Content-Type")).toBe(

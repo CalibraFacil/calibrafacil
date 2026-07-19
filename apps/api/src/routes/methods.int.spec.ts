@@ -49,6 +49,7 @@ import { db } from "@calibra-facil/db";
 import {
   assetType,
   calibrationMethod,
+  certificateTemplate,
   methodAuditLog,
   user,
   member,
@@ -96,7 +97,14 @@ async function seedProfessionalSubscription(orgId: string): Promise<void> {
  * which assertSafeUnknown rejects. Including them as real values avoids this.
  */
 const MINIMAL_DATA_FIELDS = [
-  { key: "x", type: "number", label: "Leitura X", required: true, unit: "mm", defaultValue: 0.0 },
+  {
+    key: "x",
+    type: "number",
+    label: "Leitura X",
+    required: true,
+    unit: "mm",
+    defaultValue: 0.0,
+  },
 ] as const;
 
 /**
@@ -126,6 +134,7 @@ async function seedMethod(params: {
   // incoherent before the gate existed).
   dataFields?: MethodInputField[];
   formulas?: MethodFormula[];
+  certificateTemplateId?: number | null;
 }): Promise<number> {
   const name = `Método Teste ${params.nameSuffix ?? params.orgId}`;
   const [row] = await db
@@ -141,6 +150,7 @@ async function seedMethod(params: {
       formulas: params.formulas ?? [],
       validations: [],
       accreditedScope: false,
+      certificateTemplateId: params.certificateTemplateId ?? null,
       createdBy: params.createdBy,
       technicalReviewedBy: params.technicalReviewedBy ?? null,
       // compiledMethod / methodFingerprint intentionally null for DRAFT/PENDING seeds;
@@ -221,384 +231,367 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   // =========================================================================
   // REQ-METH-001: Tenant isolation
   // =========================================================================
-  it(
-    "REQ-METH-001: org A cannot GET or transition org B's method (→ 404); GET / returns only org A's methods",
-    async () => {
-      const orgA = await seedOrgWithPro({ orgId: "org-a", userId: "user-a" });
-      const orgB = await seedOrgWithPro({ orgId: "org-b", userId: "user-b" });
+  it("REQ-METH-001: org A cannot GET or transition org B's method (→ 404); GET / returns only org A's methods", async () => {
+    const orgA = await seedOrgWithPro({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrgWithPro({ orgId: "org-b", userId: "user-b" });
 
-      // Seed one DRAFT method in org A
-      const methodAId = await seedMethod({
-        orgId: "org-a",
-        createdBy: orgA.userId,
-        status: "DRAFT",
-        nameSuffix: "a",
-      });
+    // Seed one DRAFT method in org A
+    const methodAId = await seedMethod({
+      orgId: "org-a",
+      createdBy: orgA.userId,
+      status: "DRAFT",
+      nameSuffix: "a",
+    });
 
-      // Seed one PENDING_APPROVAL method in org B
-      const methodBId = await seedMethod({
-        orgId: "org-b",
-        createdBy: orgB.userId,
-        status: "PENDING_APPROVAL",
-        nameSuffix: "b",
-      });
+    // Seed one PENDING_APPROVAL method in org B
+    const methodBId = await seedMethod({
+      orgId: "org-b",
+      createdBy: orgB.userId,
+      status: "PENDING_APPROVAL",
+      nameSuffix: "b",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
 
-      // --- Cross-tenant GET /:id ---
-      const getRes = await methodsRouter.request(`/${methodBId}`);
-      // resolveMethodRouteId scopes by org → numeric id not found under org A
-      expect(getRes.status).toBe(404);
+    // --- Cross-tenant GET /:id ---
+    const getRes = await methodsRouter.request(`/${methodBId}`);
+    // resolveMethodRouteId scopes by org → numeric id not found under org A
+    expect(getRes.status).toBe(404);
 
-      // --- Cross-tenant transition (technical-review) ---
-      const reviewRes = await methodsRouter.request(
-        `/${methodBId}/technical-review`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(reviewRes.status).toBe(404);
+    // --- Cross-tenant transition (technical-review) ---
+    const reviewRes = await methodsRouter.request(
+      `/${methodBId}/technical-review`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({}),
+      },
+    );
+    expect(reviewRes.status).toBe(404);
 
-      // Org B's method is unchanged
-      const [orgBRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodBId));
-      expect(orgBRow?.status).toBe("PENDING_APPROVAL");
+    // Org B's method is unchanged
+    const [orgBRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodBId));
+    expect(orgBRow?.status).toBe("PENDING_APPROVAL");
 
-      // --- GET / returns only org A's methods ---
-      const listRes = await methodsRouter.request("/");
-      expect(listRes.status).toBe(200);
-      const listBody = await listRes.json();
-      // pagination.total must equal org A's method count (exactly 1)
-      expect(listBody.pagination.total).toBe(1);
-      expect(listBody.data).toHaveLength(1);
-      expect(listBody.data[0].id).toBe(methodAId);
-    },
-  );
+    // --- GET / returns only org A's methods ---
+    const listRes = await methodsRouter.request("/");
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    // pagination.total must equal org A's method count (exactly 1)
+    expect(listBody.pagination.total).toBe(1);
+    expect(listBody.data).toHaveLength(1);
+    expect(listBody.data[0].id).toBe(methodAId);
+  });
 
   // =========================================================================
   // REQ-METH-002: State machine
   // =========================================================================
-  it(
-    "REQ-METH-002-a: technical-review a PENDING_APPROVAL method as admin → 200 + TECHNICAL_REVIEWED + technicalReviewedBy set (DB-verified)",
-    async () => {
-      const org = await seedOrgWithPro({ orgId: "org-sm", userId: "user-sm" });
+  it("REQ-METH-002-a: technical-review a PENDING_APPROVAL method as admin → 200 + TECHNICAL_REVIEWED + technicalReviewedBy set (DB-verified)", async () => {
+    const org = await seedOrgWithPro({ orgId: "org-sm", userId: "user-sm" });
 
-      const methodId = await seedMethod({
-        orgId: "org-sm",
-        createdBy: org.userId,
-        status: "PENDING_APPROVAL",
-      });
+    const methodId = await seedMethod({
+      orgId: "org-sm",
+      createdBy: org.userId,
+      status: "PENDING_APPROVAL",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(
-        `/${methodId}/technical-review`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}/technical-review`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.status).toBe("TECHNICAL_REVIEWED");
-      expect(body.technicalReviewedBy).toBe(org.userId);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("TECHNICAL_REVIEWED");
+    expect(body.technicalReviewedBy).toBe(org.userId);
 
-      // DB-verify
-      const [dbRow] = await db
-        .select({
-          status: calibrationMethod.status,
-          technicalReviewedBy: calibrationMethod.technicalReviewedBy,
-        })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(dbRow?.status).toBe("TECHNICAL_REVIEWED");
-      expect(dbRow?.technicalReviewedBy).toBe(org.userId);
-    },
-  );
+    // DB-verify
+    const [dbRow] = await db
+      .select({
+        status: calibrationMethod.status,
+        technicalReviewedBy: calibrationMethod.technicalReviewedBy,
+      })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(dbRow?.status).toBe("TECHNICAL_REVIEWED");
+    expect(dbRow?.technicalReviewedBy).toBe(org.userId);
+  });
 
-  it(
-    "REQ-METH-002-b: technical-review a DRAFT method → 400 (wrong state)",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-sm2",
-        userId: "user-sm2",
-      });
+  it("REQ-METH-002-b: technical-review a DRAFT method → 400 (wrong state)", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-sm2",
+      userId: "user-sm2",
+    });
 
-      const methodId = await seedMethod({
-        orgId: "org-sm2",
-        createdBy: org.userId,
-        status: "DRAFT",
-      });
+    const methodId = await seedMethod({
+      orgId: "org-sm2",
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(
-        `/${methodId}/technical-review`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}/technical-review`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
 
-      expect(res.status).toBe(400);
-    },
-  );
+    expect(res.status).toBe(400);
+  });
 
-  it(
-    "REQ-METH-002-c: quality-approve a TECHNICAL_REVIEWED method (distinct owner) → 200 + PUBLISHED (DB-verified)",
-    async () => {
-      // admin seeds the org; then we need an owner to quality-approve
-      const org = await seedOrgWithPro({
-        orgId: "org-sm3",
-        userId: "user-admin-sm3",
-        role: "admin",
-      });
+  it("REQ-METH-002-c: quality-approve a TECHNICAL_REVIEWED method (distinct owner) → 200 + PUBLISHED (DB-verified)", async () => {
+    // admin seeds the org; then we need an owner to quality-approve
+    const org = await seedOrgWithPro({
+      orgId: "org-sm3",
+      userId: "user-admin-sm3",
+      role: "admin",
+    });
 
-      const ownerId = "user-owner-sm3";
-      await seedExtraMember({
-        userId: ownerId,
-        orgId: "org-sm3",
-        role: "owner",
-      });
+    const ownerId = "user-owner-sm3";
+    await seedExtraMember({
+      userId: ownerId,
+      orgId: "org-sm3",
+      role: "owner",
+    });
 
-      // Seed an asset type so methodRecordToDraft produces assetTypeId:"1" (string)
-      // instead of undefined, which assertSafeUnknown would reject.
-      const assetTypeId = await seedAssetType();
+    // Seed an asset type so methodRecordToDraft produces assetTypeId:"1" (string)
+    // instead of undefined, which assertSafeUnknown would reject.
+    const assetTypeId = await seedAssetType();
 
-      // Seed TECHNICAL_REVIEWED by admin (distinct from owner)
-      const methodId = await seedMethod({
-        orgId: "org-sm3",
-        createdBy: org.userId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: org.userId, // admin reviewed
-        assetTypeId,
-      });
+    // Seed TECHNICAL_REVIEWED by admin (distinct from owner)
+    const methodId = await seedMethod({
+      orgId: "org-sm3",
+      createdBy: org.userId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: org.userId, // admin reviewed
+      assetTypeId,
+    });
 
-      // Owner approves (distinct from reviewer)
-      loginAs({ userId: ownerId, organizationId: "org-sm3" });
-      const res = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          // sampleData drives the ad-hoc preview scenario; x is the only input field
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
+    // Owner approves (distinct from reviewer)
+    loginAs({ userId: ownerId, organizationId: "org-sm3" });
+    const res = await methodsRouter.request(`/${methodId}/quality-approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      // sampleData drives the ad-hoc preview scenario; x is the only input field
+      body: JSON.stringify({ sampleData: { x: 1.0 } }),
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.status).toBe("PUBLISHED");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("PUBLISHED");
 
-      // DB-verify
-      const [dbRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(dbRow?.status).toBe("PUBLISHED");
-    },
-  );
+    // DB-verify
+    const [dbRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(dbRow?.status).toBe("PUBLISHED");
+  });
 
-  it(
-    "REQ-METH-002-d: quality-approve a PENDING_APPROVAL method (not TECHNICAL_REVIEWED) → 400",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-sm4",
-        userId: "user-owner-sm4",
-        role: "owner",
-      });
+  it("REQ-METH-002-d: quality-approve a PENDING_APPROVAL method (not TECHNICAL_REVIEWED) → 400", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-sm4",
+      userId: "user-owner-sm4",
+      role: "owner",
+    });
 
-      const methodId = await seedMethod({
-        orgId: "org-sm4",
-        createdBy: org.userId,
-        status: "PENDING_APPROVAL",
-      });
+    const methodId = await seedMethod({
+      orgId: "org-sm4",
+      createdBy: org.userId,
+      status: "PENDING_APPROVAL",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}/quality-approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { x: 1.0 } }),
+    });
 
-      expect(res.status).toBe(400);
-    },
-  );
+    expect(res.status).toBe(400);
+  });
 
-  it(
-    "REQ-METH-002-e: PUT a PUBLISHED method → 400 (immutable)",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-sm5",
-        userId: "user-sm5",
-      });
+  it("REQ-METH-002-e: PUT a PUBLISHED method → 400 (immutable)", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-sm5",
+      userId: "user-sm5",
+    });
 
-      const publisherId = "user-owner-sm5";
-      await seedExtraMember({
-        userId: publisherId,
-        orgId: "org-sm5",
-        role: "owner",
-      });
+    const publisherId = "user-owner-sm5";
+    await seedExtraMember({
+      userId: publisherId,
+      orgId: "org-sm5",
+      role: "owner",
+    });
 
-      const methodId = await seedMethod({
-        orgId: "org-sm5",
-        createdBy: org.userId,
-        status: "PUBLISHED",
-        technicalReviewedBy: org.userId,
-      });
+    const methodId = await seedMethod({
+      orgId: "org-sm5",
+      createdBy: org.userId,
+      status: "PUBLISHED",
+      technicalReviewedBy: org.userId,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(`/${methodId}`, {
-        method: "PUT",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          name: "Método Teste org-sm5",
-          description: "Updated",
-          dataFields: MINIMAL_DATA_FIELDS,
-          formulas: [],
-          validations: [],
-          accreditedScope: false,
-        }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        name: "Método Teste org-sm5",
+        description: "Updated",
+        dataFields: MINIMAL_DATA_FIELDS,
+        formulas: [],
+        validations: [],
+        accreditedScope: false,
+      }),
+    });
 
-      expect(res.status).toBe(400);
+    expect(res.status).toBe(400);
 
-      // DB: still PUBLISHED
-      const [dbRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(dbRow?.status).toBe("PUBLISHED");
-    },
-  );
+    // DB: still PUBLISHED
+    const [dbRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(dbRow?.status).toBe("PUBLISHED");
+  });
 
-  it(
-    "REQ-METH-002-f: new-version of a PUBLISHED method → 201 + new DRAFT with version 2",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-sm6",
-        userId: "user-sm6",
-      });
+  it("REQ-METH-002-f: new-version of a PUBLISHED method → 201 + new DRAFT with version 2", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-sm6",
+      userId: "user-sm6",
+    });
 
-      const methodId = await seedMethod({
-        orgId: "org-sm6",
-        createdBy: org.userId,
-        status: "PUBLISHED",
+    const [templateRow] = await db
+      .insert(certificateTemplate)
+      .values({
+        organizationId: "org-sm6",
+        name: "Modelo SM6",
+        slug: "modelo-sm6",
         version: 1,
-        nameSuffix: "sm6",
-      });
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: org.userId,
+      })
+      .returning({ id: certificateTemplate.id });
+    if (!templateRow) throw new Error("template seed failed");
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(`/${methodId}/new-version`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({}),
-      });
+    const methodId = await seedMethod({
+      orgId: "org-sm6",
+      createdBy: org.userId,
+      status: "PUBLISHED",
+      version: 1,
+      nameSuffix: "sm6",
+      certificateTemplateId: templateRow.id,
+    });
 
-      expect(res.status).toBe(201);
-      const body = await res.json();
-      expect(body.status).toBe("DRAFT");
-      expect(body.version).toBe(2);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}/new-version`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
 
-      // DB-verify: a new DRAFT row with version=2 exists for this org
-      const [draftRow] = await db
-        .select({
-          status: calibrationMethod.status,
-          version: calibrationMethod.version,
-        })
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.organizationId, "org-sm6"),
-            eq(calibrationMethod.status, "DRAFT"),
-          ),
-        );
-      expect(draftRow?.status).toBe("DRAFT");
-      expect(draftRow?.version).toBe(2);
-    },
-  );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.status).toBe("DRAFT");
+    expect(body.version).toBe(2);
+
+    // DB-verify: a new DRAFT row with version=2 exists for this org
+    const [draftRow] = await db
+      .select({
+        status: calibrationMethod.status,
+        version: calibrationMethod.version,
+        certificateTemplateId: calibrationMethod.certificateTemplateId,
+      })
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.organizationId, "org-sm6"),
+          eq(calibrationMethod.status, "DRAFT"),
+        ),
+      );
+    expect(draftRow?.status).toBe("DRAFT");
+    expect(draftRow?.version).toBe(2);
+    // 0104: the certificate-template link survives the version bump — a
+    // dropped link here would silently block approvals after every bump.
+    expect(draftRow?.certificateTemplateId).toBe(templateRow.id);
+  });
 
   // =========================================================================
   // REQ-METH-003: FOUR-EYES by identity (reviewer ≠ approver)
   // =========================================================================
-  it(
-    "REQ-METH-003: quality-approve as the same user who did technical-review → 400 'usuarios diferentes'; method stays TECHNICAL_REVIEWED; distinct owner → 200 + PUBLISHED",
-    async () => {
-      // Seed org with ownerA and ownerB, both role=owner
-      // ownerA will have done the technical-review (seeded directly)
-      // ownerA self-approve attempt → 400
-      // ownerB approve → 200
-      const ownerAId = "user-owner-a-fe";
-      const ownerBId = "user-owner-b-fe";
+  it("REQ-METH-003: quality-approve as the same user who did technical-review → 400 'usuarios diferentes'; method stays TECHNICAL_REVIEWED; distinct owner → 200 + PUBLISHED", async () => {
+    // Seed org with ownerA and ownerB, both role=owner
+    // ownerA will have done the technical-review (seeded directly)
+    // ownerA self-approve attempt → 400
+    // ownerB approve → 200
+    const ownerAId = "user-owner-a-fe";
+    const ownerBId = "user-owner-b-fe";
 
-      // seedOrg creates the first user as owner
-      await seedOrg({ orgId: "org-fe", userId: ownerAId, role: "owner" });
-      await seedProfessionalSubscription("org-fe");
-      await seedExtraMember({ userId: ownerBId, orgId: "org-fe", role: "owner" });
+    // seedOrg creates the first user as owner
+    await seedOrg({ orgId: "org-fe", userId: ownerAId, role: "owner" });
+    await seedProfessionalSubscription("org-fe");
+    await seedExtraMember({ userId: ownerBId, orgId: "org-fe", role: "owner" });
 
-      // Seed an asset type so compilation doesn't fail with "assetTypeId undefined".
-      const assetTypeId = await seedAssetType();
+    // Seed an asset type so compilation doesn't fail with "assetTypeId undefined".
+    const assetTypeId = await seedAssetType();
 
-      // Seed TECHNICAL_REVIEWED with technicalReviewedBy = ownerA
-      const methodId = await seedMethod({
-        orgId: "org-fe",
-        createdBy: ownerAId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: ownerAId,
-        assetTypeId,
-      });
+    // Seed TECHNICAL_REVIEWED with technicalReviewedBy = ownerA
+    const methodId = await seedMethod({
+      orgId: "org-fe",
+      createdBy: ownerAId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: ownerAId,
+      assetTypeId,
+    });
 
-      // ownerA tries to quality-approve (self) → 400
-      loginAs({ userId: ownerAId, organizationId: "org-fe" });
-      const selfApproveRes = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
-      expect(selfApproveRes.status).toBe(400);
-      const selfApproveBody = await selfApproveRes.json();
-      expect(selfApproveBody.error).toContain("usuarios diferentes");
+    // ownerA tries to quality-approve (self) → 400
+    loginAs({ userId: ownerAId, organizationId: "org-fe" });
+    const selfApproveRes = await methodsRouter.request(
+      `/${methodId}/quality-approve`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ sampleData: { x: 1.0 } }),
+      },
+    );
+    expect(selfApproveRes.status).toBe(400);
+    const selfApproveBody = await selfApproveRes.json();
+    expect(selfApproveBody.error).toContain("usuarios diferentes");
 
-      // DB: method is still TECHNICAL_REVIEWED
-      const [afterSelfRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(afterSelfRow?.status).toBe("TECHNICAL_REVIEWED");
+    // DB: method is still TECHNICAL_REVIEWED
+    const [afterSelfRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(afterSelfRow?.status).toBe("TECHNICAL_REVIEWED");
 
-      // ownerB (distinct) quality-approves → 200 + PUBLISHED
-      loginAs({ userId: ownerBId, organizationId: "org-fe" });
-      const distinctRes = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
-      expect(distinctRes.status).toBe(200);
-      const distinctBody = await distinctRes.json();
-      expect(distinctBody.status).toBe("PUBLISHED");
+    // ownerB (distinct) quality-approves → 200 + PUBLISHED
+    loginAs({ userId: ownerBId, organizationId: "org-fe" });
+    const distinctRes = await methodsRouter.request(
+      `/${methodId}/quality-approve`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ sampleData: { x: 1.0 } }),
+      },
+    );
+    expect(distinctRes.status).toBe(200);
+    const distinctBody = await distinctRes.json();
+    expect(distinctBody.status).toBe("PUBLISHED");
 
-      // DB-verify
-      const [publishedRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(publishedRow?.status).toBe("PUBLISHED");
-    },
-  );
+    // DB-verify
+    const [publishedRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(publishedRow?.status).toBe("PUBLISHED");
+  });
 
   // =========================================================================
   // REQ-METH-006: FOUR-EYES by identity on the SECOND surface — POST /:id/publish
@@ -613,197 +606,173 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   //
   // Added during integration (not by the maker) to close the /publish coverage gap.
   // =========================================================================
-  it(
-    "REQ-METH-006: publish as the same user who did technical-review → 400 'usuarios diferentes'; method stays TECHNICAL_REVIEWED; distinct owner → 200 + PUBLISHED",
-    async () => {
-      const ownerAId = "user-owner-a-pub";
-      const ownerBId = "user-owner-b-pub";
+  it("REQ-METH-006: publish as the same user who did technical-review → 400 'usuarios diferentes'; method stays TECHNICAL_REVIEWED; distinct owner → 200 + PUBLISHED", async () => {
+    const ownerAId = "user-owner-a-pub";
+    const ownerBId = "user-owner-b-pub";
 
-      // seedOrg creates ownerA as owner; add ownerB as a second owner
-      await seedOrg({ orgId: "org-pub", userId: ownerAId, role: "owner" });
-      await seedProfessionalSubscription("org-pub");
-      await seedExtraMember({ userId: ownerBId, orgId: "org-pub", role: "owner" });
+    // seedOrg creates ownerA as owner; add ownerB as a second owner
+    await seedOrg({ orgId: "org-pub", userId: ownerAId, role: "owner" });
+    await seedProfessionalSubscription("org-pub");
+    await seedExtraMember({
+      userId: ownerBId,
+      orgId: "org-pub",
+      role: "owner",
+    });
 
-      // Asset type so compilation doesn't fail with "assetTypeId undefined".
-      const assetTypeId = await seedAssetType();
+    // Asset type so compilation doesn't fail with "assetTypeId undefined".
+    const assetTypeId = await seedAssetType();
 
-      // TECHNICAL_REVIEWED with technicalReviewedBy = ownerA.
-      const methodId = await seedMethod({
-        orgId: "org-pub",
-        createdBy: ownerAId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: ownerAId,
-        assetTypeId,
-      });
+    // TECHNICAL_REVIEWED with technicalReviewedBy = ownerA.
+    const methodId = await seedMethod({
+      orgId: "org-pub",
+      createdBy: ownerAId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: ownerAId,
+      assetTypeId,
+    });
 
-      // ownerA tries to PUBLISH the method they reviewed (self) → 400.
-      // Only the identity guard can produce this 400: ownerA holds owner role,
-      // the method is genuinely TECHNICAL_REVIEWED, and the feature is enabled —
-      // so role/feature/state are all satisfied and identity is the sole blocker.
-      loginAs({ userId: ownerAId, organizationId: "org-pub" });
-      const selfPublishRes = await methodsRouter.request(
-        `/${methodId}/publish`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
-      expect(selfPublishRes.status).toBe(400);
-      const selfPublishBody = await selfPublishRes.json();
-      expect(selfPublishBody.error).toContain("usuarios diferentes");
+    // ownerA tries to PUBLISH the method they reviewed (self) → 400.
+    // Only the identity guard can produce this 400: ownerA holds owner role,
+    // the method is genuinely TECHNICAL_REVIEWED, and the feature is enabled —
+    // so role/feature/state are all satisfied and identity is the sole blocker.
+    loginAs({ userId: ownerAId, organizationId: "org-pub" });
+    const selfPublishRes = await methodsRouter.request(`/${methodId}/publish`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { x: 1.0 } }),
+    });
+    expect(selfPublishRes.status).toBe(400);
+    const selfPublishBody = await selfPublishRes.json();
+    expect(selfPublishBody.error).toContain("usuarios diferentes");
 
-      // DB: method is still TECHNICAL_REVIEWED (self-publish did not transition it).
-      const [afterSelfRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(afterSelfRow?.status).toBe("TECHNICAL_REVIEWED");
+    // DB: method is still TECHNICAL_REVIEWED (self-publish did not transition it).
+    const [afterSelfRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(afterSelfRow?.status).toBe("TECHNICAL_REVIEWED");
 
-      // ownerB (distinct) publishes → 200 + PUBLISHED.
-      loginAs({ userId: ownerBId, organizationId: "org-pub" });
-      const distinctRes = await methodsRouter.request(
-        `/${methodId}/publish`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
-      expect(distinctRes.status).toBe(200);
-      const distinctBody = await distinctRes.json();
-      expect(distinctBody.status).toBe("PUBLISHED");
+    // ownerB (distinct) publishes → 200 + PUBLISHED.
+    loginAs({ userId: ownerBId, organizationId: "org-pub" });
+    const distinctRes = await methodsRouter.request(`/${methodId}/publish`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { x: 1.0 } }),
+    });
+    expect(distinctRes.status).toBe(200);
+    const distinctBody = await distinctRes.json();
+    expect(distinctBody.status).toBe("PUBLISHED");
 
-      // DB-verify
-      const [publishedRow] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(publishedRow?.status).toBe("PUBLISHED");
-    },
-  );
+    // DB-verify
+    const [publishedRow] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(publishedRow?.status).toBe("PUBLISHED");
+  });
 
   // =========================================================================
   // REQ-METH-004: RBAC
   // =========================================================================
-  it(
-    "REQ-METH-004-a: technical-review as technician (non-admin) → 403",
-    async () => {
-      const techId = "user-tech-rbac";
-      await seedOrg({ orgId: "org-rbac", userId: techId, role: "technician" });
-      await seedProfessionalSubscription("org-rbac");
+  it("REQ-METH-004-a: technical-review as technician (non-admin) → 403", async () => {
+    const techId = "user-tech-rbac";
+    await seedOrg({ orgId: "org-rbac", userId: techId, role: "technician" });
+    await seedProfessionalSubscription("org-rbac");
 
-      const methodId = await seedMethod({
-        orgId: "org-rbac",
-        createdBy: techId,
-        status: "PENDING_APPROVAL",
-      });
+    const methodId = await seedMethod({
+      orgId: "org-rbac",
+      createdBy: techId,
+      status: "PENDING_APPROVAL",
+    });
 
-      loginAs({ userId: techId, organizationId: "org-rbac" });
-      const res = await methodsRouter.request(
-        `/${methodId}/technical-review`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(res.status).toBe(403);
-    },
-  );
+    loginAs({ userId: techId, organizationId: "org-rbac" });
+    const res = await methodsRouter.request(`/${methodId}/technical-review`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+  });
 
-  it(
-    "REQ-METH-004-b: technical-review as owner (non-admin) → 403",
-    async () => {
-      const ownerId = "user-owner-rbac2";
-      await seedOrg({ orgId: "org-rbac2", userId: ownerId, role: "owner" });
-      await seedProfessionalSubscription("org-rbac2");
+  it("REQ-METH-004-b: technical-review as owner (non-admin) → 403", async () => {
+    const ownerId = "user-owner-rbac2";
+    await seedOrg({ orgId: "org-rbac2", userId: ownerId, role: "owner" });
+    await seedProfessionalSubscription("org-rbac2");
 
-      const adminId = "user-admin-rbac2";
-      await seedExtraMember({ userId: adminId, orgId: "org-rbac2", role: "admin" });
+    const adminId = "user-admin-rbac2";
+    await seedExtraMember({
+      userId: adminId,
+      orgId: "org-rbac2",
+      role: "admin",
+    });
 
-      const methodId = await seedMethod({
-        orgId: "org-rbac2",
-        createdBy: adminId,
-        status: "PENDING_APPROVAL",
-      });
+    const methodId = await seedMethod({
+      orgId: "org-rbac2",
+      createdBy: adminId,
+      status: "PENDING_APPROVAL",
+    });
 
-      // Owner tries to do technical-review (only admin may)
-      loginAs({ userId: ownerId, organizationId: "org-rbac2" });
-      const res = await methodsRouter.request(
-        `/${methodId}/technical-review`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(res.status).toBe(403);
-    },
-  );
+    // Owner tries to do technical-review (only admin may)
+    loginAs({ userId: ownerId, organizationId: "org-rbac2" });
+    const res = await methodsRouter.request(`/${methodId}/technical-review`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+  });
 
-  it(
-    "REQ-METH-004-c: quality-approve as admin (non-owner) → 403",
-    async () => {
-      const adminId = "user-admin-rbac3";
-      await seedOrg({ orgId: "org-rbac3", userId: adminId, role: "admin" });
-      await seedProfessionalSubscription("org-rbac3");
+  it("REQ-METH-004-c: quality-approve as admin (non-owner) → 403", async () => {
+    const adminId = "user-admin-rbac3";
+    await seedOrg({ orgId: "org-rbac3", userId: adminId, role: "admin" });
+    await seedProfessionalSubscription("org-rbac3");
 
-      const ownerId = "user-owner-rbac3";
-      await seedExtraMember({ userId: ownerId, orgId: "org-rbac3", role: "owner" });
+    const ownerId = "user-owner-rbac3";
+    await seedExtraMember({
+      userId: ownerId,
+      orgId: "org-rbac3",
+      role: "owner",
+    });
 
-      // TECHNICAL_REVIEWED by owner (distinct from admin who will try to approve)
-      const methodId = await seedMethod({
-        orgId: "org-rbac3",
-        createdBy: adminId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: ownerId,
-      });
+    // TECHNICAL_REVIEWED by owner (distinct from admin who will try to approve)
+    const methodId = await seedMethod({
+      orgId: "org-rbac3",
+      createdBy: adminId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: ownerId,
+    });
 
-      // Admin tries to quality-approve (only owner may)
-      loginAs({ userId: adminId, organizationId: "org-rbac3" });
-      const res = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { x: 1.0 } }),
-        },
-      );
-      expect(res.status).toBe(403);
-    },
-  );
+    // Admin tries to quality-approve (only owner may)
+    loginAs({ userId: adminId, organizationId: "org-rbac3" });
+    const res = await methodsRouter.request(`/${methodId}/quality-approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { x: 1.0 } }),
+    });
+    expect(res.status).toBe(403);
+  });
 
   // =========================================================================
   // REQ-METH-005: Unauthenticated
   // =========================================================================
-  it(
-    "REQ-METH-005: unauthenticated technical-review and quality-approve → 401",
-    async () => {
-      // We don't even need a real method — auth check fires before DB access.
-      logout();
+  it("REQ-METH-005: unauthenticated technical-review and quality-approve → 401", async () => {
+    // We don't even need a real method — auth check fires before DB access.
+    logout();
 
-      const techReviewRes = await methodsRouter.request(
-        "/999/technical-review",
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(techReviewRes.status).toBe(401);
+    const techReviewRes = await methodsRouter.request("/999/technical-review", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(techReviewRes.status).toBe(401);
 
-      const qaApproveRes = await methodsRouter.request(
-        "/999/quality-approve",
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({}),
-        },
-      );
-      expect(qaApproveRes.status).toBe(401);
-    },
-  );
+    const qaApproveRes = await methodsRouter.request("/999/quality-approve", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(qaApproveRes.status).toBe(401);
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-002/003 (#649): deleting a DRAFT method must WRITE a 'delete'
@@ -811,50 +780,47 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   // trail). Before the fix there was no delete audit insert at all AND the
   // method_id FK cascaded — the trail had no trace of the deletion.
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-002: DELETE /:id writes a 'delete' audit row that survives the deletion",
-    async () => {
-      const org = await seedOrg({ orgId: "org-aud", role: "admin" });
-      const methodId = await seedMethod({
-        orgId: org.orgId,
-        createdBy: org.userId,
-        status: "DRAFT",
-        nameSuffix: "auditável",
-      });
+  it("REQ-CMP-AUD-002: DELETE /:id writes a 'delete' audit row that survives the deletion", async () => {
+    const org = await seedOrg({ orgId: "org-aud", role: "admin" });
+    const methodId = await seedMethod({
+      orgId: org.orgId,
+      createdBy: org.userId,
+      status: "DRAFT",
+      nameSuffix: "auditável",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(`/${methodId}`, {
-        method: "DELETE",
-        headers: JSON_HEADERS,
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}`, {
+      method: "DELETE",
+      headers: JSON_HEADERS,
+    });
+    expect(res.status).toBe(200);
 
-      // The method row is gone…
-      const remaining = await db
-        .select()
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(remaining).toHaveLength(0);
+    // The method row is gone…
+    const remaining = await db
+      .select()
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(remaining).toHaveLength(0);
 
-      // …but the deletion's audit row persists with enough data to be useful
-      // without the original row (REQ-CMP-AUD-003: id + name + actor + timestamp).
-      const logs = await db
-        .select()
-        .from(methodAuditLog)
-        .where(
-          and(
-            eq(methodAuditLog.methodId, methodId),
-            eq(methodAuditLog.action, "delete"),
-          ),
-        );
-      expect(logs).toHaveLength(1);
-      expect(logs[0]?.performedBy).toBe(org.userId);
-      expect(logs[0]?.performedAt).toBeInstanceOf(Date);
-      expect(logs[0]?.changes).toMatchObject({
-        method: { old: { name: "Método Teste auditável" }, new: null },
-      });
-    },
-  );
+    // …but the deletion's audit row persists with enough data to be useful
+    // without the original row (REQ-CMP-AUD-003: id + name + actor + timestamp).
+    const logs = await db
+      .select()
+      .from(methodAuditLog)
+      .where(
+        and(
+          eq(methodAuditLog.methodId, methodId),
+          eq(methodAuditLog.action, "delete"),
+        ),
+      );
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.performedBy).toBe(org.userId);
+    expect(logs[0]?.performedAt).toBeInstanceOf(Date);
+    expect(logs[0]?.changes).toMatchObject({
+      method: { old: { name: "Método Teste auditável" }, new: null },
+    });
+  });
 
   // =========================================================================
   // REQ-DIM-201 [HIGH RISK] / REQ-DIM-202: dimensional publish gate (DOM-10)
@@ -920,188 +886,176 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
     ],
   } as const;
 
-  it(
-    "REQ-DIM-201: POST / with massa[g] + tensao[V] → 422 DIMENSIONAL_ERROR; no row persisted",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim",
-        userId: "user-dim",
-      });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-DIM-201: POST / with massa[g] + tensao[V] → 422 DIMENSIONAL_ERROR; no row persisted", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim",
+      userId: "user-dim",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await methodsRouter.request("/", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          name: "Método Dimensional Ruim",
-          ...DIMENSIONALLY_BAD_FORMULA,
-        }),
-      });
+    const res = await methodsRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        name: "Método Dimensional Ruim",
+        ...DIMENSIONALLY_BAD_FORMULA,
+      }),
+    });
 
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.code).toBe("DIMENSIONAL_ERROR");
-      expect(Array.isArray(body.diagnostics)).toBe(true);
-      expect(body.diagnostics.length).toBeGreaterThan(0);
-      expect(body.diagnostics[0].formulaId).toBe("erro");
-      expect(typeof body.diagnostics[0].message).toBe("string");
-      // The formatted dimensions must appear (mass M vs voltage M·L^2·T^-3·I^-1).
-      expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("DIMENSIONAL_ERROR");
+    expect(Array.isArray(body.diagnostics)).toBe(true);
+    expect(body.diagnostics.length).toBeGreaterThan(0);
+    expect(body.diagnostics[0].formulaId).toBe("erro");
+    expect(typeof body.diagnostics[0].message).toBe("string");
+    // The formatted dimensions must appear (mass M vs voltage M·L^2·T^-3·I^-1).
+    expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
 
-      // Row NOT persisted.
-      const rows = await db
-        .select()
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.organizationId, org.orgId),
-            eq(calibrationMethod.name, "Método Dimensional Ruim"),
-          ),
-        );
-      expect(rows).toHaveLength(0);
-    },
-  );
-
-  it(
-    "REQ-DIM-202: POST / with a Magnus-style empirical formula → 201 (no false positive)",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-magnus",
-        userId: "user-magnus",
-      });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-
-      const res = await methodsRouter.request("/", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ name: "Método Magnus", ...MAGNUS_METHOD }),
-      });
-
-      expect(res.status).toBe(201);
-      const body = await res.json();
-      expect(body.status).toBe("DRAFT");
-
-      const rows = await db
-        .select({ id: calibrationMethod.id })
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.organizationId, org.orgId),
-            eq(calibrationMethod.name, "Método Magnus"),
-          ),
-        );
-      expect(rows).toHaveLength(1);
-    },
-  );
-
-  it(
-    "REQ-DIM-201: POST /compile surfaces a DIMENSIONAL_ERROR diagnostic (editor affordance) and ok:false",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim-compile",
-        userId: "user-dim-compile",
-      });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-
-      // A fully-shaped MethodDraft (the /compile "already a draft" branch).
-      const res = await methodsRouter.request("/compile", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          id: "compile_dim",
-          version: 1,
-          status: "draft",
-          name: "Compile Dimensional",
-          inputs: [
-            {
-              kind: "scalar",
-              key: "massa",
-              label: "Massa",
-              unit: "g",
-              required: true,
-            },
-            {
-              kind: "scalar",
-              key: "tensao",
-              label: "Tensão",
-              unit: "V",
-              required: true,
-            },
-          ],
-          formulas: [
-            {
-              key: "erro",
-              label: "Erro",
-              expression: "massa + tensao",
-              outputUnit: "g",
-              outputKind: "error",
-              required: true,
-            },
-          ],
-          measurementModels: [],
-          acceptanceCriteria: [],
-          previewScenarios: [],
-          metadata: { validationStatus: "pending_revalidation" },
-        }),
-      });
-
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.ok).toBe(false);
-      // The existing compile-preview panel lists these per-formula error entries.
-      const dimensional = body.diagnostics.filter(
-        (d: { code?: string }) => d.code === "DIMENSIONAL_ERROR",
+    // Row NOT persisted.
+    const rows = await db
+      .select()
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.organizationId, org.orgId),
+          eq(calibrationMethod.name, "Método Dimensional Ruim"),
+        ),
       );
-      expect(dimensional.length).toBeGreaterThan(0);
-      expect(dimensional[0].severity).toBe("error");
-      expect(dimensional[0].path).toBe("erro");
-      expect(dimensional[0].message).toContain("M·L^2·T^-3·I^-1");
-    },
-  );
+    expect(rows).toHaveLength(0);
+  });
 
-  it(
-    "REQ-DIM-201: PUT /:id introducing a dimensional incoherence → 422; row unchanged",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim-upd",
-        userId: "user-dim-upd",
-      });
-      const methodId = await seedMethod({
-        orgId: org.orgId,
-        createdBy: org.userId,
-        status: "DRAFT",
-        nameSuffix: "atualizável",
-      });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-DIM-202: POST / with a Magnus-style empirical formula → 201 (no false positive)", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-magnus",
+      userId: "user-magnus",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await methodsRouter.request(`/${methodId}`, {
-        method: "PUT",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          name: "Método Teste atualizável",
-          ...DIMENSIONALLY_BAD_FORMULA,
-        }),
-      });
+    const res = await methodsRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: "Método Magnus", ...MAGNUS_METHOD }),
+    });
 
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.code).toBe("DIMENSIONAL_ERROR");
-      expect(body.diagnostics[0].formulaId).toBe("erro");
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.status).toBe("DRAFT");
 
-      // Row unchanged: still the seeded MINIMAL_DATA_FIELDS + empty formulas.
-      const [row] = await db
-        .select({
-          dataFields: calibrationMethod.dataFields,
-          formulas: calibrationMethod.formulas,
-          status: calibrationMethod.status,
-        })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(row?.status).toBe("DRAFT");
-      expect(row?.formulas).toEqual([]);
-      expect(row?.dataFields).toEqual(MINIMAL_DATA_FIELDS);
-    },
-  );
+    const rows = await db
+      .select({ id: calibrationMethod.id })
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.organizationId, org.orgId),
+          eq(calibrationMethod.name, "Método Magnus"),
+        ),
+      );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("REQ-DIM-201: POST /compile surfaces a DIMENSIONAL_ERROR diagnostic (editor affordance) and ok:false", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim-compile",
+      userId: "user-dim-compile",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    // A fully-shaped MethodDraft (the /compile "already a draft" branch).
+    const res = await methodsRouter.request("/compile", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        id: "compile_dim",
+        version: 1,
+        status: "draft",
+        name: "Compile Dimensional",
+        inputs: [
+          {
+            kind: "scalar",
+            key: "massa",
+            label: "Massa",
+            unit: "g",
+            required: true,
+          },
+          {
+            kind: "scalar",
+            key: "tensao",
+            label: "Tensão",
+            unit: "V",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "erro",
+            label: "Erro",
+            expression: "massa + tensao",
+            outputUnit: "g",
+            outputKind: "error",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [],
+        metadata: { validationStatus: "pending_revalidation" },
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    // The existing compile-preview panel lists these per-formula error entries.
+    const dimensional = body.diagnostics.filter(
+      (d: { code?: string }) => d.code === "DIMENSIONAL_ERROR",
+    );
+    expect(dimensional.length).toBeGreaterThan(0);
+    expect(dimensional[0].severity).toBe("error");
+    expect(dimensional[0].path).toBe("erro");
+    expect(dimensional[0].message).toContain("M·L^2·T^-3·I^-1");
+  });
+
+  it("REQ-DIM-201: PUT /:id introducing a dimensional incoherence → 422; row unchanged", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim-upd",
+      userId: "user-dim-upd",
+    });
+    const methodId = await seedMethod({
+      orgId: org.orgId,
+      createdBy: org.userId,
+      status: "DRAFT",
+      nameSuffix: "atualizável",
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await methodsRouter.request(`/${methodId}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        name: "Método Teste atualizável",
+        ...DIMENSIONALLY_BAD_FORMULA,
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("DIMENSIONAL_ERROR");
+    expect(body.diagnostics[0].formulaId).toBe("erro");
+
+    // Row unchanged: still the seeded MINIMAL_DATA_FIELDS + empty formulas.
+    const [row] = await db
+      .select({
+        dataFields: calibrationMethod.dataFields,
+        formulas: calibrationMethod.formulas,
+        status: calibrationMethod.status,
+      })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(row?.status).toBe("DRAFT");
+    expect(row?.formulas).toEqual([]);
+    expect(row?.dataFields).toEqual(MINIMAL_DATA_FIELDS);
+  });
 
   // =========================================================================
   // REQ-DIM-201 [HIGH RISK] — deny tests for the transition gates
@@ -1118,154 +1072,139 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   // massa[g]+tensao[V] row DIRECTLY, bypassing POST/PUT entirely.
   // =========================================================================
 
-  it(
-    "REQ-DIM-201: request-approval on a PRE-EXISTING incoherent DRAFT → 422 DIMENSIONAL_ERROR; stays DRAFT",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim-ra",
-        userId: "user-dim-ra",
-      });
-      // assetTypeId required: methodRecordToDraft maps a null assetTypeId to
-      // `undefined`, which assertSafeUnknown rejects.
-      const assetTypeId = await seedAssetType();
-      const methodId = await seedMethod({
-        orgId: org.orgId,
-        createdBy: org.userId,
-        status: "DRAFT",
-        nameSuffix: "ra-incoerente",
-        assetTypeId,
-        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
-        formulas: DIMENSIONALLY_BAD_FORMULAS,
-      });
+  it("REQ-DIM-201: request-approval on a PRE-EXISTING incoherent DRAFT → 422 DIMENSIONAL_ERROR; stays DRAFT", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim-ra",
+      userId: "user-dim-ra",
+    });
+    // assetTypeId required: methodRecordToDraft maps a null assetTypeId to
+    // `undefined`, which assertSafeUnknown rejects.
+    const assetTypeId = await seedAssetType();
+    const methodId = await seedMethod({
+      orgId: org.orgId,
+      createdBy: org.userId,
+      status: "DRAFT",
+      nameSuffix: "ra-incoerente",
+      assetTypeId,
+      dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+      formulas: DIMENSIONALLY_BAD_FORMULAS,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await methodsRouter.request(
-        `/${methodId}/request-approval`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          // sampleData makes the (dimension-blind) engine compile/preview pass,
-          // so the DIMENSIONAL gate — not PREVIEW_FAILED — is what's exercised.
-          body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
-        },
-      );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await methodsRouter.request(`/${methodId}/request-approval`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      // sampleData makes the (dimension-blind) engine compile/preview pass,
+      // so the DIMENSIONAL gate — not PREVIEW_FAILED — is what's exercised.
+      body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+    });
 
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.code).toBe("DIMENSIONAL_ERROR");
-      expect(body.diagnostics[0].formulaId).toBe("erro");
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("DIMENSIONAL_ERROR");
+    expect(body.diagnostics[0].formulaId).toBe("erro");
 
-      const [row] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(row?.status).toBe("DRAFT");
-    },
-  );
+    const [row] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(row?.status).toBe("DRAFT");
+  });
 
-  it(
-    "REQ-DIM-201: quality-approve on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422; status unchanged",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim-qa",
-        userId: "user-admin-dim-qa",
-        role: "admin",
-      });
-      const ownerId = "user-owner-dim-qa";
-      await seedExtraMember({
-        userId: ownerId,
-        orgId: "org-dim-qa",
-        role: "owner",
-      });
-      const assetTypeId = await seedAssetType();
+  it("REQ-DIM-201: quality-approve on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422; status unchanged", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim-qa",
+      userId: "user-admin-dim-qa",
+      role: "admin",
+    });
+    const ownerId = "user-owner-dim-qa";
+    await seedExtraMember({
+      userId: ownerId,
+      orgId: "org-dim-qa",
+      role: "owner",
+    });
+    const assetTypeId = await seedAssetType();
 
-      const methodId = await seedMethod({
-        orgId: "org-dim-qa",
-        createdBy: org.userId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: org.userId, // admin reviewed; owner approves (four-eyes)
-        assetTypeId,
-        nameSuffix: "qa-incoerente",
-        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
-        formulas: DIMENSIONALLY_BAD_FORMULAS,
-      });
+    const methodId = await seedMethod({
+      orgId: "org-dim-qa",
+      createdBy: org.userId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: org.userId, // admin reviewed; owner approves (four-eyes)
+      assetTypeId,
+      nameSuffix: "qa-incoerente",
+      dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+      formulas: DIMENSIONALLY_BAD_FORMULAS,
+    });
 
-      loginAs({ userId: ownerId, organizationId: "org-dim-qa" });
-      const res = await methodsRouter.request(
-        `/${methodId}/quality-approve`,
-        {
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
-        },
-      );
+    loginAs({ userId: ownerId, organizationId: "org-dim-qa" });
+    const res = await methodsRouter.request(`/${methodId}/quality-approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+    });
 
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.code).toBe("DIMENSIONAL_ERROR");
-      expect(body.diagnostics[0].formulaId).toBe("erro");
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("DIMENSIONAL_ERROR");
+    expect(body.diagnostics[0].formulaId).toBe("erro");
 
-      const [row] = await db
-        .select({ status: calibrationMethod.status })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(row?.status).toBe("TECHNICAL_REVIEWED");
-    },
-  );
+    const [row] = await db
+      .select({ status: calibrationMethod.status })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(row?.status).toBe("TECHNICAL_REVIEWED");
+  });
 
-  it(
-    "REQ-DIM-201 [MANDATORY]: POST /:id/publish on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422 DIMENSIONAL_ERROR; status NEVER reaches PUBLISHED",
-    async () => {
-      const org = await seedOrgWithPro({
-        orgId: "org-dim-pub",
-        userId: "user-admin-dim-pub",
-        role: "admin",
-      });
-      const publisherId = "user-owner-dim-pub";
-      await seedExtraMember({
-        userId: publisherId,
-        orgId: "org-dim-pub",
-        role: "owner",
-      });
-      const assetTypeId = await seedAssetType();
+  it("REQ-DIM-201 [MANDATORY]: POST /:id/publish on a PRE-EXISTING incoherent TECHNICAL_REVIEWED method → 422 DIMENSIONAL_ERROR; status NEVER reaches PUBLISHED", async () => {
+    const org = await seedOrgWithPro({
+      orgId: "org-dim-pub",
+      userId: "user-admin-dim-pub",
+      role: "admin",
+    });
+    const publisherId = "user-owner-dim-pub";
+    await seedExtraMember({
+      userId: publisherId,
+      orgId: "org-dim-pub",
+      role: "owner",
+    });
+    const assetTypeId = await seedAssetType();
 
-      const methodId = await seedMethod({
-        orgId: "org-dim-pub",
-        createdBy: org.userId,
-        status: "TECHNICAL_REVIEWED",
-        technicalReviewedBy: org.userId, // admin reviewed; owner publishes (four-eyes)
-        assetTypeId,
-        nameSuffix: "pub-incoerente",
-        dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
-        formulas: DIMENSIONALLY_BAD_FORMULAS,
-      });
+    const methodId = await seedMethod({
+      orgId: "org-dim-pub",
+      createdBy: org.userId,
+      status: "TECHNICAL_REVIEWED",
+      technicalReviewedBy: org.userId, // admin reviewed; owner publishes (four-eyes)
+      assetTypeId,
+      nameSuffix: "pub-incoerente",
+      dataFields: DIMENSIONALLY_BAD_DATA_FIELDS,
+      formulas: DIMENSIONALLY_BAD_FORMULAS,
+    });
 
-      loginAs({ userId: publisherId, organizationId: "org-dim-pub" });
-      const res = await methodsRouter.request(`/${methodId}/publish`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
-      });
+    loginAs({ userId: publisherId, organizationId: "org-dim-pub" });
+    const res = await methodsRouter.request(`/${methodId}/publish`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sampleData: { massa: 10, tensao: 5 } }),
+    });
 
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.code).toBe("DIMENSIONAL_ERROR");
-      expect(body.diagnostics[0].formulaId).toBe("erro");
-      expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe("DIMENSIONAL_ERROR");
+    expect(body.diagnostics[0].formulaId).toBe("erro");
+    expect(body.diagnostics[0].message).toContain("M·L^2·T^-3·I^-1");
 
-      // The regulatory invariant: this method NEVER reaches PUBLISHED.
-      const [row] = await db
-        .select({
-          status: calibrationMethod.status,
-          publishedAt: calibrationMethod.publishedAt,
-        })
-        .from(calibrationMethod)
-        .where(eq(calibrationMethod.id, methodId));
-      expect(row?.status).toBe("TECHNICAL_REVIEWED");
-      expect(row?.status).not.toBe("PUBLISHED");
-      expect(row?.publishedAt).toBeNull();
-    },
-  );
+    // The regulatory invariant: this method NEVER reaches PUBLISHED.
+    const [row] = await db
+      .select({
+        status: calibrationMethod.status,
+        publishedAt: calibrationMethod.publishedAt,
+      })
+      .from(calibrationMethod)
+      .where(eq(calibrationMethod.id, methodId));
+    expect(row?.status).toBe("TECHNICAL_REVIEWED");
+    expect(row?.status).not.toBe("PUBLISHED");
+    expect(row?.publishedAt).toBeNull();
+  });
 
   // =========================================================================
   // REQ-DIM-201 — POST /from-template: DOCUMENTED UNREACHABLE (not a deny test)

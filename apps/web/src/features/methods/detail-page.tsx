@@ -34,6 +34,8 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { RoleGate } from '@/components/permission-gate'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { useCertificateTemplatesData } from '@/features/certificate-templates/queries'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -204,6 +206,24 @@ export function MethodDetailPage({ id }: { id: string }) {
     onError: (error) => toast.error(error.message),
   })
 
+  const certificateTemplateMutation = useMutation({
+    mutationFn: async (certificateTemplateId: number | null) => {
+      if (!method) throw new Error('Método não carregado')
+      return calibraApi.methods.setCertificateTemplate(method.id ?? id, {
+        certificateTemplateId,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['methods', id] })
+      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({
+        queryKey: ['certificate-template-linked-methods', 'cloud'],
+      })
+      toast.success('Modelo de certificado atualizado')
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
   if (isLoading) {
     return <MethodDetailSkeleton />
   }
@@ -280,6 +300,14 @@ export function MethodDetailPage({ id }: { id: string }) {
         </main>
 
         <aside className="min-w-0 space-y-6">
+          <MethodCertificateTemplatePanel
+            method={method}
+            onChange={(templateId) =>
+              certificateTemplateMutation.mutate(templateId)
+            }
+            isPending={certificateTemplateMutation.isPending}
+          />
+
           <Panel className="p-4 sm:p-5">
             <PanelHeader eyebrow="Governança" title="Responsáveis e datas" />
             <BlueprintGrid className="mt-4">
@@ -460,6 +488,67 @@ function MethodActions({
         )}
       </RoleGate>
     </div>
+  )
+}
+
+function MethodCertificateTemplatePanel({
+  method,
+  onChange,
+  isPending,
+}: {
+  method: MethodDetail
+  onChange: (certificateTemplateId: number | null) => void
+  isPending: boolean
+}) {
+  const templatesQuery = useCertificateTemplatesData({ enabled: true })
+  const options = (templatesQuery.data?.items ?? []).filter(
+    (template): template is typeof template & { id: number } =>
+      template.id !== null && template.status === 'ACTIVE',
+  )
+  const currentId = method.certificateTemplateId ?? null
+  const current = options.find((template) => template.id === currentId)
+  const isArchived = method.status === 'ARCHIVED'
+
+  return (
+    <Panel className="p-4 sm:p-5">
+      <PanelHeader eyebrow="Emissão" title="Modelo de certificado" />
+      <div className="mt-4 space-y-2">
+        {currentId === null ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+            Sem modelo vinculado — a aprovação de calibrações deste método será
+            bloqueada até vincular um modelo publicado.
+          </p>
+        ) : null}
+        <RoleGate roles={['admin', 'owner']}>
+          <NativeSelect
+            value={currentId ? String(currentId) : ''}
+            disabled={isPending || isArchived || templatesQuery.isLoading}
+            onChange={(event) => {
+              const value = event.target.value
+              onChange(value === '' ? null : Number(value))
+            }}
+            className="h-9 text-xs"
+          >
+            <NativeSelectOption value="">Sem modelo</NativeSelectOption>
+            {options.map((template) => (
+              <NativeSelectOption key={template.id} value={String(template.id)}>
+                {template.name}
+                {template.currentXlsxVersion?.status !== 'PUBLISHED'
+                  ? ' · sem versão publicada'
+                  : ''}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </RoleGate>
+        <p className="text-xs text-muted-foreground">
+          {current
+            ? current.currentXlsxVersion?.status === 'PUBLISHED'
+              ? `Certificados deste método são emitidos com “${current.name}”.`
+              : `“${current.name}” ainda não tem versão publicada — publique-a antes de aprovar calibrações.`
+            : 'Cada método emite com o modelo vinculado a ele; o vínculo pode ser alterado mesmo com o método publicado.'}
+        </p>
+      </div>
+    </Panel>
   )
 }
 

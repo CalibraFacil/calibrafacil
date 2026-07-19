@@ -133,7 +133,7 @@ export interface Env {
 type JobData = CertificateJobData;
 
 const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
-  "Nenhuma atribuição de template corresponde a esta calibração — publique um template XLSX e crie uma atribuição na etapa Atribuição";
+  "O método desta calibração não possui modelo de certificado vinculado — vincule um modelo publicado ao método";
 
 export type QueueMessage = BackgroundJobMessage;
 
@@ -533,6 +533,9 @@ async function fetchCertificateTemplateSelectionForJob(
   client: Client,
   jobId: number,
 ): Promise<CertificateTemplateSelection | null> {
+  // One explicit link, no matching: the job's FROZEN method (snapshot, never
+  // the service's live method_id — services can be re-pointed after the job
+  // exists) owns a certificate template; render its latest PUBLISHED version.
   const result = await client.query<{
     template_id: number;
     template_version_id: number;
@@ -543,29 +546,25 @@ async function fetchCertificateTemplateSelectionForJob(
   }>(
     `
       select
-        a.template_id,
-        a.template_version_id,
+        t.id as template_id,
+        v.id as template_version_id,
         v.xlsx_r2_key,
         v.binding_manifest,
         v.binding_manifest_sha256,
         v.render_policy
       from calibration_job cj
-      left join service s on s.id = cj.service_id
-      inner join certificate_template_assignment a
-        on a.organization_id = cj.organization_id
-       and a.status = 'ACTIVE'
-       and a.certificate_type = 'calibration'
-       and (a.unit_id is null or a.unit_id = cj.unit_id)
-       and (a.service_id is null or a.service_id = cj.service_id)
-       and (a.method_id is null or a.method_id = s.method_id)
-      inner join certificate_template_version v
-        on v.id = a.template_version_id
-       and v.status = 'PUBLISHED'
+      inner join calibration_method m
+        on m.id = nullif(cj.method_snapshot->>'methodId', '')::int
+       and m.organization_id = cj.organization_id
       inner join certificate_template t
-        on t.id = a.template_id
+        on t.id = m.certificate_template_id
+       and t.organization_id = cj.organization_id
        and t.status = 'ACTIVE'
+      inner join certificate_template_version v
+        on v.template_id = t.id
+       and v.status = 'PUBLISHED'
       where cj.id = $1
-      order by a.priority desc, a.created_at desc
+      order by v.version desc
       limit 1
     `,
     [jobId],

@@ -5,13 +5,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import {
   certificateTemplate,
-  certificateTemplateAssignment,
   certificateTemplatePreview,
   certificateTemplateVersion,
   calibrationMethod,
   organization,
-  organizationUnit,
-  service,
 } from "@calibra-facil/db/schema";
 import {
   certificateXlsxBindingManifestSchema,
@@ -60,14 +57,6 @@ const UpdateXlsxBindingsSchema = z.object({
 
 const RequestXlsxPreviewSchema = z.object({
   sampleData: z.record(z.string(), z.unknown()).optional(),
-});
-
-const CreateXlsxAssignmentSchema = z.object({
-  unitId: z.number().int().positive().optional(),
-  serviceId: z.number().int().positive().optional(),
-  methodId: z.number().int().positive().optional(),
-  certificateType: z.literal("calibration").default("calibration"),
-  priority: z.number().int().default(0),
 });
 
 const MAX_XLSX_FILE_SIZE = 25 * 1024 * 1024;
@@ -1189,341 +1178,6 @@ export const certificateTemplatesRouter = new Hono<{
       return c.json({ item: updated });
     },
   )
-  .get(
-    "/:id/assignments",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    async (c) => {
-      const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (!Number.isFinite(id)) {
-        return c.json({ error: "Template inválido" }, 400);
-      }
-      // Assignments were WRITE-ONLY: created but never listable, so admins
-      // could not answer "who uses this template" without a DB console.
-      const rows = await db
-        .select({
-          id: certificateTemplateAssignment.id,
-          templateVersionId: certificateTemplateAssignment.templateVersionId,
-          versionNumber: certificateTemplateVersion.version,
-          unitId: certificateTemplateAssignment.unitId,
-          unitName: organizationUnit.name,
-          serviceId: certificateTemplateAssignment.serviceId,
-          serviceName: service.name,
-          methodId: certificateTemplateAssignment.methodId,
-          priority: certificateTemplateAssignment.priority,
-          status: certificateTemplateAssignment.status,
-          createdAt: certificateTemplateAssignment.createdAt,
-        })
-        .from(certificateTemplateAssignment)
-        .innerJoin(
-          certificateTemplateVersion,
-          eq(
-            certificateTemplateVersion.id,
-            certificateTemplateAssignment.templateVersionId,
-          ),
-        )
-        .leftJoin(
-          organizationUnit,
-          eq(organizationUnit.id, certificateTemplateAssignment.unitId),
-        )
-        .leftJoin(
-          service,
-          eq(service.id, certificateTemplateAssignment.serviceId),
-        )
-        .where(
-          and(
-            eq(certificateTemplateAssignment.templateId, id),
-            eq(
-              certificateTemplateAssignment.organizationId,
-              member.organizationId,
-            ),
-            eq(certificateTemplateAssignment.status, "ACTIVE"),
-          ),
-        )
-        .orderBy(
-          desc(certificateTemplateAssignment.priority),
-          desc(certificateTemplateAssignment.createdAt),
-        );
-      return c.json({ items: rows });
-    },
-  )
-  .patch(
-    "/:id/assignments/:assignmentId/archive",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      const assignmentId = Number.parseInt(c.req.param("assignmentId"), 10);
-      if (!Number.isFinite(id) || !Number.isFinite(assignmentId)) {
-        return c.json({ error: "Atribuição inválida" }, 400);
-      }
-      const [updated] = await db
-        .update(certificateTemplateAssignment)
-        .set({ status: "ARCHIVED" })
-        .where(
-          and(
-            eq(certificateTemplateAssignment.id, assignmentId),
-            eq(certificateTemplateAssignment.templateId, id),
-            eq(
-              certificateTemplateAssignment.organizationId,
-              member.organizationId,
-            ),
-          ),
-        )
-        .returning();
-      if (!updated) {
-        return c.json({ error: "Atribuição não encontrada" }, 404);
-      }
-      await writeOrganizationAuditEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "certificate_template.assignment_archived",
-        entityType: "certificate_template_assignment",
-        entityId: String(updated.id),
-        details: { templateId: id },
-      });
-      return c.json({ item: updated });
-    },
-  )
-  .post(
-    "/:id/versions/:versionId/assignments",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("custom_templates"),
-    zValidator("json", CreateXlsxAssignmentSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      const versionId = Number.parseInt(c.req.param("versionId"), 10);
-      const input = c.req.valid("json");
-
-      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
-        return c.json({ error: "Template ou versão inválidos" }, 400);
-      }
-
-      const version = await db.query.certificateTemplateVersion.findFirst({
-        where: and(
-          eq(certificateTemplateVersion.id, versionId),
-          eq(certificateTemplateVersion.templateId, id),
-          eq(certificateTemplateVersion.organizationId, member.organizationId),
-        ),
-      });
-
-      if (!version) {
-        return c.json({ error: "Versão XLSX não encontrada" }, 404);
-      }
-
-      const template = await db.query.certificateTemplate.findFirst({
-        where: and(
-          eq(certificateTemplate.id, id),
-          eq(certificateTemplate.organizationId, member.organizationId),
-        ),
-      });
-
-      if (!template || template.status !== "ACTIVE") {
-        return c.json({ error: "Template ativo não encontrado" }, 404);
-      }
-
-      if (version.status !== "PUBLISHED") {
-        return c.json(
-          { error: "Apenas versões publicadas podem ser atribuídas" },
-          409,
-        );
-      }
-
-      if (input.unitId) {
-        const [unit] = await db
-          .select({ id: organizationUnit.id })
-          .from(organizationUnit)
-          .where(
-            and(
-              eq(organizationUnit.id, input.unitId),
-              eq(organizationUnit.organizationId, member.organizationId),
-              eq(organizationUnit.status, "ACTIVE"),
-            ),
-          )
-          .limit(1);
-        if (!unit) {
-          return c.json(
-            { error: "Unidade inválida para esta organização" },
-            400,
-          );
-        }
-      }
-
-      let serviceScope: {
-        id: number;
-        unitId: number;
-        methodId: number | null;
-      } | null = null;
-      if (input.serviceId) {
-        const [serviceRow] = await db
-          .select({
-            id: service.id,
-            unitId: service.unitId,
-            methodId: service.methodId,
-          })
-          .from(service)
-          .where(
-            and(
-              eq(service.id, input.serviceId),
-              eq(service.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!serviceRow) {
-          return c.json(
-            { error: "Serviço inválido para esta organização" },
-            400,
-          );
-        }
-        serviceScope = serviceRow;
-      }
-
-      if (
-        input.unitId &&
-        serviceScope &&
-        serviceScope.unitId !== input.unitId
-      ) {
-        return c.json(
-          { error: "Serviço não pertence à unidade selecionada" },
-          400,
-        );
-      }
-
-      if (input.methodId) {
-        const [method] = await db
-          .select({ id: calibrationMethod.id })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, input.methodId),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!method) {
-          return c.json(
-            { error: "Método inválido para esta organização" },
-            400,
-          );
-        }
-
-        if (serviceScope) {
-          if (serviceScope.methodId == null) {
-            return c.json(
-              { error: "Serviço selecionado não possui método associado" },
-              400,
-            );
-          }
-
-          if (serviceScope.methodId !== input.methodId) {
-            return c.json(
-              { error: "Método não pertence ao serviço selecionado" },
-              400,
-            );
-          }
-        }
-      }
-
-      const assignment = await db.transaction(async (tx) => {
-        // Serialize with template-archive (TOCTOU: archive checks "no live
-        // assignments" then flips status; this insert checks "template
-        // ACTIVE" then writes — without a common lock the two interleave
-        // into an ACTIVE assignment on an ARCHIVED template).
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`certificate-template:${id}`}))`,
-        );
-        const [templateNow] = await tx
-          .select({ status: certificateTemplate.status })
-          .from(certificateTemplate)
-          .where(eq(certificateTemplate.id, id))
-          .limit(1);
-        if (!templateNow || templateNow.status !== "ACTIVE") return null;
-        // Identical-scope dedup: a second concurrent submit must not create
-        // indistinguishable duplicate ACTIVE rows.
-        const [duplicate] = await tx
-          .select({ id: certificateTemplateAssignment.id })
-          .from(certificateTemplateAssignment)
-          .where(
-            and(
-              eq(certificateTemplateAssignment.templateId, id),
-              eq(
-                certificateTemplateAssignment.organizationId,
-                member.organizationId,
-              ),
-              eq(certificateTemplateAssignment.status, "ACTIVE"),
-              input.unitId != null
-                ? eq(certificateTemplateAssignment.unitId, input.unitId)
-                : sql`${certificateTemplateAssignment.unitId} is null`,
-              input.serviceId != null
-                ? eq(certificateTemplateAssignment.serviceId, input.serviceId)
-                : sql`${certificateTemplateAssignment.serviceId} is null`,
-              input.methodId != null
-                ? eq(certificateTemplateAssignment.methodId, input.methodId)
-                : sql`${certificateTemplateAssignment.methodId} is null`,
-            ),
-          )
-          .limit(1);
-        if (duplicate) return { duplicateOf: duplicate.id };
-        const [created] = await tx
-          .insert(certificateTemplateAssignment)
-
-        .values({
-          organizationId: member.organizationId,
-          templateId: id,
-          templateVersionId: version.id,
-          unitId: input.unitId,
-          serviceId: input.serviceId,
-          methodId: input.methodId,
-          certificateType: input.certificateType,
-          priority: input.priority,
-          status: "ACTIVE",
-          createdBy: session.user.id,
-        })
-        .returning();
-        return created ?? null;
-      });
-
-      if (assignment && "duplicateOf" in assignment) {
-        return c.json(
-          { error: "Já existe uma atribuição ativa idêntica para este escopo" },
-          409,
-        );
-      }
-      if (!assignment) {
-        return c.json(
-          { error: "Template não está ativo — atualize a página" },
-          409,
-        );
-      }
-
-      await writeOrganizationAuditEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "certificate_template.xlsx_assigned",
-        entityType: "certificate_template_assignment",
-        entityId: assignment ? String(assignment.id) : undefined,
-        details: {
-          templateId: id,
-          versionId: version.id,
-          unitId: input.unitId,
-          serviceId: input.serviceId,
-          methodId: input.methodId,
-          certificateType: input.certificateType,
-        },
-      });
-
-      return c.json({ item: assignment }, 201);
-    },
-  )
   .put(
     "/:id",
     ...withLabPermission({ organization: ["update"] }),
@@ -1669,15 +1323,21 @@ export const certificateTemplatesRouter = new Hono<{
       // version, else the latest of any status; the copy lands as DRAFT v1.
       let copiedVersionId: number | null = null;
       if (created) {
-        const sourceVersions = await db.query.certificateTemplateVersion.findMany({
-          where: and(
-            eq(certificateTemplateVersion.templateId, existing.id),
-            eq(certificateTemplateVersion.organizationId, member.organizationId),
-          ),
-          orderBy: [desc(certificateTemplateVersion.version)],
-        });
+        const sourceVersions =
+          await db.query.certificateTemplateVersion.findMany({
+            where: and(
+              eq(certificateTemplateVersion.templateId, existing.id),
+              eq(
+                certificateTemplateVersion.organizationId,
+                member.organizationId,
+              ),
+            ),
+            orderBy: [desc(certificateTemplateVersion.version)],
+          });
         const sourceVersion =
-          sourceVersions.find((candidate) => candidate.status === "PUBLISHED") ??
+          sourceVersions.find(
+            (candidate) => candidate.status === "PUBLISHED",
+          ) ??
           sourceVersions[0] ??
           null;
         if (sourceVersion) {
@@ -1812,25 +1472,22 @@ export const certificateTemplatesRouter = new Hono<{
         );
       }
 
-      const [liveAssignment] = await db
-        .select({ id: certificateTemplateAssignment.id })
-        .from(certificateTemplateAssignment)
+      // Archiving a template that methods still issue with would break their
+      // next certificate — block until every method is re-pointed.
+      const linkedMethods = await db
+        .select({ id: calibrationMethod.id })
+        .from(calibrationMethod)
         .where(
           and(
-            eq(certificateTemplateAssignment.templateId, existing.id),
-            eq(
-              certificateTemplateAssignment.organizationId,
-              member.organizationId,
-            ),
-            eq(certificateTemplateAssignment.status, "ACTIVE"),
+            eq(calibrationMethod.certificateTemplateId, existing.id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+            ne(calibrationMethod.status, "ARCHIVED"),
           ),
-        )
-        .limit(1);
-      if (liveAssignment) {
+        );
+      if (linkedMethods.length > 0) {
         return c.json(
           {
-            error:
-              "Este template tem atribuições ativas — remova as atribuições antes de arquivar, ou os certificados dessas calibrações falharão",
+            error: `Modelo vinculado a ${linkedMethods.length} método(s) — desvincule os métodos antes de arquivar, ou os certificados dessas calibrações falharão`,
           },
           409,
         );

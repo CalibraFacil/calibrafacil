@@ -398,6 +398,7 @@ export type MethodsListData = {
     uncertaintyParams?: unknown[];
     certificateContent?: unknown;
     accreditedScope?: boolean;
+    certificateTemplateId?: number | null;
     compiledMethod?: unknown;
     methodFingerprint?: string | null;
     methodEngine?: { version?: string; optionsFingerprint?: string } | null;
@@ -436,6 +437,7 @@ export type MethodWriteInput = {
   uncertaintyParams?: unknown[];
   certificateContent?: unknown;
   accreditedScope?: boolean;
+  certificateTemplateId?: number | null;
   reason?: string;
 };
 
@@ -560,6 +562,10 @@ export interface MethodsApi {
     input: MethodWriteInput,
   ): Promise<MethodDetailData>;
   archive(id: string | number): Promise<unknown>;
+  setCertificateTemplate(
+    id: string | number,
+    input: { certificateTemplateId: number | null },
+  ): Promise<{ ok: boolean; certificateTemplateId: number | null }>;
   createNewVersion(id: string | number): Promise<MethodDetailData>;
   technicalReview(id: string | number): Promise<unknown>;
   qualityApprove(
@@ -1668,14 +1674,6 @@ export type CertificateTemplateUpdateInput = {
   name?: string;
 };
 
-export type CertificateTemplateXlsxAssignmentInput = {
-  certificateType: "calibration";
-  priority: number;
-  unitId?: number;
-  serviceId?: number;
-  methodId?: number;
-};
-
 export interface CertificateTemplatesApi {
   list<TResponse = unknown>(): Promise<TResponse>;
   create<TResponse = unknown>(
@@ -1687,11 +1685,6 @@ export interface CertificateTemplatesApi {
   ): Promise<TResponse>;
   duplicate<TResponse = unknown>(id: string | number): Promise<TResponse>;
   archive<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  listAssignments<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  archiveAssignment<TResponse = unknown>(
-    id: string | number,
-    assignmentId: string | number,
-  ): Promise<TResponse>;
   setDefault<TResponse = unknown>(id: string | number): Promise<TResponse>;
   getXlsxVersion<TResponse = unknown>(
     templateId: string | number,
@@ -1724,11 +1717,6 @@ export interface CertificateTemplatesApi {
   publishXlsx<TResponse = unknown>(
     templateId: string | number,
     versionId: string | number,
-  ): Promise<TResponse>;
-  createXlsxAssignment<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-    input: CertificateTemplateXlsxAssignmentInput,
   ): Promise<TResponse>;
 }
 

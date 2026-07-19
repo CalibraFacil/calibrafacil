@@ -29,7 +29,6 @@ import { seedOrg } from "../../test/integration/seed";
 //   /:id/versions/upload-xlsx  — requires real multipart .xlsx payload + R2 env vars
 //   /:id/versions/:versionId/validate — requires R2 download (xlsxR2Key must exist in R2)
 //   /:id/versions/:versionId/publish  — requires RENDERED preview row + R2
-//   /:id/versions/:versionId/assignments — requires a PUBLISHED version + R2 validate path
 //   /:id/versions/:versionId/analyze   — requires R2 download
 //   /:id/duplicate (authorized 201 path) — deferred; 403 gate covered by REQ-CTMPL-006 pattern
 
@@ -51,7 +50,10 @@ async function seedCertificateTemplate(params: {
 }): Promise<number> {
   const slug =
     params.slug ??
-    params.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50);
+    params.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .slice(0, 50);
   const [row] = await db
     .insert(certificateTemplate)
     .values({
@@ -144,190 +146,172 @@ describe("certificateTemplatesRouter — real DB + real middleware", () => {
   });
 
   // REQ-CTMPL-001: GET / tenant isolation — only the authenticated org's templates
-  it(
-    "REQ-CTMPL-001: GET / returns only the authenticated org's templates (tenant isolation)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-CTMPL-001: GET / returns only the authenticated org's templates (tenant isolation)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      await seedCertificateTemplate({
-        organizationId: orgA.orgId,
-        createdBy: orgA.userId,
-        name: "Template Alpha",
-        slug: "template-alpha",
-      });
-      await seedCertificateTemplate({
-        organizationId: orgA.orgId,
-        createdBy: orgA.userId,
-        name: "Template Beta",
-        slug: "template-beta",
-      });
-      await seedCertificateTemplate({
-        organizationId: orgB.orgId,
-        createdBy: orgB.userId,
-        name: "Template Bravo",
-        slug: "template-bravo",
-      });
+    await seedCertificateTemplate({
+      organizationId: orgA.orgId,
+      createdBy: orgA.userId,
+      name: "Template Alpha",
+      slug: "template-alpha",
+    });
+    await seedCertificateTemplate({
+      organizationId: orgA.orgId,
+      createdBy: orgA.userId,
+      name: "Template Beta",
+      slug: "template-beta",
+    });
+    await seedCertificateTemplate({
+      organizationId: orgB.orgId,
+      createdBy: orgB.userId,
+      name: "Template Bravo",
+      slug: "template-bravo",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await certificateTemplatesRouter.request("/", {
-        headers: JSON_HEADERS,
-      });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await certificateTemplatesRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      const items = body.items;
-      expect(Array.isArray(items)).toBe(true);
+    const items = body.items;
+    expect(Array.isArray(items)).toBe(true);
 
-      const names = items.map((t: { name: string }) => t.name);
-      // Org A's templates appear
-      expect(names).toContain("Template Alpha");
-      expect(names).toContain("Template Beta");
-      // Org B's template must NOT appear
-      expect(names).not.toContain("Template Bravo");
-      // Exactly 2 — definite count asserts no leakage
-      expect(items).toHaveLength(2);
-    },
-  );
+    const names = items.map((t: { name: string }) => t.name);
+    // Org A's templates appear
+    expect(names).toContain("Template Alpha");
+    expect(names).toContain("Template Beta");
+    // Org B's template must NOT appear
+    expect(names).not.toContain("Template Bravo");
+    // Exactly 2 — definite count asserts no leakage
+    expect(items).toHaveLength(2);
+  });
 
   // REQ-CTMPL-002: Cross-tenant GET /:id/versions/:versionId — no data leak
-  it(
-    "REQ-CTMPL-002: GET /:id/versions/:versionId for another org's version returns 404 — no cross-tenant read",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-CTMPL-002: GET /:id/versions/:versionId for another org's version returns 404 — no cross-tenant read", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const bTemplateId = await seedCertificateTemplate({
-        organizationId: orgB.orgId,
-        createdBy: orgB.userId,
-        name: "Secret Org B Template",
-        slug: "secret-org-b",
-      });
-      const bVersionId = await seedTemplateVersion({
-        organizationId: orgB.orgId,
-        templateId: bTemplateId,
-        createdBy: orgB.userId,
-      });
+    const bTemplateId = await seedCertificateTemplate({
+      organizationId: orgB.orgId,
+      createdBy: orgB.userId,
+      name: "Secret Org B Template",
+      slug: "secret-org-b",
+    });
+    const bVersionId = await seedTemplateVersion({
+      organizationId: orgB.orgId,
+      templateId: bTemplateId,
+      createdBy: orgB.userId,
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
 
-      const res = await certificateTemplatesRouter.request(
-        `/${bTemplateId}/versions/${bVersionId}`,
-        { headers: JSON_HEADERS },
-      );
+    const res = await certificateTemplatesRouter.request(
+      `/${bTemplateId}/versions/${bVersionId}`,
+      { headers: JSON_HEADERS },
+    );
 
-      // Handler scopes by organizationId -> org B's version resolves to null -> 404
-      expect(res.status).toBe(404);
-      const body = await res.json();
-      // No org B data must leak through
-      expect(body).not.toHaveProperty("xlsxR2Key");
-      expect(body).not.toHaveProperty("bindingManifest");
-    },
-  );
+    // Handler scopes by organizationId -> org B's version resolves to null -> 404
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    // No org B data must leak through
+    expect(body).not.toHaveProperty("xlsxR2Key");
+    expect(body).not.toHaveProperty("bindingManifest");
+  });
 
   // REQ-CTMPL-003: POST / as member -> 403 (RBAC: organization:update absent for member role)
-  it(
-    "REQ-CTMPL-003: POST / as member -> 403 (RBAC: withLabPermission({organization:[update]}) denied)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-CTMPL-003: POST / as member -> 403 (RBAC: withLabPermission({organization:[update]}) denied)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await certificateTemplatesRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ name: "Blocked Template" }),
-      });
+    const res = await certificateTemplatesRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ name: "Blocked Template" }),
+    });
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
   // REQ-CTMPL-004: POST / as admin without custom_templates plan -> 403 (requireFeature gate)
-  it(
-    "REQ-CTMPL-004: POST / as admin without custom_templates plan -> 403 (requireFeature blocks FREE plan)",
-    async () => {
-      // No subscription seeded -> FREE plan -> no custom_templates entitlement
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-CTMPL-004: POST / as admin without custom_templates plan -> 403 (requireFeature blocks FREE plan)", async () => {
+    // No subscription seeded -> FREE plan -> no custom_templates entitlement
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await certificateTemplatesRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ name: "Needs Pro Plan" }),
-      });
+    const res = await certificateTemplatesRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ name: "Needs Pro Plan" }),
+    });
 
-      // requireFeature("custom_templates") fires -> 403 (feature not in FREE plan)
-      expect(res.status).toBe(403);
-    },
-  );
+    // requireFeature("custom_templates") fires -> 403 (feature not in FREE plan)
+    expect(res.status).toBe(403);
+  });
 
   // REQ-CTMPL-005: POST / as admin with PROFESSIONAL plan -> 201, row persisted in org scope
-  it(
-    "REQ-CTMPL-005: POST / as admin with PROFESSIONAL plan -> 201, template row scoped to org",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      await seedProfessionalSubscription(org.orgId);
+  it("REQ-CTMPL-005: POST / as admin with PROFESSIONAL plan -> 201, template row scoped to org", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await seedProfessionalSubscription(org.orgId);
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await certificateTemplatesRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ name: "Meu Template Pro" }),
-      });
+    const res = await certificateTemplatesRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ name: "Meu Template Pro" }),
+    });
 
-      expect(res.status).toBe(201);
-      const body = await res.json();
-      expect(body.item).toBeDefined();
-      expect(body.item.name).toBe("Meu Template Pro");
-      expect(body.item.organizationId).toBe(org.orgId);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.item).toBeDefined();
+    expect(body.item.name).toBe("Meu Template Pro");
+    expect(body.item.organizationId).toBe(org.orgId);
 
-      // Verify the row is in the DB scoped to the correct org
-      const [row] = await db
-        .select({
-          organizationId: certificateTemplate.organizationId,
-          name: certificateTemplate.name,
-        })
-        .from(certificateTemplate)
-        .where(eq(certificateTemplate.id, body.item.id));
+    // Verify the row is in the DB scoped to the correct org
+    const [row] = await db
+      .select({
+        organizationId: certificateTemplate.organizationId,
+        name: certificateTemplate.name,
+      })
+      .from(certificateTemplate)
+      .where(eq(certificateTemplate.id, body.item.id));
 
-      expect(row?.organizationId).toBe(org.orgId);
-      expect(row?.name).toBe("Meu Template Pro");
-    },
-  );
+    expect(row?.organizationId).toBe(org.orgId);
+    expect(row?.name).toBe("Meu Template Pro");
+  });
 
   // REQ-CTMPL-006: PUT /:id as member -> 403 (RBAC gate fires before business logic)
-  it(
-    "REQ-CTMPL-006: PUT /:id as member -> 403 (insufficient role for template rename)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
+  it("REQ-CTMPL-006: PUT /:id as member -> 403 (insufficient role for template rename)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
 
-      const templateId = await seedCertificateTemplate({
-        organizationId: org.orgId,
-        createdBy: org.userId,
-        name: "Original Name",
-        slug: "original-name",
-      });
+    const templateId = await seedCertificateTemplate({
+      organizationId: org.orgId,
+      createdBy: org.userId,
+      name: "Original Name",
+      slug: "original-name",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await certificateTemplatesRouter.request(`/${templateId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ name: "Should Not Update" }),
-      });
+    const res = await certificateTemplatesRouter.request(`/${templateId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ name: "Should Not Update" }),
+    });
 
-      expect(res.status).toBe(403);
+    expect(res.status).toBe(403);
 
-      // Verify the DB row was NOT mutated
-      const [row] = await db
-        .select({ name: certificateTemplate.name })
-        .from(certificateTemplate)
-        .where(eq(certificateTemplate.id, templateId));
-      expect(row?.name).toBe("Original Name");
-    },
-  );
+    // Verify the DB row was NOT mutated
+    const [row] = await db
+      .select({ name: certificateTemplate.name })
+      .from(certificateTemplate)
+      .where(eq(certificateTemplate.id, templateId));
+    expect(row?.name).toBe("Original Name");
+  });
 
   // REQ-CTMPL-007: Unauthenticated -> 401
   it("REQ-CTMPL-007: unauthenticated request -> 401", async () => {

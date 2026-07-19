@@ -729,6 +729,20 @@
       "when": 1784563602000,
       "tag": "0103_drop_wysiwyg_editor",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1784563603000,
+      "tag": "0104_method_certificate_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1784563604000,
+      "tag": "0105_drop_certificate_template_assignment",
+      "breakpoints": true
     }
   ]
 }

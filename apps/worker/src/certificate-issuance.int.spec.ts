@@ -142,7 +142,7 @@ async function auditRows(jobId: number) {
 
 async function issuedSnapshotRows(jobId: number) {
   const result = await db.execute(
-    sql`SELECT organization_id, job_id, pdf_r2_key, filled_xlsx_r2_key, status, issued_by, pdf_sha256
+    sql`SELECT organization_id, job_id, pdf_r2_key, filled_xlsx_r2_key, status, issued_by, pdf_sha256, binding_manifest_sha256
         FROM issued_certificate_snapshot WHERE job_id = ${jobId} ORDER BY id`,
   );
   return toRows(result).map((row) => ({
@@ -152,6 +152,7 @@ async function issuedSnapshotRows(jobId: number) {
     status: asString(field(row, "status")),
     issued_by: asString(field(row, "issued_by")),
     pdf_sha256: asString(field(row, "pdf_sha256")),
+    binding_manifest_sha256: asString(field(row, "binding_manifest_sha256")),
   }));
 }
 
@@ -181,6 +182,7 @@ async function seedOrgAndJob(overrides?: {
   status?: Parameters<typeof seedIssuableJob>[0]["status"];
   jobNumber?: string;
   xlsxR2Key?: string;
+  withoutTemplateLink?: boolean;
 }) {
   const org = await seedOrg({ orgId: "org-1", userId: USER_ID });
   const job = await seedIssuableJob({
@@ -190,6 +192,7 @@ async function seedOrgAndJob(overrides?: {
     status: overrides?.status,
     jobNumber: overrides?.jobNumber,
     xlsxR2Key: overrides?.xlsxR2Key,
+    withoutTemplateLink: overrides?.withoutTemplateLink,
   });
   return { org, job };
 }
@@ -367,5 +370,83 @@ describe("processXlsxIssuedCertificate / updateJobWithCertificate (worker real-D
     expect(afterB.certificate_url).toBeNull();
     expect(await auditRows(jobB.jobId)).toHaveLength(0);
     expect(await issuedSnapshotRows(jobB.jobId)).toHaveLength(0);
+  });
+
+  it("REQ-MTPL-001 resolves the template from the job's FROZEN method even after the service is re-pointed (drift fix, 0104)", async () => {
+    const { env } = makeRecordingEnv();
+    const { org, job } = await seedOrgAndJob();
+    await putSourceXlsx(env, job.xlsxR2Key);
+
+    // Simulate operational drift: the service's live method link is cleared
+    // AFTER the job exists. The old resolver matched on service.method_id and
+    // would silently fall back / fail; the new one reads the frozen snapshot.
+    await db.execute(
+      sql`update service set method_id = null where id = ${job.serviceId}`,
+    );
+
+    await processBackgroundJob(env, {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: org.userId,
+    });
+
+    const after = await jobRow(job.jobId);
+    expect(after.status).toBe("APPROVED");
+    expect(await issuedSnapshotRows(job.jobId)).toHaveLength(1);
+  });
+
+  it("REQ-MTPL-002 a method WITHOUT a template link fails loud with the actionable message", async () => {
+    const { env } = makeRecordingEnv();
+    const { org, job } = await seedOrgAndJob({ withoutTemplateLink: true });
+    await putSourceXlsx(env, job.xlsxR2Key);
+
+    await expect(
+      processBackgroundJob(env, {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: org.userId,
+      }),
+    ).rejects.toThrow(/modelo de certificado vinculado/);
+
+    // Nothing was issued and the job did not fake-approve.
+    const after = await jobRow(job.jobId);
+    expect(after.status).not.toBe("APPROVED");
+    expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
+  });
+
+  it("REQ-MTPL-003 issuance renders the template's LATEST published version", async () => {
+    const { env, putKeys } = makeRecordingEnv();
+    const { org, job } = await seedOrgAndJob();
+
+    // Publish a v2 of the SAME template pointing at a different source XLSX;
+    // the resolver must pick it (order by version desc), not v1.
+    const v2Key = "media/templates/CAL-2026-0001-v2.xlsx";
+    await db.execute(
+      sql`insert into certificate_template_version
+            (organization_id, template_id, version, status, xlsx_r2_key,
+             xlsx_sha256, binding_manifest, binding_manifest_sha256,
+             render_policy, created_by, published_at, created_at)
+          select organization_id, template_id, 2, 'PUBLISHED', ${v2Key},
+                 'sha256-xlsx-v2', binding_manifest, 'sha256-manifest-v2',
+                 render_policy, created_by, now(), now()
+          from certificate_template_version where id = ${job.templateVersionId}`,
+    );
+    await putSourceXlsx(env, job.xlsxR2Key);
+    await putSourceXlsx(env, v2Key);
+
+    await processBackgroundJob(env, {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: org.userId,
+    });
+
+    const after = await jobRow(job.jobId);
+    expect(after.status).toBe("APPROVED");
+    const snapshots = await issuedSnapshotRows(job.jobId);
+    expect(snapshots).toHaveLength(1);
+    // The issued snapshot binds to v2's manifest hash, proving v2 was used.
+    expect(snapshots[0]?.binding_manifest_sha256).toBe("sha256-manifest-v2");
+    // And the render pipeline persisted artifacts to R2 (filled xlsx + pdf).
+    expect(putKeys.length).toBeGreaterThan(0);
   });
 });

@@ -5,14 +5,11 @@ import { calibraApi } from '@/utils/api'
 import type {
   TemplateListResponse,
   WorkbookAnalysis,
-  XlsxAssignmentOption,
   XlsxBindingManifest,
   XlsxPreviewResponse,
   XlsxVersionSummary,
   XlsxWorkbenchState,
 } from './types'
-
-const ASSIGNMENT_OPTIONS_STALE_TIME_MS = 5 * 60 * 1000
 
 export function certificateTemplatesQueryOptions() {
   return queryOptions({
@@ -21,58 +18,30 @@ export function certificateTemplatesQueryOptions() {
   })
 }
 
+/**
+ * Every method of the org with its linked template (per-method certificate
+ * templates, migration 0104) — powers the "Métodos que usam este modelo"
+ * panel. Client-side filter by certificateTemplateId; 100 methods is far
+ * above any current org's catalog.
+ */
 export function certificateTemplateMethodsQueryOptions() {
   return queryOptions({
-    queryKey: ['certificate-template-assignment-options', 'methods', 'cloud'],
+    queryKey: ['certificate-template-linked-methods', 'cloud'],
     queryFn: async () => {
       const data = await calibraApi.methods.list({
         page: 1,
         limit: 100,
       })
 
-      return data.data.map<XlsxAssignmentOption>((method) => ({
+      return data.data.map((method) => ({
         id: method.id,
-        label: method.name,
-        detail: `v${method.version} · ${method.status}`,
+        name: method.name,
+        version: method.version,
+        status: method.status,
+        certificateTemplateId: method.certificateTemplateId ?? null,
       }))
     },
-    staleTime: ASSIGNMENT_OPTIONS_STALE_TIME_MS,
-  })
-}
-
-export function certificateTemplateServicesQueryOptions() {
-  return queryOptions({
-    queryKey: ['certificate-template-assignment-options', 'services', 'cloud'],
-    queryFn: async () => {
-      const data = await calibraApi.services.list({
-        page: 1,
-        limit: 100,
-      })
-
-      return data.data.map<XlsxAssignmentOption>((service) => ({
-        id: service.id,
-        label: service.name,
-        detail: service.methodName,
-      }))
-    },
-    staleTime: ASSIGNMENT_OPTIONS_STALE_TIME_MS,
-  })
-}
-
-export function certificateTemplateUnitsQueryOptions() {
-  return queryOptions({
-    queryKey: ['certificate-template-assignment-options', 'units', 'cloud'],
-    queryFn: async () => {
-      const data = await calibraApi.units.getDashboardUnits()
-      if (!data) return []
-
-      return data.data.map<XlsxAssignmentOption>((unit) => ({
-        id: unit.id,
-        label: unit.name,
-        detail: unit.role,
-      }))
-    },
-    staleTime: ASSIGNMENT_OPTIONS_STALE_TIME_MS,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -139,8 +108,6 @@ export async function prewarmCertificateTemplates(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [
     certificateTemplatesQueryOptions(),
     certificateTemplateMethodsQueryOptions(),
-    certificateTemplateServicesQueryOptions(),
-    certificateTemplateUnitsQueryOptions(),
   ])
 }
 
@@ -152,28 +119,16 @@ export function useCertificateTemplatesData({ enabled }: { enabled: boolean }) {
   })
 }
 
-export function useCertificateTemplateAssignmentOptions({
+export function useCertificateTemplateLinkedMethods({
   enabled,
 }: {
   enabled: boolean
 }) {
-  return {
-    methodsQuery: useQuery({
-      ...certificateTemplateMethodsQueryOptions(),
-      enabled,
-      refetchOnWindowFocus: false,
-    }),
-    servicesQuery: useQuery({
-      ...certificateTemplateServicesQueryOptions(),
-      enabled,
-      refetchOnWindowFocus: false,
-    }),
-    unitsQuery: useQuery({
-      ...certificateTemplateUnitsQueryOptions(),
-      enabled,
-      refetchOnWindowFocus: false,
-    }),
-  }
+  return useQuery({
+    ...certificateTemplateMethodsQueryOptions(),
+    enabled,
+    refetchOnWindowFocus: false,
+  })
 }
 
 export function useCertificateTemplateXlsxVersionData({

@@ -20,11 +20,10 @@ import {
 } from "../../lib/automatic-send";
 import { buildUnitScopeCondition } from "../../lib/units";
 import {
-  getEffectiveCertificateTemplateSnapshot,
+  resolveMethodCertificateTemplate,
   serializeCertificateTemplateSnapshot,
 } from "../../lib/certificate-template-snapshots";
 import { notifyJobApproved } from "@calibra-facil/notifications";
-import { certificateTemplateSnapshotFromUnknown } from "./helpers";
 
 type JobRow = typeof calibrationJob.$inferSelect;
 type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
@@ -51,6 +50,15 @@ export type ApproveJobResult =
        */
       status: "scope_violation";
       scopeCompliance: ScopeComplianceResult;
+    }
+  | {
+      /**
+       * The job's method has no certificate template linked (or the linked
+       * template is archived / has no PUBLISHED version) — issuance would
+       * fail in the worker, so approval blocks with an actionable error.
+       */
+      status: "certificate_template_required";
+      reason: "method_missing" | "template_missing" | "template_unpublished";
     }
   | {
       status: "approved";
@@ -182,12 +190,6 @@ export async function approveJob(input: {
       .where(eq(calibrationJob.id, jobId));
   }
 
-  const effectiveTemplateSnapshot =
-    certificateTemplateSnapshotFromUnknown(
-      existing.certificateTemplateSnapshot,
-    ) ??
-    (await getEffectiveCertificateTemplateSnapshot(memberData.organizationId));
-
   // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
   // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
   // `results`; it does NOT influence approval, conformity, or the certificate.
@@ -225,6 +227,23 @@ export async function approveJob(input: {
   // passing (or warn-mode) certificate.
   const appliedScopeOverride = scopeBlocked ? scopeOverrideJustification : null;
 
+  // Per-method certificate template (migration 0104): the frozen method must
+  // own a renderable template BEFORE the job leaves REVIEW — otherwise the
+  // worker would fail after the fact and strand the job in GENERATING_PDF.
+  // Always re-resolved at approval (like the scope classification above) so a
+  // re-approval picks up a re-linked method.
+  const templateResolution = await resolveMethodCertificateTemplate({
+    organizationId: memberData.organizationId,
+    methodId: existing.methodSnapshot?.methodId ?? null,
+  });
+  if (!templateResolution.ok) {
+    return {
+      status: "certificate_template_required",
+      reason: templateResolution.reason,
+    };
+  }
+  const templateSnapshot = templateResolution.snapshot;
+
   // Update job status to GENERATING_PDF and set approver info
   // (we set approved_by now so the PDF worker can fetch it)
   const [updated] = await db
@@ -238,11 +257,9 @@ export async function approveJob(input: {
       scopeComplianceStatus: scopeCompliance?.status ?? null,
       scopeComplianceFindings: scopeCompliance?.findings ?? null,
       scopeOverrideJustification: appliedScopeOverride,
-      certificateTemplateId:
-        existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
+      certificateTemplateId: templateSnapshot.id,
       certificateTemplateSnapshot:
-        existing.certificateTemplateSnapshot ??
-        serializeCertificateTemplateSnapshot(effectiveTemplateSnapshot),
+        serializeCertificateTemplateSnapshot(templateSnapshot),
     })
     .where(eq(calibrationJob.id, jobId))
     .returning();

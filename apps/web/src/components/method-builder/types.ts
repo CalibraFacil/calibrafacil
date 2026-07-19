@@ -281,6 +281,7 @@ export interface MethodDraft {
   description?: string
   assetTypeId?: number
   accreditedScope?: boolean
+  certificateTemplateId?: number | null
   version: number
   status: MethodDraftStatus
   inputs: Array<MethodDraftInput>
@@ -298,6 +299,7 @@ export interface MethodRecordData {
   description?: string | null
   assetTypeId?: number | null
   accreditedScope?: boolean | null
+  certificateTemplateId?: number | null
   version?: number
   status?: MethodDraftStatus
   dataFields?: Array<MethodDraftInput>
@@ -314,6 +316,7 @@ export interface MethodDraftSavePayload {
   description?: string | null
   assetTypeId?: number | null
   accreditedScope: boolean
+  certificateTemplateId?: number | null
   dataFields: Array<MethodDraftInput>
   variableBindings: Array<MethodDraftVariableBinding>
   formulas: Array<MethodDraftFormula>

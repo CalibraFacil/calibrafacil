@@ -1,7 +1,6 @@
 import type {
   CertificateTemplateCreateInput,
   CertificateTemplateUpdateInput,
-  CertificateTemplateXlsxAssignmentInput,
   CertificateTemplatesApi,
 } from "../types";
 import type { CreateCloudApiClientOptions } from "../transport/cloud";
@@ -68,23 +67,6 @@ export function createCertificateTemplatesApi(
           param: { id: String(id) },
         }),
         "Falha ao duplicar template",
-      );
-    },
-    async listAssignments<TResponse = unknown>(id: string | number) {
-      return fetchJson<TResponse>(
-        `/api/certificate-templates/${id}/assignments`,
-        { method: "GET" },
-        "Falha ao carregar atribuições",
-      );
-    },
-    async archiveAssignment<TResponse = unknown>(
-      id: string | number,
-      assignmentId: string | number,
-    ) {
-      return fetchJson<TResponse>(
-        `/api/certificate-templates/${id}/assignments/${assignmentId}/archive`,
-        { method: "PATCH" },
-        "Falha ao remover atribuição",
       );
     },
     async archive<TResponse = unknown>(id: string | number) {
@@ -179,17 +161,6 @@ export function createCertificateTemplatesApi(
         `/api/certificate-templates/${templateId}/versions/${versionId}/publish`,
         { method: "POST" },
         "Falha ao publicar XLSX",
-      );
-    },
-    async createXlsxAssignment<TResponse = unknown>(
-      templateId: string | number,
-      versionId: string | number,
-      input: CertificateTemplateXlsxAssignmentInput,
-    ) {
-      return fetchJson<TResponse>(
-        `/api/certificate-templates/${templateId}/versions/${versionId}/assignments`,
-        { method: "POST", body: JSON.stringify(input) },
-        "Falha ao atribuir template",
       );
     },
   };

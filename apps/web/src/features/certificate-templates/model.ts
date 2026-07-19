@@ -10,13 +10,6 @@ export type TemplateDraft = {
   name: string
 }
 
-export type XlsxAssignmentDraft = {
-  unitId: string
-  serviceId: string
-  methodId: string
-  priority: string
-}
-
 export function formatCertificateTemplateApiError(
   data: unknown,
   fallback: string,
@@ -145,27 +138,6 @@ export function updateXlsxScalarBinding(
         binding.id === bindingId ? { ...binding, ...patch } : binding,
       ),
     },
-  }
-}
-
-export function parseOptionalPositiveInt(value: string): number | undefined {
-  if (!value) return undefined
-  const parsed = Number.parseInt(value, 10)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-}
-
-export function parseCertificateTemplatePriority(value: string): number {
-  const parsed = Number.parseInt(value, 10)
-  return Number.isInteger(parsed) ? parsed : 0
-}
-
-export function buildXlsxAssignmentPayload(draft: XlsxAssignmentDraft) {
-  return {
-    certificateType: 'calibration' as const,
-    priority: parseCertificateTemplatePriority(draft.priority),
-    unitId: parseOptionalPositiveInt(draft.unitId),
-    serviceId: parseOptionalPositiveInt(draft.serviceId),
-    methodId: parseOptionalPositiveInt(draft.methodId),
   }
 }
 

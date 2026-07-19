@@ -6,7 +6,6 @@ import type {
   XlsxWorkbenchState,
 } from '@/features/certificate-templates/types'
 import {
-  buildXlsxAssignmentPayload,
   buildXlsxBindingManifestForSave,
   certificateTemplateKey,
   createEmptyCertificateTemplateDraft,
@@ -18,8 +17,6 @@ import {
   getDefaultCertificateTemplateKey,
   getSelectedCertificateTemplate,
   getXlsxStatusLabel,
-  parseCertificateTemplatePriority,
-  parseOptionalPositiveInt,
   updateXlsxScalarBinding,
 } from './model'
 
@@ -162,30 +159,6 @@ describe('certificate template model', () => {
         xlsxPreview: { id: 31, templateId: 12, versionId: 9 },
       }),
     ).toBeNull()
-  })
-
-  it('parses assignment numeric fields conservatively', () => {
-    expect(parseOptionalPositiveInt('')).toBeUndefined()
-    expect(parseOptionalPositiveInt('0')).toBeUndefined()
-    expect(parseOptionalPositiveInt('-1')).toBeUndefined()
-    expect(parseOptionalPositiveInt('15')).toBe(15)
-    expect(parseCertificateTemplatePriority('')).toBe(0)
-    expect(parseCertificateTemplatePriority('abc')).toBe(0)
-    expect(parseCertificateTemplatePriority('3')).toBe(3)
-    expect(
-      buildXlsxAssignmentPayload({
-        unitId: '1',
-        serviceId: '',
-        methodId: '7',
-        priority: '50',
-      }),
-    ).toEqual({
-      certificateType: 'calibration',
-      priority: 50,
-      unitId: 1,
-      serviceId: undefined,
-      methodId: 7,
-    })
   })
 
   it('builds XLSX binding manifests and updates scalar bindings immutably', () => {

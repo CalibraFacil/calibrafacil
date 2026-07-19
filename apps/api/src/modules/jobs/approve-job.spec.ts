@@ -16,7 +16,7 @@ const {
   mockCreateOotEvent,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
-  mockGetEffectiveSnapshot,
+  mockResolveMethodTemplate,
 } = vi.hoisted(() => {
   const state: {
     jobRows: unknown[];
@@ -45,9 +45,9 @@ const {
     mockCreateOotEvent: vi.fn(async () => undefined),
     mockFindServiceOrders: vi.fn(async () => []),
     mockTriggerAutomaticSend: vi.fn(async () => undefined),
-    mockGetEffectiveSnapshot: vi.fn(async () => ({
-      id: 77,
-      name: "Template padrão",
+    mockResolveMethodTemplate: vi.fn(async () => ({
+      ok: true,
+      snapshot: { id: 77, name: "Template padrão", slug: "padrao", version: 1 },
     })),
   };
 });
@@ -112,11 +112,8 @@ vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
 }));
 vi.mock("../../lib/certificate-template-snapshots", () => ({
-  getEffectiveCertificateTemplateSnapshot: mockGetEffectiveSnapshot,
+  resolveMethodCertificateTemplate: mockResolveMethodTemplate,
   serializeCertificateTemplateSnapshot: (snapshot: unknown) => snapshot,
-}));
-vi.mock("./helpers", () => ({
-  certificateTemplateSnapshotFromUnknown: () => null,
 }));
 
 import { approveJob } from "./approve-job";
@@ -225,6 +222,45 @@ describe("approveJob gates", () => {
       status: "not_authorized_signatory",
     });
     expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("blocks approval when the method has no certificate template (0104)", async () => {
+    state.jobRows = [reviewJob()];
+    mockResolveMethodTemplate.mockResolvedValueOnce({
+      ok: false,
+      reason: "template_missing",
+    });
+    await expect(callApprove()).resolves.toEqual({
+      status: "certificate_template_required",
+      reason: "template_missing",
+    });
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("blocks approval when the linked template has no published version", async () => {
+    state.jobRows = [reviewJob()];
+    mockResolveMethodTemplate.mockResolvedValueOnce({
+      ok: false,
+      reason: "template_unpublished",
+    });
+    const result = await callApprove();
+    expect(result.status).toBe("certificate_template_required");
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("freezes the method's template snapshot onto the approved job", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    const result = await callApprove();
+    expect(result.status).toBe("approved");
+    const transition = state.updateCalls.find(
+      (call) => call.status === "GENERATING_PDF",
+    );
+    expect(transition?.certificateTemplateId).toBe(77);
+    expect(transition?.certificateTemplateSnapshot).toMatchObject({
+      id: 77,
+      name: "Template padrão",
+    });
   });
 
   it("requires a justification when environmental conditions were out of limits", async () => {

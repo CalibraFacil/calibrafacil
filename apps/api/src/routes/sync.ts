@@ -121,7 +121,7 @@ import {
   resolveAssetBaseMeasurementUnit,
 } from "../lib/asset-measurement";
 import {
-  getEffectiveCertificateTemplateSnapshot,
+  resolveMethodCertificateTemplate,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
 import {
@@ -1545,13 +1545,26 @@ async function applyDesktopCertificatePdfUpload(
     );
     const approvedAt = job.approvedAt ?? new Date();
     const storedTemplateSnapshot = asRecord(job.certificateTemplateSnapshot);
+    // Desktop-approved jobs arrive with the PDF ALREADY rendered offline, so
+    // this snapshot is bookkeeping, never a gate: prefer what the job stored,
+    // else the method's linked template (0104), else the legacy system-default
+    // placeholder that offline rendering used.
+    const methodTemplateResolution = await resolveMethodCertificateTemplate({
+      organizationId: input.memberData.organizationId,
+      methodId: job.methodSnapshot?.methodId ?? null,
+    });
     const effectiveTemplateSnapshot =
       Object.keys(storedTemplateSnapshot).length > 0
         ? storedTemplateSnapshot
         : serializeCertificateTemplateSnapshot(
-            await getEffectiveCertificateTemplateSnapshot(
-              input.memberData.organizationId,
-            ),
+            methodTemplateResolution.ok
+              ? methodTemplateResolution.snapshot
+              : {
+                  id: null,
+                  name: "Padrão do Sistema",
+                  slug: "padrao-sistema",
+                  version: 1,
+                },
           );
 
     await uploadToR2(

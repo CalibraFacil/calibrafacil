@@ -1,10 +1,11 @@
+import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
   calibrationJob,
+  calibrationMethod,
   certificateTemplate,
-  certificateTemplateAssignment,
   certificateTemplateVersion,
   customer,
   service,
@@ -15,10 +16,11 @@ import type { JobStatus, MethodSnapshot } from "@calibra-facil/db/schema";
 // (processXlsxIssuedCertificate -> updateJobWithCertificate). The shared seed.ts
 // only models the integration-sync surface (org + unit + customer + ERP
 // connection); the issuance reads a far wider graph: a customer, an asset (with
-// its asset_type), a service, a PUBLISHED certificate-template version + an
-// ACTIVE assignment that fetchXlsxTemplateSelectionForJob resolves, and a
-// calibration_job sitting in the pre-issuance status the handler expects
-// (GENERATING_PDF). We DO NOT touch the shared seed.ts — these helpers live
+// its asset_type), a service, a PUBLISHED calibration_method that OWNS a
+// certificate template (certificate_template_id -> latest PUBLISHED version,
+// which is what fetchCertificateTemplateSelectionForJob resolves via the job's
+// frozen method_snapshot.methodId), and a calibration_job sitting in the
+// pre-issuance status the handler expects (GENERATING_PDF). We DO NOT touch the shared seed.ts — these helpers live
 // alongside it and reuse the same drizzle singleton. Use `seedOrg` from seed.ts
 // for the org/unit/user, then call seedIssuableJob here.
 
@@ -43,13 +45,13 @@ export const MINIMAL_BINDING_MANIFEST = {
   },
 } as const;
 
-/** The minimal MethodSnapshot the issuance reads. The SQL join only uses
- * `methodId`; buildXlsxCertificateData reads `formulas` (-> []) and
- * `accreditedScope`. All MethodSnapshot array members are required, so they are
- * present as empty arrays. */
-function minimalMethodSnapshot(): MethodSnapshot {
+/** The minimal MethodSnapshot the issuance reads. The resolver joins
+ * calibration_method by `methodId`; buildXlsxCertificateData reads `formulas`
+ * (-> []) and `accreditedScope`. All MethodSnapshot array members are required,
+ * so they are present as empty arrays. */
+function minimalMethodSnapshot(methodId: number): MethodSnapshot {
   return {
-    methodId: 0,
+    methodId,
     methodName: "Método de Teste",
     methodVersion: 1,
     accreditedScope: false,
@@ -68,6 +70,7 @@ export type SeededIssuableJob = {
   customerId: number;
   assetId: number;
   serviceId: number;
+  methodId: number;
   templateId: number;
   templateVersionId: number;
   xlsxR2Key: string;
@@ -92,6 +95,8 @@ export async function seedIssuableJob(params: {
   /** Approver user id written to approved_by (defaults to params.userId). */
   approvedBy?: string;
   customerName?: string;
+  /** Seed the method WITHOUT a template link (tests the fail-loud path). */
+  withoutTemplateLink?: boolean;
 }): Promise<SeededIssuableJob> {
   const jobNumber = params.jobNumber ?? "CAL-2026-0001";
   const xlsxR2Key = params.xlsxR2Key ?? `media/templates/${jobNumber}.xlsx`;
@@ -117,7 +122,8 @@ export async function seedIssuableJob(params: {
       createdAt: EPOCH,
     })
     .returning();
-  if (!assetTypeRow) throw new Error("seedIssuableJob: assetType insert failed");
+  if (!assetTypeRow)
+    throw new Error("seedIssuableJob: assetType insert failed");
 
   const [assetRow] = await db
     .insert(asset)
@@ -188,16 +194,30 @@ export async function seedIssuableJob(params: {
     .returning();
   if (!versionRow) throw new Error("seedIssuableJob: template version failed");
 
-  await db.insert(certificateTemplateAssignment).values({
-    organizationId: params.organizationId,
-    templateId: templateRow.id,
-    templateVersionId: versionRow.id,
-    certificateType: "calibration",
-    status: "ACTIVE",
-    priority: 0,
-    createdBy: params.userId,
-    createdAt: EPOCH,
-  });
+  const [methodRow] = await db
+    .insert(calibrationMethod)
+    .values({
+      organizationId: params.organizationId,
+      assetTypeId: assetTypeRow.id,
+      name: `Método ${jobNumber}`,
+      version: 1,
+      status: "PUBLISHED",
+      accreditedScope: false,
+      certificateTemplateId: params.withoutTemplateLink ? null : templateRow.id,
+      dataFields: [],
+      createdBy: params.userId,
+      publishedAt: EPOCH,
+      createdAt: EPOCH,
+    })
+    .returning();
+  if (!methodRow) throw new Error("seedIssuableJob: method insert failed");
+
+  // Point the service at the method too (mirrors production job creation),
+  // but the resolver must NOT depend on it — it reads the frozen snapshot.
+  await db
+    .update(service)
+    .set({ methodId: methodRow.id })
+    .where(eq(service.id, serviceRow.id));
 
   const [jobRow] = await db
     .insert(calibrationJob)
@@ -209,7 +229,7 @@ export async function seedIssuableJob(params: {
       customerId: customerRow.id,
       assetId: assetRow.id,
       serviceId: serviceRow.id,
-      methodSnapshot: minimalMethodSnapshot(),
+      methodSnapshot: minimalMethodSnapshot(methodRow.id),
       status: params.status ?? "GENERATING_PDF",
       performedAt: EPOCH,
       approvedAt: EPOCH,
@@ -218,7 +238,8 @@ export async function seedIssuableJob(params: {
       createdAt: EPOCH,
     })
     .returning();
-  if (!jobRow) throw new Error("seedIssuableJob: calibration_job insert failed");
+  if (!jobRow)
+    throw new Error("seedIssuableJob: calibration_job insert failed");
 
   return {
     jobId: jobRow.id,
@@ -226,6 +247,7 @@ export async function seedIssuableJob(params: {
     customerId: customerRow.id,
     assetId: assetRow.id,
     serviceId: serviceRow.id,
+    methodId: methodRow.id,
     templateId: templateRow.id,
     templateVersionId: versionRow.id,
     xlsxR2Key,

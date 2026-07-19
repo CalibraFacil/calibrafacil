@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   calibrationMethod,
+  certificateTemplate,
   methodAuditLog,
   assetType,
   user,
@@ -1246,6 +1248,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             validations: calibrationMethod.validations,
             certificateContent: calibrationMethod.certificateContent,
             accreditedScope: calibrationMethod.accreditedScope,
+            certificateTemplateId: calibrationMethod.certificateTemplateId,
             methodFingerprint: calibrationMethod.methodFingerprint,
             methodEngine: calibrationMethod.methodEngine,
             methodCompiledAt: calibrationMethod.methodCompiledAt,
@@ -1545,6 +1548,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           uncertaintyParams: calibrationMethod.uncertaintyParams,
           certificateContent: calibrationMethod.certificateContent,
           accreditedScope: calibrationMethod.accreditedScope,
+          certificateTemplateId: calibrationMethod.certificateTemplateId,
           compiledMethod: calibrationMethod.compiledMethod,
           methodFingerprint: calibrationMethod.methodFingerprint,
           methodEngine: calibrationMethod.methodEngine,
@@ -1956,6 +1960,39 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           changes.accreditedScope = {
             old: existing.accreditedScope,
             new: input.accreditedScope,
+          };
+        }
+        if (
+          input.certificateTemplateId !== undefined &&
+          (input.certificateTemplateId ?? null) !==
+            existing.certificateTemplateId
+        ) {
+          const nextTemplateId = input.certificateTemplateId ?? null;
+          if (nextTemplateId !== null) {
+            const [templateRow] = await db
+              .select({ id: certificateTemplate.id })
+              .from(certificateTemplate)
+              .where(
+                and(
+                  eq(certificateTemplate.id, nextTemplateId),
+                  eq(certificateTemplate.organizationId, member.organizationId),
+                  eq(certificateTemplate.status, "ACTIVE"),
+                ),
+              )
+              .limit(1);
+            if (!templateRow) {
+              return c.json(
+                {
+                  error: "Modelo de certificado inválido para esta organização",
+                },
+                400,
+              );
+            }
+          }
+          updateData.certificateTemplateId = nextTemplateId;
+          changes.certificateTemplateId = {
+            old: existing.certificateTemplateId,
+            new: nextTemplateId,
           };
         }
 
@@ -2666,6 +2703,103 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // PUT /:id/certificate-template - link/unlink the certificate template
+  //
+  // Operational setting, NOT frozen method metrology: swapping the certificate
+  // layout must not require a four-eyes version bump, so this works on any
+  // non-archived status (PUT /:id stays DRAFT-only). Every change is audited.
+  // =========================================================================
+  .put(
+    "/:id/certificate-template",
+    ...withLabPermission({ template: ["update"] }),
+    requireRole(["admin", "owner"]),
+    zValidator(
+      "json",
+      z.object({
+        certificateTemplateId: z.number().int().positive().nullable(),
+      }),
+    ),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
+      }
+      const input = c.req.valid("json");
+
+      const [existing] = await db
+        .select({
+          id: calibrationMethod.id,
+          status: calibrationMethod.status,
+          certificateTemplateId: calibrationMethod.certificateTemplateId,
+        })
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        return c.json({ error: "Método nao encontrado" }, 404);
+      }
+      if (existing.status === "ARCHIVED") {
+        return c.json({ error: "Método arquivado não pode ser alterado" }, 400);
+      }
+
+      const nextTemplateId = input.certificateTemplateId;
+      if (nextTemplateId !== null) {
+        const [templateRow] = await db
+          .select({ id: certificateTemplate.id })
+          .from(certificateTemplate)
+          .where(
+            and(
+              eq(certificateTemplate.id, nextTemplateId),
+              eq(certificateTemplate.organizationId, member.organizationId),
+              eq(certificateTemplate.status, "ACTIVE"),
+            ),
+          )
+          .limit(1);
+        if (!templateRow) {
+          return c.json(
+            { error: "Modelo de certificado inválido para esta organização" },
+            400,
+          );
+        }
+      }
+
+      if (existing.certificateTemplateId === nextTemplateId) {
+        return c.json({ ok: true, certificateTemplateId: nextTemplateId });
+      }
+
+      await db
+        .update(calibrationMethod)
+        .set({ certificateTemplateId: nextTemplateId })
+        .where(eq(calibrationMethod.id, id));
+
+      await db.insert(methodAuditLog).values({
+        methodId: id,
+        action: "certificate_template_changed",
+        changes: {
+          certificateTemplateId: {
+            old: existing.certificateTemplateId,
+            new: nextTemplateId,
+          },
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      return c.json({ ok: true, certificateTemplateId: nextTemplateId });
+    },
+  )
+
+  // =========================================================================
   // POST /:id/archive - Archive a PUBLISHED method
   // =========================================================================
   .post(
@@ -2833,6 +2967,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             uncertaintyParams: existing.uncertaintyParams,
             certificateContent: existing.certificateContent,
             accreditedScope: existing.accreditedScope,
+            certificateTemplateId: existing.certificateTemplateId,
             parentId: existing.id,
             createdBy: session.user.id,
           })

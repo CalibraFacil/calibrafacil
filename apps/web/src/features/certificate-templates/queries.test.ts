@@ -2,31 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import {
   certificateTemplateMethodsQueryOptions,
-  certificateTemplateServicesQueryOptions,
   certificateTemplatesQueryOptions,
-  certificateTemplateUnitsQueryOptions,
   certificateTemplateXlsxPreviewQueryOptions,
   certificateTemplateXlsxVersionQueryOptions,
 } from './queries'
 
 describe('certificate template feature queries', () => {
-  it('uses stable list and assignment option keys', () => {
+  it('uses stable list and linked-method keys', () => {
     expect(certificateTemplatesQueryOptions().queryKey).toEqual([
       'certificate-templates',
     ])
     expect(certificateTemplateMethodsQueryOptions().queryKey).toEqual([
-      'certificate-template-assignment-options',
-      'methods',
-      'cloud',
-    ])
-    expect(certificateTemplateServicesQueryOptions().queryKey).toEqual([
-      'certificate-template-assignment-options',
-      'services',
-      'cloud',
-    ])
-    expect(certificateTemplateUnitsQueryOptions().queryKey).toEqual([
-      'certificate-template-assignment-options',
-      'units',
+      'certificate-template-linked-methods',
       'cloud',
     ])
   })

@@ -33,7 +33,9 @@ const reportingRoles: Array<
 
 const formulaScopes = ['scalar', 'table_row'] as const
 
-function parseFormulaScope(value: string | null): (typeof formulaScopes)[number] {
+function parseFormulaScope(
+  value: string | null,
+): (typeof formulaScopes)[number] {
   return value === 'table_row' ? 'table_row' : 'scalar'
 }
 
@@ -127,9 +129,7 @@ export function FormulaEditor({
         <Field label="Escopo">
           <Select
             value={scopeKind}
-            onValueChange={(value) =>
-              changeScope(parseFormulaScope(value))
-            }
+            onValueChange={(value) => changeScope(parseFormulaScope(value))}
           >
             <SelectTrigger>
               <span>{scopeKind}</span>
