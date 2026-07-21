@@ -15,7 +15,7 @@ describe('resolvePrewarmUrl', () => {
 
   it('does not prewarm external links', () => {
     expect(
-      resolvePrewarmUrl('https://docs.calibrafacil.com', currentHref),
+      resolvePrewarmUrl('https://calibrafacil.com/docs', currentHref),
     ).toBeNull()
   })
 

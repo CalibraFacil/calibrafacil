@@ -27,7 +27,7 @@ const navSecondary = [
   },
   {
     title: "Documentação",
-    url: "https://docs.calibrafacil.com",
+    url: "https://calibrafacil.com/docs",
     icon: <HugeiconsIcon icon={Book02Icon} />,
   },
 ];

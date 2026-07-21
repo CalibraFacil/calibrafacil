@@ -12,7 +12,7 @@ This document describes how to deploy CalibraFacil to production.
 | CMS (blog)      | Vercel                | blog.calibrafacil.com   |
 | Backoffice      | Vercel                | ops.calibrafacil.com    |
 | Background jobs | Vercel Queue and Cron | (API project)           |
-| Docs            | Cloudflare Pages      | docs.calibrafacil.com   |
+| Docs            | Vercel                | calibrafacil.com/docs   |
 | Database        | Neon PostgreSQL       | (direct connection)     |
 | Object storage  | Cloudflare R2         | (certificate assets)    |
 

@@ -115,8 +115,13 @@ const config: NextConfig = {
   // Docs are served at calibrafacil.com/docs (proxied from apps/web via a Vercel
   // rewrite), consolidating SEO authority onto one host. basePath prefixes every
   // route, asset and Next <Link> (Fumadocs uses Next Link, so source.baseUrl
-  // stays "/"). The old docs.calibrafacil.com domain 301s to /docs at the Vercel
-  // domain level (operator step) — no app-level bare-origin redirect needed.
+  // stays "/").
+  //
+  // docs.calibrafacil.com must stay a plain alias of this project: it is the
+  // public origin that the apps/web rewrite proxies (this project's *.vercel.app
+  // URL is behind deployment protection, so it cannot be the origin). Do NOT
+  // redirect that domain at the Vercel domain level — it would break
+  // calibrafacil.com/docs. Its bare root is handled in redirects() below.
   basePath: "/docs",
   // Allow the dev tunnel hostname to talk to `next dev` cross-origin.
   // Without this, Next blocks /_next/webpack-hmr (WS) and /_next/static
@@ -127,7 +132,20 @@ const config: NextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   async redirects() {
-    return legacyRedirects.map((rule) => ({ ...rule, permanent: true }));
+    return [
+      // Nothing is served at the bare origin (every route lives under basePath),
+      // so anyone landing on the legacy docs host gets a 404. Send them to the
+      // canonical URL. Scoped to "/" and to that host on purpose: proxied
+      // traffic always arrives as /docs/*, so it never matches this rule.
+      {
+        source: "/",
+        has: [{ type: "host", value: "docs.calibrafacil.com" }],
+        destination: "https://calibrafacil.com/docs",
+        permanent: true,
+        basePath: false,
+      },
+      ...legacyRedirects.map((rule) => ({ ...rule, permanent: true })),
+    ];
   },
 };
 

@@ -282,7 +282,7 @@ export const dashboardManagementNavItems = [
 export const dashboardSecondaryNavItems = [
   {
     title: 'Documentação',
-    url: 'https://docs.calibrafacil.com',
+    url: 'https://calibrafacil.com/docs',
     icon: 'documentation',
   },
 ] satisfies DashboardNavItem[]
