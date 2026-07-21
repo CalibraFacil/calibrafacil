@@ -30,7 +30,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
@@ -725,23 +730,27 @@ export function CertificateTemplatesPage() {
           <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Template
           </span>
-          <NativeSelect
+          <Select
             value={effectiveSelectedTemplateKey ?? ''}
-            onChange={(event) => {
-              setSelectedTemplateKey(event.target.value)
+            onValueChange={(value) => {
+              setSelectedTemplateKey(value)
               setActiveStage(null)
             }}
-            className="min-w-56"
           >
-            {templates.map((template) => (
-              <NativeSelectOption
-                key={certificateTemplateKey(template)}
-                value={certificateTemplateKey(template)}
-              >
-                {template.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="min-w-56">
+              <span>{selectedTemplate?.name ?? 'Selecionar template'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((template) => (
+                <SelectItem
+                  key={certificateTemplateKey(template)}
+                  value={certificateTemplateKey(template)}
+                >
+                  {template.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="outline"

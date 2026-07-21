@@ -34,7 +34,12 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { RoleGate } from '@/components/permission-gate'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { useCertificateTemplatesData } from '@/features/certificate-templates/queries'
 import {
   ACTION_BUTTON_CLASS,
@@ -520,25 +525,32 @@ function MethodCertificateTemplatePanel({
           </p>
         ) : null}
         <RoleGate roles={['admin', 'owner']}>
-          <NativeSelect
-            value={currentId ? String(currentId) : ''}
+          <Select
+            value={currentId ? String(currentId) : 'none'}
+            onValueChange={(value) =>
+              onChange(value === 'none' ? null : Number(value))
+            }
             disabled={isPending || isArchived || templatesQuery.isLoading}
-            onChange={(event) => {
-              const value = event.target.value
-              onChange(value === '' ? null : Number(value))
-            }}
-            className="h-9 text-xs"
           >
-            <NativeSelectOption value="">Sem modelo</NativeSelectOption>
-            {options.map((template) => (
-              <NativeSelectOption key={template.id} value={String(template.id)}>
-                {template.name}
-                {template.currentXlsxVersion?.status !== 'PUBLISHED'
-                  ? ' · sem versão publicada'
-                  : ''}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="h-9 w-full text-xs">
+              <span>
+                {currentId
+                  ? (current?.name ?? 'Modelo selecionado')
+                  : 'Sem modelo'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sem modelo</SelectItem>
+              {options.map((template) => (
+                <SelectItem key={template.id} value={String(template.id)}>
+                  {template.name}
+                  {template.currentXlsxVersion?.status !== 'PUBLISHED'
+                    ? ' · sem versão publicada'
+                    : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </RoleGate>
         <p className="text-xs text-muted-foreground">
           {current
