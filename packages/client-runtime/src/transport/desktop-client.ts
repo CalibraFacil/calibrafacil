@@ -1829,6 +1829,32 @@ export function createDesktopApiClient(
         );
         return result.data;
       },
+      /**
+       * Desktop resolves the route id against the local store. The local id is
+       * already opaque, so an offline-created OS — which has no cloud publicId
+       * until it syncs — stays reachable by the same URL shape.
+       */
+      async getByPublicId(publicId) {
+        const response = await fetchImpl(
+          new URL(
+            `/api/service-orders/${encodeURIComponent(publicId)}`,
+            options.baseUrl,
+          ),
+          {
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Erro ao carregar OS");
+        }
+
+        const result = await readDesktopJson<{ data: ServiceOrderDetail }>(
+          response,
+        );
+        return result.data;
+      },
       async create(input) {
         const response = await fetchImpl(
           new URL("/api/service-orders", options.baseUrl),

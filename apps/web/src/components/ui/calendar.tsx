@@ -1,4 +1,5 @@
 import { ComponentProps, useCallback } from 'react'
+import { ptBR } from 'date-fns/locale'
 import {
   DayPicker,
   getDefaultClassNames,
@@ -20,6 +21,10 @@ function Calendar({
   showOutsideDays = true,
   captionLayout = 'label',
   buttonVariant = 'ghost',
+  // The product is pt-BR throughout, so the calendar defaults to it instead of
+  // react-day-picker's en-US: month caption, weekday initials and the
+  // Sunday-first week all follow the locale. Overridable per instance.
+  locale = ptBR,
   formatters,
   components,
   ...props
@@ -30,6 +35,7 @@ function Calendar({
 
   return (
     <DayPicker
+      locale={locale}
       showOutsideDays={showOutsideDays}
       className={cn(
         'p-3 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(8)] bg-background group/calendar [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent',
@@ -39,8 +45,10 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       formatters={{
+        // 'default' resolves to the browser locale (en-US on most machines),
+        // which is what leaked "August 2026" into the pt-BR UI.
         formatMonthDropdown: (date) =>
-          date.toLocaleString('default', { month: 'short' }),
+          date.toLocaleString('pt-BR', { month: 'short' }),
         ...formatters,
       }}
       classNames={{

@@ -31,6 +31,9 @@ export async function getServiceOrderDetail(
   const [order] = await db
     .select({
       id: serviceOrder.id,
+      // Opaque id the dashboard routes by, so URLs never carry the enumerable
+      // serial. Same identifier the portal already uses.
+      publicId: serviceOrder.publicId,
       organizationId: serviceOrder.organizationId,
       organizationName: organization.name,
       organizationCnpj: organization.cnpj,

@@ -210,6 +210,12 @@ vi.mock("../../lib/units", () => ({
 vi.mock("@calibra-facil/shared", () => ({
   canApproveServiceOrderQuote: vi.fn().mockReturnValue(true),
   canEditServiceOrderQuote: vi.fn().mockReturnValue(false),
+  isServiceOrderFinalStatus: vi.fn().mockReturnValue(false),
+  // These specs cover the ordinary path: the order IS awaiting a decision, so
+  // approving/rejecting still advances its status. (The mid-job and late-
+  // decision cases are covered in packages/shared and the integration tier.)
+  isServiceOrderDecidingQuoteStatus: vi.fn().mockReturnValue(true),
+  isServiceOrderWorkInProgressStatus: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("drizzle-orm", () => ({

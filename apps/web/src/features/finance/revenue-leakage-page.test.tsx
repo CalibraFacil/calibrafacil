@@ -37,6 +37,7 @@ function renderWithClient(ui: React.ReactNode) {
 
 type LeakageAlert = {
   serviceOrderId: number
+  serviceOrderPublicId: string
   serviceOrderNumber: string
   customer: { id: number; name: string }
   unit: { id: number; name: string }
@@ -78,9 +79,7 @@ describe('RevenueLeakagePage', () => {
     expect(
       screen.getByText('Enviado ao financeiro sem fatura emitida'),
     ).toBeTruthy()
-    expect(
-      screen.getByText('Pronto para faturar há muito tempo'),
-    ).toBeTruthy()
+    expect(screen.getByText('Pronto para faturar há muito tempo')).toBeTruthy()
     expect(screen.getByText('Bloqueado há mais de 7 dias')).toBeTruthy()
   })
 
@@ -102,6 +101,7 @@ describe('RevenueLeakagePage', () => {
     envelope.summary.totalAlerts = 1
     envelope.alerts.push({
       serviceOrderId: 42,
+      serviceOrderPublicId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       serviceOrderNumber: 'OS-42',
       customer: { id: 10, name: 'Cliente A' },
       unit: { id: 1, name: 'Sede' },

@@ -135,6 +135,9 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.technician_assigned",
   "service_order.evaluation_started",
   "service_order.evaluation_completed",
+  // Edits to an already-recorded evaluation. The diagnosis justifies the quote
+  // the customer approves, so a change to it has to leave a trail.
+  "service_order.evaluation_updated",
   "service_order.quote_created",
   "service_order.quote_sent",
   "service_order.quote_approved_by_client",
@@ -254,6 +257,50 @@ export function canTransitionServiceOrderStatus(
   to: ServiceOrderStatus,
 ) {
   return SERVICE_ORDER_ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * True only while the order is genuinely waiting on a quote decision.
+ *
+ * Approving or rejecting a quote advances the order ONLY from here. Anywhere
+ * else the decision is late or out-of-band — a mid-job re-quote answered while
+ * the instrument is on the bench, or a public link answered after the OS was
+ * already delivered or closed — and moving the status would rewind real
+ * progress. The quote's own status still records the customer's answer.
+ *
+ * Stated as "when may we advance?" rather than "which states must we protect?"
+ * deliberately: the protect-list version silently missed ready_for_pickup,
+ * delivered and closed, which a still-live public token can outlive.
+ */
+export function isServiceOrderDecidingQuoteStatus(status: ServiceOrderStatus) {
+  return status === "awaiting_quote_approval";
+}
+
+/**
+ * Statuses where the instrument is already on the bench. A quote sent from
+ * here is a mid-job re-quote — the technician found an extra failed part — and
+ * the physical work does not stop while the customer decides, so sending does
+ * not rewind the order to "Aguardando aprovação".
+ */
+const SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES: readonly ServiceOrderStatus[] = [
+  "repair_in_progress",
+  "awaiting_calibration",
+  "calibration_in_progress",
+  "awaiting_final_review",
+];
+
+export function isServiceOrderWorkInProgressStatus(status: ServiceOrderStatus) {
+  return SERVICE_ORDER_WORK_IN_PROGRESS_STATUSES.includes(status);
+}
+
+/**
+ * Narrows an unknown value (a jsonb column, a query param) to a status this
+ * build knows. Persisted data can carry a status written by another deploy.
+ */
+export function isServiceOrderStatus(
+  value: unknown,
+): value is ServiceOrderStatus {
+  return SERVICE_ORDER_STATUSES.some((status) => status === value);
 }
 
 export function canEditServiceOrderQuote(status: ServiceOrderQuoteStatus) {

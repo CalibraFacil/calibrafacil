@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { SERVICE_ORDER_EVENT_TYPES } from '@calibra-facil/shared'
 import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
 import type { ServiceOrderDetail } from './types'
 import {
   buildServiceOrderDetailFormKey,
   buildServiceOrderIntakeHtml,
+  buildServiceOrderStageAffordances,
   buildServiceOrderTimelineItems,
+  buildServiceOrderWorkflowStages,
   COMMUNICATION_STATUS_LABELS,
   communicationEventLabel,
   communicationStatusBadgeVariant,
@@ -13,11 +16,15 @@ import {
   financialStatusBadgeVariant,
   formatCentsForMoneyInput,
   getPublicUrl,
+  isServiceOrderLifecycleError,
   materialToQuoteItemPatch,
   parseMoneyToCents,
   quoteDraftItemFromApiItem,
+  quoteItemLineTotal,
   quoteItemsTotal,
   quoteItemTypeChangePatch,
+  serviceOrderActionErrorMessage,
+  serviceOrderEventLabel,
   serviceOrderFinancialStatusSummary,
   toApiItems,
 } from './detail-model'
@@ -317,6 +324,61 @@ describe('service order detail model', () => {
     ])
   })
 
+  it('gives every canonical event type a pt-BR label, never the raw key', () => {
+    for (const eventType of SERVICE_ORDER_EVENT_TYPES) {
+      const label = serviceOrderEventLabel(eventType)
+      expect(label).not.toBe(eventType)
+      expect(label).not.toMatch(/^service_order\./)
+      expect(label.trim().length).toBeGreaterThan(0)
+    }
+
+    // The regression that started this: the customer-side events were absent.
+    expect(serviceOrderEventLabel('service_order.public_link_viewed')).toBe(
+      'Link público acessado',
+    )
+    expect(serviceOrderEventLabel('service_order.portal_viewed')).toBe(
+      'Visualizada no portal do cliente',
+    )
+  })
+
+  it('falls back to the raw key for an event type this build does not know', () => {
+    expect(serviceOrderEventLabel('service_order.future_thing')).toBe(
+      'service_order.future_thing',
+    )
+  })
+
+  it('gives customer reads and outbound email their own timeline icons', () => {
+    const [view, email, generic] = buildServiceOrderTimelineItems([
+      {
+        id: 1,
+        eventType: 'service_order.public_link_viewed',
+        actorType: 'public_token',
+        actorName: null,
+        createdAt: '2026-05-20T10:00:00.000Z',
+      },
+      {
+        id: 2,
+        eventType: 'service_order.email_sent',
+        actorType: 'system',
+        actorName: null,
+        createdAt: '2026-05-20T11:00:00.000Z',
+      },
+      {
+        id: 3,
+        eventType: 'service_order.created',
+        actorType: 'lab_user',
+        actorName: 'Pedro',
+        createdAt: '2026-05-20T12:00:00.000Z',
+      },
+    ])
+
+    expect(view.title).toBe('Link público acessado')
+    expect(view.actor).toBe('Link público')
+    expect(view.icon).not.toBe(generic.icon)
+    expect(email.icon).not.toBe(generic.icon)
+    expect(email.icon).not.toBe(view.icon)
+  })
+
   it('extracts public URLs from flat and nested responses', () => {
     expect(getPublicUrl({ publicUrl: 'https://example.test/a.pdf' })).toBe(
       'https://example.test/a.pdf',
@@ -384,6 +446,10 @@ describe('service order detail model', () => {
     expect(html).toContain('Lab Calibra')
     expect(html).toContain('Garantia')
     expect(html).toContain('Balança snapshot')
+    // The printed lab copy names this field exactly as the dashboard does, so
+    // the form a technician fills in matches the screen they fill it from.
+    expect(html).toContain('Início da avaliação')
+    expect(html).not.toContain('Início do serviço')
     consoleError.mockRestore()
   })
 
@@ -522,6 +588,387 @@ describe('service order detail model', () => {
   })
 })
 
+type StagesInput = Pick<
+  ServiceOrderDetail,
+  'evaluations' | 'quotes' | 'execution' | 'deliveredAt'
+>
+
+function stagesInput(overrides: Partial<StagesInput> = {}): StagesInput {
+  return {
+    evaluations: [],
+    quotes: [],
+    execution: null,
+    deliveredAt: null,
+    ...overrides,
+  }
+}
+
+function evaluation(): ServiceOrderDetail['evaluations'][number] {
+  return {
+    id: 1,
+    diagnosis: 'Célula de carga descalibrada',
+    recommendedAction: 'repair',
+    requiresQuote: true,
+    requiresClientApproval: true,
+    calibrationRecommended: false,
+    evaluatedAt: '2026-05-20T10:00:00.000Z',
+  }
+}
+
+function quote(
+  overrides: Partial<ServiceOrderDetail['quotes'][number]> = {},
+): ServiceOrderDetail['quotes'][number] {
+  return {
+    id: 1,
+    status: 'draft',
+    totalCents: 25000,
+    version: 1,
+    items: [],
+    ...overrides,
+  }
+}
+
+function runningExecution(
+  finishedAt: string | null,
+): NonNullable<ServiceOrderDetail['execution']> {
+  return {
+    id: 7,
+    startedAt: '2026-05-21T09:00:00.000Z',
+    finishedAt,
+    calibrationRequiredAfterRepair: false,
+    items: [],
+  }
+}
+
+describe('service order workflow stages', () => {
+  it('marks the first unfinished stage as current and the rest as pending', () => {
+    const stages = buildServiceOrderWorkflowStages(stagesInput())
+
+    expect(stages.map((stage) => stage.state)).toEqual([
+      'current',
+      'pending',
+      'pending',
+      'pending',
+    ])
+    expect(stages.map((stage) => stage.hint)).toEqual([
+      'Pendente',
+      'Sem orçamento',
+      'Não iniciada',
+      'Pendente',
+    ])
+  })
+
+  it('completes a stage from the record it produces, not from the OS status', () => {
+    const stages = buildServiceOrderWorkflowStages(
+      stagesInput({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'sent', version: 2 })],
+      }),
+    )
+
+    expect(stages[0]).toMatchObject({ state: 'done', hint: 'Reparo' })
+    // Sent but not approved: the quote stage is where the work still sits.
+    expect(stages[1]).toMatchObject({ state: 'current', hint: 'v2 · Enviado' })
+    expect(stages[2].state).toBe('pending')
+  })
+
+  it('walks the current marker forward as each stage closes', () => {
+    const stages = buildServiceOrderWorkflowStages(
+      stagesInput({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'approved', version: 3 })],
+        execution: runningExecution('2026-05-21T15:00:00.000Z'),
+      }),
+    )
+
+    expect(stages.map((stage) => stage.state)).toEqual([
+      'done',
+      'done',
+      'done',
+      'current',
+    ])
+    expect(stages[2].hint).toBe('Concluída')
+    expect(stages[3].hint).toBe('Pendente')
+
+    const delivered = buildServiceOrderWorkflowStages(
+      stagesInput({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'approved' })],
+        execution: runningExecution('2026-05-21T15:00:00.000Z'),
+        deliveredAt: '2026-05-22T12:00:00.000Z',
+      }),
+    )
+
+    expect(delivered.every((stage) => stage.state === 'done')).toBe(true)
+  })
+
+  it('reports an execution in progress separately from a finished one', () => {
+    const stages = buildServiceOrderWorkflowStages(
+      stagesInput({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'approved' })],
+        execution: runningExecution(null),
+      }),
+    )
+
+    expect(stages[2]).toMatchObject({ state: 'current', hint: 'Em andamento' })
+  })
+})
+
+// Mirrors CalibraApiError's shape (message + status) without importing the
+// transport class into a feature test.
+function apiError(message: string, status: number) {
+  const error = new Error(message)
+  Reflect.set(error, 'status', status)
+  return error
+}
+
+type AffordanceInput = Pick<
+  ServiceOrderDetail,
+  'evaluations' | 'quotes' | 'execution' | 'deliveredAt' | 'status'
+>
+
+function base(overrides: Partial<AffordanceInput> = {}): AffordanceInput {
+  return {
+    evaluations: [],
+    quotes: [],
+    execution: null,
+    deliveredAt: null,
+    status: 'opened',
+    ...overrides,
+  }
+}
+
+describe('service order stage affordances', () => {
+  it('locks every later stage on a fresh order', () => {
+    expect(buildServiceOrderStageAffordances(base())).toEqual({
+      evaluation: 'editable',
+      quote: 'locked',
+      execution: 'locked',
+      delivery: 'locked',
+    })
+  })
+
+  it('unlocks the quote once an evaluation exists', () => {
+    const affordances = buildServiceOrderStageAffordances(
+      base({ evaluations: [evaluation()], status: 'under_evaluation' }),
+    )
+
+    expect(affordances.quote).toBe('editable')
+    // Still editable: nothing has been shown to the customer yet.
+    expect(affordances.evaluation).toBe('editable')
+  })
+
+  it('freezes the evaluation as soon as a quote leaves the lab, not before', () => {
+    const draftOnly = buildServiceOrderStageAffordances(
+      base({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'draft' })],
+        status: 'under_evaluation',
+      }),
+    )
+    expect(draftOnly.evaluation).toBe('editable')
+
+    const sent = buildServiceOrderStageAffordances(
+      base({
+        evaluations: [evaluation()],
+        quotes: [quote({ status: 'sent' })],
+        status: 'awaiting_quote_approval',
+      }),
+    )
+    expect(sent.evaluation).toBe('record-revisable')
+  })
+
+  it('turns a decided quote into a revisable record', () => {
+    for (const status of ['approved', 'rejected']) {
+      const affordances = buildServiceOrderStageAffordances(
+        base({
+          evaluations: [evaluation()],
+          quotes: [quote({ status })],
+          status: status === 'approved' ? 'quote_approved' : 'quote_rejected',
+        }),
+      )
+      expect(affordances.quote).toBe('record-revisable')
+    }
+  })
+
+  it('opens execution only where the lifecycle allows starting it', () => {
+    // under_evaluation cannot reach repair_in_progress in one step.
+    expect(
+      buildServiceOrderStageAffordances(
+        base({ evaluations: [evaluation()], status: 'under_evaluation' }),
+      ).execution,
+    ).toBe('locked')
+
+    // quote_approved -> repair_in_progress is a permitted edge.
+    expect(
+      buildServiceOrderStageAffordances(
+        base({
+          evaluations: [evaluation()],
+          quotes: [quote({ status: 'approved' })],
+          status: 'quote_approved',
+        }),
+      ).execution,
+    ).toBe('editable')
+  })
+
+  it('turns a finished execution into a record but leaves a running one editable', () => {
+    const running = buildServiceOrderStageAffordances(
+      base({
+        evaluations: [evaluation()],
+        execution: runningExecution(null),
+        status: 'repair_in_progress',
+      }),
+    )
+    expect(running.execution).toBe('editable')
+
+    const finished = buildServiceOrderStageAffordances(
+      base({
+        evaluations: [evaluation()],
+        execution: runningExecution('2026-05-21T15:00:00.000Z'),
+        status: 'awaiting_final_review',
+      }),
+    )
+    expect(finished.execution).toBe('record')
+  })
+
+  it('opens delivery at ready_for_pickup and closes it once delivered', () => {
+    expect(
+      buildServiceOrderStageAffordances(base({ status: 'ready_for_pickup' }))
+        .delivery,
+    ).toBe('editable')
+
+    expect(
+      buildServiceOrderStageAffordances(
+        base({ status: 'delivered', deliveredAt: '2026-05-22T12:00:00.000Z' }),
+      ).delivery,
+    ).toBe('record')
+  })
+
+  it('makes every stage a record on a closed or canceled order', () => {
+    for (const status of ['closed', 'canceled'] as const) {
+      expect(
+        buildServiceOrderStageAffordances(
+          base({
+            status,
+            evaluations: [evaluation()],
+            quotes: [quote({ status: 'approved' })],
+            execution: runningExecution(null),
+          }),
+        ),
+      ).toEqual({
+        evaluation: 'record',
+        quote: 'record',
+        execution: 'record',
+        delivery: 'record',
+      })
+    }
+  })
+})
+
+describe('service order action errors', () => {
+  it('treats a 409 as a lifecycle conflict', () => {
+    const error = apiError('Este orcamento ja foi respondido', 409)
+
+    expect(isServiceOrderLifecycleError(error)).toBe(true)
+    expect(serviceOrderActionErrorMessage(error, 'Erro ao emitir')).toBe(
+      'Este orcamento ja foi respondido. Atualize a página para ver o estado atual da OS.',
+    )
+  })
+
+  it('treats the transition 400 as a lifecycle conflict', () => {
+    const error = apiError('Transicao de status invalida', 400)
+
+    expect(isServiceOrderLifecycleError(error)).toBe(true)
+    expect(
+      serviceOrderActionErrorMessage(error, 'Não foi possível iniciar'),
+    ).toMatch(/Atualize a página/)
+  })
+
+  it('does NOT treat a validation 400 as a lifecycle conflict', () => {
+    // zValidator also answers 400; suggesting a refresh there would be wrong.
+    const error = apiError('deliveredToName: obrigatório', 400)
+
+    expect(isServiceOrderLifecycleError(error)).toBe(false)
+    expect(serviceOrderActionErrorMessage(error, 'Erro ao entregar')).toBe(
+      'deliveredToName: obrigatório',
+    )
+  })
+
+  it('falls back to the caller message for a non-Error or blank message', () => {
+    expect(isServiceOrderLifecycleError(null)).toBe(false)
+    expect(isServiceOrderLifecycleError('boom')).toBe(false)
+    expect(serviceOrderActionErrorMessage(null, 'Erro ao salvar')).toBe(
+      'Erro ao salvar',
+    )
+    expect(
+      serviceOrderActionErrorMessage(new Error('  '), 'Erro ao salvar'),
+    ).toBe('Erro ao salvar')
+  })
+
+  it('passes a plain server message through untouched', () => {
+    const error = apiError('Informe o diagnóstico técnico.', 422)
+
+    expect(serviceOrderActionErrorMessage(error, 'Erro ao salvar')).toBe(
+      'Informe o diagnóstico técnico.',
+    )
+  })
+})
+
+describe('quote line totals', () => {
+  it('multiplies quantity by unit price in cents', () => {
+    expect(
+      quoteItemLineTotal({
+        ...createEmptyQuoteItem('service'),
+        quantity: '3',
+        unitPrice: '150,50',
+      }),
+    ).toBe(45150)
+  })
+
+  it('accepts a comma decimal quantity', () => {
+    expect(
+      quoteItemLineTotal({
+        ...createEmptyQuoteItem('part'),
+        quantity: '2,5',
+        unitPrice: '10,00',
+      }),
+    ).toBe(2500)
+  })
+
+  it('returns null for an incomplete row so the editor can stay quiet', () => {
+    expect(
+      quoteItemLineTotal({
+        ...createEmptyQuoteItem('service'),
+        quantity: '1',
+        unitPrice: '',
+      }),
+    ).toBeNull()
+    expect(
+      quoteItemLineTotal({
+        ...createEmptyQuoteItem('service'),
+        quantity: 'abc',
+        unitPrice: '10,00',
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps the sum consistent with the per-line values', () => {
+    const items = [
+      {
+        ...createEmptyQuoteItem('service'),
+        quantity: '2',
+        unitPrice: '100,00',
+      },
+      { ...createEmptyQuoteItem('part'), quantity: '1', unitPrice: '49,90' },
+      { ...createEmptyQuoteItem('part'), quantity: '1', unitPrice: '' },
+    ]
+
+    expect(quoteItemsTotal(items)).toBe(24990)
+    expect(items.map(quoteItemLineTotal)).toEqual([20000, 4990, null])
+  })
+})
+
 function financialStatusFixture(): ServiceOrderFinancialStatus {
   return {
     serviceOrderId: 1,
@@ -578,6 +1025,7 @@ function financialStatusFixture(): ServiceOrderFinancialStatus {
 function serviceOrderDetail(): ServiceOrderDetail {
   return {
     id: 1,
+    publicId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
     serviceOrderNumber: 'OS-1',
     customerId: 1,
     assetId: 1,

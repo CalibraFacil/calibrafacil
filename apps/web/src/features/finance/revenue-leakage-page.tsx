@@ -54,6 +54,8 @@ const CLASS_TONE: Record<LeakageClass, SignalTone> = {
 
 interface AlertItem {
   serviceOrderId: number
+  /** Opaque id the OS link routes with. */
+  serviceOrderPublicId: string
   serviceOrderNumber: string
   customer: { id: number; name: string }
   unit: { id: number; name: string }
@@ -89,8 +91,8 @@ const alertColumns: ColumnDef<AlertItem, unknown>[] = [
     enableHiding: false,
     cell: ({ row }) => (
       <Link
-        to="/dashboard/service-orders/$id"
-        params={{ id: String(row.original.serviceOrderId) }}
+        to="/dashboard/service-orders/$publicId"
+        params={{ publicId: row.original.serviceOrderPublicId }}
         className="font-medium hover:underline"
       >
         {row.original.serviceOrderNumber} · {row.original.customer.name}
@@ -147,7 +149,10 @@ const alertColumns: ColumnDef<AlertItem, unknown>[] = [
     meta: { label: 'Valor' },
     cell: ({ row }) => (
       <div className="text-right">
-        <Money cents={row.original.amountCents} currency={row.original.currency} />
+        <Money
+          cents={row.original.amountCents}
+          currency={row.original.currency}
+        />
       </div>
     ),
   },
@@ -156,7 +161,8 @@ const alertColumns: ColumnDef<AlertItem, unknown>[] = [
 function revenueLeakageQueryOptions() {
   return queryOptions<RevenueLeakageEnvelope>({
     queryKey: ['finance', 'revenue-leakage'],
-    queryFn: () => calibraApi.finance.getRevenueLeakage<RevenueLeakageEnvelope>(),
+    queryFn: () =>
+      calibraApi.finance.getRevenueLeakage<RevenueLeakageEnvelope>(),
   })
 }
 

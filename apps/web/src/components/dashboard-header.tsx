@@ -108,7 +108,7 @@ const routeLabels: Record<string, string> = {
   '/dashboard/jobs': 'Calibrações',
   '/dashboard/service-orders': 'Ordens de Serviço',
   '/dashboard/service-orders/new': 'Nova OS',
-  '/dashboard/service-orders/$id': 'Ordem de Serviço',
+  '/dashboard/service-orders/$publicId': 'Ordem de Serviço',
   '/dashboard/jobs/new': 'Nova Calibração',
   '/dashboard/jobs/$id': 'Calibração',
   '/dashboard/jobs/$id/execute': 'Executar',
@@ -273,7 +273,9 @@ function extractEntityIds(pathname: string): {
     if (id !== 'new') result.serviceId = id
   }
 
-  // /dashboard/service-orders/:id/...
+  // /dashboard/service-orders/:publicId/... — the segment is the opaque id,
+  // which is also the detail query's cache key, so the crumb still resolves to
+  // the human OS number rather than rendering the uuid.
   const serviceOrdersIndex = parts.indexOf('service-orders')
   if (serviceOrdersIndex !== -1 && parts[serviceOrdersIndex + 1]) {
     const id = parts[serviceOrdersIndex + 1]
@@ -626,13 +628,17 @@ export function DashboardHeader({
 
           let label = routeLabels[normalizedRouteId]
 
-          // For routes that end with $id (entity routes), try to get entity name
-          // Only replace for routes like /clients/$id, not /clients/$id/info
-          if (normalizedRouteId.endsWith('$id')) {
+          // Entity routes end in a dynamic segment — $id, $publicId, whatever
+          // the route names it. Swap the raw segment for the entity's own name
+          // so the crumb reads "OS-2026-000001" instead of the generic route
+          // label (or the opaque id itself).
+          // Still only for routes ENDING there: /clients/$id, not
+          // /clients/$id/info.
+          const routeParts = normalizedRouteId.split('/')
+          const lastRoutePart = routeParts.at(-1) ?? ''
+          if (lastRoutePart.startsWith('$')) {
             const pathParts = m.pathname.split('/')
-            const routeParts = normalizedRouteId.split('/')
-            const idIndex = routeParts.findIndex((part) => part === '$id')
-            const id = pathParts[idIndex]
+            const id = pathParts[routeParts.length - 1]
 
             if (id && entityNames[id]) {
               label = entityNames[id]

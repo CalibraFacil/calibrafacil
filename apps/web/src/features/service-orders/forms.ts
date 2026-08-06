@@ -220,3 +220,56 @@ function mapServiceOrderSchemaError(error: {
 
   return error
 }
+
+/**
+ * The evaluation start is stored as a single timestamp but edited as a date
+ * (calendar popover) plus an "HH:mm" field, matching the date+time idiom used
+ * elsewhere in the app. These helpers keep the split/join out of JSX.
+ */
+export type ServiceStartDraft = {
+  date: Date | undefined
+  time: string
+}
+
+function padTimeUnit(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+export function serviceStartDraftFromIso(
+  iso: string | null | undefined,
+): ServiceStartDraft {
+  if (!iso) return { date: undefined, time: '' }
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) return { date: undefined, time: '' }
+
+  return {
+    date: parsed,
+    time: `${padTimeUnit(parsed.getHours())}:${padTimeUnit(parsed.getMinutes())}`,
+  }
+}
+
+/**
+ * Joins the draft back into an ISO instant. Returns null when no date is set
+ * (the field is optional and clearable); a blank time means midnight local.
+ */
+export function serviceStartDraftToIso(
+  draft: ServiceStartDraft,
+): string | null {
+  if (!draft.date) return null
+
+  const [hours, minutes] = draft.time.split(':')
+  const combined = new Date(draft.date)
+  combined.setHours(Number(hours) || 0, Number(minutes) || 0, 0, 0)
+
+  return Number.isNaN(combined.getTime()) ? null : combined.toISOString()
+}
+
+/** True when the draft resolves to a different instant than what is stored. */
+export function isServiceStartDirty(
+  draft: ServiceStartDraft,
+  storedIso: string | null | undefined,
+): boolean {
+  const next = serviceStartDraftToIso(draft)
+  const stored = storedIso ? new Date(storedIso).toISOString() : null
+  return next !== stored
+}

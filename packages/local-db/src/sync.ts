@@ -743,6 +743,7 @@ ON CONFLICT(id) DO UPDATE SET
 INSERT INTO service_orders (
   id,
   remote_id,
+  public_id,
   service_order_number,
   organization_id,
   unit_id,
@@ -781,6 +782,7 @@ INSERT INTO service_orders (
 ) VALUES (
   @id,
   @remoteId,
+  @publicId,
   @serviceOrderNumber,
   @organizationId,
   @unitId,
@@ -818,6 +820,7 @@ INSERT INTO service_orders (
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
+  public_id = excluded.public_id,
   service_order_number = excluded.service_order_number,
   customer_id = excluded.customer_id,
   asset_id = excluded.asset_id,
@@ -833,6 +836,9 @@ ON CONFLICT(id) DO UPDATE SET
         .run({
           id: remoteLocalId("service-order", id),
           remoteId: id,
+          // Opaque cloud id the dashboard routes with, so a synced OS has the
+          // same URL in both runtimes.
+          publicId: getString(row, "publicId") ?? null,
           serviceOrderNumber:
             getString(row, "serviceOrderNumber") ?? `OS-${id}`,
           organizationId,

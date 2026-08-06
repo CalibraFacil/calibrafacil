@@ -208,8 +208,8 @@ export function NewServiceOrderPage() {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] })
       toast.success('OS criada com comprovante e etiqueta em processamento')
       navigate({
-        to: '/dashboard/service-orders/$id',
-        params: { id: String(result.data.id) },
+        to: '/dashboard/service-orders/$publicId',
+        params: { publicId: result.data.publicId },
       })
     },
     onError: (error) => toast.error(error.message),

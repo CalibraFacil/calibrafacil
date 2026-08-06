@@ -8,6 +8,8 @@ export type ServiceOrderStatus = string;
 
 export type ServiceOrderListItem = {
   id: number;
+  /** Opaque id the dashboard links with; the serial never reaches a URL. */
+  publicId: string;
   serviceOrderNumber: string;
   customerName: string;
   assetName: string;
@@ -162,6 +164,8 @@ export type UpdateServiceOrderInput = z.input<typeof UpdateServiceOrderSchema>;
 export type CreateServiceOrderResult = {
   data: {
     id: number;
+    /** Opaque id — the post-create redirect routes with it. */
+    publicId: string;
     serviceOrderNumber?: string;
   };
 };
@@ -195,6 +199,11 @@ export type SaveServiceOrderEvaluationInput = {
   calibrationRecommended: boolean;
   clientVisibleNotes?: string | null;
   photos?: unknown[];
+  /**
+   * Why the evaluation is being changed. Required by the API once a quote has
+   * been sent to the customer; ignored on create.
+   */
+  revisionReason?: string | null;
 };
 
 export type SendServiceOrderQuoteInput = {

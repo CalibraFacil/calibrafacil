@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   CheckmarkCircle02Icon,
   File02Icon,
+  Mail01Icon,
   PackageProcessIcon,
   UserCheck01Icon,
+  ViewIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
@@ -13,8 +15,14 @@ import type {
   ServiceOrderCommunicationStatus,
 } from '@calibra-facil/client-runtime'
 import type { EventTimelineItem } from '@/components/event-timeline'
+import {
+  canTransitionServiceOrderStatus,
+  isServiceOrderFinalStatus,
+  SERVICE_ORDER_EVENT_TYPES,
+} from '@calibra-facil/shared'
 import type {
   FinancialContinuityStatus,
+  ServiceOrderEventType,
   ServiceOrderFinancialStatus,
 } from '@calibra-facil/shared'
 import type {
@@ -110,27 +118,230 @@ export const WORKFLOW_TABS = [
   },
 ] as const
 
-export const SERVICE_ORDER_EVENT_LABELS: Record<string, string> = {
-  'service_order.created': 'OS criada',
-  'service_order.intake_document_issued': 'Comprovante emitido',
-  'service_order.tag_printed': 'Etiqueta gerada',
-  'service_order.status_changed': 'Status alterado',
-  'service_order.technician_assigned': 'Técnico atribuído',
-  'service_order.evaluation_completed': 'Avaliação concluída',
-  'service_order.quote_created': 'Orçamento criado',
-  'service_order.quote_sent': 'Orçamento enviado',
-  'service_order.quote_approved_by_client': 'Orçamento aprovado pelo cliente',
-  'service_order.quote_approved_manually': 'Orçamento aprovado manualmente',
-  'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
-  'service_order.repair_started': 'Execução iniciada',
-  'service_order.repair_finished': 'Execução finalizada',
-  'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
-  'service_order.repair_mark_updated': 'Marca de Reparo atualizada',
-  'service_order.ready_for_pickup': 'Disponível para retirada',
-  'service_order.delivered': 'Entregue ao cliente',
-  'service_order.closed': 'OS encerrada',
-  'service_order.canceled': 'OS cancelada',
-  'service_order.certificate_linked': 'Calibração vinculada',
+export type WorkflowTabValue = (typeof WORKFLOW_TABS)[number]['value']
+
+export type WorkflowStageState = 'done' | 'current' | 'pending'
+
+export type WorkflowStage = {
+  value: WorkflowTabValue
+  label: string
+  icon: (typeof WORKFLOW_TABS)[number]['icon']
+  state: WorkflowStageState
+  /** One-line status shown under the stage label ("v2 · Aprovado"). */
+  hint: string
+}
+
+// Stage completion is derived from the records the stage produces, not from
+// `order.status` — status can jump (manual approval, cancelation) while the
+// artefacts are what the tab actually edits.
+export function buildServiceOrderWorkflowStages(
+  order: Pick<
+    ServiceOrderDetail,
+    'evaluations' | 'quotes' | 'execution' | 'deliveredAt'
+  >,
+): WorkflowStage[] {
+  const [latestEvaluation] = order.evaluations
+  const [latestQuote] = order.quotes
+  const execution = order.execution
+
+  const done = {
+    evaluation: Boolean(latestEvaluation),
+    quote: latestQuote?.status === 'approved',
+    execution: Boolean(execution?.finishedAt),
+    delivery: Boolean(order.deliveredAt),
+  }
+
+  const hints: Record<WorkflowTabValue, string> = {
+    evaluation: latestEvaluation
+      ? (RECOMMENDED_ACTION_LABELS[latestEvaluation.recommendedAction] ??
+        'Registrada')
+      : 'Pendente',
+    quote: latestQuote
+      ? `v${latestQuote.version} · ${
+          QUOTE_STATUS_LABELS[latestQuote.status] ?? latestQuote.status
+        }`
+      : 'Sem orçamento',
+    execution: execution
+      ? execution.finishedAt
+        ? 'Concluída'
+        : 'Em andamento'
+      : 'Não iniciada',
+    delivery: order.deliveredAt ? 'Entregue' : 'Pendente',
+  }
+
+  // "current" is the first stage still open, so exactly one stage is ever
+  // highlighted and everything after it reads as pending.
+  const currentIndex = WORKFLOW_TABS.findIndex((tab) => !done[tab.value])
+
+  return WORKFLOW_TABS.map((tab, index) => ({
+    value: tab.value,
+    label: tab.label,
+    icon: tab.icon,
+    state: done[tab.value]
+      ? 'done'
+      : index === currentIndex
+        ? 'current'
+        : 'pending',
+    hint: hints[tab.value],
+  }))
+}
+
+/**
+ * How a workflow stage may be interacted with right now.
+ *
+ * - `editable`          — the stage is the live one; render its form.
+ * - `record`            — closed; render what was recorded, no way back.
+ * - `record-revisable`  — closed, but a correction is legitimate (see below).
+ * - `locked`            — not reachable yet; say what unlocks it.
+ */
+export type StageAffordance =
+  | 'editable'
+  | 'record'
+  | 'record-revisable'
+  | 'locked'
+
+// A quote that has left the lab. Its existence is what freezes the evaluation:
+// the diagnosis has been communicated to the customer as the basis for a price.
+function hasQuoteLeftTheLab(order: Pick<ServiceOrderDetail, 'quotes'>) {
+  return order.quotes.some((quote) => quote.status !== 'draft')
+}
+
+/**
+ * Per-stage affordances, derived from the artefacts each stage produces plus
+ * the order status — never from the active tab. Pure so the rules are testable
+ * without rendering the page.
+ */
+export function buildServiceOrderStageAffordances(
+  order: Pick<
+    ServiceOrderDetail,
+    'evaluations' | 'quotes' | 'execution' | 'deliveredAt' | 'status'
+  >,
+): Record<WorkflowTabValue, StageAffordance> {
+  // A closed or canceled OS is history in every stage at once.
+  if (isServiceOrderFinalStatus(order.status)) {
+    return {
+      evaluation: 'record',
+      quote: 'record',
+      execution: 'record',
+      delivery: 'record',
+    }
+  }
+
+  const [latestEvaluation] = order.evaluations
+  const [latestQuote] = order.quotes
+  const execution = order.execution
+
+  // Freezes once a quote has been sent (the lab's chosen cut line), revisable
+  // from there because a wrong diagnosis still has to be correctable.
+  const evaluation: StageAffordance = !latestEvaluation
+    ? 'editable'
+    : hasQuoteLeftTheLab(order)
+      ? 'record-revisable'
+      : 'editable'
+
+  const quote: StageAffordance = !latestEvaluation
+    ? 'locked'
+    : latestQuote?.status === 'approved' || latestQuote?.status === 'rejected'
+      ? 'record-revisable'
+      : 'editable'
+
+  const canStartExecution =
+    order.status === 'repair_in_progress' ||
+    canTransitionServiceOrderStatus(order.status, 'repair_in_progress')
+  const execStage: StageAffordance = execution
+    ? execution.finishedAt
+      ? 'record'
+      : 'editable'
+    : canStartExecution
+      ? 'editable'
+      : 'locked'
+
+  const canDeliver =
+    order.status === 'delivered' ||
+    canTransitionServiceOrderStatus(order.status, 'delivered')
+  const delivery: StageAffordance = order.deliveredAt
+    ? 'record'
+    : canDeliver
+      ? 'editable'
+      : 'locked'
+
+  return { evaluation, quote, execution: execStage, delivery }
+}
+
+/** Why a locked stage is locked, in pt-BR, for its empty state. */
+export const STAGE_LOCKED_REASONS: Record<
+  WorkflowTabValue,
+  { title: string; description: string }
+> = {
+  evaluation: {
+    title: 'Avaliação ainda não disponível',
+    description: 'Esta etapa é o início do fluxo desta OS.',
+  },
+  quote: {
+    title: 'Orçamento ainda não disponível',
+    description: 'Registre a avaliação técnica para montar o orçamento.',
+  },
+  execution: {
+    title: 'Execução ainda não disponível',
+    description: 'A execução é liberada após a aprovação do orçamento.',
+  },
+  delivery: {
+    title: 'Entrega ainda não disponível',
+    description:
+      'A entrega é liberada quando a OS estiver pronta para retirada.',
+  },
+}
+
+// Keyed by the canonical event list in @calibra-facil/shared, NOT by
+// `string` — adding an event type there now fails the build here until it has
+// a pt-BR label, instead of silently rendering the raw
+// "service_order.public_link_viewed" key in the timeline.
+export const SERVICE_ORDER_EVENT_LABELS: Record<ServiceOrderEventType, string> =
+  {
+    'service_order.created': 'OS criada',
+    'service_order.intake_document_issued': 'Comprovante emitido',
+    'service_order.tag_printed': 'Etiqueta gerada',
+    'service_order.status_changed': 'Status alterado',
+    'service_order.technician_assigned': 'Técnico atribuído',
+    'service_order.evaluation_started': 'Avaliação iniciada',
+    'service_order.evaluation_completed': 'Avaliação concluída',
+    'service_order.evaluation_updated': 'Avaliação alterada',
+    'service_order.quote_created': 'Orçamento criado',
+    'service_order.quote_sent': 'Orçamento enviado',
+    'service_order.quote_approved_by_client': 'Orçamento aprovado pelo cliente',
+    'service_order.quote_approved_manually': 'Orçamento aprovado manualmente',
+    'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
+    'service_order.quote_rejected_manually': 'Orçamento recusado manualmente',
+    'service_order.repair_started': 'Execução iniciada',
+    'service_order.repair_finished': 'Execução finalizada',
+    'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
+    'service_order.repair_mark_updated': 'Marca de Reparo atualizada',
+    'service_order.ready_for_pickup': 'Disponível para retirada',
+    'service_order.delivered': 'Entregue ao cliente',
+    'service_order.closed': 'OS encerrada',
+    'service_order.reopened': 'OS reaberta',
+    'service_order.canceled': 'OS cancelada',
+    'service_order.certificate_linked': 'Calibração vinculada',
+    'service_order.certificate_unlinked': 'Calibração desvinculada',
+    'service_order.sent_to_finance': 'Enviada ao financeiro',
+    'service_order.email_sent': 'E-mail enviado ao cliente',
+    'service_order.portal_viewed': 'Visualizada no portal do cliente',
+    'service_order.public_link_viewed': 'Link público acessado',
+    'service_order.public_code_redeemed': 'Código de acesso validado',
+  }
+
+function isServiceOrderEventType(
+  eventType: string,
+): eventType is ServiceOrderEventType {
+  return SERVICE_ORDER_EVENT_TYPES.some((known) => known === eventType)
+}
+
+// The event log is persisted data: a row written by an older/newer deploy can
+// carry a type this build doesn't know, so the raw key stays as the fallback.
+export function serviceOrderEventLabel(eventType: string): string {
+  return isServiceOrderEventType(eventType)
+    ? SERVICE_ORDER_EVENT_LABELS[eventType]
+    : eventType
 }
 
 export const COMMUNICATION_STATUS_LABELS: Record<
@@ -362,12 +573,70 @@ export function quoteDraftItemFromApiItem(
   }
 }
 
+// The API's lifecycle guards answer with these exact strings when the OS status
+// forbids an action (apps/api service-order routes). Matching on them lets the
+// UI add a "refresh" hint only where it is actually useful, instead of on every
+// 400 — a Zod validation failure is also a 400 and means something else.
+const LIFECYCLE_CONFLICT_MESSAGES = [
+  'Transicao de status invalida',
+  'OS encerrada ou cancelada',
+  'Este orcamento ja foi respondido',
+  'Apenas rascunhos podem ser enviados',
+]
+
+/**
+ * True when the request failed because the order moved on (or never got to the
+ * state the action needs). Duck-typed off the CalibraApiError shape, matching
+ * `isScopeViolationError` in the jobs feature.
+ */
+export function isServiceOrderLifecycleError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+
+  const status = Reflect.get(error, 'status')
+  if (status === 409) return true
+  if (status !== 400) return false
+
+  const message = Reflect.get(error, 'message')
+  return (
+    typeof message === 'string' &&
+    LIFECYCLE_CONFLICT_MESSAGES.some((known) => message.includes(known))
+  )
+}
+
+/**
+ * User-facing pt-BR message for a failed service-order action. Prefers the
+ * server's own message (already Portuguese) and appends a refresh hint for
+ * lifecycle conflicts, whose usual cause is a page showing a stale status.
+ */
+export function serviceOrderActionErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  const serverMessage =
+    error instanceof Error && error.message.trim() ? error.message : fallback
+
+  return isServiceOrderLifecycleError(error)
+    ? `${serverMessage}. Atualize a página para ver o estado atual da OS.`
+    : serverMessage
+}
+
+// Line total for a single draft row. Returns null (not 0) while the row is
+// still incomplete, so the editor can stay quiet instead of showing "R$ 0,00"
+// on every empty line.
+export function quoteItemLineTotal(item: QuoteDraftItem): number | null {
+  // A blank field is "not filled in yet", not zero — `Number('')` is 0, so the
+  // emptiness has to be checked before parsing. A typed "0,00" still totals 0.
+  if (!item.quantity.trim() || !item.unitPrice.trim()) return null
+  const quantity = Number(item.quantity.replace(',', '.'))
+  const cents = parseMoneyToCents(item.unitPrice)
+  if (!Number.isFinite(quantity) || !Number.isFinite(cents)) return null
+  return Math.round(quantity * cents)
+}
+
 export function quoteItemsTotal(items: QuoteDraftItem[]) {
   return items.reduce((total, item) => {
-    const quantity = Number(item.quantity.replace(',', '.'))
-    const cents = parseMoneyToCents(item.unitPrice)
-    if (!Number.isFinite(quantity) || !Number.isFinite(cents)) return total
-    return total + Math.round(quantity * cents)
+    const lineTotal = quoteItemLineTotal(item)
+    return lineTotal === null ? total : total + lineTotal
   }, 0)
 }
 
@@ -409,9 +678,14 @@ export function buildServiceOrderTimelineItems(
     const isDelivery =
       event.eventType.includes('delivered') ||
       event.eventType.includes('ready_for_pickup')
+    // Customer-side reads (portal / public link / code) and outbound email are
+    // not lab actions — they get their own icons instead of the generic check.
+    const isCustomerView =
+      event.eventType.includes('viewed') || event.eventType.includes('redeemed')
+    const isEmail = event.eventType.includes('email')
     return {
       id: String(event.id),
-      title: SERVICE_ORDER_EVENT_LABELS[event.eventType] ?? event.eventType,
+      title: serviceOrderEventLabel(event.eventType),
       timestamp: event.createdAt,
       actor:
         event.actorName ??
@@ -422,15 +696,19 @@ export function buildServiceOrderTimelineItems(
             : event.actorType === 'public_token'
               ? 'Link público'
               : null),
-      icon: isDocument
-        ? File02Icon
-        : isExecution
-          ? Wrench01Icon
-          : isApproval
-            ? UserCheck01Icon
-            : isDelivery
-              ? PackageProcessIcon
-              : CheckmarkCircle02Icon,
+      icon: isCustomerView
+        ? ViewIcon
+        : isEmail
+          ? Mail01Icon
+          : isDocument
+            ? File02Icon
+            : isExecution
+              ? Wrench01Icon
+              : isApproval
+                ? UserCheck01Icon
+                : isDelivery
+                  ? PackageProcessIcon
+                  : CheckmarkCircle02Icon,
       dotClassName:
         'border-primary/20 bg-background text-primary shadow-[inset_0_0_0_0.5rem_hsl(var(--primary)/0.12)]',
       status: 'completed' as const,

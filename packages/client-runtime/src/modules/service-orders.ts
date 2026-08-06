@@ -45,6 +45,23 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
 
       return result.data;
     },
+    /**
+     * Loads a service order by its opaque publicId. The lab dashboard routes by
+     * this so URLs never carry the enumerable serial id; every other method here
+     * keeps taking the numeric id, which callers read off the loaded detail.
+     */
+    async getByPublicId(publicId: string) {
+      const result = await readJsonResponse<{ data: ServiceOrderDetail }>(
+        await rawCloudClient.api["service-orders"]["by-public-id"][
+          ":publicId"
+        ].$get({
+          param: { publicId },
+        }),
+        "Erro ao carregar OS",
+      );
+
+      return result.data;
+    },
     async listCommunications(id: string | number) {
       return readJsonResponse<ServiceOrderCommunicationsData>(
         await rawCloudClient.api["service-orders"][":id"].communications.$get({
@@ -85,16 +102,22 @@ export function createServiceOrdersApi(rawCloudClient: any): ServiceOrdersApi {
       evaluationId: string | number | null,
       input: SaveServiceOrderEvaluationInput,
     ) {
+      // revisionReason only exists on the update schema; the create endpoint
+      // would reject the unknown key.
+      const { revisionReason, ...createValues } = input;
       const response = evaluationId
         ? await rawCloudClient.api["service-orders"][":id"].evaluations[
             ":evaluationId"
           ].$patch({
             param: { id: String(id), evaluationId: String(evaluationId) },
-            json: input,
+            json: {
+              ...createValues,
+              ...(revisionReason ? { revisionReason } : {}),
+            },
           })
         : await rawCloudClient.api["service-orders"][":id"].evaluations.$post({
             param: { id: String(id) },
-            json: input,
+            json: createValues,
           });
 
       return readJsonResponse<unknown>(response, "Erro ao salvar avaliação");

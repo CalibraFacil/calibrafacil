@@ -231,7 +231,13 @@ export const CreateServiceOrderEvaluationSchema = z.object({
 });
 
 export const UpdateServiceOrderEvaluationSchema =
-  CreateServiceOrderEvaluationSchema.partial();
+  CreateServiceOrderEvaluationSchema.partial().extend({
+    // Required only once the evaluation is locked (a quote has been sent to the
+    // customer): from that point the diagnosis is the recorded basis for a
+    // price, so a change has to say why. The API enforces the "when", the
+    // schema only carries the value.
+    revisionReason: z.string().trim().min(1).max(2000).optional(),
+  });
 
 export const ServiceOrderPricedItemSchema = z.object({
   id: z.number().int().positive().optional(),

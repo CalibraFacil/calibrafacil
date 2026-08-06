@@ -909,8 +909,11 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           <tr>
             <Cell label="Cliente" value={data.customer.name} />
             <Cell label="Documento" value={data.customer.taxId} />
+            {/* Same field the dashboard edits as "Início da avaliação"
+                (serviceOrder.serviceStartedAt); the wording is kept identical
+                so the printed form and the screen never disagree. */}
             <Cell
-              label="Início do serviço"
+              label="Início da avaliação"
               value={
                 data.serviceStartedAt ? formatDate(data.serviceStartedAt) : null
               }

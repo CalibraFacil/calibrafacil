@@ -4,15 +4,20 @@ import {
   customer,
   serviceOrder,
   serviceOrderAssetSnapshot,
+  serviceOrderEventLog,
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
-import { canTransitionServiceOrderStatus } from "@calibra-facil/shared";
+import {
+  canTransitionServiceOrderStatus,
+  isServiceOrderFinalStatus,
+  isServiceOrderStatus,
+} from "@calibra-facil/shared";
 import type {
   CreateServiceOrderSchema,
   UpdateServiceOrderSchema,
   UpdateServiceOrderSettingsSchema,
 } from "@calibra-facil/schemas";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import type { AuthVariables } from "../../middleware/permission";
 import {
@@ -22,6 +27,7 @@ import {
   recordServiceOrderEvent,
 } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { getScopedServiceOrder } from "./service-order.queries";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
 import { enqueueServiceOrderEmail } from "./email-outbox-payloads";
 import type { NovaOsOutboxPayload } from "./email-outbox-payloads";
@@ -389,6 +395,20 @@ export async function deliverServiceOrder(input: {
     inmetroRepairMarkNumber?: string | null;
   };
 }) {
+  // SERVICE_ORDER_ALLOWED_TRANSITIONS is the declared truth for the lifecycle,
+  // but this path used to write `delivered` unconditionally — an OS still under
+  // evaluation could be marked delivered. Same guard as
+  // startServiceOrderExecution; re-delivering an already-delivered OS stays a
+  // no-op rather than an error.
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+  if (
+    order.status !== "delivered" &&
+    !canTransitionServiceOrderStatus(order.status, "delivered")
+  ) {
+    return { status: "invalid_transition" as const };
+  }
+
   const [updated] = await db
     .update(serviceOrder)
     .set({
@@ -410,7 +430,7 @@ export async function deliverServiceOrder(input: {
     )
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return { status: "not_found" as const };
 
   await recordServiceOrderEvent({
     organizationId: updated.organizationId,
@@ -422,7 +442,7 @@ export async function deliverServiceOrder(input: {
     metadata: { deliveredToName: input.values.deliveredToName },
   });
 
-  return updated;
+  return { status: "ok" as const, data: updated };
 }
 
 export async function closeServiceOrder(input: {
@@ -436,6 +456,19 @@ export async function closeServiceOrder(input: {
     dueDate?: DateLikeInput;
   };
 }) {
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+  // A repeat close (retry, double submit) is a no-op, NOT a second closure
+  // event. Writing one would record oldValue.status === "closed", and reopen
+  // reads the newest closure event — so the order would "reopen" to closed
+  // instead of the status it actually held before.
+  if (order.status === "closed") {
+    return { status: "ok" as const, data: order };
+  }
+  if (!canTransitionServiceOrderStatus(order.status, "closed")) {
+    return { status: "invalid_transition" as const };
+  }
+
   const [updated] = await db
     .update(serviceOrder)
     .set({
@@ -448,11 +481,14 @@ export async function closeServiceOrder(input: {
       and(
         eq(serviceOrder.id, input.serviceOrderId),
         eq(serviceOrder.organizationId, input.member.organizationId),
+        // Was missing here while deliver/cancel had it: without the unit scope
+        // a member scoped to one unit could close another unit's OS.
+        buildUnitScopeCondition(serviceOrder.unitId, input.member),
       ),
     )
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return { status: "not_found" as const };
 
   if (input.values.createBillingDocument) {
     await createBillingDocumentFromServiceOrder({
@@ -471,9 +507,14 @@ export async function closeServiceOrder(input: {
     actorId: input.actorUserId,
     eventType: "service_order.closed",
     metadata: { closingReason: input.values.closingReason },
+    // The status the order is leaving. "Reabrir OS" reads this back so a
+    // mis-click can be undone to where the order actually was, instead of
+    // restarting the whole funnel.
+    oldValue: { status: order.status },
+    newValue: { status: "closed" },
   });
 
-  return updated;
+  return { status: "ok" as const, data: updated };
 }
 
 export async function cancelServiceOrder(input: {
@@ -482,6 +523,17 @@ export async function cancelServiceOrder(input: {
   actorUserId: string;
   values: { reason: string };
 }) {
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+  // Same as close: a repeated cancel must not overwrite the remembered
+  // pre-cancellation status with "canceled".
+  if (order.status === "canceled") {
+    return { status: "ok" as const, data: order };
+  }
+  if (!canTransitionServiceOrderStatus(order.status, "canceled")) {
+    return { status: "invalid_transition" as const };
+  }
+
   const [updated] = await db
     .update(serviceOrder)
     .set({
@@ -498,7 +550,7 @@ export async function cancelServiceOrder(input: {
     )
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return { status: "not_found" as const };
 
   await recordServiceOrderEvent({
     organizationId: updated.organizationId,
@@ -508,9 +560,43 @@ export async function cancelServiceOrder(input: {
     actorId: input.actorUserId,
     eventType: "service_order.canceled",
     metadata: { reason: input.values.reason },
+    oldValue: { status: order.status },
+    newValue: { status: "canceled" },
   });
 
-  return updated;
+  return { status: "ok" as const, data: updated };
+}
+
+/**
+ * The status an order was in when it was closed or canceled, read back from the
+ * event log rather than a column: `recordServiceOrderEvent` already writes
+ * oldValue for exactly this kind of question, and the log is the audit trail a
+ * reopen has to answer to anyway.
+ *
+ * Returns null for orders closed before that value was recorded, or when the
+ * remembered status is no longer one the app knows.
+ */
+async function readStatusBeforeClose(serviceOrderId: number) {
+  const [lastClosure] = await db
+    .select({ oldValue: serviceOrderEventLog.oldValue })
+    .from(serviceOrderEventLog)
+    .where(
+      and(
+        eq(serviceOrderEventLog.serviceOrderId, serviceOrderId),
+        inArray(serviceOrderEventLog.eventType, [
+          "service_order.closed",
+          "service_order.canceled",
+        ]),
+      ),
+    )
+    .orderBy(desc(serviceOrderEventLog.createdAt))
+    .limit(1);
+
+  const recorded = lastClosure?.oldValue;
+  if (typeof recorded !== "object" || recorded === null) return null;
+
+  const status = Reflect.get(recorded, "status");
+  return isServiceOrderStatus(status) ? status : null;
 }
 
 export async function reopenServiceOrder(input: {
@@ -519,10 +605,25 @@ export async function reopenServiceOrder(input: {
   actorUserId: string;
   values: { reason: string };
 }) {
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+  // Reopening only makes sense for an order that is actually finished. Without
+  // this the endpoint reset ANY order — including one mid-repair — back to
+  // awaiting_tech_evaluation.
+  if (!isServiceOrderFinalStatus(order.status)) {
+    return { status: "invalid_transition" as const };
+  }
+
+  // Back to where it was; awaiting_tech_evaluation only when nothing was
+  // recorded (orders closed before this was tracked).
+  const restoredStatus =
+    (await readStatusBeforeClose(input.serviceOrderId)) ??
+    "awaiting_tech_evaluation";
+
   const [updated] = await db
     .update(serviceOrder)
     .set({
-      status: "awaiting_tech_evaluation",
+      status: restoredStatus,
       canceledAt: null,
       closedAt: null,
     })
@@ -535,7 +636,7 @@ export async function reopenServiceOrder(input: {
     )
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return { status: "not_found" as const };
 
   await recordServiceOrderEvent({
     organizationId: updated.organizationId,
@@ -545,7 +646,9 @@ export async function reopenServiceOrder(input: {
     actorId: input.actorUserId,
     eventType: "service_order.reopened",
     metadata: { reason: input.values.reason },
+    oldValue: { status: order.status },
+    newValue: { status: restoredStatus },
   });
 
-  return updated;
+  return { status: "ok" as const, data: updated };
 }

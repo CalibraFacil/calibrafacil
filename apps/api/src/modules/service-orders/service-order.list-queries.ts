@@ -136,6 +136,8 @@ export async function listServiceOrdersForLab(
   const rows = await db
     .select({
       id: serviceOrder.id,
+      // The dashboard links by the opaque id, never the serial.
+      publicId: serviceOrder.publicId,
       serviceOrderNumber: serviceOrder.serviceOrderNumber,
       customerName: customer.name,
       assetName: asset.name,

@@ -131,7 +131,10 @@ function money(cents: number) {
 }
 
 function serviceOrderPath(order: ServiceOrderListItem) {
-  return `/dashboard/service-orders/${order.id}`
+  // Must match the link the prewarm is for. Built from the numeric id it
+  // warmed `by-public-id/<serial>`, which 404s — silently, so every hover
+  // looked like it was prefetching while warming nothing.
+  return `/dashboard/service-orders/${order.publicId}`
 }
 
 function ServiceOrderDetailLink({
@@ -150,8 +153,8 @@ function ServiceOrderDetailLink({
   return (
     <Link
       {...linkProps}
-      to="/dashboard/service-orders/$id"
-      params={{ id: String(order.id) }}
+      to="/dashboard/service-orders/$publicId"
+      params={{ publicId: order.publicId }}
       className={className}
       preload="intent"
       {...prewarmIntentHandlers}

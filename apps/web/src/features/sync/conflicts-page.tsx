@@ -249,8 +249,8 @@ function ConflictEditButton({
           variant="outline"
           render={
             <Link
-              to="/dashboard/service-orders/$id"
-              params={{ id: target.id }}
+              to="/dashboard/service-orders/$publicId"
+              params={{ publicId: target.id }}
               search={search}
             />
           }

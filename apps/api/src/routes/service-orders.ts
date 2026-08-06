@@ -47,7 +47,10 @@ import {
   type ServiceOrderDocumentEnv,
 } from "../modules/service-orders/service-order.documents";
 import { createR2Client, generatePresignedUrl } from "../lib/storage";
-import { getScopedServiceOrder } from "../modules/service-orders/service-order.queries";
+import {
+  getScopedServiceOrder,
+  resolveServiceOrderIdByPublicId,
+} from "../modules/service-orders/service-order.queries";
 import {
   getPortalCustomerForAuthOrganization,
   getServiceOrderSummaryReport,
@@ -223,6 +226,25 @@ export const serviceOrdersRouter = new Hono<{
       return c.json(
         await listServiceOrdersPendingCalibrationAfterRepair(member),
       );
+    },
+  )
+  .get(
+    "/by-public-id/:publicId",
+    ...withLabPermission({ service_order: ["read"] }),
+    zValidator("param", z.object({ publicId: z.string().trim().min(1) })),
+    async (c) => {
+      const member = c.get("member");
+      const { publicId } = c.req.valid("param");
+      const id = await resolveServiceOrderIdByPublicId(publicId, member);
+      if (id === null) return c.json({ error: "OS nao encontrada" }, 404);
+
+      const detail = await getServiceOrderDetail(
+        id,
+        member.organizationId,
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      );
+      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+      return c.json({ data: detail });
     },
   )
   .get(
@@ -479,14 +501,30 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id, evaluationId } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await updateServiceOrderEvaluation({
+      const session = c.get("session");
+      // revisionReason is metadata about the edit, not a column on the row.
+      const { revisionReason, ...values } = input;
+      const result = await updateServiceOrderEvaluation({
         serviceOrderId: id,
         evaluationId,
         member,
-        values: input,
+        actorUserId: session.user.id,
+        values,
+        revisionReason,
       });
-      if (!updated) return c.json({ error: "Avaliacao nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "Avaliacao nao encontrada" }, 404);
+      }
+      if (result.status === "reason_required") {
+        return c.json(
+          {
+            error:
+              "Informe o motivo da revisao: o orcamento enviado ao cliente se baseia nesta avaliacao",
+          },
+          409,
+        );
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -507,6 +545,12 @@ export const serviceOrdersRouter = new Hono<{
       });
       if (result.status === "not_found") {
         return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json(
+          { error: "OS encerrada ou cancelada nao aceita novo orcamento" },
+          409,
+        );
       }
       return c.json({ data: result.data }, 201);
     },
@@ -560,6 +604,9 @@ export const serviceOrdersRouter = new Hono<{
       }
       if (result.status === "order_not_found") {
         return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
       }
       return c.json({
         data: result.data,
@@ -674,13 +721,18 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await updateServiceOrderExecution({
+      const result = await updateServiceOrderExecution({
         serviceOrderId: id,
         member,
         values: input,
       });
-      if (!updated) return c.json({ error: "Execucao nao iniciada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_started") {
+        return c.json({ error: "Execucao nao iniciada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "OS encerrada ou cancelada" }, 409);
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -721,14 +773,19 @@ export const serviceOrdersRouter = new Hono<{
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await deliverServiceOrder({
+      const result = await deliverServiceOrder({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,
         values: input,
       });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -741,14 +798,19 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await closeServiceOrder({
+      const result = await closeServiceOrder({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,
         values: input,
       });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -761,14 +823,19 @@ export const serviceOrdersRouter = new Hono<{
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await cancelServiceOrder({
+      const result = await cancelServiceOrder({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,
         values: input,
       });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json({ error: "Transicao de status invalida" }, 400);
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -781,14 +848,22 @@ export const serviceOrdersRouter = new Hono<{
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await reopenServiceOrder({
+      const result = await reopenServiceOrder({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,
         values: input,
       });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_transition") {
+        return c.json(
+          { error: "Apenas uma OS encerrada ou cancelada pode ser reaberta" },
+          409,
+        );
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -1033,6 +1108,9 @@ export const portalServiceOrdersRouter = new Hono<{
       });
       if (result.status === "not_found") {
         return c.json({ error: "Orcamento nao encontrado" }, 404);
+      }
+      if (result.status === "conflict") {
+        return c.json({ error: "Este orcamento ja foi respondido" }, 409);
       }
       return c.json({ ok: true });
     },

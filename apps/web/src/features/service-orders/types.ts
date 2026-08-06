@@ -138,6 +138,8 @@ export type ServiceOrderDeliveryDocument = {
 
 export type ServiceOrderDetail = {
   id: number
+  /** Opaque id the dashboard routes by; the serial never reaches a URL. */
+  publicId: string
   serviceOrderNumber: string
   // Present in the read-model payload; needed to open a pre-filled calibration
   // from a repair OS (DOM-02) without re-selecting customer/asset.

@@ -103,6 +103,32 @@ describe('ServiceOrderFinancialStatusBlock', () => {
     expect(container.textContent).not.toContain('AWAITING_PAYMENT')
   })
 
+  it('does not repeat the status label as its own description', () => {
+    // The API sends description === label for READY_FOR_BILLING, which rendered
+    // "Pronto para faturar" twice, one line under the other.
+    const { container } = render(
+      <ServiceOrderFinancialStatusBlock
+        status={financialStatus({
+          status: 'READY_FOR_BILLING',
+          label: 'Pronto para faturar',
+          description: 'Pronto para faturar',
+          readinessStatus: 'READY',
+          billingDocument: null,
+          amountCents: 0,
+          providerEvidence: null,
+          blockers: [],
+        })}
+        loading={false}
+        error={null}
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(screen.getAllByText('Pronto para faturar')).toHaveLength(1)
+    // Compact row only: no metrics grid, so no empty bordered strip under it.
+    expect(container.querySelector('dl')).toBeNull()
+  })
+
   it('hides empty financial metrics when the order is only ready for billing', () => {
     render(
       <ServiceOrderFinancialStatusBlock

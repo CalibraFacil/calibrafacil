@@ -8,7 +8,10 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   canApproveServiceOrderQuote,
+  isServiceOrderDecidingQuoteStatus,
   canEditServiceOrderQuote,
+  isServiceOrderFinalStatus,
+  isServiceOrderWorkInProgressStatus,
 } from "@calibra-facil/shared";
 import type {
   ApproveServiceOrderQuoteManuallySchema,
@@ -90,6 +93,12 @@ export async function createServiceOrderQuote(input: {
     )
     .limit(1);
   if (!order) return { status: "not_found" as const };
+  // Drafts mid-flow are harmless (a revision in progress), but a closed or
+  // canceled OS must not grow new quotes — sending one would rewind the whole
+  // order and email the customer about a job that is already finished.
+  if (isServiceOrderFinalStatus(order.status)) {
+    return { status: "invalid_transition" as const };
+  }
 
   const [latest] = await db
     .select({ version: serviceOrderQuote.version })
@@ -235,6 +244,18 @@ export async function sendServiceOrderQuote(input: {
     buildUnitScopeCondition(serviceOrder.unitId, input.member),
   );
   if (!detail) return { status: "order_not_found" as const };
+  // Sending drives the OS to awaiting_quote_approval. Only the clearly-wrong
+  // case is blocked here: a closed or canceled OS must not be rewound and the
+  // customer must not be mailed a fresh approval link for finished work.
+  //
+  // Deliberately NOT a full canTransitionServiceOrderStatus check: the graph has
+  // no quote_rejected/quote_approved → awaiting_quote_approval edge, so that
+  // would also block re-sending a revised version during a renegotiation. Which
+  // revision edges are legal is an open product decision (stage-gating proposal),
+  // not something to settle inside a bug fix.
+  if (isServiceOrderFinalStatus(detail.status)) {
+    return { status: "invalid_transition" as const };
+  }
 
   const sentAt = new Date();
 
@@ -276,10 +297,13 @@ export async function sendServiceOrderQuote(input: {
     .where(eq(serviceOrderQuote.id, input.quoteId))
     .returning();
 
+  // Mid-job re-quote: the instrument is on the bench, so the order keeps saying
+  // so and only the quote awaits a decision.
+  const keepStatusOnSend = isServiceOrderWorkInProgressStatus(detail.status);
   await db
     .update(serviceOrder)
     .set({
-      status: "awaiting_quote_approval",
+      ...(keepStatusOnSend ? {} : { status: "awaiting_quote_approval" }),
       quotedAt: new Date(),
       totalQuotedCents: quote.totalCents,
       updatedAt: new Date(),
@@ -484,7 +508,9 @@ export async function approveServiceOrderQuoteManually(input: {
     await tx
       .update(serviceOrder)
       .set({
-        status: "quote_approved",
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_approved" }
+          : {}),
         approvedAt: new Date(),
         totalApprovedCents: quote.totalCents,
       })
@@ -591,7 +617,12 @@ export async function rejectServiceOrderQuoteManually(input: {
     });
     await tx
       .update(serviceOrder)
-      .set({ status: "quote_rejected", rejectedAt: new Date() })
+      .set({
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_rejected" }
+          : {}),
+        rejectedAt: new Date(),
+      })
       .where(eq(serviceOrder.id, input.serviceOrderId));
     await recordServiceOrderEvent(
       {
@@ -684,7 +715,9 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
     await tx
       .update(serviceOrder)
       .set({
-        status: "quote_approved",
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_approved" }
+          : {}),
         approvedAt: new Date(),
         totalApprovedCents: quote.totalCents,
       })
@@ -759,6 +792,13 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
   ) {
     return { status: "not_found" as const };
   }
+  // Mirrors rejectServiceOrderQuoteManually: only a quote still awaiting a
+  // decision may be rejected. Without this, a portal user could reject a quote
+  // that was already approved, throwing an OS in repair_in_progress back to
+  // quote_rejected.
+  if (!canApproveServiceOrderQuote(quote.status)) {
+    return { status: "conflict" as const };
+  }
 
   await db.transaction(async (tx) => {
     await tx
@@ -777,7 +817,12 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
     });
     await tx
       .update(serviceOrder)
-      .set({ status: "quote_rejected", rejectedAt: new Date() })
+      .set({
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_rejected" }
+          : {}),
+        rejectedAt: new Date(),
+      })
       .where(eq(serviceOrder.id, input.serviceOrderId));
     await recordServiceOrderEvent(
       {

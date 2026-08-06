@@ -67,25 +67,34 @@ function DatePicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        disabled={disabled}
-        render={
-          <Button
-            id={id}
-            name={name}
-            variant="outline"
-            disabled={disabled}
-            data-empty={!value}
-            className={cn(
-              'w-full justify-start text-left font-normal data-[empty=true]:text-muted-foreground',
-              className,
-            )}
-          />
-        }
-      >
-        <HugeiconsIcon icon={Calendar01Icon} className="mr-2 size-4" />
-        {value ? formatDate(value) : <span>{placeholder}</span>}
-      </PopoverTrigger>
+      {/* While open, Base UI appends focus-guard spans as siblings of the
+          trigger. They are position:fixed and add no height, but they do make
+          the trigger stop being :last-child — which is what Tailwind's
+          `space-y-*` keys its margin off, so a caller's field wrapper would
+          silently grow by one gap and push the page down. `display: contents`
+          keeps the trigger's layout identical while hiding the guards from the
+          caller's child selectors. */}
+      <div className="contents">
+        <PopoverTrigger
+          disabled={disabled}
+          render={
+            <Button
+              id={id}
+              name={name}
+              variant="outline"
+              disabled={disabled}
+              data-empty={!value}
+              className={cn(
+                'w-full justify-start text-left font-normal data-[empty=true]:text-muted-foreground',
+                className,
+              )}
+            />
+          }
+        >
+          <HugeiconsIcon icon={Calendar01Icon} className="mr-2 size-4" />
+          {value ? formatDate(value) : <span>{placeholder}</span>}
+        </PopoverTrigger>
+      </div>
       <PopoverContent className="w-auto p-0" align="start">
         <div className={cn('flex', hasPresets && 'max-sm:flex-col')}>
           {hasPresets ? (

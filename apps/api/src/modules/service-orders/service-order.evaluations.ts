@@ -1,6 +1,10 @@
 import { db } from "@calibra-facil/db";
-import { serviceOrder, serviceOrderEvaluation } from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import {
+  serviceOrder,
+  serviceOrderEvaluation,
+  serviceOrderQuote,
+} from "@calibra-facil/db/schema";
+import { and, eq, ne } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -98,14 +102,55 @@ export async function createServiceOrderEvaluation(input: {
   return { status: "ok" as const, data: evaluation };
 }
 
+/**
+ * True once any quote for this OS has left the lab (anything past `draft`).
+ * That is the moment the diagnosis stops being a working note: the customer has
+ * been shown a price derived from it. Mirrors the client-side rule in
+ * apps/web detail-model `buildServiceOrderStageAffordances`.
+ */
+async function hasQuoteLeftTheLab(serviceOrderId: number) {
+  const [sentQuote] = await db
+    .select({ id: serviceOrderQuote.id })
+    .from(serviceOrderQuote)
+    .where(
+      and(
+        eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
+        ne(serviceOrderQuote.status, "draft"),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(sentQuote);
+}
+
+/**
+ * Edits an existing evaluation in place (evaluations do not version — one row
+ * per OS). Free while the evaluation is still a working note; once a quote has
+ * been sent, the diagnosis is the recorded basis for that price and a change
+ * requires an explicit reason, which is written to the event log alongside the
+ * old and new values.
+ *
+ * The RBAC action stays `evaluate` — who may revise a locked evaluation (same
+ * roles, or a stricter one) is an open decision for the lab, and inventing a
+ * new permission here would pre-empt it.
+ */
 export async function updateServiceOrderEvaluation(input: {
   serviceOrderId: number;
   evaluationId: number;
   member: ServiceOrderMember;
+  actorUserId: string;
   values: Partial<EvaluationRow>;
+  revisionReason?: string | null;
 }) {
   const [existingEvaluation] = await db
-    .select({ id: serviceOrderEvaluation.id })
+    .select({
+      id: serviceOrderEvaluation.id,
+      diagnosis: serviceOrderEvaluation.diagnosis,
+      recommendedAction: serviceOrderEvaluation.recommendedAction,
+      organizationId: serviceOrder.organizationId,
+      unitId: serviceOrder.unitId,
+      orderStatus: serviceOrder.status,
+    })
     .from(serviceOrderEvaluation)
     .innerJoin(
       serviceOrder,
@@ -120,13 +165,58 @@ export async function updateServiceOrderEvaluation(input: {
       ),
     )
     .limit(1);
-  if (!existingEvaluation) return null;
+  if (!existingEvaluation) return { status: "not_found" as const };
 
-  const [updated] = await db
-    .update(serviceOrderEvaluation)
-    .set({ ...input.values, updatedAt: new Date() })
-    .where(eq(serviceOrderEvaluation.id, input.evaluationId))
-    .returning();
+  const reason = input.revisionReason?.trim();
+  const locked = await hasQuoteLeftTheLab(input.serviceOrderId);
+  if (locked && !reason) {
+    return { status: "reason_required" as const };
+  }
 
-  return updated ?? null;
+  // The row change and its audit event commit together, like the creation path.
+  // Split, a failed event write would leave a communicated diagnosis silently
+  // altered with no reason and no recoverable prior value.
+  const [updated] = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(serviceOrderEvaluation)
+      .set({ ...input.values, updatedAt: new Date() })
+      .where(eq(serviceOrderEvaluation.id, input.evaluationId))
+      .returning();
+
+    if (!row) return [row];
+
+    await recordServiceOrderEvent(
+      {
+        organizationId: existingEvaluation.organizationId,
+        unitId: existingEvaluation.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.evaluation_updated",
+        oldValue: {
+          diagnosis: existingEvaluation.diagnosis,
+          recommendedAction: existingEvaluation.recommendedAction,
+        },
+        newValue: {
+          diagnosis: row.diagnosis,
+          recommendedAction: row.recommendedAction,
+        },
+        // `locked` records whether this was a revision of a communicated
+        // diagnosis or an ordinary edit — the two read very differently in an
+        // audit.
+        metadata: {
+          orderStatus: existingEvaluation.orderStatus,
+          locked,
+          ...(reason ? { revisionReason: reason } : {}),
+        },
+      },
+      tx,
+    );
+
+    return [row];
+  });
+
+  if (!updated) return { status: "not_found" as const };
+
+  return { status: "ok" as const, data: updated };
 }

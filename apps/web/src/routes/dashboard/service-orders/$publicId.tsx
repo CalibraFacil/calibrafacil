@@ -4,17 +4,22 @@ import { ServiceOrderDetailPage } from '@/features/service-orders/detail-page'
 import { loadServiceOrderDetailData } from '@/features/service-orders/queries'
 import { parseSyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
 
-export const Route = createFileRoute('/dashboard/service-orders/$id')({
+export const Route = createFileRoute('/dashboard/service-orders/$publicId')({
   validateSearch: parseSyncConflictReturnSearch,
   loader: ({ context, params }) =>
-    loadServiceOrderDetailData(context.queryClient, params.id),
+    loadServiceOrderDetailData(context.queryClient, params.publicId),
   head: () => ({ meta: [{ title: 'Detalhe da OS | CalibraFácil' }] }),
   component: ServiceOrderDetailRoute,
 })
 
 function ServiceOrderDetailRoute() {
-  const { id } = Route.useParams()
+  const { publicId } = Route.useParams()
   const conflictReturn = Route.useSearch()
 
-  return <ServiceOrderDetailPage id={id} conflictReturn={conflictReturn} />
+  return (
+    <ServiceOrderDetailPage
+      publicId={publicId}
+      conflictReturn={conflictReturn}
+    />
+  )
 }

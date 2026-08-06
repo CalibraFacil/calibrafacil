@@ -85,7 +85,7 @@ import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashbo
 import { Route as DashboardSettingsAccreditedScopeRouteImport } from './routes/dashboard/settings/accredited-scope'
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
 import { Route as DashboardServiceOrdersNewRouteImport } from './routes/dashboard/service-orders/new'
-import { Route as DashboardServiceOrdersIdRouteImport } from './routes/dashboard/service-orders/$id'
+import { Route as DashboardServiceOrdersPublicIdRouteImport } from './routes/dashboard/service-orders/$publicId'
 import { Route as DashboardProficiencyTestsPlanRouteImport } from './routes/dashboard/proficiency-tests/plan'
 import { Route as DashboardProficiencyTestsNewRouteImport } from './routes/dashboard/proficiency-tests/new'
 import { Route as DashboardPersonnelNewRouteImport } from './routes/dashboard/personnel/new'
@@ -563,10 +563,10 @@ const DashboardServiceOrdersNewRoute =
     path: '/new',
     getParentRoute: () => DashboardServiceOrdersRouteRoute,
   } as any)
-const DashboardServiceOrdersIdRoute =
-  DashboardServiceOrdersIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
+const DashboardServiceOrdersPublicIdRoute =
+  DashboardServiceOrdersPublicIdRouteImport.update({
+    id: '/$publicId',
+    path: '/$publicId',
     getParentRoute: () => DashboardServiceOrdersRouteRoute,
   } as any)
 const DashboardProficiencyTestsPlanRoute =
@@ -1005,7 +1005,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
   '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
   '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
-  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/$publicId': typeof DashboardServiceOrdersPublicIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
@@ -1130,7 +1130,7 @@ export interface FileRoutesByTo {
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
   '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
   '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
-  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/$publicId': typeof DashboardServiceOrdersPublicIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
@@ -1276,7 +1276,7 @@ export interface FileRoutesById {
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
   '/dashboard/proficiency-tests/new': typeof DashboardProficiencyTestsNewRoute
   '/dashboard/proficiency-tests/plan': typeof DashboardProficiencyTestsPlanRoute
-  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/$publicId': typeof DashboardServiceOrdersPublicIdRoute
   '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/accredited-scope': typeof DashboardSettingsAccreditedScopeRoute
@@ -1424,7 +1424,7 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/new'
     | '/dashboard/proficiency-tests/new'
     | '/dashboard/proficiency-tests/plan'
-    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/$publicId'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/accredited-scope'
@@ -1549,7 +1549,7 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/new'
     | '/dashboard/proficiency-tests/new'
     | '/dashboard/proficiency-tests/plan'
-    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/$publicId'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/accredited-scope'
@@ -1694,7 +1694,7 @@ export interface FileRouteTypes {
     | '/dashboard/personnel/new'
     | '/dashboard/proficiency-tests/new'
     | '/dashboard/proficiency-tests/plan'
-    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/$publicId'
     | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/accredited-scope'
@@ -2331,11 +2331,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServiceOrdersNewRouteImport
       parentRoute: typeof DashboardServiceOrdersRouteRoute
     }
-    '/dashboard/service-orders/$id': {
-      id: '/dashboard/service-orders/$id'
-      path: '/$id'
-      fullPath: '/dashboard/service-orders/$id'
-      preLoaderRoute: typeof DashboardServiceOrdersIdRouteImport
+    '/dashboard/service-orders/$publicId': {
+      id: '/dashboard/service-orders/$publicId'
+      path: '/$publicId'
+      fullPath: '/dashboard/service-orders/$publicId'
+      preLoaderRoute: typeof DashboardServiceOrdersPublicIdRouteImport
       parentRoute: typeof DashboardServiceOrdersRouteRoute
     }
     '/dashboard/proficiency-tests/plan': {
@@ -3163,14 +3163,14 @@ const DashboardRequestsRouteRouteWithChildren =
   )
 
 interface DashboardServiceOrdersRouteRouteChildren {
-  DashboardServiceOrdersIdRoute: typeof DashboardServiceOrdersIdRoute
+  DashboardServiceOrdersPublicIdRoute: typeof DashboardServiceOrdersPublicIdRoute
   DashboardServiceOrdersNewRoute: typeof DashboardServiceOrdersNewRoute
   DashboardServiceOrdersIndexRoute: typeof DashboardServiceOrdersIndexRoute
 }
 
 const DashboardServiceOrdersRouteRouteChildren: DashboardServiceOrdersRouteRouteChildren =
   {
-    DashboardServiceOrdersIdRoute: DashboardServiceOrdersIdRoute,
+    DashboardServiceOrdersPublicIdRoute: DashboardServiceOrdersPublicIdRoute,
     DashboardServiceOrdersNewRoute: DashboardServiceOrdersNewRoute,
     DashboardServiceOrdersIndexRoute: DashboardServiceOrdersIndexRoute,
   }

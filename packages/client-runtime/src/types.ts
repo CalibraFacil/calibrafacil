@@ -2039,6 +2039,8 @@ export interface IntegrationsApi {
 export interface ServiceOrdersApi {
   list(input: ServiceOrdersListInput): Promise<ServiceOrdersListData>;
   get(id: string | number): Promise<ServiceOrderDetail>;
+  /** Loads by the opaque publicId the lab dashboard routes with. */
+  getByPublicId(publicId: string): Promise<ServiceOrderDetail>;
   listCommunications(
     id: string | number,
   ): Promise<ServiceOrderCommunicationsData>;

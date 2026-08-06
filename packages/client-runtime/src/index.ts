@@ -616,9 +616,7 @@ export function createCloudApiClient(
       };
       "accredited-scope": {
         $get(): Promise<Response>;
-        $put(input: {
-          json: SaveAccreditedScopeLineInput;
-        }): Promise<Response>;
+        $put(input: { json: SaveAccreditedScopeLineInput }): Promise<Response>;
         ":id": {
           $delete(input: { param: { id: string } }): Promise<Response>;
         };

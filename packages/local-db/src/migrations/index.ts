@@ -14,6 +14,7 @@ import { migration0013OfficialSealingMarkTerminology } from "./0013_official_sea
 import { migration0014SyncBaseVersionAnchor } from "./0014_sync_base_version_anchor";
 import { migration0015NonConformances } from "./0015_non_conformances";
 import { migration0016CalibrationJobScopeCompliance } from "./0016_calibration_job_scope_compliance";
+import { migration0017ServiceOrderPublicId } from "./0017_service_order_public_id";
 
 export type LocalDbMigration = {
   id: number;
@@ -38,6 +39,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0014SyncBaseVersionAnchor,
   migration0015NonConformances,
   migration0016CalibrationJobScopeCompliance,
+  migration0017ServiceOrderPublicId,
 ];
 
 export const currentLocalDbSchemaVersion =

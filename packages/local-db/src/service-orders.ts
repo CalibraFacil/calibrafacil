@@ -511,6 +511,7 @@ ${whereClause}
       `
 SELECT
   so.remote_id,
+  so.public_id,
   so.id AS local_id,
   so.service_order_number,
   so.status,
@@ -533,6 +534,10 @@ LIMIT @limit OFFSET @offset
   return {
     data: rows.map((row) => ({
       id: row.remote_id ?? stableLocalNumericId(row.local_id),
+      // Route id for the dashboard. Synced rows carry the cloud publicId;
+      // offline-created ones fall back to their local id, which is already
+      // opaque. Never the serial.
+      publicId: row.public_id ?? row.local_id,
       serviceOrderNumber: row.service_order_number,
       customerName: row.customer_name,
       assetName: row.asset_name,
@@ -567,6 +572,7 @@ export function getLocalServiceOrderDetail(
 
   return {
     id: row.remote_id ?? stableLocalNumericId(row.id),
+    publicId: row.public_id ?? row.id,
     serviceOrderNumber: row.service_order_number,
     customerId: row.customer_remote_id ?? stableLocalNumericId(row.customer_id),
     customerName: row.customer_name ?? "",
@@ -967,27 +973,47 @@ INSERT INTO service_order_delivery_documents (
   return getLocalServiceOrderDeliveryDocument(database, documentId);
 }
 
+/**
+ * Resolves the id carried in the dashboard URL. That id is opaque: for an order
+ * that has synced it is the cloud `publicId`, and for one created offline (which
+ * has no publicId until the cloud assigns one) it is the local id. The numeric
+ * branch stays for callers still holding a remote serial.
+ */
 function findLocalServiceOrder(database: LocalDatabase, routeId: string) {
+  // Indexed lookup first: public_id has its own index and id is the primary
+  // key, so opening one OS costs one row, not the whole local history plus its
+  // customer/asset/snapshot joins.
+  const byRouteId = selectServiceOrderDetail(database).get({
+    remoteId: null,
+    routeId,
+    routeLocalId: null,
+  });
+  if (byRouteId) return byRouteId;
+
   const remoteId = Number(routeId);
   if (Number.isFinite(remoteId)) {
     const remoteMatch = selectServiceOrderDetail(database).get({
       remoteId,
+      routeId: null,
       routeLocalId: null,
     });
     if (remoteMatch) return remoteMatch;
   }
 
-  const rows = selectServiceOrderDetail(database).all({
-    remoteId: null,
-    routeLocalId: null,
-  });
-
-  return rows.find((row) => String(stableLocalNumericId(row.id)) === routeId);
+  // Legacy stable-hash ids have no column to match on, so this last resort is
+  // the only case that still scans.
+  return selectServiceOrderDetail(database)
+    .all({ remoteId: null, routeId: null, routeLocalId: null })
+    .find((row) => String(stableLocalNumericId(row.id)) === routeId);
 }
 
 function selectServiceOrderDetail(database: LocalDatabase) {
   return database.prepare<
-    { remoteId: number | null; routeLocalId: string | null },
+    {
+      remoteId: number | null;
+      routeId: string | null;
+      routeLocalId: string | null;
+    },
     LocalServiceOrderDetailRow
   >(
     `
@@ -1020,7 +1046,8 @@ LEFT JOIN customers c ON c.id = so.customer_id
 LEFT JOIN assets a ON a.id = so.asset_id
 LEFT JOIN service_order_asset_snapshots snap ON snap.service_order_id = so.id
 WHERE (@remoteId IS NOT NULL AND so.remote_id = @remoteId)
-   OR (@remoteId IS NULL AND @routeLocalId IS NULL)
+   OR (@routeId IS NOT NULL AND (so.public_id = @routeId OR so.id = @routeId))
+   OR (@remoteId IS NULL AND @routeId IS NULL AND @routeLocalId IS NULL)
 `,
   );
 }
@@ -1734,6 +1761,7 @@ function getSpec(specifications: JsonRecord, keys: string[]) {
 
 type LocalServiceOrderListRow = {
   remote_id: number | null;
+  public_id: string | null;
   local_id: string;
   service_order_number: string;
   customer_name: string | null;
@@ -1766,6 +1794,8 @@ type LocalServiceOrderAssetRow = {
 type LocalServiceOrderDetailRow = {
   id: string;
   remote_id: number | null;
+  // Mirrored from the cloud on sync; null for orders created offline.
+  public_id: string | null;
   service_order_number: string;
   customer_id: string;
   customer_remote_id: number | null;

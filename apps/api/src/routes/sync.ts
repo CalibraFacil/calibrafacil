@@ -401,6 +401,9 @@ export const syncRouter = new Hono<{
         db
           .select({
             id: serviceOrder.id,
+            // Mirrored into local-db so a synced OS keeps one URL across the
+            // cloud and desktop runtimes.
+            publicId: serviceOrder.publicId,
             organizationId: serviceOrder.organizationId,
             unitId: serviceOrder.unitId,
             serviceOrderNumber: serviceOrder.serviceOrderNumber,

@@ -350,6 +350,9 @@ export const calibraApiPolicyRegistry = {
   serviceOrders: {
     list: "local-first-read-through-sync",
     get: "local-first-read-through-sync",
+    // Same policy as get — it is the same read, keyed by the opaque id the
+    // dashboard routes with.
+    getByPublicId: "local-first-read-through-sync",
     listCommunications: "cloud-only",
     create: "local-command-sync",
     update: "cloud-only",

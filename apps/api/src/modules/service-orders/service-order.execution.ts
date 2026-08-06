@@ -1,6 +1,9 @@
 import { db } from "@calibra-facil/db";
 import { serviceOrder, serviceOrderExecution } from "@calibra-facil/db/schema";
-import { canTransitionServiceOrderStatus } from "@calibra-facil/shared";
+import {
+  canTransitionServiceOrderStatus,
+  isServiceOrderFinalStatus,
+} from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import {
@@ -81,7 +84,10 @@ export async function updateServiceOrderExecution(input: {
   };
 }) {
   const [execution] = await db
-    .select({ id: serviceOrderExecution.id })
+    .select({
+      id: serviceOrderExecution.id,
+      orderStatus: serviceOrder.status,
+    })
     .from(serviceOrderExecution)
     .innerJoin(
       serviceOrder,
@@ -96,7 +102,13 @@ export async function updateServiceOrderExecution(input: {
     )
     .limit(1);
 
-  if (!execution) return null;
+  if (!execution) return { status: "not_started" as const };
+  // The work record of a closed or canceled OS is history, not a draft. Editing
+  // it after the fact would silently rewrite what the delivery document already
+  // reported to the customer.
+  if (isServiceOrderFinalStatus(execution.orderStatus)) {
+    return { status: "invalid_transition" as const };
+  }
 
   if (input.values.items) {
     await replaceExecutionItems({
@@ -120,7 +132,9 @@ export async function updateServiceOrderExecution(input: {
     .where(eq(serviceOrderExecution.id, execution.id))
     .returning();
 
-  return updated ?? null;
+  if (!updated) return { status: "not_started" as const };
+
+  return { status: "ok" as const, data: updated };
 }
 
 export async function finishServiceOrderExecution(input: {

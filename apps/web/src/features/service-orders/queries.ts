@@ -60,12 +60,19 @@ export function serviceOrdersListQueryOptions(
   })
 }
 
-export function serviceOrderDetailQueryOptions(id: string) {
+/**
+ * Keyed and fetched by the OPAQUE publicId — the dashboard routes with it so a
+ * URL never carries the enumerable serial. Mutations still take the numeric id,
+ * which callers read off the loaded detail.
+ */
+export function serviceOrderDetailQueryOptions(publicId: string) {
   return queryOptions({
-    queryKey: ['service-order', id],
+    queryKey: ['service-order', publicId],
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order detail DTOs need a runtime normalizer before this view-model cast can be removed.
-      calibraApi.serviceOrders.get(id) as Promise<ServiceOrderDetail>,
+      calibraApi.serviceOrders.getByPublicId(
+        publicId,
+      ) as Promise<ServiceOrderDetail>,
   })
 }
 

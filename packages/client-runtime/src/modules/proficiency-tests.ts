@@ -51,9 +51,7 @@ export function createProficiencyTestsApi(
     },
     async auditLog<TResponse = unknown>(id: string | number) {
       return readJsonResponse<TResponse>(
-        await rawCloudClient.api["proficiency-tests"][":id"][
-          "audit-log"
-        ].$get({
+        await rawCloudClient.api["proficiency-tests"][":id"]["audit-log"].$get({
           param: { id: String(id) },
         }),
         "Falha ao carregar histórico",

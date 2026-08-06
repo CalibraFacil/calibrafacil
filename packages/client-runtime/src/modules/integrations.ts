@@ -266,12 +266,12 @@ export function createIntegrationsApi(rawCloudClient: any): IntegrationsApi {
       input: { reason: string },
     ) {
       return readJsonResponse<TResponse>(
-        await rawCloudClient.api.integrations.drift[":linkId"].acknowledge.$post(
-          {
-            param: { linkId },
-            json: input,
-          },
-        ),
+        await rawCloudClient.api.integrations.drift[
+          ":linkId"
+        ].acknowledge.$post({
+          param: { linkId },
+          json: input,
+        }),
         "Falha ao marcar drift como resolvido",
       );
     },

@@ -135,6 +135,8 @@ export function evaluateRevenueLeakage(
 
 export interface RevenueLeakageAlertItem {
   serviceOrderId: number;
+  /** Opaque id the dashboard links with; the serial never reaches a URL. */
+  serviceOrderPublicId: string;
   serviceOrderNumber: string;
   customer: { id: number; name: string };
   unit: { id: number; name: string };
@@ -198,6 +200,7 @@ export async function buildRevenueLeakage(
   const orders = await db
     .select({
       id: serviceOrder.id,
+      publicId: serviceOrder.publicId,
       number: serviceOrder.serviceOrderNumber,
       status: serviceOrder.status,
       closingReason: serviceOrder.closingReason,
@@ -335,9 +338,11 @@ export async function buildRevenueLeakage(
   for (const order of billable) {
     const orderLinks = linksByOrder.get(order.id) ?? [];
     const existingDoc = resolvedDocumentLinks.get(order.id) ?? null;
-    const docInfo = existingDoc ? docInfoMap.get(existingDoc.documentId) ?? null : null;
+    const docInfo = existingDoc
+      ? (docInfoMap.get(existingDoc.documentId) ?? null)
+      : null;
     const installments = existingDoc
-      ? installmentsByDoc.get(existingDoc.documentId) ?? []
+      ? (installmentsByDoc.get(existingDoc.documentId) ?? [])
       : [];
     const amountCents =
       order.amountApprovedCents > 0
@@ -393,13 +398,12 @@ export async function buildRevenueLeakage(
           ? docInfo?.issueDate
           : classes.includes("STUCK_SENT_TO_FINANCE")
             ? docInfo?.updatedAt
-            : order.deliveredAt ?? order.readyAt ?? null) ?? null;
-    const ageInDays = ageAnchor
-      ? daysBetween(now, ageAnchor)
-      : null;
+            : (order.deliveredAt ?? order.readyAt ?? null)) ?? null;
+    const ageInDays = ageAnchor ? daysBetween(now, ageAnchor) : null;
 
     alerts.push({
       serviceOrderId: order.id,
+      serviceOrderPublicId: order.publicId,
       serviceOrderNumber: order.number,
       customer: { id: order.customerId, name: order.customerName },
       unit: { id: order.unitId, name: order.unitName },

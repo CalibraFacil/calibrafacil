@@ -11,7 +11,10 @@ import {
   serviceOrder,
   serviceOrderEmailLog,
   serviceOrderEmailOutbox,
+  serviceOrderEvaluation,
+  serviceOrderEventLog,
   serviceOrderExecution,
+  serviceOrderQuote,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -776,6 +779,424 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
       method: "PATCH",
       headers: JSON_HEADERS,
       body: JSON.stringify({ status: "awaiting_tech_evaluation" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe(
+      "awaiting_tech_evaluation",
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-004 — the lifecycle endpoints consult the graph too.
+  //
+  // deliver/close/cancel used to write their status unconditionally, so an OS
+  // still under evaluation could be marked delivered in one call while
+  // SERVICE_ORDER_ALLOWED_TRANSITIONS said only ready_for_pickup → delivered.
+  // -------------------------------------------------------------------------
+  it("REQ-TST-SO-004: POST /:id/deliver from under_evaluation → 400, status unchanged", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "under_evaluation",
+      "tst-deliver-bad",
+    );
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/deliver`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        deliveryMethod: "pickup_at_lab",
+        deliveredToName: "Cliente",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("under_evaluation");
+  });
+
+  it("REQ-TST-SO-004: POST /:id/deliver from ready_for_pickup (permitted edge) → 200, status becomes delivered", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "ready_for_pickup",
+      "tst-deliver-ok",
+    );
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/deliver`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        deliveryMethod: "pickup_at_lab",
+        deliveredToName: "Cliente",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("delivered");
+  });
+
+  it("REQ-TST-SO-004: POST /:id/close from opened → 400, status unchanged", async () => {
+    const { org, orderId } = await setupOrderAt("opened", "tst-close-bad");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/close`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ closingReason: "completed_repaired" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("opened");
+  });
+
+  it("REQ-TST-SO-004: POST /:id/close from delivered (permitted edge) → 200, status becomes closed", async () => {
+    const { org, orderId } = await setupOrderAt("delivered", "tst-close-ok");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/close`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ closingReason: "completed_repaired" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("closed");
+  });
+
+  it("REQ-TST-SO-004: POST /:id/cancel from delivered → 400, status unchanged (cancel is not an escape hatch from a finished OS)", async () => {
+    const { org, orderId } = await setupOrderAt("delivered", "tst-cancel-bad");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/cancel`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "desistencia" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await readServiceOrderStatus(orderId)).toBe("delivered");
+  });
+
+  it("REQ-TST-SO-004: POST /:id/quotes on a closed OS → 409, no quote created", async () => {
+    const { org, orderId } = await setupOrderAt("closed", "tst-quote-final");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/quotes`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        items: [
+          {
+            type: "service",
+            description: "Servico",
+            quantity: 1,
+            unit: "un",
+            unitPriceCents: 1000,
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(serviceOrderQuote)
+      .where(eq(serviceOrderQuote.serviceOrderId, orderId));
+    expect(row.count).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-005 — the evaluation freezes once a quote has left the lab.
+  //
+  // While every quote is still a draft the technician is working; once one has
+  // been sent, the diagnosis is the recorded basis for a price the customer has
+  // seen, so a change has to carry a motivo and land in the event log.
+  // -------------------------------------------------------------------------
+  async function seedEvaluation(orderId: number, technicianId: string) {
+    const [row] = await db
+      .insert(serviceOrderEvaluation)
+      .values({
+        serviceOrderId: orderId,
+        technicianId,
+        diagnosis: "Diagnostico original",
+        recommendedAction: "repair",
+        requiresQuote: true,
+        requiresClientApproval: true,
+        calibrationRecommended: false,
+        photos: [],
+      })
+      .returning({ id: serviceOrderEvaluation.id });
+    if (!row) throw new Error("seedEvaluation: insert failed");
+    return row.id;
+  }
+
+  async function seedQuote(
+    orderId: number,
+    status: (typeof serviceOrderQuote.$inferInsert)["status"],
+    createdByUserId: string,
+  ) {
+    // quote_number and created_by_user_id are NOT NULL — omitting them fails
+    // the insert before any assertion runs.
+    await db.insert(serviceOrderQuote).values({
+      serviceOrderId: orderId,
+      quoteNumber: `ORC-${orderId}-1`,
+      version: 1,
+      status,
+      totalCents: 10000,
+      createdByUserId,
+    });
+  }
+
+  it("REQ-TST-SO-005: PATCH evaluation with only draft quotes → 200, no motivo needed", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "under_evaluation",
+      "tst-eval-draft",
+    );
+    const evaluationId = await seedEvaluation(orderId, org.userId);
+    await seedQuote(orderId, "draft", org.userId);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/evaluations/${evaluationId}`,
+      {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ diagnosis: "Diagnostico corrigido" }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("REQ-TST-SO-005: PATCH evaluation after a quote was sent, with no motivo → 409, row unchanged", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "awaiting_quote_approval",
+      "tst-eval-locked",
+    );
+    const evaluationId = await seedEvaluation(orderId, org.userId);
+    await seedQuote(orderId, "sent", org.userId);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/evaluations/${evaluationId}`,
+      {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ diagnosis: "Alteracao silenciosa" }),
+      },
+    );
+
+    expect(res.status).toBe(409);
+    const [row] = await db
+      .select({ diagnosis: serviceOrderEvaluation.diagnosis })
+      .from(serviceOrderEvaluation)
+      .where(eq(serviceOrderEvaluation.id, evaluationId));
+    expect(row.diagnosis).toBe("Diagnostico original");
+  });
+
+  it("REQ-TST-SO-005: PATCH evaluation after a quote was sent, WITH a motivo → 200, reason recorded in the event log", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "awaiting_quote_approval",
+      "tst-eval-revised",
+    );
+    const evaluationId = await seedEvaluation(orderId, org.userId);
+    await seedQuote(orderId, "approved", org.userId);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/evaluations/${evaluationId}`,
+      {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          diagnosis: "Diagnostico revisado",
+          revisionReason: "Novo teste na bancada",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({ diagnosis: serviceOrderEvaluation.diagnosis })
+      .from(serviceOrderEvaluation)
+      .where(eq(serviceOrderEvaluation.id, evaluationId));
+    expect(row.diagnosis).toBe("Diagnostico revisado");
+
+    const events = await db
+      .select({
+        eventType: serviceOrderEventLog.eventType,
+        metadata: serviceOrderEventLog.metadata,
+        oldValue: serviceOrderEventLog.oldValue,
+      })
+      .from(serviceOrderEventLog)
+      .where(eq(serviceOrderEventLog.serviceOrderId, orderId));
+
+    const revision = events.find(
+      (event) => event.eventType === "service_order.evaluation_updated",
+    );
+    expect(revision).toBeTruthy();
+    expect(revision?.metadata).toMatchObject({
+      locked: true,
+      revisionReason: "Novo teste na bancada",
+    });
+    // The superseded diagnosis stays recoverable from the log.
+    expect(revision?.oldValue).toMatchObject({
+      diagnosis: "Diagnostico original",
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-006 — a mid-job re-quote does not rewind the order.
+  //
+  // The technician finds an extra failed part while the instrument is on the
+  // bench. A new quote goes out, but the repair does not stop, so the order
+  // stays in repair_in_progress and only the quote awaits a decision.
+  // -------------------------------------------------------------------------
+  it("REQ-TST-SO-006: approving a quote while repair_in_progress leaves the status alone but records the approved total", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "repair_in_progress",
+      "tst-requote",
+    );
+    const [quoteRow] = await db
+      .insert(serviceOrderQuote)
+      .values({
+        serviceOrderId: orderId,
+        quoteNumber: `ORC-${orderId}-2`,
+        version: 2,
+        status: "sent",
+        totalCents: 45000,
+        createdByUserId: org.userId,
+      })
+      .returning({ id: serviceOrderQuote.id });
+    if (!quoteRow) throw new Error("quote insert failed");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/quotes/${quoteRow.id}/approve-manually`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          approvedByName: "Cliente Teste",
+          manualApprovalEvidenceType: "phone",
+          manualApprovalEvidenceText: "Cliente autorizou por telefone",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    // The instrument is still on the bench: the order must not say otherwise.
+    expect(await readServiceOrderStatus(orderId)).toBe("repair_in_progress");
+
+    const [order] = await db
+      .select({ totalApprovedCents: serviceOrder.totalApprovedCents })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, orderId));
+    expect(order.totalApprovedCents).toBe(45000);
+  });
+
+  it("REQ-TST-SO-006: approving a quote from awaiting_quote_approval still advances to quote_approved", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "awaiting_quote_approval",
+      "tst-requote-normal",
+    );
+    const [quoteRow] = await db
+      .insert(serviceOrderQuote)
+      .values({
+        serviceOrderId: orderId,
+        quoteNumber: `ORC-${orderId}-1`,
+        version: 1,
+        status: "sent",
+        totalCents: 12000,
+        createdByUserId: org.userId,
+      })
+      .returning({ id: serviceOrderQuote.id });
+    if (!quoteRow) throw new Error("quote insert failed");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${orderId}/quotes/${quoteRow.id}/approve-manually`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          approvedByName: "Cliente Teste",
+          manualApprovalEvidenceType: "phone",
+          manualApprovalEvidenceText: "Cliente autorizou por telefone",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("quote_approved");
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-TST-SO-007 — reopen returns the order to where it was.
+  //
+  // Closing records the status being left in the event log; reopening reads it
+  // back. An OS closed by mistake from "delivered" returns to delivered, not to
+  // the start of the funnel.
+  // -------------------------------------------------------------------------
+  it("REQ-TST-SO-007: close then reopen returns the order to its pre-close status", async () => {
+    const { org, orderId } = await setupOrderAt("delivered", "tst-reopen-back");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const closeRes = await serviceOrdersRouter.request(`/${orderId}/close`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ closingReason: "completed_repaired" }),
+    });
+    expect(closeRes.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("closed");
+
+    const reopenRes = await serviceOrdersRouter.request(`/${orderId}/reopen`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Encerrada por engano" }),
+    });
+    expect(reopenRes.status).toBe(200);
+    expect(await readServiceOrderStatus(orderId)).toBe("delivered");
+
+    const events = await db
+      .select({
+        eventType: serviceOrderEventLog.eventType,
+        newValue: serviceOrderEventLog.newValue,
+      })
+      .from(serviceOrderEventLog)
+      .where(eq(serviceOrderEventLog.serviceOrderId, orderId));
+    const reopened = events.find(
+      (event) => event.eventType === "service_order.reopened",
+    );
+    expect(reopened?.newValue).toMatchObject({ status: "delivered" });
+  });
+
+  it("REQ-TST-SO-007: reopening an order that was never closed → 409, status unchanged", async () => {
+    const { org, orderId } = await setupOrderAt(
+      "repair_in_progress",
+      "tst-reopen-open",
+    );
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/reopen`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Nao deveria funcionar" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await readServiceOrderStatus(orderId)).toBe("repair_in_progress");
+  });
+
+  it("REQ-TST-SO-007: an order closed without a recorded prior status falls back to awaiting_tech_evaluation", async () => {
+    // Mirrors rows closed before the pre-close status was written to the log.
+    const { org, orderId } = await setupOrderAt("closed", "tst-reopen-legacy");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await serviceOrdersRouter.request(`/${orderId}/reopen`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Sem historico anterior" }),
     });
 
     expect(res.status).toBe(200);

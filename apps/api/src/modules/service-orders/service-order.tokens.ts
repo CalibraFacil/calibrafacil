@@ -4,7 +4,10 @@ import {
   serviceOrderPublicAccessToken,
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
-import { canApproveServiceOrderQuote } from "@calibra-facil/shared";
+import {
+  canApproveServiceOrderQuote,
+  isServiceOrderDecidingQuoteStatus,
+} from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import {
   APPROVAL_CODE_ALPHABET,
@@ -279,7 +282,12 @@ export async function approveQuoteWithPublicServiceOrderAccess(
     await tx
       .update(serviceOrder)
       .set({
-        status: "quote_approved",
+        // Same mid-job rule as the manual/portal paths: a customer approving a
+        // re-quote through the emailed public link must not rewind an OS whose
+        // instrument is already on the bench.
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_approved" }
+          : {}),
         approvedAt: new Date(),
         totalApprovedCents: quote.totalCents,
       })
@@ -355,7 +363,12 @@ export async function rejectQuoteWithPublicServiceOrderAccess(
     });
     await tx
       .update(serviceOrder)
-      .set({ status: "quote_rejected", rejectedAt: new Date() })
+      .set({
+        ...(isServiceOrderDecidingQuoteStatus(order.status)
+          ? { status: "quote_rejected" }
+          : {}),
+        rejectedAt: new Date(),
+      })
       .where(eq(serviceOrder.id, order.id));
     await recordServiceOrderEvent(
       {

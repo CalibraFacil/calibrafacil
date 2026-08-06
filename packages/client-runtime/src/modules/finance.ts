@@ -251,9 +251,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
     },
     async listCertificateReleasePolicies<TResponse = unknown>() {
       return readJsonResponse<TResponse>(
-        await rawCloudClient.api.finance[
-          "certificate-release-policies"
-        ].$get(),
+        await rawCloudClient.api.finance["certificate-release-policies"].$get(),
         "Erro ao carregar políticas de liberação",
       );
     },
