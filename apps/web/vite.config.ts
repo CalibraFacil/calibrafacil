@@ -25,7 +25,7 @@ export default defineConfig({
     // Overridable so scripts/dev-runner.mjs can give each git
     // worktree its own port slot; defaults keep the tunnel workflow intact.
     port: Number(process.env.WEB_DEV_PORT ?? 5173),
-    allowedHosts: ['dev-web.calibrafacil.com'],
+    allowedHosts: ['dev-web.calibrafacil.com', 'devbox.example.ts.net'],
     https: httpsConfig,
     proxy: {
       '/api': {

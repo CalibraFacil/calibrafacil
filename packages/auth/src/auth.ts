@@ -201,6 +201,7 @@ function createBaseUrlConfig(
       "localhost:5173",
       "localhost:5174",
       "*.calibrafacil.com",
+      "devbox.example.ts.net",
     ],
     protocol: "auto",
   };

@@ -40,7 +40,10 @@ export function getCloudApiBaseUrl(): string {
       return `http://${host}:3000`
     }
 
-    if (/^dev-(portal|web|api)\.calibrafacil\.com$/.test(host)) {
+    if (
+      /^dev-(portal|web|api)\.calibrafacil\.com$/.test(host) ||
+      host === 'devbox.example.ts.net'
+    ) {
       return window.location.origin
     }
 

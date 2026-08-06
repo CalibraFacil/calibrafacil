@@ -30,7 +30,10 @@ function getApiBaseURL(): string {
       return `http://${host}:3000`;
     }
 
-    if (/^dev-(portal|web|api|ops)\.calibrafacil\.com$/.test(host)) {
+    if (
+      /^dev-(portal|web|api|ops)\.calibrafacil\.com$/.test(host) ||
+      host === "devbox.example.ts.net"
+    ) {
       return window.location.origin;
     }
 
