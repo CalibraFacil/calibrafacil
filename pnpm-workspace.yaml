@@ -12,7 +12,7 @@ overrides:
   "@tanstack/start-plugin-core": 1.167.6
   "@tanstack/start-server-core": 1.167.2
   seroval: ^1.4.1
-  next: 16.2.7
+  next: 16.2.11
   fast-xml-parser: ^5.5.6
   fast-xml-builder: ^1.2.0
   esbuild: ^0.25.12
@@ -25,11 +25,11 @@ overrides:
   node-forge: ^1.4.0
   "picomatch@<2.3.2": ^2.3.2
   "picomatch@>=4.0.0 <4.0.4": ^4.0.4
-  # GHSA-vmh5-mc38-953g: undici >=7.23.0 <7.28.0 TLS certificate-validation bypass
+  # GHSA-vmh5-mc38-953g / GHSA-cq9c-5vqp-fhqr: undici TLS certificate-validation bypass
   # via dropped requestTls in SOCKS5 ProxyAgent. Pulled transitively via Payload
   # (apps/cms). Patch-bump the 7.x line to the patched 7.28.0 (supersedes the
   # earlier ^7.24.0, which resolved inside the vulnerable range).
-  undici: ^7.28.0
+  undici: ^7.29.0
   # GHSA-96hv-2xvq-fx4p: ws >=8.0.0 <8.21.0 memory-exhaustion DoS from many tiny
   # fragments. Pulled transitively via Payload (apps/cms). Patch-bump the 8.x
   # line to 8.21.0 (already resolved elsewhere in the tree).
@@ -52,8 +52,24 @@ overrides:
   rollup: ^4.59.0
   svgo: ^4.0.1
   "@xmldom/xmldom": ^0.8.13
-  fast-uri: ^3.1.2
+  fast-uri: ^3.1.5
   samlify: ^2.13.0
+  # GHSA-rgw5-rvv9-x895: brace-expansion >=4.0.0 <5.0.9 DoS via unbounded
+  # intermediate arrays (bypasses the CVE-2026-14257 mitigation). Transitive via
+  # @vercel/queue>minimatch. Scoped to the 4.x/5.x line so the 1.x/2.x users are
+  # untouched.
+  "brace-expansion@>=4.0.0 <5.0.9": ^5.0.9
+  # GHSA advisories on js-yaml <4.3.0 and immutable <4.3.9, both transitive.
+  "js-yaml@>=4.0.0 <4.3.0": ^4.3.0
+  "immutable@>=4.0.0 <4.3.9": ^4.3.9
+  # builder-util-runtime <9.7.0, transitive via electron-builder (desktop only).
+  "builder-util-runtime@<9.7.0": ^9.7.0
+  # GHSA-6g55-p6wh-862q + GHSA-r28c-9q8g-f849: postcss <=8.5.17 arbitrary .map
+  # file disclosure via attacker-controlled sourceMappingURL. Build-time only,
+  # but the prod audit gate counts it.
+  postcss: ^8.5.18
+  # GHSA-f88m-g3jw-g9cj: sharp <0.35.0 inherits four libvips CVEs.
+  sharp: ^0.35.0
 
 auditConfig:
   ignoreGhsas:

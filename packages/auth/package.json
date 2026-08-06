@@ -17,14 +17,14 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "@better-auth/passkey": "1.6.14",
-    "@better-auth/sso": "1.6.14",
+    "@better-auth/passkey": "1.6.22",
+    "@better-auth/sso": "1.6.22",
     "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@simplewebauthn/server": "13.3.1",
-    "better-auth": "1.6.14",
-    "next": "16.2.7",
+    "better-auth": "1.6.22",
+    "next": "16.2.11",
     "react": "^19.2.7",
     "resend": "^6.12.4"
   },
