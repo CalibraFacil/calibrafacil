@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   ACCREDITATION_NUMBER_PREFIX,
-  ACCREDITATION_SEAL_SUBTITLE,
-  ACCREDITATION_SEAL_TITLE,
+  ACCREDITATION_SEAL_FONT_FAMILY,
+  ACCREDITATION_SEAL_SCHEME,
+  ACCREDITATION_SEAL_SCHEME_LINE1,
+  ACCREDITATION_SEAL_SCHEME_LINE2,
   formatAccreditationNumber,
   getAccreditationStatus,
   isAccreditationActive,
@@ -199,18 +201,96 @@ describe("shouldRenderAccreditationSeal", () => {
   });
 });
 
-// REQ-ACCR-012: exported seal constants must equal the regulated strings verbatim
+// REQ-ACCR-012: exported seal constants must equal the regulated strings verbatim.
+// Source: NIE-Cgcre-009 rev. 27 (Jul/2024) A.5/A.8 — the upper band of the symbol
+// carries the accreditation-SCHEME norm on two lines. Rev. 27 dropped the previous
+// "Calibração / NBR ISO/IEC / 17025"; the accreditation type is the CAL prefix below.
 describe("seal constants", () => {
-  it("REQ-ACCR-012: ACCREDITATION_SEAL_SUBTITLE equals the exact regulated string", () => {
-    expect(ACCREDITATION_SEAL_SUBTITLE).toBe("NBR ISO/IEC 17025");
+  it("REQ-ACCR-012: ACCREDITATION_SEAL_SCHEME equals the exact regulated string", () => {
+    expect(ACCREDITATION_SEAL_SCHEME).toBe("ABNT NBR ISO/IEC 17025");
+  });
+
+  it("REQ-ACCR-012: the two rendered lines concatenate back to the scheme string", () => {
+    expect(
+      `${ACCREDITATION_SEAL_SCHEME_LINE1} ${ACCREDITATION_SEAL_SCHEME_LINE2}`,
+    ).toBe(ACCREDITATION_SEAL_SCHEME);
   });
 
   it("REQ-ACCR-012: ACCREDITATION_NUMBER_PREFIX equals the exact regulated string", () => {
     expect(ACCREDITATION_NUMBER_PREFIX).toBe("CAL");
   });
 
-  it("REQ-ACCR-012: ACCREDITATION_SEAL_TITLE equals the exact regulated string", () => {
-    expect(ACCREDITATION_SEAL_TITLE).toBe("Calibração");
+  it("REQ-ACCR-012: the pre-rev.27 wording is gone from the seal", () => {
+    // "Calibração" moved out of the symbol entirely in rev. 27 — if it comes
+    // back, the symbol is non-conforming as of Jul/2027.
+    expect(ACCREDITATION_SEAL_SCHEME).not.toContain("Calibração");
+    expect(ACCREDITATION_SEAL_SCHEME).toContain("ABNT");
+  });
+
+  // REQ-ACCR-013: A.6.2 requires Arial. Carlito (a Calibri clone) ships with
+  // LibreOffice and is present in the Gotenberg Chromium container, so it must
+  // never precede Arial in the stack or the symbol silently stops being Arial.
+  it("REQ-ACCR-013: the seal font stack names Arial first", () => {
+    const families = ACCREDITATION_SEAL_FONT_FAMILY.split(",").map((family) =>
+      family.trim().replaceAll('"', ""),
+    );
+    expect(families[0]).toBe("Arial");
+    expect(families).not.toContain("Carlito");
+    expect(families).not.toContain("Calibri");
+  });
+});
+
+// REQ-ACCR-014: NIE-Cgcre-009 §11.5.3/.4/.5 — external-provider results.
+// Fail-closed tripwire. Nothing passes this flag today (subcontracting is not
+// modelled); these tests exist so the guard cannot be silently dropped by the
+// change that DOES model it.
+describe("external-provider results suppress the seal", () => {
+  const accreditedLab = {
+    accreditationActive: true,
+    accreditationNumber: "9999",
+  };
+
+  it("REQ-ACCR-014: any external-provider result suppresses the seal", () => {
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: accreditedLab,
+        methodAccreditedScope: true,
+        hasExternalProviderResults: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("REQ-ACCR-014: it overrides an otherwise fully accredited certificate", () => {
+    // Same inputs, only the flag differs — proves the flag is what decides.
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: accreditedLab,
+        methodAccreditedScope: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: accreditedLab,
+        methodAccreditedScope: true,
+        hasExternalProviderResults: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("REQ-ACCR-014: absent or false leaves today's behaviour untouched", () => {
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: accreditedLab,
+        methodAccreditedScope: true,
+        hasExternalProviderResults: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRenderAccreditationSeal({
+        lab: accreditedLab,
+        methodAccreditedScope: true,
+      }),
+    ).toBe(true);
   });
 });
 

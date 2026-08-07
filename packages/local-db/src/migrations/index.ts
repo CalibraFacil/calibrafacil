@@ -15,6 +15,7 @@ import { migration0014SyncBaseVersionAnchor } from "./0014_sync_base_version_anc
 import { migration0015NonConformances } from "./0015_non_conformances";
 import { migration0016CalibrationJobScopeCompliance } from "./0016_calibration_job_scope_compliance";
 import { migration0017ServiceOrderPublicId } from "./0017_service_order_public_id";
+import { migration0018CalibrationJobMethodDeviations } from "./0018_calibration_job_method_deviations";
 
 export type LocalDbMigration = {
   id: number;
@@ -40,6 +41,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0015NonConformances,
   migration0016CalibrationJobScopeCompliance,
   migration0017ServiceOrderPublicId,
+  migration0018CalibrationJobMethodDeviations,
 ];
 
 export const currentLocalDbSchemaVersion =

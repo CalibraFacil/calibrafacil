@@ -58,6 +58,7 @@ import {
   UpdateAssetSchema,
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
+  METHOD_DEVIATIONS_MAX_LENGTH,
 } from "@calibra-facil/schemas";
 import {
   localAttachmentSchema,
@@ -125,6 +126,8 @@ type LocalJobExecutionInput = {
   };
   calibrationLocation?: CalibrationLocationInput;
   calibrationPhases?: CalibrationPhaseInput;
+  /** ISO/IEC 17025 §7.8.2.1(n) — mirrors the cloud execute contract. */
+  methodDeviations?: string | null;
 };
 
 function buildCalibrationLocationSnapshot(
@@ -688,6 +691,7 @@ export function createLocalServer(
         environment: input.environment,
         calibrationLocationSnapshot,
         calibrationPhaseSnapshot,
+        methodDeviations: input.methodDeviations,
         actorUserId: context.userId,
         deviceId: config.deviceId,
       });
@@ -763,6 +767,7 @@ export function createLocalServer(
         environment: input.environment,
         calibrationLocationSnapshot,
         calibrationPhaseSnapshot,
+        methodDeviations: input.methodDeviations,
         requireResults: true,
         actorUserId: context.userId,
         deviceId: config.deviceId,
@@ -1659,6 +1664,16 @@ function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
       input.calibrationLocation,
     ),
     calibrationPhases: calibrationPhasesFromUnknown(input.calibrationPhases),
+    // undefined (absent) must stay undefined so the store leaves the value
+    // alone; only an explicit null or a string is a change. The length cap is
+    // the cloud's (ExecuteJobSchema); enforcing it here too keeps a value that
+    // syncs up from being one the cloud API would have refused.
+    methodDeviations:
+      input.methodDeviations === undefined
+        ? undefined
+        : typeof input.methodDeviations === "string"
+          ? input.methodDeviations.slice(0, METHOD_DEVIATIONS_MAX_LENGTH)
+          : null,
   };
 }
 

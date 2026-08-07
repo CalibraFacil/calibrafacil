@@ -64,7 +64,6 @@ import {
   createSpcApi,
 } from "./modules/proficiency-tests";
 import { createCertificateNumberingApi } from "./modules/certificate-numbering";
-import { createCertificateTemplatesApi } from "./modules/certificate-templates";
 import { createCompetencesApi } from "./modules/competences";
 import { createCustomerSuccessApi } from "./modules/customer-success";
 import { createCustomersApi } from "./modules/customers";
@@ -836,10 +835,6 @@ export function createCloudApiClient(
     capas: createCapasApi(rawCloudClient),
     proficiencyTests: createProficiencyTestsApi(rawCloudClient),
     spc: createSpcApi(rawCloudClient),
-    certificateTemplates: createCertificateTemplatesApi(
-      rawCloudClient,
-      options,
-    ),
     competences: createCompetencesApi(rawCloudClient),
     trainingRecords: createTrainingRecordsApi(rawCloudClient),
     customerSuccess: createCustomerSuccessApi(rawCloudClient),

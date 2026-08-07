@@ -1386,12 +1386,6 @@ export const CreateMethodSchema = z.object({
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
   accreditedScope: z.boolean().optional(),
-  certificateTemplateId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .nullable()
-    .optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -2231,6 +2225,15 @@ export type AccreditedScopeLineInput = z.infer<
  * Schema for executing a job (saving worksheet data)
  * Includes selected reference standards for ISO 17025 traceability
  */
+/**
+ * Cap for the §7.8.2.1(n) deviations note. Exported because the offline path
+ * does not run this schema — the local server parses its own payload and the
+ * sync apply path only trims — so all three have to agree on the limit or a
+ * deviation typed on desktop syncs into a column the cloud API would have
+ * rejected.
+ */
+export const METHOD_DEVIATIONS_MAX_LENGTH = 2000;
+
 export const ExecuteJobSchema = z.object({
   selectedStandardIds: z.array(z.number()).optional(),
   data: z.record(z.string(), z.unknown()),
@@ -2240,6 +2243,21 @@ export const ExecuteJobSchema = z.object({
   performedAt: z.string().datetime().optional(),
   calibrationLocation: CalibrationLocationInputSchema.optional(),
   calibrationPhases: CalibrationPhaseInputSchema.optional(),
+  /**
+   * ISO/IEC 17025 §7.8.2.1(n) — additions to, deviations from, or exclusions
+   * from the method, as actually executed. Recorded by whoever ran the
+   * calibration and printed on the certificate.
+   *
+   * Nullable so a technician can clear a deviation they entered by mistake;
+   * `undefined` (absent) leaves the stored value untouched, which matters
+   * because the worksheet auto-saves and must not wipe the field on a partial
+   * payload.
+   */
+  methodDeviations: z
+    .string()
+    .max(METHOD_DEVIATIONS_MAX_LENGTH)
+    .optional()
+    .nullable(),
 });
 
 export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;

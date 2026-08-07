@@ -7,7 +7,7 @@ export const Route = createFileRoute('/dashboard/settings/branding')({
     throw redirect({
       to:
         getDashboardRedirectPath('/dashboard/settings/branding') ??
-        '/dashboard/certificate-templates',
+        '/dashboard/settings',
     })
   },
 })

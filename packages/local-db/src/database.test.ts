@@ -916,6 +916,52 @@ INSERT INTO services (
     database.close();
   });
 
+  // §7.8.2.1(n). Desktop is where deviations actually get noticed — the
+  // technician is standing at the instrument — so the value has to survive the
+  // local write AND reach the outbox, or it is discarded without a trace.
+  it("persists method deviations and pushes them to the outbox", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
+
+    upsertLocalJobProjection(database, {
+      id: "job-local",
+      remoteId: 123,
+      jobId: "CAL-2026-0001",
+      organizationId: "org-1",
+      unitId: 1,
+      customerId: "customer-local",
+      assetId: "asset-local",
+      serviceId: "service-local",
+      methodSnapshotJson: "{}",
+      assetSnapshotJson: "{}",
+      status: "DRAFT",
+      createdAt: now,
+      updatedAt: now,
+      syncState: "synced",
+    });
+
+    const job = saveLocalJobExecution(database, {
+      routeId: "123",
+      data: {},
+      results: null,
+      selectedStandardIds: [],
+      actorUserId: "user-1",
+      deviceId: "device-1",
+      methodDeviations: "Ponto de 500 kg não executado: massa indisponível.",
+    });
+    if (!job) throw new Error("Expected local job execution to be saved");
+
+    expect(job.methodDeviations).toBe(
+      "Ponto de 500 kg não executado: massa indisponível.",
+    );
+    const [event] = listPendingOutboxEvents(database);
+    expect(event?.payload).toMatchObject({
+      methodDeviations: "Ponto de 500 kg não executado: massa indisponível.",
+    });
+
+    database.close();
+  });
+
   it("freezes full cached reference standard snapshots for local executions", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const now = new Date("2026-01-15T10:00:00.000Z").toISOString();

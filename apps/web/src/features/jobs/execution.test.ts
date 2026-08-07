@@ -461,7 +461,36 @@ describe('job execution feature model', () => {
           load: { mode: 'before_only', reason: 'Ajuste dispensado' },
         },
       },
+      // §7.8.2.1(n): always present so clearing the worksheet box clears the
+      // stored value — the API treats an ABSENT key as "leave untouched".
+      methodDeviations: null,
     })
+  })
+
+  it('sends method deviations trimmed, and null when blank (ISO 17025 §7.8.2.1n)', () => {
+    function payloadWith(methodDeviations: string | null | undefined) {
+      return buildExecutionMutationPayload({
+        selectedStandardIds: [],
+        normalizedData: {},
+        formulaResults: {},
+        environment: undefined,
+        calibrationLocation: {
+          type: 'lab',
+          addressText: 'Rua Lab',
+          notes: null,
+        },
+        calibrationPhases: { blocks: {} },
+        methodDeviations,
+      }).methodDeviations
+    }
+
+    expect(payloadWith('  Ponto de 500 g não executado.  ')).toBe(
+      'Ponto de 500 g não executado.',
+    )
+    // A blank box must clear the field, never print an empty heading.
+    expect(payloadWith('   ')).toBeNull()
+    expect(payloadWith('')).toBeNull()
+    expect(payloadWith(undefined)).toBeNull()
   })
 
   it('checks execution submit eligibility and editable statuses', () => {

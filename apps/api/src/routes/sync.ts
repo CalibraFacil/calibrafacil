@@ -73,6 +73,7 @@ import {
   UpdateComplianceSchema,
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
+  METHOD_DEVIATIONS_MAX_LENGTH,
 } from "@calibra-facil/schemas";
 import { and, desc, eq, gt, inArray, isNull, like, not } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
@@ -120,10 +121,6 @@ import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
 } from "../lib/asset-measurement";
-import {
-  resolveMethodCertificateTemplate,
-  serializeCertificateTemplateSnapshot,
-} from "../lib/certificate-template-snapshots";
 import {
   createInitialServiceOrderRecords,
   recordServiceOrderEvent,
@@ -386,6 +383,9 @@ export const syncRouter = new Hono<{
             scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
             scopeOverrideJustification:
               calibrationJob.scopeOverrideJustification,
+            // §7.8.2.1(n) — desktop renders certificates offline, so this has
+            // to travel or an offline render omits recorded content.
+            methodDeviations: calibrationJob.methodDeviations,
             status: calibrationJob.status,
             dueDate: calibrationJob.dueDate,
             createdAt: calibrationJob.createdAt,
@@ -1112,6 +1112,7 @@ async function loadCloudSyncEventsSince(
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
         scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
         scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
+        methodDeviations: calibrationJob.methodDeviations,
         status: calibrationJob.status,
         dueDate: calibrationJob.dueDate,
         createdAt: calibrationJob.createdAt,
@@ -1549,26 +1550,26 @@ async function applyDesktopCertificatePdfUpload(
     const approvedAt = job.approvedAt ?? new Date();
     const storedTemplateSnapshot = asRecord(job.certificateTemplateSnapshot);
     // Desktop-approved jobs arrive with the PDF ALREADY rendered offline, so
-    // this snapshot is bookkeeping, never a gate: prefer what the job stored,
-    // else the method's linked template (0104), else the legacy system-default
-    // placeholder that offline rendering used.
-    const methodTemplateResolution = await resolveMethodCertificateTemplate({
-      organizationId: input.memberData.organizationId,
-      methodId: job.methodSnapshot?.methodId ?? null,
-    });
+    // this snapshot is bookkeeping, never a gate — which is why the cloud-side
+    // issuance block (#865) is not applied on this path. Prefer what the job
+    // stored; otherwise the system-default placeholder offline rendering used.
+    // There is no per-method template left to resolve from.
+    //
+    // Not applying the block here does NOT mean desktop issuance still works:
+    // generateLocalCertificateDraft (apps/local-server/src/certificates.ts)
+    // throws unconditionally, so nothing offline renders a certificate either.
+    // What this branch preserves is the ability to ACCEPT a PDF rendered by a
+    // desktop build from before the redesign, which would otherwise be
+    // rejected on sync and lost.
     const effectiveTemplateSnapshot =
       Object.keys(storedTemplateSnapshot).length > 0
         ? storedTemplateSnapshot
-        : serializeCertificateTemplateSnapshot(
-            methodTemplateResolution.ok
-              ? methodTemplateResolution.snapshot
-              : {
-                  id: null,
-                  name: "Padrão do Sistema",
-                  slug: "padrao-sistema",
-                  version: 1,
-                },
-          );
+        : {
+            id: null,
+            name: "Padrão do Sistema",
+            slug: "padrao-sistema",
+            version: 1,
+          };
 
     await uploadToR2(
       r2Client,
@@ -1613,11 +1614,6 @@ async function applyDesktopCertificatePdfUpload(
         asFoundMargins: asFoundVerdict.margins,
         scopeComplianceStatus: scopeCompliance?.status ?? null,
         scopeComplianceFindings: scopeCompliance?.findings ?? null,
-        certificateTemplateId:
-          job.certificateTemplateId ??
-          (typeof effectiveTemplateSnapshot.id === "number"
-            ? effectiveTemplateSnapshot.id
-            : null),
         certificateTemplateSnapshot:
           job.certificateTemplateSnapshot ?? effectiveTemplateSnapshot,
         updatedAt: new Date(),
@@ -2825,6 +2821,11 @@ async function applyLocalJobExecution(
   )
     ? getCalibrationPhaseSnapshotOrNull(payload, "calibrationPhaseSnapshot")
     : existing.calibrationPhaseSnapshot;
+  // §7.8.2.1(n). Absent means "not edited offline" and must not clear a value
+  // the cloud already holds; an explicit null or empty string clears it.
+  const nextMethodDeviations = hasOwn(payload, "methodDeviations")
+    ? getMethodDeviationsOrNull(payload, "methodDeviations")
+    : existing.methodDeviations;
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
     nextStandardsSnapshot,
     nextData,
@@ -2869,6 +2870,7 @@ async function applyLocalJobExecution(
       environmentalSnapshot: nextEnvironmentalSnapshot,
       calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
       calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+      methodDeviations: nextMethodDeviations,
       status: nextStatus,
       performedAt: nextStatus === "REVIEW" ? new Date() : existing.performedAt,
       updatedAt: new Date(),
@@ -4399,6 +4401,17 @@ function getCalibrationLocationSnapshotOrNull(
 ): CalibrationLocationSnapshot | null {
   const value = row[key];
   return isCalibrationLocationSnapshot(value) ? value : null;
+}
+
+function getMethodDeviationsOrNull(
+  row: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = row[key];
+  if (typeof value !== "string") return null;
+  // Same cap the cloud's own ExecuteJobSchema applies. A desktop client that
+  // skipped the check must not be able to write past it on sync.
+  return value.trim().slice(0, METHOD_DEVIATIONS_MAX_LENGTH) || null;
 }
 
 function getCalibrationPhaseSnapshotOrNull(

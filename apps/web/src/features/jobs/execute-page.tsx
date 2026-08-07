@@ -28,7 +28,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Collapsible,
   CollapsibleContent,
@@ -427,6 +428,10 @@ function ExecuteJobForm({
     job.performedAt ? formatDateForInput(new Date(job.performedAt)) : '',
   )
   const [backdateReason, setBackdateReason] = useState('')
+  // ISO/IEC 17025 §7.8.2.1(n) — printed on the certificate when filled.
+  const [methodDeviations, setMethodDeviations] = useState(
+    job.methodDeviations ?? '',
+  )
 
   const assetSpecFields = useMemo(
     () =>
@@ -763,6 +768,7 @@ function ExecuteJobForm({
           environment: environmentPayload,
           calibrationLocation: calibrationLocationPayload,
           calibrationPhases: calibrationPhasesPayload,
+          methodDeviations,
           // Persist the execution date with the draft so it survives a reload.
           performedAt: performedAt
             ? new Date(`${performedAt}T12:00:00`).toISOString()
@@ -799,6 +805,7 @@ function ExecuteJobForm({
           environment: environmentPayload,
           calibrationLocation: calibrationLocationPayload,
           calibrationPhases: calibrationPhasesPayload,
+          methodDeviations,
           performedAt: new Date(`${performedAt}T12:00:00`).toISOString(),
           backdateReason: backdateReason.trim() || undefined,
         }),
@@ -1296,6 +1303,28 @@ function ExecuteJobForm({
                   />
                 </Field>
               )}
+              {/*
+                ISO/IEC 17025 §7.8.2.1(n). Deliberately NOT a generic
+                "observações" box: it answers one question, and whatever is
+                typed here is printed on the certificate under that heading.
+                Left blank on a calibration run exactly per method, which is
+                the normal case.
+              */}
+              <Field className="md:col-span-2">
+                <FieldLabel>Desvios em relação ao método</FieldLabel>
+                <Textarea
+                  value={methodDeviations}
+                  disabled={!isEditable}
+                  rows={2}
+                  maxLength={2000}
+                  onChange={(e) => setMethodDeviations(e.target.value)}
+                  placeholder="Adições, desvios ou exclusões em relação ao método, se houver"
+                />
+                <FieldDescription>
+                  Impresso no certificado (ISO/IEC 17025 §7.8.2.1n). Deixe em
+                  branco se a calibração seguiu o método sem alterações.
+                </FieldDescription>
+              </Field>
             </CardContent>
           </Card>
 

@@ -1252,11 +1252,11 @@ export type CertificateXlsxTemplateVersionStatus =
   | "PUBLISHED"
   | "ARCHIVED";
 
-export type CertificateXlsxTemplatePreviewStatus =
-  | "PENDING"
-  | "RENDERED"
-  | "FAILED"
-  | "EXPIRED";
+/**
+ * Which renderer produced an issued certificate. Only the retired XLSX
+ * pipeline exists today; Fase 3 adds the fixed system layouts.
+ */
+export type IssuedCertificateRenderPipeline = "XLSX_LEGACY";
 
 export type IssuedCertificateSnapshotStatus =
   | "ISSUED"
@@ -1324,48 +1324,6 @@ export const certificateTemplateVersion = pgTable(
   ],
 );
 
-export const certificateTemplatePreview = pgTable(
-  "certificate_template_preview",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    templateVersionId: integer("template_version_id")
-      .notNull()
-      .references(() => certificateTemplateVersion.id, {
-        onDelete: "cascade",
-      }),
-    sampleData: jsonb("sample_data").$type<Record<string, unknown>>(),
-    filledXlsxR2Key: text("filled_xlsx_r2_key"),
-    pdfR2Key: text("pdf_r2_key"),
-    pdfSha256: text("pdf_sha256"),
-    renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
-    status: text("status")
-      .$type<CertificateXlsxTemplatePreviewStatus>()
-      .default("PENDING")
-      .notNull(),
-    error: text("error"),
-    requestedBy: text("requested_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("certificate_template_preview_org_idx").on(table.organizationId),
-    index("certificate_template_preview_version_idx").on(
-      table.templateVersionId,
-    ),
-    index("certificate_template_preview_status_idx").on(table.status),
-    index("certificate_template_preview_expires_at_idx").on(table.expiresAt),
-  ],
-);
-
 export const issuedCertificateSnapshot = pgTable(
   "issued_certificate_snapshot",
   {
@@ -1376,14 +1334,20 @@ export const issuedCertificateSnapshot = pgTable(
     jobId: integer("job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "restrict" }),
-    templateId: integer("template_id")
-      .notNull()
-      .references(() => certificateTemplate.id, { onDelete: "restrict" }),
-    templateVersionId: integer("template_version_id")
-      .notNull()
-      .references(() => certificateTemplateVersion.id, {
-        onDelete: "restrict",
-      }),
+    /**
+     * Historical pointer to the retired lab-authored template system (#865).
+     * Nullable and FK-free since 0107: the ON DELETE RESTRICT foreign keys are
+     * exactly what would block dropping those tables in 0108, but the integers
+     * are kept so the provenance of an already-issued, signed certificate is
+     * not destroyed. New rows leave them null.
+     */
+    templateId: integer("template_id"),
+    templateVersionId: integer("template_version_id"),
+    /** Which renderer produced this row. 0108 adds the fixed-layout identity. */
+    renderPipeline: text("render_pipeline")
+      .$type<IssuedCertificateRenderPipeline>()
+      .default("XLSX_LEGACY")
+      .notNull(),
     certificateNumber: text("certificate_number"),
     filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
     filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
@@ -2172,7 +2136,6 @@ export const userRelations = relations(user, ({ many }) => ({
   emailDomains: many(organizationEmailDomain),
   certificateTemplates: many(certificateTemplate),
   certificateTemplateVersions: many(certificateTemplateVersion),
-  certificateTemplatePreviews: many(certificateTemplatePreview),
   issuedCertificateSnapshots: many(issuedCertificateSnapshot),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
   successProfiles: many(organizationSuccessProfile),
@@ -2221,8 +2184,7 @@ export const organizationRelations = relations(
     emailDomain: one(organizationEmailDomain),
     certificateTemplates: many(certificateTemplate),
     certificateTemplateVersions: many(certificateTemplateVersion),
-    certificateTemplatePreviews: many(certificateTemplatePreview),
-    issuedCertificateSnapshots: many(issuedCertificateSnapshot),
+      issuedCertificateSnapshots: many(issuedCertificateSnapshot),
     apiKeys: many(organizationApiKey),
     integrations: many(organizationIntegration),
     integrationConnections: many(integrationConnection),
@@ -2460,26 +2422,7 @@ export const certificateTemplateVersionRelations = relations(
       references: [user.id],
       relationName: "certificateTemplateVersionPublisher",
     }),
-    previews: many(certificateTemplatePreview),
     issuedSnapshots: many(issuedCertificateSnapshot),
-  }),
-);
-
-export const certificateTemplatePreviewRelations = relations(
-  certificateTemplatePreview,
-  ({ one }) => ({
-    organization: one(organization, {
-      fields: [certificateTemplatePreview.organizationId],
-      references: [organization.id],
-    }),
-    templateVersion: one(certificateTemplateVersion, {
-      fields: [certificateTemplatePreview.templateVersionId],
-      references: [certificateTemplateVersion.id],
-    }),
-    requestedByUser: one(user, {
-      fields: [certificateTemplatePreview.requestedBy],
-      references: [user.id],
-    }),
   }),
 );
 
@@ -2493,14 +2436,6 @@ export const issuedCertificateSnapshotRelations = relations(
     job: one(calibrationJob, {
       fields: [issuedCertificateSnapshot.jobId],
       references: [calibrationJob.id],
-    }),
-    template: one(certificateTemplate, {
-      fields: [issuedCertificateSnapshot.templateId],
-      references: [certificateTemplate.id],
-    }),
-    templateVersion: one(certificateTemplateVersion, {
-      fields: [issuedCertificateSnapshot.templateVersionId],
-      references: [certificateTemplateVersion.id],
     }),
     issuedByUser: one(user, {
       fields: [issuedCertificateSnapshot.issuedBy],
@@ -3276,15 +3211,6 @@ export const calibrationMethod = pgTable(
     // ISO 17025 accredited scope: certificates issued from this method may
     // carry the accreditation seal (traceable-only methods keep this off).
     accreditedScope: boolean("accredited_scope").default(false).notNull(),
-    // Certificate template this method issues with (migration 0104). One
-    // explicit link per method — issuance renders the template's latest
-    // PUBLISHED version; job approval blocks while this is null. Operational
-    // setting (editable on published methods via a dedicated audited route),
-    // never part of methodFingerprint.
-    certificateTemplateId: integer("certificate_template_id").references(
-      () => certificateTemplate.id,
-      { onDelete: "set null" },
-    ),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
     variableBindings: jsonb("variable_bindings")
@@ -3342,7 +3268,6 @@ export const calibrationMethod = pgTable(
   (table) => [
     index("method_organization_id_idx").on(table.organizationId),
     index("method_asset_type_id_idx").on(table.assetTypeId),
-    index("method_certificate_template_id_idx").on(table.certificateTemplateId),
     index("method_status_idx").on(table.status),
     index("method_parent_id_idx").on(table.parentId),
     uniqueIndex("method_org_name_version_uidx").on(
@@ -3427,10 +3352,6 @@ export const calibrationMethodRelations = relations(
       relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
-    certificateTemplate: one(certificateTemplate, {
-      fields: [calibrationMethod.certificateTemplateId],
-      references: [certificateTemplate.id],
-    }),
   }),
 );
 
@@ -4271,6 +4192,16 @@ export const calibrationJob = pgTable(
     // enforce mode — and the certificate was downgraded to non-accredited
     // (shouldRenderAccreditationSeal suppresses the seal when this is set).
     scopeOverrideJustification: text("scope_override_justification"),
+    /**
+     * ISO/IEC 17025 §7.8.2.1(n): additions to, deviations from, or exclusions
+     * from the method, as actually executed — printed on the certificate when
+     * present. A DIFFERENT question from the two justifications either side of
+     * it: `scopeOverrideJustification` above is an accreditation-scope
+     * override that suppresses the seal, and
+     * `environmentalSnapshot.outOfLimitsJustification` covers environmental
+     * limits only. Recorded by whoever executed the calibration.
+     */
+    methodDeviations: text("method_deviations"),
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
@@ -4285,10 +4216,12 @@ export const calibrationJob = pgTable(
     calibrationPhaseSnapshot: jsonb(
       "calibration_phase_snapshot",
     ).$type<CalibrationPhaseSnapshot>(),
-    certificateTemplateId: integer("certificate_template_id").references(
-      () => certificateTemplate.id,
-      { onDelete: "set null" },
-    ),
+    /**
+     * Frozen record of what an APPROVED job was issued with. Regulated
+     * evidence, not a link: the `certificate_template_id` FK it used to sit
+     * beside was dropped in 0107 with the lab-authored template system (#865).
+     * Nothing resolves or writes this any more; 22 historical rows keep it.
+     */
     certificateTemplateSnapshot: jsonb("certificate_template_snapshot").$type<
       Record<string, unknown>
     >(),
@@ -4435,7 +4368,6 @@ export const calibrationJob = pgTable(
     // Amendment tracking indexes for efficient chain lookups
     index("job_supersedes_id_idx").on(table.supersedesId),
     index("job_superseded_by_id_idx").on(table.supersededById),
-    index("job_certificate_template_id_idx").on(table.certificateTemplateId),
     // DOM-02: resolve "does this repair OS already have a calibration opened?"
     // (the pending-after-repair queue leftJoins on this column).
     index("job_source_service_order_id_idx").on(table.sourceServiceOrderId),
@@ -6381,10 +6313,6 @@ export const calibrationJobRelations = relations(
       relationName: "jobRejecter",
     }),
     auditLogs: many(jobAuditLog),
-    certificateTemplate: one(certificateTemplate, {
-      fields: [calibrationJob.certificateTemplateId],
-      references: [certificateTemplate.id],
-    }),
     issuedCertificateSnapshot: one(issuedCertificateSnapshot, {
       fields: [calibrationJob.id],
       references: [issuedCertificateSnapshot.jobId],
@@ -7875,7 +7803,6 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_QUOTE"
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
   | "INTEGRATION_SYNC"
-  | "CERTIFICATE_XLSX_PREVIEW"
   | "AUDIT_PACK"
   | "OOT_NOTIFICATION";
 

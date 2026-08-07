@@ -17,9 +17,9 @@
         "skipLibCheck": true,
         "noEmit": true,
         "paths": {
-            "@calibra-facil/certificate-xlsx-template": [
-                "../../packages/certificate-xlsx-template/src/index.ts"
-            ]
+            "@calibra-facil/certificate-data": [
+                "../../packages/certificate-data/src/index.ts"
+            ],
         }
     },
     "include": [

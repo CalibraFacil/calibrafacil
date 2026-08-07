@@ -15,7 +15,6 @@ import {
   methodInputFieldsFromSnapshot,
   methodSnapshotDisplay,
   isCompiledMethod,
-  certificateTemplateSnapshotFromUnknown,
   buildLocalJobFileUrl,
   checkEnvironmentWithinLimits,
   hasSpecificationValue,
@@ -254,49 +253,6 @@ describe("isCompiledMethod", () => {
   });
 });
 
-describe("certificateTemplateSnapshotFromUnknown", () => {
-  it("returns a normalized snapshot for a well-formed value", () => {
-    expect(
-      certificateTemplateSnapshotFromUnknown({
-        id: 7,
-        name: "Padrão",
-        slug: "padrao",
-        version: 2,
-      }),
-    ).toEqual({ id: 7, name: "Padrão", slug: "padrao", version: 2 });
-  });
-
-  it("allows id to be null", () => {
-    expect(
-      certificateTemplateSnapshotFromUnknown({
-        id: null,
-        name: "n",
-        slug: "s",
-        version: 1,
-      }),
-    ).toEqual({ id: null, name: "n", slug: "s", version: 1 });
-  });
-
-  it("returns null when a field is the wrong type", () => {
-    expect(
-      certificateTemplateSnapshotFromUnknown({
-        id: "7",
-        name: "n",
-        slug: "s",
-        version: 1,
-      }),
-    ).toBeNull();
-    expect(
-      certificateTemplateSnapshotFromUnknown({
-        id: 1,
-        name: "n",
-        slug: "s",
-        version: "1",
-      }),
-    ).toBeNull();
-    expect(certificateTemplateSnapshotFromUnknown(null)).toBeNull();
-  });
-});
 
 describe("buildLocalJobFileUrl", () => {
   it("builds a certificate URL from the request origin", () => {

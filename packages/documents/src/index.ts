@@ -32,3 +32,27 @@ export {
   OotNotificationHtml,
   type OotNotificationDocumentData,
 } from "./OotNotificationHtml.js";
+export {
+  CalibrationCertificateHtml,
+} from "./certificate/CalibrationCertificateHtml.js";
+export {
+  CERTIFICATE_PAGE_STYLES,
+  certificateFooterHtml,
+  certificateHeaderHtml,
+} from "./certificate/certificate-styles.js";
+export type {
+  CalibrationCertificateData,
+  CertificateConformity,
+  CertificateCustomer,
+  CertificateDates,
+  CertificateEccentricity,
+  CertificateEnvironment,
+  CertificateItem,
+  CertificateLabIdentity,
+  CertificateMethod,
+  CertificateResultRow,
+  CertificateRepeatability,
+  CertificateResultTable,
+  CertificateSignatory,
+  CertificateStandard,
+} from "./certificate/types.js";

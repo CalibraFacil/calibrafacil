@@ -743,6 +743,20 @@
       "when": 1784563604000,
       "tag": "0105_drop_certificate_template_assignment",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1784563605000,
+      "tag": "0106_method_deviations",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1784563606000,
+      "tag": "0107_decouple_certificate_templates",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,10 @@
 /** @jsxImportSource react */
 import { useId } from "react";
 import {
-  ACCREDITATION_SEAL_SUBTITLE,
-  ACCREDITATION_SEAL_SUBTITLE_LINE1,
-  ACCREDITATION_SEAL_SUBTITLE_LINE2,
-  ACCREDITATION_SEAL_TITLE,
+  ACCREDITATION_SEAL_FONT_FAMILY,
+  ACCREDITATION_SEAL_SCHEME,
+  ACCREDITATION_SEAL_SCHEME_LINE1,
+  ACCREDITATION_SEAL_SCHEME_LINE2,
   formatAccreditationNumber,
 } from "@calibra-facil/shared/accreditation";
 
@@ -27,7 +27,7 @@ export type AccreditationSealProps = {
   width?: number | string;
 };
 
-const SEAL_FONT_FAMILY = "Carlito, Calibri, Inter, Arial, sans-serif";
+const SEAL_FONT_FAMILY = ACCREDITATION_SEAL_FONT_FAMILY;
 
 export const ACCREDITATION_SEAL_VIEWBOX = "0 0 130 196";
 
@@ -54,8 +54,8 @@ export function AccreditationSealSvg({
       role="img"
       aria-label={
         formattedNumber
-          ? `Selo de acreditação ${ACCREDITATION_SEAL_SUBTITLE} ${formattedNumber}`
-          : `Selo de acreditação ${ACCREDITATION_SEAL_SUBTITLE}`
+          ? `Selo de acreditação ${ACCREDITATION_SEAL_SCHEME} ${formattedNumber}`
+          : `Selo de acreditação ${ACCREDITATION_SEAL_SCHEME}`
       }
     >
       <defs>
@@ -104,39 +104,29 @@ export function AccreditationSealSvg({
         d="M110.502 3H18.4167C13.064 3 9 7.05941 9 12.4059V43H122V12.4059C122 7.05941 118.035 3 110.502 3Z"
         fill="#00B4EC"
       />
+      {/* NIE-Cgcre-009 rev. 27 A.5/A.8: the scheme norm, two lines, equal
+          weight — not a title plus a subtitle. */}
       <text
         x="65.5"
-        y="16"
+        y="20"
         textAnchor="middle"
         fontFamily={SEAL_FONT_FAMILY}
         fontSize="11"
         fontWeight="700"
-        letterSpacing="0.3"
         fill="#000000"
       >
-        {ACCREDITATION_SEAL_TITLE}
+        {ACCREDITATION_SEAL_SCHEME_LINE1}
       </text>
       <text
         x="65.5"
-        y="28"
+        y="34"
         textAnchor="middle"
         fontFamily={SEAL_FONT_FAMILY}
-        fontSize="9"
-        fontWeight="600"
+        fontSize="11"
+        fontWeight="700"
         fill="#000000"
       >
-        {ACCREDITATION_SEAL_SUBTITLE_LINE1}
-      </text>
-      <text
-        x="65.5"
-        y="39"
-        textAnchor="middle"
-        fontFamily={SEAL_FONT_FAMILY}
-        fontSize="9"
-        fontWeight="600"
-        fill="#000000"
-      >
-        {ACCREDITATION_SEAL_SUBTITLE_LINE2}
+        {ACCREDITATION_SEAL_SCHEME_LINE2}
       </text>
       <path d="M9.2 48.4V162.4H121.8V48.4H9.2Z" fill={`url(#${gradientId})`} />
       <g className="seal-glyph">

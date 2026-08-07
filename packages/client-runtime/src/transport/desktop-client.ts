@@ -987,9 +987,6 @@ export function createDesktopApiClient(
       action: "Ensaios de proficiência",
     }),
     spc: desktopCloudOnlyStubs("spc", { action: "Cartas de controle" }),
-    certificateTemplates: desktopCloudOnlyStubs("certificateTemplates", {
-      action: "Templates de certificado",
-    }),
     competences: desktopCloudOnlyStubs("competences", {
       action: "Competências",
     }),

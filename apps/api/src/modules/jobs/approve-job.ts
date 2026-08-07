@@ -19,10 +19,7 @@ import {
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
 import { buildUnitScopeCondition } from "../../lib/units";
-import {
-  resolveMethodCertificateTemplate,
-  serializeCertificateTemplateSnapshot,
-} from "../../lib/certificate-template-snapshots";
+import { isCertificateIssuanceAvailable } from "../../lib/certificate-issuance-availability";
 import { notifyJobApproved } from "@calibra-facil/notifications";
 
 type JobRow = typeof calibrationJob.$inferSelect;
@@ -53,12 +50,12 @@ export type ApproveJobResult =
     }
   | {
       /**
-       * The job's method has no certificate template linked (or the linked
-       * template is archived / has no PUBLISHED version) — issuance would
-       * fail in the worker, so approval blocks with an actionable error.
+       * No certificate can be rendered while the layout is being replaced
+       * (#865) — issuance would fail in the worker, so approval blocks.
+       * Removed in Phase 3 together with
+       * `lib/certificate-issuance-availability`.
        */
-      status: "certificate_template_required";
-      reason: "method_missing" | "template_missing" | "template_unpublished";
+      status: "certificate_issuance_unavailable";
     }
   | {
       status: "approved";
@@ -227,22 +224,14 @@ export async function approveJob(input: {
   // passing (or warn-mode) certificate.
   const appliedScopeOverride = scopeBlocked ? scopeOverrideJustification : null;
 
-  // Per-method certificate template (migration 0104): the frozen method must
-  // own a renderable template BEFORE the job leaves REVIEW — otherwise the
-  // worker would fail after the fact and strand the job in GENERATING_PDF.
-  // Always re-resolved at approval (like the scope classification above) so a
-  // re-approval picks up a re-linked method.
-  const templateResolution = await resolveMethodCertificateTemplate({
-    organizationId: memberData.organizationId,
-    methodId: existing.methodSnapshot?.methodId ?? null,
-  });
-  if (!templateResolution.ok) {
-    return {
-      status: "certificate_template_required",
-      reason: templateResolution.reason,
-    };
+  // The job must be renderable BEFORE it leaves REVIEW — otherwise the worker
+  // fails after the fact and strands it in GENERATING_PDF. This used to check
+  // that the frozen method owned a published XLSX template; during the
+  // fixed-layout redesign (#865) nothing can render at all, so it blocks
+  // unconditionally. Same invariant, wider scope.
+  if (!isCertificateIssuanceAvailable()) {
+    return { status: "certificate_issuance_unavailable" };
   }
-  const templateSnapshot = templateResolution.snapshot;
 
   // Update job status to GENERATING_PDF and set approver info
   // (we set approved_by now so the PDF worker can fetch it)
@@ -257,9 +246,6 @@ export async function approveJob(input: {
       scopeComplianceStatus: scopeCompliance?.status ?? null,
       scopeComplianceFindings: scopeCompliance?.findings ?? null,
       scopeOverrideJustification: appliedScopeOverride,
-      certificateTemplateId: templateSnapshot.id,
-      certificateTemplateSnapshot:
-        serializeCertificateTemplateSnapshot(templateSnapshot),
     })
     .where(eq(calibrationJob.id, jobId))
     .returning();

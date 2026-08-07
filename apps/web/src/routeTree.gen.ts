@@ -54,7 +54,6 @@ import { Route as DashboardMaterialsIndexRouteImport } from './routes/dashboard/
 import { Route as DashboardJobsIndexRouteImport } from './routes/dashboard/jobs/index'
 import { Route as DashboardFinanceIndexRouteImport } from './routes/dashboard/finance/index'
 import { Route as DashboardClientsIndexRouteImport } from './routes/dashboard/clients/index'
-import { Route as DashboardCertificateTemplatesIndexRouteImport } from './routes/dashboard/certificate-templates/index'
 import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/index'
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
@@ -384,12 +383,6 @@ const DashboardClientsIndexRoute = DashboardClientsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardClientsRouteRoute,
 } as any)
-const DashboardCertificateTemplatesIndexRoute =
-  DashboardCertificateTemplatesIndexRouteImport.update({
-    id: '/certificate-templates/',
-    path: '/certificate-templates/',
-    getParentRoute: () => DashboardRouteRoute,
-  } as any)
 const DashboardCapaIndexRoute = DashboardCapaIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -1036,7 +1029,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/capa/': typeof DashboardCapaIndexRoute
-  '/dashboard/certificate-templates/': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/finance/': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
@@ -1161,7 +1153,6 @@ export interface FileRoutesByTo {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
   '/dashboard/capa': typeof DashboardCapaIndexRoute
-  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients': typeof DashboardClientsIndexRoute
   '/dashboard/finance': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs': typeof DashboardJobsIndexRoute
@@ -1307,7 +1298,6 @@ export interface FileRoutesById {
   '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/capa/': typeof DashboardCapaIndexRoute
-  '/dashboard/certificate-templates/': typeof DashboardCertificateTemplatesIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/finance/': typeof DashboardFinanceIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
@@ -1455,7 +1445,6 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
     | '/dashboard/capa/'
-    | '/dashboard/certificate-templates/'
     | '/dashboard/clients/'
     | '/dashboard/finance/'
     | '/dashboard/jobs/'
@@ -1580,7 +1569,6 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets'
     | '/dashboard/capa'
-    | '/dashboard/certificate-templates'
     | '/dashboard/clients'
     | '/dashboard/finance'
     | '/dashboard/jobs'
@@ -1725,7 +1713,6 @@ export interface FileRouteTypes {
     | '/dashboard/sync/conflicts'
     | '/dashboard/assets/'
     | '/dashboard/capa/'
-    | '/dashboard/certificate-templates/'
     | '/dashboard/clients/'
     | '/dashboard/finance/'
     | '/dashboard/jobs/'
@@ -2113,13 +2100,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/clients/'
       preLoaderRoute: typeof DashboardClientsIndexRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
-    }
-    '/dashboard/certificate-templates/': {
-      id: '/dashboard/certificate-templates/'
-      path: '/certificate-templates'
-      fullPath: '/dashboard/certificate-templates/'
-      preLoaderRoute: typeof DashboardCertificateTemplatesIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/capa/': {
       id: '/dashboard/capa/'
@@ -3335,7 +3315,6 @@ interface DashboardRouteRouteChildren {
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
-  DashboardCertificateTemplatesIndexRoute: typeof DashboardCertificateTemplatesIndexRoute
   DashboardVisitsIndexRoute: typeof DashboardVisitsIndexRoute
   DashboardVisitsIdIndexRoute: typeof DashboardVisitsIdIndexRoute
 }
@@ -3364,8 +3343,6 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardSyncConflictsRoute: DashboardSyncConflictsRoute,
-  DashboardCertificateTemplatesIndexRoute:
-    DashboardCertificateTemplatesIndexRoute,
   DashboardVisitsIndexRoute: DashboardVisitsIndexRoute,
   DashboardVisitsIdIndexRoute: DashboardVisitsIdIndexRoute,
 }

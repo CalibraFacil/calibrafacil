@@ -635,6 +635,7 @@ INSERT INTO calibration_jobs (
   scope_compliance_status,
   scope_compliance_findings_json,
   scope_override_justification,
+  method_deviations,
   status,
   due_date,
   version,
@@ -663,6 +664,7 @@ INSERT INTO calibration_jobs (
   @scopeComplianceStatus,
   @scopeComplianceFindingsJson,
   @scopeOverrideJustification,
+  @methodDeviations,
   @status,
   @dueDate,
   0,
@@ -684,6 +686,7 @@ ON CONFLICT(id) DO UPDATE SET
   scope_compliance_status = excluded.scope_compliance_status,
   scope_compliance_findings_json = excluded.scope_compliance_findings_json,
   scope_override_justification = excluded.scope_override_justification,
+  method_deviations = excluded.method_deviations,
   due_date = excluded.due_date,
   updated_at = excluded.updated_at,
   sync_state = excluded.sync_state
@@ -727,6 +730,8 @@ ON CONFLICT(id) DO UPDATE SET
             row,
             "scopeOverrideJustification",
           ),
+          // §7.8.2.1(n) — mirrored so an offline execution keeps it.
+          methodDeviations: getNullableString(row, "methodDeviations"),
           status: getString(row, "status") ?? "DRAFT",
           dueDate: getDateString(row, "dueDate"),
           createdAt: getDateString(row, "createdAt") ?? pulledAt,

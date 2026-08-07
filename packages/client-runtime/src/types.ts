@@ -562,10 +562,6 @@ export interface MethodsApi {
     input: MethodWriteInput,
   ): Promise<MethodDetailData>;
   archive(id: string | number): Promise<unknown>;
-  setCertificateTemplate(
-    id: string | number,
-    input: { certificateTemplateId: number | null },
-  ): Promise<{ ok: boolean; certificateTemplateId: number | null }>;
   createNewVersion(id: string | number): Promise<MethodDetailData>;
   technicalReview(id: string | number): Promise<unknown>;
   qualityApprove(
@@ -1666,59 +1662,6 @@ export interface SpcApi {
   removeReading<TResponse = unknown>(id: string | number): Promise<TResponse>;
 }
 
-export type CertificateTemplateCreateInput = {
-  name: string;
-};
-
-export type CertificateTemplateUpdateInput = {
-  name?: string;
-};
-
-export interface CertificateTemplatesApi {
-  list<TResponse = unknown>(): Promise<TResponse>;
-  create<TResponse = unknown>(
-    input: CertificateTemplateCreateInput,
-  ): Promise<TResponse>;
-  update<TResponse = unknown>(
-    id: string | number,
-    input: CertificateTemplateUpdateInput,
-  ): Promise<TResponse>;
-  duplicate<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  archive<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  setDefault<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  getXlsxVersion<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-  ): Promise<TResponse>;
-  uploadXlsx<TResponse = unknown>(
-    templateId: string | number,
-    file: Blob,
-    input?: { fileName?: string },
-  ): Promise<TResponse>;
-  validateXlsx<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-  ): Promise<TResponse>;
-  updateXlsxBindings<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-    input: { manifest: unknown },
-  ): Promise<TResponse>;
-  createXlsxPreview<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-    input: { sampleData: unknown },
-  ): Promise<TResponse>;
-  getXlsxPreview<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-    previewId: string | number,
-  ): Promise<TResponse>;
-  publishXlsx<TResponse = unknown>(
-    templateId: string | number,
-    versionId: string | number,
-  ): Promise<TResponse>;
-}
 
 export type CompetenceListInput = {
   page: number;
@@ -3128,7 +3071,6 @@ export interface CalibraApi {
   capas: CapasApi;
   proficiencyTests: ProficiencyTestsApi;
   spc: SpcApi;
-  certificateTemplates: CertificateTemplatesApi;
   competences: CompetencesApi;
   trainingRecords: TrainingRecordsApi;
   customerSuccess: CustomerSuccessApi;

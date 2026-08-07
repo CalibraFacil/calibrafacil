@@ -41,12 +41,10 @@ export type StorageCategory =
   | "SERVICE_ORDER_DOC"
   | "JOB_LABEL"
   | "DESKTOP_CERTIFICATE"
-  | "TEMPLATE_PREVIEW"
   | "STANDARD_DOC"
   | "SYNC_ATTACHMENT"
   | "PORTAL_EXPORT"
   | "OOT_NOTIFICATION"
-  | "TEMPLATE_XLSX"
   | "ORG_LOGO"
   | "SIGNATURE"
   | "AVATAR"
@@ -59,7 +57,6 @@ export type StorageCategory =
  */
 export function bucketFor(category: StorageCategory): StorageBucket {
   switch (category) {
-    case "TEMPLATE_XLSX":
     case "ORG_LOGO":
     case "SIGNATURE":
     case "AVATAR":
@@ -69,7 +66,6 @@ export function bucketFor(category: StorageCategory): StorageBucket {
     case "SERVICE_ORDER_DOC":
     case "JOB_LABEL":
     case "DESKTOP_CERTIFICATE":
-    case "TEMPLATE_PREVIEW":
     case "STANDARD_DOC":
     case "SYNC_ATTACHMENT":
     case "PORTAL_EXPORT":
@@ -242,6 +238,13 @@ export function issuedCertificatePdfKey(
   return issuedCertificateKey(params, "pdf");
 }
 
+/**
+ * Legacy: the filled-workbook sibling of an issued certificate. The XLSX
+ * issuance path is gone (#865), so nothing WRITES these any more — but the
+ * objects still exist in R2 and `apps/worker/scripts/migrate-r2-storage.ts`
+ * has to be able to address them when planning object moves. Delete this only
+ * once those legacy objects are gone.
+ */
 export function issuedCertificateXlsxKey(
   params: IssuedCertificateKeyParams,
 ): StorageObject {
@@ -311,22 +314,6 @@ export function serviceOrderDocKey(
     suffix = `quotes/${quote}-v${version}.pdf`;
   }
   return { bucket: bucketFor("SERVICE_ORDER_DOC"), key: `${base}/${suffix}` };
-}
-
-export interface TemplatePreviewKeyParams {
-  org: OrgRef;
-  previewId: number;
-  extension: "xlsx" | "pdf" | "html";
-}
-
-export function templatePreviewKey(
-  params: TemplatePreviewKeyParams,
-): StorageObject {
-  const part = orgPartition(params.org);
-  return {
-    bucket: bucketFor("TEMPLATE_PREVIEW"),
-    key: `org/${part}/certificate-template-previews/${params.previewId}/preview.${params.extension}`,
-  };
 }
 
 export interface PortalAuditPackKeyParams {
@@ -423,22 +410,6 @@ export function syncAttachmentKey(
 // ---------------------------------------------------------------------------
 // Key builders — media bucket
 // ---------------------------------------------------------------------------
-
-export interface TemplateXlsxKeyParams {
-  org: OrgRef;
-  templateId: number;
-  version: number;
-  /** Caller-supplied uuid for uniqueness. */
-  uniqueId: string;
-}
-
-export function templateXlsxKey(params: TemplateXlsxKeyParams): StorageObject {
-  const part = orgPartition(params.org);
-  return {
-    bucket: bucketFor("TEMPLATE_XLSX"),
-    key: `certificate-templates/xlsx/${part}/${params.templateId}/v${params.version}-${params.uniqueId}.xlsx`,
-  };
-}
 
 export interface OrganizationLogoKeyParams {
   org: OrgRef;

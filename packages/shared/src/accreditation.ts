@@ -7,15 +7,34 @@
 
 export const ACCREDITATION_NUMBER_PREFIX = "CAL";
 
-export const ACCREDITATION_SEAL_TITLE = "Calibração";
+/**
+ * Upper band of the accreditation symbol: the norm of the accreditation
+ * scheme, per NIE-Cgcre-009 rev. 27 (Jul/2024) A.5 —
+ * *"Na parte superior do símbolo de acreditação, o OAC deve inserir a norma
+ * referente ao esquema de acreditação"*. Rendered on two lines, as in the
+ * A.5/A.8 artwork.
+ *
+ * Rev. 27 changed these words: the previous band read
+ * "Calibração / NBR ISO/IEC / 17025" on three lines. "Calibração" is gone —
+ * the accreditation TYPE is carried by the `CAL` prefix in the lower band
+ * ("codificação do tipo da acreditação", A.8), not spelled out up top.
+ * See docs/referencias/nie-cgcre-009-simbolo-acreditacao.md.
+ */
+export const ACCREDITATION_SEAL_SCHEME = "ABNT NBR ISO/IEC 17025";
 
-/** Full prose form, used for labels/aria text. */
-export const ACCREDITATION_SEAL_SUBTITLE = "NBR ISO/IEC 17025";
+export const ACCREDITATION_SEAL_SCHEME_LINE1 = "ABNT NBR";
 
-/** Seal header renders the subtitle split across two lines. */
-export const ACCREDITATION_SEAL_SUBTITLE_LINE1 = "NBR ISO/IEC";
+export const ACCREDITATION_SEAL_SCHEME_LINE2 = "ISO/IEC 17025";
 
-export const ACCREDITATION_SEAL_SUBTITLE_LINE2 = "17025";
+/**
+ * A.6.2 — *"A fonte da letra a ser usada no símbolo é a Arial obedecendo a
+ * proporcionalidade do símbolo."* Liberation Sans is the metric-compatible
+ * substitute present in the Gotenberg Chromium container; Carlito (a Calibri
+ * clone) must NOT come first or it wins there and the symbol stops being set
+ * in Arial.
+ */
+export const ACCREDITATION_SEAL_FONT_FAMILY =
+  'Arial, "Liberation Sans", Helvetica, sans-serif';
 
 /**
  * Normalizes free-form input (pasted "RBC 0123", "CAL-0123", "0123") down to
@@ -109,7 +128,33 @@ export function shouldRenderAccreditationSeal(params: {
   atDate?: Date;
   /** Frozen `calibration_job.scope_override_justification`; non-empty = downgraded. */
   scopeOverrideJustification?: string | null;
+  /**
+   * Whether ANY result on this certificate came from an external provider
+   * (subcontracted work).
+   *
+   * FAIL-CLOSED TRIPWIRE, not a finished feature. Subcontracting is not
+   * modelled anywhere in the product yet, so this is `undefined` at every
+   * call site today and the behaviour is unchanged. It exists so that
+   * whoever DOES model it cannot ship the certificate before handling:
+   *
+   *   NIE-Cgcre-009 §11.5.3 — a certificate bearing the symbol may contain
+   *     only accredited results, whether the lab's own or an accredited
+   *     external provider's;
+   *   §11.5.4 — external results must be identified with the provider's name,
+   *     accreditation number and accrediting body;
+   *   §11.5.5 — the certificate may NOT bear the symbol at all if every
+   *     result came from an external provider.
+   *
+   * Distinguishing "some external, all accredited" (allowed, §11.5.3 b) from
+   * "all external" (forbidden, §11.5.5) needs per-result attribution that does
+   * not exist. Until it does, the safe answer to "any external results?" is to
+   * suppress the seal — an unsealed certificate is merely not-accredited,
+   * whereas a wrongly sealed one is a symbol misuse under §11.1.8.
+   */
+  hasExternalProviderResults?: boolean;
 }): boolean {
+  if (params.hasExternalProviderResults === true) return false;
+
   return (
     isAccreditationActive(params.lab, params.atDate) &&
     params.methodAccreditedScope === true &&

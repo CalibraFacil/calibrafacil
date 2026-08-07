@@ -82,9 +82,9 @@ importers:
       '@calibra-facil/auth':
         specifier: workspace:^
         version: link:../../packages/auth
-      '@calibra-facil/certificate-xlsx-template':
+      '@calibra-facil/certificate-data':
         specifier: workspace:^
-        version: link:../../packages/certificate-xlsx-template
+        version: link:../../packages/certificate-data
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
@@ -1033,9 +1033,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1060.0
         version: 3.1060.0
-      '@calibra-facil/certificate-xlsx-template':
+      '@calibra-facil/certificate-data':
         specifier: workspace:^
-        version: link:../../packages/certificate-xlsx-template
+        version: link:../../packages/certificate-data
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
@@ -1159,29 +1159,11 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(sass@1.77.4)(terser@5.48.0)(tsx@4.22.4))
 
-  packages/certificate-xlsx-template:
+  packages/certificate-data:
     dependencies:
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared
-      '@cj-tech-master/excelts':
-        specifier: ^9.6.0
-        version: 9.6.0
-      '@resvg/resvg-js':
-        specifier: 2.6.2
-        version: 2.6.2
-      '@xmldom/xmldom':
-        specifier: ^0.8.13
-        version: 0.8.13
-      fflate:
-        specifier: ^0.8.3
-        version: 0.8.3
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:^
@@ -1189,12 +1171,6 @@ importers:
       '@types/node':
         specifier: ^24.13.0
         version: 24.13.0
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

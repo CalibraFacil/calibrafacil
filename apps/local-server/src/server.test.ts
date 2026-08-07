@@ -2618,9 +2618,12 @@ INSERT INTO environmental_limits (
     );
     const draftBody = recordFromUnknown(await draftResponse.json());
     expect(draftResponse.status, JSON.stringify(draftBody)).toBe(400);
+    // The message must not name the XLSX template system (#865 deleted it) —
+    // an operator sent looking for a "publish a template" screen finds nothing.
     expect(stringFromRecord(draftBody, "error")).toContain(
-      "certificados agora exigem template XLSX publicado",
+      "layout do certificado esta em redesenho",
     );
+    expect(stringFromRecord(draftBody, "error")).not.toContain("XLSX");
 
     const attachmentForm = new FormData();
     attachmentForm.set("entityType", "calibration_job");

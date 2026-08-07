@@ -4,7 +4,6 @@ import {
   type AssetSnapshot,
   type EnvironmentalLimitsSnapshot,
 } from "@calibra-facil/db/schema";
-import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import { type R2Env, type R2BucketLike } from "../../lib/storage";
 import { type CompiledMethod } from "@calibra-facil/method-definition";
 
@@ -104,26 +103,6 @@ export function isCompiledMethod(value: unknown): value is CompiledMethod {
     Array.isArray(candidate.measurementModels) &&
     Array.isArray(candidate.acceptanceCriteria)
   );
-}
-
-export function certificateTemplateSnapshotFromUnknown(
-  value: unknown,
-): CertificateTemplateSnapshot | null {
-  const snapshot = recordFromUnknown(value);
-  const id = snapshot.id;
-  const name = snapshot.name;
-  const slug = snapshot.slug;
-  const version = snapshot.version;
-  if (
-    (id !== null && typeof id !== "number") ||
-    typeof name !== "string" ||
-    typeof slug !== "string" ||
-    typeof version !== "number"
-  ) {
-    return null;
-  }
-
-  return { id, name, slug, version };
 }
 
 export function buildLocalJobFileUrl(

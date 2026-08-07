@@ -100,9 +100,9 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { syncVisitStatusFromJobs } from "../lib/visits";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 import {
-  resolveMethodCertificateTemplate,
-  serializeCertificateTemplateSnapshot,
-} from "../lib/certificate-template-snapshots";
+  CERTIFICATE_ISSUANCE_UNAVAILABLE_CODE,
+  CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
+} from "../lib/certificate-issuance-availability";
 import {
   executeCompiledMethod,
   type CalculationEngineLike,
@@ -121,7 +121,6 @@ import {
   methodInputFieldsFromSnapshot,
   methodSnapshotDisplay,
   isCompiledMethod,
-  certificateTemplateSnapshotFromUnknown,
   buildLocalJobFileUrl,
   checkEnvironmentWithinLimits,
   findMissingRequiredAssetSpecs,
@@ -1089,6 +1088,9 @@ export const jobsRouter = new Hono<{
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
         scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
         scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
+        // §7.8.2.1(n) — the worksheet prefills from this, so it must be in the
+        // detail projection or a saved deviation looks like it never persisted.
+        methodDeviations: calibrationJob.methodDeviations,
         assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
@@ -2081,6 +2083,13 @@ export const jobsRouter = new Hono<{
           calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: newStatus,
           ...(nextPerformedAt ? { performedAt: nextPerformedAt } : {}),
+          // §7.8.2.1(n). Absent = untouched: the worksheet auto-saves and a
+          // partial payload must not wipe a deviation already recorded.
+          // Explicit null clears it; empty/whitespace normalizes to null so a
+          // blank box never prints an empty heading on the certificate.
+          ...(input.methodDeviations === undefined
+            ? {}
+            : { methodDeviations: input.methodDeviations?.trim() || null }),
         })
         .where(eq(calibrationJob.id, id))
         .returning();
@@ -2100,6 +2109,17 @@ export const jobsRouter = new Hono<{
               : undefined,
           data: { old: existing.data, new: nextData },
           results: { old: existing.results, new: nextResults },
+          // §7.8.2.1(n) is printed on the certificate, so a change to it is
+          // evidence an assessor may ask about. Logged only when it moved.
+          methodDeviations:
+            input.methodDeviations !== undefined &&
+            (input.methodDeviations?.trim() || null) !==
+              existing.methodDeviations
+              ? {
+                  old: existing.methodDeviations,
+                  new: input.methodDeviations?.trim() || null,
+                }
+              : undefined,
           officialExecution: officialExecution.execution
             ? {
                 methodFingerprint:
@@ -2233,15 +2253,11 @@ export const jobsRouter = new Hono<{
             },
             400,
           );
-        case "certificate_template_required":
+        case "certificate_issuance_unavailable":
           return c.json(
             {
-              error:
-                result.reason === "template_unpublished"
-                  ? "O modelo de certificado vinculado ao método não possui versão publicada. Publique uma versão do modelo antes de aprovar."
-                  : "O método desta calibração não possui modelo de certificado vinculado. Vincule um modelo publicado ao método antes de aprovar.",
-              code: "CERTIFICATE_TEMPLATE_REQUIRED",
-              reason: result.reason,
+              error: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
+              code: CERTIFICATE_ISSUANCE_UNAVAILABLE_CODE,
             },
             422,
           );
@@ -2560,22 +2576,6 @@ export const jobsRouter = new Hono<{
         generatedAt: new Date(),
         performedBy: session.user.id,
       });
-      const amendmentTemplateSnapshot =
-        certificateTemplateSnapshotFromUnknown(
-          originalJob.certificateTemplateSnapshot,
-        ) ??
-        (await (async () => {
-          // Amendment of a job frozen before per-method templates (0104):
-          // resolve from the original's method; when even that is unlinked,
-          // leave null — the amendment starts in DRAFT and its own approval
-          // enforces the link before anything renders.
-          const resolved = await resolveMethodCertificateTemplate({
-            organizationId: originalJob.organizationId,
-            methodId: originalJob.methodSnapshot?.methodId ?? null,
-          });
-          return resolved.ok ? resolved.snapshot : null;
-        })());
-
       // Create new job as a clone of the original
       const [amendedJob] = await db
         .insert(calibrationJob)
@@ -2591,15 +2591,12 @@ export const jobsRouter = new Hono<{
           technicianId: originalJob.technicianId,
           methodSnapshot: originalJob.methodSnapshot,
           standardsSnapshot: originalJob.standardsSnapshot,
-          certificateTemplateId:
-            originalJob.certificateTemplateId ??
-            amendmentTemplateSnapshot?.id ??
-            null,
-          certificateTemplateSnapshot:
-            originalJob.certificateTemplateSnapshot ??
-            (amendmentTemplateSnapshot
-              ? serializeCertificateTemplateSnapshot(amendmentTemplateSnapshot)
-              : null),
+          // Carried forward verbatim as a historical record of what the
+          // superseded certificate rendered from. Nothing resolves it any
+          // more — the amendment cannot be approved until the fixed layouts
+          // land (#865), and it will render with whatever layout is current
+          // then, not with the original's XLSX template.
+          certificateTemplateSnapshot: originalJob.certificateTemplateSnapshot,
           status: "DRAFT", // Start in DRAFT for corrections
           dueDate: originalJob.dueDate,
           data: originalJob.data, // Clone calibration data

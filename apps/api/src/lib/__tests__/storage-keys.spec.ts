@@ -11,7 +11,6 @@ import {
   getYear,
   getYearMonth,
   issuedCertificatePdfKey,
-  issuedCertificateXlsxKey,
   jobLabelKey,
   memberSignatureKey,
   organizationLogoKey,
@@ -21,8 +20,6 @@ import {
   slugify,
   standardCertificateKey,
   syncAttachmentKey,
-  templatePreviewKey,
-  templateXlsxKey,
 } from "@calibra-facil/shared/storage-keys";
 
 const ORG = {
@@ -38,7 +35,6 @@ describe("bucketFor", () => {
       "SERVICE_ORDER_DOC",
       "JOB_LABEL",
       "DESKTOP_CERTIFICATE",
-      "TEMPLATE_PREVIEW",
       "STANDARD_DOC",
       "SYNC_ATTACHMENT",
     ] as const) {
@@ -48,7 +44,6 @@ describe("bucketFor", () => {
 
   it("routes branding/media to the media bucket", () => {
     for (const category of [
-      "TEMPLATE_XLSX",
       "ORG_LOGO",
       "SIGNATURE",
       "AVATAR",
@@ -142,12 +137,6 @@ describe("issued certificate keys", () => {
     });
   });
 
-  it("builds the matching xlsx key (same base, .xlsx)", () => {
-    expect(issuedCertificateXlsxKey(params).key).toBe(
-      `org/${PART}/2026/jobs/CAL-2026-9001/issued/issued-123/cal-2026-9001-2026-acai-cia-ltda-bal-01-toledo.xlsx`,
-    );
-  });
-
   it("omits missing descriptive fields", () => {
     expect(
       issuedCertificatePdfKey({
@@ -226,15 +215,6 @@ describe("service order doc keys (month-partitioned)", () => {
 });
 
 describe("other documents-bucket keys", () => {
-  it("template preview", () => {
-    expect(
-      templatePreviewKey({ org: ORG, previewId: 42, extension: "pdf" }),
-    ).toEqual({
-      bucket: "documents",
-      key: `org/${PART}/certificate-template-previews/42/preview.pdf`,
-    });
-  });
-
   it("standard certificate", () => {
     expect(
       standardCertificateKey({
@@ -263,20 +243,6 @@ describe("other documents-bucket keys", () => {
 });
 
 describe("media-bucket keys", () => {
-  it("template xlsx source", () => {
-    expect(
-      templateXlsxKey({
-        org: ORG,
-        templateId: 7,
-        version: 3,
-        uniqueId: "uuid-1",
-      }),
-    ).toEqual({
-      bucket: "media",
-      key: `certificate-templates/xlsx/${PART}/7/v3-uuid-1.xlsx`,
-    });
-  });
-
   it("organization logo", () => {
     expect(
       organizationLogoKey({

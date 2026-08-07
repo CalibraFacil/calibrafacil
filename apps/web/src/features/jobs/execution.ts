@@ -289,6 +289,8 @@ export interface JobData {
   environmentalSnapshot?: EnvironmentalSnapshotData | null
   calibrationLocationSnapshot?: CalibrationLocationSnapshot | null
   calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null
+  /** ISO/IEC 17025 §7.8.2.1(n) — deviations from the method as executed. */
+  methodDeviations?: string | null
 }
 
 export interface CompiledMethodSnapshot {
@@ -780,6 +782,7 @@ export function buildExecutionMutationPayload({
   calibrationPhases,
   performedAt,
   backdateReason,
+  methodDeviations,
 }: {
   selectedStandardIds: number[]
   normalizedData: Record<string, unknown>
@@ -789,6 +792,7 @@ export function buildExecutionMutationPayload({
   calibrationPhases: ReturnType<typeof buildCalibrationPhasesPayload>
   performedAt?: string
   backdateReason?: string
+  methodDeviations?: string | null
 }) {
   return {
     selectedStandardIds: buildSelectedStandardPayload(
@@ -806,6 +810,9 @@ export function buildExecutionMutationPayload({
     calibrationPhases,
     ...(performedAt !== undefined ? { performedAt } : {}),
     ...(backdateReason !== undefined ? { backdateReason } : {}),
+    // §7.8.2.1(n). Always sent from the worksheet so clearing the box clears
+    // the stored value; the API treats absent as "leave untouched".
+    methodDeviations: methodDeviations?.trim() || null,
   }
 }
 

@@ -29,8 +29,12 @@ export async function generateLocalCertificateDraft(
     throw new Error("Job nao encontrado");
   }
 
+  // The XLSX template this message used to name no longer exists (#865): the
+  // lab-authored path was removed and the fixed system layouts are not wired
+  // yet. Telling an operator to publish a template would send them looking for
+  // a screen that is gone, so say what is actually true.
   throw new Error(
-    "Rascunho local de certificado indisponivel: certificados agora exigem template XLSX publicado",
+    "Rascunho local de certificado indisponivel: o layout do certificado esta em redesenho e nenhum certificado pode ser emitido no momento.",
   );
 }
 

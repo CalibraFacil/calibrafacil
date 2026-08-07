@@ -994,11 +994,6 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "setCertificateTemplate",
-          "namespace": "methods",
-          "policy": "cloud-only",
-        },
-        {
           "method": "createNewVersion",
           "namespace": "methods",
           "policy": "cloud-only",
@@ -1656,71 +1651,6 @@ describe("client runtime data policy registry", () => {
         {
           "method": "removeReading",
           "namespace": "spc",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "list",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "create",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "update",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "archive",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "duplicate",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "setDefault",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getXlsxVersion",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "uploadXlsx",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "validateXlsx",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "updateXlsxBindings",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createXlsxPreview",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getXlsxPreview",
-          "namespace": "certificateTemplates",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "publishXlsx",
-          "namespace": "certificateTemplates",
           "policy": "cloud-only",
         },
         {
@@ -3085,123 +3015,6 @@ describe("entity labels runtime adapter", () => {
     await expect(
       desktopClient.entityLabels.getCompetence(30),
     ).resolves.toBeNull();
-  });
-});
-
-describe("certificate templates XLSX runtime adapter", () => {
-  it("routes XLSX operations through the cloud API facade", async () => {
-    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    const fetchMock: typeof fetch = async (input, init) => {
-      fetchCalls.push([input, init]);
-      const url = String(input);
-
-      if (url.endsWith("/upload-xlsx")) {
-        return Response.json({
-          item: { id: 10 },
-          analysis: {},
-          bindingManifest: {},
-        });
-      }
-      if (url.endsWith("/validate")) {
-        return Response.json({
-          item: { id: 10 },
-          analysis: {},
-          validation: { ok: true, warnings: [] },
-        });
-      }
-      if (url.endsWith("/bindings")) {
-        return Response.json({ item: { id: 10 } });
-      }
-      if (url.endsWith("/preview")) {
-        return Response.json({ item: { id: 20 } });
-      }
-      if (url.endsWith("/previews/20")) {
-        return Response.json({ item: { status: "ready" } });
-      }
-      if (url.endsWith("/publish")) {
-        return Response.json({ item: { id: 10, status: "published" } });
-      }
-      if (url.endsWith("/assignments")) {
-        return Response.json({ item: { id: 30 } });
-      }
-      return Response.json({
-        item: { id: 10 },
-        analysis: {},
-        bindingManifest: {},
-      });
-    };
-    const client = createCloudApiClient({
-      baseUrl: "https://api.example.test",
-      activeUnitProvider: () => "20",
-      fetch: fetchMock,
-    });
-
-    await client.certificateTemplates.getXlsxVersion(1, 10);
-    await client.certificateTemplates.uploadXlsx(
-      1,
-      new Blob(["xlsx"], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }),
-      { fileName: "template.xlsx" },
-    );
-    await client.certificateTemplates.validateXlsx(1, 10);
-    await client.certificateTemplates.updateXlsxBindings(1, 10, {
-      manifest: { scalarBindings: [] },
-    });
-    await client.certificateTemplates.createXlsxPreview(1, 10, {
-      sampleData: {},
-    });
-    await client.certificateTemplates.getXlsxPreview(1, 10, 20);
-    await client.certificateTemplates.publishXlsx(1, 10);
-
-    expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "https://api.example.test/api/certificate-templates/1/versions/10",
-      "https://api.example.test/api/certificate-templates/1/versions/upload-xlsx",
-      "https://api.example.test/api/certificate-templates/1/versions/10/validate",
-      "https://api.example.test/api/certificate-templates/1/versions/10/bindings",
-      "https://api.example.test/api/certificate-templates/1/versions/10/preview",
-      "https://api.example.test/api/certificate-templates/1/versions/10/previews/20",
-      "https://api.example.test/api/certificate-templates/1/versions/10/publish",
-    ]);
-    expect(fetchCalls.map(([, init]) => init?.method)).toEqual([
-      "GET",
-      "POST",
-      "POST",
-      "PATCH",
-      "POST",
-      "GET",
-      "POST",
-    ]);
-    expect(
-      fetchCalls.map(([, init]) =>
-        new Headers(init?.headers).get("x-active-unit-id"),
-      ),
-    ).toEqual(["20", "20", "20", "20", "20", "20", "20"]);
-    expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(formDataBody(fetchCalls[1]?.[1]).get("xlsx")).toBeInstanceOf(Blob);
-    expect(new Headers(fetchCalls[3]?.[1]?.headers).get("Content-Type")).toBe(
-      "application/json",
-    );
-  });
-
-  it("keeps XLSX template operations cloud-only in the desktop adapter", async () => {
-    const client = createDesktopApiClient({
-      baseUrl: "http://127.0.0.1:4317",
-      fetch: async () => {
-        throw new Error("fetch should not be called");
-      },
-    });
-
-    await expect(
-      client.certificateTemplates.getXlsxVersion(1, 10),
-    ).rejects.toThrow(
-      "Templates de certificado requer a API web/nuvem neste momento.",
-    );
-    await expect(
-      client.certificateTemplates.uploadXlsx(1, new Blob(["xlsx"])),
-    ).rejects.toThrow(
-      "Templates de certificado requer a API web/nuvem neste momento.",
-    );
   });
 });
 

@@ -42,6 +42,12 @@ export type SaveLocalExecutionInput = LocalJobCommandInput & {
   };
   calibrationLocationSnapshot?: JsonRecord | null;
   calibrationPhaseSnapshot?: JsonRecord | null;
+  /**
+   * ISO/IEC 17025 §7.8.2.1(n). Absent leaves the stored value untouched (the
+   * worksheet auto-saves and a partial payload must not wipe it); explicit
+   * null clears it. Mirrors the cloud POST /jobs/:id/execute contract.
+   */
+  methodDeviations?: string | null;
   requireResults?: boolean;
 };
 
@@ -278,6 +284,7 @@ SET
   environmental_snapshot_json = @environmentalSnapshotJson,
   calibration_location_snapshot_json = @calibrationLocationSnapshotJson,
   calibration_phase_snapshot_json = @calibrationPhaseSnapshotJson,
+  method_deviations = @methodDeviations,
   status = @status,
   submitted_at = @submittedAt,
   updated_at = @updatedAt,
@@ -300,6 +307,10 @@ WHERE id = @id
         calibrationPhaseSnapshotJson: JSON.stringify(
           calibrationPhaseSnapshot ?? null,
         ),
+        methodDeviations:
+          input.methodDeviations === undefined
+            ? existing.method_deviations
+            : input.methodDeviations?.trim() || null,
         status: nextStatus,
         submittedAt: nextStatus === "REVIEW" ? now : existing.submitted_at,
         updatedAt: now,
@@ -323,6 +334,10 @@ WHERE id = @id
       environmentalSnapshot,
       calibrationLocationSnapshot,
       calibrationPhaseSnapshot,
+      methodDeviations:
+        input.methodDeviations === undefined
+          ? existing.method_deviations
+          : input.methodDeviations?.trim() || null,
       status: nextStatus,
     };
     if (existing.remote_id !== null) {
@@ -722,6 +737,7 @@ function toJobDetail(job: LocalJobRow) {
     scopeComplianceStatus: job.scope_compliance_status,
     scopeComplianceFindings: parseJson(job.scope_compliance_findings_json),
     scopeOverrideJustification: job.scope_override_justification,
+    methodDeviations: job.method_deviations,
     dueDate: job.due_date,
     performedAt: job.performed_at,
     submittedAt: job.submitted_at,
@@ -1326,6 +1342,7 @@ type LocalJobRow = {
   scope_compliance_status: string | null;
   scope_compliance_findings_json: string | null;
   scope_override_justification: string | null;
+  method_deviations: string | null;
   status: LocalJobStatus;
   due_date: string | null;
   performed_at: string | null;

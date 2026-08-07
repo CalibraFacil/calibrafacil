@@ -21,7 +21,6 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAssetTypesData } from '@/features/assets/queries'
-import { useCertificateTemplatesData } from '@/features/certificate-templates/queries'
 import { FormField as Field } from '@/shared/forms/form-field'
 import {
   ACTION_BUTTON_CLASS,
@@ -182,11 +181,6 @@ export function MethodBuilder({
     useState<MethodPreviewResult | null>(null)
 
   const { data: assetTypesData } = useAssetTypesData()
-  const templatesQuery = useCertificateTemplatesData({ enabled: true })
-  const certificateTemplateOptions = (templatesQuery.data?.items ?? []).filter(
-    (template): template is typeof template & { id: number } =>
-      template.id !== null && template.status === 'ACTIVE',
-  )
 
   const compileMutation = useMutation({
     mutationFn: compileMethodDraft,
@@ -514,50 +508,6 @@ export function MethodBuilder({
                     />
                   </Field>
                 </div>
-                <Field label="Modelo de certificado">
-                  <Select
-                    value={
-                      draft.certificateTemplateId
-                        ? String(draft.certificateTemplateId)
-                        : 'none'
-                    }
-                    onValueChange={(value) =>
-                      updateDraft({
-                        certificateTemplateId:
-                          value === 'none' ? null : Number(value),
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <span>
-                        {draft.certificateTemplateId
-                          ? (certificateTemplateOptions.find(
-                              (template) =>
-                                template.id === draft.certificateTemplateId,
-                            )?.name ?? 'Modelo selecionado')
-                          : 'Sem modelo'}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem modelo</SelectItem>
-                      {certificateTemplateOptions.map((template) => (
-                        <SelectItem
-                          key={template.id}
-                          value={String(template.id)}
-                        >
-                          {template.name}
-                          {template.currentXlsxVersion?.status !== 'PUBLISHED'
-                            ? ' · sem versão publicada'
-                            : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Certificados deste método são emitidos com este modelo. Sem
-                    o vínculo, a aprovação de calibrações é bloqueada.
-                  </p>
-                </Field>
                 <div className="md:col-span-2 flex items-start gap-3 rounded-lg border p-3">
                   <Switch
                     id="mb-accredited-scope"

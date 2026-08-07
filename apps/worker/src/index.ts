@@ -1,11 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { flushWorkerErrorReporter, reportWorkerError } from "./observability";
 import { processSpcRecompute } from "./spc-recompute";
 import { processEmailDomainHealth } from "./email-domain-health";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
-  AccreditationSealSvg,
   LabelHtml,
   type LabelData,
   OotNotificationHtml,
@@ -28,36 +27,11 @@ import { Workbook } from "@cj-tech-master/excelts";
 import React from "react";
 import QRCode from "qrcode";
 import {
-  buildCertificateData,
-  certificateImageContextFromJob,
-  renderEccentricityIndicatorSvgMarkup,
-  createConfiguredXlsxToPdfConverter,
-  ExcelTsCertificateWorkbookEngine,
-  fillCertificateWorkbook,
-  renderCertificateWorkbook,
-  validateCertificateXlsxBindingManifest,
-  type CertificateJobData,
-} from "@calibra-facil/certificate-xlsx-template";
-import {
   processMarketingContactSync,
   processPortalDigest,
   processScheduledNotifications,
 } from "./scheduled.js";
-import {
-  signAndTimestampPdf,
-  verifyPdf,
-  getIcpBrasilTrustAnchors,
-  decryptPassword,
-  decryptBinary,
-  type SignatureMetadata,
-  type VerifyPdfResult,
-  createCrlFetcher,
-} from "@calibra-facil/signing";
-import { resolveTsaConfig } from "./tsa-config.js";
-import { resolveSigningPolicy, SigningPolicyError } from "./signing-policy.js";
 
-/** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
-type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
 import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
@@ -66,26 +40,21 @@ import {
   formatSpecificationsForDisplay,
   type AuditPackBackgroundJobMessage,
   type BackgroundJobMessage,
-  type CertificateXlsxPreviewBackgroundJobMessage,
   type DocumentBackgroundJobMessage,
 } from "@calibra-facil/shared";
 import {
   getLogoKeyFromUrl,
   getYear,
   getYearMonth,
-  issuedCertificatePdfKey,
-  issuedCertificateXlsxKey,
   jobLabelKey,
   ootNotificationKey,
   portalAuditPackKey,
   serviceOrderDocKey,
-  templatePreviewKey,
   type OrgRef,
   type StorageBucket,
 } from "@calibra-facil/shared/storage-keys";
 import {
   notifyAuditPackReady,
-  notifyCertificateReady,
 } from "@calibra-facil/notifications";
 
 export interface R2BucketBinding {
@@ -127,13 +96,11 @@ export interface Env {
   APP_URL?: string;
 }
 
-// The certificate job snapshot shape (and everything derived from it) is
-// owned by @calibra-facil/certificate-xlsx-template; the worker only fetches
-// and persists it.
-type JobData = CertificateJobData;
+// Mirrors the API guard in lib/certificate-issuance-availability.ts. Both go
+// away in Phase 3, when the fixed layouts can render again (#865).
+const CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE =
+  "Emissão de certificado indisponível: o layout do certificado está em redesenho";
 
-const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
-  "O método desta calibração não possui modelo de certificado vinculado — vincule um modelo publicado ao método";
 
 export type QueueMessage = BackgroundJobMessage;
 
@@ -191,395 +158,27 @@ function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
   return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(Object.entries(value));
-}
-
-function prepareXlsxWorkbookForRender(input: Uint8Array): Uint8Array {
-  return input;
-}
-
-function parseSignatureMetadata(value: unknown): SignatureMetadata | undefined {
-  if (value == null) return undefined;
-
-  if (typeof value === "string") {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      return parseSignatureMetadata(parsed);
-    } catch {
-      return undefined;
-    }
-  }
-
-  const metadata = recordFromUnknown(value);
-  const signedAt = metadata.signedAt;
-  const signerCertificateSerial = metadata.signerCertificateSerial;
-  const signerName = metadata.signerName;
-  const signerCpfCnpj = metadata.signerCpfCnpj;
-  const pdfHash = metadata.pdfHash;
-  const ltvEnabled = metadata.ltvEnabled;
-  if (
-    typeof signedAt !== "string" ||
-    typeof signerCertificateSerial !== "string" ||
-    typeof signerName !== "string" ||
-    (signerCpfCnpj !== null && typeof signerCpfCnpj !== "string") ||
-    typeof pdfHash !== "string" ||
-    typeof ltvEnabled !== "boolean"
-  ) {
-    return undefined;
-  }
-
-  return {
-    signedAt,
-    signerCertificateSerial,
-    signerName,
-    signerCpfCnpj,
-    pdfHash,
-    ltvEnabled,
-  };
-}
-
-function escapeSvgText(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-async function fetchJobData(
-  client: Client,
-  jobId: number,
+async function resolveOrganizationLogoDataUrl(
   env: Env,
-): Promise<JobData | null> {
-  const result = await client.query(
-    `
-    SELECT
-      cj.job_id,
-      cj.certificate_name,
-      cj.unit_id,
-      cj.performed_at,
-      cj.approved_at,
-      cj.method_snapshot,
-      cj.asset_snapshot,
-      cj.standards_snapshot,
-      cj.environmental_snapshot,
-      cj.calibration_location_snapshot,
-      cj.calibration_phase_snapshot,
-      cj.certificate_template_id,
-      cj.certificate_template_snapshot,
-      cj.results,
-      cj.data,
-      cj.organization_id,
-      cj.approved_by,
-      cj.verification_token,
-      -- Amendment fields - ISO 17025 Clause 7.8.4.1
-      cj.supersedes_id,
-      cj.superseded_by_id,
-      cj.amendment_number,
-      cj.amendment_reason,
-      -- #427 Phase 1: non-null = issuance downgraded to non-accredited
-      cj.scope_override_justification,
-      -- Organization (Lab) info
-      o.name as lab_name,
-      o.cnpj as lab_cnpj,
-      o.accreditation_number as lab_accreditation_number,
-      o.accreditation_body as lab_accreditation_body,
-      o.accreditation_active as lab_accreditation_active,
-      o.accreditation_valid_from as lab_accreditation_valid_from,
-      o.accreditation_valid_until as lab_accreditation_valid_until,
-      o.street as lab_street,
-      o.number as lab_number,
-      o.complement as lab_complement,
-      o.neighbourhood as lab_neighbourhood,
-      o.city as lab_city,
-      o.state as lab_state,
-      o.cep as lab_cep,
-      o.phone as lab_phone,
-      o.email as lab_email,
-      o.website as lab_website,
-      o.logo as lab_logo,
-      o.slug as organization_slug,
-      o.technical_manager_name as lab_technical_manager_name,
-      o.technical_manager_title as lab_technical_manager_title,
-      -- Customer info (complete)
-      c.name as customer_name,
-      c.tax_id as customer_tax_id,
-      c.phone as customer_phone,
-      c.email as customer_email,
-      c.address as customer_address,
-      -- Asset info
-      a.name as asset_name,
-      a.serial_number,
-      a.tag,
-      a.model,
-      a.manufacturer,
-      -- Approver
-      u.name as approver_name,
-      -- Original job info (if this is an amendment)
-      original.job_id as original_job_id,
-      original.approved_at as original_approved_at,
-      service_order_link.inmetro_repair_mark_number,
-      snapshot_method.accredited_scope as method_accredited_scope_current
-    FROM calibration_job cj
-    LEFT JOIN organization o ON cj.organization_id = o.id
-    LEFT JOIN calibration_method snapshot_method
-      ON snapshot_method.id = NULLIF(cj.method_snapshot->>'methodId', '')::int
-      AND snapshot_method.organization_id = cj.organization_id
-    LEFT JOIN customer c ON cj.customer_id = c.id
-    LEFT JOIN asset a ON cj.asset_id = a.id
-    LEFT JOIN "user" u ON cj.approved_by = u.id
-    LEFT JOIN calibration_job original ON cj.supersedes_id = original.id
-    LEFT JOIN LATERAL (
-      SELECT so.inmetro_repair_mark_number
-      FROM service_order_certificate_link socl
-      INNER JOIN service_order so ON so.id = socl.service_order_id
-      WHERE socl.certificate_job_id = cj.id
-      ORDER BY socl.linked_at DESC
-      LIMIT 1
-    ) service_order_link ON true
-    WHERE cj.id = $1
-    `,
-    [jobId],
-  );
-
-  if (result.rows.length === 0) return null;
-
-  const row = result.rows[0];
-
-  let certificateTemplateSnapshot = row.certificate_template_snapshot;
-  let certificateTemplateId = row.certificate_template_id;
-
-  if (!certificateTemplateSnapshot) {
-    const templateResult = await client.query(
-      `
-            SELECT id, name, slug, version
-            FROM certificate_template
-            WHERE organization_id = $1
-              AND is_default = true
-              AND status = 'ACTIVE'
-            LIMIT 1
-            `,
-      [row.organization_id],
-    );
-
-    const templateRow = templateResult.rows[0];
-    certificateTemplateSnapshot = templateRow
-      ? {
-          id: templateRow.id,
-          name: templateRow.name,
-          slug: templateRow.slug,
-          version: templateRow.version,
-        }
-      : {
-          id: null,
-          name: "Padrão do Sistema",
-          slug: "padrao-sistema",
-          version: 1,
-        };
-
-    certificateTemplateId = templateRow?.id ?? null;
-
-    await client.query(
-      `
-            UPDATE calibration_job
-            SET certificate_template_id = $2,
-                certificate_template_snapshot = $3::jsonb
-            WHERE id = $1
-            `,
-      [
-        jobId,
-        certificateTemplateId,
-        JSON.stringify(certificateTemplateSnapshot),
-      ],
-    );
-  }
-
-  const labLogoUrl = await resolveOrganizationLogoDataUrl(
-    env,
-    row.lab_logo,
-    jobId,
-  );
-
-  // Fetch approver's visual signature if exists
-  let approverSignatureUrl: string | null = null;
-  if (row.approved_by && row.organization_id) {
-    const sigResult = await client.query(
-      `
-            SELECT mvs.r2_key, mvs.content_type
-            FROM member_visual_signature mvs
-            INNER JOIN member m ON mvs.member_id = m.id
-            WHERE m.user_id = $1 AND mvs.organization_id = $2
-            `,
-      [row.approved_by, row.organization_id],
-    );
-
-    if (sigResult.rows.length > 0) {
-      const sigRow = sigResult.rows[0];
-      // Fetch signature from R2 and convert to base64 data URL
-      try {
-        const signatureObject = await getStoredObject(
-          env,
-          "media",
-          sigRow.r2_key,
-        );
-        if (signatureObject) {
-          const signatureBuffer = await signatureObject.arrayBuffer();
-          const base64 = arrayBufferToBase64(signatureBuffer);
-          approverSignatureUrl = `data:${sigRow.content_type};base64,${base64}`;
-        }
-      } catch (err) {
-        console.warn(`[JOB ${jobId}] Failed to fetch approver signature:`, err);
-      }
-    }
-  }
-
-  return {
-    jobId: row.job_id,
-    verificationToken: row.verification_token,
-    certificateName: row.certificate_name,
-    organizationId: row.organization_id,
-    organizationSlug: row.organization_slug,
-    unitId: row.unit_id,
-    performedAt: row.performed_at,
-    approvedAt: row.approved_at,
-    lab: {
-      name: row.lab_name || "Laboratório de Calibração",
-      cnpj: row.lab_cnpj,
-      accreditationNumber: row.lab_accreditation_number,
-      accreditationBody: row.lab_accreditation_body,
-      accreditationActive: row.lab_accreditation_active,
-      accreditationValidFrom: row.lab_accreditation_valid_from,
-      accreditationValidUntil: row.lab_accreditation_valid_until,
-      street: row.lab_street,
-      number: row.lab_number,
-      complement: row.lab_complement,
-      neighbourhood: row.lab_neighbourhood,
-      city: row.lab_city,
-      state: row.lab_state,
-      cep: row.lab_cep,
-      phone: row.lab_phone,
-      email: row.lab_email,
-      website: row.lab_website,
-      logo: labLogoUrl,
-      technicalManagerName: row.lab_technical_manager_name,
-      technicalManagerTitle: row.lab_technical_manager_title,
-    },
-    customer: {
-      name: row.customer_name,
-      taxId: row.customer_tax_id,
-      phone: row.customer_phone,
-      email: row.customer_email,
-      address: row.customer_address,
-    },
-    asset: {
-      name: row.asset_name,
-      serialNumber: row.serial_number,
-      tag: row.tag,
-      model: row.model,
-      manufacturer: row.manufacturer,
-    },
-    // Legacy/offline snapshots may predate the accredited-scope flag; fall
-    // back to the method's current flag so older jobs still seal correctly.
-    methodSnapshot: row.method_snapshot
-      ? {
-          ...row.method_snapshot,
-          accreditedScope:
-            row.method_snapshot.accreditedScope ??
-            row.method_accredited_scope_current ??
-            false,
-        }
-      : row.method_snapshot,
-    assetSnapshot: row.asset_snapshot,
-    // #427 Phase 1: a documented override downgrades the issuance to
-    // non-accredited; certificate-data suppresses the seal when set.
-    scopeOverrideJustification: row.scope_override_justification,
-    standardsSnapshot: row.standards_snapshot,
-    serviceOrder: {
-      inmetroRepairMarkNumber: row.inmetro_repair_mark_number,
-    },
-    environmentalSnapshot: row.environmental_snapshot,
-    calibrationLocationSnapshot: row.calibration_location_snapshot,
-    calibrationPhaseSnapshot: row.calibration_phase_snapshot,
-    certificateTemplateSnapshot,
-    data: row.data,
-    results: row.results,
-    approverName: row.approver_name,
-    approverSignatureUrl, // Visual signature as base64 data URL
-    // Amendment fields - ISO 17025 Clause 7.8.4.1
-    supersedesId: row.supersedes_id,
-    supersededById: row.superseded_by_id,
-    amendmentNumber: row.amendment_number,
-    amendmentReason: row.amendment_reason,
-    originalJobId: row.original_job_id,
-    originalApprovedAt: row.original_approved_at,
-  };
-}
-
-type CertificateTemplateSelection = {
-  templateId: number;
-  templateVersionId: number;
-  xlsxR2Key: string | null;
-  bindingManifest: unknown;
-  bindingManifestSha256: string | null;
-  renderPolicy: unknown;
-};
-
-async function fetchCertificateTemplateSelectionForJob(
-  client: Client,
+  logoUrl: string | null | undefined,
   jobId: number,
-): Promise<CertificateTemplateSelection | null> {
-  // One explicit link, no matching: the job's FROZEN method (snapshot, never
-  // the service's live method_id — services can be re-pointed after the job
-  // exists) owns a certificate template; render its latest PUBLISHED version.
-  const result = await client.query<{
-    template_id: number;
-    template_version_id: number;
-    xlsx_r2_key: string | null;
-    binding_manifest: unknown;
-    binding_manifest_sha256: string | null;
-    render_policy: unknown;
-  }>(
-    `
-      select
-        t.id as template_id,
-        v.id as template_version_id,
-        v.xlsx_r2_key,
-        v.binding_manifest,
-        v.binding_manifest_sha256,
-        v.render_policy
-      from calibration_job cj
-      inner join calibration_method m
-        on m.id = nullif(cj.method_snapshot->>'methodId', '')::int
-       and m.organization_id = cj.organization_id
-      inner join certificate_template t
-        on t.id = m.certificate_template_id
-       and t.organization_id = cj.organization_id
-       and t.status = 'ACTIVE'
-      inner join certificate_template_version v
-        on v.template_id = t.id
-       and v.status = 'PUBLISHED'
-      where cj.id = $1
-      order by v.version desc
-      limit 1
-    `,
-    [jobId],
-  );
-  const row = result.rows[0];
-  if (!row) return null;
+) {
+  const key = getLogoKeyFromUrl(logoUrl);
+  if (!key) return logoUrl ?? null;
 
-  return {
-    templateId: row.template_id,
-    templateVersionId: row.template_version_id,
-    xlsxR2Key: row.xlsx_r2_key,
-    bindingManifest: row.binding_manifest,
-    bindingManifestSha256: row.binding_manifest_sha256,
-    renderPolicy: row.render_policy,
-  };
+  try {
+    const logoObject = await getStoredObject(env, "media", key);
+    if (!logoObject) return logoUrl ?? null;
+
+    const logoBuffer = await logoObject.arrayBuffer();
+    const contentType =
+      logoObject.httpMetadata?.contentType ?? inferImageContentType(logoBuffer);
+    const base64 = arrayBufferToBase64(logoBuffer);
+    return `data:${contentType};base64,${base64}`;
+  } catch (err) {
+    console.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, err);
+    return logoUrl ?? null;
+  }
 }
 
 function inferImageContentType(buffer: ArrayBuffer) {
@@ -618,29 +217,6 @@ function inferImageContentType(buffer: ArrayBuffer) {
   return "application/octet-stream";
 }
 
-async function resolveOrganizationLogoDataUrl(
-  env: Env,
-  logoUrl: string | null | undefined,
-  jobId: number,
-) {
-  const key = getLogoKeyFromUrl(logoUrl);
-  if (!key) return logoUrl ?? null;
-
-  try {
-    const logoObject = await getStoredObject(env, "media", key);
-    if (!logoObject) return logoUrl ?? null;
-
-    const logoBuffer = await logoObject.arrayBuffer();
-    const contentType =
-      logoObject.httpMetadata?.contentType ?? inferImageContentType(logoBuffer);
-    const base64 = arrayBufferToBase64(logoBuffer);
-    return `data:${contentType};base64,${base64}`;
-  } catch (err) {
-    console.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, err);
-    return logoUrl ?? null;
-  }
-}
-
 /**
  * Convert ArrayBuffer to base64 string
  */
@@ -656,288 +232,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 /**
  * Signing certificate data fetched from database
  */
-interface SigningCertificateData {
-  encryptedP12: string;
-  encryptedPassword: string;
-  passwordIv: string;
-  subjectCn: string;
-}
-
-/** #644: the unit's signing-policy flag (organization_unit.require_signature). */
-async function fetchUnitRequireSignature(
-  client: Client,
-  organizationId: string,
-  unitId: number,
-): Promise<boolean> {
-  const result = await client.query(
-    `
-        SELECT require_signature
-        FROM organization_unit
-        WHERE id = $1 AND organization_id = $2
-        LIMIT 1
-        `,
-    [unitId, organizationId],
-  );
-  return result.rows[0]?.require_signature === true;
-}
-
-/**
- * Fetch organization's default signing certificate
- */
-async function fetchSigningCertificate(
-  client: Client,
-  organizationId: string,
-  unitId: number,
-): Promise<SigningCertificateData | null> {
-  const result = await client.query(
-    `
-        SELECT encrypted_p12, encrypted_password, password_iv, subject_cn
-        FROM organization_signing_certificate
-        WHERE organization_id = $1
-          AND unit_id = $2
-          AND is_active = true
-          AND is_default = true
-          AND valid_until > NOW()
-        LIMIT 1
-        `,
-    [organizationId, unitId],
-  );
-
-  if (result.rows.length === 0) return null;
-
-  const row = result.rows[0];
-  return {
-    encryptedP12: row.encrypted_p12,
-    encryptedPassword: row.encrypted_password,
-    passwordIv: row.password_iv,
-    subjectCn: row.subject_cn,
-  };
-}
-
-async function updateJobWithCertificate(
-  client: Client,
-  jobId: number,
-  certificateUrl: string,
-  userId: string,
-  signatureMetadata?: SignatureMetadata,
-  signatureVerdict?: StoredSignatureVerdict,
-  options: { preserveSignatureMetadata?: boolean } = {},
-): Promise<void> {
-  const now = new Date();
-
-  // Check if job is SUPERSEDED (being regenerated with watermark)
-  const statusResult = await client.query<{
-    status: string;
-    signature_metadata: unknown;
-  }>(`SELECT status, signature_metadata FROM calibration_job WHERE id = $1`, [
-    jobId,
-  ]);
-  const currentStatus = statusResult.rows[0]?.status;
-  const isSuperseded = currentStatus === "SUPERSEDED";
-  const shouldPreserveSignatureMetadata =
-    options.preserveSignatureMetadata === true &&
-    signatureMetadata === undefined;
-  const auditSignatureMetadata =
-    signatureMetadata ??
-    (shouldPreserveSignatureMetadata
-      ? parseSignatureMetadata(statusResult.rows[0]?.signature_metadata)
-      : undefined);
-
-  // The verdict travels with the signature: write it only when a fresh one is
-  // supplied, otherwise keep whatever is stored (regeneration / watermark paths
-  // pass no verdict and must not wipe it).
-  const writeSignatureVerdict = signatureVerdict !== undefined;
-
-  // Only update status to APPROVED if not already SUPERSEDED
-  // SUPERSEDED jobs are being regenerated with watermark and should keep their status
-  await client.query(
-    `
-    UPDATE calibration_job
-    SET
-      status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
-      certificate_url = $2,
-      signature_metadata = CASE WHEN $5 THEN signature_metadata ELSE $3::jsonb END,
-      signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
-      updated_at = $4
-    WHERE id = $1
-    `,
-    [
-      jobId,
-      certificateUrl,
-      signatureMetadata ? JSON.stringify(signatureMetadata) : null,
-      now,
-      shouldPreserveSignatureMetadata,
-      writeSignatureVerdict,
-      signatureVerdict ? JSON.stringify(signatureVerdict) : null,
-    ],
-  );
-
-  // Log appropriate action based on whether this is a watermark regeneration
-  const action = isSuperseded
-    ? "certificate_watermarked"
-    : "certificate_generated";
-  const statusChange = isSuperseded
-    ? { status: "SUPERSEDED (watermark added)" }
-    : { status: { old: "GENERATING_PDF", new: "APPROVED" } };
-
-  await client.query(
-    `
-    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at)
-    VALUES ($1, $2, $3, $4, $5)
-    `,
-    [
-      jobId,
-      action,
-      JSON.stringify({
-        ...statusChange,
-        certificateUrl: { old: null, new: certificateUrl },
-        signatureMetadata: auditSignatureMetadata
-          ? { signed: true, signerName: auditSignatureMetadata.signerName }
-          : { signed: false },
-      }),
-      userId,
-      now,
-    ],
-  );
-
-  if (!isSuperseded) {
-    try {
-      await notifyCertificateReady(jobId);
-    } catch (error) {
-      console.error(
-        `[JOB ${jobId}] Failed to send certificate ready notification:`,
-        error,
-      );
-    }
-  }
-}
-
-async function signPdfWithUnitCertificate(
-  env: Env,
-  jobId: number,
-  organizationId: string | null | undefined,
-  unitId: number | null | undefined,
-  pdfBuffer: Buffer,
-): Promise<{
-  pdfBuffer: Buffer;
-  signatureMetadata?: SignatureMetadata;
-  signatureVerdict?: StoredSignatureVerdict;
-}> {
-  const signStart = performance.now();
-  if (!organizationId) {
-    console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
-  }
-  if (!unitId) {
-    console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
-  }
-
-  // #644 (CMP-01): the unit's signing policy governs the missing-cert /
-  // missing-master-key paths. Unresolvable flag (legacy job without unit)
-  // keeps the pre-#644 permissive behavior.
-  const requireSignature =
-    organizationId && unitId
-      ? await withDbClient(env, (client) =>
-          fetchUnitRequireSignature(client, organizationId, unitId),
-        )
-      : false;
-
-  const signingCert =
-    env.SIGNING_MASTER_KEY && organizationId && unitId
-      ? await withDbClient(env, (client) =>
-          fetchSigningCertificate(client, organizationId, unitId),
-        )
-      : null;
-
-  const policy = resolveSigningPolicy({
-    hasMasterKey: Boolean(env.SIGNING_MASTER_KEY),
-    hasCertificate: signingCert !== null,
-    requireSignature,
-  });
-  if (policy.action === "FAIL") {
-    throw new SigningPolicyError(policy.reason);
-  }
-  if (policy.action === "EMIT_UNSIGNED" || !signingCert) {
-    // Visible, not silent: signature_metadata stays NULL, so the portal and
-    // the public verification page render the UNSIGNED verdict.
-    console.warn(
-      `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
-    );
-    return { pdfBuffer };
-  }
-
-  // Narrowing only: the certificate fetch above is gated on the master key,
-  // so a non-null signingCert implies the key is present.
-  const masterKey = env.SIGNING_MASTER_KEY;
-  if (!masterKey) {
-    return { pdfBuffer };
-  }
-
-  try {
-    const password = decryptPassword(
-      signingCert.encryptedPassword,
-      signingCert.passwordIv,
-      masterKey,
-    );
-    const p12Buffer = decryptBinary(signingCert.encryptedP12, masterKey);
-    // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
-    // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
-    // byte-identical to the pre-#646 AD-RB signature.
-    const result = await signAndTimestampPdf(pdfBuffer, {
-      p12Buffer,
-      password,
-      reason: "Certificado de Calibracao - CalibraFacil",
-      location: "Brasil",
-      enableLtv: false,
-      timestamp: resolveTsaConfig(env),
-    });
-
-    console.log(
-      `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
-    );
-
-    // Precompute the at-issue signature-integrity verdict so the public
-    // verification page can serve it without re-downloading + re-verifying the
-    // PDF on every hit. Best-effort — verifyPdf never throws, but a verdict
-    // failure must never block issuance.
-    let signatureVerdict: StoredSignatureVerdict | undefined;
-    try {
-      const verdict = await verifyPdf(result.signedPdf, {
-        expectedSha256: result.metadata.pdfHash,
-        trustAnchors: getIcpBrasilTrustAnchors(),
-        // #646 fase b: best-effort revocation at issue time (verdict degrades
-        // to revocationChecked=false on network trouble; never blocks issuance
-        // since this whole precompute is already best-effort).
-        fetchCrl: createCrlFetcher(),
-        checkDate: new Date(result.metadata.signedAt),
-      });
-      signatureVerdict = { ...verdict, computedAt: result.metadata.signedAt };
-      console.log(`[JOB ${jobId}] verifyPdf: overall=${verdict.overall}`);
-    } catch (verifyError) {
-      console.error(`[JOB ${jobId}] verifyPdf failed:`, verifyError);
-    }
-
-    return {
-      pdfBuffer: Buffer.from(result.signedPdf),
-      signatureMetadata: result.metadata,
-      signatureVerdict,
-    };
-  } catch (signError) {
-    // #644 (REQ-CMP-SIGN-001/002): a configured certificate that fails to sign
-    // ALWAYS fails the emission — the job goes REJECTED with a named reason and
-    // neither the R2 upload, the APPROVED transition nor notifyCertificateReady
-    // (all downstream of this call) can run. Includes #646's TIMESTAMP_FAILED.
-    console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
-    if (signError instanceof SigningPolicyError) {
-      throw signError;
-    }
-    const detail =
-      signError instanceof Error ? signError.message : String(signError);
-    throw new SigningPolicyError(
-      `Falha na assinatura digital do certificado: ${detail}`,
-    );
-  }
-}
-
 async function setJobError(
   client: Client,
   jobId: number,
@@ -1897,47 +1191,37 @@ async function generatePdfFromHtml(
  * Process a single calibration-certificate job
  */
 async function processJob(
-  env: Env,
+  _env: Env,
   jobId: number,
-  userId: string,
+  _userId: string,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  const totalStart = performance.now();
-  console.log(`[JOB ${jobId}] Starting`);
-
-  try {
-    // 1. Fetch job data
-    const dbFetchStart = performance.now();
-    const job = await withDbClient(env, (client) =>
-      fetchJobData(client, jobId, env),
-    );
-    console.log(
-      `[JOB ${jobId}] fetchJobData: ${Math.round(performance.now() - dbFetchStart)}ms`,
-    );
-
-    if (!job) {
-      return { success: false, error: "Job not found" };
-    }
-
-    const selection = await withDbClient(env, (client) =>
-      fetchCertificateTemplateSelectionForJob(client, jobId),
-    );
-    if (selection) {
-      return processXlsxIssuedCertificate(env, jobId, job, userId, selection);
-    }
-
-    const totalMs = Math.round(performance.now() - totalStart);
-    console.warn(
-      `[JOB ${jobId}] ${CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE} (${totalMs}ms)`,
-    );
-    return {
-      success: false,
-      error: CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
-    };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[JOB ${jobId}] Error:`, errorMsg);
-    return { success: false, error: errorMsg };
-  }
+  // The lab-authored XLSX renderer is gone and the fixed system layouts that
+  // replace it are not built yet (#865), so there is nothing to render with.
+  //
+  // PHASE 3 RECOVERY: the SQL projection that built the certificate snapshot
+  // (`fetchJobData`, ~220 lines joining lab, customer, asset, method snapshot,
+  // standards, environmental conditions, approver signature and logo) was
+  // deleted here rather than left dead. It is the natural input to
+  // `buildCertificateData` from @calibra-facil/certificate-data and the new
+  // renderer will want it close to verbatim. Recover with:
+  //     git show abfea552:apps/worker/src/index.ts | sed -n '/^async function fetchJobData/,/^async function /p'
+  //
+  // The API blocks approval for exactly this reason, so no NEW certificate
+  // message should reach here. This path exists for messages already in the
+  // queue when the change deployed, and for a re-drain of an old one.
+  //
+  // Returning success:false makes the caller throw, which queue-runtime maps
+  // to message.retry() -> 5s*2^n backoff until attempts are exhausted. That is
+  // deliberate but worth naming: an in-flight message will retry a handful of
+  // times before it dies, rewriting the job error each round. Production has
+  // no certificate messages in flight (one certificate has ever been issued),
+  // so the cost is a few log lines rather than a storm. Phase 3 restores the
+  // renderer and the whole branch goes away.
+  console.warn(`[JOB ${jobId}] ${CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE}`);
+  return {
+    success: false,
+    error: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
+  };
 }
 
 // =============================================================================
@@ -2152,18 +1436,6 @@ async function processOotNotification(
   }
 }
 
-function isDocumentMessage(
-  message: BackgroundJobMessage,
-): message is DocumentBackgroundJobMessage {
-  return (
-    message.type !== "INTEGRATION_SYNC" &&
-    message.type !== "SCHEDULED_NOTIFICATIONS" &&
-    message.type !== "PORTAL_DIGEST" &&
-    message.type !== "MARKETING_CONTACT_SYNC" &&
-    message.type !== "CERTIFICATE_XLSX_PREVIEW"
-  );
-}
-
 function isServiceOrderDocumentMessage(
   message: DocumentBackgroundJobMessage,
 ): message is Extract<
@@ -2181,23 +1453,6 @@ function isServiceOrderDocumentMessage(
     message.type === "SERVICE_ORDER_TAG" ||
     message.type === "SERVICE_ORDER_QUOTE" ||
     message.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
-  );
-}
-
-function isCalibrationCertificateMessage(
-  message: BackgroundJobMessage,
-): message is DocumentBackgroundJobMessage & {
-  type?: "CERTIFICATE";
-  jobId: number;
-  userId: string;
-} {
-  if (!isDocumentMessage(message)) return false;
-  if (isServiceOrderDocumentMessage(message)) return false;
-
-  return (
-    (message.type === undefined || message.type === "CERTIFICATE") &&
-    typeof message.jobId === "number" &&
-    typeof message.userId === "string"
   );
 }
 
@@ -2274,462 +1529,7 @@ async function processDocumentMessage(
   }
 }
 
-async function processXlsxCertificateMessageIfSelected(
-  env: Env,
-  message: BackgroundJobMessage,
-): Promise<boolean> {
-  if (!isCalibrationCertificateMessage(message)) {
-    return false;
-  }
 
-  const job = await withDbClient(env, (client) =>
-    fetchJobData(client, message.jobId, env),
-  );
-
-  if (!job) {
-    await withDbClient(env, (client) =>
-      setJobError(client, message.jobId, "Job not found", message.userId),
-    );
-    throw new Error("Job not found");
-  }
-
-  const selection = await withDbClient(env, (client) =>
-    fetchCertificateTemplateSelectionForJob(client, message.jobId),
-  );
-
-  if (!selection) {
-    return false;
-  }
-
-  const result = await processXlsxIssuedCertificate(
-    env,
-    message.jobId,
-    job,
-    message.userId,
-    selection,
-  );
-
-  if (!result.success) {
-    await withDbClient(env, (client) =>
-      setJobError(
-        client,
-        message.jobId,
-        result.error || "Unknown error",
-        message.userId,
-      ),
-    ).catch((dbError) => {
-      console.error(
-        `[JOB ${message.jobId}] Failed to record XLSX error:`,
-        dbError,
-      );
-    });
-    throw new Error(result.error ?? "XLSX certificate generation failed");
-  }
-
-  return true;
-}
-
-async function processXlsxPreviewJob(
-  env: Env,
-  message: CertificateXlsxPreviewBackgroundJobMessage,
-) {
-  const totalStart = performance.now();
-  console.log(`[XLSX PREVIEW ${message.previewId}] Starting`);
-
-  try {
-    const preview = await withDbClient(env, async (client) => {
-      const result = await client.query<{
-        id: number;
-        organization_id: string;
-        organization_slug: string | null;
-        sample_data: Record<string, unknown> | null;
-        xlsx_r2_key: string | null;
-        xlsx_sha256: string | null;
-        binding_manifest: unknown;
-        binding_manifest_sha256: string | null;
-      }>(
-        `
-          select
-            p.id,
-            p.organization_id,
-            o.slug as organization_slug,
-            p.sample_data,
-            v.xlsx_r2_key,
-            v.xlsx_sha256,
-            v.binding_manifest,
-            v.binding_manifest_sha256
-          from certificate_template_preview p
-          inner join certificate_template_version v
-            on v.id = p.template_version_id
-          inner join organization o
-            on o.id = p.organization_id
-          where p.id = $1
-            and p.template_version_id = $2
-        `,
-        [message.previewId, message.templateVersionId],
-      );
-      return result.rows[0] ?? null;
-    });
-
-    if (!preview) {
-      throw new Error("XLSX preview not found");
-    }
-
-    if (preview.xlsx_r2_key === null) {
-      throw new Error("xlsx template version is missing its artifacts");
-    }
-
-    const sourceObject = await getStoredObject(
-      env,
-      "media",
-      preview.xlsx_r2_key,
-    );
-    if (!sourceObject) {
-      throw new Error(`Template XLSX not found: ${preview.xlsx_r2_key}`);
-    }
-
-    const manifest = validateCertificateXlsxBindingManifest(
-      preview.binding_manifest,
-    );
-    const source = prepareXlsxWorkbookForRender(
-      new Uint8Array(await sourceObject.arrayBuffer()),
-    );
-    const engine = new ExcelTsCertificateWorkbookEngine();
-    const filled = await fillCertificateWorkbook(
-      engine,
-      source,
-      manifest,
-      preview.sample_data ?? {},
-    );
-    const converter = createConfiguredXlsxToPdfConverter(env);
-    const converted = await converter.convert(filled.workbook, {
-      fileName: `preview-${message.previewId}.xlsx`,
-      singlePageSheets: false,
-    });
-
-    const previewOrg: OrgRef = {
-      id: preview.organization_id,
-      slug: preview.organization_slug ?? "",
-    };
-    const filledXlsx = templatePreviewKey({
-      org: previewOrg,
-      previewId: preview.id,
-      extension: "xlsx",
-    });
-    const pdfPreview = templatePreviewKey({
-      org: previewOrg,
-      previewId: preview.id,
-      extension: "pdf",
-    });
-    const filledXlsxR2Key = filledXlsx.key;
-    const pdfR2Key = pdfPreview.key;
-
-    await bucketBinding(env, filledXlsx.bucket).put(
-      filledXlsxR2Key,
-      filled.workbook,
-      {
-        httpMetadata: {
-          contentType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        },
-      },
-    );
-    await bucketBinding(env, pdfPreview.bucket).put(pdfR2Key, converted.bytes, {
-      httpMetadata: { contentType: "application/pdf" },
-    });
-
-    const renderMetadata = {
-      converter: converted.metadata,
-      xlsxSha256: preview.xlsx_sha256,
-      bindingManifestSha256: preview.binding_manifest_sha256,
-      workbookWarnings: filled.warnings,
-      durationMs: Math.round(performance.now() - totalStart),
-    };
-
-    await withDbClient(env, (client) =>
-      client.query(
-        `
-          update certificate_template_preview
-          set status = 'RENDERED',
-              filled_xlsx_r2_key = $1,
-              pdf_r2_key = $2,
-              pdf_sha256 = $3,
-              render_metadata = $4::jsonb,
-              error = null,
-              updated_at = now()
-          where id = $5
-        `,
-        [
-          filledXlsxR2Key,
-          pdfR2Key,
-          sha256Hex(converted.bytes),
-          JSON.stringify(renderMetadata),
-          preview.id,
-        ],
-      ),
-    );
-
-    console.log(
-      `[XLSX PREVIEW ${message.previewId}] DONE in ${renderMetadata.durationMs}ms`,
-    );
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    await withDbClient(env, (client) =>
-      client.query(
-        `
-          update certificate_template_preview
-          set status = 'FAILED',
-              error = $1,
-              updated_at = now()
-          where id = $2
-        `,
-        [errorMessage, message.previewId],
-      ),
-    ).catch((dbError) => {
-      console.error(
-        `[XLSX PREVIEW ${message.previewId}] Failed to record error:`,
-        dbError,
-      );
-    });
-    throw error;
-  }
-}
-
-function renderAccreditationSealDataUrl(
-  accreditationNumber: string | null | undefined,
-): string {
-  const svg = renderToString(
-    React.createElement(AccreditationSealSvg, { accreditationNumber }),
-  );
-  // workbookImageFromDataUrl rasterizes SVG data URLs to PNG via Resvg.
-  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
-}
-
-async function processXlsxIssuedCertificate(
-  env: Env,
-  jobId: number,
-  job: JobData,
-  userId: string,
-  selection: CertificateTemplateSelection,
-): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  // CHECK constraint ctv_engine_payload_check guarantees these for engine='xlsx';
-  // narrow (and fail loud) rather than assume.
-  const xlsxR2Key = selection.xlsxR2Key;
-  const bindingManifestSha256 = selection.bindingManifestSha256;
-  if (xlsxR2Key === null || bindingManifestSha256 === null) {
-    return {
-      success: false,
-      error: "xlsx template version is missing its artifacts",
-    };
-  }
-  const existingSnapshot = await withDbClient(env, async (client) => {
-    const result = await client.query<{
-      pdf_r2_key: string;
-      signature_metadata: unknown;
-    }>(
-      `
-        select ics.pdf_r2_key, cj.signature_metadata
-        from issued_certificate_snapshot ics
-        join calibration_job cj on cj.id = ics.job_id
-        where ics.job_id = $1
-        limit 1
-      `,
-      [jobId],
-    );
-    return result.rows[0] ?? null;
-  });
-
-  if (existingSnapshot) {
-    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
-    await withDbClient(env, (client) =>
-      updateJobWithCertificate(
-        client,
-        jobId,
-        certificateUrl,
-        userId,
-        parseSignatureMetadata(existingSnapshot.signature_metadata),
-        undefined,
-        { preserveSignatureMetadata: true },
-      ),
-    );
-    return { success: true, certificateUrl };
-  }
-
-  if (!job.organizationId) {
-    return { success: false, error: "Missing organization_id" };
-  }
-
-  try {
-    const sourceObject = await getStoredObject(env, "media", xlsxR2Key);
-    if (!sourceObject) {
-      throw new Error(`Template XLSX not found: ${xlsxR2Key}`);
-    }
-
-    const manifest = validateCertificateXlsxBindingManifest(
-      selection.bindingManifest,
-    );
-    const source = prepareXlsxWorkbookForRender(
-      new Uint8Array(await sourceObject.arrayBuffer()),
-    );
-    const engine = new ExcelTsCertificateWorkbookEngine();
-    const filled = await renderCertificateWorkbook(
-      engine,
-      source,
-      manifest,
-      job,
-      { renderAccreditationSeal: renderAccreditationSealDataUrl },
-    );
-    const inputDataSnapshot = filled.data;
-    const converter = createConfiguredXlsxToPdfConverter(env);
-    const converted = await converter.convert(filled.workbook, {
-      fileName: `${job.jobId}.xlsx`,
-      singlePageSheets: false,
-    });
-    const signed = await signPdfWithUnitCertificate(
-      env,
-      jobId,
-      job.organizationId,
-      job.unitId,
-      Buffer.from(converted.bytes),
-    );
-    const pdfBuffer = signed.pdfBuffer;
-
-    const year = getYear(
-      job.approvedAt ?? job.performedAt,
-      "approvedAt/performedAt",
-    );
-    const issuedObjectId = randomUUID();
-    const certDescriptor = {
-      org: {
-        id: job.organizationId,
-        slug: job.organizationSlug ?? "",
-      },
-      jobId: job.jobId,
-      issuedId: issuedObjectId,
-      certNumber: job.certificateName ?? job.jobId,
-      year,
-      companyName: job.customer.name,
-      assetTag: job.asset.tag,
-      brand: job.asset.manufacturer,
-    };
-    const pdf = issuedCertificatePdfKey(certDescriptor);
-    const filledXlsx = issuedCertificateXlsxKey(certDescriptor);
-    const pdfR2Key = pdf.key;
-    const filledXlsxR2Key = filledXlsx.key;
-
-    await bucketBinding(env, filledXlsx.bucket).put(
-      filledXlsxR2Key,
-      filled.workbook,
-      {
-        httpMetadata: {
-          contentType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        },
-      },
-    );
-    await bucketBinding(env, pdf.bucket).put(pdfR2Key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
-    });
-
-    const renderMetadata = {
-      converter: converted.metadata,
-      workbookWarnings: filled.warnings,
-      signature: signed.signatureMetadata
-        ? { signed: true, signerName: signed.signatureMetadata.signerName }
-        : { signed: false },
-      renderedAt: new Date().toISOString(),
-    };
-
-    const issuedPdfR2Key = await withDbClient(env, async (client) => {
-      const insertResult = await client.query<{ pdf_r2_key: string }>(
-        `
-          insert into issued_certificate_snapshot (
-            organization_id,
-            job_id,
-            template_id,
-            template_version_id,
-            certificate_number,
-            filled_xlsx_r2_key,
-            filled_xlsx_sha256,
-            pdf_r2_key,
-            pdf_sha256,
-            binding_manifest_sha256,
-            render_policy,
-            render_metadata,
-            input_data_snapshot,
-            status,
-            issued_by
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, 'ISSUED', $14)
-          on conflict (job_id) do nothing
-          returning pdf_r2_key
-        `,
-        [
-          job.organizationId,
-          jobId,
-          selection.templateId,
-          selection.templateVersionId,
-          job.jobId,
-          filledXlsxR2Key,
-          sha256Hex(filled.workbook),
-          pdfR2Key,
-          sha256Hex(pdfBuffer),
-          bindingManifestSha256,
-          JSON.stringify(selection.renderPolicy),
-          JSON.stringify(renderMetadata),
-          JSON.stringify(inputDataSnapshot),
-          userId,
-        ],
-      );
-
-      const insertedSnapshotPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
-      const existingSnapshotAfterConflict = insertedSnapshotPdfR2Key
-        ? null
-        : (
-            await client.query<{
-              pdf_r2_key: string;
-              signature_metadata: unknown;
-            }>(
-              `
-                select ics.pdf_r2_key, cj.signature_metadata
-                from issued_certificate_snapshot ics
-                join calibration_job cj on cj.id = ics.job_id
-                where ics.job_id = $1
-                limit 1
-              `,
-              [jobId],
-            )
-          ).rows[0];
-      const snapshotPdfR2Key =
-        insertedSnapshotPdfR2Key ?? existingSnapshotAfterConflict?.pdf_r2_key;
-
-      if (!snapshotPdfR2Key) {
-        throw new Error("Issued certificate snapshot was not persisted");
-      }
-
-      const snapshotCertificateUrl = `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`;
-      await updateJobWithCertificate(
-        client,
-        jobId,
-        snapshotCertificateUrl,
-        userId,
-        insertedSnapshotPdfR2Key
-          ? signed.signatureMetadata
-          : parseSignatureMetadata(
-              existingSnapshotAfterConflict?.signature_metadata,
-            ),
-        insertedSnapshotPdfR2Key ? signed.signatureVerdict : undefined,
-        { preserveSignatureMetadata: !insertedSnapshotPdfR2Key },
-      );
-      return snapshotPdfR2Key;
-    });
-
-    const certificateUrl = `https://certificates.calibrafacil.com/${issuedPdfR2Key}`;
-    return { success: true, certificateUrl };
-  } catch (error) {
-    return { success: false, error: getErrorMessage(error) };
-  }
-}
 
 // =============================================================================
 // AUDIT PACK (#738) — customer-requested bulk export of released certificates
@@ -3372,11 +2172,6 @@ async function processBackgroundJobUnreported(
   env: Env,
   message: BackgroundJobMessage,
 ) {
-  if (message.type === "CERTIFICATE_XLSX_PREVIEW") {
-    await processXlsxPreviewJob(env, message);
-    return;
-  }
-
   if (message.type === "AUDIT_PACK") {
     await processAuditPackJob(env, message);
     return;
@@ -3410,27 +2205,6 @@ async function processBackgroundJobUnreported(
   if (message.type === "EMAIL_DOMAIN_HEALTH") {
     await processEmailDomainHealth();
     return;
-  }
-
-  if (await processXlsxCertificateMessageIfSelected(env, message)) {
-    return;
-  }
-
-  if (isCalibrationCertificateMessage(message)) {
-    await withDbClient(env, (client) =>
-      setJobError(
-        client,
-        message.jobId,
-        CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
-        message.userId,
-      ),
-    ).catch((dbError) => {
-      console.error(
-        `[JOB ${message.jobId}] Failed to record missing XLSX template error:`,
-        dbError,
-      );
-    });
-    throw new Error(CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE);
   }
 
   // HTML/label documents render through the hosted Gotenberg service
@@ -3476,7 +2250,7 @@ export default {
   },
 
   // Health check endpoint
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, _env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {

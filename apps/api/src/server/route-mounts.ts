@@ -16,7 +16,6 @@ import { capaRouter } from "../routes/capa";
 import { proficiencyTestsRouter } from "../routes/proficiency-tests";
 import { spcRouter } from "../routes/spc";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
-import { certificateTemplatesRouter } from "../routes/certificate-templates";
 import { competencesRouter } from "../routes/competences";
 import { customerGroupsRouter } from "../routes/customer-groups";
 import { customerSuccessRouter } from "../routes/customer-success";
@@ -145,7 +144,6 @@ export function mountApiRoutes(
       .route("/api/api-keys", apiKeysRouter)
       .route("/api/portal-domains", portalDomainsRouter)
       .route("/api/email-domains", emailDomainsRouter)
-      .route("/api/certificate-templates", certificateTemplatesRouter)
       .route("/api/certificate-numbering", certificateNumberingRouter)
       .route("/api/units", unitsRouter)
       .route("/api/integrations", integrationsRouter)

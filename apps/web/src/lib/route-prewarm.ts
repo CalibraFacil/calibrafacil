@@ -6,7 +6,6 @@ import {
   prewarmAssetsIndex,
   prewarmNewAsset,
 } from '@/features/assets/queries'
-import { prewarmCertificateTemplates } from '@/features/certificate-templates/queries'
 import {
   prewarmCustomerAssets,
   prewarmCustomerCompliance,
@@ -455,11 +454,6 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/finance\/contracts\/([^/]+)\/?$/,
     prewarm: ({ queryClient, match }) =>
       prewarmFinanceContractDetail(queryClient, segment(match)),
-  },
-  {
-    id: 'dashboard:certificate-templates',
-    match: /^\/dashboard\/certificate-templates\/?$/,
-    prewarm: ({ queryClient }) => prewarmCertificateTemplates(queryClient),
   },
   {
     id: 'dashboard:reports',

@@ -63,7 +63,6 @@ export const dashboardRouteMeta = [
   { path: '/dashboard/capa', cloudOnly: 'prefix' },
   { path: '/dashboard/proficiency-tests', cloudOnly: 'prefix' },
   { path: '/dashboard/spc', cloudOnly: 'prefix' },
-  { path: '/dashboard/certificate-templates', cloudOnly: 'prefix' },
   { path: '/dashboard/finance', cloudOnly: 'prefix' },
   { path: '/dashboard/materials', cloudOnly: 'prefix' },
   { path: '/dashboard/settings', cloudOnly: 'prefix' },
@@ -164,11 +163,6 @@ export const dashboardPrimaryNavItems = [
     title: 'Ordens de Serviço',
     url: '/dashboard/service-orders',
     icon: 'serviceOrders',
-  },
-  {
-    title: 'Templates de Certificados',
-    url: '/dashboard/certificate-templates',
-    icon: 'certificateTemplate',
   },
   {
     title: 'Solicitações',

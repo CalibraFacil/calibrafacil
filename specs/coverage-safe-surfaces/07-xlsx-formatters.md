@@ -1,12 +1,18 @@
-# Mini-spec: certificate XLSX formatters coverage
+# Mini-spec: certificate formatters coverage
 
-Target: `packages/certificate-xlsx-template/src/formatters.ts`
-Test file: `packages/certificate-xlsx-template/src/formatters.test.ts` (Vitest)
+Target: `packages/certificate-data/src/formatters.ts`
+Test file: `packages/certificate-data/src/formatters.test.ts` (Vitest)
 
 ## Context
-`getPath` + `formatValue` (date/number/boolean dispatch) drive cell values in the
-XLSX certificate template. Output-critical → assert exact strings. Date formatting
-uses UTC; lock that in.
+`getPath` + `formatValue` (date/number/boolean dispatch) resolve and format the
+values that land in a certificate. Output-critical → assert exact strings. Date
+formatting uses UTC; lock that in.
+
+> The module moved out of the deleted `packages/certificate-xlsx-template` when the
+> lab-authored XLSX certificate path was removed. It was never XLSX-specific — it is
+> a generic path/format helper — and it now feeds the fixed system layouts. The
+> `REQ-XLSX-*` ids are kept **verbatim** so the criteria stay traceable; do not
+> renumber them for cosmetic reasons.
 
 ## Acceptance Criteria
 

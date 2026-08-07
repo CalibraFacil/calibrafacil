@@ -16,7 +16,7 @@ const {
   mockCreateOotEvent,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
-  mockResolveMethodTemplate,
+  mockIssuanceAvailable,
 } = vi.hoisted(() => {
   const state: {
     jobRows: unknown[];
@@ -45,10 +45,12 @@ const {
     mockCreateOotEvent: vi.fn(async () => undefined),
     mockFindServiceOrders: vi.fn(async () => []),
     mockTriggerAutomaticSend: vi.fn(async () => undefined),
-    mockResolveMethodTemplate: vi.fn(async () => ({
-      ok: true,
-      snapshot: { id: 77, name: "Template padrão", slug: "padrao", version: 1 },
-    })),
+    // Issuance is disabled in production while the certificate layout is
+    // redesigned (#865), so approveJob can never reach "approved" for real.
+    // Default the mock to available so the approval-effect assertions below
+    // — audit log, enqueue, OOT event, date advance — keep running instead of
+    // going dark until Phase 3.
+    mockIssuanceAvailable: vi.fn(() => true),
   };
 });
 
@@ -111,9 +113,8 @@ vi.mock("../../lib/automatic-send", () => ({
 vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
 }));
-vi.mock("../../lib/certificate-template-snapshots", () => ({
-  resolveMethodCertificateTemplate: mockResolveMethodTemplate,
-  serializeCertificateTemplateSnapshot: (snapshot: unknown) => snapshot,
+vi.mock("../../lib/certificate-issuance-availability", () => ({
+  isCertificateIssuanceAvailable: mockIssuanceAvailable,
 }));
 
 import { approveJob } from "./approve-job";
@@ -144,8 +145,6 @@ function reviewJob(overrides: Record<string, unknown> = {}) {
     performedAt: new Date("2026-06-10T00:00:00Z"),
     results: {},
     environmentalSnapshot: null,
-    certificateTemplateId: null,
-    certificateTemplateSnapshot: null,
     ...overrides,
   };
 }
@@ -224,31 +223,19 @@ describe("approveJob gates", () => {
     expect(state.updateCalls).toHaveLength(0);
   });
 
-  it("blocks approval when the method has no certificate template (0104)", async () => {
+  // #865: this is the real production behaviour right now — nothing can
+  // render a certificate, so the job must not leave REVIEW. Without this the
+  // worker would fail afterwards and strand it in GENERATING_PDF.
+  it("blocks approval while certificate issuance is unavailable", async () => {
     state.jobRows = [reviewJob()];
-    mockResolveMethodTemplate.mockResolvedValueOnce({
-      ok: false,
-      reason: "template_missing",
-    });
+    mockIssuanceAvailable.mockReturnValueOnce(false);
     await expect(callApprove()).resolves.toEqual({
-      status: "certificate_template_required",
-      reason: "template_missing",
+      status: "certificate_issuance_unavailable",
     });
     expect(state.updateCalls).toHaveLength(0);
   });
 
-  it("blocks approval when the linked template has no published version", async () => {
-    state.jobRows = [reviewJob()];
-    mockResolveMethodTemplate.mockResolvedValueOnce({
-      ok: false,
-      reason: "template_unpublished",
-    });
-    const result = await callApprove();
-    expect(result.status).toBe("certificate_template_required");
-    expect(state.updateCalls).toHaveLength(0);
-  });
-
-  it("freezes the method's template snapshot onto the approved job", async () => {
+  it("does not freeze any certificate-template link onto the job", async () => {
     state.jobRows = [reviewJob()];
     state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
     const result = await callApprove();
@@ -256,11 +243,9 @@ describe("approveJob gates", () => {
     const transition = state.updateCalls.find(
       (call) => call.status === "GENERATING_PDF",
     );
-    expect(transition?.certificateTemplateId).toBe(77);
-    expect(transition?.certificateTemplateSnapshot).toMatchObject({
-      id: 77,
-      name: "Template padrão",
-    });
+    // The per-method template link is gone; approval must not resurrect it.
+    expect(transition).not.toHaveProperty("certificateTemplateId");
+    expect(transition).not.toHaveProperty("certificateTemplateSnapshot");
   });
 
   it("requires a justification when environmental conditions were out of limits", async () => {
@@ -305,7 +290,6 @@ describe("approveJob transition effects", () => {
     expect(state.updateCalls[0]).toMatchObject({
       status: "GENERATING_PDF",
       approvedBy: "approver-1",
-      certificateTemplateId: 77,
     });
     expect(state.insertCalls[0]).toMatchObject({
       jobId: 10,

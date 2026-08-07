@@ -49,7 +49,6 @@ import { db } from "@calibra-facil/db";
 import {
   assetType,
   calibrationMethod,
-  certificateTemplate,
   methodAuditLog,
   user,
   member,
@@ -134,7 +133,6 @@ async function seedMethod(params: {
   // incoherent before the gate existed).
   dataFields?: MethodInputField[];
   formulas?: MethodFormula[];
-  certificateTemplateId?: number | null;
 }): Promise<number> {
   const name = `Método Teste ${params.nameSuffix ?? params.orgId}`;
   const [row] = await db
@@ -150,7 +148,6 @@ async function seedMethod(params: {
       formulas: params.formulas ?? [],
       validations: [],
       accreditedScope: false,
-      certificateTemplateId: params.certificateTemplateId ?? null,
       createdBy: params.createdBy,
       technicalReviewedBy: params.technicalReviewedBy ?? null,
       // compiledMethod / methodFingerprint intentionally null for DRAFT/PENDING seeds;
@@ -466,27 +463,12 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       userId: "user-sm6",
     });
 
-    const [templateRow] = await db
-      .insert(certificateTemplate)
-      .values({
-        organizationId: "org-sm6",
-        name: "Modelo SM6",
-        slug: "modelo-sm6",
-        version: 1,
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: certificateTemplate.id });
-    if (!templateRow) throw new Error("template seed failed");
-
     const methodId = await seedMethod({
       orgId: "org-sm6",
       createdBy: org.userId,
       status: "PUBLISHED",
       version: 1,
       nameSuffix: "sm6",
-      certificateTemplateId: templateRow.id,
     });
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
@@ -506,7 +488,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       .select({
         status: calibrationMethod.status,
         version: calibrationMethod.version,
-        certificateTemplateId: calibrationMethod.certificateTemplateId,
       })
       .from(calibrationMethod)
       .where(
@@ -517,9 +498,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       );
     expect(draftRow?.status).toBe("DRAFT");
     expect(draftRow?.version).toBe(2);
-    // 0104: the certificate-template link survives the version bump — a
-    // dropped link here would silently block approvals after every bump.
-    expect(draftRow?.certificateTemplateId).toBe(templateRow.id);
   });
 
   // =========================================================================

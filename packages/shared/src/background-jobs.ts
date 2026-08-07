@@ -84,13 +84,6 @@ export type EmailDomainHealthBackgroundJobMessage = {
   type: "EMAIL_DOMAIN_HEALTH";
 };
 
-export type CertificateXlsxPreviewBackgroundJobMessage = {
-  type: "CERTIFICATE_XLSX_PREVIEW";
-  previewId: number;
-  templateVersionId: number;
-  userId: string;
-};
-
 /**
  * Portal audit pack (issue #738): bulk export of released certificates +
  * fleet-status report requested by a portal user. All request parameters live
@@ -110,7 +103,6 @@ export type BackgroundJobMessage =
   | MarketingContactSyncBackgroundJobMessage
   | SpcRecomputeBackgroundJobMessage
   | EmailDomainHealthBackgroundJobMessage
-  | CertificateXlsxPreviewBackgroundJobMessage
   | AuditPackBackgroundJobMessage;
 
 export function isBackgroundJobMessage(
@@ -129,14 +121,6 @@ export function isBackgroundJobMessage(
     type === "EMAIL_DOMAIN_HEALTH"
   ) {
     return true;
-  }
-
-  if (type === "CERTIFICATE_XLSX_PREVIEW") {
-    return (
-      typeof message.previewId === "number" &&
-      typeof message.templateVersionId === "number" &&
-      typeof message.userId === "string"
-    );
   }
 
   if (type === "AUDIT_PACK") {

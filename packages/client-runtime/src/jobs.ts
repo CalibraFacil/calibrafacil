@@ -72,6 +72,12 @@ export type JobExecutionPayload = {
   };
   performedAt?: string;
   backdateReason?: string;
+  /**
+   * ISO/IEC 17025 §7.8.2.1(n) — additions to, deviations from, or exclusions
+   * from the method as executed. Omit to leave the stored value untouched
+   * (the worksheet auto-saves); send null to clear it.
+   */
+  methodDeviations?: string | null;
 };
 
 export type ReferenceStandardsResponse<TStandard = unknown> = {

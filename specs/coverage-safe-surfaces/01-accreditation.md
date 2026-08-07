@@ -37,5 +37,29 @@ status + seal emission. Used on issued certificates → assert exact strings VER
 - REQ-ACCR-011: IF the lab is active but `methodAccreditedScope` is `false`/`null`/
   `undefined`, THEN `shouldRenderAccreditationSeal` SHALL return `false`. [REVIEW]
 - REQ-ACCR-012: The exported seal constants SHALL equal the regulated strings
-  verbatim: `ACCREDITATION_SEAL_SUBTITLE === "NBR ISO/IEC 17025"`,
-  `ACCREDITATION_NUMBER_PREFIX === "CAL"`, `ACCREDITATION_SEAL_TITLE === "Calibração"`.
+  verbatim: `ACCREDITATION_SEAL_SCHEME === "ABNT NBR ISO/IEC 17025"`,
+  `ACCREDITATION_SEAL_SCHEME_LINE1 === "ABNT NBR"`,
+  `ACCREDITATION_SEAL_SCHEME_LINE2 === "ISO/IEC 17025"`,
+  `ACCREDITATION_NUMBER_PREFIX === "CAL"`.
+  Source: **NIE-Cgcre-009 rev. 27 (Jul/2024) A.5/A.8** — the upper band carries the
+  accreditation-scheme norm, and the accreditation type is carried by the `CAL`
+  codification in the lower band. Rev. 27 replaced the previous three-line wording
+  ("Calibração / NBR ISO/IEC / 17025"); §4.1 gave a 3-year transition, to Jul/2027.
+  See `docs/referencias/nie-cgcre-009-simbolo-acreditacao.md`.
+- REQ-ACCR-013: `ACCREDITATION_SEAL_FONT_FAMILY` SHALL name Arial before any other
+  family, per NIE-Cgcre-009 A.6.2 (*"A fonte da letra a ser usada no símbolo é a
+  Arial"*). A Calibri clone such as Carlito must not precede it: Carlito ships with
+  LibreOffice and would win inside the Gotenberg Chromium container.
+- REQ-ACCR-014: IF `shouldRenderAccreditationSeal` is told that any result on the
+  certificate came from an external provider (`hasExternalProviderResults === true`),
+  THEN it SHALL return `false` regardless of every other input. [HIGH RISK]
+  Source: **NIE-Cgcre-009 §11.5.3 / §11.5.4 / §11.5.5**.
+  Fail-closed tripwire, not a finished feature: subcontracting is not modelled, so no
+  call site passes this today and behaviour is unchanged. It exists so that whoever
+  models it cannot ship a sealed certificate without first implementing per-result
+  attribution (provider name, accreditation number, accrediting body — §11.5.4) and
+  the "every result external ⇒ no symbol at all" prohibition (§11.5.5). Distinguishing
+  "some external, all accredited" (allowed, §11.5.3 b) from "all external" (forbidden)
+  requires attribution that does not exist; until it does, suppressing is the safe
+  answer. An unsealed certificate is merely not-accredited; a wrongly sealed one is
+  symbol misuse under §11.1.8.

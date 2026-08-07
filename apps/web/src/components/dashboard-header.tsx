@@ -174,7 +174,6 @@ const routeLabels: Record<string, string> = {
   '/dashboard/sync/conflicts': 'Conflitos de Sincronização',
 
   // Certificate Templates
-  '/dashboard/certificate-templates': 'Templates de Certificados',
 
   // Settings (extra pages)
   '/dashboard/settings/accredited-scope': 'Escopo Acreditado',

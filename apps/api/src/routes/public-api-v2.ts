@@ -71,9 +71,10 @@ import {
   upsertResourceExternalId,
 } from "../lib/public-api";
 import {
-  resolveMethodCertificateTemplate,
-  serializeCertificateTemplateSnapshot,
-} from "../lib/certificate-template-snapshots";
+  CERTIFICATE_ISSUANCE_UNAVAILABLE_PUBLIC_CODE,
+  CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
+  isCertificateIssuanceAvailable,
+} from "../lib/certificate-issuance-availability";
 import { isUniqueViolation } from "../lib/db-errors";
 import {
   createR2Client,
@@ -3751,24 +3752,18 @@ publicApiV2Router
           };
         }
 
-        // Per-method certificate template (0104): same gate as the interactive
-        // approval — the frozen method must own a renderable template, or the
-        // worker would strand the job in GENERATING_PDF.
-        const templateResolution = await resolveMethodCertificateTemplate({
-          organizationId: apiKey.organizationId,
-          methodId: existing.methodSnapshot?.methodId ?? null,
-        });
-        if (!templateResolution.ok) {
+        // Same gate as the interactive approval: nothing can render a
+        // certificate while the layout is being replaced (#865), so approving
+        // here would strand the job in GENERATING_PDF.
+        if (!isCertificateIssuanceAvailable()) {
           return {
             status: 422,
             body: buildPublicApiError({
-              code: "certificate_template_required",
-              message:
-                "O método desta calibração não possui modelo de certificado vinculado — vincule um modelo publicado ao método",
+              code: CERTIFICATE_ISSUANCE_UNAVAILABLE_PUBLIC_CODE,
+              message: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
             }),
           };
         }
-        const effectiveTemplateSnapshot = templateResolution.snapshot;
 
         const [updated] = await db
           .update(calibrationJob)
@@ -3776,10 +3771,6 @@ publicApiV2Router
             status: "GENERATING_PDF",
             approvedBy: apiKey.createdBy,
             approvedAt: new Date(),
-            certificateTemplateId: effectiveTemplateSnapshot.id,
-            certificateTemplateSnapshot: serializeCertificateTemplateSnapshot(
-              effectiveTemplateSnapshot,
-            ),
             rejectedBy: null,
             rejectedAt: null,
             rejectionReason: null,

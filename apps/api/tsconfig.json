@@ -13,8 +13,8 @@
       "@calibra-facil/auth/lab-access": [
         "../../packages/auth/src/lab-access.ts"
       ],
-      "@calibra-facil/certificate-xlsx-template": [
-        "../../packages/certificate-xlsx-template/src/index.ts"
+      "@calibra-facil/certificate-data": [
+        "../../packages/certificate-data/src/index.ts"
       ],
       "@calibra-facil/db": ["../../packages/db/src/db.ts"],
       "@calibra-facil/db/*": ["../../packages/db/src/*"],

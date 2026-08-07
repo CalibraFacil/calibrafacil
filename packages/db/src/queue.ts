@@ -62,7 +62,6 @@ function getMessageType(message: QueueMessage): AppQueueJobType {
     case "SERVICE_ORDER_QUOTE":
     case "SERVICE_ORDER_DELIVERY_RECEIPT":
     case "INTEGRATION_SYNC":
-    case "CERTIFICATE_XLSX_PREVIEW":
     case "AUDIT_PACK":
     case "OOT_NOTIFICATION":
       return message.type;

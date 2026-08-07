@@ -33,10 +33,12 @@ const DOCUMENT_WORKER_ENV_KEYS = [
 
 const savedEnv: Record<string, string | undefined> = {};
 
-const previewMessage: BackgroundJobMessage = {
-  type: "CERTIFICATE_XLSX_PREVIEW",
-  previewId: 1,
-  templateVersionId: 2,
+// A document-worker-routable job used as the sample for the routing rules
+// below. Was CERTIFICATE_XLSX_PREVIEW until the XLSX certificate path was
+// removed (#865); the routing under test is job-type agnostic.
+const documentWorkerMessage: BackgroundJobMessage = {
+  type: "AUDIT_PACK",
+  exportId: 1,
   userId: "user-1",
 };
 
@@ -82,9 +84,9 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
   });
 
   it("uses Vercel Queue when DOCUMENT_WORKER_URL is not set", async () => {
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "CERTIFICATE_XLSX_PREVIEW";
+    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
 
-    const result = await enqueueBackgroundJob(previewMessage);
+    const result = await enqueueBackgroundJob(documentWorkerMessage);
 
     expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalledTimes(1);
@@ -94,7 +96,7 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
   it("uses Vercel Queue when the allowlist is empty", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
 
-    const result = await enqueueBackgroundJob(previewMessage);
+    const result = await enqueueBackgroundJob(documentWorkerMessage);
 
     expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalledTimes(1);
@@ -103,13 +105,13 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
 
   it("routes an allowlisted job to app_queue_job and wakes the container", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "CERTIFICATE_XLSX_PREVIEW";
+    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
     process.env.DOCUMENT_WORKER_TOKEN = "secret-token";
 
-    const result = await enqueueBackgroundJob(previewMessage);
+    const result = await enqueueBackgroundJob(documentWorkerMessage);
 
     expect(mocks.send).not.toHaveBeenCalled();
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(previewMessage);
+    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
     expect(result.messageId).toBe("app-queue-42");
 
     const fetchMock = vi.mocked(fetch);
@@ -160,12 +162,12 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
 
   it("still returns success when the wake ping fails (job is durable)", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "CERTIFICATE_XLSX_PREVIEW";
+    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
     vi.mocked(fetch).mockRejectedValue(new Error("worker unreachable"));
 
-    const result = await enqueueBackgroundJob(previewMessage);
+    const result = await enqueueBackgroundJob(documentWorkerMessage);
 
-    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(previewMessage);
+    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
     expect(result.messageId).toBe("app-queue-42");
     expect(mocks.send).not.toHaveBeenCalled();
   });

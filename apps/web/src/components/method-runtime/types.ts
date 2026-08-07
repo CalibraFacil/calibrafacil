@@ -224,7 +224,6 @@ export interface MethodData {
   name: string
   description?: string
   assetTypeId?: number
-  certificateTemplateId?: number | null
   version: number
   status: MethodStatus
   technicalReviewedBy?: string | null
