@@ -47,6 +47,7 @@ overrides:
   builder-util-runtime@<9.7.0: ^9.7.0
   postcss: ^8.5.18
   sharp: ^0.35.0
+  nanoid@>=4.0.0 <5.1.16: ^5.1.16
 
 importers:
 
@@ -8750,8 +8751,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@5.1.11:
-    resolution: {integrity: sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg==}
+  nanoid@5.1.16:
+    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
     engines: {node: ^18 || >=20}
     hasBin: true
 
@@ -14468,7 +14469,7 @@ snapshots:
   '@scalar/types@0.12.3':
     dependencies:
       '@scalar/helpers': 0.8.1
-      nanoid: 5.1.11
+      nanoid: 5.1.16
       type-fest: 5.7.0
       zod: 4.4.3
 
@@ -18804,7 +18805,7 @@ snapshots:
 
   nanoid@3.3.17: {}
 
-  nanoid@5.1.11: {}
+  nanoid@5.1.16: {}
 
   nanostores@1.3.0: {}
 
