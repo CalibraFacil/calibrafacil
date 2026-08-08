@@ -226,6 +226,24 @@ describe("CalibrationCertificateHtml", () => {
     expect(header).toContain("&lt;script&gt;");
   });
 
+  it("prints the signatory's handwritten signature when there is one", () => {
+    // The data pipeline has always fetched this from member_visual_signature;
+    // the layout had nowhere to put it, so every certificate dropped it.
+    const data = massCertificateFixture();
+    data.signatory.signatureImageDataUrl = "data:image/png;base64,AAAA";
+    const html = body(data);
+    expect(html).toContain("signature__image");
+    expect(html).toContain("data:image/png;base64,AAAA");
+  });
+
+  it("still authorises by name when the signatory has no image", () => {
+    const html = body(massCertificateFixture());
+    expect(html).not.toContain("signature__image");
+    // The rule, the name and the role carry the authorisation on their own.
+    expect(html).toContain("signature__rule");
+    expect(html).toContain("signature__name");
+  });
+
   it("escapes customer-controlled text", () => {
     const data = massCertificateFixture();
     data.customer.name = '<script>alert("xss")</script>';

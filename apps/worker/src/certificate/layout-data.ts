@@ -739,6 +739,10 @@ export function buildCertificateLayoutData(
       name: job.approverName ?? "",
       role: job.lab.technicalManagerTitle,
       placeAndDateText: buildPlaceAndDate(job),
+      // fetchCertificateJobData resolves this from member_visual_signature and
+      // has always carried it; the layout simply had nowhere to put it, so it
+      // was fetched and dropped on every certificate.
+      signatureImageDataUrl: job.approverSignatureUrl ?? null,
     },
 
     provenance: buildProvenance(job),

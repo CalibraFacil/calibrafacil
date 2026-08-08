@@ -189,11 +189,25 @@ export const CERTIFICATE_PAGE_STYLES = `
   }
 
   /* ── signature ───────────────────────────────────────────────────────
-     Name and role over a rule. No signature image: the German and French
-     certificates both authorise by name alone, and the file itself is
-     signed (PAdES) — a drawn squiggle adds nothing an auditor can use. */
+     Handwritten signature (when the signatory has uploaded one) over a rule,
+     with the name and role beneath. The first cut of this layout omitted the
+     image, reasoning that the German and French certificates authorise by name
+     alone and the file carries a PAdES signature anyway. That is true of those
+     two and false here: the Brazilian RBC certificate surveyed and Exemplo's own
+     legacy document both show one, and it is what laboratories expect. The
+     name and role still stand on their own when there is no image.
+
+     The image sits ON the rule (negative margin) rather than above it, so a
+     missing signature does not leave a gap where one used to be. */
   .signature { margin-top: 8mm; break-inside: avoid; text-align: center; }
   .signature__place { color: ${MUTED}; margin-bottom: 7mm; }
+  .signature__image {
+    display: block;
+    max-height: 16mm;
+    max-width: 60mm;
+    margin: 0 auto -1mm;
+    object-fit: contain;
+  }
   .signature__rule {
     width: 72mm;
     margin: 0 auto 1.2mm;

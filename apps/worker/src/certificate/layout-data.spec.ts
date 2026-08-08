@@ -328,6 +328,15 @@ describe("buildCertificateLayoutData", () => {
     expect(data.eccentricity?.rows[0]?.before).not.toContain(".");
   });
 
+  it("passes the approver's visual signature through to the layout", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(
+        massJob({ approverSignatureUrl: "data:image/png;base64,SIG" }),
+      ),
+    );
+    expect(data.signatory.signatureImageDataUrl).toBe("data:image/png;base64,SIG");
+  });
+
   it("never invents a conformity verdict", () => {
     // §7.8.6.2 needs a decision rule the method must declare. None do, so no
     // certificate may carry a verdict — PR #587 printed one anyway.

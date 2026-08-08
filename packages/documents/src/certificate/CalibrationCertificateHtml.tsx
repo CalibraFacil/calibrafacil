@@ -574,6 +574,13 @@ export function CalibrationCertificateHtml({
               {data.signatory.placeAndDateText}
             </div>
           ) : null}
+          {data.signatory.signatureImageDataUrl ? (
+            <img
+              className="signature__image"
+              src={data.signatory.signatureImageDataUrl}
+              alt=""
+            />
+          ) : null}
           <div className="signature__rule" />
           <div className="signature__name">{data.signatory.name}</div>
           {data.signatory.role ? (
