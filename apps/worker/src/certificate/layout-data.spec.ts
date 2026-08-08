@@ -48,10 +48,21 @@ function massJob(
       accreditedScope: true,
       dataFields: [
         {
-          key: "pontos_carga_nominal",
-          label: "Carga nominal",
-          type: "number",
-          quantityKind: "reference",
+          // The real shape: a table field whose COLUMNS carry quantityKind.
+          // The adapter used to look for flattened `<table>_<column>` entries
+          // here, found none, and silently numbered every row "Ponto N".
+          key: "pontos",
+          label: "Pontos",
+          type: "table",
+          columns: [
+            {
+              key: "carga_nominal",
+              label: "Carga nominal",
+              type: "number",
+              unit: "g",
+              quantityKind: "reference",
+            },
+          ],
         },
       ],
       formulas: [
@@ -112,6 +123,20 @@ function massJob(
           },
         },
         {
+          outputKey: "dispersao",
+          expression: "x",
+          unit: "g",
+          scope: { kind: "table_row", tableKey: "repeticoes" },
+          reporting: { role: "primary_result", group: "calibration_result" },
+        },
+        {
+          outputKey: "desvio_exc",
+          expression: "x",
+          unit: "g",
+          scope: { kind: "table_row", tableKey: "excentric" },
+          reporting: { role: "primary_result", group: "calibration_result" },
+        },
+        {
           outputKey: "erro_antes",
           expression: "x",
           unit: "g",
@@ -150,6 +175,15 @@ function massJob(
     ],
     data: {
       pontos: [{ carga_nominal: "500" }, { carga_nominal: "1000" }],
+      repeticoes: [
+        {
+          condicao: "1000 kg",
+          leitura_1: "999000",
+          leitura_2: "999000",
+          leitura_3: "999000",
+        },
+      ],
+      excentric: [{ posicao: "A", antes: "499500", apos: "500000" }],
     },
     results: {
       media_apos: ["499500.4", "999000.4"],
@@ -159,6 +193,8 @@ function massJob(
       k_apos: ["2", "2.179"],
       erro_antes: ["-1.2", "-2.3"],
       u_antes: ["12.345", "13.456"],
+      dispersao: ["0.5"],
+      desvio_exc: ["-500"],
     },
     ...overrides,
   };
@@ -204,9 +240,11 @@ describe("buildCertificateLayoutData", () => {
 
   it("labels rows from the declared reference column", () => {
     const data = unwrap(buildCertificateLayoutData(massJob()));
+    // No thousands separator: "1.000" is a pt-BR grouping but reads as a
+    // decimal point, and the results table prints the same magnitudes ungrouped.
     expect(data.resultTables[0]?.rows.map((row) => row.point)).toEqual([
       "500 g",
-      "1.000 g",
+      "1000 g",
     ]);
   });
 
@@ -269,6 +307,25 @@ describe("buildCertificateLayoutData", () => {
     expect(noApprover.ok).toBe(false);
     const noDate = buildCertificateLayoutData(massJob({ approvedAt: null }));
     expect(noDate.ok).toBe(false);
+  });
+
+  it("prints the repeatability dispersion the method computed", () => {
+    // cg-18 §6.1: the readings exist to produce s. This column was hardcoded
+    // to null, so every certificate showed an em dash while the engine had the
+    // number all along.
+    const data = unwrap(buildCertificateLayoutData(massJob()));
+    expect(data.repeatability?.rows[0]?.value).toBe("0,5");
+    expect(data.repeatability?.rows[0]?.readings).toHaveLength(3);
+  });
+
+  it("formats block values exactly like the results table", () => {
+    // toLocaleString's default grouping renders 499500 as "499.500", which is a
+    // pt-BR thousands separator but reads as a decimal point — and the very
+    // same magnitude prints ungrouped in the results table two sections above.
+    const data = unwrap(buildCertificateLayoutData(massJob()));
+    expect(data.eccentricity?.rows[0]?.before).toBe("499500");
+    expect(data.repeatability?.rows[0]?.readings[0]).toBe("999000");
+    expect(data.eccentricity?.rows[0]?.before).not.toContain(".");
   });
 
   it("never invents a conformity verdict", () => {

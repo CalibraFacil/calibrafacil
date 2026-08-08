@@ -21,6 +21,8 @@
 
 import {
   formatAtDecimals,
+  formatDecimalPtBr,
+  fractionDigitsOf,
   renderEccentricityIndicatorSvgMarkup,
   roundMeasurementForReport,
   certificateImageContextFromJob,
@@ -284,9 +286,10 @@ function resolvePointLabels(
       const raw = Object.getOwnPropertyDescriptor(row, referenceKey)?.value;
       const parsed = toNumber(raw);
       if (parsed !== null) {
-        const formatted = parsed.toLocaleString("pt-BR", {
-          maximumFractionDigits: 6,
-        });
+        const formatted = formatDecimalPtBr(
+          parsed,
+          Math.min(6, fractionDigitsOf(parsed)),
+        );
         return unit ? `${formatted} ${unit}` : formatted;
       }
     }
@@ -294,18 +297,25 @@ function resolvePointLabels(
   });
 }
 
+/**
+ * Which column of the points table holds the applied reference value, so each
+ * row can be labelled with its actual load instead of "Ponto 1".
+ *
+ * The columns are NESTED under the table's own data field — an earlier version
+ * looked for flattened `<tableKey>_<column>` entries in the top-level field
+ * list, found nothing, and silently fell back to row indices on every real
+ * certificate. The platform templates have always declared
+ * `quantityKind: "reference"` on the right column; nothing was reading it.
+ */
 function resolveReferenceColumnKey(
   job: CertificateJobData,
   tableKey: string,
 ): string | null {
-  for (const field of job.methodSnapshot.dataFields ?? []) {
-    if (field.quantityKind !== "reference") continue;
-    // Table columns are declared as `<tableKey>_<column>` in the flattened
-    // data-field namespace the engine uses.
-    if (field.key?.startsWith(`${tableKey}_`)) {
-      return field.key.slice(tableKey.length + 1);
-    }
-    if (field.key && !field.key.includes("_")) return field.key;
+  const table = (job.methodSnapshot.dataFields ?? []).find(
+    (field) => field.key === tableKey,
+  );
+  for (const column of table?.columns ?? []) {
+    if (column.quantityKind === "reference") return column.key;
   }
   return null;
 }
@@ -809,6 +819,20 @@ function buildRepeatability(
   if (inputRows.length === 0) return null;
 
   const unit = blockUnit(formulas, tableKey);
+  // The dispersion the method computes over this table — cg-18 §6.1's s, the
+  // figure the readings exist to produce. It was hardcoded to null, so the
+  // "Repetibilidade" column printed an em dash on every certificate while the
+  // engine had the number all along.
+  const dispersion = formulas.find(
+    (formula) =>
+      isReported(formula) &&
+      tableKeyOf(formula) === tableKey &&
+      formula.reporting?.role === "primary_result",
+  );
+  const dispersionValues = dispersion
+    ? valuesAt(job.results ?? {}, dispersion.outputKey)
+    : [];
+
   const rows = inputRows.map((row, index) => {
     const record = row && typeof row === "object" ? row : {};
     const readings: string[] = [];
@@ -820,7 +844,7 @@ function buildRepeatability(
     return {
       phase: readString(record, "condicao") ?? `Condição ${index + 1}`,
       readings,
-      value: null,
+      value: formatBlockValue(dispersionValues[index]),
     };
   });
 
@@ -870,10 +894,16 @@ function readString(record: object, key: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/**
+ * Same formatter the results table uses. It must be: toLocaleString's default
+ * grouping renders 499500 g as "499.500", which in pt-BR is a thousands
+ * separator but reads as a decimal point to half the world — and the very same
+ * quantity appeared as "499500" two sections above. One document, one format.
+ */
 function formatBlockValue(value: unknown): string | null {
   const parsed = toNumber(value);
   if (parsed === null) return null;
-  return parsed.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
+  return formatDecimalPtBr(parsed, Math.min(4, fractionDigitsOf(parsed)));
 }
 
 /** Re-exported so the worker does not need a second import for the QR. */

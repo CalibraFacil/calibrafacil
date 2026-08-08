@@ -65,6 +65,10 @@ export const dataFields = [
         type: "number",
         unit: "g",
         label: "Carga nominal",
+        // The applied point. The certificate labels each results row from the
+        // column declared "reference"; without it every row read "Ponto 1..N"
+        // and the reader could not tell which load produced which error.
+        quantityKind: "reference",
         includeInCertificate: false,
       },
       {

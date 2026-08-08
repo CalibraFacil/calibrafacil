@@ -170,6 +170,20 @@ export type MethodInputField = {
     label: string;
     type: "text" | "number";
     unit?: string;
+    /**
+     * What the column measures. The certificate reads `"reference"` here to
+     * find which column of a points table carries the applied value, so each
+     * results row can be labelled with its load rather than a row index.
+     */
+    quantityKind?:
+      | "indication"
+      | "reference"
+      | "environment"
+      | "correction"
+      | "tolerance"
+      | "uncertainty"
+      | "resolution"
+      | "other";
     role?: "standard_value" | "mass_standard_composition";
     phase?: "before" | "after" | "always";
     massComposition?: {
