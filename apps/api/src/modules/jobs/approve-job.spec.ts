@@ -16,7 +16,6 @@ const {
   mockCreateOotEvent,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
-  mockIssuanceAvailable,
 } = vi.hoisted(() => {
   const state: {
     jobRows: unknown[];
@@ -50,7 +49,6 @@ const {
     // Default the mock to available so the approval-effect assertions below
     // — audit log, enqueue, OOT event, date advance — keep running instead of
     // going dark until Phase 3.
-    mockIssuanceAvailable: vi.fn(() => true),
   };
 });
 
@@ -112,9 +110,6 @@ vi.mock("../../lib/automatic-send", () => ({
 }));
 vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
-}));
-vi.mock("../../lib/certificate-issuance-availability", () => ({
-  isCertificateIssuanceAvailable: mockIssuanceAvailable,
 }));
 
 import { approveJob } from "./approve-job";
@@ -219,18 +214,6 @@ describe("approveJob gates", () => {
     mockCheckSignatory.mockResolvedValue({ ok: false });
     await expect(callApprove()).resolves.toEqual({
       status: "not_authorized_signatory",
-    });
-    expect(state.updateCalls).toHaveLength(0);
-  });
-
-  // #865: this is the real production behaviour right now — nothing can
-  // render a certificate, so the job must not leave REVIEW. Without this the
-  // worker would fail afterwards and strand it in GENERATING_PDF.
-  it("blocks approval while certificate issuance is unavailable", async () => {
-    state.jobRows = [reviewJob()];
-    mockIssuanceAvailable.mockReturnValueOnce(false);
-    await expect(callApprove()).resolves.toEqual({
-      status: "certificate_issuance_unavailable",
     });
     expect(state.updateCalls).toHaveLength(0);
   });

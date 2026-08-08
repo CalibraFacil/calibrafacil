@@ -33,8 +33,16 @@ const FINGERPRINT_FIXTURES: ReadonlyArray<{
     buildDraft: buildMassBalanceDraft,
     methodId: 6,
     version: 1,
+    // Bumped by the fixed-layout work (#865): media_indicacao_antes/apos moved
+    // from role "primary_result" to "mean_indication" so a generic certificate
+    // layout can tell the indication column from the error column. NOT a
+    // metrology change — no expression, unit or constant moved, and every
+    // computed value is identical. The fingerprint covers reporting metadata,
+    // so it still churns, which means production's seeded method id=6 has to be
+    // re-seeded (EXEMPLO_FORCE_METHOD_TEMPLATE_UPDATE) before it matches again.
+    // Previous: method:a614c64c40b142acec5681ffe73c8de04b15fa223300103599efdde750394da4
     fingerprint:
-      "method:a614c64c40b142acec5681ffe73c8de04b15fa223300103599efdde750394da4",
+      "method:c867d03d82615597ab28a318d6da7d3b6c47e8edf496622e987c10bff37ac624",
   },
 ];
 

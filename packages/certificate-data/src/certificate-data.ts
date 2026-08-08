@@ -129,6 +129,20 @@ export type MethodInputField = {
   options?: string[];
   defaultValue?: string | number;
   source?: "manual" | "asset_spec";
+  /**
+   * What the field MEASURES, as declared by the method. The certificate layout
+   * uses "reference" to find which column of a points table holds the applied
+   * reference value, so it can label each row without knowing the method.
+   */
+  quantityKind?:
+    | "indication"
+    | "reference"
+    | "environment"
+    | "correction"
+    | "tolerance"
+    | "uncertainty"
+    | "resolution"
+    | "other";
   assetSpecKey?: string;
   allowOverride?: boolean;
   phaseBlockKey?: string;
@@ -177,6 +191,8 @@ export type MethodFormulaReporting = {
   includeInCertificate?: boolean;
   role?:
     | "primary_result"
+    | "mean_indication"
+    | "reference_value"
     | "expanded_uncertainty"
     | "coverage_factor"
     | "conformity_margin"
@@ -184,13 +200,32 @@ export type MethodFormulaReporting = {
     | "uncertainty_component"
     | "auxiliary";
   group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+  /**
+   * as-found ("before") vs as-left ("after"), §7.8.4.1(d). A method that
+   * measures once leaves this undefined; one that measures either side of an
+   * adjustment declares it per formula, and the layout renders one results
+   * table per declared phase.
+   */
+  phase?: "before" | "after";
 };
+
+/**
+ * Which table a formula evaluates over. "table_row" means it produces one
+ * value per row of `tableKey`, i.e. an ARRAY in `results`. This is how the
+ * layout separates the main results table from the eccentricity and
+ * repeatability blocks: they are different tables, declared as such, not
+ * guessed from the output key.
+ */
+export type MethodFormulaScope =
+  | { kind: "scalar" }
+  | { kind: "table_row"; tableKey: string };
 
 export type MethodFormula = {
   outputKey: string;
   expression: string;
   label?: string;
   unit?: string;
+  scope?: MethodFormulaScope;
   reporting?: MethodFormulaReporting;
 };
 
@@ -220,6 +255,13 @@ export type MethodSnapshot = {
   formulas?: MethodFormula[];
   certificateContent?: MethodCertificateContent | null;
   accreditedScope?: boolean;
+  /**
+   * Engine provenance, frozen with the method. Printed small at the foot of the
+   * certificate so an auditor can reproduce the calculation: which engine ran,
+   * and against which compiled method.
+   */
+  engineVersion?: string | null;
+  methodFingerprint?: string | null;
 };
 
 export type CertifiedValue = {
@@ -397,9 +439,7 @@ function formatEffectiveDegreesOfFreedom(value: unknown): unknown {
 
   const numeric = asFiniteNumber(value);
   if (numeric === null) return value;
-  return numeric >= 1_000_000_000
-    ? "infinito"
-    : formatDecimalPtBr(numeric, 0);
+  return numeric >= 1_000_000_000 ? "infinito" : formatDecimalPtBr(numeric, 0);
 }
 
 function formatAssetMeasurement(
@@ -577,7 +617,9 @@ function normalizeStandards(job: CertificateJobData) {
     validUntil: toIsoDateish(standard.nextCalibrationDate),
     validUntilText: formatCertificateDate(standard.nextCalibrationDate),
     nextCalibrationDate: toIsoDateish(standard.nextCalibrationDate),
-    nextCalibrationDateText: formatCertificateDate(standard.nextCalibrationDate),
+    nextCalibrationDateText: formatCertificateDate(
+      standard.nextCalibrationDate,
+    ),
     uncertainty: standard.uncertainty,
     uncertaintyUnit: standard.uncertaintyUnit,
     coverageFactor: standard.coverageFactor,

@@ -67,17 +67,12 @@ process.env.DATABASE_URL = workerUrl;
 // Step 5: mock better-auth sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const {
-  getSessionMock,
-  backofficeGetSessionMock,
-  portalGetSessionMock,
-  issuanceAvailableMock,
-} = vi.hoisted(() => ({
-  getSessionMock: vi.fn(),
-  backofficeGetSessionMock: vi.fn(),
-  portalGetSessionMock: vi.fn(),
-  issuanceAvailableMock: vi.fn(() => true),
-}));
+const { getSessionMock, backofficeGetSessionMock, portalGetSessionMock } =
+  vi.hoisted(() => ({
+    getSessionMock: vi.fn(),
+    backofficeGetSessionMock: vi.fn(),
+    portalGetSessionMock: vi.fn(),
+  }));
 
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
@@ -105,39 +100,6 @@ vi.mock("@calibra-facil/auth", async (importOriginal) => {
     }),
   };
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 6: certificate-issuance kill-switch (#865 — TEMPORARY)
-// ─────────────────────────────────────────────────────────────────────────────
-// While the certificate layout is being redesigned, approval is blocked
-// unconditionally by lib/certificate-issuance-availability. That is a DEPLOY
-// STATE, not domain logic — and leaving it engaged here would silently dark out
-// every approval-path assertion in this tier at once: tenant isolation,
-// four-eyes separation of duties, role separation, the REVIEW-only lifecycle,
-// the service-order and calibration-request flows. Those are the regulated
-// checks this tier exists for, so we force issuance AVAILABLE by default and
-// let a dedicated test flip it off to assert the block itself.
-//
-// DELETE THIS BLOCK in Phase 3, together with the module it mocks.
-vi.mock(
-  "../../src/lib/certificate-issuance-availability",
-  async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import("../../src/lib/certificate-issuance-availability")
-      >();
-    return { ...actual, isCertificateIssuanceAvailable: issuanceAvailableMock };
-  },
-);
-
-/**
- * Flip the certificate-issuance kill-switch for the current test. Resets to
- * `true` before each test. Use `false` to assert the 422
- * CERTIFICATE_ISSUANCE_UNAVAILABLE guard.
- */
-export function setCertificateIssuanceAvailable(available: boolean) {
-  issuanceAvailableMock.mockReturnValue(available);
-}
 
 export type TestSession = {
   user: {
@@ -253,5 +215,4 @@ beforeEach(() => {
   getSessionMock.mockReset();
   backofficeGetSessionMock.mockReset();
   portalGetSessionMock.mockReset();
-  issuanceAvailableMock.mockReturnValue(true);
 });

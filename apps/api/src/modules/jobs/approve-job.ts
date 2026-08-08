@@ -19,7 +19,6 @@ import {
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
 import { buildUnitScopeCondition } from "../../lib/units";
-import { isCertificateIssuanceAvailable } from "../../lib/certificate-issuance-availability";
 import { notifyJobApproved } from "@calibra-facil/notifications";
 
 type JobRow = typeof calibrationJob.$inferSelect;
@@ -47,15 +46,6 @@ export type ApproveJobResult =
        */
       status: "scope_violation";
       scopeCompliance: ScopeComplianceResult;
-    }
-  | {
-      /**
-       * No certificate can be rendered while the layout is being replaced
-       * (#865) — issuance would fail in the worker, so approval blocks.
-       * Removed in Phase 3 together with
-       * `lib/certificate-issuance-availability`.
-       */
-      status: "certificate_issuance_unavailable";
     }
   | {
       status: "approved";
@@ -223,15 +213,6 @@ export async function approveJob(input: {
   // enforced violation — never let a stray justification downgrade a
   // passing (or warn-mode) certificate.
   const appliedScopeOverride = scopeBlocked ? scopeOverrideJustification : null;
-
-  // The job must be renderable BEFORE it leaves REVIEW — otherwise the worker
-  // fails after the fact and strands it in GENERATING_PDF. This used to check
-  // that the frozen method owned a published XLSX template; during the
-  // fixed-layout redesign (#865) nothing can render at all, so it blocks
-  // unconditionally. Same invariant, wider scope.
-  if (!isCertificateIssuanceAvailable()) {
-    return { status: "certificate_issuance_unavailable" };
-  }
 
   // Update job status to GENERATING_PDF and set approver info
   // (we set approved_by now so the PDF worker can fetch it)

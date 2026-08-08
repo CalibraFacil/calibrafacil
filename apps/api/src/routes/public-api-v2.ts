@@ -70,11 +70,6 @@ import {
   storeIdempotencyRecord,
   upsertResourceExternalId,
 } from "../lib/public-api";
-import {
-  CERTIFICATE_ISSUANCE_UNAVAILABLE_PUBLIC_CODE,
-  CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
-  isCertificateIssuanceAvailable,
-} from "../lib/certificate-issuance-availability";
 import { isUniqueViolation } from "../lib/db-errors";
 import {
   createR2Client,
@@ -3748,19 +3743,6 @@ publicApiV2Router
             body: buildPublicApiError({
               code: "job_not_approvable",
               message: "A OS precisa estar em revisão para ser aprovada",
-            }),
-          };
-        }
-
-        // Same gate as the interactive approval: nothing can render a
-        // certificate while the layout is being replaced (#865), so approving
-        // here would strand the job in GENERATING_PDF.
-        if (!isCertificateIssuanceAvailable()) {
-          return {
-            status: 422,
-            body: buildPublicApiError({
-              code: CERTIFICATE_ISSUANCE_UNAVAILABLE_PUBLIC_CODE,
-              message: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
             }),
           };
         }

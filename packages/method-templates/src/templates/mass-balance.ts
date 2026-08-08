@@ -304,7 +304,11 @@ export const formulas: Record<string, unknown>[] = [
     reporting: {
       includeInCertificate: true,
       phase: "before",
-      role: "primary_result",
+      // Not "primary_result": that role is the ERROR. A fixed layout has to
+      // tell the mean indication column from the error column, and both
+      // carrying the same role is what forced the XLSX path to bind cells by
+      // hand. Declared, so the layout does not have to guess.
+      role: "mean_indication",
       group: "calibration_result",
     },
   },
@@ -472,7 +476,11 @@ export const formulas: Record<string, unknown>[] = [
     reporting: {
       includeInCertificate: true,
       phase: "after",
-      role: "primary_result",
+      // Not "primary_result": that role is the ERROR. A fixed layout has to
+      // tell the mean indication column from the error column, and both
+      // carrying the same role is what forced the XLSX path to bind cells by
+      // hand. Declared, so the layout does not have to guess.
+      role: "mean_indication",
       group: "calibration_result",
     },
   },

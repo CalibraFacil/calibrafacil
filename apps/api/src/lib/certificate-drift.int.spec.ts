@@ -7,8 +7,6 @@ import {
   asset,
   assetType,
   calibrationJob,
-  certificateTemplate,
-  certificateTemplateVersion,
   customer,
   issuedCertificateSnapshot,
   organizationEventLog,
@@ -58,37 +56,6 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     .insert(service)
     .values({ unitId, organizationId: orgId, name: "Calibração", createdAt: EPOCH })
     .returning();
-  const [templateRow] = await db
-    .insert(certificateTemplate)
-    .values({
-      organizationId: orgId,
-      name: "Modelo Drift",
-      slug: "modelo-drift",
-      createdBy: userId,
-      createdAt: EPOCH,
-    })
-    .returning();
-  const [versionRow] = await db
-    .insert(certificateTemplateVersion)
-    .values({
-      organizationId: orgId,
-      templateId: templateRow!.id,
-      version: 1,
-      status: "PUBLISHED",
-      xlsxR2Key: "media/templates/drift.xlsx",
-      xlsxSha256: "sha-x",
-      bindingManifest: {},
-      bindingManifestSha256: "sha-m",
-      renderPolicy: {
-        formulas: "preserve",
-        macros: "reject",
-        externalLinks: "reject",
-        converter: "gotenberg-libreoffice",
-      },
-      createdBy: userId,
-      createdAt: EPOCH,
-    })
-    .returning();
   const [jobRow] = await db
     .insert(calibrationJob)
     .values({
@@ -122,18 +89,18 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     .values({
       organizationId: orgId,
       jobId: jobRow!.id,
-      templateId: templateRow!.id,
-      templateVersionId: versionRow!.id,
-      filledXlsxR2Key: "certs/drift.xlsx",
-      filledXlsxSha256: "sha-fx",
-      bindingManifestSha256: "sha-manifest",
       pdfR2Key: "certs/drift.pdf",
       pdfSha256: PDF_SHA,
+      // #865 Phase 3: a snapshot describes a LAYOUT now, not a workbook. The
+      // template link and the filled-XLSX columns went with migration 0108.
+      renderPipeline: "FIXED_LAYOUT",
+      layoutKey: "calibration-certificate-fixed",
+      layoutVersion: "1.0.0",
+      rendererVersion: "worker/1",
       renderPolicy: {
-        formulas: "preserve",
-        macros: "reject",
-        externalLinks: "reject",
-        converter: "gotenberg-libreoffice",
+        converter: "gotenberg-chromium",
+        layoutKey: "calibration-certificate-fixed",
+        layoutVersion: "1.0.0",
       },
       inputDataSnapshot: {},
       status: "ISSUED",

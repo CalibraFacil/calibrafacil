@@ -100,10 +100,6 @@ import { buildUnitScopeCondition } from "../lib/units";
 import { syncVisitStatusFromJobs } from "../lib/visits";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 import {
-  CERTIFICATE_ISSUANCE_UNAVAILABLE_CODE,
-  CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
-} from "../lib/certificate-issuance-availability";
-import {
   executeCompiledMethod,
   type CalculationEngineLike,
   type CompiledMethod,
@@ -2252,14 +2248,6 @@ export const jobsRouter = new Hono<{
               environmentalSnapshot: result.environmentalSnapshot,
             },
             400,
-          );
-        case "certificate_issuance_unavailable":
-          return c.json(
-            {
-              error: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
-              code: CERTIFICATE_ISSUANCE_UNAVAILABLE_CODE,
-            },
-            422,
           );
         case "scope_violation":
           return c.json(

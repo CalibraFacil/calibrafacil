@@ -292,6 +292,16 @@ export type MethodFormula = {
     includeInCertificate?: boolean;
     role?:
       | "primary_result"
+      /**
+       * The instrument's mean indication at the point, as distinct from the
+       * error derived from it. Both used to be "primary_result", which left a
+       * fixed layout unable to tell which column was which — the XLSX path
+       * papered over it by having a human bind each cell by hand. A generic
+       * certificate layout has to be told, so it is declared.
+       */
+      | "mean_indication"
+      /** The reference/conventional true value applied at the point (VVC). */
+      | "reference_value"
       | "expanded_uncertainty"
       | "coverage_factor"
       | "conformity_margin"

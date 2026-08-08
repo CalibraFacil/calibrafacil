@@ -1214,49 +1214,15 @@ export const organizationEmailDomain = pgTable(
   ],
 );
 
-export const certificateTemplate = pgTable(
-  "certificate_template",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    slug: text("slug").notNull(),
-    version: integer("version").default(1).notNull(),
-    status: text("status").default("ACTIVE").notNull(),
-    isDefault: boolean("is_default").default(false).notNull(),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    archivedAt: timestamp("archived_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("certificate_template_org_id_idx").on(table.organizationId),
-    index("certificate_template_status_idx").on(table.status),
-    uniqueIndex("certificate_template_org_slug_uidx").on(
-      table.organizationId,
-      table.slug,
-    ),
-  ],
-);
-
-export type CertificateXlsxTemplateVersionStatus =
-  | "DRAFT"
-  | "VALIDATED"
-  | "PUBLISHED"
-  | "ARCHIVED";
-
 /**
- * Which renderer produced an issued certificate. Only the retired XLSX
- * pipeline exists today; Fase 3 adds the fixed system layouts.
+ * Which renderer produced an issued certificate.
+ *
+ * XLSX_LEGACY is the retired lab-authored workbook path; exactly one
+ * historical row carries it and no new row ever will. FIXED_LAYOUT is the
+ * system-designed React layout (#865 Phase 3). Reproducing an old certificate
+ * means knowing which of the two made it.
  */
-export type IssuedCertificateRenderPipeline = "XLSX_LEGACY";
+export type IssuedCertificateRenderPipeline = "XLSX_LEGACY" | "FIXED_LAYOUT";
 
 export type IssuedCertificateSnapshotStatus =
   | "ISSUED"
@@ -1270,59 +1236,20 @@ export type CertificateXlsxRenderPolicy = {
   converter: "gotenberg-libreoffice";
 };
 
-export type CertificateRenderPolicy = CertificateXlsxRenderPolicy;
+/**
+ * How the fixed layout was rendered. Recorded per issuance so a re-render years
+ * later can be compared against the conditions that produced the stored bytes.
+ */
+export type CertificateFixedLayoutRenderPolicy = {
+  converter: "gotenberg-chromium";
+  /** Which layout component rendered it, and at which revision. */
+  layoutKey: string;
+  layoutVersion: string;
+};
 
-export const certificateTemplateVersion = pgTable(
-  "certificate_template_version",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    templateId: integer("template_id")
-      .notNull()
-      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
-    version: integer("version").notNull(),
-    status: text("status")
-      .$type<CertificateXlsxTemplateVersionStatus>()
-      .default("DRAFT")
-      .notNull(),
-    xlsxR2Key: text("xlsx_r2_key").notNull(),
-    xlsxSha256: text("xlsx_sha256").notNull(),
-    bindingManifest: jsonb("binding_manifest")
-      .$type<Record<string, unknown>>()
-      .notNull(),
-    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
-    renderPolicy: jsonb("render_policy")
-      .$type<CertificateRenderPolicy>()
-      .notNull(),
-    analysis: jsonb("analysis").$type<Record<string, unknown>>(),
-    validationResult:
-      jsonb("validation_result").$type<Record<string, unknown>>(),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    publishedAt: timestamp("published_at"),
-    publishedBy: text("published_by").references(() => user.id, {
-      onDelete: "set null",
-    }),
-    archivedAt: timestamp("archived_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("certificate_template_version_org_idx").on(table.organizationId),
-    index("certificate_template_version_template_idx").on(table.templateId),
-    index("certificate_template_version_status_idx").on(table.status),
-    uniqueIndex("certificate_template_version_template_version_uidx").on(
-      table.templateId,
-      table.version,
-    ),
-  ],
-);
+export type CertificateRenderPolicy =
+  | CertificateXlsxRenderPolicy
+  | CertificateFixedLayoutRenderPolicy;
 
 export const issuedCertificateSnapshot = pgTable(
   "issued_certificate_snapshot",
@@ -1349,14 +1276,23 @@ export const issuedCertificateSnapshot = pgTable(
       .default("XLSX_LEGACY")
       .notNull(),
     certificateNumber: text("certificate_number"),
-    filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
-    filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
     pdfR2Key: text("pdf_r2_key").notNull(),
     pdfSha256: text("pdf_sha256").notNull(),
-    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
-    renderPolicy: jsonb("render_policy")
-      .$type<CertificateRenderPolicy>()
-      .notNull(),
+    /**
+     * 0108 — which layout produced this row, so it can be re-rendered and
+     * compared. Nullable because the one XLSX_LEGACY row predates them.
+     */
+    layoutKey: text("layout_key"),
+    layoutVersion: text("layout_version"),
+    rendererVersion: text("renderer_version"),
+    /**
+     * 0108 — the retired XLSX pipeline's provenance (workbook R2 key, its
+     * sha256, the binding-manifest sha256, template ids), moved off the columns
+     * rather than deleted so the single historical row still describes how it
+     * was made. Null for everything the fixed layout issues.
+     */
+    legacyXlsx: jsonb("legacy_xlsx").$type<Record<string, unknown>>(),
+    renderPolicy: jsonb("render_policy").$type<CertificateRenderPolicy>(),
     renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
     inputDataSnapshot: jsonb("input_data_snapshot")
       .$type<Record<string, unknown>>()
@@ -2134,8 +2070,6 @@ export const userRelations = relations(user, ({ many }) => ({
   ssoProviders: many(ssoProvider),
   customDomains: many(organizationCustomDomain),
   emailDomains: many(organizationEmailDomain),
-  certificateTemplates: many(certificateTemplate),
-  certificateTemplateVersions: many(certificateTemplateVersion),
   issuedCertificateSnapshots: many(issuedCertificateSnapshot),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
   successProfiles: many(organizationSuccessProfile),
@@ -2182,9 +2116,7 @@ export const organizationRelations = relations(
     ssoProviders: many(ssoProvider),
     customDomain: one(organizationCustomDomain),
     emailDomain: one(organizationEmailDomain),
-    certificateTemplates: many(certificateTemplate),
-    certificateTemplateVersions: many(certificateTemplateVersion),
-      issuedCertificateSnapshots: many(issuedCertificateSnapshot),
+    issuedCertificateSnapshots: many(issuedCertificateSnapshot),
     apiKeys: many(organizationApiKey),
     integrations: many(organizationIntegration),
     integrationConnections: many(integrationConnection),
@@ -2381,48 +2313,6 @@ export const organizationEmailDomainRelations = relations(
       fields: [organizationEmailDomain.createdBy],
       references: [user.id],
     }),
-  }),
-);
-
-export const certificateTemplateRelations = relations(
-  certificateTemplate,
-  ({ one, many }) => ({
-    organization: one(organization, {
-      fields: [certificateTemplate.organizationId],
-      references: [organization.id],
-    }),
-    createdByUser: one(user, {
-      fields: [certificateTemplate.createdBy],
-      references: [user.id],
-    }),
-    versions: many(certificateTemplateVersion),
-    issuedSnapshots: many(issuedCertificateSnapshot),
-    jobs: many(calibrationJob),
-  }),
-);
-
-export const certificateTemplateVersionRelations = relations(
-  certificateTemplateVersion,
-  ({ one, many }) => ({
-    organization: one(organization, {
-      fields: [certificateTemplateVersion.organizationId],
-      references: [organization.id],
-    }),
-    template: one(certificateTemplate, {
-      fields: [certificateTemplateVersion.templateId],
-      references: [certificateTemplate.id],
-    }),
-    createdByUser: one(user, {
-      fields: [certificateTemplateVersion.createdBy],
-      references: [user.id],
-      relationName: "certificateTemplateVersionCreator",
-    }),
-    publishedByUser: one(user, {
-      fields: [certificateTemplateVersion.publishedBy],
-      references: [user.id],
-      relationName: "certificateTemplateVersionPublisher",
-    }),
-    issuedSnapshots: many(issuedCertificateSnapshot),
   }),
 );
 

@@ -22,6 +22,7 @@ export {
   type MethodCertificateContent,
   type MethodFormula,
   type MethodFormulaReporting,
+  type MethodFormulaScope,
   type MethodInputField,
   type MethodSnapshot,
   type StandardSnapshot,
@@ -33,3 +34,9 @@ export {
 } from "./eccentricity-indicator.js";
 export { formatValue, getPath } from "./formatters.js";
 export { formatDecimalPtBr, fractionDigitsOf } from "./decimal-format.js";
+export {
+  formatAtDecimals,
+  roundMeasurementForReport,
+  UNCERTAINTY_SIGNIFICANT_FIGURES,
+  type RoundedMeasurement,
+} from "./reporting-rounding.js";

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { flushWorkerErrorReporter, reportWorkerError } from "./observability";
 import { processSpcRecompute } from "./spc-recompute";
 import { processEmailDomainHealth } from "./email-domain-health";
@@ -33,6 +33,37 @@ import {
 } from "./scheduled.js";
 
 import {
+  signAndTimestampPdf,
+  verifyPdf,
+  getIcpBrasilTrustAnchors,
+  decryptPassword,
+  decryptBinary,
+  type SignatureMetadata,
+  type VerifyPdfResult,
+  createCrlFetcher,
+} from "@calibra-facil/signing";
+import { resolveTsaConfig } from "./tsa-config.js";
+import { resolveSigningPolicy, SigningPolicyError } from "./signing-policy.js";
+
+/** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
+type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
+
+import {
+  CalibrationCertificateHtml,
+  certificateFooterHtml,
+  certificateHeaderHtml,
+} from "@calibra-facil/documents";
+import { buildCertificateLayoutData } from "./certificate/layout-data.js";
+import { fetchCertificateJobData } from "./certificate/fetch-job-data.js";
+
+/**
+ * Identifies the worker build that rendered a certificate, alongside the layout
+ * version. Two different worker builds can render the same layout differently
+ * (a Gotenberg bump, a font change), so reproducing a PDF needs both.
+ */
+const WORKER_RENDERER_VERSION = "worker/1";
+
+import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
 } from "./integrations.js";
@@ -41,6 +72,7 @@ import {
   type AuditPackBackgroundJobMessage,
   type BackgroundJobMessage,
   type DocumentBackgroundJobMessage,
+  formatAccreditationNumber,
 } from "@calibra-facil/shared";
 import {
   getLogoKeyFromUrl,
@@ -52,9 +84,11 @@ import {
   serviceOrderDocKey,
   type OrgRef,
   type StorageBucket,
+  issuedCertificatePdfKey,
 } from "@calibra-facil/shared/storage-keys";
 import {
   notifyAuditPackReady,
+  notifyCertificateReady,
 } from "@calibra-facil/notifications";
 
 export interface R2BucketBinding {
@@ -95,12 +129,6 @@ export interface Env {
   WEB_URL?: string;
   APP_URL?: string;
 }
-
-// Mirrors the API guard in lib/certificate-issuance-availability.ts. Both go
-// away in Phase 3, when the fixed layouts can render again (#865).
-const CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE =
-  "Emissão de certificado indisponível: o layout do certificado está em redesenho";
-
 
 export type QueueMessage = BackgroundJobMessage;
 
@@ -232,6 +260,345 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 /**
  * Signing certificate data fetched from database
  */
+// =============================================================================
+// CERTIFICATE SIGNING AND ISSUANCE TRANSITION (#865 Phase 3)
+//
+// Restored from 45571b97, unchanged. None of it was layout-specific: it signs
+// whatever PDF bytes it is handed and moves the job to APPROVED. It came out
+// with the XLSX renderer only because issuance was the sole caller.
+// =============================================================================
+
+/** Narrows a jsonb column to a plain record without an `as` assertion. */
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function parseSignatureMetadata(value: unknown): SignatureMetadata | undefined {
+  if (value == null) return undefined;
+
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parseSignatureMetadata(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+
+  const metadata = recordFromUnknown(value);
+  const signedAt = metadata.signedAt;
+  const signerCertificateSerial = metadata.signerCertificateSerial;
+  const signerName = metadata.signerName;
+  const signerCpfCnpj = metadata.signerCpfCnpj;
+  const pdfHash = metadata.pdfHash;
+  const ltvEnabled = metadata.ltvEnabled;
+  if (
+    typeof signedAt !== "string" ||
+    typeof signerCertificateSerial !== "string" ||
+    typeof signerName !== "string" ||
+    (signerCpfCnpj !== null && typeof signerCpfCnpj !== "string") ||
+    typeof pdfHash !== "string" ||
+    typeof ltvEnabled !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  return {
+    signedAt,
+    signerCertificateSerial,
+    signerName,
+    signerCpfCnpj,
+    pdfHash,
+    ltvEnabled,
+  };
+}
+
+interface SigningCertificateData {
+  encryptedP12: string;
+  encryptedPassword: string;
+  passwordIv: string;
+  subjectCn: string;
+}
+
+/** #644: the unit's signing-policy flag (organization_unit.require_signature). */
+async function fetchUnitRequireSignature(
+  client: Client,
+  organizationId: string,
+  unitId: number,
+): Promise<boolean> {
+  const result = await client.query(
+    `
+        SELECT require_signature
+        FROM organization_unit
+        WHERE id = $1 AND organization_id = $2
+        LIMIT 1
+        `,
+    [unitId, organizationId],
+  );
+  return result.rows[0]?.require_signature === true;
+}
+
+/**
+ * Fetch organization's default signing certificate
+ */
+async function fetchSigningCertificate(
+  client: Client,
+  organizationId: string,
+  unitId: number,
+): Promise<SigningCertificateData | null> {
+  const result = await client.query(
+    `
+        SELECT encrypted_p12, encrypted_password, password_iv, subject_cn
+        FROM organization_signing_certificate
+        WHERE organization_id = $1
+          AND unit_id = $2
+          AND is_active = true
+          AND is_default = true
+          AND valid_until > NOW()
+        LIMIT 1
+        `,
+    [organizationId, unitId],
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    encryptedP12: row.encrypted_p12,
+    encryptedPassword: row.encrypted_password,
+    passwordIv: row.password_iv,
+    subjectCn: row.subject_cn,
+  };
+}
+
+async function updateJobWithCertificate(
+  client: Client,
+  jobId: number,
+  certificateUrl: string,
+  userId: string,
+  signatureMetadata?: SignatureMetadata,
+  signatureVerdict?: StoredSignatureVerdict,
+  options: { preserveSignatureMetadata?: boolean } = {},
+): Promise<void> {
+  const now = new Date();
+
+  // Check if job is SUPERSEDED (being regenerated with watermark)
+  const statusResult = await client.query<{
+    status: string;
+    signature_metadata: unknown;
+  }>(`SELECT status, signature_metadata FROM calibration_job WHERE id = $1`, [
+    jobId,
+  ]);
+  const currentStatus = statusResult.rows[0]?.status;
+  const isSuperseded = currentStatus === "SUPERSEDED";
+  const shouldPreserveSignatureMetadata =
+    options.preserveSignatureMetadata === true &&
+    signatureMetadata === undefined;
+  const auditSignatureMetadata =
+    signatureMetadata ??
+    (shouldPreserveSignatureMetadata
+      ? parseSignatureMetadata(statusResult.rows[0]?.signature_metadata)
+      : undefined);
+
+  // The verdict travels with the signature: write it only when a fresh one is
+  // supplied, otherwise keep whatever is stored (regeneration / watermark paths
+  // pass no verdict and must not wipe it).
+  const writeSignatureVerdict = signatureVerdict !== undefined;
+
+  // Only update status to APPROVED if not already SUPERSEDED
+  // SUPERSEDED jobs are being regenerated with watermark and should keep their status
+  await client.query(
+    `
+    UPDATE calibration_job
+    SET
+      status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
+      certificate_url = $2,
+      signature_metadata = CASE WHEN $5 THEN signature_metadata ELSE $3::jsonb END,
+      signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
+      updated_at = $4
+    WHERE id = $1
+    `,
+    [
+      jobId,
+      certificateUrl,
+      signatureMetadata ? JSON.stringify(signatureMetadata) : null,
+      now,
+      shouldPreserveSignatureMetadata,
+      writeSignatureVerdict,
+      signatureVerdict ? JSON.stringify(signatureVerdict) : null,
+    ],
+  );
+
+  // Log appropriate action based on whether this is a watermark regeneration
+  const action = isSuperseded
+    ? "certificate_watermarked"
+    : "certificate_generated";
+  const statusChange = isSuperseded
+    ? { status: "SUPERSEDED (watermark added)" }
+    : { status: { old: "GENERATING_PDF", new: "APPROVED" } };
+
+  await client.query(
+    `
+    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at)
+    VALUES ($1, $2, $3, $4, $5)
+    `,
+    [
+      jobId,
+      action,
+      JSON.stringify({
+        ...statusChange,
+        certificateUrl: { old: null, new: certificateUrl },
+        signatureMetadata: auditSignatureMetadata
+          ? { signed: true, signerName: auditSignatureMetadata.signerName }
+          : { signed: false },
+      }),
+      userId,
+      now,
+    ],
+  );
+
+  if (!isSuperseded) {
+    try {
+      await notifyCertificateReady(jobId);
+    } catch (error) {
+      console.error(
+        `[JOB ${jobId}] Failed to send certificate ready notification:`,
+        error,
+      );
+    }
+  }
+}
+
+async function signPdfWithUnitCertificate(
+  env: Env,
+  jobId: number,
+  organizationId: string | null | undefined,
+  unitId: number | null | undefined,
+  pdfBuffer: Buffer,
+): Promise<{
+  pdfBuffer: Buffer;
+  signatureMetadata?: SignatureMetadata;
+  signatureVerdict?: StoredSignatureVerdict;
+}> {
+  const signStart = performance.now();
+  if (!organizationId) {
+    console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
+  }
+  if (!unitId) {
+    console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
+  }
+
+  // #644 (CMP-01): the unit's signing policy governs the missing-cert /
+  // missing-master-key paths. Unresolvable flag (legacy job without unit)
+  // keeps the pre-#644 permissive behavior.
+  const requireSignature =
+    organizationId && unitId
+      ? await withDbClient(env, (client) =>
+          fetchUnitRequireSignature(client, organizationId, unitId),
+        )
+      : false;
+
+  const signingCert =
+    env.SIGNING_MASTER_KEY && organizationId && unitId
+      ? await withDbClient(env, (client) =>
+          fetchSigningCertificate(client, organizationId, unitId),
+        )
+      : null;
+
+  const policy = resolveSigningPolicy({
+    hasMasterKey: Boolean(env.SIGNING_MASTER_KEY),
+    hasCertificate: signingCert !== null,
+    requireSignature,
+  });
+  if (policy.action === "FAIL") {
+    throw new SigningPolicyError(policy.reason);
+  }
+  if (policy.action === "EMIT_UNSIGNED" || !signingCert) {
+    // Visible, not silent: signature_metadata stays NULL, so the portal and
+    // the public verification page render the UNSIGNED verdict.
+    console.warn(
+      `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
+    );
+    return { pdfBuffer };
+  }
+
+  // Narrowing only: the certificate fetch above is gated on the master key,
+  // so a non-null signingCert implies the key is present.
+  const masterKey = env.SIGNING_MASTER_KEY;
+  if (!masterKey) {
+    return { pdfBuffer };
+  }
+
+  try {
+    const password = decryptPassword(
+      signingCert.encryptedPassword,
+      signingCert.passwordIv,
+      masterKey,
+    );
+    const p12Buffer = decryptBinary(signingCert.encryptedP12, masterKey);
+    // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
+    // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
+    // byte-identical to the pre-#646 AD-RB signature.
+    const result = await signAndTimestampPdf(pdfBuffer, {
+      p12Buffer,
+      password,
+      reason: "Certificado de Calibracao - CalibraFacil",
+      location: "Brasil",
+      enableLtv: false,
+      timestamp: resolveTsaConfig(env),
+    });
+
+    console.log(
+      `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
+    );
+
+    // Precompute the at-issue signature-integrity verdict so the public
+    // verification page can serve it without re-downloading + re-verifying the
+    // PDF on every hit. Best-effort — verifyPdf never throws, but a verdict
+    // failure must never block issuance.
+    let signatureVerdict: StoredSignatureVerdict | undefined;
+    try {
+      const verdict = await verifyPdf(result.signedPdf, {
+        expectedSha256: result.metadata.pdfHash,
+        trustAnchors: getIcpBrasilTrustAnchors(),
+        // #646 fase b: best-effort revocation at issue time (verdict degrades
+        // to revocationChecked=false on network trouble; never blocks issuance
+        // since this whole precompute is already best-effort).
+        fetchCrl: createCrlFetcher(),
+        checkDate: new Date(result.metadata.signedAt),
+      });
+      signatureVerdict = { ...verdict, computedAt: result.metadata.signedAt };
+      console.log(`[JOB ${jobId}] verifyPdf: overall=${verdict.overall}`);
+    } catch (verifyError) {
+      console.error(`[JOB ${jobId}] verifyPdf failed:`, verifyError);
+    }
+
+    return {
+      pdfBuffer: Buffer.from(result.signedPdf),
+      signatureMetadata: result.metadata,
+      signatureVerdict,
+    };
+  } catch (signError) {
+    // #644 (REQ-CMP-SIGN-001/002): a configured certificate that fails to sign
+    // ALWAYS fails the emission — the job goes REJECTED with a named reason and
+    // neither the R2 upload, the APPROVED transition nor notifyCertificateReady
+    // (all downstream of this call) can run. Includes #646's TIMESTAMP_FAILED.
+    console.error(`[JOB ${jobId}] PDF signing failed:`, signError);
+    if (signError instanceof SigningPolicyError) {
+      throw signError;
+    }
+    const detail =
+      signError instanceof Error ? signError.message : String(signError);
+    throw new SigningPolicyError(
+      `Falha na assinatura digital do certificado: ${detail}`,
+    );
+  }
+}
+
 async function setJobError(
   client: Client,
   jobId: number,
@@ -1153,29 +1520,69 @@ const DOC_PAGE_FOOTER_HTML =
   "</div></body></html>";
 
 /**
- * Generates an A4 PDF from HTML. Full-page certificate layouts honor their CSS
- * @page size with zero margins; other documents get A4 margins + a
- * "Página X de Y" footer (matching the previous puppeteer output).
+ * Generates an A4 PDF from HTML. Three layouts, distinguished by the
+ * `data-pdf-layout` attribute the document sets on its own <html>:
+ *
+ *   full-page   — CSS @page size, zero margins, no running furniture.
+ *   certificate — CSS @page size AND margins, plus a running header and
+ *                 footer on every page (#865).
+ *   (default)   — fixed A4 with our margins and a "Página X de Y" footer.
+ *
+ * The certificate branch exists because it is the only document that needs
+ * both its own margins and a running header: NIE-Cgcre-009 §11.5.2 wants the
+ * accreditation sentence carried on continuation pages, and §7.8.2.1(d) wants
+ * every page identifiable on its own. `preferCssPageSize` makes Chromium take
+ * the margin box from the stylesheet, and the header/footer render inside it —
+ * so the layout owns its own geometry and the preview in a browser matches.
  */
-async function generatePdfFromHtml(
-  env: Env,
+/**
+ * Chooses the Gotenberg conversion properties for a document, from the
+ * `data-pdf-layout` attribute it sets on its own <html>.
+ *
+ *   certificate — CSS @page size AND margins, plus a running header and footer
+ *                 on every page (#865). NIE-Cgcre-009 §11.5.2 carries the
+ *                 accreditation sentence onto continuation pages, and
+ *                 §7.8.2.1(d) wants every page identifiable on its own.
+ *                 `preferCssPageSize` hands the margin box to the stylesheet,
+ *                 so the layout owns its geometry and a browser preview agrees
+ *                 with the PDF.
+ *   full-page   — CSS @page size, zero margins, no running furniture.
+ *   (default)   — fixed A4 with our margins and a "Página X de Y" footer.
+ *
+ * Split out from `generatePdfFromHtml` so the branch is a pure function: which
+ * geometry a certificate gets is a compliance property, and asserting it should
+ * not require a Gotenberg container.
+ */
+export function resolvePdfRenderRequest(
   html: string,
-): Promise<Uint8Array> {
-  if (html.includes('data-pdf-layout="full-page"')) {
-    return gotenbergHtmlToPdf(env, html, {
-      preferCssPageSize: "true",
-      printBackground: "true",
-      marginTop: "0",
-      marginBottom: "0",
-      marginLeft: "0",
-      marginRight: "0",
-    });
+  options: { headerHtml?: string; footerHtml?: string } = {},
+): { properties: Record<string, string>; extraFiles: Record<string, string> } {
+  if (html.includes('data-pdf-layout="certificate"')) {
+    const extraFiles: Record<string, string> = {};
+    if (options.headerHtml) extraFiles["header.html"] = options.headerHtml;
+    if (options.footerHtml) extraFiles["footer.html"] = options.footerHtml;
+    return {
+      properties: { preferCssPageSize: "true", printBackground: "true" },
+      extraFiles,
+    };
   }
 
-  return gotenbergHtmlToPdf(
-    env,
-    html,
-    {
+  if (html.includes('data-pdf-layout="full-page"')) {
+    return {
+      properties: {
+        preferCssPageSize: "true",
+        printBackground: "true",
+        marginTop: "0",
+        marginBottom: "0",
+        marginLeft: "0",
+        marginRight: "0",
+      },
+      extraFiles: {},
+    };
+  }
+
+  return {
+    properties: {
       ...A4_PAPER,
       printBackground: "true",
       marginTop: "0.3937", // 10mm
@@ -1183,45 +1590,260 @@ async function generatePdfFromHtml(
       marginLeft: "0.3937",
       marginRight: "0.3937",
     },
-    { "footer.html": DOC_PAGE_FOOTER_HTML },
-  );
+    extraFiles: { "footer.html": DOC_PAGE_FOOTER_HTML },
+  };
+}
+
+/** Generates a PDF from HTML, with the geometry its layout asks for. */
+async function generatePdfFromHtml(
+  env: Env,
+  html: string,
+  options: {
+    /** Running header markup, for the certificate layout. */
+    headerHtml?: string;
+    /** Running footer markup, for the certificate layout. */
+    footerHtml?: string;
+  } = {},
+): Promise<Uint8Array> {
+  const { properties, extraFiles } = resolvePdfRenderRequest(html, options);
+  return gotenbergHtmlToPdf(env, html, properties, extraFiles);
 }
 
 /**
- * Process a single calibration-certificate job
+ * Identifies the layout that produced a certificate. Stored on every issued
+ * snapshot so a re-render years later can be told apart from tampering.
+ *
+ * Bump LAYOUT_VERSION whenever the rendered output changes in a way an auditor
+ * could see. It is not the package version: the layout can change while nothing
+ * else does, and only the layout affects the bytes.
+ */
+const CERTIFICATE_LAYOUT_KEY = "calibration-certificate-fixed";
+const CERTIFICATE_LAYOUT_VERSION = "1.0.0";
+
+/**
+ * Renders, signs, stores and records one calibration certificate.
+ *
+ * The write-once contract (REQ-REL-PDF-002): the snapshot insert is
+ * `on conflict (job_id) do nothing`, and the certificate URL always comes from
+ * whichever row is actually in the table. A re-drain of the same queue message
+ * therefore re-uses the stored PDF instead of minting a second certificate
+ * number, however many times it runs.
  */
 async function processJob(
-  _env: Env,
+  env: Env,
   jobId: number,
-  _userId: string,
+  userId: string,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  // The lab-authored XLSX renderer is gone and the fixed system layouts that
-  // replace it are not built yet (#865), so there is nothing to render with.
-  //
-  // PHASE 3 RECOVERY: the SQL projection that built the certificate snapshot
-  // (`fetchJobData`, ~220 lines joining lab, customer, asset, method snapshot,
-  // standards, environmental conditions, approver signature and logo) was
-  // deleted here rather than left dead. It is the natural input to
-  // `buildCertificateData` from @calibra-facil/certificate-data and the new
-  // renderer will want it close to verbatim. Recover with:
-  //     git show abfea552:apps/worker/src/index.ts | sed -n '/^async function fetchJobData/,/^async function /p'
-  //
-  // The API blocks approval for exactly this reason, so no NEW certificate
-  // message should reach here. This path exists for messages already in the
-  // queue when the change deployed, and for a re-drain of an old one.
-  //
-  // Returning success:false makes the caller throw, which queue-runtime maps
-  // to message.retry() -> 5s*2^n backoff until attempts are exhausted. That is
-  // deliberate but worth naming: an in-flight message will retry a handful of
-  // times before it dies, rewriting the job error each round. Production has
-  // no certificate messages in flight (one certificate has ever been issued),
-  // so the cost is a few log lines rather than a storm. Phase 3 restores the
-  // renderer and the whole branch goes away.
-  console.warn(`[JOB ${jobId}] ${CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE}`);
-  return {
-    success: false,
-    error: CERTIFICATE_ISSUANCE_UNAVAILABLE_MESSAGE,
-  };
+  // Idempotency, checked before any work: an already-issued job returns its
+  // stored certificate. The transition is replayed (not skipped) because the
+  // crash may have happened between the snapshot insert and the job update.
+  const existingSnapshot = await withDbClient(env, async (client) => {
+    const result = await client.query<{
+      pdf_r2_key: string;
+      signature_metadata: unknown;
+    }>(
+      `
+        select ics.pdf_r2_key, cj.signature_metadata
+        from issued_certificate_snapshot ics
+        join calibration_job cj on cj.id = ics.job_id
+        where ics.job_id = $1
+        limit 1
+      `,
+      [jobId],
+    );
+    return result.rows[0] ?? null;
+  });
+
+  if (existingSnapshot) {
+    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
+    await withDbClient(env, (client) =>
+      updateJobWithCertificate(
+        client,
+        jobId,
+        certificateUrl,
+        userId,
+        parseSignatureMetadata(existingSnapshot.signature_metadata),
+        undefined,
+        { preserveSignatureMetadata: true },
+      ),
+    );
+    return { success: true, certificateUrl };
+  }
+
+  try {
+    const job = await withDbClient(env, (client) =>
+      fetchCertificateJobData(client, jobId, {
+        resolveLogoDataUrl: (logo) =>
+          resolveOrganizationLogoDataUrl(env, logo, jobId),
+        resolveSignatureDataUrl: async (r2Key, contentType) => {
+          const object = await getStoredObject(env, "media", r2Key);
+          if (!object) return null;
+          const base64 = arrayBufferToBase64(await object.arrayBuffer());
+          return `data:${contentType};base64,${base64}`;
+        },
+      }),
+    );
+    if (!job) return { success: false, error: "Job not found" };
+    if (!job.organizationId) {
+      return { success: false, error: "Missing organization_id" };
+    }
+
+    // The layout refuses to guess: if the method does not declare enough to
+    // build a correct results table, issuance stops here with the reasons
+    // rather than producing a document that merely looks right.
+    const layout = buildCertificateLayoutData(job, {
+      qrCodeDataUrl: await QRCode.toDataURL(
+        `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+        { margin: 0, width: 240 },
+      ),
+    });
+    if (!layout.ok) {
+      return {
+        success: false,
+        error: `Certificado não pode ser emitido: ${layout.reasons.join(" ")}`,
+      };
+    }
+
+    const html = renderToString(
+      React.createElement(CalibrationCertificateHtml, { data: layout.data }),
+    );
+    const rendered = await generatePdfFromHtml(env, html, {
+      headerHtml: certificateHeaderHtml({
+        certificateNumber: layout.data.certificateNumber,
+        accreditationNumberText: layout.data.accredited
+          ? formatAccreditationNumber(layout.data.lab.accreditationNumber)
+          : null,
+      }),
+      footerHtml: certificateFooterHtml(),
+    });
+
+    // Signing FAILS the emission when a certificate is configured and cannot
+    // sign (#644 REQ-CMP-SIGN-001/002) — nothing below this line runs.
+    const signed = await signPdfWithUnitCertificate(
+      env,
+      jobId,
+      job.organizationId,
+      job.unitId,
+      Buffer.from(rendered),
+    );
+    const pdfBuffer = signed.pdfBuffer;
+
+    const year = getYear(
+      job.approvedAt ?? job.performedAt,
+      "approvedAt/performedAt",
+    );
+    const pdf = issuedCertificatePdfKey({
+      org: { id: job.organizationId, slug: job.organizationSlug ?? "" },
+      jobId: job.jobId,
+      issuedId: randomUUID(),
+      certNumber: job.certificateName ?? job.jobId,
+      year,
+      companyName: job.customer.name,
+      assetTag: job.asset.tag,
+      brand: job.asset.manufacturer,
+    });
+    await bucketBinding(env, pdf.bucket).put(pdf.key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+
+    const renderPolicy = {
+      converter: "gotenberg-chromium",
+      layoutKey: CERTIFICATE_LAYOUT_KEY,
+      layoutVersion: CERTIFICATE_LAYOUT_VERSION,
+    };
+    const renderMetadata = {
+      signature: signed.signatureMetadata
+        ? { signed: true, signerName: signed.signatureMetadata.signerName }
+        : { signed: false },
+      renderedAt: new Date().toISOString(),
+    };
+
+    const issuedPdfR2Key = await withDbClient(env, async (client) => {
+      const insertResult = await client.query<{ pdf_r2_key: string }>(
+        `
+          insert into issued_certificate_snapshot (
+            organization_id,
+            job_id,
+            certificate_number,
+            render_pipeline,
+            pdf_r2_key,
+            pdf_sha256,
+            layout_key,
+            layout_version,
+            renderer_version,
+            render_policy,
+            render_metadata,
+            input_data_snapshot,
+            status,
+            issued_by
+          )
+          values ($1, $2, $3, 'FIXED_LAYOUT', $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, 'ISSUED', $12)
+          on conflict (job_id) do nothing
+          returning pdf_r2_key
+        `,
+        [
+          job.organizationId,
+          jobId,
+          job.jobId,
+          pdf.key,
+          sha256Hex(pdfBuffer),
+          CERTIFICATE_LAYOUT_KEY,
+          CERTIFICATE_LAYOUT_VERSION,
+          WORKER_RENDERER_VERSION,
+          JSON.stringify(renderPolicy),
+          JSON.stringify(renderMetadata),
+          JSON.stringify(layout.data),
+          userId,
+        ],
+      );
+
+      // Lost the race, or a re-drain: whatever is stored wins. Minting a second
+      // number here is the one failure this whole path must not have.
+      const insertedPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
+      const stored = insertedPdfR2Key
+        ? null
+        : (
+            await client.query<{
+              pdf_r2_key: string;
+              signature_metadata: unknown;
+            }>(
+              `
+                select ics.pdf_r2_key, cj.signature_metadata
+                from issued_certificate_snapshot ics
+                join calibration_job cj on cj.id = ics.job_id
+                where ics.job_id = $1
+                limit 1
+              `,
+              [jobId],
+            )
+          ).rows[0];
+
+      const snapshotPdfR2Key = insertedPdfR2Key ?? stored?.pdf_r2_key;
+      if (!snapshotPdfR2Key) {
+        throw new Error("Issued certificate snapshot was not persisted");
+      }
+
+      await updateJobWithCertificate(
+        client,
+        jobId,
+        `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`,
+        userId,
+        insertedPdfR2Key
+          ? signed.signatureMetadata
+          : parseSignatureMetadata(stored?.signature_metadata),
+        insertedPdfR2Key ? signed.signatureVerdict : undefined,
+        { preserveSignatureMetadata: !insertedPdfR2Key },
+      );
+      return snapshotPdfR2Key;
+    });
+
+    return {
+      success: true,
+      certificateUrl: `https://certificates.calibrafacil.com/${issuedPdfR2Key}`,
+    };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
 }
 
 // =============================================================================
@@ -1528,8 +2150,6 @@ async function processDocumentMessage(
     throw new Error(result.error ?? `${messageType} generation failed`);
   }
 }
-
-
 
 // =============================================================================
 // AUDIT PACK (#738) — customer-requested bulk export of released certificates

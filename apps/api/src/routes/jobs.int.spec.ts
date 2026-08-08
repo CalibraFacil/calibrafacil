@@ -17,7 +17,6 @@
  *   REQ-JOB-006  Approved immutable: DELETE APPROVED → 400; PUT APPROVED → 400
  *   REQ-JOB-007  Tenant isolation on read: GET / returns only own org; GET /:id cross-tenant → not found
  *   REQ-JOB-008  Unauthenticated approve → 401
- *   REQ-JOB-009  Approve blocked with 422 while certificate issuance is unavailable (#865)
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,11 +34,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import {
-  loginAs,
-  logout,
-  setCertificateIssuanceAvailable,
-} from "../../test/integration/setup";
+import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 
@@ -316,75 +311,6 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
       .from(calibrationJob)
       .where(eq(calibrationJob.id, jobBId));
     expect(row?.status).toBe("REVIEW");
-  });
-
-  // =========================================================================
-  // REQ-JOB-009: certificate-issuance kill-switch (#865)
-  //
-  // While the certificate layout is being redesigned nothing can render a
-  // certificate, so a job must NOT leave REVIEW — otherwise the worker fails
-  // afterwards and strands it in GENERATING_PDF. The harness forces issuance
-  // available for every other test (see test/integration/setup.ts); this one
-  // flips it off to prove the guard actually blocks and leaves the row alone.
-  // =========================================================================
-  it("REQ-JOB-009: approve while issuance is unavailable → 422 and the job stays REVIEW", async () => {
-    const fixture = await seedJobFixture({
-      orgId: "org-a",
-      userId: "user-a",
-      tagSuffix: "a",
-    });
-
-    const approverUserId = "user-a-approver-865";
-    await db.insert(user).values({
-      id: approverUserId,
-      name: "Second Admin",
-      email: `${approverUserId}@lab.test`,
-    });
-    await db.insert(member).values({
-      id: `member-${approverUserId}`,
-      organizationId: "org-a",
-      userId: approverUserId,
-      role: "admin",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    });
-
-    const reviewJobId = await seedJob({
-      jobId: "JOB-REVIEW-865",
-      organizationId: "org-a",
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: fixture.userId,
-      technicianId: fixture.userId,
-      status: "REVIEW",
-    });
-
-    setCertificateIssuanceAvailable(false);
-    loginAs({ userId: approverUserId, organizationId: "org-a" });
-
-    const res = await jobsRouter.request(`/${reviewJobId}/approve`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ reason: "Should be blocked" }),
-    });
-
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.code).toBe("CERTIFICATE_ISSUANCE_UNAVAILABLE");
-
-    // The row must be untouched — no half-transition into GENERATING_PDF.
-    const [row] = await db
-      .select({
-        status: calibrationJob.status,
-        approvedBy: calibrationJob.approvedBy,
-        approvedAt: calibrationJob.approvedAt,
-      })
-      .from(calibrationJob)
-      .where(eq(calibrationJob.id, reviewJobId));
-    expect(row?.status).toBe("REVIEW");
-    expect(row?.approvedBy).toBeNull();
-    expect(row?.approvedAt).toBeNull();
   });
 
   // =========================================================================
@@ -1198,8 +1124,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
       .select({
         status: calibrationJob.status,
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
-        scopeOverrideJustification:
-          calibrationJob.scopeOverrideJustification,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
       })
       .from(calibrationJob)
       .where(eq(calibrationJob.id, world.jobId));
@@ -1230,8 +1155,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
       .select({
         status: calibrationJob.status,
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
-        scopeOverrideJustification:
-          calibrationJob.scopeOverrideJustification,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
       })
       .from(calibrationJob)
       .where(eq(calibrationJob.id, world.jobId));
@@ -1260,8 +1184,7 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
     const [row] = await db
       .select({
         scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
-        scopeOverrideJustification:
-          calibrationJob.scopeOverrideJustification,
+        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
       })
       .from(calibrationJob)
       .where(eq(calibrationJob.id, world.jobId));
