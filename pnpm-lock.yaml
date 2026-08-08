@@ -1256,6 +1256,9 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
+      '@calibra-facil/method-templates':
+        specifier: workspace:^
+        version: link:../method-templates
       '@repo/typescript-config':
         specifier: workspace:^
         version: link:../typescript-config

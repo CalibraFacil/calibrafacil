@@ -119,6 +119,12 @@ function resolveResultsTableKey(formulas: MethodFormula[]): string | null {
 }
 
 type ColumnSet = {
+  /**
+   * Output keys that claimed the same column for this (table, phase). More
+   * than one means the method is ambiguous and nothing may be rendered from it
+   * — see the note on collectColumns.
+   */
+  ambiguous: string[];
   error: MethodFormula | null;
   indication: MethodFormula | null;
   referenceValue: MethodFormula | null;
@@ -129,6 +135,7 @@ type ColumnSet = {
 
 function emptyColumns(): ColumnSet {
   return {
+    ambiguous: [],
     error: null,
     indication: null,
     referenceValue: null,
@@ -157,25 +164,43 @@ function collectColumns(
     if (tableKeyOf(formula) !== tableKey) continue;
     if (phaseOf(formula) !== phase) continue;
 
+    // Taking the first match and ignoring the rest would be a guess, and a
+    // silent one: two formulas claiming "primary_result" in the same phase is
+    // exactly the pre-#865 shape (media_indicacao and erro_indicacao both did),
+    // and picking whichever comes first in the array prints the mean indication
+    // under the "Erro" heading. Frozen snapshots from before the re-seed still
+    // look like that, so this is reachable in production, not hypothetical.
+    const claim = (
+      key: keyof Omit<ColumnSet, "ambiguous">,
+      candidate: MethodFormula,
+    ) => {
+      const existing = columns[key];
+      if (existing) {
+        columns.ambiguous.push(`${existing.outputKey} + ${candidate.outputKey}`);
+        return;
+      }
+      columns[key] = candidate;
+    };
+
     switch (formula.reporting?.role) {
       case "primary_result":
-        columns.error ??= formula;
+        claim("error", formula);
         break;
       case "mean_indication":
-        columns.indication ??= formula;
+        claim("indication", formula);
         break;
       case "reference_value":
-        columns.referenceValue ??= formula;
+        claim("referenceValue", formula);
         break;
       case "expanded_uncertainty":
         // A method may report u_c in the budget group under the same role; the
         // results-table one is the one in the calibration_result group.
         if (formula.reporting.group === "calibration_result") {
-          columns.uncertainty ??= formula;
+          claim("uncertainty", formula);
         }
         break;
       case "coverage_factor":
-        columns.coverageFactor ??= formula;
+        claim("coverageFactor", formula);
         break;
       default:
         break;
@@ -292,13 +317,18 @@ function buildResultTable(
   formulas: MethodFormula[],
   tableKey: string,
   phase: Phase | null,
-): CertificateResultTable | null {
+): { table: CertificateResultTable | null; ambiguous: string[] } {
   const columns = collectColumns(formulas, tableKey, phase);
-  if (!columns.error && !columns.indication) return null;
+  if (columns.ambiguous.length > 0) {
+    return { table: null, ambiguous: columns.ambiguous };
+  }
+  if (!columns.error && !columns.indication) {
+    return { table: null, ambiguous: [] };
+  }
 
   const results = job.results ?? {};
   const anchor = columns.error ?? columns.indication;
-  if (!anchor) return null;
+  if (!anchor) return { table: null, ambiguous: [] };
 
   const errorValues = columns.error
     ? valuesAt(results, columns.error.outputKey)
@@ -323,7 +353,7 @@ function buildResultTable(
     indicationValues.length,
     referenceValues.length,
   );
-  if (rowCount === 0) return null;
+  if (rowCount === 0) return { table: null, ambiguous: [] };
 
   const unit = anchor.unit ?? null;
   const points = resolvePointLabels(job, tableKey, unit, rowCount);
@@ -354,9 +384,12 @@ function buildResultTable(
   }
 
   return {
-    title: phase ? PHASE_TITLES[phase] : SINGLE_PHASE_TITLE,
-    unit,
-    rows,
+    table: {
+      title: phase ? PHASE_TITLES[phase] : SINGLE_PHASE_TITLE,
+      unit,
+      rows,
+    },
+    ambiguous: [],
   };
 }
 
@@ -368,7 +401,7 @@ function buildResultTables(
   job: CertificateJobData,
   formulas: MethodFormula[],
   tableKey: string,
-): CertificateResultTable[] {
+): { tables: CertificateResultTable[]; ambiguous: string[] } {
   const declaredPhases = new Set(
     formulas
       .filter((formula) => tableKeyOf(formula) === tableKey)
@@ -378,16 +411,21 @@ function buildResultTables(
 
   if (declaredPhases.size === 0) {
     const single = buildResultTable(job, formulas, tableKey, null);
-    return single ? [single] : [];
+    return {
+      tables: single.table ? [single.table] : [],
+      ambiguous: single.ambiguous,
+    };
   }
 
   const tables: CertificateResultTable[] = [];
+  const ambiguous: string[] = [];
   for (const phase of ["before", "after"] satisfies Phase[]) {
     if (!declaredPhases.has(phase)) continue;
-    const table = buildResultTable(job, formulas, tableKey, phase);
-    if (table) tables.push(table);
+    const built = buildResultTable(job, formulas, tableKey, phase);
+    if (built.table) tables.push(built.table);
+    ambiguous.push(...built.ambiguous);
   }
-  return tables;
+  return { tables, ambiguous };
 }
 
 // ── standards, uncertainty statement, signatory ─────────────────────────────
@@ -554,8 +592,18 @@ export function buildCertificateLayoutData(
     );
   }
 
-  const tables = tableKey ? buildResultTables(job, formulas, tableKey) : [];
-  if (tableKey && tables.length === 0) {
+  const built = tableKey
+    ? buildResultTables(job, formulas, tableKey)
+    : { tables: [], ambiguous: [] };
+  const tables = built.tables;
+  if (built.ambiguous.length > 0) {
+    reasons.push(
+      "O método declara mais de uma fórmula para a mesma coluna na mesma fase " +
+        `(${built.ambiguous.join("; ")}), então não é possível saber qual é ` +
+        "qual. Reexecute o job para congelar um snapshot do método atualizado.",
+    );
+  }
+  if (tableKey && tables.length === 0 && built.ambiguous.length === 0) {
     reasons.push(
       "Nenhum ponto de resultado foi encontrado para a tabela declarada " +
         `'${tableKey}'.`,

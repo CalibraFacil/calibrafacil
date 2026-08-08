@@ -211,13 +211,43 @@ describe("buildCertificateLayoutData", () => {
   });
 
   it("renders a single untitled-by-phase table when no phase is declared", () => {
+    // A genuinely single-phase method: ONE formula per column, no phase. Just
+    // stripping `phase` from the two-phase fixture would leave two error
+    // formulas over one table, which is the ambiguous case below, not this one.
     const job = massJob();
-    for (const formula of job.methodSnapshot.formulas ?? []) {
-      if (formula.reporting) delete formula.reporting.phase;
-    }
+    job.methodSnapshot.formulas = (job.methodSnapshot.formulas ?? [])
+      .filter((formula) => formula.reporting?.phase !== "after")
+      .map((formula) => {
+        if (formula.reporting) delete formula.reporting.phase;
+        return formula;
+      });
     const data = unwrap(buildCertificateLayoutData(job));
     expect(data.resultTables).toHaveLength(1);
     expect(data.resultTables[0]?.title).toBe("Resultados da calibração");
+  });
+
+  // The pre-#865 shape, still frozen into every snapshot taken before the
+  // method was re-seeded: media_indicacao and erro_indicacao BOTH declared
+  // "primary_result" for the same phase. Taking the first would print the mean
+  // indication under the "Erro" heading — a wrong number under a right label,
+  // which is the worst possible failure for a regulated document.
+  it("refuses when two formulas claim the same column in the same phase", () => {
+    const job = massJob();
+    const formulas = job.methodSnapshot.formulas ?? [];
+    const indication = formulas.find(
+      (formula) => formula.reporting?.role === "mean_indication",
+    );
+    if (!indication?.reporting) throw new Error("fixture must have one");
+    indication.reporting.role = "primary_result";
+
+    const result = buildCertificateLayoutData(job);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    const why = result.reasons.join(" ");
+    // The message must name BOTH culprits so an operator can act on it.
+    expect(why).toContain("media_apos");
+    expect(why).toContain("erro_apos");
+    expect(why).toContain("Reexecute");
   });
 
   it("refuses to build when the method declares no reported uncertainty", () => {
