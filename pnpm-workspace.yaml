@@ -23,6 +23,11 @@ overrides:
   defu: ^6.1.7
   drizzle-orm: ^0.45.2
   node-forge: ^1.4.0
+  # GHSA-2v37-7h3g-55p8: nanoid <3.3.18 loops indefinitely when a custom
+  # generator is called with size zero. Pulled transitively through postcss
+  # under vite (48 paths, all build tooling). postcss declares nanoid ^3.3.17,
+  # so the patched 3.3.18 lands inside the range it already expects.
+  "nanoid@<3.3.18": ^3.3.18
   "picomatch@<2.3.2": ^2.3.2
   "picomatch@>=4.0.0 <4.0.4": ^4.0.4
   # GHSA-vmh5-mc38-953g / GHSA-cq9c-5vqp-fhqr: undici TLS certificate-validation bypass
