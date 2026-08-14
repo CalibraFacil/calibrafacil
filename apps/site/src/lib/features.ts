@@ -42,14 +42,14 @@ export const FEATURES: Feature[] = [
     slug: "certificados-iso-17025",
     metaTitle: "Emissão de certificados de calibração ISO/IEC 17025",
     description:
-      "Gere certificados de calibração alinhados à ISO/IEC 17025 a partir de um modelo Excel que o próprio laboratório edita, com preenchimento automático e versão congelada na aprovação.",
+      "Emita certificados de calibração no layout do sistema, construído contra a ISO/IEC 17025 (7.8) e as exigências do Cgcre, com preenchimento automático a partir da evidência registrada e versão congelada na aprovação.",
     heading: "Certificados de calibração ISO/IEC 17025",
     intro:
-      "O layout do certificado é uma planilha Excel que o seu laboratório controla; o sistema preenche os dados dinâmicos e congela a versão aprovada.",
+      "O layout do certificado é do sistema e cobre item a item o que a norma exige; o laboratório não monta nem mantém modelo, só entra com a própria identidade.",
     highlights: [
       {
-        title: "Modelo que você edita",
-        body: "Logo, cabeçalho, tabelas e variáveis nomeadas na própria planilha — múltiplos modelos por escopo (massa, temperatura, dimensional).",
+        title: "A norma no layout",
+        body: "Identificação, datas, método, padrões, resultados, incerteza e signatário em posição fixa, conforme a ISO/IEC 17025 (7.8) e a NIT-DICLA-021 — inclusive a regra de arredondamento da incerteza.",
       },
       {
         title: "Versão congelada",

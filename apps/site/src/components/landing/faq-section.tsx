@@ -12,8 +12,8 @@ const faqItems = [
     a: "Sim. O motor implementa contribuições Tipo A e Tipo B, composição quadrática e fator de abrangência. Cada componente fica registrado no orçamento de incerteza, com referência ao item que o originou (certificado do padrão, resolução do instrumento, repetibilidade medida).",
   },
   {
-    q: "Como funciona o modelo do certificado?",
-    a: "O layout do certificado é uma planilha Excel (.xlsx) que o próprio laboratório edita. Você posiciona logo, cabeçalho, tabelas, assinatura. Onde precisa de dado dinâmico, escreve uma variável nomeada (ex.: {{cliente}}, {{u_expandida}}). Na emissão, o sistema preenche e gera o PDF. Permite múltiplos modelos por escopo (massa, temperatura, etc.).",
+    q: "Como é o layout do certificado?",
+    a: "O layout é do sistema — não há modelo para o laboratório montar nem manter. Ele foi construído campo a campo contra a ISO/IEC 17025 (7.8) e as exigências do Cgcre (NIT-DICLA-021, NIE-Cgcre-009): identificação do cliente e do item, datas, método, padrões e rastreabilidade, condições ambientais, resultados, incerteza, declaração de conformidade e signatário. O sistema preenche cada campo a partir da evidência registrada na calibração, aplica a regra de arredondamento da incerteza (A.6.3) e gera o PDF na aprovação. O laboratório entra com a própria identidade — logo, CNPJ, endereço — e o símbolo de acreditação só é impresso quando o escopo cobre o serviço. Seções que o método não usa simplesmente não aparecem.",
   },
   {
     q: "O que muda quando uma calibração é aprovada?",

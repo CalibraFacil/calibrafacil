@@ -5,7 +5,6 @@ import {
   Calendar03Icon,
   Certificate01Icon,
   CheckmarkCircle02Icon,
-  Table01Icon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 
@@ -20,13 +19,14 @@ export function FeaturesSection() {
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
           title="Recursos da plataforma"
-          lead="Quatro blocos sustentam a operação diária e a defesa em auditoria: geração do certificado a partir do modelo do laboratório, assinatura digital ICP-Brasil ligada à versão imutável, portal restrito ao cliente final e gestão proativa de vencimentos."
+          lead="Cinco blocos sustentam a operação diária e a defesa em auditoria: assinatura digital ICP-Brasil ligada à versão imutável, verificação pública do certificado, portal restrito ao cliente final, gestão proativa de vencimentos e análise de periodicidade a partir do histórico."
         />
 
-        <FeatureCertificate />
         <FeatureSignature />
+        <FeatureVerification />
         <FeaturePortal />
         <FeatureExpirations />
+        <FeatureInterval />
       </div>
     </section>
   );
@@ -38,12 +38,19 @@ function Feature({
   bullets,
   visual,
   reverse = false,
+  bare = false,
 }: {
   title: string;
   lead: React.ReactNode;
   bullets: readonly string[];
   visual: React.ReactNode;
   reverse?: boolean;
+  /**
+   * Drop the card chrome around the visual. The console-style panels bring
+   * their own surface (ring + layered shadow, copied from the portal), so the
+   * default wrapper would frame a frame.
+   */
+  bare?: boolean;
 }) {
   return (
     <div className="grid min-w-0 items-center gap-10 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20">
@@ -72,7 +79,13 @@ function Feature({
       </div>
       <div className={cn("min-w-0", reverse && "lg:order-1")}>
         <Reveal delay={0.1}>
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-xl sm:p-6">
+          <div
+            className={cn(
+              "min-w-0",
+              !bare &&
+                "overflow-hidden rounded-lg border border-border bg-card p-3 shadow-xl sm:p-6",
+            )}
+          >
             {visual}
           </div>
         </Reveal>
@@ -89,39 +102,9 @@ function CodeChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FeatureCertificate() {
-  return (
-    <Feature
-      title="Cada laboratório edita o próprio certificado. Em Excel mesmo."
-      lead={
-        <>
-          O Excel (ou LibreOffice) é só o layout visual — onde o laboratório
-          posiciona logo, cabeçalho e tabelas, sem aprender ferramenta nova nem
-          depender de fornecedor pra cada ajuste. O que conta para a ISO/IEC
-          17025 não mora nele: o cálculo e a evidência ficam no sistema
-          imutável, e o que vale juridicamente é o PDF congelado e assinado na
-          aprovação. O CalibraFácil preenche as variáveis nomeadas (
-          <CodeChip>{"{{cliente}}"}</CodeChip>,{" "}
-          <CodeChip>{"{{u_expandida}}"}</CodeChip>) e gera esse PDF — o template
-          Excel nunca é o documento controlado.
-        </>
-      }
-      bullets={[
-        "O modelo Excel define só a aparência do certificado: logo, cabeçalho, tabelas, posição da assinatura",
-        "O documento controlado é o PDF congelado e assinado, não a planilha. O controle de documentos da ISO/IEC 17025 vive no sistema.",
-        "Múltiplos modelos por escopo (massa, temperatura, pressão, dimensional)",
-        "Variáveis nomeadas pra cada dado de calibração. Sem cópia manual, sem erro de digitação.",
-        "PDF gerado na aprovação, congelado e assinado em ICP-Brasil. A versão aprovada não muda.",
-      ]}
-      visual={<XlsxTemplate />}
-    />
-  );
-}
-
 function FeatureSignature() {
   return (
     <Feature
-      reverse
       title="O certificado sai assinado em ICP-Brasil. Com validade legal, não só um nome no rodapé."
       lead={
         <>
@@ -142,6 +125,34 @@ function FeatureSignature() {
         "A assinatura cobre a versão congelada — qualquer alteração posterior quebra a validação.",
       ]}
       visual={<SignedCertificate />}
+    />
+  );
+}
+
+function FeatureVerification() {
+  return (
+    <Feature
+      reverse
+      bare
+      title="Quem recebe o certificado confere sozinho se ele é verdadeiro."
+      lead={
+        <>
+          Cada certificado carrega um token único e imprevisível, impresso como
+          texto e como QR. Auditor, cliente ou terceiro abre a página pública
+          sem credencial nenhuma e vê qual laboratório emitiu, para quem, qual
+          ativo e — o que mais importa — se aquela versão continua valendo. A
+          página ainda confere a assinatura do arquivo e diz, em bom português,
+          se o conteúdo bate com o que foi assinado.
+        </>
+      }
+      bullets={[
+        "Token único por certificado, em texto e em QR. Confere sem login e sem pedir nada ao laboratório.",
+        "Status explícito: autêntico ou substituído. PDF antigo circulando não passa por vigente.",
+        "Conferência criptográfica do arquivo: conteúdo íntegro, assinatura válida e cadeia até a AC-Raiz da ICP-Brasil.",
+        "Download do PDF original pra comparar com o arquivo que chegou por e-mail.",
+        "Laboratório emissor, cliente, ativo, serviço e data da calibração na mesma tela.",
+      ]}
+      visual={<PublicVerification />}
     />
   );
 }
@@ -179,155 +190,236 @@ function FeatureExpirations() {
   );
 }
 
-const xlsxCell =
-  "flex min-h-8 min-w-0 items-center overflow-hidden border-r border-b border-border/40 px-2 py-2 text-xs sm:px-2.5";
-const xlsxHead =
-  "flex min-h-6 min-w-0 items-center justify-center border-r border-b border-border/40 bg-muted/50 px-2 py-1.5 text-xs tracking-wider text-muted-foreground";
-
-function Var({ children }: { children: React.ReactNode }) {
-  return <span className="text-primary">{children}</span>;
+function FeatureInterval() {
+  return (
+    <Feature
+      bare
+      title="A periodicidade para de ser doze meses por hábito."
+      lead={
+        <>
+          O motor de confiabilidade lê o histórico de calibração do instrumento
+          e o classifica: estável, derivando, ou sem dados suficientes pra
+          opinar. Daí calcula confiabilidade e cobertura sobre os ciclos
+          observados e sugere estender, manter ou encurtar o intervalo — pelo
+          método da ILAC-G24 / NCSL RP-1. Quem aplica é o cliente, no portal
+          dele.
+        </>
+      }
+      bullets={[
+        "Classificação a partir do histórico do instrumento: estável, derivando ou dados insuficientes.",
+        "Histórico curto demais? O motor recorre aos instrumentos iguais do parque — mesmo tipo e modelo — em vez de chutar.",
+        "Confiabilidade e cobertura calculadas sobre os ciclos observados, não uma média solta.",
+        "Sugestão explícita — estender, manter ou encurtar — com o intervalo proposto em meses.",
+        "O laboratório recomenda, mas não decide no lugar do cliente: quem aplica a periodicidade é ele, no portal, e a mudança fica registrada com a justificativa do motor.",
+      ]}
+      visual={<IntervalInsight />}
+    />
+  );
 }
 
-function XlsxTemplate() {
+/**
+ * Local mirrors of the portal's `instrument-panel` vocabulary
+ * (apps/portal/src/components/instrument-panel.tsx) — flat console surface,
+ * blueprint grid, tonal tiles with an inset ring, mono uppercase eyebrows and
+ * tabular numerics. The site can't import from apps/portal, so the utilities
+ * are duplicated verbatim; keep them in sync when the portal's change, or the
+ * landing stops looking like the product.
+ */
+const consolePanel =
+  "min-w-0 rounded-2xl bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10";
+const consoleTileRing =
+  "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]";
+const consoleEyebrow =
+  "font-mono text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase";
+const blueprintOverlay =
+  "pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.05)_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(130%_130%_at_0%_0%,black,transparent_72%)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]";
+
+type ConsoleTone = "ok" | "warning" | "neutral";
+
+const consoleToneSurface: Record<ConsoleTone, string> = {
+  ok: "bg-emerald-500/10",
+  warning: "bg-amber-500/10",
+  neutral: "bg-muted/45",
+};
+const consoleToneText: Record<ConsoleTone, string> = {
+  ok: "text-emerald-700 dark:text-emerald-400",
+  warning: "text-amber-700 dark:text-amber-400",
+  neutral: "text-foreground",
+};
+
+/** Mirrors `BlueprintField`: hairline-separated cells on the panel surface. */
+function BlueprintField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-card font-mono text-xs">
-      <div className="flex items-center gap-2.5 border-b border-border/80 bg-background/50 px-3.5 py-2.5">
-        <HugeiconsIcon
-          icon={Table01Icon}
-          className="size-3.5 text-emerald-500"
-        />
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          modelo-balanca-analitica.xlsx
-        </span>
-        <span className="ml-auto hidden text-xs text-primary sm:inline">
-          Certificado
-        </span>
+    <div className="bg-background p-3">
+      <p className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <div className="mt-1 font-mono text-sm tabular-nums">{children}</div>
+    </div>
+  );
+}
+
+/** Mirrors `SignalTile` — the tonal indicator used for each integrity check. */
+function SignalTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: ConsoleTone;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl p-3",
+        consoleTileRing,
+        consoleToneSurface[tone],
+      )}
+    >
+      <span className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </span>
+      <div
+        className={cn(
+          "mt-1 font-mono text-sm font-semibold tabular-nums",
+          consoleToneText[tone],
+        )}
+      >
+        {value}
       </div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-[60px_1fr] border-b border-border/60 text-xs">
-        <div className="border-r border-border/60 bg-muted/50 px-2.5 py-1.5 text-muted-foreground italic">
-          D7
-        </div>
-        <div className="px-3 py-1.5 text-foreground">
-          <Var>{"{{u_expandida}}"}</Var>
-        </div>
-      </div>
+function PublicVerification() {
+  return (
+    <div className={cn(consolePanel, "relative overflow-hidden")}>
+      <div aria-hidden className={blueprintOverlay} />
 
-      <div className="grid grid-cols-[28px_repeat(5,minmax(0,1fr))] sm:grid-cols-[32px_repeat(5,minmax(0,1fr))]">
-        <div className={xlsxHead} />
-        <div className={xlsxHead}>A</div>
-        <div className={xlsxHead}>B</div>
-        <div className={xlsxHead}>C</div>
-        <div className={xlsxHead}>D</div>
-        <div className={xlsxHead}>E</div>
-
-        <div className={xlsxHead}>1</div>
+      <div className="relative flex flex-col items-center gap-3 p-6 text-center">
         <div
           className={cn(
-            xlsxCell,
-            "col-span-5 justify-center text-center font-semibold whitespace-nowrap text-foreground",
+            "flex size-14 items-center justify-center rounded-full",
+            consoleToneSurface.ok,
           )}
         >
-          CERTIFICADO DE CALIBRAÇÃO
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            strokeWidth={2}
+            className={cn("size-7", consoleToneText.ok)}
+          />
         </div>
-
-        <div className={xlsxHead}>2</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Cliente</div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{cliente_nome}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Nº</div>
-        <div className={xlsxCell}>
-          <Var>{"{{cc_numero}}"}</Var>
-        </div>
-
-        <div className={xlsxHead}>3</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Instrumento</div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{instrumento}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Série</div>
-        <div className={xlsxCell}>
-          <Var>{"{{ns}}"}</Var>
-        </div>
-
-        <div className={xlsxHead}>4</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Faixa</div>
-        <div className={xlsxCell}>
-          <Var>{"{{faixa}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Resolução</div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{resolucao}}"}</Var>
-        </div>
-
-        <div className={xlsxHead}>5</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Temperatura</div>
-        <div className={xlsxCell}>
-          <Var>{"{{temp_amb}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Umidade</div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{umid_amb}}"}</Var>
-        </div>
-
-        <div className={xlsxHead}>6</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>
-          Padrão usado
-        </div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{padrao_id}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Cert.</div>
-        <div className={xlsxCell}>
-          <Var>{"{{padrao_cert}}"}</Var>
-        </div>
-
-        <div className={xlsxHead}>7</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Resultado</div>
-        <div className={cn(xlsxCell, "text-xs text-muted-foreground")}>
-          U (k=2)
-        </div>
-        <div className={cn(xlsxCell, "text-xs text-muted-foreground")}>±</div>
-        <div
-          className={cn(
-            xlsxCell,
-            "relative z-[2] bg-primary/12 outline-2 -outline-offset-2 outline-primary",
-          )}
-        >
-          <Var>{"{{u_expandida}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-xs text-muted-foreground")}>g</div>
-
-        <div className={xlsxHead}>8</div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Signatário</div>
-        <div className={cn(xlsxCell, "col-span-2")}>
-          <Var>{"{{signatario_nome}}"}</Var>
-        </div>
-        <div className={cn(xlsxCell, "text-muted-foreground")}>Data</div>
-        <div className={xlsxCell}>
-          <Var>{"{{data_aprov}}"}</Var>
+        <div className="min-w-0">
+          <p className={consoleEyebrow}>Verificação de certificado</p>
+          <h4 className={cn("mt-1 text-xl font-semibold", consoleToneText.ok)}>
+            Certificado autêntico
+          </h4>
+          <p className="mt-1 font-mono text-2xl font-bold tabular-nums break-all text-foreground">
+            CC-2026-0231
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-center gap-4 px-3.5 py-3.5 sm:grid-cols-[1fr_auto_1fr]">
-        <div className="min-w-0 text-xs text-muted-foreground">
-          modelo.xlsx
-          <br />
-          <span className="text-xs opacity-70">
-            editado pelo seu laboratório
-          </span>
+      <div className="relative px-5 pb-5">
+        {/* Same fields, same labels, same order as the real page's
+            identification block — Ativo / Cliente / Serviço / Data /
+            Laboratório. `Data` is the calibration date (performedAt). */}
+        <div className="grid gap-px overflow-hidden rounded-xl bg-foreground/10 sm:grid-cols-2">
+          <BlueprintField label="Ativo">AS-220 · 55219</BlueprintField>
+          <BlueprintField label="Cliente">Indústria São José</BlueprintField>
+          <BlueprintField label="Serviço">Calibração de massa</BlueprintField>
+          <BlueprintField label="Data">12/06/2026</BlueprintField>
         </div>
-        <div className="flex items-center justify-center gap-1.5 text-xs text-primary">
-          preenche
-          <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />
+
+        <div
+          className={cn(
+            "mt-3 rounded-xl p-3",
+            consoleTileRing,
+            consoleToneSurface.ok,
+          )}
+        >
+          <p
+            className={cn(
+              "flex items-center gap-2 text-sm font-medium",
+              consoleToneText.ok,
+            )}
+          >
+            <HugeiconsIcon
+              icon={CheckmarkCircle02Icon}
+              className="size-4 shrink-0"
+            />
+            Assinatura íntegra e confiável
+          </p>
         </div>
-        <div className="min-w-0 text-xs text-foreground sm:text-right">
-          <span className="text-primary">CC-2026-0231.pdf</span>
-          <br />
-          <span className="text-xs text-muted-foreground opacity-70">
-            versão aprovada · imutável
-          </span>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <SignalTile label="Conteúdo" value="OK" tone="ok" />
+          <SignalTile label="Assinatura" value="OK" tone="ok" />
+          <SignalTile label="Cadeia ICP-Brasil" value="OK" tone="ok" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntervalInsight() {
+  return (
+    <div className={cn(consolePanel, "p-5")}>
+      <p className={consoleEyebrow}>Programa metrológico</p>
+      <h4 className="mt-1 text-base font-semibold sm:text-lg">
+        Análise de periodicidade
+      </h4>
+      <p className="mt-1 text-sm text-pretty text-muted-foreground">
+        Sugestão baseada no histórico de calibração (ILAC-G24 / NCSL RP-1).
+        Apenas indicativo — você decide.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+            consoleToneSurface.ok,
+            consoleToneText.ok,
+          )}
+        >
+          <span className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-500" />
+          Estável
+        </span>
+
+        <div className="grid gap-px overflow-hidden rounded-xl bg-foreground/10 sm:grid-cols-2">
+          <BlueprintField label="Confiabilidade">94%</BlueprintField>
+          <BlueprintField label="Cobertura">87%</BlueprintField>
+        </div>
+
+        <div
+          className={cn(
+            "rounded-xl p-4 text-sm",
+            consoleTileRing,
+            consoleToneSurface.neutral,
+          )}
+        >
+          Sugestão:{" "}
+          <strong className="font-semibold">Estender para 18 meses</strong>.
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex min-h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                strokeWidth={2}
+                className="size-4"
+              />
+              Aplicar sugestão
+            </span>
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
+              atual 12 meses
+            </span>
+          </div>
         </div>
       </div>
     </div>

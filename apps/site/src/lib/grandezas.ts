@@ -37,7 +37,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra instrumentos de pesagem: o CalibraFácil conduz a calibração de balança do registro das indicações ao certificado assinado, com o orçamento de incerteza montado conforme o GUM — sem planilha paralela e sem recomeçar a cada revisão.",
     body: [
       "A calibração de uma balança compara as indicações do instrumento contra cargas de massa conhecida — os pesos-padrão do laboratório — em pontos ao longo da faixa. O que separa um certificado defensável de uma planilha é a evidência: cada erro de indicação, cada componente da incerteza e cada padrão usado precisam ficar registrados e reconstruíveis pelo avaliador.",
-      "O CalibraFácil registra os pontos, calcula a incerteza a partir dos componentes que você mede (não de um número fixo) e gera o certificado a partir do modelo Excel do próprio laboratório. O laboratório continua dono do método; o sistema garante a rastreabilidade e o controle de documentos que a ISO/IEC 17025 exige.",
+      "O CalibraFácil registra os pontos, calcula a incerteza a partir dos componentes que você mede (não de um número fixo) e gera o certificado no layout do sistema, construído contra a ISO/IEC 17025. O laboratório continua dono do método; o sistema garante a rastreabilidade e o controle de documentos que a ISO/IEC 17025 exige.",
     ],
     method: [
       {
@@ -67,8 +67,8 @@ export const GRANDEZAS: Grandeza[] = [
     ],
     points: [
       {
-        title: "Modelo de massa que você edita",
-        body: "O layout do certificado de balança é uma planilha do próprio laboratório; o sistema preenche as variáveis nomeadas e gera o PDF.",
+        title: "Certificado de massa no padrão da norma",
+        body: "Repetibilidade, excentricidade e os pontos da faixa impressos no layout do sistema, com a incerteza arredondada pela regra da NIT-DICLA-021.",
       },
       {
         title: "Padrões rastreáveis",
@@ -141,7 +141,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra termômetros e sensores de temperatura: o CalibraFácil conduz a calibração por comparação — do registro das indicações em cada ponto ao certificado assinado — com o orçamento de incerteza montado conforme o GUM.",
     body: [
       "A calibração de um termômetro compara a indicação do instrumento contra um termômetro padrão, em pontos ao longo da faixa, dentro de um meio estável — banho termostático, forno de bloco seco ou ponto fixo. A incerteza depende tanto do padrão quanto da estabilidade e da homogeneidade do meio no momento da leitura.",
-      "O CalibraFácil registra cada ponto, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes que o laboratório mede. O certificado sai do modelo Excel do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes que o laboratório mede. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -248,7 +248,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra manômetros e transdutores de pressão: o CalibraFácil conduz a calibração por comparação contra o padrão — com pontos ascendentes e descendentes para capturar a histerese — e o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um manômetro compara a indicação do instrumento contra um padrão de pressão — balança de pressão (peso morto) ou padrão digital — em pontos ao longo da faixa, medidos na subida e na descida para revelar a histerese. A incerteza reúne o padrão, a resolução, a repetibilidade e a própria histerese.",
-      "O CalibraFácil registra cada ponto e sentido, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto e sentido, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -354,7 +354,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra paquímetros e instrumentos de medição dimensional: o CalibraFácil conduz a calibração com blocos-padrão — do erro de indicação em cada ponto ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um paquímetro verifica o erro de indicação contra blocos-padrão em pontos ao longo da faixa, nas medições de faces externas, internas e de profundidade, após estabilização térmica a 20 °C. A incerteza reúne o bloco-padrão, a resolução, a repetibilidade, a força de medição e o efeito da temperatura.",
-      "O CalibraFácil registra cada ponto e tipo de medição, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto e tipo de medição, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -460,7 +460,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra torquímetros e ferramentas de aperto: o CalibraFácil conduz a calibração contra o padrão de torque — do registro dos pontos ao certificado assinado — com o orçamento de incerteza montado conforme o GUM.",
     body: [
       "A calibração de um torquímetro compara o torque aplicado ou indicado pelo instrumento contra um padrão de torque, em pontos ao longo da faixa e, quando o instrumento exige, nos dois sentidos de aplicação. A incerteza reúne o padrão, a resolução, a repetibilidade e a reprodutibilidade entre montagens.",
-      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo Excel do próprio laboratório, congelado e assinado na aprovação — e, para ferramentas de aperto, a conformidade com a classe pode ser declarada.",
+      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação — e, para ferramentas de aperto, a conformidade com a classe pode ser declarada.",
     ],
     method: [
       {
@@ -566,7 +566,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra micrômetros externos, internos e de profundidade: o CalibraFácil conduz a calibração com blocos-padrão — do erro de indicação ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um micrômetro verifica o erro de indicação contra blocos-padrão em pontos ao longo da faixa, após estabilização térmica a 20 °C, e avalia a planeza e o paralelismo das faces de medição com planos ópticos. A incerteza reúne o bloco-padrão, a resolução, a repetibilidade, a força de medição e o efeito da temperatura.",
-      "O CalibraFácil registra cada ponto, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -671,7 +671,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra multímetros e instrumentos de grandezas elétricas: o CalibraFácil conduz a calibração contra o calibrador padrão — do registro dos pontos por função ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um multímetro compara a indicação do instrumento contra um calibrador multifunção padrão, em pontos por função — tensão contínua e alternada, corrente e resistência. A incerteza reúne o calibrador, a resolução, a repetibilidade, a deriva e, na CA, a dependência de frequência.",
-      "O CalibraFácil registra cada ponto, função e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, função e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -776,7 +776,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra termo-higrômetros e sensores de umidade: o CalibraFácil conduz a calibração por comparação em câmara ou gerador de umidade — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um termo-higrômetro compara a indicação de umidade relativa (e de temperatura) do instrumento contra um higrômetro padrão, em pontos dentro de um gerador ou câmara climática estável. A incerteza depende do padrão e, de forma marcante, da estabilidade e da homogeneidade da câmara no momento da leitura.",
-      "O CalibraFácil registra cada ponto de umidade e temperatura, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto de umidade e temperatura, o padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -882,7 +882,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra pipetas e micropipetas: o CalibraFácil conduz a calibração gravimétrica — da pesagem da água dispensada ao certificado assinado — com o volume e o orçamento de incerteza montados conforme o GUM.",
     body: [
       "A calibração gravimétrica de uma pipeta pesa a água dispensada numa balança e converte a massa em volume usando a densidade da água e o fator Z, que dependem da temperatura e da pressão. Repetindo as dispensas, o laboratório obtém o erro sistemático e a repetibilidade em cada volume ensaiado.",
-      "O CalibraFácil registra as pesagens, as condições ambientais e o padrão (balança, termômetro, barômetro), e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra as pesagens, as condições ambientais e o padrão (balança, termômetro, barômetro), e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -986,7 +986,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra durômetros: o CalibraFácil conduz a calibração indireta com blocos-padrão de dureza — do registro das indentações por escala ao certificado assinado — com o orçamento de incerteza montado conforme o GUM.",
     body: [
       "A calibração indireta de um durômetro compara as indicações do equipamento contra blocos-padrão de dureza certificados, em pontos de cada escala utilizada (Rockwell, Brinell, Vickers, Shore). A incerteza reúne o bloco-padrão, a repetibilidade das indentações, a resolução e a deriva.",
-      "O CalibraFácil registra cada indentação, a escala, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo Excel do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada indentação, a escala, o bloco-padrão utilizado e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -1090,7 +1090,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra medidores de vazão de líquidos ou gases: o CalibraFácil conduz a calibração por comparação contra o padrão — do registro dos pontos de vazão ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um medidor de vazão compara a indicação do instrumento contra um padrão de vazão, em pontos ao longo da faixa, com o fluido e as condições registrados. A incerteza reúne o padrão, a estabilidade da vazão, a repetibilidade, a resolução e o efeito da temperatura e da pressão do fluido.",
-      "O CalibraFácil registra cada ponto, o padrão utilizado e as condições do fluido, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, o padrão utilizado e as condições do fluido, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -1195,7 +1195,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra tacômetros de contato e ópticos: o CalibraFácil conduz a calibração por comparação contra o padrão de rotação — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um tacômetro compara a indicação de rotação do instrumento contra um padrão rastreável a tempo e frequência, em pontos ao longo da faixa. A incerteza reúne o padrão, a resolução, a repetibilidade e a deriva.",
-      "O CalibraFácil registra cada ponto, o modo de medição (contato ou óptico) e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, o modo de medição (contato ou óptico) e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -1298,7 +1298,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra cronômetros e temporizadores: o CalibraFácil conduz a calibração por comparação contra uma base de tempo rastreável — do registro dos intervalos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de um cronômetro compara a marcação do instrumento contra uma base de tempo padrão, rastreável às referências de tempo e frequência, em intervalos definidos. A incerteza reúne a base de tempo, a resolução, a repetibilidade do acionamento e a deriva (erro de marcha).",
-      "O CalibraFácil registra cada intervalo, a base de tempo utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada intervalo, a base de tempo utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -1401,7 +1401,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra trenas, fitas e réguas: o CalibraFácil conduz a calibração contra uma escala padrão — do erro de indicação em pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de uma trena verifica o erro de indicação contra uma escala padrão em pontos ao longo do comprimento, a 20 °C e, para fitas, sob a tensão de referência. A incerteza reúne a escala padrão, a resolução, a repetibilidade, o efeito da temperatura e, nas fitas, a tensão e a catenária.",
-      "O CalibraFácil registra cada ponto, a escala padrão utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, a escala padrão utilizada e as condições, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
@@ -1506,7 +1506,7 @@ export const GRANDEZAS: Grandeza[] = [
       "Para o laboratório que calibra células de carga e dinamômetros: o CalibraFácil conduz a calibração contra o padrão de força — do registro dos pontos ao certificado assinado — com o orçamento de incerteza conforme o GUM.",
     body: [
       "A calibração de uma célula de carga compara a indicação do instrumento contra um padrão de força, em pontos crescentes e decrescentes na faixa, em tração ou compressão. A incerteza reúne o padrão, a resolução, a repetibilidade, a reprodutibilidade entre montagens, a histerese e o retorno ao zero.",
-      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai do modelo do próprio laboratório, congelado e assinado na aprovação.",
+      "O CalibraFácil registra cada ponto, sentido e o padrão utilizado, e compõe a incerteza a partir dos componentes medidos. O certificado sai no layout do sistema, alinhado à ISO/IEC 17025, congelado e assinado na aprovação.",
     ],
     method: [
       {
