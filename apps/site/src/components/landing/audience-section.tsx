@@ -134,28 +134,33 @@ export function AudienceSection() {
               className="absolute inset-0 z-[1] [background:linear-gradient(180deg,rgba(8,11,18,0.15)_0%,rgba(8,11,18,0.35)_40%,rgba(8,11,18,0.85)_100%),linear-gradient(90deg,rgba(8,11,18,0.55)_0%,rgba(8,11,18,0.10)_50%,rgba(8,11,18,0)_100%)]"
             />
 
-            <div className="absolute inset-x-0 top-7 z-[3] flex justify-center">
+            <div className="absolute inset-x-0 top-5 z-[3] flex justify-center px-4 md:top-7">
               <div
+                role="group"
                 aria-label="Audiência"
                 className="relative grid grid-cols-2 rounded-full border border-white/10 bg-[rgba(15,18,25,0.55)] p-1 backdrop-blur-xl"
               >
+                {/* Placed in the grid rather than sized with a percentage so the
+                    highlight always matches the real width and height of the
+                    active column, whatever the labels measure. */}
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-white/15 transition-transform duration-300 ease-in-out",
+                    "col-start-1 row-start-1 rounded-full bg-white/15 transition-transform duration-300 ease-in-out",
                     active === "oficinas"
                       ? "translate-x-full"
                       : "translate-x-0",
                   )}
                 />
-                {audienceList.map((audience) => (
+                {audienceList.map((audience, index) => (
                   <button
                     key={audience.key}
                     type="button"
                     aria-pressed={active === audience.key}
                     onClick={() => setActive(audience.key)}
                     className={cn(
-                      "relative z-[1] rounded-full px-5 py-2.5 text-center text-sm font-medium whitespace-nowrap transition-colors",
+                      "relative z-[1] row-start-1 rounded-full px-3 py-2 text-center text-xs leading-tight font-medium text-balance transition-colors sm:px-5 sm:py-2.5 sm:text-sm",
+                      index === 0 ? "col-start-1" : "col-start-2",
                       active === audience.key ? "text-white" : "text-white/70",
                     )}
                   >
