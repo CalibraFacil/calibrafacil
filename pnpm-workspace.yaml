@@ -15,6 +15,10 @@ overrides:
   next: 16.2.11
   fast-xml-parser: ^5.5.6
   fast-xml-builder: ^1.2.0
+  # Held at ^0.25.12 for vite compatibility (vite 7.3.x pins esbuild ^0.27.0,
+  # 6.4.x ^0.25.0). This used to double as the mitigation for
+  # GHSA-gv7w-rqvm-qjhr, but GitHub withdrew that advisory on 2026-06-17, so
+  # the hold is now purely a compatibility pin.
   esbuild: ^0.25.12
   "h3@<2": ^1.15.6
   "h3@>=2.0.0-0 <2.0.1-rc.15": ^2.0.1-rc.15
@@ -56,7 +60,10 @@ overrides:
   basic-ftp: ^5.3.1
   rollup: ^4.59.0
   svgo: ^4.0.1
-  "@xmldom/xmldom": ^0.8.13
+  # GHSA-6gmq-8vp8-gcm6: @xmldom/xmldom <=0.8.14 mis-parses crafted markup.
+  # Stay on the 0.8 line (0.9.x is a breaking parser rewrite, and packages/auth
+  # depends on the 0.8 API) — 0.8.15 is the patched release on that line.
+  "@xmldom/xmldom": ^0.8.15
   # Four high advisories against fast-uri <3.1.6 — GHSA-f65p-4m7j-42xc and
   # GHSA-fph4-wmhf-6fwf (SSRF via malformed IPv6 normalization / repeated
   # hostname percent-decoding) plus GHSA-jqff-g426-hqxp and GHSA-5jgf-p345-68v8
@@ -78,6 +85,12 @@ overrides:
   # @vercel/queue>minimatch. Scoped to the 4.x/5.x line so the 1.x/2.x users are
   # untouched.
   "brace-expansion@>=4.0.0 <5.0.9": ^5.0.9
+  # The same DoS family (GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg,
+  # GHSA-rgw5-rvv9-x895) also lands on the 1.x and 2.x lines still present in
+  # the tree via apps/desktop and apps/web tooling. Each line has its own
+  # patched release; scope per line so no consumer is forced across a major.
+  "brace-expansion@<1.1.18": ^1.1.18
+  "brace-expansion@>=2.0.0 <2.1.4": ^2.1.4
   # GHSA advisories on js-yaml <4.3.0 and immutable <4.3.9, both transitive.
   "js-yaml@>=4.0.0 <4.3.0": ^4.3.0
   "immutable@>=4.0.0 <4.3.9": ^4.3.9
@@ -93,23 +106,60 @@ overrides:
   # negative size. Transitive via @scalar/hono-api-reference (apps/api). Scoped
   # to the 5.x line so the 3.3.x users elsewhere in the tree are untouched.
   "nanoid@>=4.0.0 <5.1.16": ^5.1.16
+  # --- Advisory sweep 2026-09-04 -------------------------------------------
+  # Every entry below is a transitive dependency with a published patched
+  # release on its own major line. Direct dependencies (hono, @hono/node-server
+  # in local-server, electron, electron-builder) were bumped in their own
+  # package.json instead of being overridden here.
+  #
+  # GHSA-9mqv-5hh9-4cgg + GHSA-frvp-7c67-39w9: @hono/node-server request
+  # smuggling / header handling. The 1.x line survives in apps/web and
+  # apps/backoffice build tooling; scope it so local-server's 2.x is untouched.
+  "@hono/node-server@<1.19.15": ^1.19.15
+  # Seven advisories against hono <4.12.34 (body-limit bypass, proxy header
+  # trust, path-normalisation confusion). Every workspace package declares
+  # ^4.12.34 directly, but the shadcn CLI pulls its own older 4.12.x through
+  # @modelcontextprotocol/sdk, so the range is forced tree-wide.
+  "hono@<4.12.34": ^4.12.34
+  # 18 advisories (14 moderate, 4 low) against dompurify — a long tail of
+  # mXSS sanitizer bypasses, all superseded by 3.4.13. Transitive via Payload
+  # (apps/cms) for the rich-text editor.
+  dompurify: ^3.4.13
+  # GHSA-v422-hmwv-36x6: body-parser <2.3.0 DoS on malformed urlencoded input.
+  "body-parser@>=2.0.0 <2.3.0": ^2.3.0
+  # GHSA-hmw2-7cc7-3qxx: form-data <4.0.6 unsafe random boundary generation.
+  "form-data@>=4.0.0 <4.0.6": ^4.0.6
+  # GHSA-mwp4-54f8-5fhr (high) + GHSA-4xrf-jv44-h6hh + GHSA-22jq-vg5j-6vgg:
+  # ip-address <=10.3.0 parses malformed addresses permissively, which defeats
+  # SSRF allow/deny lists built on it.
+  "ip-address@<10.3.1": ^10.3.1
+  # GHSA-w9m9-85wc-3x92: postcss-selector-parser <7.1.3 ReDoS. Build-time only.
+  "postcss-selector-parser@>=7.1.0 <7.1.3": ^7.1.3
+  # GHSA-4mjr-xmp4-gh2g + GHSA-x5fp-wj9c-mxmx: qs prototype-pollution and
+  # parameter-parsing DoS. 6.16.0 clears both.
+  "qs@>=6.14.2 <6.16.0": ^6.16.0
+  # GHSA-395f-4hp3-45gv: shell-quote <=1.8.4 command injection through crafted
+  # quoting. There is no 1.8.5 — the 1.8 line stops at 1.8.4 — so the patched
+  # release is the 1.9 minor.
+  "shell-quote@<1.9.0": ^1.9.0
+  # GHSA-2m8v-j782-fhvr: socket.io-parser <4.2.7 prototype pollution while
+  # decoding untrusted packets. Transitive via packages/email's preview server.
+  "socket.io-parser@>=4.0.0 <4.2.7": ^4.2.7
+  # Six advisories against tar, including GHSA-23hp-3jrh-7fpw (critical, path
+  # traversal on crafted archives) — 7.5.21 is the first release clearing all
+  # of them. Transitive via the electron-builder chain in apps/desktop.
+  "tar@<7.5.21": ^7.5.21
+  # GHSA-ph9p-34f9-6g65: tmp <0.2.6 symlink-following lets a local attacker
+  # write outside the temp dir. Transitive via electron-builder.
+  "tmp@<0.2.6": ^0.2.6
 
 auditConfig:
   ignoreGhsas:
-    - GHSA-rmmr-r34h-pfm5
-    # GHSA-gv7w-rqvm-qjhr: esbuild <0.28.1 missing binary integrity verification
-    # in its *Deno* install module, exploitable only via an attacker-controlled
-    # NPM_CONFIG_REGISTRY. We consume esbuild purely as a build-time tool under
-    # Node/pnpm via vite (never the Deno module, never in the prod runtime), so
-    # the vector doesn't apply. The patched line (>=0.28.1) is newer than every
-    # vite in the tree expects (vite 7.3.x pins esbuild ^0.27.0, 6.4.x ^0.25.0),
-    # so we hold esbuild at ^0.25.12 (see overrides) instead of a forced bump.
-    - GHSA-gv7w-rqvm-qjhr
     # image-size <=2.0.2 DoS: two advisories over the same unpatched code —
     # GHSA-5p2g-fcmc-qvqq (JXL/HEIF parsers) and GHSA-w3rx-r6r6-pgpr (ICNS
     # parser, infinite loop). There is NO patched release: both name >=2.0.3,
     # but npm's latest is 2.0.2 and the only other dist-tag is legacy 1.2.1
-    # (checked 2026-08-08) — there is nothing to bump to. Reachable only through
+    # (re-checked 2026-09-04) — there is nothing to bump to. Reachable only through
     # Payload's upload handler in apps/cms, whose admin has no public sign-up
     # and is authored solely by the operator; impact is a CMS-only denial of
     # service. Replace BOTH with an override the moment 2.0.3 ships.

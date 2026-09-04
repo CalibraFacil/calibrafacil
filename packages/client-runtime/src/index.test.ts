@@ -3402,7 +3402,7 @@ describe("desktop hybrid runtime adapter", () => {
       "https://api.example.test/api/dashboard/stats",
       "https://api.example.test/api/customers?page=1&limit=20",
       "https://api.example.test/api/assets?page=1&limit=20",
-      "https://api.example.test/api/asset-types?",
+      "https://api.example.test/api/asset-types",
       "https://api.example.test/api/services?page=1&limit=20",
       "https://api.example.test/api/methods?page=1&limit=20",
       "https://api.example.test/api/standards?page=1&limit=20",

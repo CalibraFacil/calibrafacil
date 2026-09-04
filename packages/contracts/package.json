@@ -15,7 +15,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "hono": "^4.12.25",
+    "hono": "^4.12.34",
     "zod": "^4.4.3"
   },
   "devDependencies": {
