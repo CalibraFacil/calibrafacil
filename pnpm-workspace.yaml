@@ -57,7 +57,21 @@ overrides:
   rollup: ^4.59.0
   svgo: ^4.0.1
   "@xmldom/xmldom": ^0.8.13
-  fast-uri: ^3.1.5
+  # Four high advisories against fast-uri <3.1.6 — GHSA-f65p-4m7j-42xc and
+  # GHSA-fph4-wmhf-6fwf (SSRF via malformed IPv6 normalization / repeated
+  # hostname percent-decoding) plus GHSA-jqff-g426-hqxp and GHSA-5jgf-p345-68v8
+  # (host confusion via percent-encoded scheme normalization / skipped IDN
+  # canonicalization). Transitive via Payload > ajv (apps/cms). Stay on the 3.x
+  # line — ajv depends on ^3.x, and npm's `latest` is 4.1.4 — so this resolves
+  # to 3.1.7 off the `three` dist-tag. Supersedes the earlier ^3.1.5, which now
+  # sits inside the vulnerable range.
+  fast-uri: ^3.1.6
+  # GHSA-73wf-gq98-2v4g + GHSA-c83g-rgw3-j3cx: browserslist <=4.28.6 crashes /
+  # writes to Object.prototype on an untrusted browserslist-stats.json, and
+  # grows its query cache without eviction. Build-time only (transitive via
+  # @tanstack/router-plugin > @babel/core in apps/backoffice, on stats files we
+  # author ourselves), but the prod audit gate counts it.
+  browserslist: ^4.28.7
   samlify: ^2.13.0
   # GHSA-rgw5-rvv9-x895: brace-expansion >=4.0.0 <5.0.9 DoS via unbounded
   # intermediate arrays (bypasses the CVE-2026-14257 mitigation). Transitive via
