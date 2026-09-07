@@ -23,6 +23,7 @@ import {
   assetRouteId,
   clientRouteId,
   jobRouteId,
+  standardRouteId,
 } from '@/lib/route-identifiers'
 
 export function GlobalSearchGroup({
@@ -50,6 +51,7 @@ export function GlobalSearchGroup({
     data: assetResults,
     isLoading: assetsLoading,
     isFetching: assetsFetching,
+    isError: assetsError,
   } = useCommandSearchAssetsData({
     query: debouncedSearch,
     enabled: searchMode === 'assets' && hasMinimumQuery,
@@ -59,6 +61,7 @@ export function GlobalSearchGroup({
     data: clientResults,
     isLoading: clientsLoading,
     isFetching: clientsFetching,
+    isError: clientsError,
   } = useCommandSearchClientsData({
     query: debouncedSearch,
     enabled: searchMode === 'clients' && hasMinimumQuery,
@@ -68,6 +71,7 @@ export function GlobalSearchGroup({
     data: standardResults,
     isLoading: standardsLoading,
     isFetching: standardsFetching,
+    isError: standardsError,
   } = useCommandSearchStandardsData({
     query: debouncedSearch,
     enabled: searchMode === 'standards' && hasMinimumQuery,
@@ -77,6 +81,7 @@ export function GlobalSearchGroup({
     data: jobResults,
     isLoading: jobsLoading,
     isFetching: jobsFetching,
+    isError: jobsError,
   } = useCommandSearchJobsData({
     query: debouncedSearch,
     enabled: searchMode === 'jobs' && hasMinimumQuery,
@@ -86,14 +91,14 @@ export function GlobalSearchGroup({
   if (searchMode === 'assets') {
     const isLoading = assetsLoading
     const isFetching = assetsFetching
+    const isError = assetsError
     const results = assetResults ?? []
-    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showMinLengthHint = !hasMinimumQuery
     const showSearchingState =
-      hasMinimumQuery &&
-      results.length === 0 &&
-      (isWaitingDebounce || isLoading || isFetching)
+      hasMinimumQuery && (isWaitingDebounce || isLoading || isFetching)
     const showEmptyState =
       hasMinimumQuery &&
+      !isError &&
       !isLoading &&
       !isFetching &&
       !isWaitingDebounce &&
@@ -102,24 +107,44 @@ export function GlobalSearchGroup({
     return (
       <CommandGroup heading="Resultados - Ativos">
         {showMinLengthHint && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Digite pelo menos 2 caracteres para buscar.
           </div>
         )}
         {showSearchingState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Buscando...
           </div>
         )}
+        {hasMinimumQuery && isError && !showSearchingState && (
+          <div
+            role="alert"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
+            Não foi possível buscar. Tente novamente.
+          </div>
+        )}
         {showEmptyState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Nenhum ativo encontrado para "{trimmedSearchValue}"
           </div>
         )}
         {hasMinimumQuery &&
+          !showSearchingState &&
+          !isError &&
           results.map((asset) => (
             <CommandItem
               key={asset.id}
+              value={String(asset.id)}
               onSelect={() => {
                 navigate({
                   to: '/dashboard/assets/$id',
@@ -146,14 +171,14 @@ export function GlobalSearchGroup({
   if (searchMode === 'clients') {
     const isLoading = clientsLoading
     const isFetching = clientsFetching
+    const isError = clientsError
     const results = clientResults ?? []
-    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showMinLengthHint = !hasMinimumQuery
     const showSearchingState =
-      hasMinimumQuery &&
-      results.length === 0 &&
-      (isWaitingDebounce || isLoading || isFetching)
+      hasMinimumQuery && (isWaitingDebounce || isLoading || isFetching)
     const showEmptyState =
       hasMinimumQuery &&
+      !isError &&
       !isLoading &&
       !isFetching &&
       !isWaitingDebounce &&
@@ -162,24 +187,44 @@ export function GlobalSearchGroup({
     return (
       <CommandGroup heading="Resultados - Clientes">
         {showMinLengthHint && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Digite pelo menos 2 caracteres para buscar.
           </div>
         )}
         {showSearchingState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Buscando...
           </div>
         )}
+        {hasMinimumQuery && isError && !showSearchingState && (
+          <div
+            role="alert"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
+            Não foi possível buscar. Tente novamente.
+          </div>
+        )}
         {showEmptyState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Nenhum cliente encontrado para "{trimmedSearchValue}"
           </div>
         )}
         {hasMinimumQuery &&
+          !showSearchingState &&
+          !isError &&
           results.map((client) => (
             <CommandItem
               key={client.id}
+              value={String(client.id)}
               onSelect={() => {
                 navigate({
                   to: '/dashboard/clients/$id',
@@ -201,18 +246,18 @@ export function GlobalSearchGroup({
     )
   }
 
-  // Standards results view - navigate to list with search since detail page doesn't exist
+  // Standard results
   if (searchMode === 'standards') {
     const isLoading = standardsLoading
     const isFetching = standardsFetching
+    const isError = standardsError
     const results = standardResults ?? []
-    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showMinLengthHint = !hasMinimumQuery
     const showSearchingState =
-      hasMinimumQuery &&
-      results.length === 0 &&
-      (isWaitingDebounce || isLoading || isFetching)
+      hasMinimumQuery && (isWaitingDebounce || isLoading || isFetching)
     const showEmptyState =
       hasMinimumQuery &&
+      !isError &&
       !isLoading &&
       !isFetching &&
       !isWaitingDebounce &&
@@ -221,27 +266,49 @@ export function GlobalSearchGroup({
     return (
       <CommandGroup heading="Resultados - Padrões">
         {showMinLengthHint && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Digite pelo menos 2 caracteres para buscar.
           </div>
         )}
         {showSearchingState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Buscando...
           </div>
         )}
+        {hasMinimumQuery && isError && !showSearchingState && (
+          <div
+            role="alert"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
+            Não foi possível buscar. Tente novamente.
+          </div>
+        )}
         {showEmptyState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Nenhum padrão encontrado para "{trimmedSearchValue}"
           </div>
         )}
         {hasMinimumQuery &&
+          !showSearchingState &&
+          !isError &&
           results.map((standard) => (
             <CommandItem
               key={standard.id}
+              value={String(standard.id)}
               onSelect={() => {
-                // Navigate to standards list - detail page coming soon
-                navigate({ to: '/dashboard/standards' })
+                navigate({
+                  to: '/dashboard/standards/$id',
+                  params: { id: standardRouteId(standard) },
+                })
                 setOpen(false)
               }}
             >
@@ -259,18 +326,18 @@ export function GlobalSearchGroup({
     )
   }
 
-  // Jobs results view - navigate to list since detail page doesn't exist
+  // Calibration results
   if (searchMode === 'jobs') {
     const isLoading = jobsLoading
     const isFetching = jobsFetching
+    const isError = jobsError
     const results = jobResults ?? []
-    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showMinLengthHint = !hasMinimumQuery
     const showSearchingState =
-      hasMinimumQuery &&
-      results.length === 0 &&
-      (isWaitingDebounce || isLoading || isFetching)
+      hasMinimumQuery && (isWaitingDebounce || isLoading || isFetching)
     const showEmptyState =
       hasMinimumQuery &&
+      !isError &&
       !isLoading &&
       !isFetching &&
       !isWaitingDebounce &&
@@ -279,24 +346,44 @@ export function GlobalSearchGroup({
     return (
       <CommandGroup heading="Resultados - Calibrações">
         {showMinLengthHint && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Digite pelo menos 2 caracteres para buscar.
           </div>
         )}
         {showSearchingState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
             Buscando...
           </div>
         )}
+        {hasMinimumQuery && isError && !showSearchingState && (
+          <div
+            role="alert"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
+            Não foi possível buscar. Tente novamente.
+          </div>
+        )}
         {showEmptyState && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhuma ordem encontrada para "{trimmedSearchValue}"
+          <div
+            role="status"
+            className="py-6 text-center text-sm text-muted-foreground"
+          >
+            Nenhuma calibração encontrada para "{trimmedSearchValue}"
           </div>
         )}
         {hasMinimumQuery &&
+          !showSearchingState &&
+          !isError &&
           results.map((job) => (
             <CommandItem
               key={job.id}
+              value={String(job.id)}
               onSelect={() => {
                 navigate({
                   to: '/dashboard/jobs/$id',
@@ -358,7 +445,7 @@ export function GlobalSearchGroup({
         }}
       >
         <HugeiconsIcon icon={ClipboardIcon} />
-        <span>Buscar Ordem de Serviço...</span>
+        <span>Buscar Calibração...</span>
       </CommandItem>
     </CommandGroup>
   )

@@ -8,30 +8,14 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useRef,
   useState,
 } from 'react'
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { useLocation } from '@tanstack/react-router'
 import { useMountEffect } from '@/hooks/use-mount-effect'
-import { LEADER_KEYS, matchShortcutSequence } from './shortcuts'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  return (
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
-    target.isContentEditable
-  )
-}
-
 export type CommandAction = {
   id: string
   label: string
   icon?: ReactNode
-  shortcut?: string
   onSelect: () => void
   keywords?: Array<string>
 }
@@ -75,14 +59,6 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     Array<ContextActionsConfig>
   >([])
   const location = useLocation()
-  const navigate = useNavigate()
-
-  // Latest-value refs so the once-mounted key listener never goes stale.
-  const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
-  const openRef = useRef(open)
-  openRef.current = open
-
   const activePage = pages[pages.length - 1] ?? 'root'
 
   // Compute context actions based on current route
@@ -115,61 +91,22 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useMountEffect(() => {
-    let pendingLeader: string | null = null
-    let leaderTimer: ReturnType<typeof setTimeout> | undefined
-
-    const clearPending = () => {
-      pendingLeader = null
-      if (leaderTimer) {
-        clearTimeout(leaderTimer)
-        leaderTimer = undefined
-      }
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Open/close the palette — Ctrl/⌘+K is not browser-reserved.
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        clearPending()
-        setOpen((prev) => !prev)
-        return
-      }
-
-      // Leader sequences are off while the palette is open, while typing, or
-      // when a modifier is held (so Ctrl+C and friends are untouched).
-      if (openRef.current) {
-        return
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target)) {
-        clearPending()
-        return
-      }
-
-      const key = e.key.toLowerCase()
-
-      if (pendingLeader) {
-        const shortcut = matchShortcutSequence(pendingLeader + key)
-        clearPending()
-        if (shortcut) {
-          e.preventDefault()
-          navigateRef.current({ to: shortcut.to })
-        }
-        return
-      }
-
-      if (LEADER_KEYS.has(key)) {
-        pendingLeader = key
-        leaderTimer = setTimeout(clearPending, 1200)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        !event.defaultPrevented &&
+        !event.repeat &&
+        !event.isComposing &&
+        !event.altKey &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'k'
+      ) {
+        event.preventDefault()
+        setOpen((previous) => !previous)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      if (leaderTimer) {
-        clearTimeout(leaderTimer)
-      }
-    }
+    return () => document.removeEventListener('keydown', handleKeyDown)
   })
 
   const contextValue = useMemo(

@@ -13,7 +13,8 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
-import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { Button } from '@/components/ui/button'
+import { OrganizationGroup } from './groups/organization-group'
 
 export function CommandPalette() {
   const { open, setOpen, activePage, setPages, searchValue, setSearchValue } =
@@ -26,13 +27,10 @@ export function CommandPalette() {
     [setOpen],
   )
 
-  // Handle back navigation with Escape or Backspace on empty input
+  // Backspace on an empty query returns to the previous page; Escape closes.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (
-        activePage !== 'root' &&
-        (e.key === 'Escape' || (e.key === 'Backspace' && !searchValue))
-      ) {
+      if (activePage !== 'root' && e.key === 'Backspace' && !searchValue) {
         e.preventDefault()
         setPages((prev) => prev.slice(0, -1))
         setSearchValue('')
@@ -45,14 +43,14 @@ export function CommandPalette() {
     switch (activePage) {
       case 'search-assets':
         return 'Buscar ativo por ID ou número de série...'
-      case 'search-certificates':
-        return 'Buscar certificado por número...'
+      case 'organizations':
+        return 'Buscar organização...'
       case 'search-clients':
         return 'Buscar cliente por nome ou CNPJ...'
       case 'search-standards':
         return 'Buscar padrão por identificação...'
       case 'search-jobs':
-        return 'Buscar ordem de serviço...'
+        return 'Buscar calibração...'
       default:
         return 'Digite um comando ou busque...'
     }
@@ -64,10 +62,16 @@ export function CommandPalette() {
         open={open}
         onOpenChange={handleOpenChange}
         title="Paleta de Comandos"
-        description="Use atalhos de teclado para navegar rapidamente pelo sistema."
+        description="Busque registros, navegue entre páginas e selecione ações."
       >
-        <Command onKeyDown={handleKeyDown} shouldFilter={activePage === 'root'}>
+        <Command
+          key={activePage}
+          onKeyDown={handleKeyDown}
+          shouldFilter={activePage === 'root' || activePage === 'organizations'}
+        >
           <CommandInput
+            autoFocus
+            aria-label={getPlaceholder()}
             placeholder={getPlaceholder()}
             value={searchValue}
             onValueChange={setSearchValue}
@@ -91,28 +95,29 @@ export function CommandPalette() {
               </>
             )}
 
-            {activePage !== 'root' && (
+            {activePage === 'organizations' && <OrganizationGroup />}
+            {activePage.startsWith('search-') && (
               <GlobalSearchGroup searchValue={searchValue} />
             )}
           </CommandList>
           <CommandFooter>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="flex items-center gap-1.5">
-                <KbdGroup>
-                  <Kbd>↑</Kbd>
-                  <Kbd>↓</Kbd>
-                </KbdGroup>
-                Navegar
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Kbd>↵</Kbd>
-                Selecionar
-              </span>
-            </div>
-            <span className="flex items-center gap-1.5">
-              <Kbd>esc</Kbd>
+            {activePage !== 'root' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPages((previous) => previous.slice(0, -1))
+                  setSearchValue('')
+                }}
+              >
+                Voltar
+              </Button>
+            ) : (
+              <span>Selecione uma ação para continuar</span>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Fechar
-            </span>
+            </Button>
           </CommandFooter>
         </Command>
       </CommandDialog>

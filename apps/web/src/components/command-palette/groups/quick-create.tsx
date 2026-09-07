@@ -9,7 +9,6 @@ import {
 
 import { useCommandPalette } from '../command-context'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
-import { ShortcutHint } from '../shortcuts'
 
 export function QuickCreateGroup() {
   const navigate = useNavigate()
@@ -25,7 +24,6 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
         <span>Nova Calibração</span>
-        <ShortcutHint id="createCalibration" />
       </CommandItem>
       <CommandItem
         onSelect={() => {
@@ -35,7 +33,6 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
         <span>Nova Ordem de Serviço</span>
-        <ShortcutHint id="createServiceOrder" />
       </CommandItem>
 
       <CommandItem
@@ -46,7 +43,6 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={ThermometerIcon} className="text-orange-500" />
         <span>Configurar Condições Ambientais</span>
-        <ShortcutHint id="createEnvironment" />
       </CommandItem>
 
       <CommandItem
@@ -57,7 +53,6 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={Package01Icon} className="text-green-500" />
         <span>Registrar Entrada de Ativo</span>
-        <ShortcutHint id="createAsset" />
       </CommandItem>
 
       <CommandItem
@@ -68,7 +63,6 @@ export function QuickCreateGroup() {
       >
         <HugeiconsIcon icon={AlertDiamondIcon} className="text-red-500" />
         <span>Criar Relatório de Não Conformidade</span>
-        <ShortcutHint id="createNonConformance" />
       </CommandItem>
     </CommandGroup>
   )

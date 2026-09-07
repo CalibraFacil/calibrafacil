@@ -19,15 +19,15 @@ import { toast } from 'sonner'
 import { signOut } from '@calibra-facil/auth/client'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
-import { ShortcutHint } from '../shortcuts'
 
 export function NavigationGroup() {
-  const { setOpen } = useCommandPalette()
+  const { setOpen, setPages, setSearchValue } = useCommandPalette()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
     try {
-      await signOut()
+      const result = await signOut()
+      if (result.error) throw new Error(result.error.message)
       toast.success('Sessão encerrada', {
         description: 'Você foi desconectado com sucesso.',
       })
@@ -45,19 +45,16 @@ export function NavigationGroup() {
       label: 'Painel de Controle',
       icon: Home01Icon,
       to: '/dashboard' as const,
-      shortcutId: 'goDashboard' as const,
     },
     {
       label: 'Clientes',
       icon: UserIcon,
       to: '/dashboard/clients' as const,
-      shortcutId: 'goClients' as const,
     },
     {
       label: 'Ativos',
       icon: Wrench01Icon,
       to: '/dashboard/assets' as const,
-      shortcutId: 'goAssets' as const,
     },
     {
       label: 'Padrões de Referência',
@@ -88,7 +85,6 @@ export function NavigationGroup() {
       label: 'Configurações',
       icon: Settings05Icon,
       to: '/dashboard/settings' as const,
-      shortcutId: 'goSettings' as const,
     },
   ]
 
@@ -104,16 +100,13 @@ export function NavigationGroup() {
         >
           <HugeiconsIcon icon={item.icon} />
           <span>{item.label}</span>
-          {item.shortcutId ? <ShortcutHint id={item.shortcutId} /> : null}
         </CommandItem>
       ))}
 
       <CommandItem
         onSelect={() => {
-          toast.info('Abrindo seletor de organização...', {
-            description: 'Use o menu lateral para trocar de organização.',
-          })
-          setOpen(false)
+          setSearchValue('')
+          setPages((previous) => [...previous, 'organizations'])
         }}
       >
         <HugeiconsIcon icon={Building02Icon} />
