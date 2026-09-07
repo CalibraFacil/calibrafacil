@@ -41,6 +41,14 @@
       "src": "/_next/(.*)",
       "dest": "https://calibra-facil-site.vercel.app/_next/$1"
     },
+    {
+      "src": "/dashboard-preview-(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/dashboard-preview-$1"
+    },
+    {
+      "src": "/landing/(.*)",
+      "dest": "https://calibra-facil-site.vercel.app/landing/$1"
+    },
     { "src": "/", "dest": "https://calibra-facil-site.vercel.app/" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
