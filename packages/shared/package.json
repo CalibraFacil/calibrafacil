@@ -10,7 +10,6 @@
     "./accreditation": "./src/accreditation.ts",
     "./calibration-format": "./src/calibration-format.ts",
     "./cnpj": "./src/cnpj.ts",
-    "./certificate-templates": "./src/certificate-templates.ts",
     "./mass-units": "./src/mass-units.ts",
     "./plans": "./src/plans.ts",
     "./storage-keys": "./src/storage-keys.ts",

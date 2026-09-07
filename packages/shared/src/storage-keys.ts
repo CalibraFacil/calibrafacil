@@ -17,13 +17,11 @@
  *                     org/{slug}-{id}/{year}/jobs/{jobId}/label.pdf
  *                     org/{slug}-{id}/{year}/jobs/{jobId}/desktop-{draftId}.pdf
  *                     org/{slug}-{id}/{year}/{month}/service-orders/{number}/...
- *                     org/{slug}-{id}/certificate-template-previews/{previewId}/preview.{ext}
  *                     org/{slug}-{id}/standards/{stdId}/certificates/{docId}-{file}
  *                     org/{slug}-{id}/sync-attachments/{entityType}/{entityId}/{file}
  *   media bucket      organization-logos/{slug}-{id}/{ts}-{uuid}
  *                     signatures/{slug}-{id}/{memberId}.png
  *                     avatars/{userId}
- *                     certificate-templates/xlsx/{slug}-{id}/{templateId}/v{version}-{uuid}.xlsx
  */
 
 /** Logical storage buckets. Concrete names are resolved per-app from env. */
@@ -238,18 +236,6 @@ export function issuedCertificatePdfKey(
   return issuedCertificateKey(params, "pdf");
 }
 
-/**
- * Legacy: the filled-workbook sibling of an issued certificate. The XLSX
- * issuance path is gone (#865), so nothing WRITES these any more — but the
- * objects still exist in R2 and `apps/worker/scripts/migrate-r2-storage.ts`
- * has to be able to address them when planning object moves. Delete this only
- * once those legacy objects are gone.
- */
-export function issuedCertificateXlsxKey(
-  params: IssuedCertificateKeyParams,
-): StorageObject {
-  return issuedCertificateKey(params, "xlsx");
-}
 
 export interface JobLabelKeyParams {
   org: OrgRef;

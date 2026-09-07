@@ -3066,13 +3066,6 @@ export type MethodCertificateContent = {
   massCompositionDisplay?: "full" | "hidden";
   uncertaintyBudgetDisplay?: "full" | "hidden";
   decisionRuleStatement?: string;
-  resultCharts?: Array<{
-    tableKey: string;
-    xKey: string;
-    yKey: string;
-    uncertaintyKey?: string | null;
-    label?: string | null;
-  }>;
   sections?: MethodCertificateContentSection[];
 };
 
@@ -4110,7 +4103,13 @@ export const calibrationJob = pgTable(
      * Frozen record of what an APPROVED job was issued with. Regulated
      * evidence, not a link: the `certificate_template_id` FK it used to sit
      * beside was dropped in 0107 with the lab-authored template system (#865).
-     * Nothing resolves or writes this any more; 22 historical rows keep it.
+     *
+     * Read-only history. Nothing resolves a template any more, and nothing
+     * fabricates a snapshot: the desktop-sync path in apps/api/src/routes/sync.ts
+     * used to write a placeholder {name: "Padrão do Sistema"} whenever an
+     * incoming job carried none, which put an invented template name into
+     * regulated evidence for a certificate no template produced. It now passes
+     * through what a pre-redesign desktop build sent, or null.
      */
     certificateTemplateSnapshot: jsonb("certificate_template_snapshot").$type<
       Record<string, unknown>

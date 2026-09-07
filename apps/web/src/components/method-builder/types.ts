@@ -249,13 +249,6 @@ export interface MethodDraftCertificateContent {
   massCompositionDisplay?: 'full' | 'hidden'
   uncertaintyBudgetDisplay?: 'full' | 'hidden'
   decisionRuleStatement?: string
-  resultCharts?: Array<{
-    tableKey: string
-    xKey: string
-    yKey: string
-    uncertaintyKey?: string | null
-    label?: string | null
-  }>
   sections?: Array<
     | {
         kind: 'paragraphs'

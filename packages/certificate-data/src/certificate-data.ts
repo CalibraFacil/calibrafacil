@@ -252,13 +252,6 @@ export type MethodCertificateContent = {
   /** Free-text decision rule (ISO/IEC 17025 §7.8.6) printed verbatim. */
   decisionRuleStatement?: string;
   /** Calibration curve charts (deterministic SVG in the html engine). */
-  resultCharts?: Array<{
-    tableKey: string;
-    xKey: string;
-    yKey: string;
-    uncertaintyKey?: string | null;
-    label?: string | null;
-  }>;
 };
 
 export type MethodSnapshot = {

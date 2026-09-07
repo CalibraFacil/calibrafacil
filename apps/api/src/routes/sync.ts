@@ -1548,28 +1548,19 @@ async function applyDesktopCertificatePdfUpload(
       input.sessionUserId,
     );
     const approvedAt = job.approvedAt ?? new Date();
-    const storedTemplateSnapshot = asRecord(job.certificateTemplateSnapshot);
-    // Desktop-approved jobs arrive with the PDF ALREADY rendered offline, so
-    // this snapshot is bookkeeping, never a gate — which is why the cloud-side
-    // issuance block (#865) is not applied on this path. Prefer what the job
-    // stored; otherwise the system-default placeholder offline rendering used.
-    // There is no per-method template left to resolve from.
+    // A pre-redesign desktop build may arrive with a template snapshot frozen
+    // onto the job. It is accepted and preserved as the historical evidence it
+    // is, but nothing FABRICATES one any more: the previous version wrote a
+    // placeholder {name: "Padrão do Sistema"} whenever the job had none, which
+    // put an invented template name into a regulated evidence column for a
+    // certificate no template ever produced. There is no per-method template
+    // left to resolve from, so absent is the honest value.
     //
-    // Not applying the block here does NOT mean desktop issuance still works:
+    // The cloud-side issuance block (#865) is deliberately not applied here:
+    // these PDFs were already rendered offline, and rejecting them on sync
+    // would lose them. That is not a claim that desktop issuance still works —
     // generateLocalCertificateDraft (apps/local-server/src/certificates.ts)
-    // throws unconditionally, so nothing offline renders a certificate either.
-    // What this branch preserves is the ability to ACCEPT a PDF rendered by a
-    // desktop build from before the redesign, which would otherwise be
-    // rejected on sync and lost.
-    const effectiveTemplateSnapshot =
-      Object.keys(storedTemplateSnapshot).length > 0
-        ? storedTemplateSnapshot
-        : {
-            id: null,
-            name: "Padrão do Sistema",
-            slug: "padrao-sistema",
-            version: 1,
-          };
+    // throws unconditionally, so nothing offline renders a certificate today.
 
     await uploadToR2(
       r2Client,
@@ -1614,8 +1605,7 @@ async function applyDesktopCertificatePdfUpload(
         asFoundMargins: asFoundVerdict.margins,
         scopeComplianceStatus: scopeCompliance?.status ?? null,
         scopeComplianceFindings: scopeCompliance?.findings ?? null,
-        certificateTemplateSnapshot:
-          job.certificateTemplateSnapshot ?? effectiveTemplateSnapshot,
+        certificateTemplateSnapshot: job.certificateTemplateSnapshot ?? null,
         updatedAt: new Date(),
       })
       .where(eq(calibrationJob.id, job.id));

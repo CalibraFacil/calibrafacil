@@ -8,8 +8,6 @@
     "serve": "bun src/serve.ts",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:xlsx-safety": "node src/xlsx-certificate-safety.test.mjs",
-    "test:xlsx-format": "bun src/xlsx-number-format.test.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "check-types": "tsc --noEmit"
   },

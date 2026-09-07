@@ -20,7 +20,7 @@ This inventory records the production Method Builder surface introduced in this 
 | Method runtime helpers | `apps/web/src/components/method-runtime/**`                                             | Shared execution/display helpers for table inputs, mass composition, weighing ranges, and formula context evaluation used outside the builder UI.                       |
 | Job execution UI       | `apps/web/src/routes/dashboard/jobs/$id/execute.tsx`                                    | Captures technician inputs, environmental data, standards, table data, and local result display.                                                                        |
 | Job backend            | `apps/api/src/lib/jobs.ts`, `apps/api/src/routes/jobs.ts`                               | Creates method snapshots from published methods, validates required asset specs, and stores execution data/results/snapshots.                                           |
-| Certificate rendering  | `packages/certificate-xlsx-template` and `apps/worker/src/index.ts`                     | Fills assigned XLSX workbook templates from job snapshots/results and converts the filled workbook to the issued PDF.                                                   |
+| Certificate rendering  | `apps/worker/src/certificate/layout-data.ts` and `packages/documents/src/certificate`   | Builds the ONE fixed system layout from a frozen job — reading only what the method declares (`reporting.role`/`group`/`phase`, `scope.tableKey`) — and renders it to HTML for Gotenberg. The lab-authored XLSX template system it used to describe was removed in #865/#877 (migrations 0107/0108); `packages/certificate-xlsx-template` no longer exists. |
 
 ## Current Method Model
 

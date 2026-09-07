@@ -3,7 +3,6 @@ export type DashboardIconId =
   | 'assets'
   | 'billing'
   | 'building'
-  | 'certificateTemplate'
   | 'clipboard'
   | 'creditCard'
   | 'customers'

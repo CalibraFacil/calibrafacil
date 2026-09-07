@@ -52,21 +52,14 @@ export function CertificateContentSection({
             }
           />
         </Field>
+        {/* Only the budget toggle is offered, because only the budget is
+            rendered. `certifiedValuesDisplay`, `massCompositionDisplay` and
+            `decisionRuleStatement` are still persisted — the templates carry
+            the laboratory's intent for them — but the fixed layout does not
+            draw those blocks yet, and a switch that changes nothing is worse
+            than an absent one: it reads as a certificate feature the lab has
+            configured and can rely on. Restore the controls with the blocks. */}
         <div className="grid gap-3 md:grid-cols-3">
-          <CertificateDisplaySelect
-            label="Valores certificados"
-            value={certificate?.certifiedValuesDisplay ?? 'full'}
-            onChange={(value) =>
-              onCertificateChange({ certifiedValuesDisplay: value })
-            }
-          />
-          <CertificateDisplaySelect
-            label="Composição de massa"
-            value={certificate?.massCompositionDisplay ?? 'full'}
-            onChange={(value) =>
-              onCertificateChange({ massCompositionDisplay: value })
-            }
-          />
           <CertificateDisplaySelect
             label="Orçamento de incerteza"
             value={certificate?.uncertaintyBudgetDisplay ?? 'full'}
@@ -75,98 +68,6 @@ export function CertificateContentSection({
             }
           />
         </div>
-        <Field label="Gráfico da curva de calibração (motor visual)">
-          <div className="space-y-2">
-            {(certificate?.resultCharts ?? []).map((chart, index) => (
-              <div
-                key={index}
-                className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
-              >
-                <Input
-                  value={chart.tableKey}
-                  onChange={(event) => {
-                    const next = [...(certificate?.resultCharts ?? [])]
-                    next[index] = { ...chart, tableKey: event.target.value }
-                    onCertificateChange({ resultCharts: next })
-                  }}
-                  placeholder="Tabela (ex.: pontos_indicacao)"
-                />
-                <Input
-                  value={chart.xKey}
-                  onChange={(event) => {
-                    const next = [...(certificate?.resultCharts ?? [])]
-                    next[index] = { ...chart, xKey: event.target.value }
-                    onCertificateChange({ resultCharts: next })
-                  }}
-                  placeholder="Eixo X (ex.: valor_padrao)"
-                />
-                <Input
-                  value={chart.yKey}
-                  onChange={(event) => {
-                    const next = [...(certificate?.resultCharts ?? [])]
-                    next[index] = { ...chart, yKey: event.target.value }
-                    onCertificateChange({ resultCharts: next })
-                  }}
-                  placeholder="Eixo Y (ex.: erro_indicacao_antes)"
-                />
-                <Input
-                  value={chart.uncertaintyKey ?? ''}
-                  onChange={(event) => {
-                    const next = [...(certificate?.resultCharts ?? [])]
-                    next[index] = {
-                      ...chart,
-                      uncertaintyKey: event.target.value || undefined,
-                    }
-                    onCertificateChange({ resultCharts: next })
-                  }}
-                  placeholder="Barra U (opcional)"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    onCertificateChange({
-                      resultCharts: (certificate?.resultCharts ?? []).filter(
-                        (_item, itemIndex) => itemIndex !== index,
-                      ),
-                    })
-                  }
-                >
-                  Remover
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={(certificate?.resultCharts ?? []).length >= 4}
-              onClick={() =>
-                onCertificateChange({
-                  resultCharts: [
-                    ...(certificate?.resultCharts ?? []),
-                    { tableKey: '', xKey: '', yKey: '' },
-                  ],
-                })
-              }
-            >
-              Adicionar gráfico
-            </Button>
-          </div>
-        </Field>
-        <Field label="Regra de decisão (ISO/IEC 17025 §7.8.6)">
-          <Textarea
-            value={certificate?.decisionRuleStatement ?? ''}
-            onChange={(event) =>
-              onCertificateChange({
-                decisionRuleStatement: event.target.value || undefined,
-              })
-            }
-            placeholder="Texto impresso no certificado quando o modelo incluir o bloco de regra de decisão"
-            rows={2}
-          />
-        </Field>
         <Field label="Padrões de referência">
           <Textarea
             value={(certificate?.referenceStandards ?? []).join('\n')}

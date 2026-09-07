@@ -42,7 +42,6 @@ import {
   UpdateCustomerSchema,
   UpdateJobSchema,
 } from "@calibra-facil/schemas";
-import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import {
   and,
   count,

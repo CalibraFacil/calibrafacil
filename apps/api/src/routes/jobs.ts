@@ -63,7 +63,6 @@ import {
 } from "../middleware/permission";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
-import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import {
   requirePlanLimit,
   assertPlanLimitInTransaction,
