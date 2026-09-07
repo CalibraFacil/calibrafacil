@@ -5,95 +5,118 @@ import {
   Alert02Icon,
   ArrowRight02Icon,
   CheckmarkCircle01Icon,
-  Clock01Icon,
   Notebook01Icon,
   PlusSignIcon,
   RefreshIcon,
   RulerIcon,
+  ShieldIcon,
+  UserMultipleIcon,
+  ChartLineData01Icon,
 } from '@hugeicons/core-free-icons'
+import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
 
 import { Button } from '@/components/ui/button'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ACTION_BUTTON_CLASS,
+  Panel,
+  PanelHeader,
+  SignalTile,
+  StaggerGroup,
+  StaggerItem,
+  type SignalTone,
+} from '@/components/instrument-panel'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { cn } from '@/lib/utils'
-import { jobRouteId } from '@/lib/route-identifiers'
+import { jobRouteId, standardRouteId } from '@/lib/route-identifiers'
 import {
   useDashboardIndexData,
   type DashboardJob,
   type DashboardJobStatus,
   type DashboardStats,
 } from '@/features/dashboard/queries'
+import {
+  buildHealthSignals,
+  buildPipeline,
+  buildTrendSeries,
+  defaultQueueView,
+  formatCurrentDate,
+  formatDueDate,
+  formatShortDate,
+  formatStandardDue,
+  jobTitle,
+  QUEUE_VIEWS,
+  selectQueueJobs,
+  STATUS_LABEL,
+  sumTrend,
+  type HealthSignal,
+  type HealthSignalKey,
+  type PipelineStage,
+  type QueueView,
+  type TrendWindow,
+} from '@/features/dashboard/dashboard-model'
 
 const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
 const DASHBOARD_INDEX_DATA_READY_MARK = 'dashboard:index:data:ready'
 const DASHBOARD_INDEX_FIRST_CONTENT_MARK = 'dashboard:index:first-content'
 
-const surface =
-  'rounded-2xl bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10'
+type IconType = Parameters<typeof HugeiconsIcon>[0]['icon']
 
-const queueSkeletonKeys = ['priority-1', 'priority-2', 'priority-3']
-const deliverySkeletonKeys = ['delivery-1', 'delivery-2', 'delivery-3']
-const traceabilitySkeletonKeys = ['standard-1', 'standard-2']
+const SECTION_LINK_CLASS =
+  'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-primary transition-[background-color,transform] hover:bg-primary/10 motion-safe:active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 
-const statusLabel: Record<DashboardJobStatus, string> = {
-  DRAFT: 'Preparação',
-  IN_PROGRESS: 'Em execução',
-  REVIEW: 'Revisão técnica',
-  GENERATING_PDF: 'Emitindo PDF',
-  APPROVED: 'Aprovada',
-  REJECTED: 'Rejeitada',
-  CANCELED: 'Cancelada',
-  SUPERSEDED: 'Substituída',
+const FOCUS_RING_CLASS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+
+const STAGE_BAR_TONE: Record<PipelineStage['status'], string> = {
+  DRAFT: 'bg-foreground/45',
+  IN_PROGRESS: 'bg-primary/55',
+  REVIEW: 'bg-primary',
+  GENERATING_PDF: 'bg-emerald-500',
 }
 
-type ActionKind =
-  | 'overdue'
-  | 'deadline'
-  | 'review'
-  | 'request'
-  | 'standard'
-  | 'quality'
-
-type ActionTarget =
-  | { type: 'job'; id: string; execute: boolean }
-  | { type: 'requests' }
-  | { type: 'standard'; id: string }
-  | { type: 'nc' }
-  | { type: 'capa' }
-
-type OperationalAction = {
-  key: string
-  kind: ActionKind
-  label: string
-  title: string
-  context: string
-  deadline: string
-  action: string
-  target: ActionTarget
+const STATUS_DOT: Record<DashboardJobStatus, string> = {
+  DRAFT: 'bg-foreground/25',
+  IN_PROGRESS: 'bg-primary/60',
+  REVIEW: 'bg-primary',
+  GENERATING_PDF: 'bg-emerald-500',
+  APPROVED: 'bg-emerald-500',
+  REJECTED: 'bg-destructive',
+  CANCELED: 'bg-foreground/15',
+  SUPERSEDED: 'bg-foreground/15',
 }
 
-const actionIcon: Record<
-  ActionKind,
-  Parameters<typeof HugeiconsIcon>[0]['icon']
-> = {
-  overdue: Alert02Icon,
-  deadline: Clock01Icon,
-  review: CheckmarkCircle01Icon,
-  request: Notebook01Icon,
-  standard: RulerIcon,
-  quality: Alert02Icon,
+const HEALTH_ICON: Record<HealthSignalKey, IconType> = {
+  nc: Alert02Icon,
+  capa: ShieldIcon,
+  standards: RulerIcon,
+  competences: UserMultipleIcon,
+  validity: ChartLineData01Icon,
+  intake: Notebook01Icon,
 }
 
-const actionTone: Record<ActionKind, string> = {
-  overdue: 'bg-destructive/10 text-destructive',
-  deadline: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  review: 'bg-primary/10 text-primary',
-  request: 'bg-muted text-muted-foreground',
-  standard: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  quality: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+const TREND_WINDOWS: ReadonlyArray<{ value: '30' | '90'; label: string }> = [
+  { value: '30', label: '30 dias' },
+  { value: '90', label: '90 dias' },
+]
+
+const trendChartConfig: ChartConfig = {
+  approved: { label: 'Aprovadas', color: 'var(--primary)' },
+  rejected: { label: 'Rejeitadas', color: 'var(--destructive)' },
 }
+
+const queueSkeletonKeys = ['q-1', 'q-2', 'q-3', 'q-4', 'q-5']
+const healthSkeletonKeys = ['h-1', 'h-2', 'h-3', 'h-4', 'h-5', 'h-6']
+const standardSkeletonKeys = ['s-1', 's-2', 's-3']
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -139,9 +162,7 @@ export function DashboardIndex() {
     })
 
   const isLoading = !data && (isPending || isFetching)
-  const priorities = buildOperationalActions(data, isManager).slice(0, 3)
-  const reviewCount =
-    data?.statusBreakdown.find((item) => item.status === 'REVIEW')?.count ?? 0
+  const pipeline = buildPipeline(data?.statusBreakdown)
 
   async function refreshDashboard() {
     const result = await refetch()
@@ -156,7 +177,7 @@ export function DashboardIndex() {
   }
 
   return (
-    <div className="@container mx-auto w-full max-w-[1440px] space-y-5 pb-8">
+    <div className="mx-auto w-full max-w-[1440px] space-y-4 pb-8">
       <DashboardIndexMountMarker />
       {!isLoading ? (
         <>
@@ -167,32 +188,24 @@ export function DashboardIndex() {
 
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             {formatCurrentDate()}
           </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-[-0.02em] sm:text-[28px]">
+            Operação do laboratório
+          </h1>
           {isLoading ? (
-            <Skeleton className="mt-2 h-10 w-full max-w-xl rounded-lg" />
+            <Skeleton className="mt-2 h-5 w-72 rounded-md" />
           ) : (
-            <h1 className="mt-1 max-w-3xl text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-              {priorities.length > 0
-                ? `${priorities.length} ${priorities.length === 1 ? 'prioridade' : 'prioridades'} para agora`
-                : 'Operação em dia'}
-            </h1>
+            <StatusLine data={data} open={pipeline.open} />
           )}
-          <p className="mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
-            {isLoading
-              ? 'Carregando prioridades do contexto selecionado.'
-              : priorities.length > 0
-                ? 'Comece pelo que afeta prazo, liberação ou continuidade do laboratório.'
-                : 'Nenhuma pendência crítica foi encontrada no contexto selecionado.'}
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => void refreshDashboard()}
             disabled={isRefetching}
-            className="min-h-10 transition-[background-color,transform] motion-safe:active:scale-[0.96]"
+            className={ACTION_BUTTON_CLASS}
           >
             <HugeiconsIcon
               icon={RefreshIcon}
@@ -201,7 +214,7 @@ export function DashboardIndex() {
             Atualizado {updatedAt}
           </Button>
           <Button
-            className="min-h-10 transition-transform motion-safe:active:scale-[0.96]"
+            className={ACTION_BUTTON_CLASS}
             render={<Link to="/dashboard/jobs/new" />}
           >
             <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
@@ -213,176 +226,553 @@ export function DashboardIndex() {
         </p>
       </header>
 
-      <section className="flex flex-col gap-4 xl:grid xl:items-start xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,0.68fr)]">
-        <div className="contents xl:block xl:space-y-4">
-          <ActionQueue
-            priorities={priorities}
-            overdueCount={data?.overdueJobs ?? 0}
+      <StaggerGroup className="space-y-4">
+        <StaggerItem>
+          <PipelinePanel
+            stages={pipeline.stages}
+            open={pipeline.open}
+            data={data}
             isLoading={isLoading}
           />
-          <UpcomingDeliveries
-            jobs={data?.dueSoonJobs ?? []}
-            isLoading={isLoading}
-          />
-        </div>
+        </StaggerItem>
 
-        <aside className="space-y-4">
-          <OperationSummary
-            overdue={data?.overdueJobs ?? 0}
-            dueToday={data?.dueToday ?? 0}
-            review={reviewCount}
-            dueNextSevenDays={data?.dueNextSevenDays ?? 0}
-            isLoading={isLoading}
-          />
-          <TraceabilitySummary
-            standards={data?.standardsWatchlist ?? []}
-            isLoading={isLoading}
-          />
-        </aside>
-      </section>
+        {/*
+          Two independent columns so each side packs its own panels; a shared
+          row grid would stretch the shorter panel to the taller neighbour and
+          leave dead space. Below xl the columns dissolve (`contents`) and the
+          `order-*` classes interleave the panels by importance.
+        */}
+        <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.6fr)_minmax(20rem,0.8fr)] xl:items-start">
+          <div className="contents xl:flex xl:flex-col xl:gap-4">
+            <StaggerItem className="order-1 xl:order-none">
+              <WorkQueuePanel
+                key={data ? 'ready' : 'loading'}
+                data={data}
+                isManager={isManager}
+                isLoading={isLoading}
+              />
+            </StaggerItem>
+            <StaggerItem className="order-3 xl:order-none">
+              <ThroughputPanel data={data} isLoading={isLoading} />
+            </StaggerItem>
+          </div>
+          <div className="contents xl:flex xl:flex-col xl:gap-4">
+            <StaggerItem className="order-2 xl:order-none">
+              <HealthPanel data={data} isLoading={isLoading} />
+            </StaggerItem>
+            <StaggerItem className="order-4 xl:order-none">
+              <TraceabilityPanel
+                standards={data?.standardsWatchlist ?? []}
+                isLoading={isLoading}
+              />
+            </StaggerItem>
+          </div>
+        </div>
+      </StaggerGroup>
     </div>
   )
 }
 
-function ActionQueue({
-  priorities,
-  overdueCount,
-  isLoading,
+function StatusLine({
+  data,
+  open,
 }: {
-  priorities: OperationalAction[]
-  overdueCount: number
-  isLoading: boolean
+  data: DashboardStats | undefined
+  open: number
 }) {
-  return (
-    <section className={`${surface} p-4 sm:p-5`}>
-      <div className="flex flex-wrap items-start justify-between gap-3 px-1 pb-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Fila de ação</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Ordenada por prazo e bloqueio operacional.
-          </p>
-        </div>
-        {!isLoading && overdueCount > 0 ? (
-          <span className="rounded-full bg-destructive/10 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-destructive">
-            {overdueCount} {overdueCount === 1 ? 'atrasada' : 'atrasadas'}
-          </span>
-        ) : null}
-      </div>
+  if (!data) return null
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {queueSkeletonKeys.map((key) => (
-            <Skeleton key={key} className="h-[6.5rem] rounded-xl" />
-          ))}
-        </div>
-      ) : priorities.length > 0 ? (
-        <ol className="space-y-2">
-          {priorities.map((item, index) => (
-            <li key={item.key}>
-              <article className="group grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 rounded-xl bg-muted/35 p-3.5 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] sm:items-center sm:p-4">
-                <span
-                  className={`grid size-10 place-items-center rounded-lg ${actionTone[item.kind]}`}
-                  aria-hidden="true"
-                >
-                  <HugeiconsIcon
-                    icon={actionIcon[item.kind]}
-                    className="size-[18px]"
-                  />
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                      {item.label}
-                    </span>
-                    <span
-                      className={cn(
-                        'text-xs font-semibold tabular-nums',
-                        item.kind === 'overdue'
-                          ? 'text-destructive'
-                          : 'text-muted-foreground',
-                      )}
-                    >
-                      {item.deadline}
-                    </span>
-                  </div>
-                  <h3 className="mt-1 text-sm font-semibold sm:text-[15px]">
-                    {item.title}
-                  </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-                    {item.context}
-                  </p>
-                </div>
-                <OperationalActionLink item={item} />
-              </article>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <EmptyState
-          icon={CheckmarkCircle01Icon}
-          title="Nenhuma ação crítica"
-          description="A fila está limpa para o contexto selecionado."
+  const overdue = data.overdueJobs
+  const attention =
+    data.nonConformancesAwaitingDisposition +
+    data.capasOverdue +
+    data.spcChartsWithSignals +
+    data.ptPlanOverdue
+
+  const tone: SignalTone = overdue > 0 || attention > 0 ? 'critical' : 'ok'
+  const summary =
+    overdue > 0
+      ? `${overdue} ${overdue === 1 ? 'calibração atrasada' : 'calibrações atrasadas'}`
+      : 'Prazos em dia'
+  const detail =
+    attention > 0
+      ? `${attention} ${attention === 1 ? 'sinal de qualidade' : 'sinais de qualidade'} aguardando decisão`
+      : `${open} ${open === 1 ? 'calibração em aberto' : 'calibrações em aberto'}`
+
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+      <span className="inline-flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className={cn(
+            'size-2 rounded-full',
+            tone === 'critical' ? 'bg-destructive' : 'bg-emerald-500',
+          )}
         />
-      )}
-    </section>
+        <span
+          className={cn(
+            'font-medium',
+            tone === 'critical' ? 'text-destructive' : 'text-foreground',
+          )}
+        >
+          {summary}
+        </span>
+      </span>
+      <span aria-hidden="true">·</span>
+      <span>{detail}</span>
+    </p>
   )
 }
 
-function OperationalActionLink({ item }: { item: OperationalAction }) {
-  const className =
-    'col-span-2 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-primary transition-[background-color,transform] hover:bg-primary/10 motion-safe:active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:col-span-1 sm:justify-start'
+// — Row 1: pipeline —
+
+function PipelinePanel({
+  stages,
+  open,
+  data,
+  isLoading,
+}: {
+  stages: PipelineStage[]
+  open: number
+  data: DashboardStats | undefined
+  isLoading: boolean
+}) {
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Calibrações"
+        title="Pipeline"
+        description="Trabalho em aberto por etapa, da preparação à emissão."
+        action={
+          isLoading ? (
+            <Skeleton className="h-6 w-24 rounded-full" />
+          ) : (
+            <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-semibold tabular-nums">
+              {open} em aberto
+            </span>
+          )
+        }
+      />
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="min-w-0">
+          <div className="grid gap-px overflow-hidden rounded-xl bg-foreground/10 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] sm:grid-cols-4">
+            {stages.map((stage) => (
+              <Link
+                key={stage.status}
+                to="/dashboard/jobs"
+                search={{ status: stage.status }}
+                className={cn(
+                  'group block bg-card px-3.5 py-3 transition-colors hover:bg-muted/50 focus-visible:z-10 focus-visible:ring-inset',
+                  FOCUS_RING_CLASS,
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-1.5 rounded-full',
+                      STAGE_BAR_TONE[stage.status],
+                    )}
+                  />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {stage.label}
+                  </span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="mt-2 h-7 w-10 rounded-md" />
+                ) : (
+                  <div className="mt-1.5 flex items-baseline gap-2">
+                    <span
+                      className={cn(
+                        'font-mono text-2xl font-semibold leading-none tabular-nums',
+                        stage.count === 0 && 'text-muted-foreground/60',
+                      )}
+                    >
+                      {stage.count}
+                    </span>
+                    {stage.count > 0 && open > stage.count ? (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {Math.round(stage.share * 100)}%
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+
+          <div
+            className="mt-3 flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-foreground/10"
+            aria-hidden="true"
+          >
+            {!isLoading && open > 0
+              ? stages
+                  .filter((stage) => stage.count > 0)
+                  .map((stage) => (
+                    <span
+                      key={stage.status}
+                      className={cn(
+                        'h-full transition-[flex-basis] duration-500',
+                        STAGE_BAR_TONE[stage.status],
+                      )}
+                      style={{ flexBasis: `${stage.share * 100}%` }}
+                    />
+                  ))
+              : null}
+          </div>
+        </div>
+
+        <MonthSummary data={data} isLoading={isLoading} />
+      </div>
+    </Panel>
+  )
+}
+
+function MonthSummary({
+  data,
+  isLoading,
+}: {
+  data: DashboardStats | undefined
+  isLoading: boolean
+}) {
+  const approved = data?.approvedThisMonth ?? 0
+  const rejected = data?.rejectedThisMonth ?? 0
+  const decided = approved + rejected
+  const items = [
+    {
+      label: 'Aprovadas no mês',
+      value: approved,
+      tone:
+        approved > 0
+          ? 'text-emerald-700 dark:text-emerald-400'
+          : 'text-muted-foreground/60',
+    },
+    {
+      label: 'Rejeitadas',
+      value: rejected,
+      tone: rejected > 0 ? 'text-destructive' : 'text-muted-foreground/60',
+    },
+    {
+      label: 'Taxa de aprovação',
+      value: decided > 0 ? `${data?.approvalRate ?? 0}%` : '—',
+      tone: decided > 0 ? '' : 'text-muted-foreground/60',
+    },
+  ]
+
+  return (
+    <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-foreground/10 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] lg:grid-cols-1">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="flex items-center justify-between gap-3 bg-muted/35 px-3.5 py-2.5 max-lg:flex-col max-lg:items-start max-lg:gap-1"
+        >
+          <dt className="text-xs text-muted-foreground">{item.label}</dt>
+          {isLoading ? (
+            <Skeleton className="h-5 w-10 rounded-md" />
+          ) : (
+            <dd
+              className={cn(
+                'font-mono text-lg font-semibold leading-none tabular-nums',
+                item.tone,
+              )}
+            >
+              {item.value}
+            </dd>
+          )}
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+// — Row 2: work queue + health —
+
+function WorkQueuePanel({
+  data,
+  isManager,
+  isLoading,
+}: {
+  data: DashboardStats | undefined
+  isManager: boolean
+  isLoading: boolean
+}) {
+  const [view, setView] = useState<QueueView>(() =>
+    defaultQueueView(data, isManager),
+  )
+  const jobs = selectQueueJobs(data, view)
+
+  const deadlineStats = [
+    {
+      label: 'atrasadas',
+      value: data?.overdueJobs ?? 0,
+      tone: (data?.overdueJobs ?? 0) > 0 ? 'text-destructive' : '',
+    },
+    {
+      label: 'até hoje',
+      value: data?.dueToday ?? 0,
+      tone:
+        (data?.dueToday ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : '',
+    },
+    { label: 'em 7 dias', value: data?.dueNextSevenDays ?? 0, tone: '' },
+    {
+      label: 'em revisão',
+      value: data?.reviewQueue.length ?? 0,
+      tone: (data?.reviewQueue.length ?? 0) > 0 ? 'text-primary' : '',
+    },
+  ]
+
+  return (
+    <Panel className="overflow-hidden">
+      <div className="px-5 pt-5">
+        <PanelHeader
+          eyebrow="Fila de trabalho"
+          title={
+            view === 'due'
+              ? 'Por prazo'
+              : view === 'review'
+                ? 'Aguardando revisão'
+                : 'Criadas recentemente'
+          }
+          description={
+            view === 'due'
+              ? 'Calibrações abertas vencidas ou com prazo nos próximos sete dias.'
+              : view === 'review'
+                ? 'Submetidas pela execução e aguardando aprovação técnica.'
+                : 'Últimas calibrações registradas no contexto selecionado.'
+          }
+          action={
+            <SegmentedControl
+              name="dashboard-queue-view"
+              value={view}
+              onValueChange={setView}
+              options={QUEUE_VIEWS}
+            />
+          }
+        />
+
+        <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+          {deadlineStats.map((stat) => (
+            <div key={stat.label} className="flex items-baseline gap-1.5">
+              {isLoading ? (
+                <Skeleton className="h-5 w-6 rounded-md" />
+              ) : (
+                <dd
+                  className={cn(
+                    'font-mono text-base font-semibold leading-none tabular-nums',
+                    stat.tone,
+                  )}
+                >
+                  {stat.value}
+                </dd>
+              )}
+              <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div className="mt-4 border-t border-border/70">
+        {isLoading ? (
+          <div className="divide-y divide-border/70">
+            {queueSkeletonKeys.map((key) => (
+              <div key={key} className="px-5 py-3.5">
+                <Skeleton className="h-10 rounded-md" />
+              </div>
+            ))}
+          </div>
+        ) : jobs.length > 0 ? (
+          <ol className="divide-y divide-border/70">
+            {jobs.map((job, index) => (
+              <li key={job.id}>
+                <QueueRow job={job} index={index} view={view} />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <EmptyState
+            icon={CheckmarkCircle01Icon}
+            title={
+              view === 'due'
+                ? 'Nenhum prazo próximo'
+                : view === 'review'
+                  ? 'Nada aguardando revisão'
+                  : 'Nenhuma calibração registrada'
+            }
+            description={
+              view === 'due'
+                ? 'Não há calibrações vencidas nem com prazo nos próximos sete dias.'
+                : view === 'review'
+                  ? 'Todas as execuções submetidas já foram avaliadas.'
+                  : 'Crie a primeira calibração para vê-la aqui.'
+            }
+          />
+        )}
+      </div>
+
+      <div className="flex justify-end border-t border-border/70 px-3 py-2">
+        <Link
+          to="/dashboard/jobs"
+          search={view === 'review' ? { status: 'REVIEW' } : {}}
+          className={SECTION_LINK_CLASS}
+        >
+          Abrir todas as calibrações
+          <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+        </Link>
+      </div>
+    </Panel>
+  )
+}
+
+function QueueRow({
+  job,
+  index,
+  view,
+}: {
+  job: DashboardJob
+  index: number
+  view: QueueView
+}) {
+  const routeId = jobRouteId(job)
+  const isOverdue = Boolean(job.isOverdue)
+  const trailing =
+    view === 'recent'
+      ? formatShortDate(job.createdAt)
+      : formatDueDate(job.dueDate, job.isOverdue)
+  const trailingTone =
+    view !== 'recent' && isOverdue
+      ? 'text-destructive'
+      : view === 'due' && trailing === 'Hoje'
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-muted-foreground'
+
+  const rowClass = cn(
+    'grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 px-5 py-3 transition-colors hover:bg-muted/40 sm:grid-cols-[1.5rem_minmax(0,1fr)_8rem_7.5rem]',
+    'focus-visible:outline-none focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+  )
+
   const content = (
     <>
-      {item.action}
-      <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={cn(
+            'size-1.5 rounded-full',
+            isOverdue && view !== 'recent'
+              ? 'bg-destructive'
+              : STATUS_DOT[job.status],
+          )}
+        />
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+      </span>
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-sm font-medium">{jobTitle(job)}</span>
+          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+            {job.jobId}
+          </span>
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {job.customerName ?? 'Cliente não informado'}
+          {job.technicianName ? ` · ${job.technicianName}` : ''}
+          <span className="sm:hidden"> · {STATUS_LABEL[job.status]}</span>
+        </span>
+      </span>
+      <span className="hidden sm:block">
+        <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+          {STATUS_LABEL[job.status]}
+        </span>
+      </span>
+      <span
+        className={cn(
+          'text-end text-xs font-medium tabular-nums',
+          trailingTone,
+        )}
+      >
+        {trailing}
+      </span>
     </>
   )
 
-  switch (item.target.type) {
-    case 'job':
-      return item.target.execute ? (
-        <Link
-          to="/dashboard/jobs/$id/execute"
-          params={{ id: item.target.id }}
-          preload="intent"
-          className={className}
-        >
-          {content}
-        </Link>
+  if (job.status === 'IN_PROGRESS' && view === 'due') {
+    return (
+      <Link
+        to="/dashboard/jobs/$id/execute"
+        params={{ id: routeId }}
+        preload="intent"
+        className={rowClass}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <Link
+      to="/dashboard/jobs/$id"
+      params={{ id: routeId }}
+      preload="intent"
+      className={rowClass}
+    >
+      {content}
+    </Link>
+  )
+}
+
+function HealthPanel({
+  data,
+  isLoading,
+}: {
+  data: DashboardStats | undefined
+  isLoading: boolean
+}) {
+  const signals = data ? buildHealthSignals(data) : []
+
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="ISO/IEC 17025"
+        title="Saúde do laboratório"
+        description="Sinais de qualidade, rastreabilidade e pessoal."
+      />
+      {isLoading ? (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {healthSkeletonKeys.map((key) => (
+            <Skeleton key={key} className="h-[4.75rem] rounded-xl" />
+          ))}
+        </div>
       ) : (
-        <Link
-          to="/dashboard/jobs/$id"
-          params={{ id: item.target.id }}
-          preload="intent"
-          className={className}
-        >
-          {content}
-        </Link>
-      )
-    case 'requests':
-      return (
-        <Link
-          to="/dashboard/requests"
-          search={{ status: 'PENDING' }}
-          className={className}
-        >
-          {content}
-        </Link>
-      )
-    case 'standard':
-      return (
-        <Link
-          to="/dashboard/standards/$id"
-          params={{ id: item.target.id }}
-          preload="intent"
-          className={className}
-        >
-          {content}
-        </Link>
-      )
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {signals.map((signal) => (
+            <HealthLink key={signal.key} signal={signal}>
+              <SignalTile
+                icon={HEALTH_ICON[signal.key]}
+                label={signal.label}
+                value={signal.value}
+                hint={signal.hint}
+                tone={signal.tone}
+                className="h-full transition-[box-shadow] group-hover:shadow-[inset_0_0_0_1px_rgba(15,23,42,0.18)] dark:group-hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]"
+              />
+            </HealthLink>
+          ))}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function HealthLink({
+  signal,
+  children,
+}: {
+  signal: HealthSignal
+  children: ReactNode
+}) {
+  const className = cn('group block rounded-xl', FOCUS_RING_CLASS)
+
+  switch (signal.key) {
     case 'nc':
       return (
         <Link
@@ -390,7 +780,7 @@ function OperationalActionLink({ item }: { item: OperationalAction }) {
           search={{ status: 'open' }}
           className={className}
         >
-          {content}
+          {children}
         </Link>
       )
     case 'capa':
@@ -400,221 +790,224 @@ function OperationalActionLink({ item }: { item: OperationalAction }) {
           search={{ status: 'OPEN' }}
           className={className}
         >
-          {content}
+          {children}
+        </Link>
+      )
+    case 'standards':
+      return (
+        <Link to="/dashboard/standards" className={className}>
+          {children}
+        </Link>
+      )
+    case 'competences':
+      return (
+        <Link to="/dashboard/personnel" className={className}>
+          {children}
+        </Link>
+      )
+    case 'validity':
+      return (
+        <Link to="/dashboard/spc" className={className}>
+          {children}
+        </Link>
+      )
+    case 'intake':
+      return (
+        <Link
+          to="/dashboard/requests"
+          search={{ status: 'PENDING' }}
+          className={className}
+        >
+          {children}
         </Link>
       )
   }
 }
 
-function UpcomingDeliveries({
-  jobs,
+// — Row 3: throughput + traceability —
+
+function ThroughputPanel({
+  data,
   isLoading,
 }: {
-  jobs: DashboardJob[]
+  data: DashboardStats | undefined
   isLoading: boolean
 }) {
-  return (
-    <section className={`${surface} overflow-hidden`}>
-      <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4 sm:px-6">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">
-            Próximas entregas
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Calibrações abertas com prazo nos próximos sete dias.
-          </p>
-        </div>
-        <SectionLink to="/dashboard/jobs">Abrir fila completa</SectionLink>
-      </div>
+  const [range, setRange] = useState<'30' | '90'>('30')
+  const days: TrendWindow = range === '90' ? 90 : 30
+  const series = buildTrendSeries(data?.calibrationTrend, days)
+  const totals = sumTrend(series)
 
-      {isLoading ? (
-        <div className="space-y-px border-t border-border/70 bg-border/70">
-          {deliverySkeletonKeys.map((key) => (
-            <Skeleton key={key} className="h-[4.25rem] rounded-none" />
-          ))}
-        </div>
-      ) : jobs.length > 0 ? (
-        <>
-          <div className="divide-y divide-border/70 sm:hidden">
-            {jobs.map((job) => (
-              <UpcomingDeliveryCard key={job.id} job={job} />
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full min-w-[38rem] text-start text-sm">
-              <thead className="bg-muted/35 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-6 py-3 text-start font-medium">
-                    Calibração
-                  </th>
-                  <th className="px-4 py-3 text-start font-medium">Cliente</th>
-                  <th className="px-4 py-3 text-start font-medium">Etapa</th>
-                  <th className="px-6 py-3 text-end font-medium">Prazo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <UpcomingDeliveryRow key={job.id} job={job} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
-        <div className="border-t border-border/70 p-5">
-          <EmptyState
-            icon={CheckmarkCircle01Icon}
-            title="Nenhuma entrega próxima"
-            description="Não há calibrações abertas vencendo nos próximos sete dias."
+  return (
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Ritmo"
+        title="Decisões por dia"
+        description="Calibrações aprovadas e rejeitadas na revisão técnica."
+        action={
+          <SegmentedControl
+            name="dashboard-trend-window"
+            value={range}
+            onValueChange={setRange}
+            options={TREND_WINDOWS}
           />
-        </div>
-      )}
-    </section>
-  )
-}
+        }
+      />
 
-function UpcomingDeliveryCard({ job }: { job: DashboardJob }) {
-  const routeId = jobRouteId(job)
+      <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+        <TrendTotal
+          label="aprovadas"
+          value={totals.approved}
+          swatch="bg-primary"
+          isLoading={isLoading}
+        />
+        <TrendTotal
+          label="rejeitadas"
+          value={totals.rejected}
+          swatch="bg-destructive"
+          isLoading={isLoading}
+        />
+      </dl>
 
-  return (
-    <Link
-      to="/dashboard/jobs/$id"
-      params={{ id: routeId }}
-      preload="intent"
-      className="block px-5 py-4 transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-xs font-semibold tabular-nums">
-          {job.jobId}
-        </span>
-        <span
-          className={cn(
-            'text-xs font-semibold tabular-nums',
-            job.isOverdue ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {formatDueDate(job.dueDate, job.isOverdue)}
-        </span>
-      </div>
-      <p className="mt-2 text-sm font-semibold">{jobTitle(job)}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {job.customerName ?? 'Cliente não informado'} ·{' '}
-        {statusLabel[job.status]}
-      </p>
-    </Link>
-  )
-}
-
-function UpcomingDeliveryRow({ job }: { job: DashboardJob }) {
-  const routeId = jobRouteId(job)
-
-  return (
-    <tr className="border-t border-border/70 transition-colors hover:bg-muted/30">
-      <td className="px-6 py-3.5">
-        <Link
-          to="/dashboard/jobs/$id"
-          params={{ id: routeId }}
-          preload="intent"
-          className="rounded-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {jobTitle(job)}
-          <span className="mt-1 block font-mono text-[11px] tabular-nums text-muted-foreground">
-            {job.jobId}
-          </span>
-        </Link>
-      </td>
-      <td className="px-4 py-3.5 text-muted-foreground">
-        {job.customerName ?? 'Cliente não informado'}
-      </td>
-      <td className="px-4 py-3.5">
-        <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
-          {statusLabel[job.status]}
-        </span>
-      </td>
-      <td
-        className={cn(
-          'px-6 py-3.5 text-end text-xs font-medium tabular-nums',
-          job.isOverdue ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      >
-        {formatDueDate(job.dueDate, job.isOverdue)}
-      </td>
-    </tr>
-  )
-}
-
-function OperationSummary({
-  overdue,
-  dueToday,
-  review,
-  dueNextSevenDays,
-  isLoading,
-}: {
-  overdue: number
-  dueToday: number
-  review: number
-  dueNextSevenDays: number
-  isLoading: boolean
-}) {
-  const indicators = [
-    { label: 'atrasadas', value: overdue, tone: 'text-destructive' },
-    {
-      label: 'até hoje',
-      value: dueToday,
-      tone: 'text-amber-700 dark:text-amber-400',
-    },
-    { label: 'em revisão', value: review, tone: 'text-primary' },
-    {
-      label: 'próximos 7 dias',
-      value: dueNextSevenDays,
-      tone: 'text-foreground',
-    },
-  ]
-
-  return (
-    <section className={`${surface} p-5`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Operação de hoje</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Contexto selecionado
+      {isLoading ? (
+        <Skeleton className="mt-4 h-40 rounded-xl" />
+      ) : totals.approved + totals.rejected === 0 ? (
+        <div className="mt-4 flex h-40 flex-col items-center justify-center rounded-xl bg-muted/35 px-4 text-center shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+          <p className="text-sm font-medium">Nenhuma decisão no período</p>
+          <p className="mt-1 max-w-xs text-pretty text-xs text-muted-foreground">
+            O ritmo aparece aqui conforme calibrações forem aprovadas ou
+            rejeitadas na revisão técnica.
           </p>
         </div>
-        <HugeiconsIcon
-          icon={Clock01Icon}
-          className="size-5 text-muted-foreground"
-          aria-hidden="true"
-        />
-      </div>
-      {isLoading ? (
-        <div className="mt-5 grid grid-cols-2 gap-5">
-          {['indicator-1', 'indicator-2', 'indicator-3', 'indicator-4'].map(
-            (key) => (
-              <Skeleton key={key} className="h-12 rounded-lg" />
-            ),
-          )}
-        </div>
       ) : (
-        <dl className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5">
-          {indicators.map((indicator) => (
-            <div key={indicator.label}>
-              <dt className="text-xs text-muted-foreground">
-                {indicator.label}
-              </dt>
-              <dd
-                className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${indicator.tone}`}
+        <ChartContainer
+          config={trendChartConfig}
+          className="mt-4 aspect-auto h-40 w-full"
+        >
+          <AreaChart
+            data={series}
+            margin={{ top: 4, right: 4, left: 4, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient
+                id="dashboard-approved"
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
               >
-                {indicator.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+                <stop
+                  offset="0%"
+                  stopColor="var(--color-approved)"
+                  stopOpacity={0.28}
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--color-approved)"
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+              <linearGradient
+                id="dashboard-rejected"
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="var(--color-rejected)"
+                  stopOpacity={0.22}
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--color-rejected)"
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              minTickGap={32}
+              tickFormatter={(value: string) =>
+                new Intl.DateTimeFormat('pt-BR', {
+                  day: '2-digit',
+                  month: 'short',
+                }).format(new Date(`${value}T12:00:00`))
+              }
+            />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  indicator="line"
+                  labelFormatter={(value) =>
+                    new Intl.DateTimeFormat('pt-BR', {
+                      weekday: 'short',
+                      day: '2-digit',
+                      month: 'short',
+                    }).format(new Date(`${String(value)}T12:00:00`))
+                  }
+                />
+              }
+            />
+            <Area
+              dataKey="rejected"
+              type="monotone"
+              stroke="var(--color-rejected)"
+              strokeWidth={1.5}
+              fill="url(#dashboard-rejected)"
+              isAnimationActive={false}
+            />
+            <Area
+              dataKey="approved"
+              type="monotone"
+              stroke="var(--color-approved)"
+              strokeWidth={1.5}
+              fill="url(#dashboard-approved)"
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ChartContainer>
       )}
-    </section>
+    </Panel>
   )
 }
 
-function TraceabilitySummary({
+function TrendTotal({
+  label,
+  value,
+  swatch,
+  isLoading,
+}: {
+  label: string
+  value: number
+  swatch: string
+  isLoading: boolean
+}) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span
+        aria-hidden="true"
+        className={cn('size-2 translate-y-[-1px] rounded-full', swatch)}
+      />
+      {isLoading ? (
+        <Skeleton className="h-5 w-6 rounded-md" />
+      ) : (
+        <dd className="font-mono text-base font-semibold leading-none tabular-nums">
+          {value}
+        </dd>
+      )}
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+    </div>
+  )
+}
+
+function TraceabilityPanel({
   standards,
   isLoading,
 }: {
@@ -622,71 +1015,81 @@ function TraceabilitySummary({
   isLoading: boolean
 }) {
   return (
-    <section className={`${surface} p-5`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Rastreabilidade próxima</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Padrões que vencem em até 30 dias
-          </p>
-        </div>
-        <HugeiconsIcon
-          icon={RulerIcon}
-          className="size-5 text-amber-700 dark:text-amber-400"
-          aria-hidden="true"
-        />
-      </div>
+    <Panel className="p-5">
+      <PanelHeader
+        eyebrow="Rastreabilidade"
+        title="Padrões a vencer"
+        description="Padrões ativos com calibração vencendo em até 30 dias."
+      />
 
       {isLoading ? (
-        <div className="mt-4 space-y-3">
-          {traceabilitySkeletonKeys.map((key) => (
+        <div className="mt-4 space-y-2">
+          {standardSkeletonKeys.map((key) => (
             <Skeleton key={key} className="h-12 rounded-lg" />
           ))}
         </div>
       ) : standards.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          {standards.slice(0, 2).map((standard) => (
-            <Link
-              key={standard.id}
-              to="/dashboard/standards/$id"
-              params={{ id: String(standard.id) }}
-              preload="intent"
-              className="block rounded-lg px-1 py-2 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <p className="text-sm font-medium">{standard.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {standard.serialNumber} ·{' '}
-                {formatStandardDate(standard.nextCalibrationDate)}
-              </p>
-            </Link>
-          ))}
-        </div>
+        <ol className="mt-3 divide-y divide-border/70">
+          {standards.map((standard) => {
+            const due = formatStandardDue(standard.nextCalibrationDate)
+            return (
+              <li key={standard.id}>
+                <Link
+                  to="/dashboard/standards/$id"
+                  params={{ id: standardRouteId(standard) }}
+                  preload="intent"
+                  className={cn(
+                    'flex items-center justify-between gap-3 rounded-lg px-1 py-2.5 transition-colors hover:bg-muted/40',
+                    FOCUS_RING_CLASS,
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {standard.name}
+                    </span>
+                    <span className="mt-0.5 block truncate font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {standard.serialNumber} · cert.{' '}
+                      {standard.certificateNumber}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-end">
+                    <span className="block text-xs font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                      {due}
+                    </span>
+                    <span className="block font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {formatShortDate(standard.nextCalibrationDate)}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            )
+          })}
+        </ol>
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Nenhum padrão ativo vence nos próximos 30 dias.
-        </p>
+        <div className="mt-4 flex items-center gap-3 rounded-xl bg-emerald-500/10 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+          <HugeiconsIcon
+            icon={CheckmarkCircle01Icon}
+            className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+            aria-hidden="true"
+          />
+          <p className="text-sm">
+            <span className="font-medium">
+              Cadeia de rastreabilidade em dia.
+            </span>{' '}
+            <span className="text-muted-foreground">
+              Nenhum padrão vence nos próximos 30 dias.
+            </span>
+          </p>
+        </div>
       )}
 
-      <SectionLink to="/dashboard/standards">Ver todos os padrões</SectionLink>
-    </section>
-  )
-}
-
-function SectionLink({
-  to,
-  children,
-}: {
-  to: '/dashboard/jobs' | '/dashboard/standards'
-  children: ReactNode
-}) {
-  return (
-    <Link
-      to={to}
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 motion-safe:active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      {children}
-      <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
-    </Link>
+      <div className="mt-3 flex justify-end">
+        <Link to="/dashboard/standards" className={SECTION_LINK_CLASS}>
+          Ver todos os padrões
+          <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+        </Link>
+      </div>
+    </Panel>
   )
 }
 
@@ -695,185 +1098,24 @@ function EmptyState({
   title,
   description,
 }: {
-  icon: Parameters<typeof HugeiconsIcon>[0]['icon']
+  icon: IconType
   title: string
   description: string
 }) {
   return (
-    <div className="flex min-h-32 flex-col items-center justify-center rounded-xl bg-muted/30 px-4 text-center">
-      <HugeiconsIcon
-        icon={icon}
-        className="mb-2 size-5 text-muted-foreground"
-      />
+    <div className="flex min-h-36 flex-col items-center justify-center px-4 text-center">
+      <span className="mb-2 grid size-8 place-items-center rounded-full bg-emerald-500/10">
+        <HugeiconsIcon
+          icon={icon}
+          className="size-4 text-emerald-600 dark:text-emerald-400"
+        />
+      </span>
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-1 max-w-sm text-pretty text-xs text-muted-foreground">
         {description}
       </p>
     </div>
   )
-}
-
-function buildOperationalActions(
-  data: DashboardStats | undefined,
-  isManager: boolean,
-): OperationalAction[] {
-  if (!data) return []
-
-  const actions: OperationalAction[] = []
-  const addedJobIds = new Set<number>()
-  const firstDueJob = data.dueSoonJobs[0]
-
-  if (firstDueJob) {
-    actions.push(jobAction(firstDueJob))
-    addedJobIds.add(firstDueJob.id)
-  }
-
-  const reviewJob = data.reviewQueue.find((job) => !addedJobIds.has(job.id))
-  if (reviewJob) {
-    actions.push(jobAction(reviewJob, 'Sua revisão'))
-    addedJobIds.add(reviewJob.id)
-  }
-
-  if (isManager && data.capasOverdue > 0) {
-    actions.push({
-      key: 'capas-overdue',
-      kind: 'quality',
-      label: 'Qualidade',
-      title:
-        data.capasOverdue === 1
-          ? '1 CAPA está atrasada'
-          : `${data.capasOverdue} CAPAs estão atrasadas`,
-      context: 'Ações corretivas com prazo vencido',
-      deadline: 'Prazo vencido',
-      action: 'Tratar CAPAs',
-      target: { type: 'capa' },
-    })
-  }
-
-  if (isManager && data.nonConformancesAwaitingDisposition > 0) {
-    actions.push({
-      key: 'nc-awaiting-disposition',
-      kind: 'quality',
-      label: 'Qualidade',
-      title:
-        data.nonConformancesAwaitingDisposition === 1
-          ? '1 NC aguarda disposição'
-          : `${data.nonConformancesAwaitingDisposition} NCs aguardam disposição`,
-      context: 'Decisão necessária para definir o impacto nos resultados',
-      deadline: 'Ação pendente',
-      action: 'Tratar não conformidades',
-      target: { type: 'nc' },
-    })
-  }
-
-  if (data.pendingCalibrationRequests > 0) {
-    actions.push({
-      key: 'pending-requests',
-      kind: 'request',
-      label: 'Triagem',
-      title:
-        data.pendingCalibrationRequests === 1
-          ? '1 solicitação aguarda análise'
-          : `${data.pendingCalibrationRequests} solicitações aguardam análise`,
-      context: 'Recebidas pelo portal do cliente',
-      deadline: 'Fila de entrada',
-      action: 'Triar solicitações',
-      target: { type: 'requests' },
-    })
-  }
-
-  const firstStandard = data.standardsWatchlist[0]
-  if (firstStandard) {
-    actions.push({
-      key: `standard-${firstStandard.id}`,
-      kind: 'standard',
-      label: 'Rastreabilidade',
-      title: firstStandard.name,
-      context: `${firstStandard.serialNumber} · certificado ${firstStandard.certificateNumber}`,
-      deadline: formatStandardDate(firstStandard.nextCalibrationDate),
-      action: 'Abrir padrão',
-      target: { type: 'standard', id: String(firstStandard.id) },
-    })
-  }
-
-  for (const job of data.dueSoonJobs) {
-    if (addedJobIds.has(job.id)) continue
-    actions.push(jobAction(job))
-    addedJobIds.add(job.id)
-  }
-
-  return actions
-}
-
-function jobAction(job: DashboardJob, label?: string): OperationalAction {
-  const isReview = job.status === 'REVIEW'
-  const execute = job.status === 'IN_PROGRESS'
-
-  return {
-    key: `job-${job.id}`,
-    kind: job.isOverdue ? 'overdue' : isReview ? 'review' : 'deadline',
-    label:
-      label ??
-      (job.isOverdue
-        ? 'Prazo vencido'
-        : isReview
-          ? 'Sua revisão'
-          : 'Próxima entrega'),
-    title: jobTitle(job),
-    context: `${job.jobId} · ${job.customerName ?? 'Cliente não informado'} · ${statusLabel[job.status]}`,
-    deadline: formatDueDate(job.dueDate, job.isOverdue),
-    action: isReview
-      ? 'Revisar calibração'
-      : execute
-        ? 'Continuar execução'
-        : 'Abrir calibração',
-    target: { type: 'job', id: jobRouteId(job), execute },
-  }
-}
-
-function jobTitle(job: DashboardJob) {
-  return job.assetName ?? job.serviceName ?? job.jobId
-}
-
-function formatCurrentDate() {
-  const value = new Intl.DateTimeFormat('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date())
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function formatStandardDate(dateString: string | null) {
-  if (!dateString) return 'Sem vencimento informado'
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(dateString))
-}
-
-function formatDueDate(dateString: string | null, isOverdue?: boolean | null) {
-  if (!dateString) return 'Sem prazo'
-
-  const due = new Date(dateString)
-  const today = new Date()
-  const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate())
-  const startOfToday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  )
-  const difference = Math.round(
-    (startOfDue.getTime() - startOfToday.getTime()) / 86_400_000,
-  )
-
-  if (difference < 0 || isOverdue) {
-    const days = Math.max(1, Math.abs(difference))
-    return `Atrasada há ${days} ${days === 1 ? 'dia' : 'dias'}`
-  }
-  if (difference === 0) return 'Hoje'
-  if (difference === 1) return 'Amanhã'
-  return `Em ${difference} dias`
 }
 
 function DashboardIndexMountMarker() {
