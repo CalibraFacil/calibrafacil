@@ -74,26 +74,42 @@ export function Hero() {
 function HeroVisual() {
   return (
     <div className="relative mx-auto mt-14 max-w-[1120px] md:mt-20">
-      <div className="relative h-[300px] overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card shadow-[0_0_0_1px_rgba(255,255,255,0.6)_inset,0_2px_6px_rgba(15,23,42,0.04),0_40px_80px_-32px_rgba(15,23,42,0.28)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_40px_80px_-32px_rgba(0,0,0,0.7)] [mask-image:linear-gradient(180deg,#000_62%,transparent_100%)] sm:h-[420px] md:h-[560px]">
-        <Image
-          src="/hero-preview.png"
-          alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
-          width={3420}
-          height={2146}
-          priority
-          sizes="(min-width: 1200px) 1120px, 100vw"
-          draggable={false}
-          className="block h-auto w-[190%] max-w-none -translate-x-[28%] select-none md:w-full md:translate-x-0 dark:hidden"
-        />
-        <Image
-          src="/hero-preview-dark.png"
-          alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
-          width={3420}
-          height={2146}
-          sizes="(min-width: 1200px) 1120px, 100vw"
-          draggable={false}
-          className="hidden h-auto w-[190%] max-w-none -translate-x-[28%] select-none md:w-full md:translate-x-0 dark:block"
-        />
+      <div className="relative mx-auto aspect-[390/844] max-w-[430px] overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card shadow-[0_0_0_1px_rgba(255,255,255,0.6)_inset,0_2px_6px_rgba(15,23,42,0.04),0_40px_80px_-32px_rgba(15,23,42,0.28)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_40px_80px_-32px_rgba(0,0,0,0.7)] [mask-image:linear-gradient(180deg,#000_62%,transparent_100%)] md:aspect-auto md:h-[560px] md:max-w-none">
+        <picture className="block dark:hidden">
+          <source
+            media="(max-width: 767px)"
+            srcSet="/dashboard-preview-mobile-light.png"
+            width={780}
+            height={1688}
+          />
+          <Image
+            src="/dashboard-preview-light.png"
+            alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
+            width={3420}
+            height={2146}
+            priority
+            sizes="(min-width: 1200px) 1120px, 100vw"
+            draggable={false}
+            className="block h-auto w-full select-none"
+          />
+        </picture>
+        <picture className="hidden dark:block">
+          <source
+            media="(max-width: 767px)"
+            srcSet="/dashboard-preview-mobile-dark.png"
+            width={780}
+            height={1688}
+          />
+          <Image
+            src="/dashboard-preview-dark.png"
+            alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
+            width={3420}
+            height={2146}
+            sizes="(min-width: 1200px) 1120px, 100vw"
+            draggable={false}
+            className="block h-auto w-full select-none"
+          />
+        </picture>
       </div>
 
       <CertificateCard className="absolute bottom-6 left-0 hidden w-[300px] md:block lg:-left-6" />
