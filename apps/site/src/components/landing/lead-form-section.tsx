@@ -18,7 +18,7 @@ import {
   type LeadFormField,
 } from "@/lib/lead-form";
 
-import { SectionHeading } from "./landing-primitives";
+import { SectionHeading } from "./surfaces";
 
 const DEMO_URL = "https://cal.com/calibrafacil/30min?user=calibrafacil";
 
@@ -100,7 +100,7 @@ export function LeadFormSection() {
       setSubmitted(true);
     } catch {
       setFormError(
-        "Não foi possível enviar. Tente novamente ou use o WhatsApp.",
+        "Não foi possível enviar. Tente novamente ou fale pelo WhatsApp.",
       );
     } finally {
       setPending(false);
@@ -108,16 +108,19 @@ export function LeadFormSection() {
   }
 
   return (
-    <section id="contato" className="border-t border-border/70 py-24">
+    <section
+      id="contato"
+      className="scroll-mt-20 border-t border-border bg-[linear-gradient(180deg,var(--muted)_0%,var(--background)_100%)] py-24 md:py-32"
+    >
       <div className="mx-auto max-w-[720px] px-6 md:px-8">
         <SectionHeading
           center
-          title="Fale com um especialista"
-          lead="Conte um pouco sobre o seu laboratório ou oficina. Retornamos com uma proposta e uma demonstração focada no seu escopo."
+          title="Conte como é o seu laboratório."
+          body="Quais grandezas calibra, quantas calibrações por mês, se é acreditado ou está implantando a norma. A demonstração é sobre a sua operação."
         />
 
         {submitted ? (
-          <div className="mx-auto mt-10 max-w-[520px] rounded-2xl border border-border bg-card px-6 py-10 text-center">
+          <div className="mx-auto mt-10 max-w-[520px] rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-20px_rgba(15,23,42,0.18)]">
             <HugeiconsIcon
               icon={CheckmarkCircle02Icon}
               className="mx-auto size-10 text-emerald-500"
@@ -152,7 +155,7 @@ export function LeadFormSection() {
           <form
             onSubmit={handleSubmit}
             noValidate
-            className="mt-10 rounded-2xl border border-border bg-card px-6 py-8 sm:px-8"
+            className="mt-10 rounded-2xl border border-border bg-card px-6 py-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-20px_rgba(15,23,42,0.18)] sm:px-8"
           >
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
@@ -231,7 +234,7 @@ export function LeadFormSection() {
                   value={form.segment}
                   onChange={(e) => updateField("segment", e.target.value)}
                 >
-                  <option value="">Selecione…</option>
+                  <option value="">Selecionar</option>
                   <option value="lab">Laboratório de calibração</option>
                   <option value="oficina">
                     Oficina permissionária do Inmetro
@@ -250,7 +253,7 @@ export function LeadFormSection() {
                   value={form.message}
                   onChange={(e) => updateField("message", e.target.value)}
                   rows={4}
-                  placeholder="Grandezas que você calibra, volume mensal, dúvidas…"
+                  placeholder="Grandezas que calibra, volume mensal, acreditação, dúvidas"
                 />
                 <span className="text-xs text-muted-foreground">
                   Seus dados são usados apenas para este contato comercial.
@@ -277,7 +280,7 @@ export function LeadFormSection() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Button type="submit" size="lg" disabled={pending}>
-                {pending ? "Enviando…" : "Falar com um especialista"}
+                {pending ? "Enviando" : "Enviar e conversar"}
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
               </Button>
               <a

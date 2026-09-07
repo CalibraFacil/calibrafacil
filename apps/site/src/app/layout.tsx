@@ -33,8 +33,7 @@ export const metadata: Metadata = {
   },
 };
 
-// Follows the OS color scheme (matches the SPA landing) — sets `.dark` before
-// paint so there is no flash.
+// Follows the OS color scheme. Sets `.dark` before paint so there is no flash.
 const THEME_SCRIPT = `(function(){try{var m=window.matchMedia('(prefers-color-scheme: dark)');function a(){document.documentElement.classList.toggle('dark',m.matches);}a();m.addEventListener('change',a);}catch(e){}})();`;
 
 // Consent Mode v2 defaults (all denied) + apply any stored choice, before GTM.
@@ -59,9 +58,15 @@ export default function RootLayout({
         ) : null}
       </head>
       <body>
-        <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
+        <a
+          href="#conteudo"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-foreground focus:px-3 focus:py-2 focus:text-sm focus:text-background"
+        >
+          Ir para o conteúdo
+        </a>
+        <div className="min-h-screen overflow-x-clip bg-background text-foreground">
           <LandingNav />
-          <main>{children}</main>
+          <main id="conteudo">{children}</main>
           <LandingFooter />
         </div>
         <WhatsAppFloat />

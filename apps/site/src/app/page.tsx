@@ -1,12 +1,10 @@
 import { Hero } from "@/components/landing/hero";
-import { HeroPreview } from "@/components/landing/hero-preview";
-import { WorkflowSection } from "@/components/landing/workflow-section";
-import { AudienceSection } from "@/components/landing/audience-section";
-import { FeaturesSection } from "@/components/landing/features-section";
+import { ProductSection } from "@/components/landing/product-section";
+import { PortalSection } from "@/components/landing/portal-section";
+import { CoverageSection } from "@/components/landing/coverage-section";
+import { TrustSection } from "@/components/landing/trust-section";
 import { VideoSection } from "@/components/landing/video-section";
-import { FAQSection } from "@/components/landing/faq-section";
 import { LeadFormSection } from "@/components/landing/lead-form-section";
-import { ClosingCTA } from "@/components/landing/closing-cta";
 import { SITE_URL } from "@/lib/site";
 
 const orgJsonLd = {
@@ -18,7 +16,7 @@ const orgJsonLd = {
       url: SITE_URL,
       logo: `${SITE_URL}/logo-mark-light.svg`,
       description:
-        "Software para laboratórios de calibração com cálculo de incerteza conforme o GUM e conformidade ISO/IEC 17025.",
+        "Software para laboratórios de calibração: cálculo de incerteza conforme o GUM, certificados com revisão e aprovação, assinatura ICP-Brasil e portal do cliente.",
     },
     {
       "@type": "SoftwareApplication",
@@ -27,7 +25,7 @@ const orgJsonLd = {
       operatingSystem: "Web",
       url: SITE_URL,
       description:
-        "Software para laboratórios de calibração e oficinas permissionárias do Inmetro: gestão de ordens de serviço, rastreabilidade metrológica e emissão automática de certificados.",
+        "Gestão de laboratórios de calibração sob a ISO/IEC 17025: clientes, equipamentos, calibrações, cálculo de incerteza, certificados, rastreabilidade, histórico e portal do cliente.",
     },
   ],
 };
@@ -40,14 +38,12 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
       <Hero />
-      <HeroPreview />
-      <WorkflowSection />
-      <AudienceSection />
-      <FeaturesSection />
+      <ProductSection />
+      <PortalSection />
+      <CoverageSection />
+      <TrustSection />
       <VideoSection />
-      <FAQSection />
       <LeadFormSection />
-      <ClosingCTA />
     </>
   );
 }

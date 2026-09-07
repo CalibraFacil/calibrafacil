@@ -1,114 +1,201 @@
-"use client";
-
+import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  ArrowRight01Icon,
-  Certificate01Icon,
-  DocumentValidationIcon,
-  Link01Icon,
-  SecurityCheckIcon,
-} from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { track } from "@/lib/analytics/track";
+import { CONTACT_URL, DEMO_URL } from "@/lib/site";
 
-const DEMO_URL = "https://cal.com/calibrafacil/30min?user=calibrafacil";
-
-const heroMeta = [
-  {
-    icon: DocumentValidationIcon,
-    label: "Cálculo de incerteza conforme o GUM",
-  },
-  { icon: Certificate01Icon, label: "Assinatura ICP-Brasil A1 nativa" },
-  { icon: SecurityCheckIcon, label: "Trilha de auditoria nativa" },
-  { icon: Link01Icon, label: "Rastreabilidade ponta a ponta" },
-];
+import { TrackedLink } from "./tracked-link";
 
 export function Hero() {
   return (
-    <section className="relative isolate overflow-hidden pt-20 pb-16 md:pb-20">
+    <section className="relative isolate overflow-hidden">
+      {/* Soft brand tint at the top, nothing else behind the content. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-50 -right-60 size-[720px] rounded-full bg-[color-mix(in_oklch,var(--primary)_14%,transparent)] blur-[140px]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[720px] bg-[radial-gradient(56%_60%_at_50%_0%,color-mix(in_oklch,var(--primary)_9%,transparent),transparent_72%)]"
       />
-      <BlueprintGrid />
 
-      <div className="relative z-[1] mx-auto max-w-[900px] px-6 text-center md:px-8">
-        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-700">
-          <h1 className="text-[clamp(40px,5.4vw,68px)] leading-[1.02] font-semibold tracking-tight text-balance text-foreground">
-            Da OS ao certificado,
-            <br />
-            <span>com a auditoria já feita.</span>
+      <div className="mx-auto max-w-[1200px] px-6 pt-20 md:px-8 md:pt-28">
+        <div className="mx-auto max-w-[820px] text-center">
+          <h1 className="text-[clamp(38px,5.6vw,66px)] leading-[1.04] font-semibold tracking-[-0.032em] text-balance text-foreground">
+            Calibração, incerteza e certificado no mesmo registro.
           </h1>
-
-          <p className="mx-auto mt-5 max-w-[56ch] text-lg leading-relaxed text-pretty text-muted-foreground">
-            Cada calibração já sai rastreável — orçamento de incerteza, padrões
-            usados e signatário ligados ao certificado. Na aprovação, tudo
-            congela numa versão que não muda mais: a evidência que o avaliador
-            pede já está pronta.
+          <p className="mx-auto mt-6 max-w-[60ch] text-[17px] leading-relaxed text-pretty text-muted-foreground md:text-lg">
+            O CalibraFácil acompanha cada calibração do cadastro do equipamento
+            à aprovação do certificado, com cálculo de incerteza, assinatura
+            ICP-Brasil e portal do cliente. Feito para laboratórios sob a
+            ISO/IEC 17025, acreditados ou em implantação.
           </p>
-
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button
               size="lg"
+              className="bg-[linear-gradient(180deg,#5b53ea_0%,#4f46e5_45%,#3f3ad6_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(20,71,230,0.35),0_8px_20px_-8px_rgba(79,70,229,0.5)] hover:brightness-[1.06]"
               render={
-                <a
-                  href="#contato"
-                  onClick={() => track("lead_cta_click", { location: "hero" })}
+                <TrackedLink
+                  href={DEMO_URL}
+                  event="demo_click"
+                  params={{ location: "hero" }}
+                  external
                 />
               }
             >
-              Falar com um especialista
+              Agendar demonstração
               <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
             </Button>
             <Button
               variant="outline"
               size="lg"
+              className="shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
               render={
-                <a
-                  href={DEMO_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => track("demo_click", { location: "hero" })}
+                <TrackedLink
+                  href={CONTACT_URL}
+                  event="lead_cta_click"
+                  params={{ location: "hero" }}
                 />
               }
             >
-              Agendar demonstração
+              Falar com a equipe
             </Button>
           </div>
-
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 text-xs text-muted-foreground">
-            {heroMeta.map((item, index) => (
-              <div key={item.label} className="flex items-center gap-3">
-                {index > 0 && (
-                  <span className="size-1 rounded-full bg-foreground/30" />
-                )}
-                <span className="flex items-center gap-1.5">
-                  <HugeiconsIcon
-                    icon={item.icon}
-                    className="size-3.5 text-emerald-500"
-                  />
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
+
+        <HeroVisual />
       </div>
     </section>
   );
 }
 
-/** Blueprint grid backdrop — hairline grid masked to a soft ellipse. */
-export function BlueprintGrid({ fine = false }: { fine?: boolean }) {
+/**
+ * The product, framed once and dissolving into the page, with two real
+ * moments of a calibration floating over it: the approved certificate and
+ * the expanded uncertainty behind it.
+ */
+function HeroVisual() {
   return (
-    <div
-      aria-hidden
-      className={
-        fine
-          ? "pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_oklch,var(--foreground)_6%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklch,var(--foreground)_6%,transparent)_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_40%_at_50%_50%,black_30%,transparent_80%)]"
-          : "pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_oklch,var(--foreground)_6%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklch,var(--foreground)_6%,transparent)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_30%,black_30%,transparent_75%)]"
-      }
-    />
+    <div className="relative mx-auto mt-14 max-w-[1120px] md:mt-20">
+      <div className="relative h-[300px] overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card shadow-[0_0_0_1px_rgba(255,255,255,0.6)_inset,0_2px_6px_rgba(15,23,42,0.04),0_40px_80px_-32px_rgba(15,23,42,0.28)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_40px_80px_-32px_rgba(0,0,0,0.7)] [mask-image:linear-gradient(180deg,#000_62%,transparent_100%)] sm:h-[420px] md:h-[560px]">
+        <Image
+          src="/hero-preview.png"
+          alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
+          width={3420}
+          height={2146}
+          priority
+          sizes="(min-width: 1200px) 1120px, 100vw"
+          draggable={false}
+          className="block h-auto w-[190%] max-w-none -translate-x-[28%] select-none md:w-full md:translate-x-0 dark:hidden"
+        />
+        <Image
+          src="/hero-preview-dark.png"
+          alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
+          width={3420}
+          height={2146}
+          sizes="(min-width: 1200px) 1120px, 100vw"
+          draggable={false}
+          className="hidden h-auto w-[190%] max-w-none -translate-x-[28%] select-none md:w-full md:translate-x-0 dark:block"
+        />
+      </div>
+
+      <CertificateCard className="absolute bottom-6 left-0 hidden w-[300px] md:block lg:-left-6" />
+      <UncertaintyCard className="absolute top-10 right-0 hidden w-[288px] md:block lg:-right-6" />
+
+      {/* Below md the two cards sit under the frame instead of over it. */}
+      <div className="mt-4 grid gap-3 md:hidden">
+        <CertificateCard />
+        <UncertaintyCard />
+      </div>
+    </div>
+  );
+}
+
+const floating =
+  "rounded-xl border border-border bg-card/95 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_20px_40px_-16px_rgba(15,23,42,0.28)] backdrop-blur-sm";
+
+function CertificateCard({ className = "" }: { className?: string }) {
+  return (
+    <div className={`${floating} ${className}`}>
+      <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 text-[12px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-600/15 dark:ring-emerald-400/20 ring-inset">
+          <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
+          Aprovado
+        </span>
+        <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
+          CAL-2026-0231
+        </span>
+      </div>
+      <div className="px-4 pt-2.5 pb-3.5">
+        <p className="text-[14px] font-medium text-foreground">
+          Balança analítica{" "}
+          <span className="font-normal text-muted-foreground">· BAL-07</span>
+        </p>
+        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+          Certificado assinado com ICP-Brasil A1 · 14/08/2026
+        </p>
+        <div className="mt-3 flex items-center gap-2.5 border-t border-border pt-3">
+          <span
+            aria-hidden
+            className="flex size-6 items-center justify-center rounded-full bg-[linear-gradient(135deg,#4f46e5,#1447e6)] text-[10px] font-semibold text-white"
+          >
+            CM
+          </span>
+          <span className="text-[12.5px] text-foreground">
+            Carla Menezes{" "}
+            <span className="text-muted-foreground">· Responsável técnica</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BUDGET = [
+  ["Repetibilidade", 100],
+  ["Resolução", 40],
+  ["Excentricidade", 60],
+  ["Padrão", 30],
+  ["Deriva", 12],
+  ["Empuxo", 10],
+] as const;
+
+function UncertaintyCard({ className = "" }: { className?: string }) {
+  return (
+    <div className={`${floating} ${className}`}>
+      <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
+        <span className="text-[12.5px] font-medium text-foreground">
+          Incerteza expandida{" "}
+          <span className="font-normal text-muted-foreground">· 200 g</span>
+        </span>
+        <span className="text-[11.5px] text-muted-foreground">GUM</span>
+      </div>
+      <div className="px-4 pt-2 pb-4">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[26px] font-semibold tracking-[-0.02em] tabular-nums text-foreground">
+            U = 0,25 mg
+          </span>
+          <span className="text-[13px] tabular-nums text-muted-foreground">
+            k = 2,00
+          </span>
+        </div>
+        <ul
+          className="mt-3 grid gap-1.5"
+          aria-label="Contribuições do orçamento de incerteza"
+        >
+          {BUDGET.map(([label, value]) => (
+            <li
+              key={label}
+              className="grid grid-cols-[92px_1fr] items-center gap-2 text-[11.5px] text-muted-foreground"
+            >
+              <span className="truncate">{label}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-border">
+                <span
+                  className="block h-full rounded-full bg-[linear-gradient(90deg,#4f46e5,#1447e6)]"
+                  style={{ width: `${value}%` }}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
