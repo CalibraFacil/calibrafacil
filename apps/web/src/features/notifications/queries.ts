@@ -53,3 +53,27 @@ export function useRecentNotificationsData({
     enabled,
   })
 }
+
+export function useNotificationCenterData({
+  organizationKey,
+  enabled,
+  page,
+  unreadOnly,
+}: {
+  organizationKey: string
+  enabled: boolean
+  page: number
+  unreadOnly: boolean
+}) {
+  return useQuery({
+    queryKey: ['notifications', organizationKey, 'inbox', { page, unreadOnly }],
+    queryFn: () =>
+      calibraApi.notifications.listRecent({
+        page,
+        limit: 15,
+        ...(unreadOnly ? { status: 'UNREAD' as const } : {}),
+      }),
+    enabled,
+    staleTime: 5_000,
+  })
+}

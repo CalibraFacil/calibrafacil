@@ -4696,6 +4696,26 @@ describe("email domains runtime adapter", () => {
 });
 
 describe("notifications runtime adapter", () => {
+  it("forwards unread filtering and pagination to the API", async () => {
+    let requestUrl = "";
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: async (input) => {
+        requestUrl = String(input);
+        return Response.json({ data: [] });
+      },
+    });
+    await client.notifications.listRecent({
+      page: 2,
+      limit: 15,
+      status: "UNREAD",
+    });
+    const url = new URL(requestUrl);
+    expect(url.searchParams.get("page")).toBe("2");
+    expect(url.searchParams.get("limit")).toBe("15");
+    expect(url.searchParams.get("status")).toBe("UNREAD");
+  });
+
   it("routes notification operations through the cloud API", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {

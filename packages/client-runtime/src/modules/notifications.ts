@@ -20,6 +20,7 @@ export function createNotificationsApi(rawCloudClient: any): NotificationsApi {
           query: {
             page: String(input.page ?? 1),
             limit: String(input.limit ?? 5),
+            ...(input.status ? { status: input.status } : {}),
           },
         }),
         "Failed to fetch notifications",

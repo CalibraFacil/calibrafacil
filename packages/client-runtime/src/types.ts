@@ -2849,6 +2849,7 @@ export interface NotificationsApi {
   listRecent(input?: {
     page?: number;
     limit?: number;
+    status?: "UNREAD";
   }): Promise<NotificationsListResponse>;
   markRead(notificationIds: number[]): Promise<unknown>;
   markAllRead(): Promise<unknown>;
