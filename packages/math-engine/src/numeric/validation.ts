@@ -24,6 +24,33 @@ export interface ValidatedNumericString {
 const DECIMAL_PATTERN = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/u;
 const MAX_NUMBER_ABS_FOR_DOUBLE_OPERATIONS = 1e100;
 
+// Sign + significant digits + decimal exponent, independent of how the text was
+// written ("0.10", "1e-1" and "0.1" all become "1e-1"). Comparing the identity of
+// the input against that of Number(input).toString() detects estimates that a
+// double cannot carry (e.g. "9007199254740993" rounds to ...992) — the old
+// magnitude-only guard let those through and the derivative came out wrong (audit).
+function decimalIdentity(text: string): string {
+  const negative = text.startsWith("-");
+  const unsigned = text.startsWith("-") || text.startsWith("+") ? text.slice(1) : text;
+  const [coefficient = "0", exponentText = "0"] = unsigned.toLowerCase().split("e");
+  const [integerPart = "", fractionPart = ""] = coefficient.split(".");
+  let digits = `${integerPart}${fractionPart}`.replace(/^0+/u, "");
+  if (digits.length === 0) return "0";
+  let trailingZeros = 0;
+  while (digits.endsWith("0")) {
+    digits = digits.slice(0, -1);
+    trailingZeros += 1;
+  }
+  const exponent = Number(exponentText) - fractionPart.length + trailingZeros;
+  return `${negative ? "-" : ""}${digits}e${exponent}`;
+}
+
+/** True when the validated decimal text survives a Number() conversion unchanged. */
+export function roundTripsThroughDouble(text: string): boolean {
+  const numeric = Number(text);
+  return Number.isFinite(numeric) && decimalIdentity(text) === decimalIdentity(numeric.toString());
+}
+
 function codeForNumericInput(raw: unknown, label: string, reason: string, extra: Record<string, unknown> = {}): never {
   throw makeError(ERROR_CODES.INVALID_NUMERIC_INPUT, `${label} must be a finite decimal numeric value.`, {
     path: label,
@@ -119,6 +146,14 @@ export function validateNumericString(raw: string, limits: NumericValidationLimi
         value: text,
         maxAbs: MAX_NUMBER_ABS_FOR_DOUBLE_OPERATIONS,
         suggestedRemediation: "Provide explicit sensitivity coefficients for variables with very large nominal values."
+      });
+    }
+    if (!roundTripsThroughDouble(text)) {
+      throw makeError(ERROR_CODES.UNSAFE_NUMERIC_RANGE, `${label} loses decimal precision when converted to a JavaScript number.`, {
+        path: label,
+        value: text,
+        roundedValue: numeric.toString(),
+        suggestedRemediation: "Provide explicit sensitivity coefficients or use inputs that round-trip through double precision."
       });
     }
   }

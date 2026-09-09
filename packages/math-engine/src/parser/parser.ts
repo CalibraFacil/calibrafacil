@@ -16,6 +16,23 @@ class Parser {
   private index = 0;
   private depth = 0;
 
+  private parseNested<T>(position: number, parse: () => T): T {
+    this.depth += 1;
+    if (this.depth > this.maxDepth) {
+      this.depth -= 1;
+      throw makeError(
+        ERROR_CODES.AST_TOO_DEEP,
+        "Expression nesting exceeds the configured maximum depth.",
+        { maxAstDepth: this.maxDepth, position },
+      );
+    }
+    try {
+      return parse();
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
   constructor(tokens: readonly Token[], maxDepth: number) {
     this.tokens = tokens;
     this.maxDepth = maxDepth;
@@ -68,8 +85,11 @@ class Parser {
       this.current().type === "operator" &&
       (this.current().value === "+" || this.current().value === "-")
     ) {
-      const operator = this.consume().value as UnaryOperator;
-      const argument = this.parseUnary();
+      const operatorToken = this.consume();
+      const operator = operatorToken.value as UnaryOperator;
+      const argument = this.parseNested(operatorToken.position, () =>
+        this.parseUnary(),
+      );
       return { kind: "UnaryExpression", operator, argument };
     }
     return this.parsePower();
@@ -78,8 +98,10 @@ class Parser {
   private parsePower(): FormulaAstNode {
     const left = this.parsePrimary();
     if (this.current().type === "operator" && this.current().value === "^") {
-      this.consume();
-      const right = this.parseUnary();
+      const operatorToken = this.consume();
+      const right = this.parseNested(operatorToken.position, () =>
+        this.parseUnary(),
+      );
       return { kind: "BinaryExpression", operator: "^", left, right };
     }
     return left;
@@ -117,21 +139,11 @@ class Parser {
       // AST, so validateAst's post-parse depth check never constrains nesting;
       // without this guard a deeply parenthesized expression overflows the call
       // stack before any AST limit applies (audit).
-      this.depth += 1;
-      if (this.depth > this.maxDepth) {
-        throw makeError(
-          ERROR_CODES.AST_TOO_DEEP,
-          "Expression nesting exceeds the configured maximum depth.",
-          {
-            maxAstDepth: this.maxDepth,
-            position: token.position,
-          },
-        );
-      }
       this.consume();
-      const expression = this.parseAdditive();
+      const expression = this.parseNested(token.position, () =>
+        this.parseAdditive(),
+      );
       this.expect("paren", ")");
-      this.depth -= 1;
       return expression;
     }
 
@@ -146,11 +158,13 @@ class Parser {
   }
 
   private parseCall(functionName: SafeFunctionName): FormulaAstNode {
-    this.expect("paren", "(");
+    const openingToken = this.expect("paren", "(");
     const args: FormulaAstNode[] = [];
     if (!(this.current().type === "paren" && this.current().value === ")")) {
       while (true) {
-        args.push(this.parseAdditive());
+        args.push(
+          this.parseNested(openingToken.position, () => this.parseAdditive()),
+        );
         if (this.current().type === "comma") {
           this.consume();
           continue;

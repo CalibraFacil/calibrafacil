@@ -110,7 +110,9 @@ Transcendental functions, Student's t coverage-factor calculations, and numerica
 
 The engine evaluates `Y = f(X1, X2, ..., Xn)`, computes sensitivity coefficients symbolically where practical, combines uncertainty using `uc² = ΣΣ ci cj u(xi,xj)`, supports covariance/correlation terms, computes Welch-Satterthwaite effective degrees of freedom, and computes expanded uncertainty `U = k * uc`.
 
-For GUM propagation, non-smooth functions such as `abs`, `floor`, `ceil`, `round`, `min`, and `max` are rejected by default. They are allowed only when every formula variable has an explicit `sensitivityCoefficient` and the caller sets `allowNonSmoothWithExplicitSensitivities: true`.
+For GUM propagation, non-smooth functions such as `abs`, `floor`, `ceil`, `round`, `min`, `max`, and `if_zero` are rejected by default. They are allowed only when every formula variable has an explicit `sensitivityCoefficient` and the caller sets `allowNonSmoothWithExplicitSensitivities: true`.
+
+Repeated observations cannot be combined with `standardUncertainty` or Type B source fields on the same quantity. Model repeatability and other uncertainty sources as separate quantities so each contributes to the budget with its own degrees of freedom.
 
 Type B distributions are validated at runtime. Supported values are `normal`, `rectangular`, `uniform`, `triangular`, `u-shaped`, `arcsine`, and `custom`. Ambiguous configurations are rejected: for example, `normal + halfWidth` and `custom + halfWidth` without an explicit divisor fail with structured errors.
 

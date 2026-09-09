@@ -8,6 +8,10 @@ export interface DecimalParseOptions {
   readonly maxSignificantDigits?: number;
 }
 
+// Smallest positive normal double (2^-1022). Below it a double carries fewer
+// than 53 significant bits, so its decimal digits are not trustworthy.
+const MIN_NORMAL_DOUBLE = 2.2250738585072014e-308;
+
 const DEFAULT_DECIMAL_PARSE_OPTIONS: Required<DecimalParseOptions> = {
   maxExponentMagnitude: 12,
   maxInputLength: 512,
@@ -133,6 +137,20 @@ function ratioToNumber(numerator: bigint, denominator: bigint): number {
   return negative ? -magnitude : magnitude;
 }
 
+// The double nearest an exact rational, or a non-finite value when the rational
+// is outside the double range. Callers that must not fail on an out-of-range
+// value (canonical text) use this directly; `toNumber` wraps it with the
+// finite-result assertion.
+function ratioToDouble(numerator: bigint, denominator: bigint): number {
+  const direct = Number(numerator) / Number(denominator);
+  if (Number.isFinite(direct) && (direct !== 0 || numerator === 0n)) {
+    return direct;
+  }
+  // A component overflowed the double range, or the quotient underflowed to 0
+  // while the value is non-zero; fall back to an exact normalized conversion.
+  return ratioToNumber(numerator, denominator);
+}
+
 function canonicalizeNumberString(text: string): string {
   if (text.includes("e") || text.includes("E")) {
     const [coefficientRaw = "0", exponentRaw = "0"] = text
@@ -170,9 +188,15 @@ function canonicalizeNumberString(text: string): string {
   return `${sign}${body}`;
 }
 
+// Canonical texts stop expanding a terminating rational past this many fractional
+// places and round through a double instead (see toCanonicalString); the exact
+// text (toExactString) has no such cutoff.
+const CANONICAL_EXACT_SCALE_LIMIT = 120;
+
 function finiteDecimalString(
   numerator: bigint,
   denominator: bigint,
+  maxScale: number,
 ): string | null {
   let denominatorWork = denominator;
   let twos = 0;
@@ -187,7 +211,7 @@ function finiteDecimalString(
   }
   if (denominatorWork !== 1n) return null;
   const scale = Math.max(twos, fives);
-  if (scale > 120) return null;
+  if (scale > maxScale) return null;
 
   const sign = numerator < 0n ? "-" : "";
   const multiplier = 2n ** BigInt(scale - twos) * 5n ** BigInt(scale - fives);
@@ -203,6 +227,56 @@ function finiteDecimalString(
   return fractionalPart.length === 0
     ? `${sign}${integerPart}`
     : `${sign}${integerPart}.${fractionalPart}`;
+}
+
+function rationalToPrecisionString(
+  numerator: bigint,
+  denominator: bigint,
+  precision: number,
+): string {
+  const negative = numerator < 0n;
+  const n = absBigInt(numerator);
+  const numeratorDigits = n.toString().length;
+  const denominatorDigits = denominator.toString().length;
+  let exponent = numeratorDigits - denominatorDigits;
+  const belowCandidatePower =
+    exponent >= 0
+      ? n < denominator * pow10(exponent)
+      : n * pow10(-exponent) < denominator;
+  if (belowCandidatePower) exponent -= 1;
+
+  const scale = precision - 1 - exponent;
+  const scaledNumerator = scale >= 0 ? n * pow10(scale) : n;
+  const scaledDenominator =
+    scale >= 0 ? denominator : denominator * pow10(-scale);
+  let rounded = scaledNumerator / scaledDenominator;
+  const remainder = scaledNumerator % scaledDenominator;
+  if (remainder * 2n >= scaledDenominator) rounded += 1n;
+
+  const precisionPower = pow10(precision);
+  if (rounded >= precisionPower) {
+    rounded /= 10n;
+    exponent += 1;
+  }
+
+  let digits = rounded.toString().padStart(precision, "0");
+  while (digits.endsWith("0")) digits = digits.slice(0, -1);
+  const sign = negative ? "-" : "";
+
+  if (exponent >= -6 && exponent < precision) {
+    const decimalPosition = exponent + 1;
+    if (decimalPosition <= 0) {
+      return `${sign}0.${"0".repeat(-decimalPosition)}${digits}`;
+    }
+    if (decimalPosition >= digits.length) {
+      return `${sign}${digits}${"0".repeat(decimalPosition - digits.length)}`;
+    }
+    return `${sign}${digits.slice(0, decimalPosition)}.${digits.slice(decimalPosition)}`;
+  }
+
+  const coefficient =
+    digits.length === 1 ? digits : `${digits[0]}.${digits.slice(1)}`;
+  return `${sign}${coefficient}e${exponent}`;
 }
 
 export class DeterministicDecimal {
@@ -386,24 +460,101 @@ export class DeterministicDecimal {
   }
 
   toNumber(): number {
-    const direct = Number(this.numerator) / Number(this.denominator);
-    if (Number.isFinite(direct) && (direct !== 0 || this.numerator === 0n)) {
-      return assertFiniteResult(direct, "decimal value");
-    }
-    // A component overflowed the double range, or the quotient underflowed to 0
-    // while the value is non-zero; fall back to an exact normalized conversion.
     return assertFiniteResult(
-      ratioToNumber(this.numerator, this.denominator),
+      ratioToDouble(this.numerator, this.denominator),
       "decimal value",
     );
   }
 
+  /**
+   * The double nearest the square root of a non-negative value, computed so the
+   * squared quantity never has to be representable as a normal double: a
+   * variance such as 5e-401 narrows to 0 while its standard deviation
+   * (~7.07e-201) is an ordinary double (review). The plain narrow-then-sqrt
+   * arithmetic runs first and is returned whenever it is reliable, so results
+   * already produced by that path stay byte-for-byte identical.
+   */
+  sqrtToNumber(): number {
+    if (this.numerator < 0n) {
+      throw makeError(
+        ERROR_CODES.INVALID_NUMERIC_INPUT,
+        "Square root of a negative decimal value is not defined.",
+        { numerator: this.numerator.toString(), denominator: this.denominator.toString() },
+      );
+    }
+    if (this.numerator === 0n) return 0;
+    const narrowed = ratioToDouble(this.numerator, this.denominator);
+    if (Number.isFinite(narrowed) && narrowed >= MIN_NORMAL_DOUBLE) {
+      return Math.sqrt(narrowed);
+    }
+    // Scale the rational by an even power of ten into the normal double range,
+    // take the root there, and undo half the scale on the result.
+    const decimalExponent =
+      this.numerator.toString().length - this.denominator.toString().length;
+    const halfScale = Math.round(-decimalExponent / 2);
+    const shift = pow10(Math.abs(halfScale) * 2);
+    const scaled =
+      halfScale >= 0
+        ? ratioToDouble(this.numerator * shift, this.denominator)
+        : ratioToDouble(this.numerator, this.denominator * shift);
+    return assertFiniteResult(
+      Math.sqrt(scaled) * Math.pow(10, -halfScale),
+      "decimal square root",
+    );
+  }
+
+  /**
+   * Exact terminating decimal expansion of the value, however many fractional
+   * places it takes (a parsed input always terminates: its denominator is a
+   * power of ten). Non-terminating rationals — only reachable from arithmetic,
+   * never from parsing — are reported as a structured error rather than
+   * rounded, so the text is always a lossless record of the value.
+   */
+  toExactString(): string {
+    if (this.numerator === 0n) return "0";
+    const exact = finiteDecimalString(
+      this.numerator,
+      this.denominator,
+      Number.POSITIVE_INFINITY,
+    );
+    if (exact === null) {
+      throw makeError(
+        ERROR_CODES.UNSAFE_NUMERIC_RANGE,
+        "Value has no terminating decimal expansion and cannot be recorded exactly.",
+        {
+          numerator: this.numerator.toString(),
+          denominator: this.denominator.toString(),
+        },
+      );
+    }
+    return canonicalizeNumberString(exact);
+  }
+
   toCanonicalString(precision = 16): string {
     if (this.numerator === 0n) return "0";
-    const exactFinite = finiteDecimalString(this.numerator, this.denominator);
+    const exactFinite = finiteDecimalString(
+      this.numerator,
+      this.denominator,
+      CANONICAL_EXACT_SCALE_LIMIT,
+    );
     if (exactFinite !== null) return canonicalizeNumberString(exactFinite);
-    const value = this.toNumber();
     const clampedPrecision = Math.max(1, Math.min(21, Math.trunc(precision)));
-    return canonicalizeNumberString(value.toPrecision(clampedPrecision));
+    // ratioToDouble, not toNumber: a rational above the finite-double range must
+    // reach the exact-rational fallback below instead of throwing (review).
+    const value = ratioToDouble(this.numerator, this.denominator);
+    if (Number.isFinite(value) && Math.abs(value) >= MIN_NORMAL_DOUBLE) {
+      // Established path for the normal double range: keep it so canonical
+      // texts (and the fingerprints derived from them) stay stable under the
+      // current engine version.
+      return canonicalizeNumberString(value.toPrecision(clampedPrecision));
+    }
+    // The rational is non-zero but its double is 0, subnormal or non-finite —
+    // toPrecision would emit "0" (or garbage digits) for a value the exact
+    // arithmetic still carries (audit). Round the rational itself instead.
+    return rationalToPrecisionString(
+      this.numerator,
+      this.denominator,
+      clampedPrecision,
+    );
   }
 }

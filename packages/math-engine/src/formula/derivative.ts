@@ -125,18 +125,6 @@ export function symbolicDerivative(
       }
     }
     case "CallExpression": {
-      // if_zero(c, a, b) selects branch a or b by whether c == 0. Away from the
-      // measure-zero set c == 0 it is differentiable, and its derivative is the
-      // derivative of the taken branch: d/dx if_zero(c, a, b) = if_zero(c, a', b').
-      // Differentiating it symbolically (rather than falling back to a finite
-      // difference that straddles the discontinuity) yields the correct GUM
-      // sensitivity at the operating point (audit: if_zero non-smooth bypass).
-      if (ast.functionName === "if_zero" && ast.args.length === 3) {
-        const dThen = symbolicDerivative(ast.args[1]!, variable);
-        const dElse = symbolicDerivative(ast.args[2]!, variable);
-        if (dThen === null || dElse === null) return null;
-        return call("if_zero", [ast.args[0]!, dThen, dElse]);
-      }
       if (ast.args.length !== 1) return null;
       const arg = ast.args[0] as FormulaAstNode;
       const dArg = symbolicDerivative(arg, variable);

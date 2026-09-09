@@ -2,6 +2,15 @@
 
 Documento controlado que registra a validação do motor matemático conforme distribuído na plataforma CalibraFácil. Serve como evidência reutilizável por laboratórios usuários na composição da sua própria validação de método sob ISO/IEC 17025:2017 §7.2.1.3.
 
+## Revisões do documento
+
+| Rev. | Data       | Descrição                                                                                                                                          |
+| ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0  | 2026-06-09 | Emissão inicial para a v0.3.0.                                                                                                                     |
+| 1.1  | 2026-09-08 | Revalidação sob a mesma versão após a auditoria técnica de 2026-09-07 (19 achados, `docs/audits/math-engine-2026-09-07*.md`); camada 3 + gate documentados; evidência da camada 1 reimplementada em `src/gum/reference-evidence.spec.ts`; corrigidas as declarações sobre truncamento de ν_eff e limiar da aproximação normal. |
+
+A revisão do documento (`\docRevision`) é independente da versão do pacote (`\docVersion`): uma revisão registra alterações que **não** mudam nenhum resultado já validado; qualquer mudança de resultado exige nova versão do pacote e novo diretório de dossiê.
+
 ## Fonte
 
 - `dossier.tex` — fonte LaTeX (única fonte da verdade).

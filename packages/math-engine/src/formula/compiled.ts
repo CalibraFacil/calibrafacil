@@ -4,7 +4,11 @@ import { fingerprintCanonical, fingerprintText } from "../audit/fingerprint.js";
 import { evaluateAst } from "../evaluator/evaluate.js";
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
-import { DecimalBackend, NumberBackend } from "../numeric/backend.js";
+import {
+  canonicalRoundTripNumber,
+  DecimalBackend,
+  NumberBackend,
+} from "../numeric/backend.js";
 import type {
   NumericBackend,
   NumericInput,
@@ -456,13 +460,15 @@ export class CompiledFormula {
         { value: valueText },
       );
     }
+    const auditText = (numericValue: T): string =>
+      backend.mode === "number"
+        ? canonicalRoundTripNumber(backend.toNumber(numericValue))
+        : backend.toCanonicalString(numericValue);
     const canonicalInputs: Record<string, CanonicalJsonValue> = Object.create(
       null,
     ) as Record<string, CanonicalJsonValue>;
     for (const variable of [...this.variables].sort()) {
-      canonicalInputs[variable] = backend.toCanonicalString(
-        scope[variable] as T,
-      );
+      canonicalInputs[variable] = auditText(scope[variable] as T);
     }
     const calculationFingerprint = fingerprintText(
       canonicalJson({
@@ -479,7 +485,7 @@ export class CompiledFormula {
           optionsFingerprint: this.optionsFingerprint,
           engineVersion: this.options.engineVersion,
         },
-        value: valueText,
+        value: auditText(rawValue),
       }),
     );
 

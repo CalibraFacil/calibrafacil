@@ -14,9 +14,15 @@ import {
   compileFormulaInternal,
   isCompiledFormula,
 } from "../formula/compiled.js";
-import { DecimalBackend, NumberBackend } from "../numeric/backend.js";
+import {
+  canonicalRoundTripNumber,
+  DecimalBackend,
+  NumberBackend,
+} from "../numeric/backend.js";
+import type { DeterministicDecimal } from "../numeric/decimal.js";
 import type { NumericInput, NumericOutput } from "../numeric/types.js";
 import {
+  roundTripsThroughDouble,
   safeNumberFromInput,
   validateNumericInput,
 } from "../numeric/validation.js";
@@ -185,6 +191,7 @@ const NON_SMOOTH_FUNCTIONS: ReadonlySet<SafeFunctionName> = new Set([
   "round",
   "min",
   "max",
+  "if_zero",
 ]);
 const MEASUREMENT_MODEL_INPUT_KEYS = new Set([
   "formula",
@@ -371,7 +378,7 @@ function canonicalizeEstimate(
     return {
       input: parsed,
       output: backend.toOutput(parsed),
-      canonical: backend.toCanonicalString(parsed),
+      canonical: canonicalRoundTripNumber(parsed),
     };
   }
   const backend = new DecimalBackend(
@@ -571,6 +578,23 @@ function resolveQuantity(
   options: NormalizedCalculationEngineOptions,
 ): ResolvedQuantity {
   const helperOptions = numericValidationOptionsFromEngine(options);
+  if (
+    quantity.repeatedObservations !== undefined &&
+    (quantity.standardUncertainty !== undefined ||
+      quantityHasExternalTypeBSource(quantity) ||
+      typeBRecordHasSource(quantity.typeB))
+  ) {
+    throw makeError(
+      ERROR_CODES.INVALID_UNCERTAINTY,
+      "Repeated observations must not be combined with another uncertainty source on the same quantity.",
+      {
+        symbol,
+        path: `${symbol}.repeatedObservations`,
+        suggestedRemediation:
+          "Represent repeatability and other uncertainty sources as separate quantities in the measurement formula.",
+      },
+    );
+  }
   let typeA: TypeAUncertaintyResult | undefined;
   if (quantity.repeatedObservations !== undefined) {
     typeA = typeAFromRepeatedObservations(
@@ -579,7 +603,11 @@ function resolveQuantity(
     );
   }
 
-  const estimateInput = getEstimateInput(quantity) ?? typeA?.mean;
+  // canonicalMean before mean: when the observations carry more precision than a
+  // double, the exact mean is the estimate the decimal-mode model must be
+  // evaluated at — the double view would silently round it back (review).
+  const estimateInput =
+    getEstimateInput(quantity) ?? typeA?.canonicalMean ?? typeA?.mean;
   if (estimateInput === undefined) {
     throw makeError(
       ERROR_CODES.INVALID_QUANTITY,
@@ -1257,19 +1285,9 @@ function validateCovarianceMatrix(
   quantities: readonly ResolvedQuantity[],
   tolerance: number,
 ): void {
-  // `covarianceMatrixTolerance` is a RELATIVE tolerance (≈ machine-epsilon ratio).
-  // Variances scale as u², covariances as u_i·u_j and Cholesky pivots as u², so an
-  // absolute comparison is vacuous at small magnitudes (a non-PSD matrix with
-  // u≈1e-7 slips through and clamps U to 0) and over-strict at large magnitudes
-  // (rejecting any independently rounded covariance matrix) — audit H3. Scale the
-  // tolerances by the matrix magnitude instead.
-  const varianceScale = quantities.reduce(
-    (max, q) => Math.max(max, q.standardUncertainty ** 2),
-    0,
-  );
-  const varTol = tolerance * Math.max(varianceScale, Number.MIN_VALUE);
-  const pivotTol = Math.sqrt(varTol);
-
+  // Validate in dimensionless correlation space: a large variance elsewhere
+  // must not relax the bounds or PSD test for a small-uncertainty pair.
+  const normalized = createZeroMatrix(matrix.length);
   for (let i = 0; i < matrix.length; i += 1) {
     const row = matrix[i]!;
     if (row.length !== matrix.length) {
@@ -1279,21 +1297,15 @@ function validateCovarianceMatrix(
         { row: i },
       );
     }
-    const variance = row[i] ?? Number.NaN;
-    if (!Number.isFinite(variance) || variance < -varTol) {
-      throw makeError(
-        ERROR_CODES.INVALID_COVARIANCE_MATRIX,
-        "Covariance matrix variances must be non-negative and finite.",
-        { row: i, variance },
-      );
-    }
     for (let j = 0; j < matrix.length; j += 1) {
       const a = row[j] ?? Number.NaN;
       const b = matrix[j]?.[i] ?? Number.NaN;
+      const bound =
+        quantities[i]!.standardUncertainty * quantities[j]!.standardUncertainty;
       if (
         !Number.isFinite(a) ||
         !Number.isFinite(b) ||
-        Math.abs(a - b) > varTol
+        Math.abs(a - b) > tolerance * bound
       ) {
         throw makeError(
           ERROR_CODES.INVALID_COVARIANCE_MATRIX,
@@ -1301,26 +1313,24 @@ function validateCovarianceMatrix(
           { i, j, a, b },
         );
       }
-      const bound =
-        quantities[i]!.standardUncertainty * quantities[j]!.standardUncertainty;
-      if (bound > 0 && Math.abs(a) - bound > Math.max(varTol, bound * 1e-12)) {
+      if ((bound === 0 && a !== 0) || Math.abs(a) - bound > tolerance * bound) {
         throw makeError(
           ERROR_CODES.INVALID_COVARIANCE_MATRIX,
           "Covariance magnitude exceeds the product of standard uncertainties.",
           { i, j, covariance: a, bound },
         );
       }
+      normalized[i]![j] = bound === 0 ? 0 : a / bound;
     }
   }
-
   const size = matrix.length;
   const l = createZeroMatrix(size);
   for (let i = 0; i < size; i += 1) {
     for (let j = 0; j <= i; j += 1) {
-      let sum = matrix[i]![j]!;
+      let sum = normalized[i]![j]!;
       for (let k = 0; k < j; k += 1) sum -= l[i]![k]! * l[j]![k]!;
       if (i === j) {
-        if (sum < -varTol) {
+        if (sum < -tolerance) {
           throw makeError(
             ERROR_CODES.INVALID_COVARIANCE_MATRIX,
             "Covariance matrix is not positive semidefinite.",
@@ -1328,9 +1338,14 @@ function validateCovarianceMatrix(
           );
         }
         l[i]![j] = sum <= 0 ? 0 : Math.sqrt(sum);
-      } else if (l[j]![j]! > pivotTol) {
+      } else if (l[j]![j]! > 0) {
+        // Any positive pivot is factored, however small: a nearly singular but
+        // positive-definite block (e.g. r = 1 - 5e-15 next to r = 5e-8) is
+        // legitimate, and an inconsistent residual still surfaces as a negative
+        // diagonal on a later row. Only an exactly collapsed pivot needs the
+        // residual test below (review of the pass-1 fix).
         l[i]![j] = sum / l[j]![j]!;
-      } else if (Math.abs(sum) > varTol) {
+      } else if (Math.abs(sum) > tolerance) {
         throw makeError(
           ERROR_CODES.INVALID_COVARIANCE_MATRIX,
           "Covariance matrix is not positive semidefinite near a singular pivot.",
@@ -1407,6 +1422,69 @@ function getNumberScopeForAst(
   return scope;
 }
 
+function hasLiteralBeyondDoublePrecision(ast: FormulaAstNode): boolean {
+  switch (ast.kind) {
+    case "NumberLiteral":
+      return !roundTripsThroughDouble(ast.raw);
+    case "Variable":
+      return false;
+    case "UnaryExpression":
+      return hasLiteralBeyondDoublePrecision(ast.argument);
+    case "BinaryExpression":
+      return (
+        hasLiteralBeyondDoublePrecision(ast.left) ||
+        hasLiteralBeyondDoublePrecision(ast.right)
+      );
+    case "CallExpression":
+      return ast.args.some(hasLiteralBeyondDoublePrecision);
+  }
+}
+
+// The literal check is as load-bearing as the estimate check: a formula constant
+// a double cannot carry (e.g. `x-9007199254740993`) is rounded by the Number
+// backend during symbolic differentiation and halves or doubles the reported
+// sensitivity, even when every referenced estimate round-trips (review).
+function hasValueBeyondDoublePrecision(
+  ast: FormulaAstNode,
+  quantities: readonly ResolvedQuantity[],
+): boolean {
+  const required = variablesInAst(ast);
+  return (
+    quantities.some(
+      (quantity) =>
+        required.has(quantity.symbol) &&
+        typeof quantity.estimateInput === "string" &&
+        !roundTripsThroughDouble(quantity.estimateInput),
+    ) || hasLiteralBeyondDoublePrecision(ast)
+  );
+}
+
+function getDecimalScopeForAst(
+  ast: FormulaAstNode,
+  quantities: readonly ResolvedQuantity[],
+  options: NormalizedCalculationEngineOptions,
+): Record<string, DeterministicDecimal> {
+  const required = variablesInAst(ast);
+  const backend = new DecimalBackend(
+    options.decimalPrecision,
+    options.maxExponentMagnitude,
+    options.maxNumericInputLength,
+    options.maxSignificantDigits,
+  );
+  // Object.create(null) is typed `any`, so the annotation applies without an
+  // assertion; a null prototype keeps dangerous keys out of the scope.
+  const scope: Record<string, DeterministicDecimal> = Object.create(null);
+  for (const quantity of quantities) {
+    if (required.has(quantity.symbol)) {
+      scope[quantity.symbol] = backend.fromInput(
+        quantity.estimateInput,
+        `${quantity.symbol}.estimate`,
+      );
+    }
+  }
+  return scope;
+}
+
 function assertGumFormulaSmoothness(
   input: MeasurementModelInput,
   formula: CompiledFormula,
@@ -1439,6 +1517,36 @@ function assertGumFormulaSmoothness(
   );
 }
 
+// Domain checks must see the same value the runtime sees: in decimal mode the
+// argument is evaluated exactly (so an if_zero discriminator follows the branch
+// the nominal evaluation takes, and an estimate a double cannot carry is not
+// rejected for a domain probe — review of the pass-2 fix); only the resulting
+// value is converted to a double for the range comparisons.
+function evaluateDomainArgument(
+  ast: FormulaAstNode,
+  quantities: readonly ResolvedQuantity[],
+  options: NormalizedCalculationEngineOptions,
+): number {
+  if (options.numericMode === "decimal") {
+    const backend = new DecimalBackend(
+      options.decimalPrecision,
+      options.maxExponentMagnitude,
+      options.maxNumericInputLength,
+      options.maxSignificantDigits,
+    );
+    const scope = getDecimalScopeForAst(ast, quantities, options);
+    return backend.toNumber(evaluateAst(ast, scope, backend));
+  }
+  const backend = new NumberBackend(
+    options.decimalPrecision,
+    options.maxExponentMagnitude,
+    options.maxNumericInputLength,
+    options.maxSignificantDigits,
+  );
+  const scope = getNumberScopeForAst(ast, quantities, options);
+  return backend.toNumber(evaluateAst(ast, scope, backend));
+}
+
 function assertSmoothDomains(
   ast: FormulaAstNode,
   quantities: readonly ResolvedQuantity[],
@@ -1451,15 +1559,10 @@ function assertSmoothDomains(
     if (ast.functionName === "if_zero" && ast.args.length === 3) {
       const discriminator = ast.args[0]!;
       assertSmoothDomains(discriminator, quantities, options);
-      const backend = new NumberBackend(
-        options.decimalPrecision,
-        options.maxExponentMagnitude,
-        options.maxNumericInputLength,
-        options.maxSignificantDigits,
-      );
-      const scope = getNumberScopeForAst(discriminator, quantities, options);
-      const discriminatorValue = backend.toNumber(
-        evaluateAst(discriminator, scope, backend),
+      const discriminatorValue = evaluateDomainArgument(
+        discriminator,
+        quantities,
+        options,
       );
       assertSmoothDomains(
         discriminatorValue === 0 ? ast.args[1]! : ast.args[2]!,
@@ -1474,14 +1577,7 @@ function assertSmoothDomains(
     if (
       ["sqrt", "log", "log10", "asin", "acos", "tan"].includes(ast.functionName)
     ) {
-      const backend = new NumberBackend(
-        options.decimalPrecision,
-        options.maxExponentMagnitude,
-        options.maxNumericInputLength,
-        options.maxSignificantDigits,
-      );
-      const scope = getNumberScopeForAst(arg, quantities, options);
-      const value = backend.toNumber(evaluateAst(arg, scope, backend));
+      const value = evaluateDomainArgument(arg, quantities, options);
       if (ast.functionName === "sqrt" && value < 0)
         throw makeError(
           ERROR_CODES.DOMAIN_ERROR,
@@ -1560,10 +1656,36 @@ function resolveSensitivityCoefficients(
     const derivativeAst = symbolicDerivative(formula.ast, quantity.symbol);
     if (derivativeAst !== null) {
       try {
-        const scope = getNumberScopeForAst(derivativeAst, quantities, options);
-        const value = numberBackend.toNumber(
-          evaluateAst(derivativeAst, scope, numberBackend),
-        );
+        // The double path is kept for every estimate a double can carry so
+        // 0.3.0 sensitivities stay byte-stable. Estimates with more decimal
+        // precision than a double used to be rounded silently here, giving a
+        // wrong derivative (audit) — evaluate those exactly, like the nominal.
+        const value =
+          options.numericMode === "decimal" &&
+          hasValueBeyondDoublePrecision(derivativeAst, quantities)
+            ? (() => {
+                const backend = new DecimalBackend(
+                  options.decimalPrecision,
+                  options.maxExponentMagnitude,
+                  options.maxNumericInputLength,
+                  options.maxSignificantDigits,
+                );
+                const scope = getDecimalScopeForAst(
+                  derivativeAst,
+                  quantities,
+                  options,
+                );
+                return backend.toNumber(
+                  evaluateAst(derivativeAst, scope, backend),
+                );
+              })()
+            : numberBackend.toNumber(
+                evaluateAst(
+                  derivativeAst,
+                  getNumberScopeForAst(derivativeAst, quantities, options),
+                  numberBackend,
+                ),
+              );
         if (Number.isFinite(value)) {
           diagnostics.push({
             code: "SENSITIVITY_SYMBOLIC",

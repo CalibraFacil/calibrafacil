@@ -23,6 +23,12 @@ function assertFiniteStatisticNumber(value: unknown, path: string): number {
   return Object.is(value, -0) ? 0 : value;
 }
 
+const MIN_NORMAL_DOUBLE = 2.2250738585072014e-308;
+
+function isNormalDouble(value: number): boolean {
+  return Number.isFinite(value) && Math.abs(value) >= MIN_NORMAL_DOUBLE;
+}
+
 function assertFiniteStatisticResult(value: number, path: string): number {
   if (!Number.isFinite(value)) {
     throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Statistic helper result is outside the finite numeric range supported by this API.", {
@@ -308,18 +314,59 @@ export function welchSatterthwaiteDegreesOfFreedom(
     });
   }
   if (variance === 0) return Number.POSITIVE_INFINITY;
-  let denominator = 0;
+  const checked: Array<{ contribution: number; dof: number }> = [];
   for (let index = 0; index < diagonalVarianceContributions.length; index += 1) {
     const contribution = assertFiniteStatisticNumber(diagonalVarianceContributions[index], `diagonalVarianceContributions[${index}]`);
     if (contribution < 0) {
       throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Diagonal variance contributions must be non-negative.", { index, contribution });
     }
     const dof = assertDegreesOfFreedom(degreesOfFreedom[index], `degreesOfFreedom[${index}]`, true);
+    checked.push({ contribution, dof });
+  }
+  // 0.3.0 arithmetic first, kept byte-for-byte while every square is a normal
+  // double: dividing by a scale before squaring rounds differently in the last
+  // ulp, which would drift ν_eff (and so k, U and the fingerprint) on recorded
+  // results. The scale-normalized form below only engages where this form is
+  // unreliable — a square that underflows to zero/subnormal (read as infinite
+  // information at 0.3.0, the audit finding) or overflows.
+  const plainNumerator = variance * variance;
+  let plainDenominator: number | undefined = isNormalDouble(plainNumerator) ? 0 : undefined;
+  for (const { contribution, dof } of checked) {
+    if (plainDenominator === undefined) break;
     if (contribution === 0 || !Number.isFinite(dof)) continue;
-    const contributionTerm = assertFiniteStatisticResult((contribution * contribution) / dof, `diagonalVarianceContributions[${index}].term`);
+    const square = contribution * contribution;
+    // The quotient has to be a normal double too: dividing a normal square by a
+    // very large dof can underflow the term to zero, which the plain form would
+    // read as infinite information from that contribution (review).
+    const term = square / dof;
+    const sum = plainDenominator + term;
+    plainDenominator = isNormalDouble(square) && isNormalDouble(term) && Number.isFinite(sum) ? sum : undefined;
+  }
+  if (plainDenominator !== undefined) {
+    if (plainDenominator === 0) return Number.POSITIVE_INFINITY;
+    return assertFiniteStatisticResult(plainNumerator / plainDenominator, "welchSatterthwaiteDegreesOfFreedom");
+  }
+  // Normalize by the largest variance before squaring: the identity is scale
+  // invariant, so u^4 no longer underflows below ~1e-154 or overflows above (audit).
+  let scale = variance;
+  for (const { contribution } of checked) if (contribution > scale) scale = contribution;
+  let denominator = 0;
+  for (const [index, { contribution, dof }] of checked.entries()) {
+    if (contribution === 0 || !Number.isFinite(dof)) continue;
+    const scaledContribution = contribution / scale;
+    // Scaling bounds the squared term by 1, but a tiny positive dof can still
+    // overflow it; an infinite denominator would otherwise read as 0 dof (review).
+    const contributionTerm = assertFiniteStatisticResult((scaledContribution * scaledContribution) / dof, `diagonalVarianceContributions[${index}].term`);
     denominator = assertFiniteStatisticResult(denominator + contributionTerm, "welchSatterthwaite.denominator");
   }
   if (denominator === 0) return Number.POSITIVE_INFINITY;
-  const numerator = assertFiniteStatisticResult(variance * variance, "welchSatterthwaite.numerator");
+  const scaledVariance = variance / scale;
+  const numerator = scaledVariance * scaledVariance;
+  if (numerator === 0) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Combined variance is too small relative to its contributions for a finite Welch-Satterthwaite evaluation.", {
+      combinedVariance: variance,
+      scale
+    });
+  }
   return assertFiniteStatisticResult(numerator / denominator, "welchSatterthwaiteDegreesOfFreedom");
 }
