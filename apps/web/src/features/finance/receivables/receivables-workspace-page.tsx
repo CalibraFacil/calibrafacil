@@ -72,7 +72,7 @@ const PAYMENT_METHODS: readonly FinancialPaymentMethod[] = [
 
 const PAYMENT_METHOD_LABELS: Record<FinancialPaymentMethod, string> = {
   BANK_TRANSFER: 'Transferência bancária',
-  PIX: 'PIX',
+  PIX: 'Pix',
   BOLETO: 'Boleto',
   CREDIT_CARD: 'Cartão de crédito',
   CASH: 'Dinheiro',
@@ -219,92 +219,97 @@ function makeInstallmentColumns(
   onReceive: (row: ReceiptRow) => void,
 ): ColumnDef<ReceiptRow, unknown>[] {
   return [
-  {
-    accessorKey: 'documentNumber',
-    id: 'documentNumber',
-    header: 'Documento',
-    enableHiding: false,
-    cell: ({ row }) =>
-      row.original.documentNumber ?? `Documento #${row.original.documentId}`,
-  },
-  {
-    accessorKey: 'customerName',
-    id: 'customerName',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Cliente" />
-    ),
-    meta: { label: 'Cliente' },
-  },
-  {
-    accessorKey: 'installmentStatus',
-    id: 'installmentStatus',
-    header: 'Situação',
-    filterFn: 'arrIncludesSome',
-    meta: { label: 'Situação' },
-    cell: ({ row }) => (
-      <Badge
-        variant={INSTALLMENT_BADGE_VARIANT[row.original.installmentStatus] ?? 'secondary'}
-      >
-        {getReceivableInstallmentStatusLabel(
-          parseInstallmentStatus(row.original.installmentStatus),
-        )}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: 'dueDate',
-    id: 'dueDate',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Vencimento" />
-    ),
-    meta: { label: 'Vencimento' },
-    cell: ({ row }) => formatFinanceDate(row.original.dueDate),
-  },
-  {
-    accessorKey: 'amountCents',
-    id: 'amountCents',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Valor" />
-    ),
-    meta: { label: 'Valor' },
-    cell: ({ row }) => (
-      <div className="text-right">
-        <Money
-          cents={row.original.amountCents}
-          tone={installmentToneOf(row.original.installmentStatus)}
-        />
-      </div>
-    ),
-  },
-  {
-    id: 'action',
-    header: '',
-    enableSorting: false,
-    enableHiding: false,
-    cell: ({ row }) => {
-      const status = row.original.installmentStatus
-      if (status === 'OPEN' || status === 'OVERDUE') {
+    {
+      accessorKey: 'documentNumber',
+      id: 'documentNumber',
+      header: 'Documento',
+      enableHiding: false,
+      cell: ({ row }) =>
+        row.original.documentNumber ?? `Documento #${row.original.documentId}`,
+    },
+    {
+      accessorKey: 'customerName',
+      id: 'customerName',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Cliente" />
+      ),
+      meta: { label: 'Cliente' },
+    },
+    {
+      accessorKey: 'installmentStatus',
+      id: 'installmentStatus',
+      header: 'Situação',
+      filterFn: 'arrIncludesSome',
+      meta: { label: 'Situação' },
+      cell: ({ row }) => (
+        <Badge
+          variant={
+            INSTALLMENT_BADGE_VARIANT[row.original.installmentStatus] ??
+            'secondary'
+          }
+        >
+          {getReceivableInstallmentStatusLabel(
+            parseInstallmentStatus(row.original.installmentStatus),
+          )}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'dueDate',
+      id: 'dueDate',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Vencimento" />
+      ),
+      meta: { label: 'Vencimento' },
+      cell: ({ row }) => formatFinanceDate(row.original.dueDate),
+    },
+    {
+      accessorKey: 'amountCents',
+      id: 'amountCents',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Valor" />
+      ),
+      meta: { label: 'Valor' },
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Money
+            cents={row.original.amountCents}
+            tone={installmentToneOf(row.original.installmentStatus)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'action',
+      header: '',
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => {
+        const status = row.original.installmentStatus
+        if (status === 'OPEN' || status === 'OVERDUE') {
+          return (
+            <div className="text-right">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onReceive(row.original)}
+              >
+                Registrar baixa
+              </Button>
+            </div>
+          )
+        }
         return (
-          <div className="text-right">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onReceive(row.original)}
-            >
-              Registrar baixa
-            </Button>
+          <div className="text-right text-sm text-muted-foreground">
+            {row.original.paymentMethod
+              ? PAYMENT_METHOD_LABELS[
+                  parsePaymentMethod(row.original.paymentMethod)
+                ]
+              : 'Recebido'}
           </div>
         )
-      }
-      return (
-        <div className="text-right text-sm text-muted-foreground">
-          {row.original.paymentMethod
-            ? PAYMENT_METHOD_LABELS[parsePaymentMethod(row.original.paymentMethod)]
-            : 'Recebido'}
-        </div>
-      )
+      },
     },
-  },
   ]
 }
 
@@ -340,7 +345,8 @@ export function FinanceReceivablesPage({
   }
 
   const documentFilters: ColumnFiltersState = []
-  if (search.status) documentFilters.push({ id: 'status', value: [search.status] })
+  if (search.status)
+    documentFilters.push({ id: 'status', value: [search.status] })
   if (search.export) {
     documentFilters.push({ id: 'exportStatus', value: [search.export] })
   }
@@ -458,7 +464,8 @@ export function FinanceReceivablesPage({
                           doc.exportStatus !== 'EXPORTED',
                       )
                       .map((doc) => doc.id)
-                    const busy = issueMutation.isPending || exportMutation.isPending
+                    const busy =
+                      issueMutation.isPending || exportMutation.isPending
                     return (
                       <>
                         <Button
@@ -489,7 +496,10 @@ export function FinanceReceivablesPage({
                             )
                           }
                         >
-                          <HugeiconsIcon icon={SentIcon} className="mr-2 size-4" />
+                          <HugeiconsIcon
+                            icon={SentIcon}
+                            className="mr-2 size-4"
+                          />
                           Exportar ({exportableIds.length})
                         </Button>
                       </>

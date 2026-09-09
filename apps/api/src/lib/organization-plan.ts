@@ -6,6 +6,7 @@ import {
   getPlanSupportPolicy,
   isFeatureFlag,
   isSubscriptionActive,
+  subscriptionGrantsAccess,
   isValidPlanId,
   type FeatureFlag,
   type PlanId,
@@ -34,7 +35,14 @@ export async function getOrganizationPlanAccess(
   const planId = isValidPlanId(planIdValue) ? planIdValue : "FREE";
   const status = parseSubscriptionStatus(currentSubscription?.status);
   const plan = getPlan(planId);
-  const isActive = currentSubscription ? isSubscriptionActive(status) : true;
+  // A cancelled subscription keeps its entitlements until the period the
+  // customer already paid for runs out.
+  const isActive = currentSubscription
+    ? subscriptionGrantsAccess({
+        status,
+        currentPeriodEnd: currentSubscription.currentPeriodEnd,
+      })
+    : true;
 
   // Backoffice entitlement overrides are grant-only: they add features on top of
   // the plan (comps, upsell trials) and never remove a plan entitlement. Applied

@@ -15,6 +15,7 @@ const footerColumns: FooterColumn[] = [
       { label: "Portal do cliente", href: "/#portal" },
       { label: "Cobertura", href: "/#cobertura" },
       { label: "Como é construído", href: "/#fundamentos" },
+      { label: "Preços", href: "/#planos" },
       { label: "Documentação", href: "/docs" },
     ],
   },

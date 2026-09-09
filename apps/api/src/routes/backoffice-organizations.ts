@@ -57,7 +57,9 @@ const ImportParseSchema = z.object({
 
 const ManageSubscriptionSchema = z.object({
   action: z.enum(["change_plan", "cancel", "reactivate"]),
-  planId: z.enum(["FREE", "STANDARD", "PROFESSIONAL", "ENTERPRISE"]).optional(),
+  planId: z
+    .enum(["FREE", "STANDARD", "PROFESSIONAL", "ADVANCED", "ENTERPRISE"])
+    .optional(),
   reason: z.string().trim().max(500).optional(),
 });
 

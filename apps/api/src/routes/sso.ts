@@ -11,7 +11,7 @@ import { createLabAuth } from "@calibra-facil/auth";
 import {
   getPlan,
   hasFeature,
-  isSubscriptionActive,
+  subscriptionGrantsAccess,
   isValidPlanId,
   type PlanId,
   type SubscriptionStatus,
@@ -192,10 +192,17 @@ async function getPlanAccessForOrg(organizationId: string) {
     status,
     plan: getPlan(planId),
     hasSso: hasFeature(planId, "sso"),
+    // Honours a cancelled subscription until the period it already paid for
+    // runs out, the same rule the plan gates use. SSO is often the only way a
+    // laboratory's team signs in, so cancelling an annual plan here used to
+    // lock everyone out on the spot, months before the paid period ended.
     isAccessible:
       !activeSubscription ||
-      isSubscriptionActive(status) ||
-      status === "PAST_DUE",
+      status === "PAST_DUE" ||
+      subscriptionGrantsAccess({
+        status,
+        currentPeriodEnd: activeSubscription.currentPeriodEnd,
+      }),
   };
 }
 

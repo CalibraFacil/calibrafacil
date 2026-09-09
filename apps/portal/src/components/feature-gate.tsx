@@ -113,7 +113,6 @@ export function FeatureBadge({
 
 function getFeatureLabel(feature: string): string {
   const labels: Record<string, string> = {
-    math_engine: "Calculo de incerteza",
     portal: "Portal do cliente",
     financial: "Modulo financeiro",
     api: "Acesso API",

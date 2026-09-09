@@ -34,6 +34,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from '@/components/instrument-panel'
+import { ActivationChecklist } from '@/features/onboarding/activation-checklist'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { cn } from '@/lib/utils'
@@ -225,6 +226,20 @@ export function DashboardIndex() {
           {refreshMessage}
         </p>
       </header>
+
+      {/* Above the instrument cluster and never in front of it: a laboratory
+          still setting up should see what is left, and one that is running
+          should not have to scroll past a checklist it finished. It removes
+          itself once the first certificate is issued. */}
+      {activeOrganizationId ? (
+        // Keyed by organization: the dismissal is read once through a state
+        // initialiser, so switching laboratories without leaving the route
+        // would otherwise carry one organization's "hide" over to the next.
+        <ActivationChecklist
+          key={activeOrganizationId}
+          organizationId={activeOrganizationId}
+        />
+      ) : null}
 
       <StaggerGroup className="space-y-4">
         <StaggerItem>

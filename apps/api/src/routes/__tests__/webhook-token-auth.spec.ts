@@ -71,41 +71,49 @@ describe("verifyWebhookSourceIp (#641)", () => {
     });
   }
 
-  it("REQ-SEC-ASA-IP-001: allowlist set + non-listed source IP -> rejected", () => {
+  it("REQ-SEC-ASA-IP-001: allowlist set + non-listed source IP -> rejected", async () => {
     process.env.ASAAS_WEBHOOK_ALLOWED_IPS =
       "52.67.12.206,18.230.8.159,54.94.136.112,54.94.183.101";
-    expect(verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(false);
+    expect(await verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(
+      false,
+    );
   });
 
-  it("allowlist set + listed source IP -> accepted (whitespace tolerated)", () => {
+  it("allowlist set + listed source IP -> accepted (whitespace tolerated)", async () => {
     process.env.ASAAS_WEBHOOK_ALLOWED_IPS =
       " 52.67.12.206 , 18.230.8.159 ,54.94.136.112";
-    expect(verifyWebhookSourceIp(requestFromIp("18.230.8.159"))).toBe(true);
+    expect(await verifyWebhookSourceIp(requestFromIp("18.230.8.159"))).toBe(
+      true,
+    );
   });
 
-  it("allowlist set + NO source-ip header -> rejected (fail closed once enforcing)", () => {
+  it("allowlist set + NO source-ip header -> rejected (fail closed once enforcing)", async () => {
     process.env.ASAAS_WEBHOOK_ALLOWED_IPS = "52.67.12.206";
-    expect(verifyWebhookSourceIp(requestFromIp(null))).toBe(false);
+    expect(await verifyWebhookSourceIp(requestFromIp(null))).toBe(false);
   });
 
-  it("REQ-SEC-ASA-IP-002: env unset/blank -> skip (pre-#641 behavior preserved)", () => {
+  it("REQ-SEC-ASA-IP-002: env unset/blank -> skip (pre-#641 behavior preserved)", async () => {
     delete process.env.ASAAS_WEBHOOK_ALLOWED_IPS;
-    expect(verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(true);
+    expect(await verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(
+      true,
+    );
     process.env.ASAAS_WEBHOOK_ALLOWED_IPS = "  ";
-    expect(verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(true);
+    expect(await verifyWebhookSourceIp(requestFromIp("203.0.113.7"))).toBe(
+      true,
+    );
   });
 
-  it("falls back to the first x-forwarded-for hop when x-real-ip is absent", () => {
+  it("falls back to the first x-forwarded-for hop when x-real-ip is absent", async () => {
     process.env.ASAAS_WEBHOOK_ALLOWED_IPS = "54.94.136.112";
     const req = new Request("https://example.com/api/webhooks/asaas", {
       method: "POST",
       headers: { "x-forwarded-for": "54.94.136.112, 10.0.0.1" },
     });
-    expect(verifyWebhookSourceIp(req)).toBe(true);
+    expect(await verifyWebhookSourceIp(req)).toBe(true);
     const bad = new Request("https://example.com/api/webhooks/asaas", {
       method: "POST",
       headers: { "x-forwarded-for": "203.0.113.7, 54.94.136.112" },
     });
-    expect(verifyWebhookSourceIp(bad)).toBe(false);
+    expect(await verifyWebhookSourceIp(bad)).toBe(false);
   });
 });

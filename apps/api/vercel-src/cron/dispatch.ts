@@ -14,6 +14,10 @@ import {
   createAsaasReconciliationPort,
   reconcileProviderSubscriptions,
 } from "../../src/services/commercial/reconcile-subscriptions";
+import {
+  createAsaasOfferReconciliationPort,
+  reconcilePendingOffers,
+} from "../../src/services/commercial/reconcile-offers";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
@@ -264,8 +268,21 @@ async function handleSubscriptionReconciliation(request: Request) {
 
   // Backstop for lost/never-retried ASAAS webhooks: reconcile local subscription
   // state against the provider and correct/alert on divergence (REQ-REL-ASA-002).
-  return runCron("subscription-reconciliation", { leaseSeconds: 120 }, () =>
-    reconcileProviderSubscriptions(createAsaasReconciliationPort()),
+  // One-off offers (setup fees, upfront plans) never create a subscription row,
+  // so they need their own pass or a lost webhook hides a paid charge forever.
+  return runCron(
+    "subscription-reconciliation",
+    { leaseSeconds: 120 },
+    async () => {
+      const subscriptions = await reconcileProviderSubscriptions(
+        createAsaasReconciliationPort(),
+      );
+      const offers = await reconcilePendingOffers(
+        createAsaasOfferReconciliationPort(),
+      );
+
+      return { subscriptions, offers };
+    },
   );
 }
 
@@ -293,7 +310,13 @@ function getDriftR2Env(): R2Env | null {
   const secretAccessKey = str(process.env.R2_SECRET_ACCESS_KEY);
   const bucketName = str(process.env.R2_BUCKET_NAME);
   const mediaBucketName = str(process.env.R2_MEDIA_BUCKET_NAME);
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !mediaBucketName) {
+  if (
+    !accountId ||
+    !accessKeyId ||
+    !secretAccessKey ||
+    !bucketName ||
+    !mediaBucketName
+  ) {
     return null;
   }
   return {
@@ -317,7 +340,12 @@ async function handleCertificateDrift(request: Request) {
     const r2Env = getDriftR2Env();
     if (!r2Env) {
       console.warn("[drift-check] R2 env unconfigured — skipping");
-      return Promise.resolve({ checked: 0, drifted: 0, missing: 0, details: [] });
+      return Promise.resolve({
+        checked: 0,
+        drifted: 0,
+        missing: 0,
+        details: [],
+      });
     }
     const client = createR2Client(r2Env);
     return runCertificateDriftCheck(async (_bucket, key) => {

@@ -61,7 +61,6 @@ export async function mockPlanAccess(page: Page) {
       canManageBilling: false,
       hasApi: false,
       hasCustomDomain: false,
-      hasCustomTemplates: false,
       hasSso: false,
     },
   })
@@ -161,7 +160,6 @@ export async function installDesktopBridge(
               canManageBilling: false,
               hasApi: false,
               hasCustomDomain: false,
-              hasCustomTemplates: false,
               hasSso: false,
             })
           }

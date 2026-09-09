@@ -433,6 +433,28 @@ async function updateJobWithCertificate(
     ],
   );
 
+  // The laboratory's first issued certificate is the moment activation is
+  // actually complete, and it happens here rather than at approval, because
+  // approval only moves a job to GENERATING_PDF. Written once, best-effort,
+  // and read only by customer-success analytics — never by anything the
+  // laboratory sees, so it must not be able to fail the certificate.
+  if (!isSuperseded) {
+    try {
+      await client.query(
+        `
+        UPDATE organization_success_profile
+        SET first_certificate_issued_at = COALESCE(first_certificate_issued_at, now())
+        WHERE organization_id = (
+          SELECT organization_id FROM calibration_job WHERE id = $1
+        )
+        `,
+        [jobId],
+      );
+    } catch (error) {
+      console.error("Failed to record first-certificate milestone", error);
+    }
+  }
+
   // Log appropriate action based on whether this is a watermark regeneration
   const action = isSuperseded
     ? "certificate_watermarked"

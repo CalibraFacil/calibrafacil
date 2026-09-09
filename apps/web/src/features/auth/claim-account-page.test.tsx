@@ -185,6 +185,7 @@ describe('ClaimAccountPage', () => {
     expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
     expect(claimMocks.navigate).toHaveBeenCalledWith({
       to: '/onboarding/organization',
+      search: {},
     })
   })
 

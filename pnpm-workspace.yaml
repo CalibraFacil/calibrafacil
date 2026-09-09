@@ -12,7 +12,7 @@ overrides:
   "@tanstack/start-plugin-core": 1.167.6
   "@tanstack/start-server-core": 1.167.2
   seroval: ^1.4.1
-  next: 16.2.11
+  next: 16.3.3
   fast-xml-parser: ^5.5.6
   fast-xml-builder: ^1.2.0
   # Held at ^0.25.12 for vite compatibility (vite 7.3.x pins esbuild ^0.27.0,
@@ -91,8 +91,8 @@ overrides:
   # patched release; scope per line so no consumer is forced across a major.
   "brace-expansion@<1.1.18": ^1.1.18
   "brace-expansion@>=2.0.0 <2.1.4": ^2.1.4
-  # GHSA advisories on js-yaml <4.3.0 and immutable <4.3.9, both transitive.
-  "js-yaml@>=4.0.0 <4.3.0": ^4.3.0
+  # GHSA advisories on js-yaml <4.3.2 and immutable <4.3.9, both transitive.
+  "js-yaml@>=4.0.0 <4.3.2": ^4.3.2
   "immutable@>=4.0.0 <4.3.9": ^4.3.9
   # builder-util-runtime <9.7.0, transitive via electron-builder (desktop only).
   "builder-util-runtime@<9.7.0": ^9.7.0
@@ -100,8 +100,9 @@ overrides:
   # file disclosure via attacker-controlled sourceMappingURL. Build-time only,
   # but the prod audit gate counts it.
   postcss: ^8.5.18
-  # GHSA-f88m-g3jw-g9cj: sharp <0.35.0 inherits four libvips CVEs.
-  sharp: ^0.35.0
+  # GHSA-f88m-g3jw-g9cj: sharp <0.35.0 inherits four libvips CVEs. GHSA-rgj7-g3m4-5g8c
+  # adds two more libheif CVEs against <0.35.4.
+  sharp: ^0.35.4
   # GHSA-28wg-ghj8-5hjv: nanoid >=4.0.0 <5.1.16 can loop indefinitely on a
   # negative size. Transitive via @scalar/hono-api-reference (apps/api). Scoped
   # to the 5.x line so the 3.3.x users elsewhere in the tree are untouched.

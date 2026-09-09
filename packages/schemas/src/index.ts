@@ -2,6 +2,7 @@ import { z } from "zod";
 export * from "./commercial";
 export * from "./imports";
 export * from "./leads";
+export * from "./self-serve-signup";
 export * from "./portal-fleet";
 export * from "./printing";
 export * from "./proficiency-tests";

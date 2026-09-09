@@ -1279,6 +1279,10 @@ export interface PublicCheckoutApi {
   start<TResponse = unknown>(token: string): Promise<TResponse>;
 }
 
+export interface PublicSignupApi {
+  start<TInput = unknown>(input: TInput): Promise<SelfServeSignupResponse>;
+}
+
 export interface PublicLeadsApi {
   create<TResponse = unknown, TInput = unknown>(
     input: TInput,
@@ -1659,7 +1663,6 @@ export interface SpcApi {
   ): Promise<TResponse>;
   removeReading<TResponse = unknown>(id: string | number): Promise<TResponse>;
 }
-
 
 export type CompetenceListInput = {
   page: number;
@@ -2160,10 +2163,12 @@ export type PlanAccessResponse = {
   entitlements: string[];
   hasFinancial: boolean;
   hasFinancialModule: boolean;
+  /** billing:["read"] — may see the plan, usage and invoices. */
+  canViewBilling: boolean;
+  /** billing:["update"] — may contract or cancel. Owner only today. */
   canManageBilling: boolean;
   hasApi: boolean;
   hasCustomDomain: boolean;
-  hasCustomTemplates: boolean;
   hasSso: boolean;
 };
 
@@ -2179,6 +2184,25 @@ export type FinanceAccessResponse = {
   canExportFinancial: boolean;
   role: string;
 };
+
+/** One step of the first-certificate checklist, derived server-side. */
+export type ActivationStepId =
+  | "organizationProfile"
+  | "methodPublished"
+  | "referenceStandard"
+  | "signingCertificate"
+  | "customer"
+  | "firstCertificate";
+
+export type ActivationChecklistResponse = {
+  steps: Array<{ id: ActivationStepId; done: boolean }>;
+  complete: boolean;
+};
+
+export interface OnboardingApi {
+  /** What the laboratory still has to do before its first certificate. */
+  getChecklist(): Promise<ActivationChecklistResponse>;
+}
 
 export interface AccessApi {
   getPlanAccess(): Promise<PlanAccessResponse>;
@@ -2333,12 +2357,44 @@ export type BillingPaymentsResponse = {
   data: BillingPaymentRecord[];
 };
 
+export type BillingCancelSubscriptionResponse = {
+  subscription: BillingSubscriptionSummary | null;
+};
+
+export type SelfServeSignupResponse = {
+  ok: true;
+  email?: string;
+  /** False when the account exists but the setup e-mail could not be sent. */
+  emailDelivered?: boolean;
+  error?: string;
+  code?: string;
+};
+
+export type SelfServeCheckoutResponse = {
+  /** Path of the public checkout page, e.g. "/checkout/<token>". */
+  checkoutPath: string;
+  offerId: string;
+  /** True when an open offer for the same plan was handed back. */
+  reused: boolean;
+};
+
 export interface BillingApi {
   getSubscription(): Promise<BillingSubscriptionResponse>;
   listPayments(input?: {
     limit?: number;
     offset?: number;
   }): Promise<BillingPaymentsResponse>;
+  /** Mints (or reuses) a checkout for the plan the lab picked itself. */
+  startSelfServeCheckout(input: {
+    planId: "STANDARD" | "PROFESSIONAL" | "ADVANCED";
+    billingCycle: "MONTHLY" | "YEARLY";
+    paymentMethod?: "PIX" | "BOLETO" | "CREDIT_CARD";
+  }): Promise<SelfServeCheckoutResponse>;
+  /**
+   * Returns the subscription as it stands after cancelling — the endpoint
+   * answers with the row, not an acknowledgement flag.
+   */
+  cancelSubscription(): Promise<BillingCancelSubscriptionResponse>;
 }
 
 export type BackofficeAccessResponse = {
@@ -3032,6 +3088,7 @@ export interface CalibraApi {
   dashboard: DashboardApi;
   units: UnitsApi;
   access: AccessApi;
+  onboarding: OnboardingApi;
   sessions: SessionsApi;
   finance: FinanceApi;
   billing: BillingApi;
@@ -3065,6 +3122,7 @@ export interface CalibraApi {
   publicCheckout: PublicCheckoutApi;
   publicInvitations: PublicInvitationsApi;
   publicLeads: PublicLeadsApi;
+  publicSignup: PublicSignupApi;
   labSetup: LabSetupApi;
   nonConformances: NonConformancesApi;
   capas: CapasApi;

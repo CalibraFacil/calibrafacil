@@ -1,9 +1,11 @@
 import { db } from "@calibra-facil/db";
+import type { PaymentStatus } from "@calibra-facil/db/schema";
 import { commercialOffer } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import {
   insertOfferHistory,
   invalidateCommercialPublicToken,
+  isPaidPaymentStatus,
   upsertSubscriptionFromOffer,
   type DbTx,
 } from "./common";
@@ -11,10 +13,12 @@ import {
 export async function activateOfferFromConfirmedPayment(
   tx: DbTx,
   offerId: string,
-  paymentStatus: "CONFIRMED" | "RECEIVED",
+  paymentStatus: PaymentStatus,
 ) {
-  if (paymentStatus !== "CONFIRMED" && paymentStatus !== "RECEIVED")
-    return null;
+  // Cash settlement counts. It used to be excluded here while the offer was
+  // still marked PAID above, which left a laboratory that paid its boleto at
+  // the counter on FREE with a closed offer and a revoked checkout token.
+  if (!isPaidPaymentStatus(paymentStatus)) return null;
 
   const offer = await tx.query.commercialOffer.findFirst({
     where: eq(commercialOffer.id, offerId),

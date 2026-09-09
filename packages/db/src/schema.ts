@@ -633,6 +633,20 @@ export const organizationSuccessProfile = pgTable(
     publicStatusNote: text("public_status_note"),
     internalNotes: text("internal_notes"),
     lastTouchedAt: timestamp("last_touched_at"),
+    // Activation milestones. Written once by the domain paths that complete
+    // each onboarding step and never read back to drive the UI — the checklist
+    // the laboratory sees is derived from live domain state, because a stored
+    // completion flag goes stale and a stale checklist lies. These answer the
+    // question a derived check cannot once the triggering row is gone: did this
+    // organization ever get there, and when.
+    organizationProfileCompletedAt: timestamp(
+      "organization_profile_completed_at",
+    ),
+    firstMethodPublishedAt: timestamp("first_method_published_at"),
+    firstReferenceStandardAt: timestamp("first_reference_standard_at"),
+    firstSigningCertificateAt: timestamp("first_signing_certificate_at"),
+    firstCustomerCreatedAt: timestamp("first_customer_created_at"),
+    firstCertificateIssuedAt: timestamp("first_certificate_issued_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -6704,7 +6718,12 @@ export const accreditedScopeLineAuditLogRelations = relations(
 /**
  * Plan identifiers - matches shared/plans.ts
  */
-export type PlanId = "FREE" | "STANDARD" | "PROFESSIONAL" | "ENTERPRISE";
+export type PlanId =
+  | "FREE"
+  | "STANDARD"
+  | "PROFESSIONAL"
+  | "ADVANCED"
+  | "ENTERPRISE";
 
 /**
  * Subscription status
@@ -6724,8 +6743,11 @@ export type PaymentStatus =
   | "AWAITING_RISK_ANALYSIS"
   | "CONFIRMED"
   | "RECEIVED"
+  // Staff marked the charge as settled outside Asaas. Paid, like RECEIVED.
+  | "RECEIVED_IN_CASH"
   | "OVERDUE"
   | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
   | "REFUND_REQUESTED"
   | "CHARGEBACK_REQUESTED"
   | "CHARGEBACK_DISPUTE"

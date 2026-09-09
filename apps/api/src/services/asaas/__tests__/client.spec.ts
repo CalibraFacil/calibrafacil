@@ -172,6 +172,64 @@ describe("AsaasClient", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
+    // Asaas does not always answer a failure with { errors: [...] }. A 404 with
+    // a null body used to blow up inside the AsaasError constructor, so the
+    // caller saw a TypeError from our error path instead of the provider's
+    // status — every such failure looked identical and undebuggable.
+    it("survives an error body that has no errors array", async () => {
+      global.fetch = mockFetch(mockFetchResponse(null, 404));
+
+      const client = new AsaasClient("test-api-key", "sandbox");
+      const error = await client
+        .get("/customers/dev-offline:nope")
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AsaasError);
+      if (error instanceof AsaasError) {
+        expect(error.message).toContain("404");
+        expect(error.code).toBe("HTTP_404");
+      }
+    });
+
+    it("keeps the raw body when the error shape is unexpected", async () => {
+      global.fetch = mockFetch(
+        mockFetchResponse({ message: "algo deu errado" }, 400),
+      );
+
+      const client = new AsaasClient("test-api-key", "sandbox");
+      const error = await client
+        .post("/customers", {})
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AsaasError);
+      if (error instanceof AsaasError) {
+        expect(error.message).toContain("algo deu errado");
+      }
+    });
+
+    // Asaas has no idempotency key for charge creation, so replaying a POST
+    // whose response was lost creates a second real charge.
+    it("does NOT retry a POST on 503 — a replay could double-charge", async () => {
+      const mockData = createMockCustomer();
+      global.fetch = mockFetchWithRetries(1, 503, mockData);
+
+      const client = new AsaasClient("test-api-key", "sandbox");
+
+      await expect(client.post("/payments", {})).rejects.toThrow();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("still retries a GET on 503 — reading twice is free", async () => {
+      const mockData = createMockCustomer();
+      global.fetch = mockFetchWithRetries(1, 503, mockData);
+
+      const client = new AsaasClient("test-api-key", "sandbox");
+      const result = await client.get<typeof mockData>("/customers/cus_123");
+
+      expect(result).toEqual(mockData);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
     it("should NOT retry on 404 (not found)", async () => {
       const errorResponse = {
         errors: [{ code: "not_found", description: "Customer not found" }],
@@ -219,6 +277,19 @@ describe("AsaasClient", () => {
 
       expect(result).toEqual(mockData);
       expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("does NOT replay a POST after a network error", async () => {
+      // A lost response says nothing about whether Asaas accepted the charge,
+      // and Asaas has no idempotency key — so a replay is a second real charge.
+      global.fetch = mockFetchNetworkError("Network error");
+
+      const client = new AsaasClient("test-api-key", "sandbox");
+
+      await expect(client.post("/payments", { value: 100 })).rejects.toThrow(
+        "Network error",
+      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it("should exhaust retries on persistent network error", async () => {

@@ -74,7 +74,8 @@ async function recordDivergenceAlert(params: {
   divergence: SubscriptionDivergence;
 }): Promise<void> {
   const { now, divergence } = params;
-  const severity = divergence.expectedStatus === "CANCELED" ? "critical" : "warning";
+  const severity =
+    divergence.expectedStatus === "CANCELED" ? "critical" : "warning";
   const title = `Assinatura divergente do ASAAS: ${divergence.organizationId}`;
   const detail = `Estado local ${divergence.localStatus} → ASAAS indica ${divergence.expectedStatus} (${divergence.reason}). Corrigido para ${divergence.expectedStatus}.`;
 

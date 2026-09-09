@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import {
   emailWebhookEvent,
+  operatorAlert,
   providerWebhookEvent,
 } from "@calibra-facil/db/schema";
 import { suppressEmail } from "@calibra-facil/notifications";
@@ -50,7 +51,9 @@ let asaasIpAllowlistWarningLogged = false;
  * edge, not client-forgeable) with the first `x-forwarded-for` hop as
  * fallback.
  */
-export function verifyWebhookSourceIp(request: Request): boolean {
+export async function verifyWebhookSourceIp(
+  request: Request,
+): Promise<boolean> {
   const raw = process.env.ASAAS_WEBHOOK_ALLOWED_IPS;
   const allowed = (raw ?? "")
     .split(",")
@@ -63,6 +66,16 @@ export function verifyWebhookSourceIp(request: Request): boolean {
       console.warn(
         "ASAAS_WEBHOOK_ALLOWED_IPS not configured — Asaas webhooks are authenticated by token only (see issue #641).",
       );
+      // A console line nobody reads is not a control. Asaas signs nothing, so
+      // the allowlist is the second factor on the endpoint that activates paid
+      // plans, and it has to be surfaced where operators actually look.
+      //
+      // Awaited, not fired and forgotten. The flag above makes this run once
+      // per process, and on a serverless runtime the instance can freeze the
+      // moment the handler returns: a request rejected for a bad token exits
+      // fast enough to discard an unawaited write, and no later request on that
+      // warm instance would ever retry it.
+      await raiseMissingIpAllowlistAlert();
     }
     return true;
   }
@@ -73,6 +86,31 @@ export function verifyWebhookSourceIp(request: Request): boolean {
     null;
 
   return sourceIp !== null && allowed.includes(sourceIp);
+}
+
+async function raiseMissingIpAllowlistAlert(): Promise<void> {
+  try {
+    const now = new Date();
+    await db
+      .insert(operatorAlert)
+      .values({
+        dedupeKey: "asaas:webhook_ip_allowlist_missing",
+        kind: "asaas_webhook_ip_allowlist_missing",
+        severity: "warning",
+        title: "Webhook do Asaas sem allowlist de IP",
+        detail:
+          "ASAAS_WEBHOOK_ALLOWED_IPS não está definida. O Asaas não assina os webhooks, então hoje o endpoint que ativa planos pagos é autenticado apenas pelo token estático. IPs oficiais em https://docs.asaas.com/docs/ips-oficiais-do-asaas.",
+        firstSeenAt: now,
+        lastSeenAt: now,
+      })
+      .onConflictDoUpdate({
+        target: operatorAlert.dedupeKey,
+        set: { lastSeenAt: now, updatedAt: now },
+      });
+  } catch (error) {
+    // Never let observability break the webhook that takes the money.
+    console.error("Failed to record Asaas IP allowlist alert", error);
+  }
 }
 
 export function verifyWebhookToken(request: Request): boolean {
@@ -114,7 +152,7 @@ export const webhooksRouter = new Hono()
     // side effect — with no HMAC available from Asaas, this is the second
     // authentication factor (REQ-SEC-ASA-002: invalid requests never reach
     // reconciliation, so no offer activation and no payment_record).
-    if (!verifyWebhookSourceIp(c.req.raw)) {
+    if (!(await verifyWebhookSourceIp(c.req.raw))) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 

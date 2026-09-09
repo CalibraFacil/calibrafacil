@@ -5,6 +5,7 @@ import { assetTypesRouter } from "../routes/asset-types";
 import { assetsRouter } from "../routes/assets";
 import { backofficeRouter } from "../routes/backoffice";
 import { billingRouter } from "../routes/billing";
+import { onboardingRouter } from "../routes/onboarding";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
 import {
   visitJobsRouter,
@@ -48,6 +49,7 @@ import {
   publicApiV2Router,
 } from "../routes/public-api-v2";
 import { publicCommercialCheckoutRouter } from "../routes/public-commercial-checkout";
+import { publicSignupRouter } from "../routes/public-signup";
 import { publicLeadsRouter } from "../routes/public-leads";
 import { reportsRouter } from "../routes/reports";
 import {
@@ -125,6 +127,7 @@ export function mountApiRoutes(
       .route("/api/dashboard", dashboardRouter)
       .route("/api/reports", reportsRouter)
       .route("/api/billing", billingRouter)
+      .route("/api/onboarding", onboardingRouter)
       .route("/api/finance", financeRouter)
       .route("/api/webhooks", webhooksRouter)
       .route("/api/notifications", notificationsRouter)
@@ -155,6 +158,7 @@ export function mountApiRoutes(
       .route("/api/profile-media", profileMediaRouter)
       .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
       .route("/api/public/leads", publicLeadsRouter)
+      .route("/api/public/signup", publicSignupRouter)
       .route("/api/public/oot-ack", ootAckRouter)
       .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
       .route("/api/public/v1", publicApiRouter)

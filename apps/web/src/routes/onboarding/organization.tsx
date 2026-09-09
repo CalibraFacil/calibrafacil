@@ -38,11 +38,24 @@ type OnboardingSession = NonNullable<
 
 type OnboardingSearch = {
   redirect?: string
+  /**
+   * The plan picked on the pricing page. Onboarding sits between the claim link
+   * and billing whenever a required field was left blank at sign-up, so without
+   * carrying these two the handoff from pricing to checkout is lost for
+   * everyone who did not fill in a phone number.
+   */
+  plano?: string
+  ciclo?: 'MONTHLY' | 'YEARLY'
 }
 
 export const Route = createFileRoute('/onboarding/organization')({
   validateSearch: (search: Record<string, unknown>): OnboardingSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+    plano: typeof search.plano === 'string' ? search.plano : undefined,
+    ciclo:
+      search.ciclo === 'MONTHLY' || search.ciclo === 'YEARLY'
+        ? search.ciclo
+        : undefined,
   }),
   beforeLoad: async () => {
     const { data: session } =
@@ -68,7 +81,7 @@ export const Route = createFileRoute('/onboarding/organization')({
 
 function OrganizationOnboardingPage() {
   const navigate = useNavigate()
-  const { redirect: redirectTo } = Route.useSearch()
+  const { redirect: redirectTo, plano, ciclo } = Route.useSearch()
   const { data: organizations, isPending: isLoadingOrganizations } =
     useListOrganizations()
   const { data: activeOrganization, isPending: isLoadingActiveOrganization } =
@@ -132,6 +145,15 @@ function OrganizationOnboardingPage() {
       }
 
       setStoredDashboardOrganizationId(labOrganization.id)
+
+      if (plano) {
+        navigate({
+          to: '/dashboard/settings/subscription',
+          search: { plano, ciclo },
+        })
+        return
+      }
+
       navigate({ to: redirectTo || '/dashboard' })
     } catch (err) {
       setError(
@@ -259,8 +281,8 @@ function OrganizationOnboardingPage() {
               <p>Este fluxo atualiza a organização existente.</p>
               <p>Você poderá acessar o dashboard e convidar a equipe.</p>
               <p>
-                Novas contas LAB continuam sendo criadas pelo backoffice ou por
-                convites de administradores.
+                Endereço, acreditação e responsável técnico ficam nas
+                configurações, e o CNPJ preenche esses campos por lá.
               </p>
             </CardContent>
           </Card>

@@ -139,7 +139,8 @@ export function SectionHeading({
   center = false,
 }: {
   title: string;
-  body: string;
+  /** Optional: a heading whose section already explains itself does not need one. */
+  body?: string;
   center?: boolean;
 }) {
   return (
@@ -147,14 +148,16 @@ export function SectionHeading({
       <h2 className="text-[clamp(30px,3.6vw,44px)] leading-[1.08] font-semibold tracking-[-0.028em] text-balance text-foreground">
         {title}
       </h2>
-      <p
-        className={cn(
-          "mt-4 max-w-[56ch] text-[17px] leading-relaxed text-pretty text-muted-foreground",
-          center && "mx-auto",
-        )}
-      >
-        {body}
-      </p>
+      {body ? (
+        <p
+          className={cn(
+            "mt-4 max-w-[56ch] text-[17px] leading-relaxed text-pretty text-muted-foreground",
+            center && "mx-auto",
+          )}
+        >
+          {body}
+        </p>
+      ) : null}
     </div>
   );
 }

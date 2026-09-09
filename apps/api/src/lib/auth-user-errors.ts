@@ -6,7 +6,16 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value));
 }
 
-export function userCreateErrorWasDuplicate(error: unknown) {
+/**
+ * Flatten what an auth error actually says.
+ *
+ * Better Auth reports the same conflict in several shapes depending on where it
+ * was raised: a top-level `status`, an `APIError` carrying `statusCode` and a
+ * `body`, or a driver error wrapped under `cause`. A classifier that reads only
+ * the top level misses the other two and treats a recoverable conflict as a
+ * hard failure, so every caller reads through this instead.
+ */
+export function authErrorSignals(error: unknown) {
   const errorRecord = recordFromUnknown(error);
   const body = recordFromUnknown(errorRecord.body);
   const cause = recordFromUnknown(errorRecord.cause);
@@ -36,6 +45,12 @@ export function userCreateErrorWasDuplicate(error: unknown) {
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
+
+  return { status, message };
+}
+
+export function userCreateErrorWasDuplicate(error: unknown) {
+  const { status, message } = authErrorSignals(error);
 
   return (
     status === 409 ||

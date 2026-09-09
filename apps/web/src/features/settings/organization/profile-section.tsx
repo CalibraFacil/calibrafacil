@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, isValid, parse } from 'date-fns'
 import { toast } from 'sonner'
@@ -14,6 +14,11 @@ import {
 } from '@calibra-facil/shared'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import { calibraApi } from '@/utils/api'
+import {
+  keepOrFill,
+  useCnpjLookup,
+  type CnpjLookupResult,
+} from '@/lib/cnpj-lookup'
 import { useDashboardUnitsData } from '@/features/settings/queries'
 import type { GovernanceViewer } from '@/features/settings/types'
 import {
@@ -133,6 +138,7 @@ export function OrganizationProfileSection({
   const [cep, setCep] = useState(isoDraft.cep)
   const [phone, setPhone] = useState(isoDraft.phone)
   const [email, setEmail] = useState(isoDraft.email)
+
   const [website, setWebsite] = useState(isoDraft.website)
   const [technicalManagerName, setTechnicalManagerName] = useState(
     isoDraft.technicalManagerName,
@@ -141,6 +147,31 @@ export function OrganizationProfileSection({
     isoDraft.technicalManagerTitle,
   )
   const [isUpdatingIso, setIsUpdatingIso] = useState(false)
+
+  // The same lookup the customer cadastro has used for a while, pointed at the
+  // laboratory's own record. It fills only blank fields, so it can never
+  // overwrite something the lab typed, and a failure is silent: manual entry
+  // was always the path and stays the path.
+  const handleCnpjResolved = useCallback((result: CnpjLookupResult) => {
+    setName((current) => keepOrFill(current, result.name))
+    setEmail((current) => keepOrFill(current, result.email))
+    setPhone((current) => keepOrFill(current, result.phone))
+    setCep((current) => keepOrFill(current, result.address.cep))
+    setStreet((current) => keepOrFill(current, result.address.street))
+    setNumber((current) => keepOrFill(current, result.address.number))
+    setComplement((current) => keepOrFill(current, result.address.complement))
+    setNeighbourhood((current) =>
+      keepOrFill(current, result.address.neighbourhood),
+    )
+    setCity((current) => keepOrFill(current, result.address.city))
+    setState((current) => keepOrFill(current, result.address.state))
+  }, [])
+
+  const cnpjLookup = useCnpjLookup({
+    cnpj,
+    disabled: isUpdatingIso,
+    onResolved: handleCnpjResolved,
+  })
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
@@ -539,15 +570,29 @@ export function OrganizationProfileSection({
                         id="org-cnpj"
                         maskOptions={cnpjMask}
                         value={cnpj}
-                        onInput={(e) => setCnpj(e.currentTarget.value)}
+                        onInput={(e) => {
+                          setCnpj(e.currentTarget.value)
+                          cnpjLookup.lookupCnpj(e.currentTarget.value)
+                        }}
                         disabled={isUpdatingIso}
                         placeholder="00.000.000/0000-00"
                       />
+                      {cnpjLookup.status === 'loading' && (
+                        <FieldDescription>
+                          Buscando os dados do CNPJ.
+                        </FieldDescription>
+                      )}
+                      {cnpjLookup.status === 'success' && (
+                        <FieldDescription>
+                          Preenchemos os campos que estavam em branco. Confira
+                          antes de salvar.
+                        </FieldDescription>
+                      )}
                       {normalizeCnpj(cnpj).length === 14 &&
                         !isValidCnpj(cnpj) && (
                           <FieldDescription className="text-amber-700 dark:text-amber-400">
-                            CNPJ inválido — verifique os dígitos. Você ainda
-                            pode salvar.
+                            CNPJ inválido. Verifique os dígitos. Você ainda pode
+                            salvar.
                           </FieldDescription>
                         )}
                     </Field>

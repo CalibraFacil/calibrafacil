@@ -321,7 +321,10 @@ export function isInternalOperatorEmail(
     .includes(normalizedEmail);
 }
 
-function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
+export function hasPermissionLocally(
+  role: RoleName,
+  permissions: PermissionCheck,
+) {
   try {
     switch (role) {
       case "owner":

@@ -17,7 +17,9 @@ import {
   createCommercialExternalReference,
   invalidateCommercialPublicToken,
   insertOfferHistory,
+  advanceSubscriptionPeriodForRenewal,
   insertPaymentStatusHistoryEntry,
+  isPaidPaymentStatus,
   markOfferPaymentsDeleted,
   type DbTx,
 } from "./common";
@@ -331,15 +333,25 @@ export async function reconcileCommercialWebhook(
       );
 
       let nextOfferStatus = offer.status;
-      if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
+      if (isPaidPaymentStatus(payment.status)) {
         nextOfferStatus = "PAID";
       } else if (payment.status === "OVERDUE") {
         nextOfferStatus = "FAILED";
       } else if (
         payment.status === "REFUNDED" ||
+        payment.status === "PARTIALLY_REFUNDED" ||
         payment.status === "DELETED"
       ) {
         nextOfferStatus = "FAILED";
+      } else if (
+        // Asaas can restore a deleted charge: the payment goes back to a
+        // collectible status. Without this the offer stayed FAILED forever,
+        // because only the forward transitions were modelled.
+        offer.status === "FAILED" &&
+        (payment.status === "PENDING" ||
+          payment.status === "AWAITING_RISK_ANALYSIS")
+      ) {
+        nextOfferStatus = "PENDING_PAYMENT";
       }
 
       if (nextOfferStatus !== offer.status) {
@@ -368,15 +380,30 @@ export async function reconcileCommercialWebhook(
         });
       }
 
-      if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
-        await activateOfferFromConfirmedPayment(tx, offer.id, payment.status);
+      // The same set that decided the offer is PAID, so a cash settlement
+      // cannot close an offer without granting the plan it paid for.
+      if (isPaidPaymentStatus(payment.status)) {
+        const activated = await activateOfferFromConfirmedPayment(
+          tx,
+          offer.id,
+          payment.status,
+        );
+
+        // Activation is a one-time event; a renewal finds the offer already
+        // ACTIVATED and returns early. The paid period still has to move, or
+        // cancelling in month eight honours a boundary from month one.
+        if (activated && offer.status === "ACTIVATED") {
+          await advanceSubscriptionPeriodForRenewal(
+            tx,
+            offer,
+            payment.paidAt ?? new Date(),
+          );
+        }
       }
 
-      const paymentSuccessStatuses: PaymentStatus[] = ["CONFIRMED", "RECEIVED"];
       const enteredSuccessfulPaymentState =
-        paymentSuccessStatuses.includes(payment.status) &&
-        (previousStatus === null ||
-          !paymentSuccessStatuses.includes(previousStatus));
+        isPaidPaymentStatus(payment.status) &&
+        (previousStatus === null || !isPaidPaymentStatus(previousStatus));
 
       if (enteredSuccessfulPaymentState) {
         notification = {
@@ -393,6 +420,7 @@ export async function reconcileCommercialWebhook(
           "CHARGEBACK_REQUESTED",
           "CHARGEBACK_DISPUTE",
           "AWAITING_CHARGEBACK_REVERSAL",
+          "PARTIALLY_REFUNDED",
           "DELETED",
         ].includes(payment.status)
       ) {
@@ -412,7 +440,22 @@ export async function reconcileCommercialWebhook(
         };
       }
 
-      if (payment.status === "OVERDUE" && offer.kind !== "SETUP_FEE") {
+      // A charge in dispute or reversed is money we no longer hold, so it
+      // should not keep granting service. Previously only OVERDUE downgraded,
+      // and a chargeback sent an e-mail while access continued untouched.
+      const REVOKES_ENTITLEMENT = new Set([
+        "OVERDUE",
+        "REFUNDED",
+        "PARTIALLY_REFUNDED",
+        "CHARGEBACK_REQUESTED",
+        "CHARGEBACK_DISPUTE",
+        "AWAITING_CHARGEBACK_REVERSAL",
+      ]);
+
+      if (
+        REVOKES_ENTITLEMENT.has(payment.status) &&
+        offer.kind !== "SETUP_FEE"
+      ) {
         await tx
           .update(subscription)
           .set({ status: "PAST_DUE" })
@@ -478,6 +521,38 @@ export async function reconcileCommercialWebhook(
             eq(subscription.organizationId, offer.organizationId),
             eq(subscription.sourceCommercialOfferId, offer.id),
           ),
+        );
+    }
+
+    // Asaas ending a recurrence — the customer cancelled there, or repeated
+    // capture failures killed it. The daily reconciliation cron would catch
+    // this eventually, which meant up to a day of a dead subscription still
+    // granting access. The event says so immediately; use it.
+    if (
+      payload.event === "SUBSCRIPTION_DELETED" ||
+      payload.event === "SUBSCRIPTION_INACTIVATED"
+    ) {
+      // Scoped to the provider subscription the event is actually about. An
+      // operator who replaces a plan and then cancels the old recurrence at
+      // Asaas produces a deletion event that resolves to the OLD offer; a
+      // cancel filtered only by organization would take the replacement's
+      // access away the moment the superseded one was tidied up.
+      const providerSubscriptionId = offer.providerSubscriptionId;
+
+      await tx
+        .update(subscription)
+        .set({
+          status: "CANCELED",
+          canceledAt: new Date(),
+          cancelReason: `Encerrada no provedor (${payload.event})`,
+        })
+        .where(
+          providerSubscriptionId
+            ? and(
+                eq(subscription.organizationId, offer.organizationId),
+                eq(subscription.providerSubscriptionId, providerSubscriptionId),
+              )
+            : eq(subscription.organizationId, offer.organizationId),
         );
     }
 

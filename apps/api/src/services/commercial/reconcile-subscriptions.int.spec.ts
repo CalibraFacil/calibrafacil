@@ -68,9 +68,7 @@ function fakePort(config: {
     async listPayments(options): Promise<AsaasPaymentList> {
       const subId = options.subscription ?? "";
       const count =
-        options.status === "OVERDUE"
-          ? (config.overdueCount?.[subId] ?? 0)
-          : 0;
+        options.status === "OVERDUE" ? (config.overdueCount?.[subId] ?? 0) : 0;
       const data = Array.from({ length: count }, (_, i) =>
         overduePayment(`pay_${subId}_${i}`),
       );
@@ -145,7 +143,11 @@ describe("reconcileProviderSubscriptions (REQ-REL-ASA-002)", () => {
     });
 
     const summary = await reconcileProviderSubscriptions(
-      fakePort({ subscriptions: { sub_cancel: remoteSubscription("sub_cancel", "INACTIVE") } }),
+      fakePort({
+        subscriptions: {
+          sub_cancel: remoteSubscription("sub_cancel", "INACTIVE"),
+        },
+      }),
       { now: FIXED_NOW },
     );
 
@@ -198,10 +200,14 @@ describe("reconcileProviderSubscriptions (REQ-REL-ASA-002)", () => {
       subscriptions: { sub_idem: remoteSubscription("sub_idem", "EXPIRED") },
     });
 
-    const first = await reconcileProviderSubscriptions(port, { now: FIXED_NOW });
+    const first = await reconcileProviderSubscriptions(port, {
+      now: FIXED_NOW,
+    });
     expect(first.corrected).toBe(1);
 
-    const second = await reconcileProviderSubscriptions(port, { now: FIXED_NOW });
+    const second = await reconcileProviderSubscriptions(port, {
+      now: FIXED_NOW,
+    });
     // The subscription is now CANCELED, so it is no longer an active-state row the
     // reconciler loads → nothing to check, nothing to correct.
     expect(second.checked).toBe(0);
@@ -245,7 +251,9 @@ describe("reconcileProviderSubscriptions (REQ-REL-ASA-002)", () => {
 
     const summary = await reconcileProviderSubscriptions(
       fakePort({
-        subscriptions: { sub_overdue: remoteSubscription("sub_overdue", "ACTIVE") },
+        subscriptions: {
+          sub_overdue: remoteSubscription("sub_overdue", "ACTIVE"),
+        },
         overdueCount: { sub_overdue: 1 },
       }),
       { now: FIXED_NOW },

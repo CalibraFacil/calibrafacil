@@ -72,9 +72,10 @@ const JSON_HEADERS = { "content-type": "application/json" };
 // ---------------------------------------------------------------------------
 
 /**
- * Seed a PROFESSIONAL subscription for an org so requireFeature("approval_workflow")
- * does not block the workflow routes. No subscription → FREE plan → approval_workflow
- * feature absent → 403.
+ * Seed a PROFESSIONAL subscription for an org. The method lifecycle itself is
+ * no longer gated by plan (17025 requires review and approval, so it is
+ * unconditional), but the seeding is kept so these tests run against a
+ * realistic paid organization rather than a bare FREE one.
  */
 async function seedProfessionalSubscription(orgId: string): Promise<void> {
   await db.insert(subscription).values({

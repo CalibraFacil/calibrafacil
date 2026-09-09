@@ -28,6 +28,7 @@ import {
   getCommercialRenewalMode,
   isPlanBearingOffer,
 } from "@calibra-facil/shared";
+import type { PaymentStatus } from "@calibra-facil/db/schema";
 import type { CommercialOfferPreviewInput } from "@calibra-facil/schemas";
 import type { CommercialOfferPreviewResult } from "./preview";
 
@@ -35,6 +36,32 @@ import type { CommercialOfferPreviewResult } from "./preview";
 // callbacks. Derived from the runtime `db` instance so it tracks the driver
 // union (postgres-js / neon-serverless) without importing driver types here.
 export type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * The payment statuses that mean the money arrived.
+ *
+ * One definition, because three places used to disagree: the offer was marked
+ * PAID on a cash settlement while activation and the customer notification
+ * accepted only CONFIRMED and RECEIVED. A laboratory that paid in cash had its
+ * offer closed and its checkout token revoked, and stayed on FREE with no way
+ * to repair it, because replaying the webhook finds the offer already PAID.
+ *
+ * RECEIVED_IN_CASH is Asaas's status for a boleto settled at the bank counter
+ * and reconciled manually. It is as paid as the other two.
+ */
+export const PAID_PAYMENT_STATUSES = [
+  "CONFIRMED",
+  "RECEIVED",
+  "RECEIVED_IN_CASH",
+] as const satisfies readonly PaymentStatus[];
+
+export type PaidPaymentStatus = (typeof PAID_PAYMENT_STATUSES)[number];
+
+export function isPaidPaymentStatus(
+  status: PaymentStatus,
+): status is PaidPaymentStatus {
+  return PAID_PAYMENT_STATUSES.some((paid) => paid === status);
+}
 
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -546,6 +573,64 @@ export async function upsertSubscriptionFromOffer(
     .returning();
 
   return result ?? null;
+}
+
+/**
+ * Move a live subscription's period forward when a renewal is paid.
+ *
+ * Activation only runs once: the second and every later payment for a
+ * recurring offer finds it already ACTIVATED and returns early, so nothing
+ * advanced `current_period_end`. It stayed frozen at the date computed from the
+ * very first payment.
+ *
+ * That was harmless while the column was only decorative, and stopped being
+ * harmless when cancellation started honouring the paid period: a customer in
+ * their eighth month would cancel and lose access instantly, because the
+ * boundary being honoured was seven months in the past.
+ *
+ * Scoped to the subscription this offer actually backs, so a renewal on a
+ * superseded recurrence cannot extend the current one.
+ */
+export async function advanceSubscriptionPeriodForRenewal(
+  tx: DbTx,
+  offer: {
+    id: string;
+    organizationId: string;
+    billingCycle: string | null;
+    providerSubscriptionId: string | null;
+  },
+  paidAt: Date,
+) {
+  const periodEnd = new Date(paidAt);
+  if (offer.billingCycle === "MONTHLY") {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  } else if (offer.billingCycle === "YEARLY") {
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  } else {
+    return;
+  }
+
+  await tx
+    .update(subscription)
+    .set({
+      currentPeriodStart: paidAt,
+      currentPeriodEnd: periodEnd,
+      nextBillingDate: periodEnd,
+    })
+    .where(
+      offer.providerSubscriptionId
+        ? and(
+            eq(subscription.organizationId, offer.organizationId),
+            eq(
+              subscription.providerSubscriptionId,
+              offer.providerSubscriptionId,
+            ),
+          )
+        : and(
+            eq(subscription.organizationId, offer.organizationId),
+            eq(subscription.sourceCommercialOfferId, offer.id),
+          ),
+    );
 }
 
 export async function getOfferById(offerId: string) {

@@ -1,7 +1,13 @@
+import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { ReferenceStandardKind } from '@calibra-facil/schemas'
 
+import {
+  applyPastedCertifiedValues,
+  parsePastedCertifiedValues,
+} from '@/features/standards/paste'
+import { describeStandardWarnings } from '@/features/standards/warnings'
 import { Button } from '@/components/ui/button'
 import {
   Field,
@@ -106,6 +112,11 @@ export function StandardFormSections({
     })
   }
 
+  // Caught here rather than when a job refuses the standard or a laudo comes
+  // out with the wrong budget. Never blocking: the standard's own certificate
+  // is the authority, and a lab can have a legitimate reason for any of these.
+  const warnings = describeStandardWarnings(formData)
+
   const updateMassValue = (
     index: number,
     field: keyof StandardCertifiedValueFormData,
@@ -117,6 +128,46 @@ export function StandardFormSections({
         itemIndex === index ? { ...item, [field]: value } : item,
       ),
     )
+  }
+
+  /**
+   * Transcribing a 20-piece weight set cell by cell is the largest single cost
+   * in setting a laboratory up, and the figures are already in a spreadsheet.
+   * Pasting a block spreads it across rows and columns from the cell it was
+   * dropped on. Values are stored exactly as pasted: these digits state the
+   * resolution of the calibration.
+   */
+  const pasteMassValues = (
+    rowIndex: number,
+    columnIndex: number,
+    text: string,
+  ) => {
+    const parsed = parsePastedCertifiedValues({
+      text,
+      startColumnIndex: columnIndex,
+    })
+
+    if (!parsed.ok) {
+      toast.error(parsed.error)
+      return false
+    }
+
+    updateField(
+      'certifiedValues',
+      applyPastedCertifiedValues({
+        current: formData.certifiedValues,
+        parsed: parsed.rows,
+        startRowIndex: rowIndex,
+        createEmptyRow: () => createStandardCertifiedValueDraft(),
+      }),
+    )
+
+    toast.success(
+      parsed.rows.length === 1
+        ? 'Uma linha colada. Confira os valores.'
+        : `${parsed.rows.length} linhas coladas. Confira os valores.`,
+    )
+    return true
   }
 
   const updateChannel = (
@@ -309,6 +360,18 @@ export function StandardFormSections({
             disabled={disabled}
           />
         </div>
+        {warnings.length > 0 && (
+          <ul className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+            {warnings.map((warning) => (
+              <li
+                key={`${warning.field}-${warning.message}`}
+                className="text-xs leading-relaxed text-amber-700 dark:text-amber-400"
+              >
+                {warning.message}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="space-y-5 border-b pb-6">
@@ -507,6 +570,10 @@ export function StandardFormSections({
         {definition.mode === 'mass' && (
           <div className="space-y-5">
             <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Cole a seleção da planilha do certificado direto na tabela. As
+                linhas necessárias são criadas automaticamente.
+              </p>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -531,12 +598,18 @@ export function StandardFormSections({
                           onChange={(next) =>
                             updateMassValue(index, 'nominal', next)
                           }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 0, text)
+                          }
                           disabled={disabled}
                         />
                         <EditableCell
                           value={value.authentication}
                           onChange={(next) =>
                             updateMassValue(index, 'authentication', next)
+                          }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 1, text)
                           }
                           disabled={disabled}
                         />
@@ -546,6 +619,9 @@ export function StandardFormSections({
                           onChange={(next) =>
                             updateMassValue(index, 'value', next)
                           }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 2, text)
+                          }
                           disabled={disabled}
                         />
                         <EditableCell
@@ -554,12 +630,18 @@ export function StandardFormSections({
                           onChange={(next) =>
                             updateMassValue(index, 'uncertainty', next)
                           }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 3, text)
+                          }
                           disabled={disabled}
                         />
                         <EditableCell
                           value={value.unit}
                           onChange={(next) =>
                             updateMassValue(index, 'unit', next)
+                          }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 4, text)
                           }
                           disabled={disabled}
                         />
@@ -569,6 +651,9 @@ export function StandardFormSections({
                           onChange={(next) =>
                             updateMassValue(index, 'maxError', next)
                           }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 5, text)
+                          }
                           disabled={disabled}
                         />
                         <EditableCell
@@ -576,6 +661,9 @@ export function StandardFormSections({
                           value={value.drift}
                           onChange={(next) =>
                             updateMassValue(index, 'drift', next)
+                          }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 6, text)
                           }
                           disabled={disabled}
                         />
@@ -585,6 +673,9 @@ export function StandardFormSections({
                           onChange={(next) =>
                             updateMassValue(index, 'buoyancy', next)
                           }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 7, text)
+                          }
                           disabled={disabled}
                         />
                         <EditableCell
@@ -592,6 +683,9 @@ export function StandardFormSections({
                           value={value.coverageFactor}
                           onChange={(next) =>
                             updateMassValue(index, 'coverageFactor', next)
+                          }
+                          onPasteBlock={(text) =>
+                            pasteMassValues(index, 8, text)
                           }
                           disabled={disabled}
                         />
@@ -807,11 +901,14 @@ function NumberField(props: {
 function EditableCell({
   value,
   onChange,
+  onPasteBlock,
   type = 'text',
   disabled,
 }: {
   value: string
   onChange: (value: string) => void
+  /** Given the clipboard text, spread a multi-cell paste across the table. */
+  onPasteBlock?: (text: string) => boolean
   type?: 'text' | 'number'
   disabled?: boolean
 }) {
@@ -823,6 +920,19 @@ function EditableCell({
         inputMode={type === 'number' ? 'decimal' : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onPaste={
+          onPasteBlock
+            ? (event) => {
+                const text = event.clipboardData.getData('text/plain')
+                // A single cell keeps the browser's own paste. Only a block
+                // that spans rows or columns is worth taking over.
+                if (!/[\t;\n]/.test(text)) return
+                if (onPasteBlock(text)) {
+                  event.preventDefault()
+                }
+              }
+            : undefined
+        }
         disabled={disabled}
         className="h-8 min-w-20 tabular-nums"
       />

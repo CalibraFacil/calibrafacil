@@ -1,4 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import type { ActivationStepId } from '@calibra-facil/client-runtime'
+import { OnboardingStepHint } from '@/features/onboarding/step-hint'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -72,7 +74,12 @@ function parseMethodStatus(value: string | null): MethodStatus | '' {
   }
 }
 
-export function MethodsListPage() {
+export function MethodsListPage({
+  onboardingStep,
+}: {
+  /** Set when the laboratory arrived here from the activation checklist. */
+  onboardingStep?: ActivationStepId
+} = {}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { activeOrganizationId, isContextSwitching } =
@@ -152,6 +159,7 @@ export function MethodsListPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingStepHint step={onboardingStep} expected="methodPublished" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -170,8 +178,8 @@ export function MethodsListPage() {
               render={<Link to="/dashboard/methods/from-template" />}
               className={ACTION_BUTTON_CLASS}
             >
-              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A partir de
-              modelo
+              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A partir
+              de modelo
             </Button>
           ) : null}
           <Button
@@ -243,9 +251,7 @@ export function MethodsListPage() {
                   <div className="flex flex-wrap justify-center gap-2">
                     {isCloudRuntime ? (
                       <Button
-                        render={
-                          <Link to="/dashboard/methods/from-template" />
-                        }
+                        render={<Link to="/dashboard/methods/from-template" />}
                       >
                         <HugeiconsIcon
                           icon={PlusSignIcon}

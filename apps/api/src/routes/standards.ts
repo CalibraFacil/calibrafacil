@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
+import { recordActivationMilestone } from "../services/activation-checklist";
 import {
   calibrationJob,
   emailSuppression,
@@ -1035,6 +1036,11 @@ export const standardsRouter = new Hono<{
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
+
+      void recordActivationMilestone(
+        member.organizationId,
+        "referenceStandard",
+      );
 
       return c.json(newStandard, 201);
     },

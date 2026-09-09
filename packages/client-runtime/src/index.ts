@@ -56,6 +56,7 @@ import { createCloudAttachmentsApi } from "./modules/attachments";
 import { createCloudSyncApi } from "./modules/sync";
 import { createBackofficeApi } from "./modules/backoffice";
 import { createBillingApi } from "./modules/billing";
+import { createOnboardingApi } from "./modules/onboarding";
 import { createCalibrationRequestsApi } from "./modules/calibration-requests";
 import { createVisitsApi } from "./modules/visits";
 import { createCapasApi } from "./modules/capa";
@@ -86,6 +87,7 @@ import { createProfileMediaApi } from "./modules/profile-media";
 import { createPublicCheckoutApi } from "./modules/public-checkout";
 import { createPublicInvitationsApi } from "./modules/public-invitations";
 import { createPublicLeadsApi } from "./modules/public-leads";
+import { createPublicSignupApi } from "./modules/public-signup";
 import { createReportsApi } from "./modules/reports";
 import { createSessionsApi } from "./modules/sessions";
 import { createServiceOrdersApi } from "./modules/service-orders";
@@ -125,12 +127,24 @@ export function createCloudApiClient(
           $get(): Promise<Response>;
         };
       };
+      onboarding: {
+        checklist: {
+          $get(): Promise<Response>;
+        };
+      };
       billing: {
         access: {
           $get(): Promise<Response>;
         };
         subscription: {
           $get(): Promise<Response>;
+          $delete(): Promise<Response>;
+        };
+        "self-serve-checkout": {
+          $post(input: {
+            json: unknown;
+            query?: { pagamento?: string };
+          }): Promise<Response>;
         };
         payments: {
           $get(input: {
@@ -796,6 +810,7 @@ export function createCloudApiClient(
     dashboard: createDashboardApi(rawCloudClient),
     units: createUnitsApi(rawCloudClient),
     access: createAccessApi(rawCloudClient),
+    onboarding: createOnboardingApi(rawCloudClient),
     sessions: createSessionsApi(rawCloudClient),
     finance: createFinanceApi(rawCloudClient),
     billing: createBillingApi(rawCloudClient),
@@ -830,6 +845,7 @@ export function createCloudApiClient(
     publicCheckout: createPublicCheckoutApi(rawCloudClient),
     publicInvitations: createPublicInvitationsApi(rawCloudClient),
     publicLeads: createPublicLeadsApi(rawCloudClient),
+    publicSignup: createPublicSignupApi(rawCloudClient),
     labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),

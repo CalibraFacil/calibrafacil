@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { ActivationStepId } from '@calibra-facil/client-runtime'
+import { OnboardingStepHint } from '@/features/onboarding/step-hint'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -65,7 +67,12 @@ import { useSigningCertificatesData } from '@/features/settings/queries'
 
 type Certificate = SigningCertificate
 
-export function CertificatesSettingsPage() {
+export function CertificatesSettingsPage({
+  onboardingStep,
+}: {
+  /** Set when the laboratory arrived here from the activation checklist. */
+  onboardingStep?: ActivationStepId
+} = {}) {
   const queryClient = useQueryClient()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null)
@@ -155,6 +162,7 @@ export function CertificatesSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingStepHint step={onboardingStep} expected="signingCertificate" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-balance text-lg font-semibold tracking-tight">

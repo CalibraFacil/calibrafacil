@@ -1,4 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import type { ActivationStepId } from '@calibra-facil/client-runtime'
+import { OnboardingStepHint } from '@/features/onboarding/step-hint'
 import {
   Building02Icon,
   PlusSignIcon,
@@ -30,7 +32,12 @@ import {
 } from '@/features/customers/components/columns'
 import { clientRouteId } from '@/lib/route-identifiers'
 
-export function ClientsPage() {
+export function ClientsPage({
+  onboardingStep,
+}: {
+  /** Set when the laboratory arrived here from the activation checklist. */
+  onboardingStep?: ActivationStepId
+} = {}) {
   const navigate = useNavigate()
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
@@ -57,6 +64,7 @@ export function ClientsPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingStepHint step={onboardingStep} expected="customer" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">

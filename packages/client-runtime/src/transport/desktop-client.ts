@@ -247,11 +247,25 @@ export function createDesktopApiClient(
         return desktopFinanceAccess();
       },
     },
+    // Self-serve activation is a cloud concern: a desktop install is reached by
+    // a laboratory that already has an account.
+    onboarding: desktopCloudOnlyStubs("onboarding", {
+      action: "Configuração inicial",
+    }),
     sessions: desktopCloudOnlyStubs("sessions", {
       action: "Gerenciamento de sessoes",
     }),
     finance: desktopCloudOnlyStubs("finance", { action: "Financeiro" }),
     billing: {
+      // Contracting and cancelling a plan are cloud actions by definition:
+      // they talk to the payment provider, which the offline shell cannot.
+      ...desktopCloudOnlyStubs("billing", {
+        action: "Assinatura",
+        actionByMethod: {
+          startSelfServeCheckout: "Contratação de plano",
+          cancelSubscription: "Cancelamento de assinatura",
+        },
+      }),
       async getSubscription() {
         return desktopBillingSubscription();
       },
@@ -926,6 +940,10 @@ export function createDesktopApiClient(
     }),
     publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
       action: "Convites",
+    }),
+    // Opening an account happens on the cloud, before any desktop shell exists.
+    publicSignup: desktopCloudOnlyStubs("publicSignup", {
+      action: "Cadastro de laboratório",
     }),
     publicLeads: desktopCloudOnlyStubs("publicLeads", {
       action: "Contato comercial",
@@ -2363,10 +2381,11 @@ function desktopPlanAccess(): PlanAccessResponse {
     entitlements: ["desktop_local"],
     hasFinancial: false,
     hasFinancialModule: false,
+    // Desktop is offline: there is no billing surface to read or manage.
+    canViewBilling: false,
     canManageBilling: false,
     hasApi: false,
     hasCustomDomain: false,
-    hasCustomTemplates: true,
     hasSso: false,
   };
 }

@@ -88,7 +88,9 @@ export const CommercialOfferPreviewInputSchema = z.object({
   dealId: z.string().trim().min(1).optional(),
   billingContactId: z.coerce.number().int().positive().optional(),
   kind: CommercialOfferKindSchema,
-  basePlanId: z.enum(["STANDARD", "PROFESSIONAL", "ENTERPRISE"]).optional(),
+  basePlanId: z
+    .enum(["STANDARD", "PROFESSIONAL", "ADVANCED", "ENTERPRISE"])
+    .optional(),
   billingCycle: z.enum(["MONTHLY", "YEARLY"]).optional(),
   contractTermMonths: z.coerce.number().int().positive().max(120).optional(),
   negotiatedAmount: moneySchema,

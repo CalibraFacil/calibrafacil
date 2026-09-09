@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import {
+  hasPermissionLocally,
   requireLabProtected,
   requireOrgType,
   type AuthVariables,
@@ -34,10 +35,16 @@ export const billingAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
       entitlements: access.entitlements,
       hasFinancial: access.entitlements.includes("financial"),
       hasFinancialModule: access.entitlements.includes("financial"),
-      canManageBilling: true,
+      // The real permissions, not constants, and split because the roles are:
+      // ADMIN holds billing:["read"] without "update". Reporting one flag as
+      // true for everyone put an enabled purchase button in front of a role
+      // whose every mutation the API rejects.
+      canViewBilling: hasPermissionLocally(member.role, { billing: ["read"] }),
+      canManageBilling: hasPermissionLocally(member.role, {
+        billing: ["update"],
+      }),
       hasApi: access.entitlements.includes("api"),
       hasCustomDomain: access.entitlements.includes("custom_domain"),
-      hasCustomTemplates: access.entitlements.includes("custom_templates"),
       hasSso: access.entitlements.includes("sso"),
     });
   },

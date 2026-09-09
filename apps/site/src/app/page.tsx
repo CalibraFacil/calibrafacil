@@ -4,7 +4,10 @@ import { PortalSection } from "@/components/landing/portal-section";
 import { CoverageSection } from "@/components/landing/coverage-section";
 import { TrustSection } from "@/components/landing/trust-section";
 import { VideoSection } from "@/components/landing/video-section";
+import { PricingSection } from "@/components/landing/pricing-section";
+import { PlanIntentProvider } from "@/components/landing/plan-intent";
 import { LeadFormSection } from "@/components/landing/lead-form-section";
+import { PRICING_FAQ, PRICING_TIERS } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/site";
 
 const orgJsonLd = {
@@ -26,6 +29,38 @@ const orgJsonLd = {
       url: SITE_URL,
       description:
         "Gestão de laboratórios de calibração sob a ISO/IEC 17025: clientes, equipamentos, calibrações, cálculo de incerteza, certificados, rastreabilidade, histórico e portal do cliente.",
+      offers: PRICING_TIERS.flatMap((tier) =>
+        tier.price.kind === "fixed"
+          ? [
+              {
+                "@type": "Offer",
+                name: tier.name,
+                description: tier.audience,
+                url: `${SITE_URL}/#planos`,
+                priceCurrency: "BRL",
+                price: tier.price.yearlyMonthly,
+                priceSpecification: {
+                  "@type": "UnitPriceSpecification",
+                  priceCurrency: "BRL",
+                  price: tier.price.yearlyMonthly,
+                  unitCode: "MON",
+                  billingDuration: 12,
+                  billingIncrement: 1,
+                  description:
+                    "Mensalidade equivalente no plano anual, por laboratório.",
+                },
+              },
+            ]
+          : [],
+      ),
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: PRICING_FAQ.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
     },
   ],
 };
@@ -43,7 +78,12 @@ export default function HomePage() {
       <CoverageSection />
       <TrustSection />
       <VideoSection />
-      <LeadFormSection />
+      {/* One provider so a plan clicked in the table lands preselected in the
+          form a few hundred pixels below it. */}
+      <PlanIntentProvider>
+        <PricingSection />
+        <LeadFormSection />
+      </PlanIntentProvider>
     </>
   );
 }

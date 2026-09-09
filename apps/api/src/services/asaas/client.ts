@@ -40,6 +40,44 @@ function calculateBackoff(attempt: number): number {
   return Math.min(exponentialDelay + jitter, MAX_DELAY_MS);
 }
 
+/**
+ * Methods it is safe to send twice.
+ *
+ * Asaas documents no idempotency key for charge creation, so a retried POST
+ * that actually succeeded the first time — response lost to a timeout, a 502
+ * from an intermediate proxy, a dropped socket — creates a SECOND real charge,
+ * checkout or subscription for the same offer. A failed checkout the customer
+ * can retry is recoverable; billing them twice is not, so non-idempotent calls
+ * surface the error instead of being replayed.
+ *
+ * DELETE stays retryable: repeating it converges on the same end state.
+ */
+const REPLAYABLE_METHODS: ReadonlySet<string> = new Set(["GET", "DELETE"]);
+
+/**
+ * How long Asaas says to wait, when it says anything.
+ *
+ * Asaas publishes `RateLimit-Reset` (seconds until the window clears) and the
+ * usual `Retry-After`. Our exponential backoff caps at five seconds, which is
+ * shorter than a real rate window — retrying blind either hammers a limit that
+ * has not reset or gives up on one that was about to. Honour the header when
+ * present, and keep it bounded so a bad value cannot park a request forever.
+ */
+const MAX_HONOURED_RESET_MS = 60_000;
+
+function retryDelayFromHeaders(headers: Headers): number | null {
+  const raw =
+    headers.get("retry-after") ??
+    headers.get("ratelimit-reset") ??
+    headers.get("x-ratelimit-reset");
+  if (!raw) return null;
+
+  const seconds = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+
+  return Math.min(seconds * 1000, MAX_HONOURED_RESET_MS);
+}
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -55,13 +93,17 @@ export class AsaasError extends Error {
   public code: string;
   public details: AsaasErrorResponse;
 
-  constructor(response: AsaasErrorResponse) {
-    const message =
-      response.errors?.[0]?.description || "Erro desconhecido na API Asaas";
-    super(message);
+  constructor(response: AsaasErrorResponse | null | undefined) {
+    // Asaas does not always answer a failure with an { errors: [...] } body —
+    // some rejections arrive with errors null, or with a different shape
+    // entirely. Reading .errors off that threw a TypeError inside the error
+    // path itself, which replaced the provider's real message with a crash in
+    // the constructor and made every such failure look identical.
+    const first = response?.errors?.[0];
+    super(first?.description || "Erro desconhecido na API Asaas");
     this.name = "AsaasError";
-    this.code = response.errors?.[0]?.code || "UNKNOWN";
-    this.details = response;
+    this.code = first?.code || "UNKNOWN";
+    this.details = response ?? { errors: [] };
   }
 }
 
@@ -126,9 +168,12 @@ export class AsaasClient {
           // Check if this is a retryable error
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
+            REPLAYABLE_METHODS.has(method) &&
             attempt < MAX_RETRIES
           ) {
-            const delay = calculateBackoff(attempt);
+            const delay =
+              retryDelayFromHeaders(response.headers) ??
+              calculateBackoff(attempt);
             console.warn(
               `Asaas API returned ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
             );
@@ -138,7 +183,21 @@ export class AsaasClient {
 
           let errorData: AsaasErrorResponse;
           try {
-            errorData = await response.json();
+            const parsed: unknown = await response.json();
+            const errors =
+              parsed && typeof parsed === "object" && "errors" in parsed
+                ? Reflect.get(parsed, "errors")
+                : null;
+            errorData = Array.isArray(errors)
+              ? { errors }
+              : {
+                  errors: [
+                    {
+                      code: `HTTP_${response.status}`,
+                      description: `Asaas respondeu ${response.status}: ${JSON.stringify(parsed).slice(0, 300)}`,
+                    },
+                  ],
+                };
           } catch {
             errorData = {
               errors: [
@@ -168,7 +227,16 @@ export class AsaasClient {
           throw error;
         }
 
-        // Retry on network errors (TypeError from fetch)
+        // A network error on a write says nothing about whether Asaas already
+        // accepted the charge — the response may simply have been lost on the
+        // way back. Asaas has no idempotency key, so a replay would be a second
+        // real charge. Surface the failure and let the caller reconcile.
+        if (!REPLAYABLE_METHODS.has(method)) {
+          throw lastError;
+        }
+
+        // Retry on network errors (TypeError from fetch) — but only where a
+        // duplicate request cannot become a duplicate charge.
         if (attempt < MAX_RETRIES) {
           const delay = calculateBackoff(attempt);
           console.warn(

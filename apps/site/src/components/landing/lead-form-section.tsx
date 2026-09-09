@@ -11,13 +11,16 @@ import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics/track";
 import { cn } from "@/lib/utils";
 import {
+  composeLeadMessage,
   emptyLeadForm,
   parseLeadForm,
   LEADS_ENDPOINT,
   type LeadFormData,
   type LeadFormField,
 } from "@/lib/lead-form";
+import { PRICING_TIERS } from "@/lib/pricing";
 
+import { usePlanIntent } from "./plan-intent";
 import { SectionHeading } from "./surfaces";
 
 const DEMO_URL = "https://cal.com/calibrafacil/30min?user=calibrafacil";
@@ -50,6 +53,11 @@ function captureAttribution() {
 
 export function LeadFormSection() {
   const [form, setForm] = useState<LeadFormData>(emptyLeadForm);
+  // The pricing table sets the intent; an explicit choice here wins over it,
+  // which is why the field is derived instead of copied into state.
+  const { plan: intendedPlan } = usePlanIntent();
+  const [planChoice, setPlanChoice] = useState<string | null>(null);
+  const plan = planChoice ?? intendedPlan;
   const [errors, setErrors] = useState<Partial<Record<LeadFormField, string>>>(
     {},
   );
@@ -73,7 +81,10 @@ export function LeadFormSection() {
     setErrors({});
     setFormError(null);
 
-    const parsed = parseLeadForm(form);
+    const parsed = parseLeadForm({
+      ...form,
+      message: composeLeadMessage(form.message, plan),
+    });
     if (!parsed.success) {
       setErrors(
         Object.fromEntries(
@@ -96,7 +107,10 @@ export function LeadFormSection() {
         }),
       });
       if (!response.ok) throw new Error("request failed");
-      track("lead_submit", { segment: form.segment || "outro" });
+      track("lead_submit", {
+        segment: form.segment || "outro",
+        plan: plan || "nao_informado",
+      });
       setSubmitted(true);
     } catch {
       setFormError(
@@ -224,7 +238,7 @@ export function LeadFormSection() {
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <div className="flex flex-col gap-1.5">
                 <label htmlFor="lead-segment" className="text-sm font-medium">
                   Perfil
                 </label>
@@ -240,6 +254,25 @@ export function LeadFormSection() {
                     Oficina permissionária do Inmetro
                   </option>
                   <option value="outro">Outro</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="lead-plan" className="text-sm font-medium">
+                  Plano de interesse
+                </label>
+                <select
+                  id="lead-plan"
+                  className={cn(controlClass, "h-[38px]")}
+                  value={plan}
+                  onChange={(e) => setPlanChoice(e.target.value)}
+                >
+                  <option value="">Ainda não sei</option>
+                  {PRICING_TIERS.map((tier) => (
+                    <option key={tier.id} value={tier.name}>
+                      {tier.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

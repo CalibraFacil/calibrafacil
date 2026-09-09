@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 import { SsoSignInForm } from '@/components/sso-sign-in-form'
-import { SignInShaderPanel } from '@/features/auth/components/sign-in-shader-panel'
+import { AuthShaderPanel } from '@/features/auth/components/auth-shader-panel'
 
 type SignInScene = 'credentials' | 'sso'
 
@@ -66,7 +66,7 @@ export function SignInPage({ redirect }: SignInPageProps) {
         animate={{ x: isSso ? '0%' : '100%' }}
         transition={sceneSpring}
       >
-        <SignInShaderPanel />
+        <AuthShaderPanel />
       </motion.div>
     </div>
   )

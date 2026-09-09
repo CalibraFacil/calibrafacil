@@ -764,6 +764,13 @@
       "when": 1784563607000,
       "tag": "0108_fixed_layout_issuance",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1784563608000,
+      "tag": "0109_activation_milestones",
+      "breakpoints": true
     }
   ]
 }

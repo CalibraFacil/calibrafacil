@@ -32,6 +32,7 @@ import {
   collectMassCompositionStandardIds,
   type MassCompositionOption,
 } from '@/components/method-runtime/mass-composition-utils'
+import { parseClipboardMatrix } from '@/lib/clipboard-table'
 import type { StandardCertifiedValueOption } from '@/components/method-runtime/standard-value-utils'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
@@ -538,34 +539,11 @@ export function parsePastedReadings({
     return { ok: false, error: 'Coluna de destino inválida para a colagem.' }
   }
 
-  const normalizedText = text.replace(/\r\n?/g, '\n')
-  const lines = normalizedText.split('\n')
-  while (lines.length > 0 && lines[lines.length - 1] === '') {
-    lines.pop()
+  const clipboard = parseClipboardMatrix(text)
+  if (!clipboard.ok) {
+    return { ok: false, error: clipboard.error }
   }
-
-  // `every` already returns true for an empty array, so this also covers the
-  // "no lines at all" case.
-  if (lines.every((line) => line.trim() === '')) {
-    return { ok: false, error: 'Nada para colar.' }
-  }
-
-  const delimiter = lines.some((line) => line.includes('\t'))
-    ? '\t'
-    : lines.some((line) => line.includes(';'))
-      ? ';'
-      : null
-
-  const matrix = lines.map((line) => (delimiter ? line.split(delimiter) : [line]))
-
-  const width = matrix[0].length
-  if (!matrix.every((cells) => cells.length === width)) {
-    return {
-      ok: false,
-      error:
-        'O conteúdo colado tem um número irregular de colunas. Verifique a seleção na planilha.',
-    }
-  }
+  const { rows: matrix, width } = clipboard
 
   if (startColumnIndex + width > columns.length) {
     return {
@@ -575,7 +553,10 @@ export function parsePastedReadings({
     }
   }
 
-  const targetColumns = columns.slice(startColumnIndex, startColumnIndex + width)
+  const targetColumns = columns.slice(
+    startColumnIndex,
+    startColumnIndex + width,
+  )
 
   const blockedColumn = targetColumns.find(isBulkPasteBlockedColumn)
   if (blockedColumn) {
@@ -637,7 +618,10 @@ export function applyPastedReadings({
 }): Array<Record<string, unknown>> {
   const blankRow = (): Record<string, unknown> =>
     Object.fromEntries(
-      columns.map((column) => [column.key, column.type === 'number' ? null : '']),
+      columns.map((column) => [
+        column.key,
+        column.type === 'number' ? null : '',
+      ]),
     )
 
   const totalLength = Math.max(

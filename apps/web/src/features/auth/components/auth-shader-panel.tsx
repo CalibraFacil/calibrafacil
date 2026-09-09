@@ -11,7 +11,23 @@ const BRAND_MESH_COLORS = [
   '#F5F7FF',
 ]
 
-export function SignInShaderPanel() {
+type AuthShaderPanelProps = {
+  /** Small caps line above the headline. */
+  eyebrow?: string
+  title?: string
+  description?: string
+}
+
+/**
+ * The brand panel that fills half of the authentication screens. Sign-in and
+ * sign-up share it so the two pages read as one surface; only the copy over
+ * the mesh changes, which is why the text is props rather than hardcoded.
+ */
+export function AuthShaderPanel({
+  eyebrow = 'ISO/IEC 17025 · GUM · Certificados digitais',
+  title = 'Calibração sem complicação.',
+  description = 'Fluxos de calibração, cálculo de incertezas e emissão de certificados ISO/IEC 17025 em uma única plataforma.',
+}: AuthShaderPanelProps = {}) {
   const prefersReducedMotion = useReducedMotion()
 
   return (
@@ -30,14 +46,13 @@ export function SignInShaderPanel() {
 
       <div className="relative z-10 flex flex-col gap-4 p-10 text-white">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-white/70">
-          ISO/IEC 17025 · GUM · Certificados digitais
+          {eyebrow}
         </p>
         <h2 className="max-w-md text-3xl font-semibold leading-tight text-balance">
-          Calibração sem complicação.
+          {title}
         </h2>
         <p className="max-w-md text-sm text-white/80 text-pretty">
-          Fluxos de calibração, cálculo de incertezas e emissão de certificados
-          ISO/IEC 17025 em uma única plataforma.
+          {description}
         </p>
       </div>
     </div>

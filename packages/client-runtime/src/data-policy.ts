@@ -79,6 +79,10 @@ export const calibraApiPolicyRegistry = {
     getPlanAccess: "cloud-only",
     getFinanceAccess: "cloud-only",
   },
+  onboarding: {
+    // Derived from cloud domain state; desktop has no self-serve activation.
+    getChecklist: "cloud-only",
+  },
   sessions: {
     revoke: "cloud-only",
   },
@@ -120,6 +124,8 @@ export const calibraApiPolicyRegistry = {
   billing: {
     getSubscription: "cloud-only",
     listPayments: "cloud-only",
+    startSelfServeCheckout: "cloud-only",
+    cancelSubscription: "cloud-only",
   },
   backoffice: {
     getAccess: "cloud-only",
@@ -400,6 +406,9 @@ export const calibraApiPolicyRegistry = {
   publicCheckout: {
     getSnapshot: "cloud-only",
     getStatus: "cloud-only",
+    start: "cloud-only",
+  },
+  publicSignup: {
     start: "cloud-only",
   },
   publicLeads: {

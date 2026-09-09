@@ -48,6 +48,7 @@ function toBasePlanId(value: unknown) {
   switch (value) {
     case "STANDARD":
     case "PROFESSIONAL":
+    case "ADVANCED":
     case "ENTERPRISE":
       return value;
     default:
@@ -102,8 +103,7 @@ export async function reissueCommercialOffer(
         ? terms.billingContactId
         : undefined,
     kind: current.kind,
-    basePlanId:
-      input.overrides.basePlanId ?? toBasePlanId(current.basePlanId),
+    basePlanId: input.overrides.basePlanId ?? toBasePlanId(current.basePlanId),
     billingCycle:
       input.overrides.billingCycle ?? toBillingCycle(current.billingCycle),
     contractTermMonths:

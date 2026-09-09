@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
+import { recordActivationMilestone } from "../services/activation-checklist";
 import {
   calibrationMethod,
   methodAuditLog,
@@ -42,7 +43,6 @@ import {
   type AuthVariables,
   requireRole,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import { alias } from "drizzle-orm/pg-core";
 import {
   buildMethodRouteIdentifier,
@@ -2013,7 +2013,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/request-approval",
     ...withLabPermission({ template: ["update"] }),
-    requireFeature("approval_workflow"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2150,7 +2149,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/technical-review",
     ...withLabPermission({ template: ["publish"] }),
-    requireFeature("approval_workflow"),
     requireRole(["admin"]),
     async (c) => {
       const member = c.get("member");
@@ -2221,7 +2219,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/quality-approve",
     ...withLabPermission({ template: ["publish"] }),
-    requireFeature("approval_workflow"),
     requireRole(["owner"]),
     async (c) => {
       const member = c.get("member");
@@ -2404,7 +2401,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/return-to-draft",
     ...withLabPermission({ template: ["update"] }),
-    requireFeature("approval_workflow"),
     requireRole(["admin", "owner"]),
     zValidator("json", ReturnMethodToDraftSchema),
     async (c) => {
@@ -2486,7 +2482,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/publish",
     ...withLabPermission({ template: ["publish"] }),
-    requireFeature("approval_workflow"),
     requireRole(["owner"]),
     async (c) => {
       const member = c.get("member");
@@ -2657,6 +2652,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 
+        void recordActivationMilestone(
+          member.organizationId,
+          "methodPublished",
+        );
+
         return c.json(published);
       } catch (error) {
         console.error("Error publishing method:", error);
@@ -2664,7 +2664,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       }
     },
   )
-
 
   // =========================================================================
   // POST /:id/archive - Archive a PUBLISHED method
@@ -2992,7 +2991,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:id/audit",
     ...withLabPermission({ template: ["read"] }),
-    requireFeature("advanced_audit_trail"),
     async (c) => {
       const member = c.get("member");
       const id = await resolveMethodRouteId(

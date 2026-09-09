@@ -4,6 +4,7 @@ import { plansRouter } from "./plans";
 import { billingAccessRouter } from "./access";
 import { subscriptionRouter } from "./subscription";
 import { paymentsRouter } from "./payments";
+import { selfServeCheckoutRouter } from "./self-serve-checkout";
 
 // =============================================================================
 // BILLING ROUTER - Aggregates all billing-related routes
@@ -13,7 +14,8 @@ export const billingRouter = new Hono<{ Variables: AuthVariables }>()
   .route("/plans", plansRouter)
   .route("/access", billingAccessRouter)
   .route("/subscription", subscriptionRouter)
-  .route("/payments", paymentsRouter);
+  .route("/payments", paymentsRouter)
+  .route("/self-serve-checkout", selfServeCheckoutRouter);
 
 // Re-export helpers
 export { getOrganizationUsage } from "./subscription";

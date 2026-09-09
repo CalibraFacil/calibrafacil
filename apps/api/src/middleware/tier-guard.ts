@@ -9,12 +9,14 @@ import {
   organization,
 } from "@calibra-facil/db/schema";
 import { eq, and, gte, count, sql } from "drizzle-orm";
+import { decidePlanLimit } from "./plan-limit-grace";
 import {
   ENTITLEMENT_METADATA,
   getPlan,
   getEffectivePlanLimits,
   hasFeature,
   isSubscriptionActive,
+  subscriptionGrantsAccess,
   isValidPlanId,
   type PlanId,
   type FeatureFlag,
@@ -68,7 +70,14 @@ export async function assertPlanLimit(
   const status = sub?.status || "TRIAL";
 
   // Check if subscription allows access
-  if (sub && !isSubscriptionActive(status) && status !== "PAST_DUE") {
+  if (
+    sub &&
+    !subscriptionGrantsAccess({
+      status,
+      currentPeriodEnd: sub.currentPeriodEnd,
+    }) &&
+    status !== "PAST_DUE"
+  ) {
     throw new HTTPException(402, {
       message: "Assinatura inativa. Ative um plano para continuar.",
       cause: { code: "SUBSCRIPTION_INACTIVE", planId, status },
@@ -90,17 +99,31 @@ export async function assertPlanLimit(
     where: eq(organization.id, memberData.organizationId),
   });
 
-  const limit = getEffectivePlanLimits(planId, currentOrganization?.createdAt)[
-    resource
-  ];
-
   // Get current usage
   const usage = await getResourceUsage(memberData.organizationId, resource, db);
   const projectedUsage = usage + requestedCount;
 
-  // Check if limit exceeded
-  if (projectedUsage > limit) {
+  const decision = decidePlanLimit({
+    resource,
+    planId,
+    organizationCreatedAt: currentOrganization?.createdAt,
+    usage,
+    requestedCount,
+  });
+
+  // Past the ceiling but inside the grace band: let the work through and say
+  // so in the response, rather than stopping a calibration mid-month.
+  if (decision.outcome === "grace") {
+    c.header("X-Plan-Limit-Warning", "grace");
+    c.header(
+      "X-Plan-Limit-Message",
+      `Você passou do limite de ${getResourceLabel(resource)} do plano (${projectedUsage}/${decision.limit}). Seguimos liberando até ${decision.ceiling} — depois disso é preciso trocar de plano.`,
+    );
+  }
+
+  if (decision.outcome === "blocked") {
     const plan = getPlan(planId);
+    const limit = decision.limit;
     const message =
       requestedCount > 1
         ? `Limite de ${getResourceLabel(resource)} seria excedido (${projectedUsage}/${limit}) nesta operacao. Faca upgrade para o proximo plano.`
@@ -115,6 +138,7 @@ export async function assertPlanLimit(
         requested: requestedCount,
         projected: projectedUsage,
         limit,
+        graceCeiling: decision.ceiling,
         planId,
         planName: plan.name,
       },
@@ -122,9 +146,13 @@ export async function assertPlanLimit(
   }
 
   // Add usage info to response headers (for UI display)
+  const effectiveLimit = getEffectivePlanLimits(
+    planId,
+    currentOrganization?.createdAt,
+  )[resource];
   c.header("X-Plan-Id", planId);
   c.header(`X-Usage-${resource}`, String(usage));
-  c.header(`X-Limit-${resource}`, String(limit));
+  c.header(`X-Limit-${resource}`, String(effectiveLimit));
 }
 
 export function requirePlanLimit(resource: LimitResource) {
@@ -177,7 +205,11 @@ export async function assertPlanLimitInTransaction(
   );
 
   const [activeSubscription] = await executor
-    .select({ planId: subscription.planId, status: subscription.status })
+    .select({
+      planId: subscription.planId,
+      status: subscription.status,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+    })
     .from(subscription)
     .where(eq(subscription.organizationId, organizationId))
     .limit(1);
@@ -187,7 +219,10 @@ export async function assertPlanLimitInTransaction(
 
   if (
     activeSubscription &&
-    !isSubscriptionActive(status) &&
+    !subscriptionGrantsAccess({
+      status,
+      currentPeriodEnd: activeSubscription.currentPeriodEnd,
+    }) &&
     status !== "PAST_DUE"
   ) {
     throw new HTTPException(402, {
@@ -202,14 +237,21 @@ export async function assertPlanLimitInTransaction(
     .where(eq(organization.id, organizationId))
     .limit(1);
 
-  const limit = getEffectivePlanLimits(planId, currentOrganization?.createdAt)[
-    resource
-  ];
-
   const usage = await getResourceUsage(organizationId, resource, executor);
   const projectedUsage = usage + requestedCount;
 
-  if (projectedUsage > limit) {
+  // Same decision the pre-check made, so the grace band cannot be granted
+  // outside the transaction and then refused inside it.
+  const decision = decidePlanLimit({
+    resource,
+    planId,
+    organizationCreatedAt: currentOrganization?.createdAt,
+    usage,
+    requestedCount,
+  });
+
+  if (decision.outcome === "blocked") {
+    const limit = decision.limit;
     const plan = getPlan(planId);
     const message =
       requestedCount > 1
@@ -239,8 +281,8 @@ export async function assertPlanLimitInTransaction(
  * // In portal.ts - require portal feature
  * .get("/", ...withLabPermission({ portal: ["read"] }), requireFeature("portal"), handler)
  *
- * // In math routes - require math_engine feature
- * .post("/calculate", requireFeature("math_engine"), handler)
+ * // In finance routes - require the financial module
+ * .post("/documents", requireFeature("financial"), handler)
  */
 export function requireFeature(feature: FeatureFlag) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
@@ -254,7 +296,14 @@ export function requireFeature(feature: FeatureFlag) {
     const status = sub?.status || "TRIAL";
 
     // Check if subscription allows access
-    if (sub && !isSubscriptionActive(status) && status !== "PAST_DUE") {
+    if (
+      sub &&
+      !subscriptionGrantsAccess({
+        status,
+        currentPeriodEnd: sub.currentPeriodEnd,
+      }) &&
+      status !== "PAST_DUE"
+    ) {
       throw new HTTPException(402, {
         message: "Assinatura inativa. Ative um plano para continuar.",
         cause: { code: "SUBSCRIPTION_INACTIVE", planId, status },
@@ -290,6 +339,8 @@ export function requireFeature(feature: FeatureFlag) {
 interface SubscriptionInfo {
   planId: PlanId;
   status: SubscriptionStatus;
+  /** Needed to honour a period the customer already paid for after cancelling. */
+  currentPeriodEnd: Date | null;
 }
 
 /**
@@ -307,6 +358,7 @@ async function getSubscription(
   return {
     planId: toPlanId(sub.planId),
     status: toSubscriptionStatus(sub.status),
+    currentPeriodEnd: sub.currentPeriodEnd ?? null,
   };
 }
 

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
+import { getOrganizationPlanAccess } from "../lib/organization-plan";
+import { recordActivationMilestone } from "../services/activation-checklist";
 import {
   customer,
   customerGroup,
@@ -195,9 +197,18 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           })
           .returning();
 
-        // Step 3: If email provided, create invitation for client portal access
+        // Step 3: If email provided, create invitation for client portal access.
+        // Gated on the plan: the portal is Profissional and up, and this path
+        // used to hand it out silently to anyone who typed a customer e-mail,
+        // including a FREE self-serve account that had not paid for anything.
+        // The explicit invite endpoint has always checked; this one did not.
+        const planAccess = await getOrganizationPlanAccess(
+          memberData.organizationId,
+        );
+        const portalAllowed = planAccess.entitlements.includes("portal");
+
         let invitationId: string | null = null;
-        if (input.email && input.email.trim() !== "") {
+        if (portalAllowed && input.email && input.email.trim() !== "") {
           try {
             const inviteResult = await createPortalInvitationAsService({
               email: input.email,
@@ -210,6 +221,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             console.error("Failed to send invitation:", inviteError);
           }
         }
+
+        void recordActivationMilestone(memberData.organizationId, "customer");
 
         return c.json({ ...newCustomer, invitationId }, 201);
       } catch (error) {
@@ -799,7 +812,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/invitations",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("portal"), // Requires PROFESSIONAL+ plan
+    requireFeature("portal"), // Professional+ — Essencial has no portal
     zValidator("json", CreatePortalInvitationSchema),
     async (c) => {
       const { email, role } = c.req.valid("json");

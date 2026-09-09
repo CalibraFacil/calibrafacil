@@ -134,6 +134,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getChecklist",
+          "namespace": "onboarding",
+          "policy": "cloud-only",
+        },
+        {
           "method": "revoke",
           "namespace": "sessions",
           "policy": "cloud-only",
@@ -310,6 +315,16 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "listPayments",
+          "namespace": "billing",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "startSelfServeCheckout",
+          "namespace": "billing",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "cancelSubscription",
           "namespace": "billing",
           "policy": "cloud-only",
         },
@@ -1399,6 +1414,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "start",
+          "namespace": "publicSignup",
+          "policy": "cloud-only",
+        },
+        {
           "method": "create",
           "namespace": "publicLeads",
           "policy": "cloud-only",
@@ -2207,7 +2227,6 @@ describe("access runtime adapter", () => {
           canManageBilling: true,
           hasApi: true,
           hasCustomDomain: true,
-          hasCustomTemplates: true,
           hasSso: false,
         });
       }
@@ -2255,7 +2274,6 @@ describe("access runtime adapter", () => {
 
     await expect(client.access.getPlanAccess()).resolves.toMatchObject({
       planId: "desktop-local",
-      hasCustomTemplates: true,
       hasFinancialModule: false,
     });
     await expect(client.access.getFinanceAccess()).resolves.toMatchObject({

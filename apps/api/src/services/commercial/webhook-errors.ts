@@ -88,7 +88,10 @@ export function isTransientWebhookError(error: unknown): boolean {
 
   // undici/fetch surfaces a dropped connection as a bare TypeError("fetch failed")
   // with no `code` — treat that specific network failure as transient.
-  if (error instanceof TypeError && /fetch failed|network/i.test(error.message)) {
+  if (
+    error instanceof TypeError &&
+    /fetch failed|network/i.test(error.message)
+  ) {
     return true;
   }
 

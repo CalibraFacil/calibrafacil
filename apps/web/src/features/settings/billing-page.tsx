@@ -31,15 +31,19 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { usePlanAccess } from '@/hooks/use-plan-access'
+import { PlanPicker } from '@/features/settings/plan-picker'
+import { PixIcon } from '@/components/payment-brand-icons'
 import {
   useBillingPaymentsData,
   useBillingSubscriptionData,
 } from '@/features/settings/queries'
 import {
+  checkSelfServeEligibility,
   ENTITLEMENT_METADATA,
   formatPrice,
   getEnabledEntitlements,
   isValidPlanId,
+  type BillingCycle,
 } from '@calibra-facil/shared'
 
 // Status badge variants
@@ -72,7 +76,16 @@ const PAYMENT_STATUS: Record<
   DELETED: { label: 'Cancelado', variant: 'outline' },
 }
 
-export function BillingSettingsPage() {
+type BillingSettingsPageProps = {
+  /** Plan chosen on the pricing page, carried here through the claim link. */
+  suggestedPlanId?: string
+  suggestedCycle?: BillingCycle
+}
+
+export function BillingSettingsPage({
+  suggestedPlanId,
+  suggestedCycle,
+}: BillingSettingsPageProps = {}) {
   const accessQuery = usePlanAccess()
   const accessReady = accessQuery.isSuccess && !!accessQuery.data
   const accessPlanId =
@@ -84,16 +97,21 @@ export function BillingSettingsPage() {
       accessQuery.data.hasFinancial ??
       false)
     : false
+  // Two different permissions. ADMIN may read billing but not change it, so
+  // reading gates the data and updating gates every control that mutates.
   const canManageBilling = accessReady
-    ? (accessQuery.data.canManageBilling ?? true)
+    ? (accessQuery.data.canManageBilling ?? false)
+    : false
+  const canViewBilling = accessReady
+    ? (accessQuery.data.canViewBilling ?? canManageBilling)
     : false
 
   const subscriptionQuery = useBillingSubscriptionData({
-    enabled: accessReady && canManageBilling,
+    enabled: accessReady && canViewBilling,
   })
 
   const paymentsQuery = useBillingPaymentsData({
-    enabled: accessReady && canManageBilling,
+    enabled: accessReady && canViewBilling,
   })
 
   const { subscription, plan, usage, limits } = subscriptionQuery.data || {
@@ -119,6 +137,16 @@ export function BillingSettingsPage() {
   const enabledEntitlements = selectedPlanId
     ? getEnabledEntitlements(selectedPlanId)
     : []
+
+  // The server refuses a self-serve checkout while a paid plan is still
+  // billing, because replacing a live Asaas subscription is not implemented.
+  // Asking the same question here keeps the page from offering a purchase that
+  // can only come back as a 409.
+  const selfServeEligibility = checkSelfServeEligibility(
+    subscription
+      ? { planId: subscription.planId, status: subscription.status }
+      : null,
+  )
 
   const statusBadge =
     STATUS_BADGES[subscription?.status || 'TRIAL'] || STATUS_BADGES.TRIAL
@@ -148,16 +176,34 @@ export function BillingSettingsPage() {
           <CardContent className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="font-medium">
-                A contratação é conduzida pelo time comercial da CalibraFácil
+                O módulo financeiro entra a partir do plano Profissional
               </p>
               <p className="text-sm text-muted-foreground">
-                Durante a beta, mudanças de plano, condições negociadas e novas
-                cobranças são emitidas exclusivamente pelo backoffice interno.
+                Você pode contratar o plano abaixo, sem passar por proposta.
+                Condições negociadas e contratos Enterprise seguem com o time
+                comercial.
               </p>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {canManageBilling && selfServeEligibility.ok ? (
+        <PlanPicker
+          currentPlanId={subscription?.planId}
+          suggestedPlanId={suggestedPlanId}
+          suggestedCycle={suggestedCycle}
+        />
+      ) : null}
+
+      {canManageBilling && !selfServeEligibility.ok ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Trocar de plano</CardTitle>
+            <CardDescription>{selfServeEligibility.message}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
 
       {/* Current Plan */}
       <Card>
@@ -284,7 +330,7 @@ export function BillingSettingsPage() {
         </CardContent>
       </Card>
 
-      {canManageBilling && (
+      {canViewBilling && (
         <Card>
           <CardHeader>
             <CardTitle>Histórico de Pagamentos</CardTitle>
@@ -338,7 +384,12 @@ export function BillingSettingsPage() {
                         </TableCell>
                         <TableCell>{formatPrice(payment.amount)}</TableCell>
                         <TableCell>
-                          {getPaymentMethodLabel(payment.paymentMethod)}
+                          <span className="inline-flex items-center gap-1.5">
+                            {payment.paymentMethod === 'PIX' ? (
+                              <PixIcon className="size-5" />
+                            ) : null}
+                            {getPaymentMethodLabel(payment.paymentMethod)}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <Badge variant={paymentStatus.variant}>
@@ -404,7 +455,7 @@ function getFeatureLabel(feature: string): string {
 function getPaymentMethodLabel(method: string): string {
   const labels: Record<string, string> = {
     CREDIT_CARD: 'Cartao',
-    PIX: 'PIX',
+    PIX: 'Pix',
     BOLETO: 'Boleto',
   }
   return labels[method] || method

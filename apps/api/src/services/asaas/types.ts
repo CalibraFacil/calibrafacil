@@ -38,8 +38,11 @@ export type AsaasPaymentStatus =
   | "AWAITING_RISK_ANALYSIS"
   | "CONFIRMED"
   | "RECEIVED"
+  // Staff marked the charge as settled outside Asaas. Paid, like RECEIVED.
+  | "RECEIVED_IN_CASH"
   | "OVERDUE"
   | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
   | "REFUND_REQUESTED"
   | "CHARGEBACK_REQUESTED"
   | "CHARGEBACK_DISPUTE"
@@ -311,6 +314,8 @@ export type AsaasWebhookEventType =
   | "PAYMENT_DUNNING_RECEIVED"
   | "PAYMENT_DUNNING_REQUESTED"
   | "PAYMENT_BANK_SLIP_VIEWED"
+  | "PAYMENT_BANK_SLIP_CANCELLED"
+  | "PAYMENT_REFUND_DENIED"
   | "PAYMENT_CHECKOUT_VIEWED"
   // Checkout events
   | "CHECKOUT_CREATED"

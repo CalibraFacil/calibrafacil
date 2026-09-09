@@ -6,12 +6,16 @@ import {
   commercialOfferItem,
   organization,
   paymentRecord,
+  subscription,
 } from "@calibra-facil/db/schema";
 import type {
   CommercialPaymentMethod,
   CommercialPublicCheckoutState,
 } from "@calibra-facil/shared";
-import { getCommercialRenewalMode } from "@calibra-facil/shared";
+import {
+  checkSelfServeEligibility,
+  getCommercialRenewalMode,
+} from "@calibra-facil/shared";
 import { desc, eq, sql } from "drizzle-orm";
 import {
   createCheckout,
@@ -27,10 +31,15 @@ import {
   buildOfferDescription,
   createCommercialExternalReference,
   hashCommercialPublicToken,
+  insertOfferHistory,
   insertPaymentStatusHistoryEntry,
+  isPaidPaymentStatus,
+  invalidateCommercialPublicToken,
   resolveBillingType,
 } from "./common";
 import type { CommercialOfferPreviewResult } from "./preview";
+
+import { isSelfServeOffer } from "./self-serve-offer";
 
 type OfferRow = typeof commercialOffer.$inferSelect;
 type OfferItemRow = typeof commercialOfferItem.$inferSelect;
@@ -57,9 +66,12 @@ type OfferContext = {
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
-const PAID_PAYMENT_STATUSES = new Set(["CONFIRMED", "RECEIVED"]);
+// RECEIVED_IN_CASH is a settlement staff recorded outside Asaas. Leaving it
+// out made a paid customer land back on "Pix gerado" — the worst direction to
+// fail in, since it invites a second payment.
 const REFUNDED_PAYMENT_STATUSES = new Set([
   "REFUNDED",
+  "PARTIALLY_REFUNDED",
   "REFUND_REQUESTED",
   "CHARGEBACK_REQUESTED",
   "CHARGEBACK_DISPUTE",
@@ -113,6 +125,10 @@ type ValidPublicCheckoutSnapshotResponse = {
     id: string;
     status: string;
     kind: OfferRow["kind"];
+    /** Plan and cycle behind a plan-bearing offer, so the page can say what
+     *  is being contracted and when it renews instead of only a label. */
+    basePlanId: OfferRow["basePlanId"];
+    billingCycle: OfferRow["billingCycle"];
     paymentMethod: CommercialPaymentMethod;
     providerMode: OfferRow["providerMode"];
     currency: string;
@@ -227,6 +243,7 @@ function paymentMethodsFromUnknown(value: unknown): CommercialPaymentMethod[] {
 function basePlanIdFromUnknown(value: unknown) {
   return value === "STANDARD" ||
     value === "PROFESSIONAL" ||
+    value === "ADVANCED" ||
     value === "ENTERPRISE"
     ? value
     : undefined;
@@ -236,11 +253,110 @@ function billingCycleFromUnknown(value: unknown) {
   return value === "MONTHLY" || value === "YEARLY" ? value : undefined;
 }
 
-function getLockedOfferId(lockedRows: unknown) {
-  const rows =
-    typeof lockedRows === "object" && lockedRows !== null
+/**
+ * `db.execute()` answers in two shapes depending on the driver: postgres-js
+ * (Bun/Node — local dev and the Vercel API) returns the rows as a bare array,
+ * the Neon serverless driver (Cloudflare Workers) wraps them in `{ rows }`.
+ * Reading `.rows` off an array yields undefined, which used to turn every
+ * "start" outside Workers into INVALID_TOKEN.
+ */
+export /**
+ * A Pix code that Asaas will no longer accept.
+ *
+ * Dynamic Pix codes expire (same day at 23:59 for accounts without a
+ * registered Pix key, up to twelve months after the due date with one). Once
+ * past that instant the payload is dead, and replaying the cached artifact —
+ * which is what "resume" used to do unconditionally — left the customer
+ * staring at a QR code the bank rejects, with no way to ask for another.
+ */
+function pixPresentationIsExpired(
+  presentation: PublicCheckoutSnapshotResponse["presentation"],
+  now: Date,
+): boolean {
+  if (!presentation || presentation.type !== "PIX") return false;
+
+  const expiresAt = presentation.pix.expirationDate;
+  if (!expiresAt) return false;
+
+  const parsed = new Date(expiresAt.replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  return parsed.getTime() <= now.getTime();
+}
+
+/**
+ * Asks Asaas for a new QR code on a charge whose previous one expired, and
+ * stores it. The docs are explicit that the code must be retrieved again
+ * whenever the charge changes; this is the same GET, not a new charge, so no
+ * second payment can appear.
+ *
+ * Returns null when Asaas hands back something still expired — the caller then
+ * falls through to the normal states, and the page keeps telling the customer
+ * the code is dead rather than pretending otherwise.
+ */
+async function refreshPixQrCode(
+  executor: CommercialExecutor,
+  payment: PaymentRecordRow,
+  meta: PublicRequestMeta,
+  snapshot: PublicCheckoutSnapshotResponse,
+): Promise<PublicCheckoutStartResponse | null> {
+  if (!payment.providerPaymentId) return null;
+
+  const pixQrCode = await getPaymentPixQrCode(payment.providerPaymentId);
+  const qrCodeImage = normalizePixImage(pixQrCode.encodedImage);
+  const expirationDate = pixQrCode.expirationDate ?? null;
+
+  const stillExpired =
+    expirationDate !== null &&
+    new Date(expirationDate.replace(" ", "T")).getTime() <= Date.now();
+  if (stillExpired) return null;
+
+  const providerSnapshot = recordFromUnknown(payment.providerSnapshot);
+  await executor
+    .update(paymentRecord)
+    .set({
+      pixQrCodeUrl: qrCodeImage,
+      pixPayload: pixQrCode.payload,
+      providerSnapshot: {
+        ...providerSnapshot,
+        pixTransaction: {
+          ...recordFromUnknown(providerSnapshot.pixTransaction),
+          qrCode: qrCodeImage,
+          qrCodePayload: pixQrCode.payload,
+          expirationDate,
+        },
+      },
+    })
+    .where(eq(paymentRecord.id, payment.id));
+
+  await recordOfferAccess(
+    executor,
+    payment.commercialOfferId,
+    meta,
+    "PAYMENT_RESUMED",
+    "PIX_READY",
+    false,
+    { pixQrCodeRefreshed: true },
+  );
+
+  return {
+    type: "PIX_READY",
+    state: "PIX_READY",
+    paymentId: payment.id,
+    pix: {
+      qrCodeImage,
+      payload: pixQrCode.payload,
+      expirationDate,
+    },
+  };
+}
+
+export function getLockedOfferId(lockedRows: unknown) {
+  const rows = Array.isArray(lockedRows)
+    ? lockedRows
+    : typeof lockedRows === "object" && lockedRows !== null
       ? Reflect.get(lockedRows, "rows")
-      : lockedRows;
+      : undefined;
 
   if (!Array.isArray(rows)) {
     return undefined;
@@ -302,7 +418,7 @@ export function resolveCommercialPublicState(
   }
 
   if (latestPayment) {
-    if (PAID_PAYMENT_STATUSES.has(latestPayment.status)) {
+    if (isPaidPaymentStatus(latestPayment.status)) {
       return "PAID";
     }
 
@@ -457,6 +573,8 @@ function serializeSnapshot(
       id: context.offer.id,
       status: context.offer.status,
       kind: context.offer.kind,
+      basePlanId: context.offer.basePlanId,
+      billingCycle: context.offer.billingCycle,
       paymentMethod: getPaymentMethod(context.offer),
       providerMode: context.offer.providerMode,
       currency: context.offer.currency,
@@ -1073,6 +1191,22 @@ export async function startCommercialPublicCheckout(params: {
       return coerceStartResponse(currentSnapshot);
     }
 
+    // An expired Pix code is refreshed against the SAME charge. Falling
+    // through to create another artifact would leave two open charges for one
+    // offer, and the customer could pay both.
+    if (
+      pixPresentationIsExpired(currentSnapshot.presentation, new Date()) &&
+      context.latestPayment?.providerPaymentId
+    ) {
+      const refreshed = await refreshPixQrCode(
+        tx,
+        context.latestPayment,
+        params.meta,
+        currentSnapshot,
+      );
+      if (refreshed) return refreshed;
+    }
+
     if (
       currentSnapshot.state === "PIX_READY" ||
       currentSnapshot.state === "BOLETO_READY" ||
@@ -1098,6 +1232,41 @@ export async function startCommercialPublicCheckout(params: {
       currentSnapshot.state === "REFUNDED"
     ) {
       throw new Error(`TERMINAL_${currentSnapshot.state}`);
+    }
+
+    // A self-serve link the customer left open can still be clicked after a
+    // different one was paid. Creating the artifact would open a second
+    // recurrence at Asaas and overwrite the provider id we track, so the first
+    // would keep charging where nothing can see it. Operator-issued offers are
+    // untouched: a plan change prepared by a human is reconciled by that human.
+    if (
+      context.offer.kind === "PLAN_RECURRING" &&
+      isSelfServeOffer(context.offer)
+    ) {
+      const currentSubscription = await tx.query.subscription.findFirst({
+        where: eq(subscription.organizationId, context.offer.organizationId),
+      });
+
+      if (!checkSelfServeEligibility(currentSubscription).ok) {
+        // Retire the link as well as refusing it: nothing was charged against
+        // this offer, and leaving it PENDING_PAYMENT would just invite the
+        // customer to click again.
+        await tx
+          .update(commercialOffer)
+          .set({ status: "SUPERSEDED" })
+          .where(eq(commercialOffer.id, context.offer.id));
+        await invalidateCommercialPublicToken(tx, context.offer.id);
+        await insertOfferHistory(tx, {
+          offerId: context.offer.id,
+          fromStatus: context.offer.status,
+          toStatus: "SUPERSEDED",
+          source: "USER",
+          reason:
+            "Outra assinatura self-serve já está ativa para este laboratório.",
+        });
+
+        throw new Error("TERMINAL_REVOKED");
+      }
     }
 
     const createdArtifact = await createLazyArtifactForOffer({

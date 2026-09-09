@@ -57,6 +57,7 @@ import {
   requirePlatformAdmin,
   type AuthVariables,
 } from "../middleware/permission";
+import { provisionLabAccount } from "../services/lab-provisioning";
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
 import { backofficeCommercialRouter } from "./backoffice-commercial";
 import { backofficeOrganizationsRouter } from "./backoffice-organizations";
@@ -116,7 +117,7 @@ const ProvisionLabAccountSchema = z.object({
     email: OptionalEmailSchema,
     phone: OptionalTrimmedStringSchema,
     planId: z
-      .enum(["FREE", "STANDARD", "PROFESSIONAL", "ENTERPRISE"])
+      .enum(["FREE", "STANDARD", "PROFESSIONAL", "ADVANCED", "ENTERPRISE"])
       .default("FREE"),
   }),
   owner: z.object({
@@ -277,242 +278,6 @@ function resolveAppUrl(c: {
     configuredAppUrl.trim().length > 0
     ? configuredAppUrl.trim()
     : "https://localhost:5173";
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function labSlugCandidate(
-  input: { name: string; slug?: string },
-  suffix: number,
-) {
-  const baseSlug = slugify(input.slug ?? input.name) || "laboratorio";
-  return suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
-}
-
-function labOrganizationCreateErrorWasSlugConflict(error: unknown) {
-  const errorRecord = recordFromUnknown(error);
-  const body = recordFromUnknown(errorRecord.body);
-  const cause = recordFromUnknown(errorRecord.cause);
-  const statusCandidates = [
-    errorRecord.status,
-    errorRecord.statusCode,
-    body.status,
-    body.statusCode,
-    cause.status,
-    cause.statusCode,
-  ];
-  const status = statusCandidates.find(
-    (candidate): candidate is number => typeof candidate === "number",
-  );
-  const message = [
-    error instanceof Error ? error.message : null,
-    errorRecord.message,
-    errorRecord.error,
-    errorRecord.code,
-    body.message,
-    body.error,
-    body.code,
-    cause.message,
-    cause.error,
-    cause.code,
-  ]
-    .filter((value): value is string => typeof value === "string")
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    (status === 409 && (!message || message.includes("slug"))) ||
-    (message.includes("slug") &&
-      (message.includes("already") ||
-        message.includes("duplicate") ||
-        message.includes("taken") ||
-        message.includes("unique")))
-  );
-}
-
-async function createLabOrganizationWithUniqueSlug(input: {
-  auth: ReturnType<typeof createLabAuth>;
-  lab: z.infer<typeof ProvisionLabAccountSchema>["lab"];
-  ownerUserId: string;
-  ownerEmail: string;
-}) {
-  for (let attempt = 1; attempt <= 50; attempt += 1) {
-    const resolvedSlug = labSlugCandidate(input.lab, attempt);
-    // oxlint-disable-next-line no-await-in-loop -- slug candidates must be checked in order.
-    const existing = await db.query.organization.findFirst({
-      where: eq(organization.slug, resolvedSlug),
-    });
-
-    if (existing) {
-      continue;
-    }
-
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- retry the next suffix only after a slug conflict.
-      const orgResult = await input.auth.api.createOrganization({
-        body: {
-          name: input.lab.name,
-          slug: resolvedSlug,
-          type: "LAB",
-          cnpj: input.lab.cnpj ?? "",
-          accreditationNumber: "",
-          accreditationBody: "",
-          street: "",
-          number: "",
-          complement: "",
-          neighbourhood: "",
-          city: "",
-          state: "",
-          cep: "",
-          phone: input.lab.phone ?? "",
-          email: input.lab.email ?? input.ownerEmail,
-          website: "",
-          technicalManagerName: "",
-          technicalManagerTitle: "",
-          userId: input.ownerUserId,
-          keepCurrentActiveOrganization: true,
-        },
-      });
-      const org = recordFromUnknown(orgResult);
-
-      if (typeof org.id !== "string") {
-        throw new HTTPException(502, {
-          message: "Lab auth returned an invalid organization payload",
-        });
-      }
-
-      return {
-        id: org.id,
-        slug: resolvedSlug,
-      };
-    } catch (error) {
-      if (!labOrganizationCreateErrorWasSlugConflict(error)) {
-        throw error;
-      }
-    }
-  }
-
-  throw new HTTPException(409, {
-    message: "Não foi possível gerar um slug disponível para o laboratório",
-  });
-}
-
-async function findLabProvisioningUser(email: string) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const existing = await db.query.user.findFirst({
-    where: eq(sql<string>`lower(${userTable.email})`, normalizedEmail),
-  });
-
-  if (!existing) return null;
-
-  return {
-    id: existing.id,
-    name: existing.name,
-    email: existing.email,
-  };
-}
-
-async function ensureLabProvisioningUser(input: {
-  name: string;
-  email: string;
-}) {
-  const existing = await findLabProvisioningUser(input.email);
-
-  if (existing) {
-    return {
-      created: false,
-      user: existing,
-    };
-  }
-
-  const auth = createLabAuth();
-
-  try {
-    const createdUser = await auth.api.createUser({
-      body: {
-        name: input.name,
-        email: input.email,
-        password: randomBytes(24).toString("base64url"),
-        role: "user",
-      },
-    });
-
-    return {
-      created: true,
-      user: platformUserFromUnknown(createdUser),
-    };
-  } catch (error) {
-    if (!userCreateErrorWasDuplicate(error)) {
-      throw error;
-    }
-
-    const reloaded = await findLabProvisioningUser(input.email);
-    if (!reloaded) {
-      throw error;
-    }
-
-    return {
-      created: false,
-      user: reloaded,
-    };
-  }
-}
-
-async function ensureOwnerMembership(input: {
-  organizationId: string;
-  userId: string;
-}) {
-  const existing = await db.query.member.findFirst({
-    where: and(
-      eq(member.organizationId, input.organizationId),
-      eq(member.userId, input.userId),
-    ),
-  });
-
-  if (!existing) {
-    await db.insert(member).values({
-      id: randomBytes(16).toString("hex"),
-      organizationId: input.organizationId,
-      userId: input.userId,
-      role: "owner",
-      createdAt: new Date(),
-    });
-    return "created";
-  }
-
-  if (existing.role !== "owner") {
-    await db
-      .update(member)
-      .set({ role: "owner" })
-      .where(eq(member.id, existing.id));
-    return "promoted";
-  }
-
-  return "existing";
-}
-
-async function cleanupFailedLabProvisioning(params: {
-  organizationId?: string | null;
-}) {
-  try {
-    if (params.organizationId) {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, params.organizationId));
-    }
-  } catch (error) {
-    console.error("Failed to clean up failed LAB provisioning", {
-      organizationId: params.organizationId,
-      error,
-    });
-  }
 }
 
 const AccountTaskListQuerySchema = z.object({
@@ -1327,111 +1092,79 @@ export const backofficeRouter = new Hono<{
       const session = c.get("session");
       const input = c.req.valid("json");
       const appUrl = resolveTrustedAppUrl(c);
-      const labAuth = createLabAuth();
-      let createdOrganizationId: string | null = null;
 
-      try {
-        const owner = await ensureLabProvisioningUser(input.owner);
+      // Same sequence the public self-serve sign-up runs; only the gate in
+      // front of it differs (platform admin here, e-mail policy there).
+      // provisionLabAccount rolls the organization back on its own if any
+      // step after creation fails, so there is nothing to unwind here.
+      const provisioned = await provisionLabAccount({
+        lab: input.lab,
+        owner: input.owner,
+        planId: input.lab.planId,
+      });
+      const owner = {
+        user: provisioned.owner,
+        created: provisioned.ownerCreated,
+      };
+      const org = provisioned.organization;
+      const membershipStatus = provisioned.membershipStatus;
 
-        const org = await createLabOrganizationWithUniqueSlug({
-          auth: labAuth,
-          lab: input.lab,
-          ownerUserId: owner.user.id,
-          ownerEmail: owner.user.email,
-        });
-        createdOrganizationId = org.id;
+      let passwordSetupRequested = false;
+      let passwordSetupMessage = "Envio de acesso desabilitado";
 
-        const membershipStatus = await ensureOwnerMembership({
-          organizationId: org.id,
+      if (input.onboarding.sendSetupEmail) {
+        const setupToken = await createLabAccountSetupToken({
           userId: owner.user.id,
+          organizationId: org.id,
+          email: owner.user.email,
+          purpose: "owner_claim",
+          createdByUserId: session.user.id,
+          source: "backoffice.lab.provisioning",
         });
 
-        await db
-          .insert(subscription)
-          .values({
-            organizationId: org.id,
-            planId: input.lab.planId,
-            status: "TRIAL",
-          })
-          .onConflictDoNothing({ target: subscription.organizationId });
-
-        await db
-          .insert(organizationSuccessProfile)
-          .values({
-            organizationId: org.id,
-            accountOwnerUserId: owner.user.id,
-            accountOwnerName: owner.user.name,
-            accountOwnerEmail: owner.user.email,
-            supportContactEmail: input.lab.email ?? owner.user.email,
-            onboardingStatus: "NOT_STARTED",
-            migrationStatus: "NOT_REQUIRED",
-          })
-          .onConflictDoNothing({
-            target: organizationSuccessProfile.organizationId,
-          });
-
-        let passwordSetupRequested = false;
-        let passwordSetupMessage = "Envio de acesso desabilitado";
-
-        if (input.onboarding.sendSetupEmail) {
-          const setupToken = await createLabAccountSetupToken({
-            userId: owner.user.id,
-            organizationId: org.id,
-            email: owner.user.email,
-            purpose: "owner_claim",
-            createdByUserId: session.user.id,
-            source: "backoffice.lab.provisioning",
-          });
-
-          await sendLabAccountSetupEmail({
-            email: owner.user.email,
-            recipientName: owner.user.name,
-            organizationName: input.lab.name,
-            claimUrl: buildLabClaimUrl(appUrl, setupToken.token),
-          });
-
-          passwordSetupRequested = true;
-          passwordSetupMessage = "Email de configuração de acesso solicitado";
-        }
-
-        await logPlatformEvent({
-          actorUserId: session.user.id,
-          targetUserId: owner.user.id,
-          action: "backoffice.lab.provisioned",
-          entityType: "organization",
-          entityId: org.id,
-          details: {
-            ownerCreated: owner.created,
-            ownerEmail: owner.user.email,
-            planId: input.lab.planId,
-            membershipStatus,
-            passwordSetupRequested,
-            authSetupMode: "passkey_first",
-          },
+        await sendLabAccountSetupEmail({
+          email: owner.user.email,
+          recipientName: owner.user.name,
+          organizationName: input.lab.name,
+          claimUrl: buildLabClaimUrl(appUrl, setupToken.token),
         });
 
-        return c.json({
-          organization: {
-            id: org.id,
-            name: input.lab.name,
-            slug: org.slug,
-          },
-          owner: owner.user,
-          ownerCreated: owner.created,
-          membershipStatus,
-          plan: {
-            planId: input.lab.planId,
-            status: "TRIAL",
-          },
-          passwordSetupRequested,
-          passwordSetupMessage,
-        });
-      } catch (error) {
-        await cleanupFailedLabProvisioning({
-          organizationId: createdOrganizationId,
-        });
-        throw error;
+        passwordSetupRequested = true;
+        passwordSetupMessage = "Email de configuração de acesso solicitado";
       }
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId: owner.user.id,
+        action: "backoffice.lab.provisioned",
+        entityType: "organization",
+        entityId: org.id,
+        details: {
+          ownerCreated: owner.created,
+          ownerEmail: owner.user.email,
+          planId: input.lab.planId,
+          membershipStatus,
+          passwordSetupRequested,
+          authSetupMode: "passkey_first",
+        },
+      });
+
+      return c.json({
+        organization: {
+          id: org.id,
+          name: input.lab.name,
+          slug: org.slug,
+        },
+        owner: owner.user,
+        ownerCreated: owner.created,
+        membershipStatus,
+        plan: {
+          planId: input.lab.planId,
+          status: "TRIAL",
+        },
+        passwordSetupRequested,
+        passwordSetupMessage,
+      });
     },
   )
   // The /organizations/* concern is extracted into its own sub-router, mounted
@@ -1626,7 +1359,9 @@ export const backofficeRouter = new Hono<{
       // Reuses the shared identity rule (../lib/dual-control) so the same
       // separation-of-duties check gates BOTH the decision here and the
       // downstream financial execution (DOM-04 / #657).
-      if (isSameDualControlIdentity(existing.requestedByUserId, session.user.id)) {
+      if (
+        isSameDualControlIdentity(existing.requestedByUserId, session.user.id)
+      ) {
         return c.json(
           {
             error:
