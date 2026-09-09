@@ -1,4 +1,6 @@
 import { createCalculationEngine } from "../engine/create.js";
+import { METHOD_ENGINE_OPTIONS } from "../engine/options.js";
+import { canonicalJson, type CanonicalJsonValue } from "./canonical-json.js";
 
 /**
  * Machine-readable identity of a validated dossier version.
@@ -21,10 +23,19 @@ export interface DossierManifest {
   /**
    * `formulaFingerprint` (a `sha256:` canonical digest over the frozen AST +
    * compilation options + engine version) produced by compiling `referenceFormula`
-   * with the validated engine. A human ratifies this pinned value; the gate fails
-   * if the running engine no longer reproduces it.
+   * with the validated engine **under the production configuration**
+   * ({@link METHOD_ENGINE_OPTIONS}). A human ratifies this pinned value; the gate
+   * fails if the running engine no longer reproduces it.
    */
   readonly fingerprint: string;
+  /**
+   * The production engine configuration the fingerprint above authenticates,
+   * recorded verbatim so a drift in `METHOD_ENGINE_OPTIONS` is reported as
+   * itself and not only as an opaque digest mismatch (review). Optional for
+   * dossiers issued before the field existed; the gate spec requires it of the
+   * current dossier.
+   */
+  readonly engineOptions?: Readonly<Record<string, CanonicalJsonValue | undefined>>;
 }
 
 /** The identity of the engine actually shipping in the package. */
@@ -34,7 +45,7 @@ export interface EngineIdentity {
 }
 
 export interface GateMismatch {
-  readonly field: "engineVersion" | "fingerprint";
+  readonly field: "engineVersion" | "fingerprint" | "engineOptions";
   readonly engineValue: string;
   readonly dossierValue: string;
 }
@@ -108,10 +119,22 @@ export function parseDossierManifest(value: unknown): DossierManifest {
     throw new Error("Dossier manifest must be a JSON object.");
   }
   const entries = new Map<string, unknown>(Object.entries(value));
+  const engineOptions = entries.get("engineOptions");
+  if (entries.has("engineOptions") && (typeof engineOptions !== "object" || engineOptions === null || Array.isArray(engineOptions))) {
+    throw new Error('Dossier manifest "engineOptions" must be a JSON object.');
+  }
+  const engineOptionsRecord: Record<string, CanonicalJsonValue | undefined> = {};
+  if (entries.has("engineOptions")) {
+    for (const [key, value] of Object.entries(engineOptions ?? {})) {
+      engineOptionsRecord[key] =
+        value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : String(value);
+    }
+  }
   return {
     engineVersion: readStringField(entries, "engineVersion"),
     referenceFormula: readStringField(entries, "referenceFormula"),
     fingerprint: readStringField(entries, "fingerprint"),
+    ...(entries.has("engineOptions") ? { engineOptions: engineOptionsRecord } : {}),
   };
 }
 
@@ -122,8 +145,22 @@ export function parseDossierManifest(value: unknown): DossierManifest {
 export function computeEngineReferenceFingerprint(
   referenceFormula: string,
 ): string {
-  const engine = createCalculationEngine();
+  // METHOD_ENGINE_OPTIONS, not the engine defaults: certificate-producing paths
+  // (cloud API, desktop local-server, method templates) all compile under this
+  // configuration, and formula fingerprints include the normalized compilation
+  // options — a gate run with defaults would authenticate a numeric contract
+  // that is not the one in production (review).
+  const engine = createCalculationEngine(METHOD_ENGINE_OPTIONS);
   return engine.compileFormula(referenceFormula).formulaFingerprint;
+}
+
+/** The production engine configuration the gate authenticates, as recorded in a manifest. */
+export function productionEngineOptions(): Readonly<Record<string, CanonicalJsonValue | undefined>> {
+  const entries: Record<string, CanonicalJsonValue | undefined> = {};
+  for (const [key, value] of Object.entries(METHOD_ENGINE_OPTIONS)) {
+    entries[key] = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : null;
+  }
+  return entries;
 }
 
 /**
@@ -150,6 +187,17 @@ export function evaluateEngineDossierGate(
       engineValue: engine.fingerprint,
       dossierValue: manifest.fingerprint,
     });
+  }
+  if (manifest.engineOptions !== undefined) {
+    const running = canonicalJson(productionEngineOptions());
+    const validated = canonicalJson(manifest.engineOptions);
+    if (running !== validated) {
+      mismatches.push({
+        field: "engineOptions",
+        engineValue: running,
+        dossierValue: validated,
+      });
+    }
   }
   return { ok: mismatches.length === 0, mismatches };
 }

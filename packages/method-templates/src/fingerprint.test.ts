@@ -41,8 +41,15 @@ const FINGERPRINT_FIXTURES: ReadonlyArray<{
     // so it still churns, which means production's seeded method id=6 has to be
     // re-seeded (EXEMPLO_FORCE_METHOD_TEMPLATE_UPDATE) before it matches again.
     // Previous: method:a614c64c40b142acec5681ffe73c8de04b15fa223300103599efdde750394da4
+    //
+    // Bumped again by math-engine 0.4.0: the compiled method embeds
+    // `engine.version`, so every engine release churns it even though the
+    // draft is untouched. Production's seeded method id=6 must be re-seeded
+    // (EXEMPLO_FORCE_METHOD_TEMPLATE_UPDATE) after the 0.4.0 deploy — until then
+    // executeCompiledMethod refuses the 0.3.0 snapshot (ENGINE_VERSION_MISMATCH).
+    // Previous (0.3.0): method:c867d03d82615597ab28a318d6da7d3b6c47e8edf496622e987c10bff37ac624
     fingerprint:
-      "method:c867d03d82615597ab28a318d6da7d3b6c47e8edf496622e987c10bff37ac624",
+      "method:37a5f84f93d7c46fc8fd13c9ed2148e8803a78e186f1cdfb7934d755edcd81b1",
   },
 ];
 

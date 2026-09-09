@@ -12,7 +12,7 @@ import {
 /**
  * Known-answer tests (KAT) against the REAL @calibra-facil/math-engine.
  *
- * The engine is a vendored workspace package (v0.3.0) and its own test suite is
+ * The engine is a vendored workspace package (v0.4.0) and its own test suite is
  * NOT mirrored into this repo — every other GUM test here injects a fake engine.
  * These textbook reference values are the only in-repo guard against a silent
  * GUM-math regression when ENGINE_VERSION is bumped: if any of these fail in CI,
@@ -35,7 +35,7 @@ describe("@calibra-facil/math-engine — GUM known-answer tests (real engine)", 
   it("pins the engine version this KAT was validated against", () => {
     // Bump this deliberately together with the engine tag in package.json so a
     // surprise upgrade is visible in the diff and re-validates the numbers.
-    expect(ENGINE_VERSION).toBe("0.3.0");
+    expect(ENGINE_VERSION).toBe("0.4.0");
   });
 
   it("Type A: mean, sample s, standard uncertainty s/√n, dof = n − 1", () => {

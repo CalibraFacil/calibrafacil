@@ -90,6 +90,7 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
@@ -2830,8 +2831,19 @@ async function applyLocalJobExecution(
     };
   }
 
-  const officialExecution = await executeOfficialDesktopSyncSnapshot({
+  // Desktop jobs freeze their own compiled method too, so a job started before
+  // an engine release reaches the cloud with the old snapshot; adopt the
+  // method's current compilation when it is provably the same definition
+  // (review of the 0.4.0 execution guard).
+  const reconciledMethod = await reconcileMethodSnapshotEngine({
     methodSnapshot: existing.methodSnapshot,
+    organizationId: input.memberData.organizationId,
+    engine: await createMethodExecutionEngine(),
+  });
+  const nextMethodSnapshot = reconciledMethod.methodSnapshot;
+
+  const officialExecution = await executeOfficialDesktopSyncSnapshot({
+    methodSnapshot: nextMethodSnapshot,
     data: nextData,
     assetSnapshot: existing.assetSnapshot,
     standardsSnapshot: nextStandardsSnapshot,
@@ -2856,6 +2868,9 @@ async function applyLocalJobExecution(
     .set({
       data: nextData,
       results: nextResults,
+      ...(reconciledMethod.adopted
+        ? { methodSnapshot: nextMethodSnapshot }
+        : {}),
       standardsSnapshot: nextStandardsSnapshot,
       environmentalSnapshot: nextEnvironmentalSnapshot,
       calibrationLocationSnapshot: nextCalibrationLocationSnapshot,

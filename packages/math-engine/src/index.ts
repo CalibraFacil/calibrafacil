@@ -77,11 +77,13 @@ export {
   studentTCdf,
   studentTQuantile,
   welchSatterthwaiteDegreesOfFreedom,
+  generalizedWelchSatterthwaiteDegreesOfFreedom,
 } from "./gum/index.js";
 export type {
   AuditMetadataValue,
   InputQuantity,
   MeasurementModelInput,
+  CorrelatedDegreesOfFreedomPolicy,
   MeasurementModelResult,
   PairwiseCorrelation,
   PairwiseCorrelationObject,

@@ -1,10 +1,8 @@
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
-import { mean, sampleStandardDeviation, standardUncertaintyOfMean } from "../gum/statistics.js";
 import { NumberBackend } from "../numeric/backend.js";
 import { DeterministicDecimal } from "../numeric/decimal.js";
 import type { NumericInput } from "../numeric/types.js";
-import { roundTripsThroughDouble, validateNumericString } from "../numeric/validation.js";
 import { assertAllowedKeys, assertDenseArray, assertNoDangerousKeys, assertPlainRecord, hasOwn, valueKind } from "../validation/shape.js";
 
 export interface NumericValidationOptionSubset {
@@ -23,15 +21,14 @@ export interface TypeAUncertaintyResult {
    */
   readonly canonicalObservations: readonly string[];
   readonly count: number;
+  /** Arithmetic mean as a double (nearest to the exact rational mean). */
   readonly mean: number;
   /**
-   * Exact decimal text of the mean, present only when the observations carry
-   * more precision than a double and the exact mean both terminates and fits
-   * the configured input limits. Callers that derive a quantity estimate from
-   * repeated observations must prefer it over `mean`, which is the (rounded)
-   * double view.
+   * Exact rational mean rendered at `decimalPrecision` significant digits —
+   * the text a decimal-mode model uses as the quantity estimate, so the mean
+   * never passes through a double on its way into the formula.
    */
-  readonly canonicalMean?: string;
+  readonly canonicalMean: string;
   readonly sampleStandardDeviation: number;
   readonly standardUncertainty: number;
   readonly degreesOfFreedom: number;
@@ -88,31 +85,6 @@ export function normalizeNumericValidationOptions(options: unknown = {}): Normal
   });
 }
 
-/**
- * Exact decimal text of a value when it terminates and stays inside the
- * configured input limits, so it can be handed back as a numeric input; `undefined`
- * when either condition fails and the caller must fall back to the double view.
- */
-function exactDecimalTextWithinLimits(value: DeterministicDecimal, options: NormalizedNumericValidationOptionSubset): string | undefined {
-  let text: string;
-  try {
-    text = value.toExactString();
-  } catch {
-    return undefined;
-  }
-  try {
-    validateNumericString(text, {
-      maxExponentMagnitude: options.maxExponentMagnitude,
-      maxInputLength: options.maxNumericInputLength,
-      maxSignificantDigits: options.maxSignificantDigits,
-      label: "observations.mean"
-    });
-  } catch {
-    return undefined;
-  }
-  return text;
-}
-
 export function typeAFromRepeatedObservations(observations: readonly NumericInput[], options: NumericValidationOptionSubset = {}): TypeAUncertaintyResult {
   if (!Array.isArray(observations)) {
     throw makeError(ERROR_CODES.INVALID_INPUT_SHAPE, "Type A observations must be an array.", { path: "observations", valueType: valueKind(observations) });
@@ -130,29 +102,13 @@ export function typeAFromRepeatedObservations(observations: readonly NumericInpu
     maxInputLength: safeOptions.maxNumericInputLength,
     maxSignificantDigits: safeOptions.maxSignificantDigits
   };
+  // Centre and square exactly (rational arithmetic) and convert to doubles only
+  // at the end: the double path silently centred on rounded values and reported
+  // a spurious spread — or zero — for observations a double cannot carry (audit).
+  // `canonicalObservations` carries the exact samples so the statistics can be
+  // reproduced; `observations` are their doubles.
   const exactObservations = observations.map((value, index) => DeterministicDecimal.from(value, `observation[${index}]`, parseOptions));
-  // toExactString, not toCanonicalString: the canonical text rounds through a
-  // double past 120 fractional places and would collapse the very samples the
-  // exact branch below distinguishes (review).
   const canonicalObservations = exactObservations.map((value) => value.toExactString());
-  if (observations.every((value) => typeof value === "number" || roundTripsThroughDouble(value))) {
-    // Established double path, kept byte-for-byte for every observation set the
-    // 0.3.0 engine already handles so recorded results stay reproducible.
-    return Object.freeze({
-      observations: numericObservations,
-      canonicalObservations,
-      count,
-      mean: mean(numericObservations),
-      sampleStandardDeviation: sampleStandardDeviation(numericObservations),
-      standardUncertainty: standardUncertaintyOfMean(numericObservations),
-      degreesOfFreedom: count - 1
-    });
-  }
-  // At least one observation carries more decimal precision than a double: the
-  // double path would silently centre on rounded values and report a spurious
-  // spread (or zero). Centre and square exactly, converting to doubles only at
-  // the end (audit). `canonicalObservations` carries the exact samples so the
-  // reported statistics can be reproduced; `observations` are their doubles.
   const exactMean = exactObservations.reduce((sum, value) => sum.add(value), DeterministicDecimal.zero()).div(DeterministicDecimal.of(BigInt(count)));
   const exactSumOfSquares = exactObservations.reduce((sum, value) => {
     const difference = value.sub(exactMean);
@@ -161,7 +117,6 @@ export function typeAFromRepeatedObservations(observations: readonly NumericInpu
   // The exact mean is the estimate a decimal-mode model must be evaluated at:
   // narrowing it to a double here would throw away the precision this branch
   // just recovered (review).
-  const canonicalMean = exactDecimalTextWithinLimits(exactMean, safeOptions);
   // sqrtToNumber, not toNumber-then-Math.sqrt: at very small configured scales
   // the variance narrows to zero while the standard deviation is an ordinary
   // double (review). It runs the plain arithmetic first, so the values this
@@ -172,7 +127,7 @@ export function typeAFromRepeatedObservations(observations: readonly NumericInpu
     canonicalObservations,
     count,
     mean: exactMean.toNumber(),
-    ...(canonicalMean === undefined ? {} : { canonicalMean }),
+    canonicalMean: exactMean.toCanonicalString(safeOptions.decimalPrecision),
     sampleStandardDeviation: exactSampleStandardDeviation,
     standardUncertainty: exactSampleStandardDeviation / Math.sqrt(count),
     degreesOfFreedom: count - 1

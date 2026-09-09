@@ -71,6 +71,7 @@ export type MeasurementModelInputLike = {
   coverageProbability?: number;
   coverageFactor?: NumericInput;
   allowNonSmoothWithExplicitSensitivities?: boolean;
+  correlatedDegreesOfFreedom?: "generalized" | "diagonal";
 };
 
 export type CalculationEngineLike = {
@@ -389,6 +390,13 @@ export type MethodMeasurementModel = {
   outputUnit?: string;
   options?: {
     allowNonSmoothWithExplicitSensitivities?: boolean;
+    /**
+     * ν_eff policy when `correlations`/`covariances` are declared:
+     * `"generalized"` (engine default, Welch–Satterthwaite generalized to
+     * correlated components) or `"diagonal"` (GUM Eq. G.2b on the diagonal
+     * contributions only — the pre-0.4.0 behaviour).
+     */
+    correlatedDegreesOfFreedom?: "generalized" | "diagonal";
   };
   metadata?: SafeMetadata;
 };

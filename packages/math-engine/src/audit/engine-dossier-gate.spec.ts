@@ -27,6 +27,7 @@ import {
   evaluateEngineDossierGate,
   parseDossierDeclaredVersion,
   parseDossierManifest,
+  productionEngineOptions,
   resolveCurrentDossierDir,
 } from "./engine-dossier-gate.js";
 
@@ -108,6 +109,27 @@ describe("DOM-11: math engine ↔ validated dossier gate", () => {
         manifest,
       );
       expect(result).toStrictEqual({ ok: true, mismatches: [] });
+    });
+
+    it("REQ-DOM-GAT-002 — the current manifest records the production engine configuration", () => {
+      // The fingerprint is only evidence about the configuration it was
+      // produced with; a dossier that omits it authenticates nothing checkable.
+      expect(manifest.engineOptions).toBeDefined();
+      expect(manifest.engineOptions).toStrictEqual(productionEngineOptions());
+    });
+
+    it("REQ-DOM-GAT-002 — drifted production options SHALL be reported as a mismatch", () => {
+      const result = evaluateEngineDossierGate(
+        {
+          version: ENGINE_VERSION,
+          fingerprint: computeEngineReferenceFingerprint(
+            manifest.referenceFormula,
+          ),
+        },
+        { ...manifest, engineOptions: { ...manifest.engineOptions, numericMode: "number" } },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.mismatches.map((m) => m.field)).toContain("engineOptions");
     });
 
     it("REQ-DOM-GAT-002 — a divergent fingerprint SHALL be reported as a mismatch", () => {

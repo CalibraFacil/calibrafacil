@@ -22,7 +22,6 @@ import {
 import type { DeterministicDecimal } from "../numeric/decimal.js";
 import type { NumericInput, NumericOutput } from "../numeric/types.js";
 import {
-  roundTripsThroughDouble,
   safeNumberFromInput,
   validateNumericInput,
 } from "../numeric/validation.js";
@@ -45,9 +44,11 @@ import {
   type TypeAUncertaintyResult,
 } from "../uncertainty/type-a.js";
 import type { NumericValidationOptionSubset } from "../uncertainty/type-a.js";
+import { correlationMatrixDefect } from "./psd.js";
 import {
   coverageFactorForProbability,
   welchSatterthwaiteDegreesOfFreedom,
+  generalizedWelchSatterthwaiteDegreesOfFreedom,
 } from "./statistics.js";
 import {
   assertAllowedKeys,
@@ -120,7 +121,17 @@ export interface MeasurementModelInput {
   readonly coverageProbability?: number;
   readonly coverageFactor?: NumericInput;
   readonly allowNonSmoothWithExplicitSensitivities?: boolean;
+  /**
+   * How ν_eff is obtained when correlations/covariances are declared.
+   * `"generalized"` (default) uses the Welch–Satterthwaite generalization for
+   * correlated components; `"diagonal"` keeps GUM Eq. G.2b on the diagonal
+   * contributions only (the pre-0.4.0 behaviour) and emits a warning.
+   * Ignored — and not fingerprinted differently — when no relationship is declared.
+   */
+  readonly correlatedDegreesOfFreedom?: CorrelatedDegreesOfFreedomPolicy;
 }
+
+export type CorrelatedDegreesOfFreedomPolicy = "generalized" | "diagonal";
 
 export interface UncertaintyBudgetEntry {
   readonly symbol: string;
@@ -201,7 +212,27 @@ const MEASUREMENT_MODEL_INPUT_KEYS = new Set([
   "coverageProbability",
   "coverageFactor",
   "allowNonSmoothWithExplicitSensitivities",
+  "correlatedDegreesOfFreedom",
 ]);
+
+const CORRELATED_DOF_POLICIES: ReadonlySet<string> = new Set(["generalized", "diagonal"]);
+
+function resolveCorrelatedDegreesOfFreedomPolicy(
+  record: Record<string, unknown>,
+): CorrelatedDegreesOfFreedomPolicy {
+  if (!hasOwn(record, "correlatedDegreesOfFreedom")) return "generalized";
+  const value = record.correlatedDegreesOfFreedom;
+  if (value === "generalized" || value === "diagonal") return value;
+  throw makeError(
+    ERROR_CODES.INVALID_INPUT_SHAPE,
+    "correlatedDegreesOfFreedom must be \"generalized\" or \"diagonal\".",
+    {
+      path: "correlatedDegreesOfFreedom",
+      value: typeof value === "string" ? value : valueKind(value),
+      allowed: [...CORRELATED_DOF_POLICIES],
+    },
+  );
+}
 
 function numericLimits(
   options: NormalizedCalculationEngineOptions,
@@ -603,11 +634,11 @@ function resolveQuantity(
     );
   }
 
-  // canonicalMean before mean: when the observations carry more precision than a
-  // double, the exact mean is the estimate the decimal-mode model must be
-  // evaluated at — the double view would silently round it back (review).
+  // A Type A mean enters the model as its exact rational rendered at engine
+  // precision in decimal mode (0.4.0); the double view only in number mode.
   const estimateInput =
-    getEstimateInput(quantity) ?? typeA?.canonicalMean ?? typeA?.mean;
+    getEstimateInput(quantity) ??
+    (options.numericMode === "decimal" ? typeA?.canonicalMean : typeA?.mean);
   if (estimateInput === undefined) {
     throw makeError(
       ERROR_CODES.INVALID_QUANTITY,
@@ -1165,13 +1196,23 @@ function collectRelationships(
   return map;
 }
 
+interface CovarianceFromRelationships {
+  readonly covariance: number[][];
+  /**
+   * Off-diagonal correlation/covariance entries actually declared. Empty
+   * `correlations: []` / `covariances: []` collections count as none: they
+   * declare no relationship, so the model is uncorrelated (review).
+   */
+  readonly relationshipCount: number;
+}
+
 function covarianceFromRelationships(
   quantities: readonly ResolvedQuantity[],
   input: MeasurementModelInput,
   symbolToIndex: ReadonlyMap<string, number>,
   options: NormalizedCalculationEngineOptions,
   diagnostics: CalculationDiagnostic[],
-): number[][] {
+): CovarianceFromRelationships {
   const covariance = createZeroMatrix(quantities.length);
   for (let i = 0; i < quantities.length; i += 1) {
     covariance[i]![i] = quantities[i]!.standardUncertainty ** 2;
@@ -1277,7 +1318,11 @@ function covarianceFromRelationships(
       },
     });
   }
-  return covariance;
+  let relationshipCount = 0;
+  for (const entry of [...correlations.values(), ...covariances.values()]) {
+    if (entry.i !== entry.j) relationshipCount += 1;
+  }
+  return { covariance, relationshipCount };
 }
 
 function validateCovarianceMatrix(
@@ -1323,39 +1368,20 @@ function validateCovarianceMatrix(
       normalized[i]![j] = bound === 0 ? 0 : a / bound;
     }
   }
-  const size = matrix.length;
-  const l = createZeroMatrix(size);
-  for (let i = 0; i < size; i += 1) {
-    for (let j = 0; j <= i; j += 1) {
-      let sum = normalized[i]![j]!;
-      for (let k = 0; k < j; k += 1) sum -= l[i]![k]! * l[j]![k]!;
-      if (i === j) {
-        if (sum < -tolerance) {
-          throw makeError(
-            ERROR_CODES.INVALID_COVARIANCE_MATRIX,
-            "Covariance matrix is not positive semidefinite.",
-            { pivot: i, value: sum },
-          );
-        }
-        l[i]![j] = sum <= 0 ? 0 : Math.sqrt(sum);
-      } else if (l[j]![j]! > 0) {
-        // Any positive pivot is factored, however small: a nearly singular but
-        // positive-definite block (e.g. r = 1 - 5e-15 next to r = 5e-8) is
-        // legitimate, and an inconsistent residual still surfaces as a negative
-        // diagonal on a later row. Only an exactly collapsed pivot needs the
-        // residual test below (review of the pass-1 fix).
-        l[i]![j] = sum / l[j]![j]!;
-      } else if (Math.abs(sum) > tolerance) {
-        throw makeError(
-          ERROR_CODES.INVALID_COVARIANCE_MATRIX,
-          "Covariance matrix is not positive semidefinite near a singular pivot.",
-          { i, j, residual: sum },
-        );
-      } else {
-        l[i]![j] = 0;
-      }
-    }
+  const defect = correlationMatrixDefect(normalized, tolerance);
+  if (defect === null) return;
+  if (defect.kind === "negative_pivot") {
+    throw makeError(
+      ERROR_CODES.INVALID_COVARIANCE_MATRIX,
+      "Covariance matrix is not positive semidefinite.",
+      { pivot: defect.pivot, value: defect.value },
+    );
   }
+  throw makeError(
+    ERROR_CODES.INVALID_COVARIANCE_MATRIX,
+    "Covariance matrix is not positive semidefinite near a singular pivot.",
+    { i: defect.row, j: defect.column, residual: defect.residual },
+  );
 }
 
 function variablesInAst(
@@ -1420,43 +1446,6 @@ function getNumberScopeForAst(
     }
   }
   return scope;
-}
-
-function hasLiteralBeyondDoublePrecision(ast: FormulaAstNode): boolean {
-  switch (ast.kind) {
-    case "NumberLiteral":
-      return !roundTripsThroughDouble(ast.raw);
-    case "Variable":
-      return false;
-    case "UnaryExpression":
-      return hasLiteralBeyondDoublePrecision(ast.argument);
-    case "BinaryExpression":
-      return (
-        hasLiteralBeyondDoublePrecision(ast.left) ||
-        hasLiteralBeyondDoublePrecision(ast.right)
-      );
-    case "CallExpression":
-      return ast.args.some(hasLiteralBeyondDoublePrecision);
-  }
-}
-
-// The literal check is as load-bearing as the estimate check: a formula constant
-// a double cannot carry (e.g. `x-9007199254740993`) is rounded by the Number
-// backend during symbolic differentiation and halves or doubles the reported
-// sensitivity, even when every referenced estimate round-trips (review).
-function hasValueBeyondDoublePrecision(
-  ast: FormulaAstNode,
-  quantities: readonly ResolvedQuantity[],
-): boolean {
-  const required = variablesInAst(ast);
-  return (
-    quantities.some(
-      (quantity) =>
-        required.has(quantity.symbol) &&
-        typeof quantity.estimateInput === "string" &&
-        !roundTripsThroughDouble(quantity.estimateInput),
-    ) || hasLiteralBeyondDoublePrecision(ast)
-  );
 }
 
 function getDecimalScopeForAst(
@@ -1631,6 +1620,12 @@ function resolveSensitivityCoefficients(
     options.maxNumericInputLength,
     options.maxSignificantDigits,
   );
+  const decimalBackend = new DecimalBackend(
+    options.decimalPrecision,
+    options.maxExponentMagnitude,
+    options.maxNumericInputLength,
+    options.maxSignificantDigits,
+  );
   const formulaVariableSet = new Set(formula.variables);
 
   return quantities.map((quantity) => {
@@ -1656,29 +1651,19 @@ function resolveSensitivityCoefficients(
     const derivativeAst = symbolicDerivative(formula.ast, quantity.symbol);
     if (derivativeAst !== null) {
       try {
-        // The double path is kept for every estimate a double can carry so
-        // 0.3.0 sensitivities stay byte-stable. Estimates with more decimal
-        // precision than a double used to be rounded silently here, giving a
-        // wrong derivative (audit) — evaluate those exactly, like the nominal.
+        // The derivative is evaluated with the mode's backend, like the
+        // nominal value: exact rational arithmetic in decimal mode (0.4.0 —
+        // up to 0.3.0 this went through doubles and silently rounded estimates
+        // a double cannot carry, audit), IEEE doubles in number mode.
         const value =
-          options.numericMode === "decimal" &&
-          hasValueBeyondDoublePrecision(derivativeAst, quantities)
-            ? (() => {
-                const backend = new DecimalBackend(
-                  options.decimalPrecision,
-                  options.maxExponentMagnitude,
-                  options.maxNumericInputLength,
-                  options.maxSignificantDigits,
-                );
-                const scope = getDecimalScopeForAst(
+          options.numericMode === "decimal"
+            ? decimalBackend.toNumber(
+                evaluateAst(
                   derivativeAst,
-                  quantities,
-                  options,
-                );
-                return backend.toNumber(
-                  evaluateAst(derivativeAst, scope, backend),
-                );
-              })()
+                  getDecimalScopeForAst(derivativeAst, quantities, options),
+                  decimalBackend,
+                ),
+              )
             : numberBackend.toNumber(
                 evaluateAst(
                   derivativeAst,
@@ -1864,7 +1849,7 @@ export function evaluateMeasurementModelInternal(
   const symbolToIndex = new Map<string, number>(
     quantities.map((quantity, index) => [quantity.symbol, index]),
   );
-  const covariance = covarianceFromRelationships(
+  const { covariance, relationshipCount } = covarianceFromRelationships(
     quantities,
     typedInput,
     symbolToIndex,
@@ -1915,26 +1900,70 @@ export function evaluateMeasurementModelInternal(
     return sensitivities[i]! * row;
   });
 
-  const effectiveDegreesOfFreedom = welchSatterthwaiteDegreesOfFreedom(
-    combinedVariance,
-    diagonalVarianceContributions,
-    quantities.map((quantity) => quantity.degreesOfFreedom),
+  const quantityDegreesOfFreedom = quantities.map(
+    (quantity) => quantity.degreesOfFreedom,
   );
-  if (
-    typedInput.correlations !== undefined ||
-    typedInput.covariances !== undefined
-  ) {
+  const correlatedDegreesOfFreedom =
+    resolveCorrelatedDegreesOfFreedomPolicy(inputRecord);
+  // Based on the parsed entries, not on the presence of the fields: a model
+  // that passes `correlations: []` declares no relationship and must take the
+  // ordinary uncorrelated path, without the generalized diagnostic or a
+  // fingerprinted policy (review). `volume-glassware` and `humidity-magnus`
+  // ship exactly those empty collections.
+  const hasDeclaredRelationships = relationshipCount > 0;
+  let effectiveDegreesOfFreedom: number;
+  if (hasDeclaredRelationships && correlatedDegreesOfFreedom === "generalized") {
+    // Generalized Welch–Satterthwaite (0.4.0): b_i = c_i·u_i and the
+    // correlation matrix recovered from the validated covariance matrix.
+    const scaledUncertainties = quantities.map(
+      (quantity, index) => sensitivities[index]! * quantity.standardUncertainty,
+    );
+    const correlationMatrix = quantities.map((rowQuantity, i) =>
+      quantities.map((columnQuantity, j) => {
+        if (i === j) return 1;
+        const product =
+          rowQuantity.standardUncertainty * columnQuantity.standardUncertainty;
+        return product === 0 ? 0 : (covariance[i]?.[j] ?? 0) / product;
+      }),
+    );
+    effectiveDegreesOfFreedom = generalizedWelchSatterthwaiteDegreesOfFreedom(
+      combinedVariance,
+      scaledUncertainties,
+      correlationMatrix,
+      quantityDegreesOfFreedom,
+    );
     diagnostics.push({
-      code: "WELCH_SATTERTHWAITE_CORRELATION_LIMITATION",
-      severity: "warning",
+      code: "EFFECTIVE_DEGREES_OF_FREEDOM_GENERALIZED",
+      severity: "info",
       message:
-        "Effective degrees of freedom uses diagonal variance contributions; correlated models may require laboratory-specific validation.",
+        "Effective degrees of freedom computed with the Welch-Satterthwaite generalization for correlated input quantities (Castrup 2010/2020 Eq. 46; Willink 2007).",
       details: {
+        policy: correlatedDegreesOfFreedom,
         effectiveDegreesOfFreedom: Number.isFinite(effectiveDegreesOfFreedom)
           ? effectiveDegreesOfFreedom
           : "Infinity",
       },
     });
+  } else {
+    effectiveDegreesOfFreedom = welchSatterthwaiteDegreesOfFreedom(
+      combinedVariance,
+      diagonalVarianceContributions,
+      quantityDegreesOfFreedom,
+    );
+    if (hasDeclaredRelationships) {
+      diagnostics.push({
+        code: "WELCH_SATTERTHWAITE_CORRELATION_LIMITATION",
+        severity: "warning",
+        message:
+          "Effective degrees of freedom uses diagonal variance contributions only (correlatedDegreesOfFreedom: \"diagonal\"); correlated models may require laboratory-specific validation.",
+        details: {
+          policy: correlatedDegreesOfFreedom,
+          effectiveDegreesOfFreedom: Number.isFinite(effectiveDegreesOfFreedom)
+            ? effectiveDegreesOfFreedom
+            : "Infinity",
+        },
+      });
+    }
   }
 
   const coverageProbability = coverageProbabilityFromInput(typedInput);
@@ -2002,6 +2031,7 @@ export function evaluateMeasurementModelInternal(
     quantities: quantities.map(quantityCanonical),
     correlations: normalizePairwiseInput(typedInput.correlations),
     covariances: normalizePairwiseInput(typedInput.covariances),
+    ...(hasDeclaredRelationships ? { correlatedDegreesOfFreedom } : {}),
     options: {
       numericMode: options.numericMode,
       angleMode: options.angleMode,

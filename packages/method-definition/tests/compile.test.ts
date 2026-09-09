@@ -4,6 +4,8 @@ import {
   compileCriterionExpression,
   executeCompiledMethod,
   evaluateCompiledCriterion,
+  fingerprintJson,
+  reconcileCompiledMethodEngine,
   type CalculationEngineLike,
   type MethodDraft,
   type NumericInput,
@@ -172,6 +174,26 @@ function validDraft(overrides: Partial<MethodDraft> = {}): MethodDraft {
     ],
     metadata: { validationStatus: "pending_revalidation" },
     ...overrides,
+  };
+}
+
+// Fresh object per call: the draft shape check rejects shared sub-objects.
+function directModel() {
+  return {
+    key: "model",
+    label: "Model",
+    measurand: "y",
+    expression: "x",
+    quantities: [
+      {
+        symbol: "x",
+        source: { kind: "input" as const, key: "indication" },
+        uncertainty: {
+          kind: "direct_standard_uncertainty" as const,
+          standardUncertainty: 0.1,
+        },
+      },
+    ],
   };
 }
 
@@ -1624,6 +1646,63 @@ describe("compileMethodDraft", () => {
     ).toBe(true);
   });
 
+  it("passes the correlatedDegreesOfFreedom option through to the engine model input", () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const recordingEngine: CalculationEngineLike = {
+      ...fakeGumEngine,
+      evaluateMeasurementModel(input) {
+        seen.push(Object.fromEntries(Object.entries(input)));
+        return fakeGumEngine.evaluateMeasurementModel(input);
+      },
+    };
+    const result = compileMethodDraft(
+      validDraft({
+        formulas: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          { key: "nominal", label: "Nominal", inputs: { indication: "10", reference: "10" } },
+        ],
+        measurementModels: [
+          { ...directModel(), options: { correlatedDegreesOfFreedom: "diagonal" } },
+          { ...directModel(), key: "model_default" },
+        ],
+      }),
+      { engine: recordingEngine },
+    );
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    expect(seen[0]?.correlatedDegreesOfFreedom).toBe("diagonal");
+    expect("correlatedDegreesOfFreedom" in (seen[1] ?? {})).toBe(false);
+  });
+
+  it("fingerprints the model options, so two policies are two models", () => {
+    const compileWith = (options?: Record<string, unknown>) => {
+      const result = compileMethodDraft(
+        validDraft({
+          formulas: [],
+          acceptanceCriteria: [],
+          previewScenarios: [
+            { key: "nominal", label: "Nominal", inputs: { indication: "10", reference: "10" } },
+          ],
+          measurementModels: [
+            options ? { ...directModel(), options } : directModel(),
+          ],
+        }),
+        { engine: fakeGumEngine },
+      );
+      expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+      if (!result.ok) throw new Error("compile failed");
+      return result.method.measurementModels[0]?.modelFingerprint;
+    };
+
+    const generalized = compileWith({ correlatedDegreesOfFreedom: "generalized" });
+    const diagonal = compileWith({ correlatedDegreesOfFreedom: "diagonal" });
+    expect(generalized).toBeDefined();
+    expect(generalized).not.toBe(diagonal);
+    // The absent-options model is its own identity, not either policy's.
+    expect(compileWith()).not.toBe(generalized);
+  });
+
   it("validates Type A observation inputs at compile time", () => {
     const result = compileMethodDraft(
       validDraft({
@@ -2683,5 +2762,164 @@ describe("compileMethodDraft", () => {
     );
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("executeCompiledMethod — engine contract guard", () => {
+  const metadata = {
+    packageName: "@calibra-facil/math-engine",
+    version: "fake-test",
+    // Exactly how compileDraftWithEngine derives it in apps/api, so an
+    // agreeing version also agrees on the numeric contract.
+    optionsFingerprint: fingerprintJson(fakeEngine.options, "engine-options"),
+  };
+
+  function compiledWith(version: string) {
+    const result = compileMethodDraft(validDraft(), {
+      engine: fakeEngine,
+      engineMetadata: { ...metadata, version },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("compile failed");
+    return result.method;
+  }
+
+  it("refuses to execute a method compiled under a different engine version", () => {
+    const execution = executeCompiledMethod(
+      compiledWith("0.3.0"),
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(false);
+    expect(execution.engineVersion).toBe("0.3.0");
+    expect(execution.measurementModelResults).toEqual([]);
+    expect(execution.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "ENGINE_VERSION_MISMATCH",
+        severity: "error",
+        path: "engine.version",
+        details: {
+          compiledEngineVersion: "0.3.0",
+          runningEngineVersion: "fake-test",
+        },
+      }),
+    ]);
+  });
+
+  it("executes when the compiled and running versions agree", () => {
+    const execution = executeCompiledMethod(
+      compiledWith("fake-test"),
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: fakeEngine },
+    );
+    expect(execution.ok).toBe(true);
+  });
+
+  it("refuses to execute when the numeric contract changed under the same version", () => {
+    const compiled = compileMethodDraft(validDraft(), {
+      engine: fakeEngine,
+      engineMetadata: { ...metadata, optionsFingerprint: "engine-options:other" },
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) throw new Error("compile failed");
+
+    const execution = executeCompiledMethod(
+      compiled.method,
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(false);
+    expect(execution.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "ENGINE_OPTIONS_MISMATCH",
+        severity: "error",
+        path: "engine.optionsFingerprint",
+      }),
+    ]);
+  });
+
+  it("adopts the method's current compilation into a stale execution snapshot", () => {
+    const snapshot = compiledWith("0.3.0");
+    const current = compiledWith("fake-test");
+    // The normalized text carries the engine block, so it differs by design;
+    // the method definition around it is what must match.
+    expect(current.normalizedMethodJson).not.toBe(snapshot.normalizedMethodJson);
+
+    const reconciled = reconcileCompiledMethodEngine({
+      snapshot,
+      current,
+      engine: fakeEngine,
+    });
+    expect(reconciled.adopted).toBe(true);
+    expect(reconciled.compiledMethod).toBe(current);
+
+    const execution = executeCompiledMethod(
+      reconciled.compiledMethod,
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: fakeEngine },
+    );
+    expect(execution.ok).toBe(true);
+  });
+
+  it("keeps the snapshot when no current compilation matches it", () => {
+    const snapshot = compiledWith("0.3.0");
+    const differentMethod = compileMethodDraft(
+      { ...validDraft(), name: "Outro método" },
+      { engine: fakeEngine, engineMetadata: metadata },
+    );
+    expect(differentMethod.ok).toBe(true);
+    if (!differentMethod.ok) throw new Error("compile failed");
+
+    expect(
+      reconcileCompiledMethodEngine({ snapshot, current: null, engine: fakeEngine }),
+    ).toEqual({ compiledMethod: snapshot, adopted: false });
+    // Same engine, different method definition: never adopted.
+    expect(
+      reconcileCompiledMethodEngine({
+        snapshot,
+        current: differentMethod.method,
+        engine: fakeEngine,
+      }),
+    ).toEqual({ compiledMethod: snapshot, adopted: false });
+    // A current compilation that is itself stale is not an escape hatch.
+    expect(
+      reconcileCompiledMethodEngine({
+        snapshot,
+        current: compiledWith("0.2.0"),
+        engine: fakeEngine,
+      }),
+    ).toEqual({ compiledMethod: snapshot, adopted: false });
+  });
+
+  it("leaves an up-to-date snapshot untouched", () => {
+    const snapshot = compiledWith("fake-test");
+    expect(
+      reconcileCompiledMethodEngine({ snapshot, current: null, engine: fakeEngine }),
+    ).toEqual({ compiledMethod: snapshot, adopted: false });
+  });
+
+  it("skips the check for methods compiled without engine metadata", () => {
+    const result = compileMethodDraft(validDraft(), { engine: fakeEngine });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.method.engine.version).toBe("unknown");
+    const execution = executeCompiledMethod(
+      result.method,
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: fakeEngine },
+    );
+    expect(execution.ok).toBe(true);
+  });
+
+  it("skips the check for engines that do not report a version", () => {
+    const { options: _options, ...silentEngine } = fakeEngine;
+    const execution = executeCompiledMethod(
+      compiledWith("0.3.0"),
+      { inputs: { indication: "10.02", reference: "10" } },
+      { engine: silentEngine },
+    );
+    expect(execution.ok).toBe(true);
   });
 });

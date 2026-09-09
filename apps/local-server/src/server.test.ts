@@ -2,7 +2,11 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { compileMethodDraft } from "@calibra-facil/method-definition";
+import {
+  compileMethodDraft,
+  fingerprintJson,
+} from "@calibra-facil/method-definition";
+import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import {
   applySyncBootstrap,
   currentLocalDbSchemaVersion,
@@ -2843,9 +2847,13 @@ function compileLocalTestMethod() {
     {
       engine,
       engineMetadata: {
+        // The real engine identity, exactly as the cloud stamps it when it
+        // compiles a published method: the execution guard compares both, so a
+        // made-up version/options pair would only ever exercise the mismatch
+        // path.
         packageName: "@calibra-facil/math-engine",
-        version: "local-test",
-        optionsFingerprint: "local-test-options",
+        version: ENGINE_VERSION,
+        optionsFingerprint: fingerprintJson(engine.options, "engine-options"),
       },
       requirePublishable: true,
     },

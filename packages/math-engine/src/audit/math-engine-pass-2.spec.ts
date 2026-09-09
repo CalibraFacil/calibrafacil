@@ -24,9 +24,10 @@ describe("second-pass math-engine audit regressions", () => {
     expect(Number(result.combinedStandardUncertainty)).toBeCloseTo(0.02, 14);
   });
 
-  it("keeps 0.3.0 double-precision sensitivities for estimates a double can carry", () => {
-    // 100.123 - 100.1 is not exactly 0.023 in doubles; the byte-stable path is
-    // the double one, so recorded fingerprints under this engine version hold.
+  it("evaluates sensitivities exactly in decimal mode (0.4.0)", () => {
+    // 100.123 - 100.1 is not exactly 0.023 in doubles (0.02299999999999613);
+    // up to 0.3.0 the derivative was evaluated through doubles and carried that
+    // rounding into c_k. The exact rational derivative is 0.023.
     const result = createCalculationEngine().evaluateMeasurementModel({
       formula: "(I_x - I_ref) * k",
       quantities: {
@@ -36,7 +37,8 @@ describe("second-pass math-engine audit regressions", () => {
       },
     });
 
-    expect(Number(result.sensitivityCoefficients.k)).toBe(100.123 - 100.1);
+    expect(result.sensitivityCoefficients.k).toBe("0.023");
+    expect(Number(result.sensitivityCoefficients.k)).not.toBe(100.123 - 100.1);
     expect(Number(result.sensitivityCoefficients.I_x)).toBe(1.0004);
   });
 
@@ -73,16 +75,21 @@ describe("second-pass math-engine audit regressions", () => {
     expect(result.standardUncertainty).toBe(0);
   });
 
-  it("keeps the 0.3.0 double statistics for observations that round-trip through doubles", () => {
+  it("computes Type A statistics exactly for every observation set (0.4.0)", () => {
+    // Exact: mean 10.002, s² = (0.001² + 0 + 0.001²)/2 = 1e-6, s = 1e-3. The
+    // double path centred on rounded values and reported s = 0.00099999999999945.
     const observations = [10.001, "10.002", "10.0030"];
     const doubles = [10.001, 10.002, 10.003];
     const result = typeAFromRepeatedObservations(observations);
     expect(result.observations).toEqual(doubles);
-    expect(result.mean).toBe(mean(doubles));
-    expect(result.sampleStandardDeviation).toBe(
+    expect(result.canonicalMean).toBe("10.002");
+    expect(result.mean).toBe(10.002);
+    expect(result.sampleStandardDeviation).toBe(0.001);
+    expect(result.sampleStandardDeviation).not.toBe(
       sampleStandardDeviation(doubles),
     );
-    expect(result.standardUncertainty).toBe(standardUncertaintyOfMean(doubles));
+    expect(result.standardUncertainty).toBe(0.001 / Math.sqrt(3));
+    expect(result.standardUncertainty).not.toBe(standardUncertaintyOfMean(doubles));
   });
 
   it("distinguishes adjacent number-mode inputs and results in audit fingerprints", () => {
@@ -150,10 +157,9 @@ describe("second-pass math-engine audit regressions", () => {
   it.each([
     [1n, 3n, "0.3333333333333333"],
     [1n, 6n, "0.1666666666666667"],
-    // Normal-range texts are unchanged from the double-mediated path so the
-    // canonical value (and fingerprints) stay stable under the same engine
-    // version: -2/3 keeps its 0.3.0 text (the double is -0.66666666666666663).
-    [-2n, 3n, "-0.6666666666666666"],
+    // 0.4.0 rounds the rational itself (exact half-up): -2/3 is …667, where
+    // the 0.3.0 double-mediated text was …666 (the double is -0.66666666666666663).
+    [-2n, 3n, "-0.6666666666666667"],
     [299999999999999999n, 300000000000000000n, "1"],
     // Below the double range the rational itself is rounded.
     [1n, 3n * 10n ** 400n, "3.333333333333333e-401"],
@@ -324,15 +330,15 @@ describe("PR #902 review follow-ups", () => {
     );
   });
 
-  it("keeps the 0.3.0 Welch-Satterthwaite arithmetic bit-for-bit in the normal range", () => {
-    // Contributions of a realistic mass model (two Type A, three Type B). The
-    // scale-normalized form rounds one ulp differently (…644 vs …645), which
-    // drifted k, U and the calculation fingerprint of recorded results.
+  it("evaluates Welch-Satterthwaite in scale-normalized form (0.4.0)", () => {
+    // Same identity as GUM Eq. G.2b, normalized by the largest variance before
+    // squaring so it is immune to under/overflow. Contributions of a realistic
+    // mass model (two Type A, three Type B).
     const variance = 0.0000730296743603715 ** 2;
     const contributions = [1.000000000066393e-9, 9.99999999782176e-10, 8.333333333333336e-10, 2.5e-9, 4.000000000265573e-18];
     const dofs = [4, 4, Infinity, Infinity, Infinity];
-    const plain = (variance * variance) / (0 + (contributions[0]! * contributions[0]!) / 4 + (contributions[1]! * contributions[1]!) / 4);
-    expect(welchSatterthwaiteDegreesOfFreedom(variance, contributions, dofs)).toBe(plain);
+    const plain = (variance * variance) / ((contributions[0]! * contributions[0]!) / 4 + (contributions[1]! * contributions[1]!) / 4);
+    expect(welchSatterthwaiteDegreesOfFreedom(variance, contributions, dofs)).toBeCloseTo(plain, 12);
   });
 
   it("rejects a Welch-Satterthwaite term that overflows instead of reporting zero degrees of freedom", () => {
@@ -362,14 +368,6 @@ describe("PR #902 review follow-ups", () => {
     });
     expect(Number(result.value)).toBe(9);
     expect(Number(result.sensitivityCoefficients.x)).toBe(6);
-  });
-
-  it("leaves the double Type A path without a canonical mean", () => {
-    // Observations a double carries keep the 0.3.0 mean arithmetic, so no exact
-    // mean is offered that could displace it.
-    const typeA = typeAFromRepeatedObservations([10.001, "10.002", "10.003"]);
-    expect(typeA.canonicalMean).toBeUndefined();
-    expect(typeA.mean).toBe(mean([10.001, 10.002, 10.003]));
   });
 
   it("evaluates derivatives exactly when a formula literal exceeds double precision", () => {

@@ -34,6 +34,7 @@ import {
   type CalibrationLocationSnapshot,
   type CalibrationPhaseSnapshot,
 } from "@calibra-facil/db/schema";
+import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import {
   notifyJobSubmittedForReview,
   notifyJobRejected,
@@ -1782,8 +1783,18 @@ export const jobsRouter = new Hono<{
         );
       }
       const executionData = normalizedData.data ?? {};
-      const officialExecution = executeOfficialCompiledSnapshot({
+      // An engine release recompiles the published method but never rewrites
+      // the copies frozen into open jobs; adopt the recompiled method here when
+      // it is provably the same definition, or this job could never be
+      // submitted again (review of the 0.4.0 execution guard).
+      const reconciledMethod = await reconcileMethodSnapshotEngine({
         methodSnapshot: existing.methodSnapshot,
+        organizationId: memberData.organizationId,
+        engine: createMethodExecutionEngine(),
+      });
+      const nextMethodSnapshot = reconciledMethod.methodSnapshot;
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: nextMethodSnapshot,
         data: executionData,
         assetSnapshot: nextAssetSnapshot,
         standardsSnapshot: nextStandardsSnapshot,
@@ -1826,6 +1837,9 @@ export const jobsRouter = new Hono<{
         .set({
           data: nextData,
           results: nextResults,
+          ...(reconciledMethod.adopted
+            ? { methodSnapshot: nextMethodSnapshot }
+            : {}),
           scopeComplianceStatus: scopeCompliance?.status ?? null,
           scopeComplianceFindings: scopeCompliance?.findings ?? null,
           // A re-submission restarts the release flow: any override recorded
@@ -1852,6 +1866,20 @@ export const jobsRouter = new Hono<{
         action: "submit",
         changes: {
           status: { old: existing.status, new: "REVIEW" },
+          // Evidence that the frozen compiled method was re-pointed at the
+          // method's current compilation (same definition, new engine).
+          methodSnapshotEngine: reconciledMethod.adopted
+            ? {
+                old: {
+                  engineVersion: existing.methodSnapshot.engineVersion,
+                  methodFingerprint: existing.methodSnapshot.methodFingerprint,
+                },
+                new: {
+                  engineVersion: nextMethodSnapshot.engineVersion,
+                  methodFingerprint: nextMethodSnapshot.methodFingerprint,
+                },
+              }
+            : undefined,
           data: { old: existing.data, new: nextData },
           results: { old: existing.results, new: nextResults },
           officialExecution: officialExecution.execution
@@ -2028,8 +2056,16 @@ export const jobsRouter = new Hono<{
         existing.methodSnapshot,
       );
       const executionData = normalizedData.data ?? {};
-      const officialExecution = executeOfficialCompiledSnapshot({
+      // Same reconciliation as the submit route: a draft saved after an engine
+      // release must keep executing (review of the 0.4.0 execution guard).
+      const reconciledMethod = await reconcileMethodSnapshotEngine({
         methodSnapshot: existing.methodSnapshot,
+        organizationId: memberData.organizationId,
+        engine: createMethodExecutionEngine(),
+      });
+      const nextMethodSnapshot = reconciledMethod.methodSnapshot;
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: nextMethodSnapshot,
         data: executionData,
         assetSnapshot: nextAssetSnapshot,
         standardsSnapshot: nextStandardsSnapshot,
@@ -2071,6 +2107,9 @@ export const jobsRouter = new Hono<{
         .set({
           data: nextData,
           results: nextResults,
+          ...(reconciledMethod.adopted
+            ? { methodSnapshot: nextMethodSnapshot }
+            : {}),
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -2098,6 +2137,18 @@ export const jobsRouter = new Hono<{
         jobId: id,
         action: "execute",
         changes: {
+          methodSnapshotEngine: reconciledMethod.adopted
+            ? {
+                old: {
+                  engineVersion: existing.methodSnapshot.engineVersion,
+                  methodFingerprint: existing.methodSnapshot.methodFingerprint,
+                },
+                new: {
+                  engineVersion: nextMethodSnapshot.engineVersion,
+                  methodFingerprint: nextMethodSnapshot.methodFingerprint,
+                },
+              }
+            : undefined,
           status:
             existing.status !== newStatus
               ? { old: existing.status, new: newStatus }

@@ -2,6 +2,7 @@ export type {
   AuditMetadataValue,
   InputQuantity,
   MeasurementModelInput,
+  CorrelatedDegreesOfFreedomPolicy,
   MeasurementModelResult,
   PairwiseCorrelation,
   PairwiseCorrelationObject,
@@ -23,5 +24,6 @@ export {
   standardUncertaintyOfMean,
   studentTCdf,
   studentTQuantile,
-  welchSatterthwaiteDegreesOfFreedom
+  welchSatterthwaiteDegreesOfFreedom,
+  generalizedWelchSatterthwaiteDegreesOfFreedom
 } from "./statistics.js";

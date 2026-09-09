@@ -225,6 +225,27 @@ function validateCalibrationPhasesForSubmit(
   return null;
 }
 
+/**
+ * The compiled method currently published locally for a job's frozen snapshot,
+ * used only to re-point that snapshot when a desktop release moved the engine
+ * under it (see `executeLocalCompiledMethod`). Resolved by the snapshot's own
+ * method id and version, so a newer published version is never substituted.
+ */
+function currentPublishedCompiledMethod(
+  database: LocalDatabase,
+  methodSnapshot: Record<string, unknown>,
+): unknown {
+  const methodId = methodSnapshot.methodId;
+  const methodVersion = methodSnapshot.methodVersion;
+  if (typeof methodId !== "number") return null;
+  const method = getLocalMethodDetail(database, String(methodId));
+  if (!method) return null;
+  if (typeof methodVersion === "number" && method.version !== methodVersion) {
+    return null;
+  }
+  return method.compiledMethod;
+}
+
 export function createLocalServer(
   config: LocalServerConfig,
   database: LocalDatabase,
@@ -670,8 +691,13 @@ export function createLocalServer(
         input.selectedStandardIds,
         input.data,
       );
+      const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
-        methodSnapshot: recordFromUnknown(current.methodSnapshot),
+        methodSnapshot: jobMethodSnapshot,
+        currentCompiledMethod: currentPublishedCompiledMethod(
+          database,
+          jobMethodSnapshot,
+        ),
         assetSnapshot: recordFromUnknown(current.assetSnapshot),
         standardsSnapshot:
           standardsSnapshot === undefined
@@ -746,8 +772,13 @@ export function createLocalServer(
         input.selectedStandardIds,
         input.data,
       );
+      const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
-        methodSnapshot: recordFromUnknown(current.methodSnapshot),
+        methodSnapshot: jobMethodSnapshot,
+        currentCompiledMethod: currentPublishedCompiledMethod(
+          database,
+          jobMethodSnapshot,
+        ),
         assetSnapshot: recordFromUnknown(current.assetSnapshot),
         standardsSnapshot:
           standardsSnapshot === undefined

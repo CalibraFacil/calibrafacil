@@ -38,10 +38,10 @@ const SQRT6 = Math.sqrt(6); // √6
 // ─── REQ-GUM-009: engine version pin ───────────────────────────────────────
 
 describe("REQ-GUM-009: ENGINE_VERSION pin", () => {
-  it("REQ-GUM-009 — ENGINE_VERSION SHALL equal '0.3.0'", () => {
+  it("REQ-GUM-009 — ENGINE_VERSION SHALL equal '0.4.0'", () => {
     // Pinning the validated engine tag; a surprise bump must appear in the diff
     // and force re-validation of all oracle values below.
-    expect(ENGINE_VERSION).toBe("0.3.0");
+    expect(ENGINE_VERSION).toBe("0.4.0");
   });
 });
 

@@ -1,0 +1,11 @@
+{
+  "engineVersion": "0.4.0",
+  "referenceFormula": "reference + correction - drift",
+  "fingerprint": "sha256:cad84413a549dfa17ed9fff7d9ac0169e6108908e3eb746995f4ec3941055716",
+  "engineOptions": {
+    "numericMode": "decimal",
+    "rejectUnusedInputs": true,
+    "maxExponentMagnitude": 12,
+    "maxSignificantDigits": 24
+  }
+}

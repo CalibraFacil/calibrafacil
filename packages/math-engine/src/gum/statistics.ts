@@ -1,6 +1,12 @@
 import { ERROR_CODES } from "../errors/codes.js";
 import { makeError } from "../errors/errors.js";
 import { assertDenseArray, valueKind } from "../validation/shape.js";
+import { correlationMatrixDefect } from "./psd.js";
+
+// Slack for the correlation-matrix checks of the generalized Welch–Satterthwaite
+// helper (bounds, unit diagonal, symmetry and positive semidefiniteness), so a
+// matrix assembled from rounded coefficients is not rejected for its last bits.
+const CORRELATION_MATRIX_TOLERANCE = 1e-12;
 
 const LANCZOS_COEFFICIENTS = [
   676.5203681218851,
@@ -21,12 +27,6 @@ function assertFiniteStatisticNumber(value: unknown, path: string): number {
     });
   }
   return Object.is(value, -0) ? 0 : value;
-}
-
-const MIN_NORMAL_DOUBLE = 2.2250738585072014e-308;
-
-function isNormalDouble(value: number): boolean {
-  return Number.isFinite(value) && Math.abs(value) >= MIN_NORMAL_DOUBLE;
 }
 
 function assertFiniteStatisticResult(value: number, path: string): number {
@@ -323,31 +323,9 @@ export function welchSatterthwaiteDegreesOfFreedom(
     const dof = assertDegreesOfFreedom(degreesOfFreedom[index], `degreesOfFreedom[${index}]`, true);
     checked.push({ contribution, dof });
   }
-  // 0.3.0 arithmetic first, kept byte-for-byte while every square is a normal
-  // double: dividing by a scale before squaring rounds differently in the last
-  // ulp, which would drift ν_eff (and so k, U and the fingerprint) on recorded
-  // results. The scale-normalized form below only engages where this form is
-  // unreliable — a square that underflows to zero/subnormal (read as infinite
-  // information at 0.3.0, the audit finding) or overflows.
-  const plainNumerator = variance * variance;
-  let plainDenominator: number | undefined = isNormalDouble(plainNumerator) ? 0 : undefined;
-  for (const { contribution, dof } of checked) {
-    if (plainDenominator === undefined) break;
-    if (contribution === 0 || !Number.isFinite(dof)) continue;
-    const square = contribution * contribution;
-    // The quotient has to be a normal double too: dividing a normal square by a
-    // very large dof can underflow the term to zero, which the plain form would
-    // read as infinite information from that contribution (review).
-    const term = square / dof;
-    const sum = plainDenominator + term;
-    plainDenominator = isNormalDouble(square) && isNormalDouble(term) && Number.isFinite(sum) ? sum : undefined;
-  }
-  if (plainDenominator !== undefined) {
-    if (plainDenominator === 0) return Number.POSITIVE_INFINITY;
-    return assertFiniteStatisticResult(plainNumerator / plainDenominator, "welchSatterthwaiteDegreesOfFreedom");
-  }
   // Normalize by the largest variance before squaring: the identity is scale
-  // invariant, so u^4 no longer underflows below ~1e-154 or overflows above (audit).
+  // invariant, so u^4 neither underflows below ~1e-154 (read as infinite
+  // information up to 0.3.0, audit) nor overflows above ~1e154.
   let scale = variance;
   for (const { contribution } of checked) if (contribution > scale) scale = contribution;
   let denominator = 0;
@@ -369,4 +347,157 @@ export function welchSatterthwaiteDegreesOfFreedom(
     });
   }
   return assertFiniteStatisticResult(numerator / denominator, "welchSatterthwaiteDegreesOfFreedom");
+}
+
+/**
+ * Welch–Satterthwaite generalized to correlated input quantities (Castrup, H.,
+ * "A Welch-Satterthwaite Relation for Correlated Errors", Proc. Meas. Sci.
+ * Conf. 2010, rev. 2020, Eq. 46; cf. Willink, R., Metrologia 44 (2007) 340).
+ * With b_i = c_i·u_i (signed) and ρ_ij the correlation coefficients,
+ *
+ *   ν_eff = u_c⁴ / [ Σ_i b_i⁴/ν_i
+ *                    + Σ_{i<j} ρ_ij² b_i² b_j² (1/ν_i + 1/ν_j + 1/(2 ν_i ν_j))
+ *                    + 2 Σ_{i<j} ρ_ij b_i b_j (b_i²/ν_i + b_j²/ν_j)
+ *                    + 2 Σ_i (1/ν_i) Σ_{j<k, j≠i, k≠i} ρ_ij ρ_ik b_i² b_j b_k ]
+ *
+ * The last sum carries the components that share an index: with three or more
+ * correlated quantities, u_i appears in more than one relationship and its
+ * estimate contributes a cross-product for every pair it links (the term is
+ * absent from the two-component form, and omitting it overstates ν_eff — three
+ * equal components with ν = 10 and every ρ = 0.5 give 29.91, not 34.16;
+ * review). Writing B_i = Σ_j ρ_ij b_j (ρ_ii = 1), the whole denominator is the
+ * first-order propagation Σ_i (b_i B_i)²/ν_i plus the second-order pair terms
+ * 1/(2 ν_i ν_j), which is how it is grouped above.
+ *
+ * It reduces to GUM Eq. G.2b when every ρ_ij = 0; every term of an input with
+ * ν = ∞ vanishes. Inputs are normalized by the largest |b_i| (or u_c) before
+ * squaring, as in `welchSatterthwaiteDegreesOfFreedom`.
+ */
+export function generalizedWelchSatterthwaiteDegreesOfFreedom(
+  combinedVariance: number,
+  scaledUncertainties: readonly number[],
+  correlationMatrix: readonly (readonly number[])[],
+  degreesOfFreedom: readonly number[]
+): number {
+  const variance = assertFiniteStatisticNumber(combinedVariance, "combinedVariance");
+  if (variance < 0) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Combined variance must be non-negative.", { path: "combinedVariance", combinedVariance: variance });
+  }
+  if (!Array.isArray(scaledUncertainties) || !Array.isArray(correlationMatrix) || !Array.isArray(degreesOfFreedom)) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Generalized Welch-Satterthwaite inputs must be arrays.", {
+      scaledUncertaintiesType: valueKind(scaledUncertainties),
+      correlationMatrixType: valueKind(correlationMatrix),
+      degreesOfFreedomType: valueKind(degreesOfFreedom)
+    });
+  }
+  assertDenseArray(scaledUncertainties, "scaledUncertainties", ERROR_CODES.INVALID_STATISTIC_INPUT);
+  assertDenseArray(degreesOfFreedom, "degreesOfFreedom", ERROR_CODES.INVALID_STATISTIC_INPUT);
+  const size = scaledUncertainties.length;
+  if (degreesOfFreedom.length !== size || correlationMatrix.length !== size) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Generalized Welch-Satterthwaite input dimensions must agree.", {
+      scaledUncertainties: size,
+      degreesOfFreedom: degreesOfFreedom.length,
+      correlationMatrixRows: correlationMatrix.length
+    });
+  }
+  if (variance === 0) return Number.POSITIVE_INFINITY;
+  const b: number[] = [];
+  const inverseDof: number[] = [];
+  for (let index = 0; index < size; index += 1) {
+    b.push(assertFiniteStatisticNumber(scaledUncertainties[index], `scaledUncertainties[${index}]`));
+    const dof = assertDegreesOfFreedom(degreesOfFreedom[index], `degreesOfFreedom[${index}]`, true);
+    inverseDof.push(Number.isFinite(dof) ? 1 / dof : 0);
+  }
+  const rho: number[][] = [];
+  for (let i = 0; i < size; i += 1) {
+    const row = correlationMatrix[i];
+    if (!Array.isArray(row) || row.length !== size) {
+      throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Correlation matrix must be square.", { row: i, columns: Array.isArray(row) ? row.length : valueKind(row) });
+    }
+    assertDenseArray(row, `correlationMatrix[${i}]`, ERROR_CODES.INVALID_STATISTIC_INPUT);
+    const checkedRow: number[] = [];
+    for (let j = 0; j < size; j += 1) {
+      const value = assertFiniteStatisticNumber(row[j], `correlationMatrix[${i}][${j}]`);
+      if (Math.abs(value) > 1 + 1e-12 || (i === j && Math.abs(value - 1) > 1e-12)) {
+        throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Correlation coefficients must lie in [-1, 1] with a unit diagonal.", { row: i, column: j, value });
+      }
+      checkedRow.push(value);
+    }
+    rho.push(checkedRow);
+  }
+  for (let i = 0; i < size; i += 1) {
+    for (let j = i + 1; j < size; j += 1) {
+      if (Math.abs(rho[i]![j]! - rho[j]![i]!) > 1e-12) {
+        throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Correlation matrix must be symmetric.", { row: i, column: j });
+      }
+    }
+  }
+  // Bounds, unit diagonal and symmetry do not make a correlation matrix
+  // admissible: every off-diagonal entry of -0.9 in a 3x3 passes all three and
+  // still has a negative eigenvalue. evaluateMeasurementModel validates this
+  // before calling, but the helper is exported and must not return a plausible
+  // ν_eff for an impossible model (review).
+  const defect = correlationMatrixDefect(rho, CORRELATION_MATRIX_TOLERANCE);
+  if (defect !== null) {
+    throw makeError(
+      ERROR_CODES.INVALID_STATISTIC_INPUT,
+      "Correlation matrix is not positive semidefinite.",
+      defect.kind === "negative_pivot"
+        ? { pivot: defect.pivot, value: defect.value }
+        : { row: defect.row, column: defect.column, residual: defect.residual }
+    );
+  }
+  let scale = Math.sqrt(variance);
+  for (const value of b) if (Math.abs(value) > scale) scale = Math.abs(value);
+  const s = b.map((value) => value / scale);
+  let denominator = 0;
+  for (let i = 0; i < size; i += 1) {
+    const si2 = s[i]! * s[i]!;
+    denominator = assertFiniteStatisticResult(denominator + si2 * si2 * inverseDof[i]!, "generalizedWelchSatterthwaite.denominator");
+    for (let j = i + 1; j < size; j += 1) {
+      const r = rho[i]![j]!;
+      if (r === 0 || (inverseDof[i] === 0 && inverseDof[j] === 0)) continue;
+      const sj2 = s[j]! * s[j]!;
+      const squaredTerm = r * r * si2 * sj2 * (inverseDof[i]! + inverseDof[j]! + 0.5 * inverseDof[i]! * inverseDof[j]!);
+      const crossTerm = 2 * r * s[i]! * s[j]! * (si2 * inverseDof[i]! + sj2 * inverseDof[j]!);
+      denominator = assertFiniteStatisticResult(denominator + squaredTerm + crossTerm, "generalizedWelchSatterthwaite.denominator");
+    }
+  }
+  // Shared-index cross-products: quantity i's uncertainty estimate enters both
+  // ρ_ij and ρ_ik, so every pair of relationships it takes part in contributes
+  // 2 ρ_ij ρ_ik b_i² b_j b_k / ν_i. Only reachable with three or more
+  // correlated quantities (review).
+  for (let i = 0; i < size; i += 1) {
+    const inverse = inverseDof[i]!;
+    if (inverse === 0) continue;
+    const si2 = s[i]! * s[i]!;
+    if (si2 === 0) continue;
+    for (let j = 0; j < size; j += 1) {
+      if (j === i) continue;
+      const rij = rho[i]![j]!;
+      if (rij === 0) continue;
+      for (let k = j + 1; k < size; k += 1) {
+        if (k === i) continue;
+        const rik = rho[i]![k]!;
+        if (rik === 0) continue;
+        denominator = assertFiniteStatisticResult(
+          denominator + 2 * rij * rik * si2 * s[j]! * s[k]! * inverse,
+          "generalizedWelchSatterthwaite.denominator"
+        );
+      }
+    }
+  }
+  if (denominator === 0) return Number.POSITIVE_INFINITY;
+  if (denominator < 0) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Generalized Welch-Satterthwaite denominator is negative; the correlation matrix is not consistent with the declared uncertainties.", { denominator });
+  }
+  const scaledVariance = variance / (scale * scale);
+  const numerator = scaledVariance * scaledVariance;
+  if (numerator === 0) {
+    throw makeError(ERROR_CODES.INVALID_STATISTIC_INPUT, "Combined variance is too small relative to its contributions for a finite Welch-Satterthwaite evaluation.", {
+      combinedVariance: variance,
+      scale
+    });
+  }
+  return assertFiniteStatisticResult(numerator / denominator, "generalizedWelchSatterthwaiteDegreesOfFreedom");
 }

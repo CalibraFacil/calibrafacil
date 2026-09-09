@@ -656,6 +656,12 @@ function compileMeasurementModels(
             coverageProbability: model.coverageProbability,
             coverageFactor: model.coverageFactor,
             scope: model.scope ?? { kind: "scalar" },
+            // Model options change the evaluation itself — the correlated-DOF
+            // policy selects a different ν_eff, and the non-smooth allowance a
+            // different sensitivity contract — so two models that differ only
+            // here are not the same model and must not share a fingerprint
+            // (review).
+            options: model.options ?? null,
           },
           "measurement-model",
         ),
@@ -1031,6 +1037,7 @@ export function buildMeasurementModelInput(
     ),
     allowNonSmoothWithExplicitSensitivities:
       model.options?.allowNonSmoothWithExplicitSensitivities,
+    correlatedDegreesOfFreedom: model.options?.correlatedDegreesOfFreedom,
   });
 }
 

@@ -1,5 +1,6 @@
 import {
   executeCompiledMethod,
+  reconcileCompiledMethodEngine,
   type CompiledMethod,
 } from "@calibra-facil/method-definition";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
@@ -14,14 +15,31 @@ type ExecutionInput = {
   fallbackResults?: Record<string, unknown> | null;
   requireSuccess?: boolean;
   calibrationPhaseSnapshot?: Record<string, unknown> | null;
+  /**
+   * The compiled method currently published for this method locally, when the
+   * caller has it. A job freezes its own copy at creation, so after a desktop
+   * release ships a new engine the frozen copy no longer matches and would be
+   * refused forever; the reconciliation below adopts this one when it is
+   * provably the same method definition (review of the 0.4.0 execution guard).
+   */
+  currentCompiledMethod?: unknown;
 };
 
 export function executeLocalCompiledMethod(input: ExecutionInput) {
-  const compiledMethod = input.methodSnapshot.compiledMethod;
+  const snapshotCompiledMethod = input.methodSnapshot.compiledMethod;
 
-  if (!isCompiledMethod(compiledMethod)) {
+  if (!isCompiledMethod(snapshotCompiledMethod)) {
     return input.fallbackResults ?? null;
   }
+
+  const engine = createMethodDefinitionEngine();
+  const { compiledMethod } = reconcileCompiledMethodEngine({
+    snapshot: snapshotCompiledMethod,
+    current: isCompiledMethod(input.currentCompiledMethod)
+      ? input.currentCompiledMethod
+      : null,
+    engine,
+  });
 
   const execution = executeCompiledMethod(
     compiledMethod,
@@ -33,9 +51,7 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
           ? input.calibrationPhaseSnapshot
           : undefined,
     },
-    {
-      engine: createMethodDefinitionEngine(),
-    },
+    { engine },
   );
 
   if (!execution.ok && input.requireSuccess) {

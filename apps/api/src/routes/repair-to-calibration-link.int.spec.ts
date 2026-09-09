@@ -38,6 +38,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
@@ -122,7 +123,7 @@ async function seedPublishedMethod(params: {
   createdBy: string;
 }): Promise<number> {
   const fingerprint = "test-fp-0000000000000001";
-  const engineVersion = "0.3.0";
+  const engineVersion = ENGINE_VERSION;
   const optionsFingerprint = "test-opts-fp-00000001";
   const [row] = await db
     .insert(calibrationMethod)

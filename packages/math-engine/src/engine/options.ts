@@ -5,7 +5,7 @@ import { mergeFormulaLimits } from "../parser/options.js";
 import type { NumericMode } from "../numeric/types.js";
 import { assertAllowedKeys, assertBoolean, assertNoDangerousKeys, assertPlainRecord, hasOwn } from "../validation/shape.js";
 
-export const ENGINE_VERSION = "0.3.0";
+export const ENGINE_VERSION = "0.4.0";
 
 /**
  * The canonical engine configuration for certificate-producing method

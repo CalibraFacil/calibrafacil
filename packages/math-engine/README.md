@@ -108,7 +108,9 @@ Transcendental functions, Student's t coverage-factor calculations, and numerica
 
 ## GUM propagation model
 
-The engine evaluates `Y = f(X1, X2, ..., Xn)`, computes sensitivity coefficients symbolically where practical, combines uncertainty using `uc² = ΣΣ ci cj u(xi,xj)`, supports covariance/correlation terms, computes Welch-Satterthwaite effective degrees of freedom, and computes expanded uncertainty `U = k * uc`.
+The engine evaluates `Y = f(X1, X2, ..., Xn)`, computes sensitivity coefficients symbolically where practical (evaluated with exact rational arithmetic in decimal mode), combines uncertainty using `uc² = ΣΣ ci cj u(xi,xj)`, supports covariance/correlation terms, computes Welch-Satterthwaite effective degrees of freedom, and computes expanded uncertainty `U = k * uc`.
+
+When correlations or covariances are declared, `ν_eff` uses the Welch-Satterthwaite generalization for correlated components (Castrup, _A Welch-Satterthwaite Relation for Correlated Errors_, 2010/rev. 2020, Eq. 46; cf. Willink, Metrologia 44 (2007) 340) — `generalizedWelchSatterthwaiteDegreesOfFreedom`, which reduces to GUM Eq. G.2b when every correlation is zero. Set `correlatedDegreesOfFreedom: "diagonal"` on the model to keep the diagonal-only G.2b form (the pre-0.4.0 behaviour); the engine then emits `WELCH_SATTERTHWAITE_CORRELATION_LIMITATION`. The relation carries the shared-index cross-products (`2 Σ_i (1/ν_i) Σ_{j<k, j,k≠i} ρ_ij ρ_ik b_i² b_j b_k`), which only appear when a quantity takes part in more than one relationship; the correlation matrix is validated as positive semidefinite before it is used, including when the helper is called directly. The option is ignored, and not fingerprinted, when no relationship is declared — an empty `correlations`/`covariances` collection declares none.
 
 For GUM propagation, non-smooth functions such as `abs`, `floor`, `ceil`, `round`, `min`, `max`, and `if_zero` are rejected by default. They are allowed only when every formula variable has an explicit `sensitivityCoefficient` and the caller sets `allowNonSmoothWithExplicitSensitivities: true`.
 

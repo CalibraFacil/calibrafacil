@@ -9,7 +9,8 @@ export interface DecimalParseOptions {
 }
 
 // Smallest positive normal double (2^-1022). Below it a double carries fewer
-// than 53 significant bits, so its decimal digits are not trustworthy.
+// than 53 significant bits, so its decimal digits are not trustworthy — the
+// square-root helper uses it to decide when narrowing first is safe.
 const MIN_NORMAL_DOUBLE = 2.2250738585072014e-308;
 
 const DEFAULT_DECIMAL_PARSE_OPTIONS: Required<DecimalParseOptions> = {
@@ -189,8 +190,8 @@ function canonicalizeNumberString(text: string): string {
 }
 
 // Canonical texts stop expanding a terminating rational past this many fractional
-// places and round through a double instead (see toCanonicalString); the exact
-// text (toExactString) has no such cutoff.
+// places and round it to the requested precision instead (see toCanonicalString);
+// the exact text (toExactString) has no such cutoff.
 const CANONICAL_EXACT_SCALE_LIMIT = 120;
 
 function finiteDecimalString(
@@ -539,18 +540,11 @@ export class DeterministicDecimal {
     );
     if (exactFinite !== null) return canonicalizeNumberString(exactFinite);
     const clampedPrecision = Math.max(1, Math.min(21, Math.trunc(precision)));
-    // ratioToDouble, not toNumber: a rational above the finite-double range must
-    // reach the exact-rational fallback below instead of throwing (review).
-    const value = ratioToDouble(this.numerator, this.denominator);
-    if (Number.isFinite(value) && Math.abs(value) >= MIN_NORMAL_DOUBLE) {
-      // Established path for the normal double range: keep it so canonical
-      // texts (and the fingerprints derived from them) stay stable under the
-      // current engine version.
-      return canonicalizeNumberString(value.toPrecision(clampedPrecision));
-    }
-    // The rational is non-zero but its double is 0, subnormal or non-finite —
-    // toPrecision would emit "0" (or garbage digits) for a value the exact
-    // arithmetic still carries (audit). Round the rational itself instead.
+    // Round the rational itself (exact half-up at `precision` significant
+    // digits). Up to 0.3.0 this went through the nearest double and
+    // `toPrecision`, which rounds the *binary* value and so could differ in the
+    // last digit (-2/3 → …666 instead of …667) and emitted "0" below the double
+    // range; 0.4.0 makes the text a function of the rational alone.
     return rationalToPrecisionString(
       this.numerator,
       this.denominator,

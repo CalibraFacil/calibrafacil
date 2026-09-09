@@ -1,6 +1,6 @@
 {
   "name": "@calibra-facil/math-engine",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "sideEffects": false,
   "description": "Secure, deterministic, GUM-aligned calculation engine for calibration formulas.",
