@@ -9,6 +9,8 @@ export {
 } from "./encryption";
 export {
   classifyResendErrorName,
+  createResendDomain,
+  deleteResendDomain,
   getResendDomain,
   listResendDomains,
   validateResendApiKey,

@@ -6,6 +6,10 @@ import type { EmailDomainResponse } from '@calibra-facil/client-runtime'
 
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
+import {
+  normalizeEmailDnsRecords,
+  suggestSendingSubdomain,
+} from '@/features/settings/email-domain-records'
 import { useEmailDomainData } from '@/features/settings/queries'
 import {
   Card,
@@ -18,10 +22,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-
-type ValidatedDomain = { id: string; name: string; status: string }
 
 function formatDateTime(value: string | Date | null) {
   if (!value) return 'Ainda não disponível'
@@ -56,94 +66,39 @@ function statusLabel(status: EmailDomainResponse['statusSummary']['status']) {
   }
 }
 
-function resendStatusLabel(status: string) {
-  switch (status) {
-    case 'verified':
-      return 'Verificado'
-    case 'pending':
-      return 'Pendente'
-    case 'failed':
-    case 'partially_failed':
-      return 'Falhou'
-    default:
-      return 'Não verificado'
-  }
-}
-
 export function EmailDomainSettingsPage() {
   const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
   const domainQuery = useEmailDomainData()
 
-  const [apiKey, setApiKey] = useState('')
-  const [validatedDomains, setValidatedDomains] = useState<
-    ValidatedDomain[] | null
-  >(null)
-  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null)
-  const [fromLocalPart, setFromLocalPart] = useState('contato')
-  const [rotateKeyValue, setRotateKeyValue] = useState('')
+  const [hostname, setHostname] = useState('')
+  const [fromLocalPart, setFromLocalPart] = useState<string | null>(null)
+  const savedDomain = domainQuery.data?.domain
+  const sendingHostname = savedDomain?.hostname ?? hostname
+  const sendingLocalPart =
+    fromLocalPart ?? savedDomain?.fromAddress.split('@')[0] ?? 'contato'
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['email-domain'] })
   }
 
-  const validateKeyMutation = useMutation({
-    mutationFn: async () => calibraApi.emailDomains.validateKey({ apiKey }),
-    onSuccess: (result) => {
-      const domains = result.domains ?? []
-      setValidatedDomains(domains)
-      const firstVerified = domains.find((d) => d.status === 'verified')
-      setSelectedDomainId(firstVerified?.id ?? domains[0]?.id ?? null)
-      if (domains.length === 0) {
-        toast.info(
-          'Chave válida, mas a conta ainda não tem domínios. Adicione um domínio no painel do Resend.',
-        )
-      } else {
-        toast.success('Chave validada. Escolha o domínio de envio.')
-      }
-    },
-    onError: (error) => {
-      setValidatedDomains(null)
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao validar a chave',
-      )
-    },
-  })
-
   const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedDomainId) throw new Error('Escolha um domínio')
-      return calibraApi.emailDomains.create({
-        apiKey,
-        resendDomainId: selectedDomainId,
-        fromLocalPart,
-      })
-    },
+    mutationFn: async () =>
+      calibraApi.emailDomains.create({
+        hostname: sendingHostname,
+        fromLocalPart: sendingLocalPart,
+      }),
     onSuccess: async () => {
-      setApiKey('')
-      setValidatedDomains(null)
-      setSelectedDomainId(null)
-      toast.success('Remetente salvo. Ative o envio quando estiver pronto.')
+      toast.success(
+        savedDomain
+          ? 'Remetente salvo'
+          : 'Registros gerados. Publique-os no seu DNS e verifique.',
+      )
       await refresh()
     },
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : 'Falha ao salvar remetente',
-      )
-    },
-  })
-
-  const rotateKeyMutation = useMutation({
-    mutationFn: async () =>
-      calibraApi.emailDomains.rotateKey({ apiKey: rotateKeyValue }),
-    onSuccess: async () => {
-      setRotateKeyValue('')
-      toast.success('Chave atualizada')
-      await refresh()
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao atualizar a chave',
       )
     },
   })
@@ -181,6 +136,8 @@ export function EmailDomainSettingsPage() {
   const deleteMutation = useMutation({
     mutationFn: async () => calibraApi.emailDomains.delete(),
     onSuccess: async () => {
+      setHostname('')
+      setFromLocalPart(null)
       toast.success(
         'Configuração removida. Os e-mails voltam ao remetente padrão.',
       )
@@ -219,8 +176,8 @@ export function EmailDomainSettingsPage() {
     accessQuery.data?.entitlements.includes('email_sender_domain') ?? false
   const domain = payload.domain
   const keyHealth = payload.statusSummary.keyHealth
-  const selectedDomain =
-    validatedDomains?.find((d) => d.id === selectedDomainId) ?? null
+  const dnsRecords = normalizeEmailDnsRecords(domain?.dnsRecords)
+  const subdomainSuggestion = domain ? null : suggestSendingSubdomain(hostname)
 
   return (
     <div className="space-y-6">
@@ -229,8 +186,9 @@ export function EmailDomainSettingsPage() {
           <CardTitle>Domínio de e-mail</CardTitle>
           <CardDescription>
             Envie os e-mails de OS, orçamentos e portal a partir do domínio do
-            seu laboratório, com a sua própria conta Resend. Sem configuração,
-            tudo continua saindo de calibrafacil.com.
+            seu laboratório. Você publica alguns registros de DNS e pronto, sem
+            criar conta em outro serviço. Sem configuração, tudo continua saindo
+            de calibrafacil.com.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -241,7 +199,7 @@ export function EmailDomainSettingsPage() {
             {keyHealth.status !== 'ok' && (
               <Badge variant="destructive">
                 {keyHealth.status === 'invalid'
-                  ? 'Chave inválida'
+                  ? 'Serviço de envio indisponível'
                   : 'Limite de envio atingido'}
               </Badge>
             )}
@@ -306,8 +264,8 @@ export function EmailDomainSettingsPage() {
           <AlertDescription className="space-y-1">
             <span className="font-medium">
               {keyHealth.status === 'invalid'
-                ? 'A chave do Resend foi recusada. Os e-mails estão saindo pelo remetente padrão da plataforma.'
-                : 'A conta do Resend atingiu o limite de envio. Os e-mails excedentes saem pelo remetente padrão da plataforma.'}
+                ? 'O acesso ao serviço de envio foi recusado. Contate o suporte.'
+                : 'O serviço de envio atingiu o limite de uso. Aguarde e tente novamente.'}
             </span>
             {keyHealth.lastError && (
               <span className="block font-mono text-xs break-all">
@@ -321,159 +279,174 @@ export function EmailDomainSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            {domain ? 'Trocar domínio ou conta' : 'Configurar envio'}
+            {domain ? 'Domínio configurado' : 'Configurar envio'}
           </CardTitle>
           <CardDescription>
-            O laboratório usa a própria conta Resend. Recomendamos um subdomínio
-            dedicado, como <code>mail.suaempresa.com.br</code>, para proteger a
-            reputação do seu e-mail principal.
+            Use um subdomínio dedicado, como certificados.seulaboratorio.com.br.
+            O CalibraFácil configura o serviço de envio e você publica os
+            registros DNS.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
             <li>
-              Crie uma conta gratuita em{' '}
-              <a
-                href="https://resend.com"
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium underline"
-              >
-                resend.com
-              </a>
-              .
+              Informe o domínio e o endereço do remetente para gerar os
+              registros.
             </li>
             <li>
-              No painel do Resend, adicione o subdomínio de envio e conclua a
-              verificação DNS (DKIM e SPF).
+              Publique os registros no serviço onde você gerencia o DNS do
+              laboratório.
             </li>
             <li>
-              Gere uma chave de API com acesso total e cole abaixo. Ela fica
-              criptografada e nunca é exibida novamente.
+              Selecione Verificar novamente. Após a confirmação, selecione
+              Ativar envio.
             </li>
           </ol>
+          {domain && (
+            <p className="text-sm text-muted-foreground">
+              Para trocar de domínio, remova a configuração atual abaixo e
+              configure o novo domínio.
+              {domain.mode === 'byok' &&
+                ' Sua configuração anterior continua funcionando. A remoção não exclui o domínio da sua conta Resend.'}
+            </p>
+          )}
 
-          <form
-            className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[1fr_auto]"
-            onSubmit={(event) => {
-              event.preventDefault()
-              validateKeyMutation.mutate()
-            }}
-          >
-            <Field>
-              <FieldLabel htmlFor="email-domain-api-key">
-                Chave de API do Resend
-              </FieldLabel>
-              <Input
-                id="email-domain-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder="re_..."
-                autoComplete="off"
-                disabled={!hasEntitlement || validateKeyMutation.isPending}
-              />
-              <FieldDescription>
-                Validamos a chave direto no Resend antes de salvar qualquer
-                coisa.
-              </FieldDescription>
-            </Field>
-            <div className="flex items-end">
+          {domain?.mode !== 'byok' && (
+            <form
+              className="space-y-4 rounded-lg border p-4"
+              onSubmit={(event) => {
+                event.preventDefault()
+                createMutation.mutate()
+              }}
+            >
+              <Field>
+                <FieldLabel htmlFor="email-domain-hostname">
+                  Domínio de envio
+                </FieldLabel>
+                <Input
+                  id="email-domain-hostname"
+                  value={sendingHostname}
+                  onChange={(event) => setHostname(event.target.value)}
+                  placeholder="certificados.seulaboratorio.com.br"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={
+                    Boolean(domain) ||
+                    !hasEntitlement ||
+                    createMutation.isPending
+                  }
+                />
+                <FieldDescription>
+                  Use um subdomínio dedicado ao envio. Assim a reputação dos
+                  e-mails do sistema fica separada da do domínio que a sua
+                  equipe já usa no dia a dia.
+                </FieldDescription>
+                {subdomainSuggestion && (
+                  <FieldDescription className="text-amber-700 dark:text-amber-400">
+                    Você digitou o domínio principal.{' '}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={() => setHostname(subdomainSuggestion)}
+                    >
+                      Usar {subdomainSuggestion}
+                    </button>
+                  </FieldDescription>
+                )}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="email-domain-local-part">
+                  Endereço do remetente
+                </FieldLabel>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="email-domain-local-part"
+                    value={sendingLocalPart}
+                    onChange={(event) => setFromLocalPart(event.target.value)}
+                    className="max-w-40"
+                    disabled={createMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    @{sendingHostname.trim() || 'seu-dominio'}
+                  </span>
+                </div>
+                <FieldDescription>
+                  Os clientes verão este endereço e o nome do laboratório como
+                  remetente. As respostas vão para o e-mail de contato da
+                  organização, exibido acima.
+                </FieldDescription>
+              </Field>
+
               <Button
                 type="submit"
                 disabled={
                   !hasEntitlement ||
-                  !apiKey.trim() ||
-                  validateKeyMutation.isPending
+                  !sendingHostname.trim() ||
+                  !sendingLocalPart.trim() ||
+                  createMutation.isPending
                 }
               >
-                Validar chave
+                {createMutation.isPending
+                  ? 'Salvando'
+                  : domain
+                    ? 'Salvar remetente'
+                    : 'Gerar registros DNS'}
               </Button>
-            </div>
-          </form>
+            </form>
+          )}
 
-          {validatedDomains && validatedDomains.length > 0 && (
-            <div className="space-y-4 rounded-lg border p-4">
+          {dnsRecords.length > 0 && (
+            <div className="space-y-3 rounded-lg border p-4">
               <div>
-                <p className="text-sm font-medium">Domínios da conta</p>
+                <p className="text-sm font-medium">
+                  Publique estes registros no seu DNS
+                </p>
                 <p className="text-sm text-muted-foreground">
-                  Escolha o domínio verificado que vai assinar os envios.
+                  São gerados pelo provedor de envio. Copie exatamente como
+                  estão, sem alterar nada. A propagação costuma levar de alguns
+                  minutos a algumas horas.
                 </p>
               </div>
-              <div className="grid gap-2">
-                {validatedDomains.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedDomainId(item.id)}
-                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                      selectedDomainId === item.id
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:bg-muted/50'
-                    }`}
-                  >
-                    <span className="font-mono">{item.name}</span>
-                    <Badge
-                      variant={
-                        item.status === 'verified' ? 'secondary' : 'outline'
-                      }
-                    >
-                      {resendStatusLabel(item.status)}
-                    </Badge>
-                  </button>
-                ))}
+
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-24">Tipo</TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead className="w-20">Prioridade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dnsRecords.map((record) => (
+                      <TableRow key={`${record.type}-${record.name}`}>
+                        <TableCell className="font-mono text-xs">
+                          {record.type}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs break-all">
+                          {record.name}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs break-all">
+                          {record.value}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {record.priority ?? '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
 
-              <form
-                className="grid gap-4 lg:grid-cols-[1fr_auto]"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  createMutation.mutate()
-                }}
-              >
-                <Field>
-                  <FieldLabel htmlFor="email-domain-local-part">
-                    Endereço do remetente
-                  </FieldLabel>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      id="email-domain-local-part"
-                      value={fromLocalPart}
-                      onChange={(event) => setFromLocalPart(event.target.value)}
-                      className="max-w-40"
-                      disabled={createMutation.isPending}
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      @{selectedDomain?.name ?? 'seu-dominio'}
-                    </span>
-                  </div>
-                  <FieldDescription>
-                    Os clientes verão este endereço como remetente. O nome de
-                    exibição é o nome do laboratório.
-                  </FieldDescription>
-                </Field>
-                <div className="flex items-end">
-                  <Button
-                    type="submit"
-                    disabled={
-                      !selectedDomainId ||
-                      !fromLocalPart.trim() ||
-                      createMutation.isPending
-                    }
-                  >
-                    Salvar remetente
-                  </Button>
-                </div>
-              </form>
-
-              {selectedDomain && selectedDomain.status !== 'verified' && (
-                <Alert>
-                  <AlertDescription>
-                    Este domínio ainda não foi verificado pelo Resend. Você pode
-                    salvá-lo, mas o envio só é liberado depois da verificação.
-                  </AlertDescription>
-                </Alert>
-              )}
+              <Alert>
+                <AlertDescription>
+                  Se o seu DNS recusar algum registro por conflito de nome,
+                  confira se já existe outro registro com o mesmo Nome. Um host
+                  não pode ter um CNAME junto de outros tipos de registro.
+                </AlertDescription>
+              </Alert>
             </div>
           )}
         </CardContent>
@@ -484,14 +457,19 @@ export function EmailDomainSettingsPage() {
           <CardHeader>
             <CardTitle>Configuração atual</CardTitle>
             <CardDescription>
-              Estado do domínio, saúde da chave e ações de ciclo de vida.
+              Confira a verificação do domínio e ative ou remova o envio.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatusMetric label="Domínio" value={domain.hostname} />
               <StatusMetric label="Remetente" value={domain.fromAddress} />
-              <StatusMetric label="Chave de API" value={domain.apiKeyMasked} />
+              {domain.mode === 'byok' && (
+                <StatusMetric
+                  label="Chave de API"
+                  value={domain.apiKeyMasked}
+                />
+              )}
               <StatusMetric
                 label="Verificado em"
                 value={formatDateTime(domain.verifiedAt)}
@@ -527,46 +505,6 @@ export function EmailDomainSettingsPage() {
                 Remover
               </Button>
             </div>
-
-            <form
-              className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[1fr_auto]"
-              onSubmit={(event) => {
-                event.preventDefault()
-                rotateKeyMutation.mutate()
-              }}
-            >
-              <Field>
-                <FieldLabel htmlFor="email-domain-rotate-key">
-                  Trocar chave de API
-                </FieldLabel>
-                <Input
-                  id="email-domain-rotate-key"
-                  type="password"
-                  value={rotateKeyValue}
-                  onChange={(event) => setRotateKeyValue(event.target.value)}
-                  placeholder="re_..."
-                  autoComplete="off"
-                  disabled={!hasEntitlement || rotateKeyMutation.isPending}
-                />
-                <FieldDescription>
-                  Use quando a chave for revogada ou girada no Resend. A nova
-                  chave precisa alcançar o mesmo domínio.
-                </FieldDescription>
-              </Field>
-              <div className="flex items-end">
-                <Button
-                  type="submit"
-                  variant="outline"
-                  disabled={
-                    !hasEntitlement ||
-                    !rotateKeyValue.trim() ||
-                    rotateKeyMutation.isPending
-                  }
-                >
-                  Atualizar chave
-                </Button>
-              </div>
-            </form>
           </CardContent>
         </Card>
       )}

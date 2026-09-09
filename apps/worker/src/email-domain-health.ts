@@ -45,7 +45,10 @@ function resolveApiKey(
   if (row.mode === "managed") {
     return process.env.RESEND_API_KEY;
   }
-  if (!masterKey) return undefined;
+  // Legacy byok rows only. The key columns are nullable since managed mode.
+  if (!masterKey || !row.resendApiKeyEncrypted || !row.resendApiKeyIv) {
+    return undefined;
+  }
   try {
     return decryptResendApiKey(
       row.resendApiKeyEncrypted,

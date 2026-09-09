@@ -644,17 +644,7 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "validateKey",
-          "namespace": "emailDomains",
-          "policy": "cloud-only",
-        },
-        {
           "method": "create",
-          "namespace": "emailDomains",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "rotateKey",
           "namespace": "emailDomains",
           "policy": "cloud-only",
         },
@@ -4628,15 +4618,6 @@ describe("email domains runtime adapter", () => {
         return new Response(null, { status: 204 });
       }
 
-      if (String(input).endsWith("/validate-key")) {
-        return Response.json({
-          valid: true,
-          domains: [
-            { id: "rd-1", name: "mail.lab.example.test", status: "verified" },
-          ],
-        });
-      }
-
       return Response.json(payload);
     };
     const client = createCloudApiClient({
@@ -4648,17 +4629,10 @@ describe("email domains runtime adapter", () => {
       domain: { hostname: "mail.lab.example.test" },
     });
     await expect(
-      client.emailDomains.validateKey({ apiKey: "re_key" }),
-    ).resolves.toMatchObject({ valid: true });
-    await expect(
       client.emailDomains.create({
-        apiKey: "re_key",
-        resendDomainId: "rd-1",
+        hostname: "mail.lab.example.test",
         fromLocalPart: "os",
       }),
-    ).resolves.toMatchObject({ domain: { id: "emaildom-1" } });
-    await expect(
-      client.emailDomains.rotateKey({ apiKey: "re_key2" }),
     ).resolves.toMatchObject({ domain: { id: "emaildom-1" } });
     await expect(client.emailDomains.verify()).resolves.toMatchObject({
       statusSummary: { status: "verified" },
@@ -4670,9 +4644,7 @@ describe("email domains runtime adapter", () => {
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/email-domains",
-      "https://api.example.test/api/email-domains/validate-key",
       "https://api.example.test/api/email-domains",
-      "https://api.example.test/api/email-domains/key",
       "https://api.example.test/api/email-domains/verify",
       "https://api.example.test/api/email-domains/activate",
       "https://api.example.test/api/email-domains",
@@ -4692,12 +4664,8 @@ describe("email domains runtime adapter", () => {
       statusSummary: { status: "not_configured" },
     });
     await expect(
-      client.emailDomains.validateKey({ apiKey: "re_key" }),
-    ).rejects.toThrow("Domínio de e-mail requer a API web/nuvem");
-    await expect(
       client.emailDomains.create({
-        apiKey: "re_key",
-        resendDomainId: "rd-1",
+        hostname: "mail.lab.example.test",
         fromLocalPart: "os",
       }),
     ).rejects.toThrow("Domínio de e-mail requer a API web/nuvem");

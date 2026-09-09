@@ -1,12 +1,4 @@
-/**
- * Lab-owned email sending domain (issue #584, BYOK v1).
- *
- * The lab brings its own Resend account: it pastes an API key, we live-list
- * the account's domains and the lab PICKS an already-verified one (v1
- * verified-domain-picker; domain creation/DNS handholding happens in the
- * lab's Resend dashboard). The key is stored AES-256-GCM encrypted and is
- * NEVER returned by any response — only the masked last-4.
- */
+/** Managed laboratory sending domains, with read support for legacy BYOK rows. */
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
@@ -15,17 +7,13 @@ import { db } from "@calibra-facil/db";
 import { organizationEmailDomain } from "@calibra-facil/db/schema";
 import {
   decryptResendApiKey,
-  encryptResendApiKey,
   getEmailDomainMasterKey,
   getResendDomain,
-  resendApiKeyLast4,
-  validateResendApiKey,
   verifyResendDomain,
   type ResendFailureClass,
 } from "@calibra-facil/email-sender";
 import {
   buildEmailDomainStatusSummary,
-  buildFromAddress,
   getOrganizationEmailDomain,
   getOrganizationReplyToEmail,
   sanitizeEmailHostname,
@@ -41,33 +29,27 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
-import { and, eq, ne } from "drizzle-orm";
-
-const ApiKeySchema = z.string().trim().min(8).max(200);
-
-const ValidateKeySchema = z.object({
-  apiKey: ApiKeySchema,
-});
+import { eq } from "drizzle-orm";
+import {
+  saveManagedEmailDomain,
+  removeEmailDomain,
+} from "../lib/email-domain-lifecycle";
 
 const CreateEmailDomainSchema = z.object({
-  apiKey: ApiKeySchema,
-  resendDomainId: z.string().trim().min(1).max(120),
+  /** The laboratory's sending host, e.g. certificados.laboratorio.com.br. */
+  hostname: z.string().trim().min(4).max(253),
   fromLocalPart: z.string().trim().min(1).max(64),
-});
-
-const RotateKeySchema = z.object({
-  apiKey: ApiKeySchema,
 });
 
 function resendFailureMessage(failureClass: ResendFailureClass): string {
   switch (failureClass) {
     case "invalid_key":
-      return "Chave de API do Resend inválida ou sem as permissões necessárias. Gere uma chave com acesso total no painel do Resend.";
+      return "O serviço de envio precisa de uma atualização de acesso. Contate o suporte.";
     case "quota_exhausted":
     case "rate_limited":
       return "O Resend recusou a chamada por limite de uso. Aguarde alguns instantes e tente novamente.";
     case "sender_config":
-      return "O Resend não encontrou este domínio na conta da chave informada.";
+      return "Não foi possível consultar este domínio no serviço de envio. Contate o suporte.";
     default:
       return "Não foi possível falar com o Resend agora. Tente novamente em instantes.";
   }
@@ -79,6 +61,52 @@ function resendFailureStatus(failureClass: ResendFailureClass): 400 | 502 {
 
 const MASTER_KEY_MISSING_MESSAGE =
   "Configuração do servidor incompleta para armazenar a chave (EMAIL_DOMAIN_MASTER_KEY ausente). Contate o suporte.";
+
+const PLATFORM_KEY_MISSING_MESSAGE =
+  "Configuração do servidor incompleta para criar o domínio de envio (RESEND_API_KEY ausente). Contate o suporte.";
+
+/**
+ * Which Resend account this row lives in.
+ *
+ * Managed rows are ours, so they use the platform key. Legacy bring-your-own-key
+ * rows are the laboratory's own account and still need their stored key
+ * decrypted. No new row is ever created in that mode.
+ */
+function resolveRowApiKey(record: {
+  mode: string;
+  resendApiKeyEncrypted: string | null;
+  resendApiKeyIv: string | null;
+}): { ok: true; apiKey: string } | { ok: false; message: string } {
+  if (record.mode === "managed") {
+    const platformKey = process.env.RESEND_API_KEY;
+    return platformKey
+      ? { ok: true, apiKey: platformKey }
+      : { ok: false, message: PLATFORM_KEY_MISSING_MESSAGE };
+  }
+
+  const masterKey = getEmailDomainMasterKey();
+  if (!masterKey) return { ok: false, message: MASTER_KEY_MISSING_MESSAGE };
+  if (!record.resendApiKeyEncrypted || !record.resendApiKeyIv) {
+    return { ok: false, message: MASTER_KEY_MISSING_MESSAGE };
+  }
+
+  try {
+    return {
+      ok: true,
+      apiKey: decryptResendApiKey(
+        record.resendApiKeyEncrypted,
+        record.resendApiKeyIv,
+        masterKey,
+      ),
+    };
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Não foi possível ler a chave armazenada deste domínio. Remova e configure novamente.",
+    };
+  }
+}
 
 export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
@@ -100,29 +128,6 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     });
   })
   .post(
-    "/validate-key",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("email_sender_domain"),
-    zValidator("json", ValidateKeySchema),
-    async (c) => {
-      const input = c.req.valid("json");
-      const result = await validateResendApiKey(input.apiKey);
-
-      if (!result.valid) {
-        return c.json(
-          { error: resendFailureMessage(result.failureClass) },
-          resendFailureStatus(result.failureClass),
-        );
-      }
-
-      return c.json({
-        valid: true,
-        domains: result.domains,
-      });
-    },
-  )
-  .post(
     "/",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
@@ -133,11 +138,6 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      const masterKey = getEmailDomainMasterKey();
-      if (!masterKey) {
-        return c.json({ error: MASTER_KEY_MISSING_MESSAGE }, 500);
-      }
-
       const fromLocalPart = sanitizeFromLocalPart(input.fromLocalPart);
       if (!fromLocalPart) {
         return c.json(
@@ -146,193 +146,26 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // The pasted key must reach the picked domain in ITS OWN account —
-      // this both live-validates the key and pins hostname/status/records.
-      const details = await getResendDomain(input.apiKey, input.resendDomainId);
-      if (!details.ok) {
-        return c.json(
-          { error: resendFailureMessage(details.failureClass) },
-          resendFailureStatus(details.failureClass),
-        );
-      }
-
-      const hostname = sanitizeEmailHostname(details.data.name);
+      const hostname = sanitizeEmailHostname(input.hostname);
       if (!hostname) {
         return c.json({ error: "Domínio inválido para envio de e-mail" }, 400);
       }
 
-      const collision = await db.query.organizationEmailDomain.findFirst({
-        where: and(
-          eq(organizationEmailDomain.hostname, hostname),
-          ne(organizationEmailDomain.organizationId, member.organizationId),
-        ),
-      });
-      if (collision) {
-        return c.json(
-          { error: "Este domínio já está em uso por outra organização" },
-          409,
-        );
-      }
-
-      const encryptedKey = encryptResendApiKey(input.apiKey, masterKey);
-      const isVerified = details.data.status === "verified";
-      const now = new Date();
-      const values = {
-        mode: "byok" as const,
-        hostname,
-        resendDomainId: details.data.id,
-        resendApiKeyEncrypted: encryptedKey.encrypted,
-        resendApiKeyIv: encryptedKey.iv,
-        resendApiKeyLast4: resendApiKeyLast4(input.apiKey),
-        fromAddress: buildFromAddress(fromLocalPart, hostname),
-        dnsRecords: details.data.records,
-        status: details.data.status,
-        verifiedAt: isVerified ? now : null,
-        lastVerifiedAt: isVerified ? now : null,
-        keyStatus: "ok" as const,
-        keyLastError: null,
-      };
-
-      const existing = await getOrganizationEmailDomain(member.organizationId);
-
-      if (existing) {
-        const [updated] = await db
-          .update(organizationEmailDomain)
-          .set({
-            ...values,
-            // Re-picking a domain resets activation on purpose: the lab must
-            // review and activate the new sender explicitly.
-            isActive: false,
-            activatedAt: null,
-            updatedAt: now,
-          })
-          .where(eq(organizationEmailDomain.id, existing.id))
-          .returning();
-
-        if (updated) {
-          await writeOrganizationAuditEvent({
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "email_sender_domain.updated",
-            entityType: "email_sender_domain",
-            entityId: updated.id,
-            details: {
-              hostname: updated.hostname,
-              fromAddress: updated.fromAddress,
-              previousHostname: existing.hostname,
-              apiKeyLast4: updated.resendApiKeyLast4,
-            },
-          });
-        }
-
-        return c.json({
-          domain: serializeEmailDomain(updated ?? null),
-          statusSummary: buildEmailDomainStatusSummary(updated ?? null),
-        });
-      }
-
-      const [created] = await db
-        .insert(organizationEmailDomain)
-        .values({
-          id: crypto.randomUUID(),
+      const result = await saveManagedEmailDomain(
+        {
           organizationId: member.organizationId,
-          createdBy: session.user.id,
-          ...values,
-        })
-        .returning();
-
-      if (created) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "email_sender_domain.created",
-          entityType: "email_sender_domain",
-          entityId: created.id,
-          details: {
-            hostname: created.hostname,
-            fromAddress: created.fromAddress,
-            apiKeyLast4: created.resendApiKeyLast4,
-          },
-        });
-      }
-
+          userId: session.user.id,
+          memberId: member.id,
+        },
+        { hostname, fromLocalPart },
+      );
       return c.json(
         {
-          domain: serializeEmailDomain(created ?? null),
-          statusSummary: buildEmailDomainStatusSummary(created ?? null),
+          domain: serializeEmailDomain(result.domain),
+          statusSummary: buildEmailDomainStatusSummary(result.domain),
         },
-        201,
+        result.created ? 201 : 200,
       );
-    },
-  )
-  .post(
-    "/key",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    requireFeature("email_sender_domain"),
-    zValidator("json", RotateKeySchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-
-      const record = await getOrganizationEmailDomain(member.organizationId);
-      if (!record) {
-        return c.json({ error: "Nenhum domínio de envio configurado" }, 404);
-      }
-
-      const masterKey = getEmailDomainMasterKey();
-      if (!masterKey) {
-        return c.json({ error: MASTER_KEY_MISSING_MESSAGE }, 500);
-      }
-
-      // The new key must reach the SAME domain (same Resend account).
-      const details = await getResendDomain(
-        input.apiKey,
-        record.resendDomainId,
-      );
-      if (!details.ok) {
-        return c.json(
-          { error: resendFailureMessage(details.failureClass) },
-          resendFailureStatus(details.failureClass),
-        );
-      }
-
-      const encryptedKey = encryptResendApiKey(input.apiKey, masterKey);
-      const [updated] = await db
-        .update(organizationEmailDomain)
-        .set({
-          resendApiKeyEncrypted: encryptedKey.encrypted,
-          resendApiKeyIv: encryptedKey.iv,
-          resendApiKeyLast4: resendApiKeyLast4(input.apiKey),
-          keyStatus: "ok",
-          keyLastError: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationEmailDomain.id, record.id))
-        .returning();
-
-      if (updated) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "email_sender_domain.key_rotated",
-          entityType: "email_sender_domain",
-          entityId: updated.id,
-          details: {
-            hostname: updated.hostname,
-            apiKeyLast4: updated.resendApiKeyLast4,
-          },
-        });
-      }
-
-      return c.json({
-        domain: serializeEmailDomain(updated ?? null),
-        statusSummary: buildEmailDomainStatusSummary(updated ?? null),
-      });
     },
   )
   .post(
@@ -349,27 +182,11 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Nenhum domínio de envio configurado" }, 404);
       }
 
-      const masterKey = getEmailDomainMasterKey();
-      if (!masterKey) {
-        return c.json({ error: MASTER_KEY_MISSING_MESSAGE }, 500);
+      const credential = resolveRowApiKey(record);
+      if (!credential.ok) {
+        return c.json({ error: credential.message }, 500);
       }
-
-      let apiKey: string;
-      try {
-        apiKey = decryptResendApiKey(
-          record.resendApiKeyEncrypted,
-          record.resendApiKeyIv,
-          masterKey,
-        );
-      } catch {
-        return c.json(
-          {
-            error:
-              "Não foi possível ler a chave armazenada. Cole a chave novamente.",
-          },
-          500,
-        );
-      }
+      const apiKey = credential.apiKey;
 
       // Nudge Resend to re-check DNS, then read back the verdict. The trigger
       // failing on an unverifiable state is fine; the GET is what we trust.
@@ -445,7 +262,10 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!record.verifiedAt) {
         return c.json(
-          { error: "Verifique o domínio no Resend antes de ativá-lo" },
+          {
+            error:
+              "Publique os registros DNS e verifique o domínio antes de ativá-lo",
+          },
           400,
         );
       }
@@ -489,29 +309,11 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
 
-      const record = await getOrganizationEmailDomain(member.organizationId);
-      if (!record) {
-        return c.json({ success: true });
-      }
-
-      await db
-        .delete(organizationEmailDomain)
-        .where(eq(organizationEmailDomain.id, record.id));
-
-      await writeOrganizationAuditEvent({
+      await removeEmailDomain({
         organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "email_sender_domain.deleted",
-        entityType: "email_sender_domain",
-        entityId: record.id,
-        details: {
-          hostname: record.hostname,
-          wasVerified: Boolean(record.verifiedAt),
-          wasActive: record.isActive,
-        },
+        userId: session.user.id,
+        memberId: member.id,
       });
-
       return c.json({ success: true });
     },
   );

@@ -203,9 +203,7 @@ export const calibraApiPolicyRegistry = {
   },
   emailDomains: {
     get: "cloud-only",
-    validateKey: "cloud-only",
     create: "cloud-only",
-    rotateKey: "cloud-only",
     verify: "cloud-only",
     activate: "cloud-only",
     delete: "cloud-only",

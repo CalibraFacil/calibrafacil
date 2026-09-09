@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const domainsMock = vi.hoisted(() => ({
+  create: vi.fn(),
+  remove: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   verify: vi.fn(),
@@ -14,6 +16,8 @@ vi.mock("resend", () => ({
 
 import {
   classifyResendErrorName,
+  createResendDomain,
+  deleteResendDomain,
   getResendDomain,
   listResendDomains,
   validateResendApiKey,
@@ -21,6 +25,8 @@ import {
 } from "./resend-domains";
 
 beforeEach(() => {
+  domainsMock.create.mockReset();
+  domainsMock.remove.mockReset();
   domainsMock.list.mockReset();
   domainsMock.get.mockReset();
   domainsMock.verify.mockReset();
@@ -190,6 +196,87 @@ describe("validateResendApiKey", () => {
       valid: false,
       failureClass: "invalid_key",
       message: "insufficient permissions",
+    });
+  });
+});
+
+describe("managed domain provisioning", () => {
+  it("creates in São Paulo and preserves the provider DNS records", async () => {
+    const data = {
+      id: "new-domain",
+      name: "mail.lab.com.br",
+      status: "not_started",
+      records: [
+        {
+          type: "MX",
+          name: "send.mail",
+          value: "feedback-smtp.sa-east-1.amazonses.com",
+          priority: 10,
+        },
+      ],
+    };
+    domainsMock.create.mockResolvedValue({ data, error: null });
+    expect(await createResendDomain("re_platform", data.name)).toEqual({
+      ok: true,
+      data,
+    });
+    expect(domainsMock.create).toHaveBeenCalledWith({
+      name: data.name,
+      region: "sa-east-1",
+    });
+  });
+  it("returns provider conflicts without adopting an existing domain", async () => {
+    domainsMock.create.mockResolvedValue({
+      data: null,
+      error: { name: "validation_error", message: "Domain already exists" },
+    });
+    expect(
+      await createResendDomain("re_platform", "mail.lab.com.br"),
+    ).toMatchObject({ ok: false, failureClass: "sender_config" });
+    expect(domainsMock.list).not.toHaveBeenCalled();
+  });
+  it("requires a created domain response", async () => {
+    domainsMock.create.mockResolvedValue({ data: null, error: null });
+    expect(
+      await createResendDomain("re_platform", "mail.lab.com.br"),
+    ).toMatchObject({ ok: false });
+  });
+  it("deletes by provider ID and treats an already-removed domain as success", async () => {
+    domainsMock.remove
+      .mockResolvedValueOnce({ data: { id: "d1", deleted: true }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { name: "not_found", message: "Domain not found" },
+      });
+    expect(await deleteResendDomain("re_platform", "d1")).toEqual({
+      ok: true,
+      data: { id: "d1" },
+    });
+    expect(await deleteResendDomain("re_platform", "d1")).toEqual({
+      ok: true,
+      data: { id: "d1" },
+    });
+    expect(domainsMock.remove).toHaveBeenCalledWith("d1");
+  });
+  it("does not mistake permission, transport or empty responses for deletion", async () => {
+    domainsMock.remove
+      .mockResolvedValueOnce({
+        data: null,
+        error: { name: "invalid_api_key", message: "Invalid key" },
+      })
+      .mockRejectedValueOnce(new Error("Offline"))
+      .mockResolvedValueOnce({ data: null, error: null });
+    expect(await deleteResendDomain("re_platform", "d1")).toMatchObject({
+      ok: false,
+      failureClass: "invalid_key",
+    });
+    expect(await deleteResendDomain("re_platform", "d1")).toMatchObject({
+      ok: false,
+      failureClass: "transient",
+    });
+    expect(await deleteResendDomain("re_platform", "d1")).toMatchObject({
+      ok: false,
+      failureClass: "transient",
     });
   });
 });

@@ -2840,22 +2840,17 @@ export type EmailDomainResponse = {
   replyToEmail?: string | null;
 };
 
-export type EmailDomainValidateKeyResponse = {
-  valid: boolean;
-  domains?: { id: string; name: string; status: string }[];
-};
-
 export interface EmailDomainsApi {
   get(): Promise<EmailDomainResponse>;
-  validateKey(input: {
-    apiKey: string;
-  }): Promise<EmailDomainValidateKeyResponse>;
+  /**
+   * Creates the sending domain in our own provider account and returns the DNS
+   * records for the laboratory to publish. No API key is ever supplied by the
+   * client: the laboratory does not have one and never needs one.
+   */
   create(input: {
-    apiKey: string;
-    resendDomainId: string;
+    hostname: string;
     fromLocalPart: string;
   }): Promise<EmailDomainResponse>;
-  rotateKey(input: { apiKey: string }): Promise<EmailDomainResponse>;
   verify(): Promise<EmailDomainResponse>;
   activate(): Promise<EmailDomainResponse>;
   delete(): Promise<void>;

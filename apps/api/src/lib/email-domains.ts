@@ -78,7 +78,8 @@ export function serializeEmailDomain(record: EmailDomainRecord | null) {
     keyStatus: record.keyStatus,
     keyLastError: record.keyLastError,
     /** The only key representation that ever leaves the server. */
-    apiKeyMasked: `••••${record.resendApiKeyLast4}`,
+    apiKeyMasked:
+      record.mode === "byok" ? `••••${record.resendApiKeyLast4}` : "",
     dnsRecords: record.dnsRecords ?? [],
     createdAt: record.createdAt,
   };
@@ -123,7 +124,7 @@ export function buildEmailDomainStatusSummary(
     status: "waiting_verification" as const,
     canActivate: false,
     message:
-      "O Resend ainda não confirmou os registros DNS deste domínio. Conclua a verificação no painel do Resend e clique em Verificar novamente.",
+      "Publique os registros DNS exibidos nesta página e clique em Verificar novamente. A confirmação pode levar algumas horas.",
     keyHealth,
   };
 }

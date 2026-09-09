@@ -96,6 +96,52 @@ function toRecordArray(records: object[]): Record<string, unknown>[] {
   return records.map((record) => Object.fromEntries(Object.entries(record)));
 }
 
+/**
+ * Create a sending domain in the account that owns `apiKey`.
+ *
+ * In managed mode that account is ours, so the laboratory never signs up for
+ * anything: we create the domain here and hand back the DNS records for it to
+ * publish. The returned `records` are Resend's own and we display them
+ * verbatim, because inventing or reformatting them is how a lab ends up
+ * publishing something that never verifies.
+ *
+ * `region` is deliberately São Paulo. The mail is Brazilian laboratory to
+ * Brazilian customer, and the return path lives under the domain the lab
+ * publishes, so keeping the sending region close is free.
+ */
+export async function createResendDomain(
+  apiKey: string,
+  hostname: string,
+): Promise<ResendDomainsResult<ResendDomainDetails>> {
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.domains.create({
+      name: hostname,
+      region: "sa-east-1",
+    });
+    if (error) return failure(error);
+    if (!data) {
+      return {
+        ok: false,
+        errorName: "not_created",
+        message: "Resend did not return the created domain",
+        failureClass: "sender_config",
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        id: data.id,
+        name: data.name,
+        status: data.status,
+        records: toRecordArray(data.records ?? []),
+      },
+    };
+  } catch (error) {
+    return thrownFailure(error);
+  }
+}
+
 /** List the domains registered in the account that owns `apiKey`. */
 export async function listResendDomains(
   apiKey: string,
@@ -188,4 +234,30 @@ export async function validateResendApiKey(
     failureClass: result.failureClass,
     message: result.message,
   };
+}
+
+/** Delete only a domain whose provider ID belongs to the caller's organization. */
+export async function deleteResendDomain(
+  apiKey: string,
+  domainId: string,
+): Promise<ResendDomainsResult<{ id: string }>> {
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.domains.remove(domainId);
+    // A prior attempt may have removed the provider domain before a DB failure.
+    if (error?.name === "not_found")
+      return { ok: true, data: { id: domainId } };
+    if (error) return failure(error);
+    if (!data?.deleted) {
+      return {
+        ok: false,
+        errorName: "not_deleted",
+        message: "Resend did not confirm domain deletion",
+        failureClass: "transient",
+      };
+    }
+    return { ok: true, data: { id: domainId } };
+  } catch (error) {
+    return thrownFailure(error);
+  }
 }

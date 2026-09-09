@@ -78,14 +78,11 @@ async function findUsableEmailDomainRow(organizationId: string) {
 export async function resolveLabEmailSender(
   organizationId: string,
 ): Promise<LabEmailSenderInfo | undefined> {
-  // Without the master key no BYOK credential can ever be decrypted, so the
-  // whole feature is inert: skip the lookups entirely. (Revisit if "managed"
-  // mode ships — platform-key sends would not need the master key.)
-  if (!getEmailDomainMasterKey()) return undefined;
-
   try {
     const row = await findUsableEmailDomainRow(organizationId);
     if (!row) return undefined;
+    if (row.mode === "byok" && !getEmailDomainMasterKey()) return undefined;
+    if (row.mode === "managed" && !process.env.RESEND_API_KEY) return undefined;
 
     if (!(await organizationHasEmailSenderEntitlement(organizationId))) {
       return undefined;
@@ -122,8 +119,10 @@ export async function getLabEmailCredential(
       return undefined;
     }
 
+    // Managed: the domain lives in OUR Resend account, so the laboratory never
+    // held a key and there is nothing to decrypt. This is the path every new
+    // configuration takes.
     if (row.mode === "managed") {
-      // Future shared-platform-account mode: same wrapper, platform key.
       const platformKey = process.env.RESEND_API_KEY;
       if (!platformKey) return undefined;
       return {
@@ -132,6 +131,11 @@ export async function getLabEmailCredential(
         hostname: row.hostname,
       };
     }
+
+    // Legacy bring-your-own-key. No new rows are created this way; the ones
+    // that exist keep sending from the laboratory's own Resend account, which
+    // costs a dozen lines and avoids a migration nobody needs yet.
+    if (!row.resendApiKeyEncrypted || !row.resendApiKeyIv) return undefined;
 
     const masterKey = getEmailDomainMasterKey();
     if (!masterKey) {

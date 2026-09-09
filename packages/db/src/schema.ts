@@ -1189,13 +1189,16 @@ export const organizationEmailDomain = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     mode: text("mode")
       .$type<OrganizationEmailDomainMode>()
-      .default("byok")
+      .default("managed")
       .notNull(),
     hostname: text("hostname").notNull(),
     resendDomainId: text("resend_domain_id").notNull(),
-    resendApiKeyEncrypted: text("resend_api_key_encrypted").notNull(),
-    resendApiKeyIv: text("resend_api_key_iv").notNull(),
-    resendApiKeyLast4: text("resend_api_key_last4").notNull(),
+    // Null in `managed` mode: the domain lives in our own Resend account, so
+    // the laboratory never holds a key and there is nothing to encrypt. A CHECK
+    // constraint (migration 0110) keeps the two modes from drifting apart.
+    resendApiKeyEncrypted: text("resend_api_key_encrypted"),
+    resendApiKeyIv: text("resend_api_key_iv"),
+    resendApiKeyLast4: text("resend_api_key_last4"),
     fromAddress: text("from_address").notNull(),
     /** Snapshot of Resend's generated DKIM/SPF rows (diagnostics only). */
     dnsRecords: jsonb("dns_records").$type<Record<string, unknown>[]>(),

@@ -144,8 +144,6 @@ type ApiRoutePath =
   | "/api/dashboard/stats"
   | "/api/email-domains"
   | "/api/email-domains/activate"
-  | "/api/email-domains/key"
-  | "/api/email-domains/validate-key"
   | "/api/email-domains/verify"
   | "/api/environmental-limits"
   | "/api/environmental-limits/:id"

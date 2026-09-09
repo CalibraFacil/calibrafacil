@@ -98,6 +98,16 @@ const { dbMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
+// These specs exercise the PLATFORM sender path. `resolveLabEmailSender` now
+// reads the email-domain row before checking any key (it must, so a managed
+// row resolves with only RESEND_API_KEY), which would otherwise consume one
+// extra `db.select()` and shift the call-count routing below. Lab-sender
+// resolution has its own coverage in service-order-customer-email-lab-sender.spec.ts.
+vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@calibra-facil/email-sender")>()),
+  resolveLabEmailSender: vi.fn().mockResolvedValue(undefined),
+}));
+
 
 // The email path consults the suppression list before every send; stub it so
 // these template tests never touch the (mocked-away) emailSuppression table.
