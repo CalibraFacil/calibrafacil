@@ -3,6 +3,7 @@ import { Outlet, useLocation } from '@tanstack/react-router'
 import {
   useActiveOrganization,
   useListOrganizations,
+  useSession,
 } from '@calibra-facil/auth/client'
 
 import { AppSidebar } from '@/components/app-sidebar'
@@ -25,9 +26,15 @@ import {
 } from './dashboard-org-bootstrap'
 import { getStoredDashboardOrganizationId } from './dashboard-scope-storage'
 import {
+  DashboardLocalPartitionBlockedState,
   DashboardOnboardingState,
   DashboardRestrictedState,
 } from './dashboard-access-states'
+import {
+  resolveLocalPartitionGate,
+  useLocalPartition,
+} from '@/runtime/use-local-partition'
+import { isDesktopRuntime } from '@/runtime/desktop'
 import { getDashboardBootstrapState } from './dashboard-bootstrap-model'
 import { PasskeyNudgeBanner } from '@/features/passkeys/components/passkey-nudge-banner'
 
@@ -38,6 +45,7 @@ export function DashboardLayout() {
     useListOrganizations()
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization()
+  const { data: session } = useSession()
 
   const storedOrgId = getStoredDashboardOrganizationId()
   const pathname = location.pathname
@@ -63,6 +71,20 @@ export function DashboardLayout() {
     cloudOnlyUnavailable &&
     isCloudOnlyDashboardPath(pathname)
 
+  // On desktop, nothing may render until the host has opened the local
+  // database belonging to *this* account and organization. Rendering first and
+  // asking later is the exposure this guards.
+  const localPartition = useLocalPartition({
+    userId: session?.user.id,
+    organizationId: effectiveActiveOrganizationId,
+  })
+  const partitionGate = resolveLocalPartitionGate({
+    isDesktop: isDesktopRuntime(),
+    isPending: localPartition.isPending,
+    outcome: localPartition.data,
+    error: localPartition.error,
+  })
+
   const dashboardContextValue = useMemo(
     () => ({
       isContextSwitching,
@@ -70,6 +92,12 @@ export function DashboardLayout() {
     }),
     [isContextSwitching, effectiveActiveOrganizationId],
   )
+
+  if (partitionGate.state === 'blocked') {
+    return (
+      <DashboardLocalPartitionBlockedState message={partitionGate.message} />
+    )
+  }
 
   if (shouldShowOnboarding) {
     return <DashboardOnboardingState />
@@ -102,7 +130,7 @@ export function DashboardLayout() {
           <SidebarInset>
             <DashboardHeader suspendEntityQueries={isContextSwitching} />
             <main className="flex-1 space-y-4 p-4">
-              {shouldBlockChildRoutes ? (
+              {shouldBlockChildRoutes || partitionGate.state === 'pending' ? (
                 <div className="space-y-4">
                   <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />
                   <div className="h-64 rounded-lg border bg-card/60 animate-pulse" />

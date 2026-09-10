@@ -1,4 +1,5 @@
 import type { SyncState, SyncStatusSnapshot } from '@calibra-facil/contracts'
+import { pluralize } from '@calibra-facil/shared'
 import type {
   CloudReachability,
   LocalRuntimeHealth,
@@ -139,10 +140,11 @@ export function describeRuntimeHealth(
   if (health.conflictCount > 0) {
     return {
       tone: 'conflict',
-      summary:
-        health.conflictCount === 1
-          ? '1 registro com conflito aguardando revisão.'
-          : `${health.conflictCount} registros com conflito aguardando revisão.`,
+      summary: `${pluralize(
+        health.conflictCount,
+        'registro',
+        'registros',
+      )} com conflito aguardando revisão.`,
     }
   }
 
@@ -158,10 +160,11 @@ export function describeRuntimeHealth(
   if (health.pendingOutboxCount > 0) {
     return {
       tone: 'idle',
-      summary:
-        health.pendingOutboxCount === 1
-          ? '1 alteração local aguardando envio.'
-          : `${health.pendingOutboxCount} alterações locais aguardando envio.`,
+      summary: `${pluralize(
+        health.pendingOutboxCount,
+        'alteração local',
+        'alterações locais',
+      )} aguardando envio.`,
     }
   }
 

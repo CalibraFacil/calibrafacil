@@ -21,6 +21,7 @@ vi.mock("electron", () => ({
 }));
 
 const expectedBridgeKeys = [
+  "activateLocalPartition",
   "authFetch",
   "checkForUpdate",
   "deleteSecret",

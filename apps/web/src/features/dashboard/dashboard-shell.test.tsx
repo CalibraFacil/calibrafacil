@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const routerMocks = vi.hoisted(() => ({
@@ -11,6 +12,7 @@ const authMocks = vi.hoisted(() => ({
   setActive: vi.fn(),
   useActiveOrganization: vi.fn(),
   useListOrganizations: vi.fn(),
+  useSession: vi.fn(() => ({ data: { user: { id: 'user-1' } } })),
 }))
 
 const syncMocks = vi.hoisted(() => ({
@@ -28,6 +30,7 @@ vi.mock('@calibra-facil/auth/client', () => ({
   },
   useActiveOrganization: authMocks.useActiveOrganization,
   useListOrganizations: authMocks.useListOrganizations,
+  useSession: authMocks.useSession,
 }))
 
 vi.mock('@/components/app-sidebar', () => ({
@@ -82,6 +85,21 @@ vi.mock('./dashboard-performance', () => ({
 import { DASHBOARD_ORG_KEY } from '@/app/config/runtime'
 import { DashboardLayout } from './dashboard-shell'
 
+function renderDashboard() {
+  // The shell resolves the desktop local-database partition through React
+  // Query. In the browser that query is disabled, so this only supplies the
+  // client the hook requires.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DashboardLayout />
+    </QueryClientProvider>,
+  )
+}
+
 describe('DashboardLayout bootstrap workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -115,7 +133,7 @@ describe('DashboardLayout bootstrap workflow', () => {
       isPending: false,
     })
 
-    render(<DashboardLayout />)
+    renderDashboard()
 
     expect(screen.getByText('header suspended')).toBeTruthy()
     expect(screen.queryByText('dashboard outlet')).toBeNull()
@@ -131,7 +149,7 @@ describe('DashboardLayout bootstrap workflow', () => {
     routerMocks.pathname = '/dashboard/finance'
     syncMocks.cloudOnlyUnavailable = true
 
-    render(<DashboardLayout />)
+    renderDashboard()
 
     expect(screen.getByText('Tela indisponível offline')).toBeTruthy()
     expect(screen.queryByText('dashboard outlet')).toBeNull()

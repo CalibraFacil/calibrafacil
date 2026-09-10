@@ -5,9 +5,57 @@ import {
   type LocalEnvironmentBootstrap,
   type LocalServerBootstrapConfig,
 } from "@calibra-facil/contracts";
-import { currentLocalDbSchemaVersion } from "@calibra-facil/local-db";
+import {
+  currentLocalDbSchemaVersion,
+  localDatabasePartitionPath,
+} from "@calibra-facil/local-db";
 
 export type LocalServerConfig = LocalServerBootstrapConfig;
+
+/**
+ * The database file this config should open.
+ *
+ * Derived here rather than by the Electron host so that the partition path and
+ * the ownership check that enforces it live in one place. A host that passed a
+ * stale `dbPath` alongside a fresh identity would otherwise open the wrong
+ * account's file and rely on the check to catch it; deriving means the two
+ * cannot disagree in the first place.
+ */
+export class LocalServerPartitionRequiredError extends Error {
+  constructor() {
+    super(
+      "Local server refused to start: a packaged build must open a database that belongs to a signed-in account and organization.",
+    );
+    this.name = "LocalServerPartitionRequiredError";
+  }
+}
+
+/**
+ * Enforces the packaged-build guarantee independently of the host.
+ *
+ * The Electron main process already declines to spawn an unpartitioned server
+ * when packaged. This is the second lock on the same door: a guarantee that
+ * only holds while one caller remembers to check it is not a guarantee.
+ */
+export function assertLocalServerPartitionConfigured(
+  config: LocalServerConfig,
+): void {
+  if (!config.requirePartition) return;
+  if (config.userId && config.organizationId) return;
+
+  throw new LocalServerPartitionRequiredError();
+}
+
+export function resolveLocalServerDbPath(config: LocalServerConfig): string {
+  if (!config.dataRoot || !config.userId || !config.organizationId) {
+    return config.dbPath;
+  }
+
+  return localDatabasePartitionPath(config.dataRoot, {
+    userId: config.userId,
+    organizationId: config.organizationId,
+  });
+}
 
 export function readLocalServerConfig(
   env: Record<string, string | undefined>,
@@ -27,6 +75,8 @@ export function readLocalServerConfig(
     ).pathname;
 
   return {
+    dataRoot: env.CALIBRA_LOCAL_DATA_ROOT ?? null,
+    requirePartition: env.CALIBRA_LOCAL_REQUIRE_PARTITION === "true",
     host: env.CALIBRA_LOCAL_HOST ?? "127.0.0.1",
     port: Number(env.CALIBRA_LOCAL_PORT ?? "4317"),
     appVersion: env.CALIBRA_APP_VERSION ?? "0.0.0-dev",

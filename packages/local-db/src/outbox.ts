@@ -2,8 +2,8 @@ import type { SyncPushResponse } from "@calibra-facil/contracts";
 import { stringifySyncConflictPayload } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 import {
-  recomputeServiceOrderSyncState,
-  resolveServiceOrderForAggregate,
+  recomputeServiceOrderSyncStates,
+  resolveServiceOrdersForAggregates,
 } from "./service-orders";
 
 export type PendingOutboxEvent = {
@@ -267,14 +267,16 @@ WHERE event_id = @eventId
     }
 
     // Child acceptances leave the parent order dirty on their own; recompute
-    // it once, after every acceptance in this batch has landed, so an order
-    // with two queued children is not cleared by the first of them.
-    for (const serviceOrderId of touchedServiceOrderIds(
+    // after every acceptance in this batch has landed, so an order with two
+    // queued children is not cleared by the first of them. Batched, because
+    // this runs on every push cycle while a backlog drains.
+    recomputeServiceOrderSyncStates(
       database,
-      [...acceptedById.keys()].map((eventId) => eventsById.get(eventId)),
-    )) {
-      recomputeServiceOrderSyncState(database, serviceOrderId);
-    }
+      resolveServiceOrdersForAggregates(
+        database,
+        acceptedAggregates(acceptedById, eventsById),
+      ),
+    );
 
     for (const [eventId, rejection] of rejectedById) {
       database
@@ -407,28 +409,21 @@ WHERE event_id IN (${eventIds.map(() => "?").join(",")})
   return new Map(rows.map((row) => [row.event_id, row]));
 }
 
-/**
- * Distinct service orders touched by a batch of accepted events, whether the
- * event targeted the order or one of its child rows.
- */
-function touchedServiceOrderIds(
-  database: LocalDatabase,
-  events: Array<DomainEventRow | undefined>,
-): string[] {
-  const ids = new Set<string>();
+/** The aggregates a batch of accepted events touched. */
+function acceptedAggregates(
+  acceptedById: Map<string, unknown>,
+  eventsById: Map<string, DomainEventRow>,
+): Array<{ kind: string; id: string }> {
+  const aggregates: Array<{ kind: string; id: string }> = [];
 
-  for (const event of events) {
+  for (const eventId of acceptedById.keys()) {
+    const event = eventsById.get(eventId);
     if (!event) continue;
 
-    const serviceOrderId = resolveServiceOrderForAggregate(
-      database,
-      event.aggregate_kind,
-      event.aggregate_id,
-    );
-    if (serviceOrderId) ids.add(serviceOrderId);
+    aggregates.push({ kind: event.aggregate_kind, id: event.aggregate_id });
   }
 
-  return [...ids];
+  return aggregates;
 }
 
 function applyAcceptedRemoteEntity(

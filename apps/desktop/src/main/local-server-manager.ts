@@ -7,6 +7,7 @@ import { app } from "electron";
 import {
   localEnvironmentBootstrapSchema,
   localServerBootstrapConfigSchema,
+  type LocalDatabasePartition,
   type LocalEnvironmentBootstrap,
   type LocalServerBootstrapConfig,
 } from "@calibra-facil/contracts";
@@ -42,6 +43,12 @@ type LocalServerStartOptions = {
   cloudApiUrl?: string | null;
   cloudProxyToken?: string | null;
   /**
+   * The account and organization whose database to open. The local server
+   * derives the file from this and verifies the ownership record inside it;
+   * the host deliberately does not compute a path, so the two cannot disagree.
+   */
+  partition?: LocalDatabasePartition | null;
+  /**
    * The user's persisted preference. Passed through so the scheduler stays
    * dormant for an installation that turned automatic sync off, instead of
    * uploading pending work on every launch.
@@ -50,6 +57,7 @@ type LocalServerStartOptions = {
 };
 
 type LocalServerCommand = {
+  dataRoot: string;
   executable: string;
   args: string[];
   cwd: string;
@@ -276,6 +284,7 @@ export class LocalServerManager {
           "local-data",
           "calibra.sqlite",
         ),
+        dataRoot: path.join(app.getPath("userData"), "local-partitions"),
         storageRoot: path.join(app.getPath("userData"), "local-files"),
       };
     }
@@ -287,6 +296,7 @@ export class LocalServerManager {
       cwd: workspaceRoot,
       env: {},
       dbPath: path.join(workspaceRoot, ".calibra-local", "calibra.sqlite"),
+      dataRoot: path.join(workspaceRoot, ".calibra-local", "partitions"),
       storageRoot: path.join(workspaceRoot, ".calibra-local", "files"),
     };
   }
@@ -304,11 +314,19 @@ export class LocalServerManager {
       storageRoot: process.env.CALIBRA_LOCAL_STORAGE_DIR ?? command.storageRoot,
       deviceId: process.env.CALIBRA_DEVICE_ID ?? "local-dev-device",
       tenantId: process.env.CALIBRA_TENANT_ID ?? null,
-      organizationId: process.env.CALIBRA_ORGANIZATION_ID ?? null,
+      dataRoot: command.dataRoot,
+      legacyDbPath: command.dbPath,
+      // A packaged build must never open a database that belongs to nobody.
+      // The server enforces this too; passing it is the host's half.
+      requirePartition: app.isPackaged,
+      organizationId:
+        options.partition?.organizationId ??
+        process.env.CALIBRA_ORGANIZATION_ID ??
+        null,
       unitId: process.env.CALIBRA_UNIT_ID
         ? Number(process.env.CALIBRA_UNIT_ID)
         : null,
-      userId: process.env.CALIBRA_USER_ID ?? null,
+      userId: options.partition?.userId ?? process.env.CALIBRA_USER_ID ?? null,
       syncEnabled: process.env.CALIBRA_SYNC_ENABLED !== "false",
       autoStartSync: options.autoStartSync ?? true,
       bootstrapToken: this.#localApiToken,

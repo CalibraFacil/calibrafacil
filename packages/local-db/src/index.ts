@@ -160,3 +160,5 @@ export {
   type LocalDatabaseDiagnostics,
 } from "./diagnostics";
 export { getLocalDashboardStats, type LocalDashboardStats } from "./dashboard";
+export * from "./partitions";
+export * from "./legacy-adoption";

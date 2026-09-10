@@ -18,6 +18,8 @@
  *    the notification in the centre already.
  */
 
+import { isUnsafeDeepLinkPath } from "./deep-link-path";
+
 export type NotificationFeedEntry = {
   id: number;
   title: string;
@@ -101,18 +103,25 @@ export function observeNotifications({
 }
 
 /**
- * `actionUrl` comes from the server. Only a same-app path is accepted: an
- * absolute URL here would let a notification payload navigate the desktop
- * shell somewhere it should never go.
+ * `actionUrl` comes from the server and flows into the same "navigate the
+ * desktop shell" sink as an OS deep link, so it is held to the same standard —
+ * `isUnsafeDeepLinkPath`, rather than a thinner check written next to it that
+ * would miss a scheme prefix, a `..` segment or a control character.
  */
 function normalizeActionPath(actionUrl: string | null | undefined) {
   if (typeof actionUrl !== "string") return null;
 
   const trimmed = actionUrl.trim();
   if (!trimmed.startsWith("/")) return null;
-  if (trimmed.startsWith("//")) return null;
 
-  return trimmed;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch {
+    return null;
+  }
+
+  return isUnsafeDeepLinkPath(decoded) ? null : trimmed;
 }
 
 /**

@@ -29,6 +29,28 @@ export const localServerBootstrapConfigSchema = z.object({
   appVersion: z.string().min(1),
   localServerVersion: z.string().min(1),
   dbPath: z.string().min(1),
+  /**
+   * Root under which per-partition databases live. When set *and* an identity
+   * is configured, the local server derives its own file beneath this and
+   * ignores `dbPath` — so the host cannot point one account's partition at
+   * another's file. Absent in dev and test runs, which use `dbPath` directly.
+   */
+  dataRoot: z.string().min(1).nullable().optional(),
+  /**
+   * Refuse to open an unpartitioned database.
+   *
+   * The unpartitioned path exists so `pnpm dev` and the test suites can run a
+   * local server without a signed-in account. That convenience must not be
+   * reachable in a packaged build, where it would be a database belonging to
+   * nobody — and therefore readable by whoever opens the app next.
+   */
+  requirePartition: z.boolean().optional(),
+  /**
+   * The single pre-partition database, if this installation upgraded from a
+   * build that had one. Adopted into its owner's partition on first use, so
+   * work queued before the upgrade is not orphaned.
+   */
+  legacyDbPath: z.string().min(1).nullable().optional(),
   storageRoot: z.string().min(1),
   deviceId: z.string().min(1),
   tenantId: z.string().nullable(),
@@ -163,6 +185,49 @@ export const desktopNotificationsPublishSchema = z.object({
     .max(100),
 });
 
+/**
+ * Which account and organization a desktop local database belongs to.
+ *
+ * The pair, not the organization alone: two accounts can belong to one
+ * organization with different permissions, so an organization-wide cache would
+ * still let the second read everything the first downloaded.
+ *
+ * Lives in contracts because the Electron host, the local server and the
+ * renderer all have to agree on it.
+ */
+export const localDatabasePartitionSchema = z.object({
+  userId: z.string().min(1),
+  organizationId: z.string().min(1),
+});
+
+export const localPartitionActivationRequestSchema = z.object({
+  partition: localDatabasePartitionSchema.nullable(),
+  /**
+   * `true` only when the renderer reached the cloud to confirm this identity
+   * in this attempt. A session restored from a cookie cache is not verified.
+   */
+  identityVerified: z.boolean(),
+});
+
+export const localPartitionActivationResultSchema = z.discriminatedUnion(
+  "status",
+  [
+    z.object({ status: z.literal("idle") }),
+    z.object({
+      status: z.literal("active"),
+      partition: localDatabasePartitionSchema,
+      /** The renderer must drop cached data when this is true. */
+      switched: z.boolean(),
+    }),
+    z.object({
+      status: z.literal("refused"),
+      reason: z.string(),
+      message: z.string(),
+    }),
+    z.object({ status: z.literal("failed"), message: z.string() }),
+  ],
+);
+
 export const desktopUpdateStateSchema = z.object({
   status: z.enum([
     "idle",
@@ -225,6 +290,15 @@ export type DesktopSecretWrite = z.infer<typeof desktopSecretWriteSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;
 export type SyncStatusSnapshot = z.infer<typeof syncStatusSnapshotSchema>;
 export type SyncTrigger = z.infer<typeof syncTriggerSchema>;
+export type LocalDatabasePartition = z.infer<
+  typeof localDatabasePartitionSchema
+>;
+export type LocalPartitionActivationRequest = z.infer<
+  typeof localPartitionActivationRequestSchema
+>;
+export type LocalPartitionActivationResult = z.infer<
+  typeof localPartitionActivationResultSchema
+>;
 export type DesktopNotificationsPublish = z.infer<
   typeof desktopNotificationsPublishSchema
 >;
@@ -296,6 +370,16 @@ export interface CalibraBridge {
    * visible.
    */
   onHistoryCommand(listener: (command: string) => void): () => void;
+  /**
+   * Ask the host to open the local database for this account and organization.
+   *
+   * The host decides — a caller cannot assert its way into another account's
+   * data. `switched` in the result means a different database is now open and
+   * the renderer must drop everything it had cached.
+   */
+  activateLocalPartition(
+    request: LocalPartitionActivationRequest,
+  ): Promise<LocalPartitionActivationResult>;
   pickFile(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   saveFile(): Promise<string | null>;

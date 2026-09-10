@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { writeJsonFileAtomically } from "./atomic-json-file";
 import { z } from "zod";
 
 /**
@@ -261,11 +263,6 @@ export class DesktopWindowStateStore {
   }
 
   private async persist(state: PersistedWindowState) {
-    const directory = path.dirname(this.filePath);
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-    await rename(tempPath, this.filePath);
+    await writeJsonFileAtomically(this.filePath, state);
   }
 }

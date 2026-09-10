@@ -30,8 +30,10 @@ import {
   syncStatusSnapshotSchema,
   syncTriggerSchema,
   desktopNotificationsPublishSchema,
+  localPartitionActivationRequestSchema,
   type DesktopAuthFetchRequest,
   type DesktopAuthFetchResponse,
+  type LocalDatabasePartition,
   type SyncTrigger,
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "./channels";
@@ -47,6 +49,11 @@ import {
   resolveDeepLink,
 } from "./deep-links";
 import { resolveUnreadBadge } from "./unread-badge";
+import {
+  describeLocalPartitionRefusal,
+  resolveLocalPartitionActivation,
+} from "./local-partition-activation";
+import { LocalPartitionStore } from "./local-partition-store";
 import {
   buildCertificateFileName,
   buildSupportBundleFileName,
@@ -77,6 +84,32 @@ import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const windowStateStore = new DesktopWindowStateStore(app.getPath("userData"));
+const localPartitionStore = new LocalPartitionStore(app.getPath("userData"));
+
+/** The account and organization the running local server serves, if any. */
+let activeLocalPartition: LocalDatabasePartition | null = null;
+
+/**
+ * The cloud endpoint the local server was started against. Captured once so a
+ * partition switch restarts it against the same proxy rather than recomputing
+ * a URL that may have moved.
+ */
+let localServerCloudOptions: {
+  cloudApiUrl: string | null;
+  cloudProxyToken: string | null;
+  autoStartSync?: boolean;
+} = { cloudApiUrl: null, cloudProxyToken: null };
+
+type LocalPartitionActivationResult =
+  | { status: "idle" }
+  | {
+      status: "active";
+      partition: LocalDatabasePartition;
+      /** The renderer must drop cached data when this is true. */
+      switched: boolean;
+    }
+  | { status: "refused"; reason: string; message: string }
+  | { status: "failed"; message: string };
 
 /**
  * A link that arrived before the renderer could receive it — a cold launch,
@@ -559,6 +592,11 @@ function registerIpc(
     const result = await wakeLocalSync(syncTriggerSchema.parse(trigger));
     await broadcastSyncStatus();
     return result;
+  });
+  handle(desktopIpcChannels.activateLocalPartition, async (_event, input) => {
+    return activateLocalPartition(
+      localPartitionActivationRequestSchema.parse(input),
+    );
   });
   handle(desktopIpcChannels.deepLinkReady, () => {
     rendererReadyForDeepLinks = true;
@@ -1291,23 +1329,31 @@ function handleDeepLink(rawUrl: string) {
     return;
   }
 
+  deliverDeepLinkPath(resolved.path);
+}
+
+/**
+ * Send an already-validated route path to the renderer, or hold it until one
+ * is listening.
+ *
+ * Separate from `handleDeepLink` so internal re-delivery — flushing the
+ * buffer, a notification click — does not re-run untrusted-input validation on
+ * a path that already passed it. Joined, a future tightening of
+ * `resolveDeepLink` could break delivery of data that never came from outside.
+ */
+function deliverDeepLinkPath(path: string) {
   if (!rendererReadyForDeepLinks || !mainWindow || mainWindow.isDestroyed()) {
-    pendingDeepLinkPath = resolved.path;
+    pendingDeepLinkPath = path;
     return;
   }
 
-  mainWindow.webContents.send(
-    desktopIpcChannels.deepLinkRequested,
-    resolved.path,
-  );
+  mainWindow.webContents.send(desktopIpcChannels.deepLinkRequested, path);
 }
 
 function flushPendingDeepLink() {
   const pending = pendingDeepLinkPath;
   pendingDeepLinkPath = null;
-  if (pending) {
-    handleDeepLink(`${desktopDeepLinkScheme}://${pending.slice(1)}`);
-  }
+  if (pending) deliverDeepLinkPath(pending);
 }
 
 /**
@@ -1353,12 +1399,156 @@ function presentNativeNotification(request: NativeNotificationRequest) {
     focusMainWindow();
     if (!request.actionPath) return;
 
-    // Routed through the same buffered path as an OS deep link, so a click
-    // during a reload is not lost.
-    handleDeepLink(`${desktopDeepLinkScheme}://${request.actionPath.slice(1)}`);
+    // Buffered like an OS deep link, so a click during a reload is not lost.
+    // The path was already validated when the notification was built.
+    deliverDeepLinkPath(request.actionPath);
   });
 
   notification.show();
+}
+
+/**
+ * Open the local database belonging to a verified identity, closing whatever
+ * was open before.
+ *
+ * The order is the point, and it is the order a switch has to happen in:
+ *
+ * 1. decide, from the activation policy — never from the caller's assertion;
+ * 2. pause continuous sync and let the run in flight finish, so no push lands
+ *    under the outgoing account's credentials after the switch begins;
+ * 3. stop the local server, which closes its database;
+ * 4. start it on the incoming partition, which derives its own path and
+ *    verifies the ownership record inside the file before serving a route;
+ * 5. remember the grant, so this identity — and only this one — can open
+ *    offline next time.
+ *
+ * The outgoing account's database is left exactly as it was. Its queued field
+ * work is not deleted, not migrated, and never uploaded under the incoming
+ * account's credentials; it waits for its owner to authenticate again.
+ */
+function activateLocalPartition(input: {
+  partition: LocalDatabasePartition | null;
+  identityVerified: boolean;
+}): Promise<LocalPartitionActivationResult> {
+  // Strictly one at a time. Two activations overlapping — switching
+  // organization while the gate is still pending is enough — would race over
+  // which database is open and which partition is recorded as active.
+  const queued = activationQueue
+    .catch(() => undefined)
+    .then(() => activateLocalPartitionOnce(input));
+
+  activationQueue = queued.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  return queued;
+}
+
+let activationQueue: Promise<unknown> = Promise.resolve();
+
+async function activateLocalPartitionOnce(input: {
+  partition: LocalDatabasePartition | null;
+  identityVerified: boolean;
+}): Promise<LocalPartitionActivationResult> {
+  const decision = resolveLocalPartitionActivation({
+    requested: input.partition,
+    identityVerified: input.identityVerified,
+    running: activeLocalPartition,
+    remembered: (await localPartitionStore.load())?.partition ?? null,
+  });
+
+  if (decision.action === "idle") {
+    return { status: "idle" };
+  }
+
+  if (decision.action === "refuse") {
+    console.warn("[desktop-partition] refused", { reason: decision.reason });
+    return {
+      status: "refused",
+      reason: decision.reason,
+      message: describeLocalPartitionRefusal(decision.reason),
+    };
+  }
+
+  if (decision.action === "reuse") {
+    return { status: "active", partition: decision.partition, switched: false };
+  }
+
+  const target =
+    decision.action === "switch" ? decision.to : decision.partition;
+
+  // A `start` decision does not mean nothing is running. On first launch — or
+  // after an upgrade, when no grant exists yet — startup may already have
+  // opened the *unpartitioned* database while `activeLocalPartition` stayed
+  // null. `LocalServerManager.start()` short-circuits on a ready server, so
+  // without stopping it first the host would report the target as active while
+  // still serving the shared file: the original cross-account exposure,
+  // preserved exactly where it is least expected.
+  // Anything other than fully stopped has to be torn down, not just "ready".
+  // A start already in flight is the dangerous case: `LocalServerManager.start`
+  // returns its cached promise and ignores the new options, so the host would
+  // record the incoming partition as active while the server finishes opening
+  // the previous one's database.
+  const serverNeedsRestart = localServer.state !== "stopped";
+  const switched = decision.action === "switch" || serverNeedsRestart;
+
+  if (switched) {
+    await quiesceLocalSync();
+    localServer.stop();
+  }
+
+  try {
+    await localServer.start({
+      ...localServerCloudOptions,
+      partition: target,
+    });
+  } catch (error) {
+    activeLocalPartition = null;
+    // Leave nothing running. Without this the manager keeps respawning a
+    // configuration that cannot start, and its restart timer can later abort
+    // an otherwise healthy activation.
+    localServer.stop();
+    console.error("[desktop-partition] failed to open partition", {
+      error: formatErrorMessage(error),
+    });
+
+    return {
+      status: "failed",
+      message:
+        "Não foi possível abrir os dados locais desta conta neste computador.",
+    };
+  }
+
+  activeLocalPartition = target;
+
+  // Only an online-verified activation grants offline access. An offline start
+  // is *using* a grant, not issuing one.
+  if (decision.action === "switch" || !decision.offline) {
+    await localPartitionStore.remember(target);
+  }
+
+  await broadcastSyncStatus();
+
+  return { status: "active", partition: target, switched };
+}
+
+/**
+ * Stop the sync loop and wait for the run in flight. Pausing alone would let
+ * an in-progress push finish *after* the database it was reading has been
+ * closed and replaced.
+ */
+async function quiesceLocalSync() {
+  await postLocalSyncAction("/api/local/sync/pause");
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const status = await getLocalSyncStatus();
+    if (status.scheduler?.syncing !== true) return;
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  console.warn("[desktop-partition] sync did not settle before switching");
 }
 
 function focusMainWindow() {
@@ -1413,18 +1603,36 @@ app.whenReady().then(async () => {
   }
 
   const desktopSettings = await settingsStore.get();
+  localServerCloudOptions = {
+    cloudApiUrl: cloudProxyUrl,
+    cloudProxyToken,
+    autoStartSync: desktopSettings.autoStartSync,
+  };
 
-  try {
-    await localServer.start({
-      cloudApiUrl: cloudProxyUrl,
-      cloudProxyToken,
-      autoStartSync: desktopSettings.autoStartSync,
-    });
+  // Offline start: open the partition this device last authorized, and only
+  // that one. A different account has to sign in online first.
+  const rememberedPartition =
+    (await localPartitionStore.load())?.partition ?? null;
+
+  if (app.isPackaged && !rememberedPartition) {
+    // Nothing to open until someone signs in. Spawning an unpartitioned
+    // server here would create a database belonging to nobody, and the
+    // restart logic would retry a configuration that cannot succeed.
+    console.log("[desktop-startup] no authorized partition; local server idle");
     await broadcastSyncStatus();
-  } catch (error) {
-    console.error("[desktop-startup] local server failed to start", {
-      error: formatErrorMessage(error),
-    });
+  } else {
+    try {
+      await localServer.start({
+        ...localServerCloudOptions,
+        partition: rememberedPartition,
+      });
+      activeLocalPartition = rememberedPartition;
+    } catch (error) {
+      console.error("[desktop-startup] local server failed to start", {
+        error: formatErrorMessage(error),
+      });
+    }
+
     await broadcastSyncStatus();
   }
 

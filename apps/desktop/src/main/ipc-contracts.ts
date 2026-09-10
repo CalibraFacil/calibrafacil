@@ -9,6 +9,8 @@ import {
   desktopSettingsPatchSchema,
   desktopSettingsSchema,
   desktopNotificationsPublishSchema,
+  localPartitionActivationRequestSchema,
+  localPartitionActivationResultSchema,
   desktopUpdateStateSchema,
   localEnvironmentBootstrapSchema,
   syncActionResultSchema,
@@ -177,6 +179,10 @@ export const desktopIpcInvokeContracts = {
   [desktopIpcChannels.publishNotifications]: {
     args: oneArg(desktopNotificationsPublishSchema),
     response: booleanResponse(),
+  },
+  [desktopIpcChannels.activateLocalPartition]: {
+    args: oneArg(localPartitionActivationRequestSchema),
+    response: localPartitionActivationResultSchema,
   },
   [desktopIpcChannels.revealFile]: {
     args: oneArg(nonEmptyString()),

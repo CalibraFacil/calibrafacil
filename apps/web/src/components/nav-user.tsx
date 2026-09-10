@@ -13,6 +13,9 @@ import { useTheme } from 'next-themes'
 
 import { signOut, useSession } from '@calibra-facil/auth/client'
 import { canAccessBackoffice } from '@calibra-facil/auth/access'
+import { useQueryClient } from '@tanstack/react-query'
+import { resolveSignOutWarning } from '@/runtime/sign-out-warning'
+import { useSyncStatus } from '@/runtime/sync-status'
 import { Link } from '@tanstack/react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -51,6 +54,8 @@ export function NavUser() {
   // The backoffice is its own app now; this lab nav always uses the lab session.
   const labSessionQuery = useSession()
   const session = labSessionQuery.data
+  const sync = useSyncStatus()
+  const queryClient = useQueryClient()
   const isPending = labSessionQuery.isPending
 
   const getInitials = (name: string) =>
@@ -63,8 +68,25 @@ export function NavUser() {
       .toUpperCase()
 
   const handleSignOut = async () => {
+    // Unsent field work stays in this account's own local database — never
+    // deleted, never handed to whoever signs in next. The person walking away
+    // from a shared bench PC cannot see that, so say it before they go.
+    const warning = resolveSignOutWarning({
+      isDesktop: sync.isDesktop,
+      pendingOutboxCount: sync.pendingOutboxCount,
+    })
+
+    if (
+      warning &&
+      !window.confirm(`${warning.title}\n\n${warning.description}`)
+    ) {
+      return
+    }
+
     await signOut()
     markDesktopSignedOut()
+    // Nothing cached may outlive the session that fetched it.
+    queryClient.clear()
     window.location.replace('/sign-in')
   }
 

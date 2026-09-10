@@ -268,6 +268,19 @@ export async function installDesktopBridge(
         onHistoryCommand() {
           return () => undefined
         },
+        async activateLocalPartition() {
+          // The e2e fixture runs a single account, so activation is a no-op
+          // that reports the partition already open — never a switch, which
+          // would have the app clear its caches mid-scenario.
+          return {
+            status: 'active' as const,
+            partition: {
+              userId: 'user-1',
+              organizationId: activeOrganization.id,
+            },
+            switched: false,
+          }
+        },
         async pickFile() {
           return null
         },

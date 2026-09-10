@@ -33,14 +33,6 @@ type SupportBundleInput = {
   secretsStore: Pick<DesktopSecretsStore, "getStatuses">;
 };
 
-export function defaultSupportBundlePath() {
-  const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
-  return path.join(
-    app.getPath("documents"),
-    `calibra-facil-support-${timestamp}.json`,
-  );
-}
-
 export async function exportSupportBundle(input: SupportBundleInput) {
   const settings = await input.settingsStore.get();
   const secretStatuses = await input.secretsStore.getStatuses();

@@ -406,3 +406,46 @@ Nothing here was exercised in a packaged Electron run: no window restore across
 a real monitor change, no OS link handed over by a real shell, no notification
 click, no save dialog. Those are PAR-01 and Phase 5, and until they run these
 rows stay untested in §3.
+
+### 2026-09-10 — Account partitions for the offline cache
+
+Not a plan item. Found while working PAR-03 and fixed ahead of the remaining
+roadmap at the product owner's direction.
+
+**The defect.** The desktop kept one SQLite file, never scoped a local read by
+organization, and never purged on sign-out; `hasDesktopSession()` reported a
+session from the mere presence of a local snapshot, and `dashboardBeforeLoad`
+returned early on that alone. On a shared workstation that meant account A
+syncs, signs out, account B signs in — and the dashboard serves A's jobs,
+customers, assets and service orders from the cache.
+
+**The shape of the fix**, per the product owner:
+
+- Partition by **(account, organization)**, not organization alone: two
+  accounts in one organization have different permissions.
+- The **path is not the boundary**. Migration 0019 records the owner inside
+  the database and the local server verifies it before registering a route. A
+  file remains readable by anyone with enough operating-system access; what
+  isolates is the check, not the filename.
+- **Guarded activation**: decide from the policy, pause sync and wait for the
+  run in flight, close, open the verified partition, verify before loading.
+- **Offline startup uses a grant, never issues one.** Switching accounts
+  requires online authentication, because offline there is nothing to check a
+  revoked membership against.
+- **Pending work is preserved**, in its own database — never deleted,
+  transferred, or uploaded under another account's credentials.
+- Per-query organization filtering remains useful for unit-level access
+  _within_ a partition, but is explicitly not the account-isolation mechanism.
+
+A packaged build now refuses to open an unpartitioned database at all, in both
+the host and the server, so the dev-only convenience of a database belonging
+to nobody cannot ship reachable.
+
+**Evidence.** Unit and component tests: `local-db` 66, `local-server` 76,
+`desktop` 142, `web` 930. Lint clean; touched packages typecheck.
+
+**Not verified.** No packaged Electron run: no two-account switch on a real
+machine, no offline start, no ownership refusal observed end to end. This is
+unit coverage of a security boundary — necessary, not sufficient. PAR-01's
+dual-host harness is what would make it sufficient, and until it exists this
+row stays untested like the others.

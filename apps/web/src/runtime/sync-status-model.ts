@@ -179,8 +179,23 @@ export function syncCompletionClearedBlockers(
 ): boolean {
   if (!previous) return false
 
-  if (next.pendingOutboxCount < previous.pendingOutboxCount) return true
+  // Drained: blockers have cleared, refetch.
+  if (next.pendingOutboxCount === 0 && previous.pendingOutboxCount > 0) {
+    return true
+  }
 
+  // Still draining. The scheduler runs every couple of seconds while a backlog
+  // clears, and reacting to each intermediate run would refetch every mounted
+  // query for the whole drain — minutes of it after a day offline. Waiting
+  // costs nothing: more acceptances are coming, and the drained case above
+  // will fire.
+  if (next.pendingOutboxCount < previous.pendingOutboxCount) return false
+
+  // No progress. Deliberately *not* treated as "still draining": the count
+  // includes permanently failed rows, so a single stuck event would otherwise
+  // disable every post-sync refetch until the window reloaded. With nothing
+  // being accepted there is no storm to avoid, and a completed run here is a
+  // pull that may have changed remote ids or statuses underneath the cache.
   return (
     next.lastSyncedAt !== null && next.lastSyncedAt !== previous.lastSyncedAt
   )

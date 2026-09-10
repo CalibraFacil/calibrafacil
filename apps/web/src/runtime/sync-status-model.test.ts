@@ -243,12 +243,35 @@ describe('syncCompletionClearedBlockers', () => {
     expect(syncCompletionClearedBlockers(null, base)).toBe(false)
   })
 
-  it('is true when queued events were accepted', () => {
-    // The pending count falling is exactly when an entity stops reporting
-    // local changes — and when its cloud actions should become available.
+  it('is true once the queue has drained', () => {
+    // The pending count reaching zero is when an entity stops reporting local
+    // changes — and when its cloud actions should become available.
     expect(
       syncCompletionClearedBlockers(base, { ...base, pendingOutboxCount: 0 }),
     ).toBe(true)
+  })
+
+  it('still refetches when a stuck row keeps the count above zero', () => {
+    // `countPendingOutbox` includes permanently failed rows, so keying on
+    // "count > 0" would disable every post-sync refetch until reload.
+    expect(
+      syncCompletionClearedBlockers(
+        { lastSyncedAt: '2026-09-10T10:00:00.000Z', pendingOutboxCount: 1 },
+        { lastSyncedAt: '2026-09-10T10:05:00.000Z', pendingOutboxCount: 1 },
+      ),
+    ).toBe(true)
+  })
+
+  it('stays quiet while a backlog is still draining', () => {
+    // The scheduler runs every couple of seconds during a drain. Reacting to
+    // each intermediate run would refetch every mounted query for the whole
+    // drain — minutes of it after a day offline.
+    expect(
+      syncCompletionClearedBlockers(
+        { lastSyncedAt: '2026-09-10T10:00:00.000Z', pendingOutboxCount: 90 },
+        { lastSyncedAt: '2026-09-10T10:00:02.000Z', pendingOutboxCount: 40 },
+      ),
+    ).toBe(false)
   })
 
   it('is true when a run completed, even with nothing queued', () => {

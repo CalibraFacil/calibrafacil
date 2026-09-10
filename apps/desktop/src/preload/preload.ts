@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type {
   CalibraBridge,
   DesktopNotificationsPublish,
+  LocalPartitionActivationRequest,
+  LocalPartitionActivationResult,
   DesktopUpdateState,
   SyncStatusSnapshot,
   SyncTrigger,
@@ -51,6 +53,11 @@ const calibraBridge: CalibraBridge = {
     invoke<boolean>(desktopIpcChannels.revealFile, filePath),
   onHistoryCommand: (listener: (command: string) => void) =>
     subscribe<string>(desktopIpcChannels.historyCommand, listener),
+  activateLocalPartition: (request: LocalPartitionActivationRequest) =>
+    invoke<LocalPartitionActivationResult>(
+      desktopIpcChannels.activateLocalPartition,
+      request,
+    ),
   pickFile: () => invoke(desktopIpcChannels.pickFile),
   pickFolder: () => invoke(desktopIpcChannels.pickFolder),
   saveFile: () => invoke(desktopIpcChannels.saveFile),

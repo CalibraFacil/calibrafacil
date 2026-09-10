@@ -271,12 +271,3 @@ function unavailable(
     resolvableBySync: RESOLVABLE_BY_SYNC.includes(reason),
   };
 }
-
-/**
- * `true` when the runtime snapshot has no *observed* blocker for cloud
- * commands. Use for coarse page-level gating; use
- * `evaluateOperationAvailability` for anything a user can click.
- */
-export function isCloudCommandReachable(health: RuntimeHealthSnapshot) {
-  return health.cloud !== "unreachable";
-}

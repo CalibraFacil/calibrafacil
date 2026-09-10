@@ -1,3 +1,5 @@
+import { hasControlCharacter } from "./deep-link-path";
+
 /**
  * Filenames for files the desktop writes to the user's disk.
  *
@@ -84,12 +86,11 @@ export function sanitizeSegment(value: string | null | undefined): string {
       // Path separators and the characters Windows forbids in a name.
       .replace(/[\\/:*?"<>|]+/g, "-")
       .replace(/\s+/g, "-")
-      // Anything left that a filesystem or a shell would treat oddly.
+      // Anything left that a filesystem or a shell would treat oddly. Shares
+      // the deep-link module's control-character definition rather than
+      // restating the code-point range one file over.
       .split("")
-      .filter((character) => {
-        const code = character.codePointAt(0) ?? 0;
-        return code > 0x1f && code !== 0x7f;
-      })
+      .filter((character) => !hasControlCharacter(character))
       .join("")
       .replace(/-{2,}/g, "-")
       .replace(/^[-_.]+|[-_.]+$/g, "")

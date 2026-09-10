@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase } from "@calibra-facil/local-db";
 
-import { createLocalServerRuntime } from "./server";
+import {
+  createLocalServerFromConfig,
+  createLocalServerRuntime,
+} from "./server";
 import type { LocalServerConfig } from "./bootstrap";
 
 const tempDirectories: string[] = [];
@@ -298,6 +301,26 @@ describe("continuous sync lifecycle", () => {
     });
 
     expect(syncScheduler.getState().running).toBe(false);
+  });
+
+  it("stays dormant on process startup when automatic sync is off", async () => {
+    // The case the preference exists for. `createLocalServerFromConfig` used
+    // to re-derive the start condition and omit `autoStartSync`, so the very
+    // launch it was meant to prevent still began polling.
+    const dbPath = createTempDatabasePath();
+    const instance = createLocalServerFromConfig(
+      createConfig(dbPath, { autoStartSync: false }),
+    );
+
+    expect(instance.syncScheduler.getState().running).toBe(false);
+  });
+
+  it("starts on process startup when automatic sync is on", async () => {
+    const dbPath = createTempDatabasePath();
+    const instance = createLocalServerFromConfig(createConfig(dbPath));
+
+    expect(instance.syncScheduler.getState().running).toBe(true);
+    instance.syncScheduler.stop();
   });
 
   it("stays dormant when the operator turned automatic sync off", async () => {

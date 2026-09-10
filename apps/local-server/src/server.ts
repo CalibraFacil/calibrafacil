@@ -37,6 +37,8 @@ import {
   listLocalServices,
   listLocalServiceOrders,
   listLocalStandards,
+  adoptLegacyLocalDatabase,
+  assertLocalDatabaseOwner,
   countPendingOutbox,
   listSyncConflicts,
   openLocalDatabase,
@@ -73,7 +75,9 @@ import {
 } from "@calibra-facil/contracts";
 import {
   createLocalEnvironmentBootstrap,
+  assertLocalServerPartitionConfigured,
   readLocalServerConfig,
+  resolveLocalServerDbPath,
   type LocalServerConfig,
 } from "./bootstrap";
 import {
@@ -113,6 +117,13 @@ export type LocalServerRuntime = {
   app: Hono;
   syncRuntime: LocalSyncRuntime;
   syncScheduler: LocalSyncScheduler;
+  /**
+   * Start continuous sync if this configuration permits it. The *only* way to
+   * start the loop from outside: re-deriving the condition at a call site is
+   * how `autoStartSync` came to be honoured on the explicit routes but not on
+   * process startup, the one place its whole purpose applies.
+   */
+  startScheduler(): void;
 };
 
 type CalibrationLocationInput = {
@@ -1699,7 +1710,12 @@ export function createLocalServerRuntime(
     return c.json(toSyncSchedulerWireState(syncScheduler.getState()));
   });
 
-  return { app, syncRuntime, syncScheduler };
+  return {
+    app,
+    syncRuntime,
+    syncScheduler,
+    startScheduler: startOrResumeScheduler,
+  };
 }
 
 export function createLocalServerFromEnv(
@@ -1712,15 +1728,53 @@ export function createLocalServerFromEnv(
 export function createLocalServerFromConfig(
   config: LocalServerConfig,
 ): LocalServerInstance {
-  const database = openLocalDatabase({ filePath: config.dbPath });
+  assertLocalServerPartitionConfigured(config);
+
+  const dbPath = resolveLocalServerDbPath(config);
+
+  // An upgrade from the single-database build leaves its file behind. Move it
+  // into this partition *only* if it says it belongs to this account —
+  // adopting it blindly would recreate the exposure partitioning closes.
+  if (config.legacyDbPath && config.userId && config.organizationId) {
+    const result = adoptLegacyLocalDatabase({
+      legacyPath: config.legacyDbPath,
+      partitionPath: dbPath,
+      partition: {
+        userId: config.userId,
+        organizationId: config.organizationId,
+      },
+    });
+
+    if (
+      !result.adopted &&
+      result.reason === "legacy-belongs-to-another-account"
+    ) {
+      console.log(
+        "[local-server] legacy database belongs to another account; left in place",
+      );
+    }
+  }
+
+  const database = openLocalDatabase({ filePath: dbPath });
+
+  // Ownership is verified before a single route is registered, so a
+  // misconfigured path fails at startup rather than quietly serving one
+  // account's calibration records to another. The path is not the boundary —
+  // this check is. Dev and test runs without an identity are unaffected.
+  if (config.userId && config.organizationId) {
+    assertLocalDatabaseOwner(database, {
+      userId: config.userId,
+      organizationId: config.organizationId,
+    });
+  }
+
   const runtime = createLocalServerRuntime(config, database);
 
-  // Only start the loop when there is somewhere to sync to. Standalone dev
-  // (`CALIBRA_SYNC_ENABLED=false`, or no cloud URL) keeps the routes working
-  // and the scheduler dormant instead of failing on a timer.
-  if (config.syncEnabled && config.cloudApiUrl) {
-    runtime.syncScheduler.start("startup");
-  }
+  // Standalone dev (`CALIBRA_SYNC_ENABLED=false`, no cloud URL) and any
+  // installation with automatic sync turned off keep the routes working and
+  // the scheduler dormant. The runtime owns that condition — see
+  // `startScheduler`.
+  runtime.startScheduler();
 
   return {
     app: runtime.app,

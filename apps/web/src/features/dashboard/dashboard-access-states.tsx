@@ -65,3 +65,35 @@ export function DashboardRestrictedState() {
     </div>
   )
 }
+
+/**
+ * Shown when the desktop host will not open a local database for the account
+ * on screen — most often an offline attempt to switch accounts.
+ *
+ * States plainly that the other account's offline work is untouched. Someone
+ * locked out of a laptop in the field needs to know their unsent calibrations
+ * were not thrown away, and the only wrong thing to do here is stay vague.
+ */
+export function DashboardLocalPartitionBlockedState({
+  message,
+}: {
+  message: string
+}) {
+  const navigate = useNavigate()
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Dados locais indisponíveis</CardTitle>
+          <CardDescription>{message}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Button onClick={() => navigate({ to: '/sign-in' })}>
+            Entrar novamente
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

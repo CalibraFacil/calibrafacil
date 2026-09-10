@@ -68,11 +68,15 @@ export function useDesktopNotificationBridge({
       if (!bridge) return { published: false }
 
       // `fetchQuery` reuses the unread count the notification centre already
-      // polls, rather than opening a second counting request beside it.
+      // polls, rather than opening a second counting request beside it. The
+      // explicit `staleTime` matters: the two pollers start at different mount
+      // times, so the centre's own 10s window frequently misses and this would
+      // re-hit the network on almost every tick.
       const [unread, recent] = await Promise.all([
-        queryClient.fetchQuery(
-          unreadNotificationsQueryOptions(organizationKey),
-        ),
+        queryClient.fetchQuery({
+          ...unreadNotificationsQueryOptions(organizationKey),
+          staleTime: 30_000,
+        }),
         calibraApi.notifications.listRecent({
           page: 1,
           limit: PUBLISHED_ENTRY_LIMIT,

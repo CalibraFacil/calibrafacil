@@ -17,6 +17,8 @@ import { migration0016CalibrationJobScopeCompliance } from "./0016_calibration_j
 import { migration0017ServiceOrderPublicId } from "./0017_service_order_public_id";
 import { migration0018CalibrationJobMethodDeviations } from "./0018_calibration_job_method_deviations";
 
+import { migration0019LocalDatabaseOwner } from "./0019_local_database_owner";
+
 export type LocalDbMigration = {
   id: number;
   name: string;
@@ -42,6 +44,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0016CalibrationJobScopeCompliance,
   migration0017ServiceOrderPublicId,
   migration0018CalibrationJobMethodDeviations,
+  migration0019LocalDatabaseOwner,
 ];
 
 export const currentLocalDbSchemaVersion =

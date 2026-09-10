@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateOperationAvailability,
-  isCloudCommandReachable,
   type RuntimeHealthSnapshot,
 } from "./availability";
 
@@ -206,15 +205,5 @@ describe("evaluateOperationAvailability", () => {
         target: { synced: false, hasPendingLocalChanges: true },
       }),
     ).toMatchObject({ available: true });
-  });
-});
-
-describe("isCloudCommandReachable", () => {
-  it("is false only for an observed unreachable cloud", () => {
-    expect(isCloudCommandReachable(health({ cloud: "unreachable" }))).toBe(
-      false,
-    );
-    expect(isCloudCommandReachable(health({ cloud: "unknown" }))).toBe(true);
-    expect(isCloudCommandReachable(health())).toBe(true);
   });
 });

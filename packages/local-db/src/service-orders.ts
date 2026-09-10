@@ -1941,30 +1941,47 @@ type LocalServiceOrderDeliveryDocumentRow = {
 };
 
 /**
- * The service order a domain event belongs to, whether the event targets the
- * order itself or one of its child rows.
+ * The service orders a batch of domain events belongs to, whether each event
+ * targets an order directly or one of its child rows.
  *
- * Saving a quote or a delivery document marks the *parent* order `local`, so
- * clearing that state later requires walking back from the child.
+ * Batched because this runs inside every push-sync cycle — up to fifty events,
+ * every couple of seconds while an offline backlog drains. One query per child
+ * table beats one per event.
  */
-export function resolveServiceOrderForAggregate(
+export function resolveServiceOrdersForAggregates(
   database: LocalDatabase,
-  aggregateKind: string,
-  aggregateId: string,
-): string | null {
-  if (aggregateKind === "service_order") return aggregateId;
+  aggregates: ReadonlyArray<{ kind: string; id: string }>,
+): string[] {
+  const found = new Set<string>();
+  const byTable = new Map<string, string[]>();
 
-  const childTable = SERVICE_ORDER_CHILD_TABLES[aggregateKind];
-  if (!childTable) return null;
+  for (const aggregate of aggregates) {
+    if (aggregate.kind === "service_order") {
+      found.add(aggregate.id);
+      continue;
+    }
 
-  const row = database
-    .prepare<
-      { id: string },
-      { service_order_id: string }
-    >(`SELECT service_order_id FROM ${childTable} WHERE id = @id`)
-    .get({ id: aggregateId });
+    const table = SERVICE_ORDER_CHILD_TABLES[aggregate.kind];
+    if (!table) continue;
 
-  return row?.service_order_id ?? null;
+    const ids = byTable.get(table) ?? [];
+    ids.push(aggregate.id);
+    byTable.set(table, ids);
+  }
+
+  for (const [table, ids] of byTable) {
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = database
+      .prepare<
+        string[],
+        { service_order_id: string }
+      >(`SELECT service_order_id FROM ${table} WHERE id IN (${placeholders})`)
+      .all(...ids);
+
+    for (const row of rows) found.add(row.service_order_id);
+  }
+
+  return [...found];
 }
 
 const SERVICE_ORDER_CHILD_TABLES: Record<string, string | undefined> = {
@@ -1974,7 +1991,7 @@ const SERVICE_ORDER_CHILD_TABLES: Record<string, string | undefined> = {
 };
 
 /**
- * Put a service order back to `synced` once nothing of its own is still
+ * Put service orders back to `synced` once nothing of their own is still
  * queued.
  *
  * Without this, saving a quote draft marks the parent order `local` and no
@@ -1985,42 +2002,68 @@ const SERVICE_ORDER_CHILD_TABLES: Record<string, string | undefined> = {
  * "Nothing queued" means no outbox row in a non-terminal state for the order
  * or any of its children; a rejected or conflicted event must keep the order
  * dirty, because its local state genuinely differs from the server's.
+ *
+ * Takes a batch: the caller is a sync push that may have accepted events for
+ * many orders at once, and doing this per order multiplied five queries by the
+ * batch size.
  */
-export function recomputeServiceOrderSyncState(
+export function recomputeServiceOrderSyncStates(
   database: LocalDatabase,
-  serviceOrderId: string,
+  serviceOrderIds: readonly string[],
 ): void {
-  const childIds = Object.values(SERVICE_ORDER_CHILD_TABLES)
-    .filter((table): table is string => Boolean(table))
-    .flatMap((table) =>
-      database
-        .prepare<{ serviceOrderId: string }, { id: string }>(
-          `SELECT id FROM ${table} WHERE service_order_id = @serviceOrderId`,
-        )
-        .all({ serviceOrderId })
-        .map((row) => row.id),
-    );
+  if (serviceOrderIds.length === 0) return;
 
-  const aggregateIds = [serviceOrderId, ...childIds];
-  const placeholders = aggregateIds.map(() => "?").join(", ");
+  const orderPlaceholders = serviceOrderIds.map(() => "?").join(", ");
 
-  const unsettled = database
-    .prepare<string[], { total: number }>(
-      `
-SELECT COUNT(*) AS total
+  // order id -> its own id plus every child id, built with one query per child
+  // table for the whole batch rather than per order.
+  const ownedIds = new Map<string, string[]>(
+    serviceOrderIds.map((id) => [id, [id]]),
+  );
+
+  for (const table of Object.values(SERVICE_ORDER_CHILD_TABLES)) {
+    if (!table) continue;
+
+    const rows = database
+      .prepare<
+        string[],
+        { id: string; service_order_id: string }
+      >(`SELECT id, service_order_id FROM ${table} WHERE service_order_id IN (${orderPlaceholders})`)
+      .all(...serviceOrderIds);
+
+    for (const row of rows) {
+      ownedIds.get(row.service_order_id)?.push(row.id);
+    }
+  }
+
+  const allIds = [...ownedIds.values()].flat();
+  const unsettledIds = new Set(
+    database
+      .prepare<string[], { aggregate_id: string }>(
+        `
+SELECT DISTINCT e.aggregate_id
 FROM outbox o
 JOIN domain_events e ON e.event_id = o.event_id
 WHERE o.status NOT IN ('synced')
-  AND e.aggregate_id IN (${placeholders})
+  AND e.aggregate_id IN (${allIds.map(() => "?").join(", ")})
 `,
-    )
-    .get(...aggregateIds);
+      )
+      .all(...allIds)
+      .map((row) => row.aggregate_id),
+  );
 
-  if ((unsettled?.total ?? 0) > 0) return;
+  const clean = serviceOrderIds.filter((orderId) =>
+    (ownedIds.get(orderId) ?? []).every((id) => !unsettledIds.has(id)),
+  );
+
+  if (clean.length === 0) return;
 
   database
     .prepare(
-      `UPDATE service_orders SET sync_state = 'synced' WHERE id = @id AND remote_id IS NOT NULL`,
+      `UPDATE service_orders
+       SET sync_state = 'synced'
+       WHERE id IN (${clean.map(() => "?").join(", ")})
+         AND remote_id IS NOT NULL`,
     )
-    .run({ id: serviceOrderId });
+    .run(...clean);
 }

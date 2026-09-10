@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { openLocalDatabase } from "./database";
 import {
-  recomputeServiceOrderSyncState,
-  resolveServiceOrderForAggregate,
+  recomputeServiceOrderSyncStates,
+  resolveServiceOrdersForAggregates,
 } from "./service-orders";
 
 /**
@@ -113,14 +113,16 @@ function syncStateOf(database: Db) {
     .get()?.sync_state;
 }
 
-describe("resolveServiceOrderForAggregate", () => {
+describe("resolveServiceOrdersForAggregates", () => {
   it("returns the order itself", () => {
     const database = createDatabase();
     seedOrder(database);
 
     expect(
-      resolveServiceOrderForAggregate(database, "service_order", "so-1"),
-    ).toBe("so-1");
+      resolveServiceOrdersForAggregates(database, [
+        { kind: "service_order", id: "so-1" },
+      ]),
+    ).toEqual(["so-1"]);
   });
 
   it("walks back from a child row to its parent", () => {
@@ -129,24 +131,41 @@ describe("resolveServiceOrderForAggregate", () => {
     seedQuote(database);
 
     expect(
-      resolveServiceOrderForAggregate(
-        database,
-        "service_order_quote",
-        "quote-1",
-      ),
-    ).toBe("so-1");
+      resolveServiceOrdersForAggregates(database, [
+        { kind: "service_order_quote", id: "quote-1" },
+      ]),
+    ).toEqual(["so-1"]);
   });
 
-  it("is null for an unrelated aggregate", () => {
+  it("resolves a whole batch without a query per event", () => {
+    // This runs on every push cycle while a backlog drains, so batching is
+    // the point — one query per child table, not one per event.
+    const database = createDatabase();
+    seedOrder(database);
+    seedQuote(database, "quote-1");
+    seedQuote(database, "quote-2");
+
+    expect(
+      resolveServiceOrdersForAggregates(database, [
+        { kind: "service_order_quote", id: "quote-1" },
+        { kind: "service_order_quote", id: "quote-2" },
+        { kind: "service_order", id: "so-1" },
+      ]),
+    ).toEqual(["so-1"]);
+  });
+
+  it("ignores an unrelated aggregate", () => {
     const database = createDatabase();
 
     expect(
-      resolveServiceOrderForAggregate(database, "calibration_job", "job-1"),
-    ).toBeNull();
+      resolveServiceOrdersForAggregates(database, [
+        { kind: "calibration_job", id: "job-1" },
+      ]),
+    ).toEqual([]);
   });
 });
 
-describe("recomputeServiceOrderSyncState", () => {
+describe("recomputeServiceOrderSyncStates", () => {
   it("clears the parent once its child event is accepted", () => {
     // The exact defect: the quote is synced, the order is not, and nothing
     // ever puts it right.
@@ -160,7 +179,7 @@ describe("recomputeServiceOrderSyncState", () => {
       status: "synced",
     });
 
-    recomputeServiceOrderSyncState(database, "so-1");
+    recomputeServiceOrderSyncStates(database, ["so-1"]);
 
     expect(syncStateOf(database)).toBe("synced");
   });
@@ -183,7 +202,7 @@ describe("recomputeServiceOrderSyncState", () => {
       status: "pending",
     });
 
-    recomputeServiceOrderSyncState(database, "so-1");
+    recomputeServiceOrderSyncStates(database, ["so-1"]);
 
     expect(syncStateOf(database)).toBe("local");
   });
@@ -200,7 +219,7 @@ describe("recomputeServiceOrderSyncState", () => {
       status: "failed",
     });
 
-    recomputeServiceOrderSyncState(database, "so-1");
+    recomputeServiceOrderSyncStates(database, ["so-1"]);
 
     expect(syncStateOf(database)).toBe("local");
   });
@@ -215,7 +234,7 @@ describe("recomputeServiceOrderSyncState", () => {
       status: "pending",
     });
 
-    recomputeServiceOrderSyncState(database, "so-1");
+    recomputeServiceOrderSyncStates(database, ["so-1"]);
 
     expect(syncStateOf(database)).toBe("local");
   });
@@ -225,7 +244,7 @@ describe("recomputeServiceOrderSyncState", () => {
     const database = createDatabase();
     seedOrder(database, { remoteId: null });
 
-    recomputeServiceOrderSyncState(database, "so-1");
+    recomputeServiceOrderSyncStates(database, ["so-1"]);
 
     expect(syncStateOf(database)).toBe("local");
   });
