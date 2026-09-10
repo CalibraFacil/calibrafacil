@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { labAuthClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
-import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import { BrandLockup } from '@/components/brand'
 import {
   AuthStatusMessage,
@@ -19,12 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSeparator,
-  InputOTPSlot,
-} from '@/components/ui/input-otp'
+import { OTP_CODE_LENGTH, OtpCodeField } from '@/components/otp-code-field'
 import { Spinner } from '@/components/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { startDesktopInitialSync } from '@/components/sign-in-form'
@@ -261,9 +255,9 @@ export function ClaimAccountPage({
     }
   }
 
-  async function handleOtpSignIn(event: React.FormEvent) {
-    event.preventDefault()
-    if (!metadata?.email) return
+  async function handleOtpSignIn(event?: React.FormEvent) {
+    event?.preventDefault()
+    if (!metadata?.email || isOtpSigningIn) return
     setAuthStatus(null)
     setIsOtpSigningIn(true)
 
@@ -415,37 +409,22 @@ export function ClaimAccountPage({
             </div>
 
             {otpRequested ? (
-              <form className="space-y-3" onSubmit={handleOtpSignIn}>
+              <form className="flex flex-col gap-3" onSubmit={handleOtpSignIn}>
                 <Field>
                   <FieldLabel htmlFor="claim-otp">Código recebido</FieldLabel>
-                  <InputOTP
+                  <OtpCodeField
                     id="claim-otp"
-                    maxLength={6}
-                    pattern={REGEXP_ONLY_DIGITS}
                     value={otp}
                     onChange={setOtp}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
+                    onComplete={() => void handleOtpSignIn()}
+                    disabled={isOtpSigningIn}
+                    autoFocus
                     aria-label="Código recebido"
-                    containerClassName="justify-center"
-                    required
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPSeparator />
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
+                  />
                 </Field>
                 <Button
                   type="submit"
-                  disabled={isOtpSigningIn || otp.length < 6}
+                  disabled={isOtpSigningIn || otp.length < OTP_CODE_LENGTH}
                 >
                   {isOtpSigningIn ? 'Validando...' : 'Entrar com código'}
                 </Button>

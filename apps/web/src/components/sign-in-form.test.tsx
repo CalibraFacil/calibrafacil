@@ -210,7 +210,7 @@ describe('SignInForm workflow', () => {
     ).toBeTruthy()
   })
 
-  it('requests and completes lab email OTP sign-in', async () => {
+  it('requests a code and signs in as soon as the last digit lands', async () => {
     authMocks.sendVerificationOtp.mockResolvedValue({ error: null })
     authMocks.signInEmailOtp.mockResolvedValue({ error: null })
 
@@ -228,10 +228,10 @@ describe('SignInForm workflow', () => {
       })
     })
 
+    // No explicit submit click: filling the sixth slot verifies on its own.
     fireEvent.change(await screen.findByLabelText('Código recebido'), {
       target: { value: '123456' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar com código' }))
 
     await waitFor(() => {
       expect(authMocks.signInEmailOtp).toHaveBeenCalledWith({
@@ -239,9 +239,102 @@ describe('SignInForm workflow', () => {
         otp: '123456',
       })
     })
-    expect(authMocks.navigate).toHaveBeenCalledWith({
-      to: '/dashboard/jobs',
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({
+        to: '/dashboard/jobs',
+      })
     })
+  })
+
+  it('keeps the fallback submit disabled until the code is complete', async () => {
+    authMocks.sendVerificationOtp.mockResolvedValue({ error: null })
+    authMocks.signInEmailOtp.mockResolvedValue({ error: null })
+
+    render(<SignInForm redirect="/dashboard/jobs" />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tecnico@lab.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Receber código' }))
+
+    const field = await screen.findByLabelText('Código recebido')
+    fireEvent.change(field, { target: { value: '12345' } })
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Entrar com código' })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    expect(authMocks.signInEmailOtp).not.toHaveBeenCalled()
+  })
+
+  it('clears a rejected code and surfaces the error so the user can retype', async () => {
+    authMocks.sendVerificationOtp.mockResolvedValue({ error: null })
+    authMocks.signInEmailOtp.mockResolvedValue({
+      error: { message: 'INVALID_OTP' },
+    })
+
+    render(<SignInForm redirect="/dashboard/jobs" />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tecnico@lab.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Receber código' }))
+
+    const field = await screen.findByLabelText('Código recebido')
+    fireEvent.change(field, { target: { value: '000000' } })
+
+    await waitFor(() => {
+      expect(authMocks.signInEmailOtp).toHaveBeenCalled()
+    })
+
+    // The wrong digits are dropped rather than left for the user to hunt through.
+    await waitFor(() => {
+      expect(screen.getByLabelText('Código recebido')).toHaveProperty(
+        'value',
+        '',
+      )
+    })
+    expect(
+      screen.getByText('Código inválido. Confira o email e tente novamente.'),
+    ).toBeTruthy()
+    expect(authMocks.navigate).not.toHaveBeenCalled()
+
+    // A fresh six digits re-arms auto-submit.
+    authMocks.signInEmailOtp.mockResolvedValue({ error: null })
+    fireEvent.change(screen.getByLabelText('Código recebido'), {
+      target: { value: '654321' },
+    })
+
+    await waitFor(() => {
+      expect(authMocks.signInEmailOtp).toHaveBeenLastCalledWith({
+        email: 'tecnico@lab.test',
+        otp: '654321',
+      })
+    })
+  })
+
+  it('holds the resend control on a cooldown and lets the user go back to the method list', async () => {
+    authMocks.sendVerificationOtp.mockResolvedValue({ error: null })
+
+    render(<SignInForm redirect="/dashboard/jobs" />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tecnico@lab.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Receber código' }))
+
+    const resend = await screen.findByRole('button', {
+      name: /Reenviar em \d+s/,
+    })
+    expect(resend.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usar outro email' }))
+
+    // Back on the method list with the typed email still in place.
+    const emailInput = await screen.findByLabelText('Email')
+    expect(emailInput).toHaveProperty('value', 'tecnico@lab.test')
+    expect(screen.queryByLabelText('Código recebido')).toBeNull()
   })
 
   it('translates invalid credential errors from the auth provider', async () => {

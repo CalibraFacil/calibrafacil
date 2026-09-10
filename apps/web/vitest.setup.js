@@ -32,3 +32,14 @@ if (typeof Range !== 'undefined') {
     }
   }
 }
+
+// jsdom does not implement document.elementFromPoint. input-otp probes it on a
+// timer to decide whether a password-manager badge overlaps the last slot, so
+// any suite that mounts an OTP field crashes with an uncaught TypeError after
+// the test body. Hit-testing is meaningless without layout: report a miss.
+if (
+  typeof document !== 'undefined' &&
+  typeof document.elementFromPoint !== 'function'
+) {
+  document.elementFromPoint = () => null
+}

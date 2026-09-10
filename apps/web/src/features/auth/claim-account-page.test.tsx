@@ -156,6 +156,12 @@ describe('ClaimAccountPage', () => {
   })
 
   it('requests and completes email OTP fallback claims', async () => {
+    claimMocks.completeSetup.mockResolvedValue({
+      claimed: true,
+      organizationId: 'org-1',
+      needsOnboarding: true,
+    })
+
     renderClaimPage('setup-token')
 
     fireEvent.click(
@@ -165,16 +171,11 @@ describe('ClaimAccountPage', () => {
     await waitFor(() => {
       expect(claimMocks.requestOtp).toHaveBeenCalledWith('setup-token')
     })
+
+    // The sixth digit submits on its own; no button click needed.
     fireEvent.change(await screen.findByLabelText('Código recebido'), {
       target: { value: '123456' },
     })
-
-    claimMocks.completeSetup.mockResolvedValue({
-      claimed: true,
-      organizationId: 'org-1',
-      needsOnboarding: true,
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar com código' }))
 
     await waitFor(() => {
       expect(claimMocks.signInEmailOtp).toHaveBeenCalledWith({
@@ -182,7 +183,9 @@ describe('ClaimAccountPage', () => {
         otp: '123456',
       })
     })
-    expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
+    await waitFor(() => {
+      expect(claimMocks.completeSetup).toHaveBeenCalledWith('setup-token')
+    })
     expect(claimMocks.navigate).toHaveBeenCalledWith({
       to: '/onboarding/organization',
       search: {},

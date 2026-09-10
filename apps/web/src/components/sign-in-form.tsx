@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Building03Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { REGEXP_ONLY_DIGITS } from 'input-otp'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   backofficeSignIn,
   backofficeSignOut,
@@ -11,6 +11,7 @@ import {
 } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { calibraApi } from '@/utils/api'
+import { useCountdown } from '@/hooks/use-countdown'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { getBackofficeAppUrl } from '@/app/config/runtime'
@@ -28,13 +29,28 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSeparator,
-  InputOTPSlot,
-} from '@/components/ui/input-otp'
 import { Separator } from '@/components/ui/separator'
+import { OTP_CODE_LENGTH } from '@/components/otp-code-field'
+import {
+  SignInCodeStep,
+  type SignInCodeStatus,
+} from '@/components/sign-in-code-step'
+
+/** Matches the emailOTP rate limit (5 requests / 60s) with room to spare. */
+const RESEND_COOLDOWN_SECONDS = 30
+
+/** Rejections that retyping the same code cannot fix. */
+const NEEDS_FRESH_CODE = new Set(['otp_expired', 'too_many_attempts'])
+
+function needsFreshCode(message: string | null | undefined) {
+  return NEEDS_FRESH_CODE.has(message?.trim().toLowerCase() ?? '')
+}
+
+/**
+ * A beat between "code accepted" and the redirect, so the confirmation is seen
+ * instead of the page vanishing mid-keystroke.
+ */
+const VERIFIED_HOLD_MS = 450
 
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
@@ -50,20 +66,37 @@ export function SignInForm({
   ...props
 }: SignInFormProps) {
   const navigate = useNavigate()
+  const prefersReducedMotion = useReducedMotion()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false)
   const [isOtpRequesting, setIsOtpRequesting] = useState(false)
-  const [isOtpSigningIn, setIsOtpSigningIn] = useState(false)
   const [otp, setOtp] = useState('')
-  const [otpRequested, setOtpRequested] = useState(false)
+  const [otpStatus, setOtpStatus] = useState<SignInCodeStatus>('idle')
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [otpErrorNonce, setOtpErrorNonce] = useState(0)
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null)
+
+  const resendCooldown = useCountdown()
+  const otpInputRef = useRef<HTMLInputElement>(null)
+  const deferredRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
 
   const isLabMode = mode === 'lab'
+  const isCodeStep = isLabMode && codeSentTo !== null
   const safeRedirect = isLabMode
     ? sanitizeLabRedirect(redirect)
     : sanitizeBackofficeRedirect(redirect)
+
+  useMountEffect(() => () => {
+    for (const handle of deferredRef.current) clearTimeout(handle)
+    deferredRef.current = []
+  })
+
+  function defer(callback: () => void, delayMs: number) {
+    deferredRef.current.push(setTimeout(callback, delayMs))
+  }
 
   // Conditional-UI autofill: when the browser supports conditional mediation,
   // pre-arm a passkey request on mount so the email field (autoComplete
@@ -109,6 +142,14 @@ export function SignInForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    // Enter inside the code field must verify the code, not fire the passkey
+    // prompt that owns this form's submit in the first step.
+    if (isCodeStep) {
+      await handleOtpSignIn(otp)
+      return
+    }
+
     if (isLabMode) {
       await handlePasskeySignIn()
       return
@@ -256,13 +297,11 @@ export function SignInForm({
         return
       }
 
-      setOtpRequested(true)
-      setAuthStatus({
-        tone: 'success',
-        title: 'Código solicitado',
-        description:
-          'Se o email tiver acesso LAB, enviaremos um código de 6 dígitos.',
-      })
+      setOtp('')
+      setOtpError(null)
+      setOtpStatus('idle')
+      setCodeSentTo(email)
+      resendCooldown.start(RESEND_COOLDOWN_SECONDS)
     } catch {
       setAuthStatus({
         tone: 'error',
@@ -273,39 +312,76 @@ export function SignInForm({
     }
   }
 
-  async function handleOtpSignIn() {
+  function handleChangeEmail() {
+    setCodeSentTo(null)
+    setOtp('')
+    setOtpError(null)
+    setOtpStatus('idle')
     setAuthStatus(null)
-    setIsOtpSigningIn(true)
+    resendCooldown.reset()
+  }
+
+  async function handleOtpSignIn(code: string) {
+    // `onComplete` and the fallback button can both land on the same value;
+    // one verification at a time.
+    if (otpStatus !== 'idle' || code.length < OTP_CODE_LENGTH) return
+
+    setAuthStatus(null)
+    setOtpError(null)
+    setOtpStatus('validating')
 
     try {
       const { error: otpSignInError } = await labAuthClient.signIn.emailOtp({
-        email,
-        otp,
+        email: codeSentTo ?? email,
+        otp: code,
       })
 
       if (otpSignInError) {
-        setAuthStatus({
-          tone: 'error',
-          title: translateAuthErrorMessage(
-            otpSignInError.message,
-            'Código inválido.',
-          ),
-        })
+        // "Solicite um novo código" must not point at a button still counting
+        // down: when retrying this code is pointless, free the resend now.
+        if (needsFreshCode(otpSignInError.message)) resendCooldown.reset()
+        rejectOtp(
+          translateAuthErrorMessage(otpSignInError.message, 'Código inválido.'),
+        )
         return
       }
 
+      setOtpStatus('verified')
       clearDesktopSignedOut()
       startDesktopInitialSync()
-      navigate({ to: safeRedirect })
+      defer(() => navigate({ to: safeRedirect }), VERIFIED_HOLD_MS)
     } catch {
-      setAuthStatus({
-        tone: 'error',
-        title: 'Falha ao validar código.',
-      })
-    } finally {
-      setIsOtpSigningIn(false)
+      rejectOtp('Falha ao validar código.')
     }
   }
+
+  /**
+   * A rejected code is cleared rather than left in place: retyping six digits is
+   * faster than hunting for the wrong one, and it re-arms the auto-submit.
+   */
+  function rejectOtp(message: string) {
+    setOtpStatus('idle')
+    setOtp('')
+    setOtpError(message)
+    setOtpErrorNonce((nonce) => nonce + 1)
+    // After the re-enable has been committed, not before it.
+    defer(() => otpInputRef.current?.focus(), 0)
+  }
+
+  const emailField = (
+    <Field>
+      <FieldLabel htmlFor="email">Email</FieldLabel>
+      <Input
+        id="email"
+        type="email"
+        autoComplete={isLabMode ? 'username webauthn' : 'username'}
+        placeholder="seu@email.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required={!isLabMode || isMagicLinkLoading || isOtpRequesting}
+      />
+    </Field>
+  )
 
   return (
     <form
@@ -316,117 +392,137 @@ export function SignInForm({
       <FieldGroup>
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12" />
-          <h1 className="text-2xl font-bold">
-            {mode === 'backoffice'
-              ? 'Entrar no backoffice'
-              : 'Entre em sua conta'}
+          <h1 className="text-2xl font-bold text-balance">
+            {isCodeStep
+              ? 'Verifique seu email'
+              : mode === 'backoffice'
+                ? 'Entrar no backoffice'
+                : 'Entre em sua conta'}
           </h1>
           <p className="text-muted-foreground text-sm text-balance">
-            {mode === 'backoffice'
-              ? 'Acesso interno da equipe CalibraFácil'
-              : 'Use sua passkey ou um método seguro por email'}
+            {isCodeStep ? (
+              <>
+                Se{' '}
+                <span className="text-foreground font-medium break-all">
+                  {codeSentTo}
+                </span>{' '}
+                tiver acesso LAB, o código chega em instantes.
+              </>
+            ) : mode === 'backoffice' ? (
+              'Acesso interno da equipe CalibraFácil'
+            ) : (
+              'Use sua passkey ou um método seguro por email'
+            )}
           </p>
         </div>
         {authStatus ? <AuthStatusMessage status={authStatus} /> : null}
-        <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input
-            id="email"
-            type="email"
-            autoComplete={isLabMode ? 'username webauthn' : 'username'}
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required={!isLabMode || isMagicLinkLoading || isOtpRequesting}
-          />
-        </Field>
         {isLabMode ? (
-          <>
-            <Field>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Spinner className="mr-2" />
-                    Entrando...
-                  </>
-                ) : (
-                  'Entrar com passkey'
-                )}
-              </Button>
-            </Field>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isMagicLinkLoading || !email.trim()}
-                onClick={handleMagicLinkSignIn}
+          <AnimatePresence mode="wait" initial={false}>
+            {isCodeStep ? (
+              <SignInCodeStep
+                key="code"
+                code={otp}
+                onCodeChange={setOtp}
+                onSubmit={() => void handleOtpSignIn(otp)}
+                onResend={() => void handleRequestOtp()}
+                onChangeEmail={handleChangeEmail}
+                status={otpStatus}
+                error={otpError}
+                errorNonce={otpErrorNonce}
+                resendSecondsLeft={resendCooldown.secondsLeft}
+                isResending={isOtpRequesting}
+                inputRef={otpInputRef}
+              />
+            ) : (
+              <motion.div
+                key="methods"
+                className="flex flex-col gap-6"
+                initial={false}
+                animate={{
+                  opacity: 1,
+                  transform: 'translateY(0px)',
+                  filter: 'blur(0px)',
+                }}
+                exit={
+                  prefersReducedMotion
+                    ? { opacity: 0 }
+                    : {
+                        opacity: 0,
+                        transform: 'translateY(-6px)',
+                        filter: 'blur(3px)',
+                      }
+                }
+                transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
               >
-                {isMagicLinkLoading ? (
-                  <>
-                    <Spinner className="mr-2" />
-                    Enviando...
-                  </>
-                ) : (
-                  'Receber link de acesso'
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isOtpRequesting || !email.trim()}
-                onClick={handleRequestOtp}
-              >
-                {isOtpRequesting ? (
-                  <>
-                    <Spinner className="mr-2" />
-                    Enviando...
-                  </>
-                ) : (
-                  'Receber código'
-                )}
-              </Button>
-            </div>
-            {otpRequested ? (
-              <div className="space-y-3">
+                {emailField}
                 <Field>
-                  <FieldLabel htmlFor="sign-in-otp">Código recebido</FieldLabel>
-                  <InputOTP
-                    id="sign-in-otp"
-                    maxLength={6}
-                    pattern={REGEXP_ONLY_DIGITS}
-                    value={otp}
-                    onChange={setOtp}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    aria-label="Código recebido"
-                    containerClassName="justify-center"
-                    required
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPSeparator />
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Spinner className="mr-2" />
+                        Entrando...
+                      </>
+                    ) : (
+                      'Entrar com passkey'
+                    )}
+                  </Button>
                 </Field>
-                <Button
-                  type="button"
-                  disabled={isOtpSigningIn || otp.length < 6}
-                  onClick={handleOtpSignIn}
-                >
-                  {isOtpSigningIn ? 'Validando...' : 'Entrar com código'}
-                </Button>
-              </div>
-            ) : null}
-          </>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isMagicLinkLoading || !email.trim()}
+                    onClick={handleMagicLinkSignIn}
+                  >
+                    {isMagicLinkLoading ? (
+                      <>
+                        <Spinner className="mr-2" />
+                        Enviando...
+                      </>
+                    ) : (
+                      'Receber link de acesso'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isOtpRequesting || !email.trim()}
+                    onClick={handleRequestOtp}
+                  >
+                    {isOtpRequesting ? (
+                      <>
+                        <Spinner className="mr-2" />
+                        Enviando...
+                      </>
+                    ) : (
+                      'Receber código'
+                    )}
+                  </Button>
+                </div>
+                {onSwitchToSso ? (
+                  <>
+                    <Separator />
+                    <Field>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onSwitchToSso}
+                      >
+                        <HugeiconsIcon
+                          icon={Building03Icon}
+                          className="size-4"
+                        />
+                        Entrar com SSO corporativo
+                      </Button>
+                    </Field>
+                  </>
+                ) : null}
+              </motion.div>
+            )}
+          </AnimatePresence>
         ) : (
           <>
+            {emailField}
             <Field>
               <div className="flex items-center">
                 <FieldLabel htmlFor="password">Senha</FieldLabel>
@@ -459,17 +555,6 @@ export function SignInForm({
             </Field>
           </>
         )}
-        {mode === 'lab' && onSwitchToSso ? (
-          <>
-            <Separator />
-            <Field>
-              <Button type="button" variant="outline" onClick={onSwitchToSso}>
-                <HugeiconsIcon icon={Building03Icon} className="size-4" />
-                Entrar com SSO corporativo
-              </Button>
-            </Field>
-          </>
-        ) : null}
       </FieldGroup>
     </form>
   )
