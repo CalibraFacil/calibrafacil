@@ -4,6 +4,7 @@ import {
   buildRegulatedIntervalFromForm,
   DEFAULT_REGULATED_FORM_FIELDS,
   isAssetFormStatus,
+  listMissingAssetRequirements,
   parseAssetEditForm,
   parseAssetForm,
   regulatedFormFieldsFromAsset,
@@ -12,6 +13,75 @@ import {
 } from './forms'
 
 describe('asset feature forms', () => {
+  it('lists the missing required inputs in visual order', () => {
+    const empty: AssetFormData = {
+      ...validAssetForm(),
+      customerId: null,
+      assetTypeId: null,
+      name: '',
+      tag: '   ',
+      serialNumber: '',
+      baseMeasurementUnit: null,
+      specifications: {},
+    }
+
+    expect(listMissingAssetRequirements(empty)).toEqual([
+      { field: 'assetTypeId', label: 'Tipo de instrumento' },
+      { field: 'customerId', label: 'Cliente' },
+      { field: 'name', label: 'Nome' },
+      { field: 'tag', label: 'Tag' },
+      { field: 'serialNumber', label: 'Número de série' },
+    ])
+
+    expect(
+      listMissingAssetRequirements(empty, {
+        requiresMassBaseUnit: true,
+        specificationFields: [
+          { key: 'capacity', label: 'Capacidade', required: true },
+          { key: 'notes', label: 'Notas', required: false },
+        ],
+      }).map((item) => item.label),
+    ).toEqual([
+      'Tipo de instrumento',
+      'Cliente',
+      'Nome',
+      'Tag',
+      'Número de série',
+      'Unidade base',
+      'Capacidade',
+    ])
+  })
+
+  it('reports nothing missing once every required input is filled', () => {
+    expect(
+      listMissingAssetRequirements(
+        {
+          ...validAssetForm(),
+          baseMeasurementUnit: 'kg',
+          specifications: { capacity: 10 },
+        },
+        {
+          requiresMassBaseUnit: true,
+          specificationFields: [
+            { key: 'capacity', label: 'Capacidade', required: true },
+          ],
+        },
+      ),
+    ).toEqual([])
+  })
+
+  it('keeps the readiness list in sync with parseAssetForm required rules', () => {
+    const form: AssetFormData = { ...validAssetForm(), name: '', tag: '' }
+    const parsed = parseAssetForm(form)
+    const missing = listMissingAssetRequirements(form).map((item) => item.field)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      for (const error of parsed.fieldErrors) {
+        expect(missing).toContain(error.field)
+      }
+    }
+  })
+
   it('builds and validates asset create payloads', () => {
     const result = parseAssetForm({
       ...validAssetForm(),

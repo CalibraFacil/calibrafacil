@@ -17,6 +17,7 @@ function SegmentedControl<TValue extends string>({
   options,
   disabled,
   className,
+  'aria-labelledby': ariaLabelledBy,
 }: {
   name: string
   value: TValue
@@ -24,10 +25,12 @@ function SegmentedControl<TValue extends string>({
   options: ReadonlyArray<SegmentedControlOption<TValue>>
   disabled?: boolean
   className?: string
+  'aria-labelledby'?: string
 }) {
   return (
     <div
       role="radiogroup"
+      aria-labelledby={ariaLabelledBy}
       data-slot="segmented-control"
       className={cn(
         // p-1 + inner rounded-lg (8px) → outer rounded-xl (12px) stays concentric.

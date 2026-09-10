@@ -144,6 +144,13 @@ export const REGULATED_ANCHOR_LABELS: Record<string, string> = {
   install_year: 'Ano de instalação',
 }
 
+/** Short regime labels for the segmented picker; the long form stays as the description. */
+export const METROLOGY_REGIME_SHORT_LABELS: Record<MetrologyRegime, string> = {
+  INDUSTRIAL: 'Industrial',
+  LEGAL: 'Metrologia legal',
+  UNKNOWN: 'A determinar',
+}
+
 export function isMetrologyRegime(value: string): value is MetrologyRegime {
   return METROLOGY_REGIMES.some((regime) => regime === value)
 }
@@ -211,7 +218,10 @@ export function regulationCatalogToRegimePatch(
   if (entry.anchor !== null) {
     patch.regulatedAnchor = entry.anchor
   }
-  if (entry.kind === 'fixed_months' || entry.kind === 'max_months_from_install') {
+  if (
+    entry.kind === 'fixed_months' ||
+    entry.kind === 'max_months_from_install'
+  ) {
     patch.regulatedValueMonths =
       entry.valueMonths !== null ? String(entry.valueMonths) : ''
   }
@@ -376,6 +386,58 @@ export function isAssetSpecificationErrorField(
   field: string,
 ): field is `spec_${string}` {
   return field.startsWith('spec_')
+}
+
+export type AssetFormMissingRequirement = {
+  field: AssetFormField
+  label: string
+}
+
+/**
+ * Live readiness for the create form: which REQUIRED inputs are still empty,
+ * in visual order. Drives the footer summary ("Faltam: tipo, nome…") without
+ * running the full parse on every keystroke. Mirrors the required rules in
+ * `parseAssetForm` (customer, type, name, tag, serial, mass base unit and the
+ * asset type's required specifications) — keep the two in sync.
+ */
+export function listMissingAssetRequirements(
+  data: Pick<
+    AssetFormData,
+    | 'customerId'
+    | 'assetTypeId'
+    | 'name'
+    | 'tag'
+    | 'serialNumber'
+    | 'baseMeasurementUnit'
+    | 'specifications'
+  >,
+  options: ParseAssetFormOptions = {},
+): AssetFormMissingRequirement[] {
+  const missing: AssetFormMissingRequirement[] = []
+  if (!(typeof data.assetTypeId === 'number' && data.assetTypeId > 0)) {
+    missing.push({ field: 'assetTypeId', label: 'Tipo de instrumento' })
+  }
+  if (!(typeof data.customerId === 'number' && data.customerId > 0)) {
+    missing.push({ field: 'customerId', label: 'Cliente' })
+  }
+  if (!data.name.trim()) missing.push({ field: 'name', label: 'Nome' })
+  if (!data.tag.trim()) missing.push({ field: 'tag', label: 'Tag' })
+  if (!data.serialNumber.trim()) {
+    missing.push({ field: 'serialNumber', label: 'Número de série' })
+  }
+  if (options.requiresMassBaseUnit && !data.baseMeasurementUnit) {
+    missing.push({ field: 'baseMeasurementUnit', label: 'Unidade base' })
+  }
+  for (const error of collectSpecificationErrors(
+    data.specifications,
+    options.specificationFields,
+  )) {
+    const field = options.specificationFields?.find(
+      (candidate) => `spec_${candidate.key}` === error.field,
+    )
+    missing.push({ field: error.field, label: field?.label ?? error.field })
+  }
+  return missing
 }
 
 export function parseAssetForm(

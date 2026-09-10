@@ -9,6 +9,7 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
   isRegulatedKind,
   isSecondaryRegulationProvenance,
   METROLOGY_REGIME_LABELS,
+  METROLOGY_REGIME_SHORT_LABELS,
   METROLOGY_REGIMES,
   REGULATED_ANCHOR_LABELS,
   REGULATED_INTERVAL_KINDS,
@@ -106,31 +108,26 @@ export function MetrologyRegimeFields({
   return (
     <div className="mt-4 space-y-4">
       <Field>
-        <FieldLabel htmlFor="metrologyRegime">Regime metrológico</FieldLabel>
-        <Select
+        <FieldLabel id="metrologyRegime-label">Regime metrológico</FieldLabel>
+        <SegmentedControl
+          name="metrologyRegime"
           value={values.metrologyRegime}
           onValueChange={(value) => {
-            if (value && isMetrologyRegime(value))
-              onChange({ metrologyRegime: value })
+            if (isMetrologyRegime(value)) onChange({ metrologyRegime: value })
           }}
+          options={METROLOGY_REGIMES.map((regime) => ({
+            value: regime,
+            label: METROLOGY_REGIME_SHORT_LABELS[regime],
+          }))}
           disabled={disabled}
-        >
-          <SelectTrigger id="metrologyRegime">
-            <span>{METROLOGY_REGIME_LABELS[values.metrologyRegime]}</span>
-          </SelectTrigger>
-          <SelectContent>
-            {METROLOGY_REGIMES.map((regime) => (
-              <SelectItem key={regime} value={regime}>
-                {METROLOGY_REGIME_LABELS[regime]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          className="max-w-full flex-wrap"
+          aria-labelledby="metrologyRegime-label"
+        />
         <FieldDescription>
-          Definido pelo enquadramento legal do instrumento, não pelo
-          laboratório. “Metrologia legal” fixa a periodicidade de verificação
-          por regulamento (Inmetro); habilita marcas de selagem e Marca de
-          Reparo na OS.
+          {METROLOGY_REGIME_LABELS[values.metrologyRegime]}. Definido pelo
+          enquadramento legal do instrumento, não pelo laboratório. “Metrologia
+          legal” fixa a periodicidade de verificação por regulamento (Inmetro);
+          habilita marcas de selagem e Marca de Reparo na OS.
         </FieldDescription>
       </Field>
 

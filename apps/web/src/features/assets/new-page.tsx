@@ -13,15 +13,12 @@ export function NewAssetPage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Cadastro de ativo
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Novo ativo
         </h1>
         <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
-          Vincule o instrumento ao cliente, identifique-o e registre as
-          especificações necessárias para calibração.
+          Escolha o tipo de instrumento e o cliente; as especificações
+          necessárias para calibração aparecem conforme o tipo.
         </p>
       </div>
 
