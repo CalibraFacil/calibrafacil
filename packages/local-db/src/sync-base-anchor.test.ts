@@ -204,9 +204,7 @@ INSERT INTO service_orders (
       .prepare<
         [],
         { remote_base_updated_at: string | null }
-      >(
-        `SELECT remote_base_updated_at FROM service_order_executions WHERE service_order_id = 'service-order-local'`,
-      )
+      >(`SELECT remote_base_updated_at FROM service_order_executions WHERE service_order_id = 'service-order-local'`)
       .get();
 
     expect(execution?.remote_base_updated_at).toBe(CLOUD_UPDATED_AT);

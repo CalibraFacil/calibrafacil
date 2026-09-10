@@ -36,6 +36,12 @@ export const localServerBootstrapConfigSchema = z.object({
   unitId: z.number().int().nullable(),
   userId: z.string().nullable(),
   syncEnabled: z.boolean(),
+  /**
+   * The user's `autoStartSync` preference. When false the scheduler stays
+   * dormant until sync is started explicitly — a managed installation that
+   * turned automatic sync off must not begin uploading on every launch.
+   */
+  autoStartSync: z.boolean().optional(),
   bootstrapToken: z.string().nullable(),
   cloudApiUrl: z.string().url().nullable(),
   cloudAuthToken: z.string().nullable(),
@@ -83,6 +89,29 @@ export const syncActionResultSchema = z.object({
   message: z.string().optional(),
 });
 
+/**
+ * What woke the continuous sync scheduler. Reported so support surfaces can
+ * distinguish "we polled" from "the user pressed sync" from "a local write
+ * landed" without reading logs.
+ */
+export const syncTriggerSchema = z.enum([
+  "startup",
+  "local-mutation",
+  "reconnect",
+  "manual",
+  "poll",
+]);
+
+export const syncSchedulerStateSchema = z.object({
+  running: z.boolean(),
+  paused: z.boolean(),
+  syncing: z.boolean(),
+  consecutiveFailures: z.number().int().nonnegative(),
+  lastTrigger: syncTriggerSchema.nullable(),
+  /** When the next run is planned, or null when nothing is scheduled. */
+  nextRunAt: z.string().datetime().nullable(),
+});
+
 export const syncStatusSnapshotSchema = z.object({
   state: syncStateSchema,
   pendingOutboxCount: z.number().int().nonnegative(),
@@ -91,6 +120,11 @@ export const syncStatusSnapshotSchema = z.object({
   activeRunId: z.string().nullable().optional(),
   lastRunId: z.string().nullable().optional(),
   lastError: z.string().nullable().optional(),
+  /**
+   * Absent when the local server runs without continuous sync (standalone dev,
+   * or `CALIBRA_SYNC_ENABLED=false`).
+   */
+  scheduler: syncSchedulerStateSchema.nullable().optional(),
 });
 
 export const desktopUpdateStateSchema = z.object({
@@ -148,6 +182,8 @@ export type DesktopSecretStatus = z.infer<typeof desktopSecretStatusSchema>;
 export type DesktopSecretWrite = z.infer<typeof desktopSecretWriteSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;
 export type SyncStatusSnapshot = z.infer<typeof syncStatusSnapshotSchema>;
+export type SyncTrigger = z.infer<typeof syncTriggerSchema>;
+export type SyncSchedulerState = z.infer<typeof syncSchedulerStateSchema>;
 export type DesktopUpdateState = z.infer<typeof desktopUpdateStateSchema>;
 export type CertificatePdfExportRequest = z.infer<
   typeof certificatePdfExportRequestSchema
@@ -175,7 +211,15 @@ export interface CalibraBridge {
   onSyncStatus(listener: (status: SyncStatusSnapshot) => void): () => void;
   startSync(): Promise<SyncActionResult>;
   pauseSync(): Promise<SyncActionResult>;
+  resumeSync(): Promise<SyncActionResult>;
   retrySync(): Promise<SyncActionResult>;
+  /**
+   * Nudge the continuous sync loop because something outside it changed —
+   * the network came back, the window regained focus, the machine woke.
+   * Coalesced by the scheduler, so calling it liberally is safe and calling
+   * it twice is not two syncs.
+   */
+  wakeSync(trigger: SyncTrigger): Promise<SyncActionResult>;
   pickFile(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   saveFile(): Promise<string | null>;

@@ -244,7 +244,13 @@ export async function installDesktopBridge(
         async pauseSync() {
           return { ok: true }
         },
+        async resumeSync() {
+          return { ok: true }
+        },
         async retrySync() {
+          return { ok: true }
+        },
+        async wakeSync() {
           return { ok: true }
         },
         async pickFile() {

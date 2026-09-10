@@ -181,9 +181,10 @@ LIMIT @limit OFFSET @offset
 
 function resolveLocalCustomerId(database: LocalDatabase, numericId: number) {
   const remoteRow = database
-    .prepare<{ remoteId: number }, { id: string }>(
-      "SELECT id FROM customers WHERE remote_id = @remoteId LIMIT 1",
-    )
+    .prepare<
+      { remoteId: number },
+      { id: string }
+    >("SELECT id FROM customers WHERE remote_id = @remoteId LIMIT 1")
     .get({ remoteId: numericId });
   if (remoteRow) return remoteRow.id;
 

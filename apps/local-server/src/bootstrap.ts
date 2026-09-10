@@ -40,6 +40,7 @@ export function readLocalServerConfig(
     unitId: env.CALIBRA_UNIT_ID ? Number(env.CALIBRA_UNIT_ID) : null,
     userId: env.CALIBRA_USER_ID ?? null,
     syncEnabled: env.CALIBRA_SYNC_ENABLED !== "false",
+    autoStartSync: env.CALIBRA_LOCAL_AUTO_START_SYNC !== "false",
     bootstrapToken: env.CALIBRA_LOCAL_BOOTSTRAP_TOKEN ?? null,
     cloudApiUrl: env.CALIBRA_CLOUD_API_URL ?? null,
     cloudAuthToken: env.CALIBRA_CLOUD_AUTH_TOKEN ?? null,

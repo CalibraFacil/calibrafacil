@@ -273,3 +273,42 @@ export function isServiceStartDirty(
   const stored = storedIso ? new Date(storedIso).toISOString() : null
   return next !== stored
 }
+
+/**
+ * What a cloud command needs to know about this service order before it runs.
+ *
+ * Unlike a calibration job, a service order *can* be created offline
+ * (`serviceOrders.create` is a queued local command). Two distinct states have
+ * to be told apart, and the numeric `id` cannot do it — it falls back to a
+ * stable local surrogate, so an order that only exists on this laptop looks
+ * identical to one the cloud knows:
+ *
+ * - **No cloud identity yet** (`remoteId === null`): sending `deliver`,
+ *   `sendQuote` or a document generation would address an order the server has
+ *   never seen — a 404 at best, a duplicate at worst.
+ * - **Known, but with queued local edits** (`syncState !== 'synced'`): the
+ *   command would decide against the server's older snapshot.
+ *
+ * `remoteId === undefined` means the record came from the cloud read (the
+ * browser), where neither state exists.
+ */
+export function serviceOrderCloudCommandTarget(order: unknown): {
+  synced: boolean
+  hasPendingLocalChanges: boolean
+} {
+  if (!order || typeof order !== 'object' || Array.isArray(order)) {
+    return { synced: true, hasPendingLocalChanges: false }
+  }
+
+  const remoteId: unknown = Reflect.get(order, 'remoteId')
+  const syncState: unknown = Reflect.get(order, 'syncState')
+
+  // Absent field = cloud read; the order is canonical by definition.
+  const synced = remoteId === undefined ? true : remoteId !== null
+
+  return {
+    synced,
+    hasPendingLocalChanges:
+      synced && typeof syncState === 'string' && syncState !== 'synced',
+  }
+}

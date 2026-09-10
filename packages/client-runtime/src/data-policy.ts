@@ -374,6 +374,7 @@ export const calibraApiPolicyRegistry = {
   },
   sync: {
     getSession: "local-only",
+    reconcile: "local-only",
     listConflicts: "local-only",
     resolveConflict: "local-only",
   },

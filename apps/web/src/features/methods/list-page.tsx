@@ -47,11 +47,11 @@ import {
   methodsColumns,
 } from '@/features/methods/components/columns'
 import { methodRouteId } from '@/lib/route-identifiers'
-import { isDesktopRuntime } from '@/runtime/desktop'
+import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
 
 // The from-template catalog is cloud-only (the route is cloud-gated); hide the
 // affordance entirely in the desktop/offline runtime.
-const isCloudRuntime = !isDesktopRuntime()
 
 const statusLabels: Record<MethodStatus, string> = {
   DRAFT: 'Rascunho',
@@ -82,6 +82,14 @@ export function MethodsListPage({
 } = {}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // The template catalogue and method authoring are cloud commands. They used
+  // to be hidden outright on desktop, which removed a supported discovery path
+  // from a connected app; now they show, and say why when they cannot run.
+  const fromTemplateAvailability = useOperationAvailability(
+    'methods',
+    'listMethodTemplates',
+  )
+  const createMethodAvailability = useOperationAvailability('methods', 'create')
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
@@ -173,22 +181,35 @@ export function MethodsListPage({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {isCloudRuntime ? (
-            <Button
-              render={<Link to="/dashboard/methods/from-template" />}
-              className={ACTION_BUTTON_CLASS}
-            >
-              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A partir
-              de modelo
-            </Button>
-          ) : null}
-          <Button
-            render={<Link to="/dashboard/methods/new" />}
-            variant={isCloudRuntime ? 'outline' : 'default'}
-            className={isCloudRuntime ? undefined : ACTION_BUTTON_CLASS}
-          >
-            Método em branco
-          </Button>
+          <ActionAvailabilityGate availability={fromTemplateAvailability}>
+            {({ disabled }) => (
+              <Button
+                render={
+                  disabled ? undefined : (
+                    <Link to="/dashboard/methods/from-template" />
+                  )
+                }
+                disabled={disabled}
+                className={ACTION_BUTTON_CLASS}
+              >
+                <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A
+                partir de modelo
+              </Button>
+            )}
+          </ActionAvailabilityGate>
+          <ActionAvailabilityGate availability={createMethodAvailability}>
+            {({ disabled }) => (
+              <Button
+                render={
+                  disabled ? undefined : <Link to="/dashboard/methods/new" />
+                }
+                disabled={disabled}
+                variant="outline"
+              >
+                Método em branco
+              </Button>
+            )}
+          </ActionAvailabilityGate>
         </div>
       </div>
 
@@ -249,23 +270,43 @@ export function MethodsListPage({
               <EmptyContent>
                 {!search && !statusFilter && (
                   <div className="flex flex-wrap justify-center gap-2">
-                    {isCloudRuntime ? (
-                      <Button
-                        render={<Link to="/dashboard/methods/from-template" />}
-                      >
-                        <HugeiconsIcon
-                          icon={PlusSignIcon}
-                          className="mr-2 size-4"
-                        />
-                        A partir de modelo
-                      </Button>
-                    ) : null}
-                    <Button
-                      render={<Link to="/dashboard/methods/new" />}
-                      variant={isCloudRuntime ? 'outline' : 'default'}
+                    <ActionAvailabilityGate
+                      availability={fromTemplateAvailability}
                     >
-                      Método em branco
-                    </Button>
+                      {({ disabled }) => (
+                        <Button
+                          render={
+                            disabled ? undefined : (
+                              <Link to="/dashboard/methods/from-template" />
+                            )
+                          }
+                          disabled={disabled}
+                        >
+                          <HugeiconsIcon
+                            icon={PlusSignIcon}
+                            className="mr-2 size-4"
+                          />
+                          A partir de modelo
+                        </Button>
+                      )}
+                    </ActionAvailabilityGate>
+                    <ActionAvailabilityGate
+                      availability={createMethodAvailability}
+                    >
+                      {({ disabled }) => (
+                        <Button
+                          render={
+                            disabled ? undefined : (
+                              <Link to="/dashboard/methods/new" />
+                            )
+                          }
+                          disabled={disabled}
+                          variant="outline"
+                        >
+                          Método em branco
+                        </Button>
+                      )}
+                    </ActionAvailabilityGate>
                   </div>
                 )}
                 {(search || statusFilter) && (

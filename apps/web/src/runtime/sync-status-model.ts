@@ -1,4 +1,8 @@
-import type { SyncActionResult, SyncState } from '@calibra-facil/contracts'
+import type {
+  SyncActionResult,
+  SyncState,
+  SyncStatusSnapshot,
+} from '@calibra-facil/contracts'
 
 export type DesktopSyncAvailabilitySnapshot = {
   isDesktop: boolean
@@ -78,9 +82,10 @@ export function getDataSourceIndicatorModel(
     return {
       label: 'Pendente',
       title: 'Alterações locais pendentes',
-      description: `${sync.pendingOutboxCount} alteração${
-        sync.pendingOutboxCount === 1 ? '' : 'es'
-      } aguardando envio para a nuvem.`,
+      description:
+        sync.pendingOutboxCount === 1
+          ? '1 alteração aguardando envio para a nuvem.'
+          : `${sync.pendingOutboxCount} alterações aguardando envio para a nuvem.`,
       variant: 'outline',
       className: 'text-amber-700 dark:text-amber-300',
       dotClassName: 'bg-amber-500',
@@ -149,4 +154,34 @@ export async function runDesktopManualSync(
   if (!result.ok) {
     throw new Error(result.message ?? 'Falha ao sincronizar cache local.')
   }
+}
+
+/**
+ * Whether a sync just finished in a way that can change what the UI is
+ * allowed to do.
+ *
+ * Availability for a cloud command depends on the entity's local
+ * `syncState`/`remoteId`, which sync rewrites in SQLite. Nothing tells React
+ * Query about that, so without this the cached row keeps reporting "pending
+ * local changes" and approval, delivery, quote and document actions stay
+ * disabled even after "Sincronizar agora" reports success.
+ *
+ * Both signals matter: `lastSyncedAt` moves on any completed run, and the
+ * pending count falling means queued events were accepted — which is exactly
+ * when a blocker clears.
+ */
+export function syncCompletionClearedBlockers(
+  previous: Pick<
+    SyncStatusSnapshot,
+    'lastSyncedAt' | 'pendingOutboxCount'
+  > | null,
+  next: Pick<SyncStatusSnapshot, 'lastSyncedAt' | 'pendingOutboxCount'>,
+): boolean {
+  if (!previous) return false
+
+  if (next.pendingOutboxCount < previous.pendingOutboxCount) return true
+
+  return (
+    next.lastSyncedAt !== null && next.lastSyncedAt !== previous.lastSyncedAt
+  )
 }

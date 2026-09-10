@@ -256,7 +256,10 @@ function getEntityConflictFields(entityType: string): ConflictField[] {
         field('servicePerformed', 'Serviço executado'),
         field('partsUsedSummary', 'Peças utilizadas'),
         field('technicalNotes', 'Notas técnicas'),
-        field('calibrationRequiredAfterRepair', 'Requer calibração após reparo'),
+        field(
+          'calibrationRequiredAfterRepair',
+          'Requer calibração após reparo',
+        ),
         field('result', 'Resultado'),
         field('updatedAt', 'Atualizado em'),
       ]

@@ -41,6 +41,12 @@ type LocalServerStartOptions = {
   cloudAuthToken?: string | null;
   cloudApiUrl?: string | null;
   cloudProxyToken?: string | null;
+  /**
+   * The user's persisted preference. Passed through so the scheduler stays
+   * dormant for an installation that turned automatic sync off, instead of
+   * uploading pending work on every launch.
+   */
+  autoStartSync?: boolean;
 };
 
 type LocalServerCommand = {
@@ -304,6 +310,7 @@ export class LocalServerManager {
         : null,
       userId: process.env.CALIBRA_USER_ID ?? null,
       syncEnabled: process.env.CALIBRA_SYNC_ENABLED !== "false",
+      autoStartSync: options.autoStartSync ?? true,
       bootstrapToken: this.#localApiToken,
       cloudApiUrl:
         options.cloudApiUrl ?? process.env.CALIBRA_CLOUD_API_URL ?? null,

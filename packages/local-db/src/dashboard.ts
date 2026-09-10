@@ -202,11 +202,14 @@ function getCalibrationTrend(database: LocalDatabase, now: Date) {
   );
   const start = `${days[0]}T00:00:00.000Z`;
   const rows = database
-    .prepare<{ start: string }, {
-      status: "APPROVED" | "REJECTED";
-      date: string;
-      count: number;
-    }>(
+    .prepare<
+      { start: string },
+      {
+        status: "APPROVED" | "REJECTED";
+        date: string;
+        count: number;
+      }
+    >(
       `
 SELECT status, substr(COALESCE(approved_at, rejected_at, updated_at), 1, 10) AS date, COUNT(*) AS count
 FROM calibration_jobs

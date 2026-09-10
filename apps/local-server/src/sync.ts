@@ -166,6 +166,16 @@ export function createLocalSyncRuntime(
   }
 
   async function runPushSyncOnce() {
+    // A delta sync against a database that was never bootstrapped cannot
+    // succeed: the pull either throws because no snapshot exists, or records a
+    // cursor without creating one, leaving automatic retries unable to ever
+    // establish a usable cache. This happens for real — an authenticated
+    // desktop whose local data was reset or newly partitioned while the cloud
+    // session persisted. Fall back to the full bootstrap rather than looping.
+    if (config.syncEnabled && config.cloudApiUrl && !hasBootstrapSnapshot()) {
+      return runInitialSyncOnce();
+    }
+
     const runId = createSyncRunId("push");
     if (!config.syncEnabled) {
       status = {
@@ -229,6 +239,17 @@ export function createLocalSyncRuntime(
       console.error(`[sync:${runId}] push sync failed: ${status.lastError}`);
       throw error;
     }
+  }
+
+  function hasBootstrapSnapshot() {
+    const row = database
+      .prepare<
+        [],
+        { total: number }
+      >("SELECT COUNT(*) AS total FROM tenant_snapshot")
+      .get();
+
+    return (row?.total ?? 0) > 0;
   }
 }
 

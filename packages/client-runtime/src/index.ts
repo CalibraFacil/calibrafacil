@@ -116,6 +116,7 @@ export { createDesktopApiClient } from "./transport/desktop-client";
 
 export * from "./types";
 export * from "./data-policy";
+export * from "./availability";
 export function createCloudApiClient(
   options: CreateCloudApiClientOptions,
 ): CalibraApi {

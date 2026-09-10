@@ -1971,6 +1971,38 @@ export function createDesktopApiClient(
       async getSession() {
         return getLocalSessionSnapshot();
       },
+      async reconcile() {
+        // Push-then-pull, awaited and unthrottled — the caller is holding a
+        // just-succeeded cloud command and needs the local cache to catch up
+        // before the next read. Deliberately does not throw: the command
+        // already happened, and surfacing a sync failure as an action failure
+        // would be a lie.
+        try {
+          const response = await fetchImpl(
+            new URL("/api/local/sync/push", options.baseUrl),
+            {
+              method: "POST",
+              credentials: "include",
+              headers: await createDesktopHeaders(options.tokenProvider),
+            },
+          );
+
+          if (!response.ok) {
+            return {
+              reconciled: false,
+              reason: `local-sync-http-${response.status}`,
+            };
+          }
+
+          return { reconciled: true };
+        } catch (error) {
+          return {
+            reconciled: false,
+            reason:
+              error instanceof Error ? error.message : "local-sync-failed",
+          };
+        }
+      },
       async listConflicts(input = {}) {
         const url = new URL("/api/local/sync/conflicts", options.baseUrl);
 

@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  powerMonitor,
   protocol,
   session as electronSession,
   shell,
@@ -24,8 +25,10 @@ import {
   localDiagnosticsSchema,
   syncActionResultSchema,
   syncStatusSnapshotSchema,
+  syncTriggerSchema,
   type DesktopAuthFetchRequest,
   type DesktopAuthFetchResponse,
+  type SyncTrigger,
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "./channels";
 import { DesktopCloudAuthProxy } from "./cloud-auth-proxy";
@@ -395,6 +398,16 @@ function registerIpc(
   });
   handle(desktopIpcChannels.pauseSync, async () => {
     const result = await postLocalSyncAction("/api/local/sync/pause");
+    await broadcastSyncStatus();
+    return result;
+  });
+  handle(desktopIpcChannels.resumeSync, async () => {
+    const result = await postLocalSyncAction("/api/local/sync/resume");
+    await broadcastSyncStatus();
+    return result;
+  });
+  handle(desktopIpcChannels.wakeSync, async (_event, trigger) => {
+    const result = await wakeLocalSync(syncTriggerSchema.parse(trigger));
     await broadcastSyncStatus();
     return result;
   });
@@ -809,6 +822,37 @@ async function getCurrentLocalEnvironmentBootstrap() {
   }
 }
 
+/**
+ * Tell the local server that the world outside changed. The scheduler
+ * coalesces, so this is fire-and-forget from the host's point of view: two
+ * wakes in the same second are one sync, and a wake while a sync is running
+ * queues exactly one follow-up.
+ */
+async function wakeLocalSync(trigger: SyncTrigger) {
+  try {
+    const response = await fetch(`${localServer.baseUrl}/api/local/sync/wake`, {
+      method: "POST",
+      headers: createLocalApiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ trigger }),
+    });
+
+    if (!response.ok) {
+      return syncActionResultSchema.parse({
+        ok: false,
+        message: `Local sync wake failed with HTTP ${response.status}.`,
+      });
+    }
+
+    return syncActionResultSchema.parse({ ok: true });
+  } catch (error) {
+    return syncActionResultSchema.parse({
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "Local sync wake failed.",
+    });
+  }
+}
+
 async function postLocalSyncAction(pathname: string) {
   try {
     const response = await fetch(`${localServer.baseUrl}${pathname}`, {
@@ -986,10 +1030,13 @@ app.whenReady().then(async () => {
     });
   }
 
+  const desktopSettings = await settingsStore.get();
+
   try {
     await localServer.start({
       cloudApiUrl: cloudProxyUrl,
       cloudProxyToken,
+      autoStartSync: desktopSettings.autoStartSync,
     });
     await broadcastSyncStatus();
   } catch (error) {
@@ -999,8 +1046,29 @@ app.whenReady().then(async () => {
     await broadcastSyncStatus();
   }
 
+  registerSyncWakeTriggers();
   createWindow();
 });
+
+/**
+ * Host-level reasons to sync that the local server cannot observe on its own.
+ *
+ * A technician who finishes work on a train, closes the lid, and opens it at
+ * the lab gets `resume`; the OS network stack coming back gets `online`. Both
+ * are coalesced by the scheduler, so a flapping connection produces one sync,
+ * not one per event.
+ */
+function registerSyncWakeTriggers() {
+  powerMonitor.on("resume", () => {
+    void wakeLocalSync("reconnect");
+  });
+
+  // `unlock-screen` is not emitted on every platform; Electron ignores an
+  // unknown listener rather than throwing, so no platform branch is needed.
+  powerMonitor.on("unlock-screen", () => {
+    void wakeLocalSync("reconnect");
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

@@ -64,6 +64,7 @@ import {
   isServiceStartDirty,
   serviceStartDraftFromIso,
   serviceStartDraftToIso,
+  serviceOrderCloudCommandTarget,
   type ServiceStartDraft,
 } from '@/features/service-orders/forms'
 import { QuoteItemMaterialPicker } from '@/features/service-orders/components/quote-item-material-picker'
@@ -98,7 +99,15 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { isDesktopRuntime } from '@calibra-facil/client-runtime'
+import {
+  ActionAvailabilityGate,
+  OperationUnavailableNotice,
+} from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
+import {
+  describeReconcileLag,
+  reconcileAfterCloudCommand,
+} from '@/runtime/reconcile-cloud-command'
 import type { ServiceOrderFinancialStatus } from '@calibra-facil/shared'
 import { InstallmentsBlock } from '@/features/finance/installments-block'
 import {
@@ -392,15 +401,15 @@ export function ServiceOrderFinancialStatusBlock({
 // #343 — per-OS customer notification log. Answers "we told customer X on
 // date Y via channel Z" from the email ledger/outbox; printable via the
 // browser as the dispute-proof trail.
-export function ServiceOrderCommunicationsBlock({
-  id,
-  isDesktop,
-}: {
-  id: string
-  isDesktop: boolean
-}) {
+export function ServiceOrderCommunicationsBlock({ id }: { id: string }) {
+  // The ledger lives in the cloud, so this is unavailable when the cloud is —
+  // not when the app happens to be Electron. A connected desktop reads it.
+  const availability = useOperationAvailability(
+    'serviceOrders',
+    'listCommunications',
+  )
   const communicationsQuery = useServiceOrderCommunicationsData({
-    enabled: !isDesktop,
+    enabled: availability.available,
     id,
   })
   const entries = communicationsQuery.data?.data ?? []
@@ -414,10 +423,8 @@ export function ServiceOrderCommunicationsBlock({
         </CardDescription>
       </CardHeader>
       <CardContent aria-live="polite">
-        {isDesktop ? (
-          <p className="text-sm text-muted-foreground">
-            Disponível apenas no modo online.
-          </p>
+        {!availability.available ? (
+          <OperationUnavailableNotice availability={availability} />
         ) : communicationsQuery.isPending ? (
           <div className="space-y-3">
             <span className="sr-only">Carregando comunicações...</span>
@@ -549,7 +556,84 @@ function ServiceOrderDetailContent({
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const isDesktop = isDesktopRuntime()
+  /**
+   * PAR-06. Every one of these was disabled by a bare `isDesktopRuntime()`,
+   * which took an entire end-to-end workflow away from a connected desktop:
+   * intake documents, tags, service start, evaluation, quote sending, the
+   * Marca de Reparo, delivery and the delivery receipt.
+   *
+   * The real blockers are connectivity and this order's own sync state — an
+   * order created offline has no cloud identity, and one with queued local
+   * edits would have the command decided against a stale server snapshot.
+   */
+  const orderTarget = serviceOrderCloudCommandTarget(order)
+  /**
+   * For fetching a document that already exists. Still requires the order to
+   * have a cloud identity — there is nothing to fetch for one the server has
+   * never seen — but not a drained outbox, since a GET decides nothing.
+   */
+  const documentReadTarget = { synced: orderTarget.synced }
+  const evaluationAvailability = useOperationAvailability(
+    'serviceOrders',
+    'saveEvaluation',
+    orderTarget,
+  )
+  const serviceStartAvailability = useOperationAvailability(
+    'serviceOrders',
+    'update',
+    orderTarget,
+  )
+  const sendQuoteAvailability = useOperationAvailability(
+    'serviceOrders',
+    'sendQuote',
+    orderTarget,
+  )
+  const generateIntakeAvailability = useOperationAvailability(
+    'serviceOrders',
+    'generateIntakeDocument',
+    orderTarget,
+  )
+  // Reads of an already-generated document, not state transitions: they need
+  // a cloud identity and a connection, but not a clean outbox. Passing
+  // `orderTarget` would withhold an existing receipt because of an unrelated
+  // queued edit.
+  const openIntakeAvailability = useOperationAvailability(
+    'serviceOrders',
+    'getIntakeDocumentPdf',
+    documentReadTarget,
+  )
+  const generateTagAvailability = useOperationAvailability(
+    'serviceOrders',
+    'generateTag',
+    orderTarget,
+  )
+  const openTagAvailability = useOperationAvailability(
+    'serviceOrders',
+    'getTagPdf',
+    documentReadTarget,
+  )
+  const repairMarkAvailability = useOperationAvailability(
+    'serviceOrders',
+    'updateRepairMark',
+    orderTarget,
+  )
+  const deliverAvailability = useOperationAvailability(
+    'serviceOrders',
+    'deliver',
+    orderTarget,
+  )
+  const openDeliveryDocumentAvailability = useOperationAvailability(
+    'serviceOrders',
+    'getDeliveryDocumentPdf',
+    documentReadTarget,
+  )
+  // The parts catalog is a cloud read and does not depend on this order at
+  // all; offline the quote keeps its free-form part fallback.
+  const materialCatalogAvailability = useOperationAvailability(
+    'materials',
+    'list',
+  )
+
   const latestEvaluation = order.evaluations[0]
   const latestQuote = order.quotes[0]
   const draftQuotes =
@@ -695,6 +779,23 @@ function ServiceOrderDetailContent({
     }
   }
 
+  /**
+   * Single success path for the *cloud* commands on this page. The order is
+   * read local-first on desktop, so plain invalidation would re-read the
+   * pre-command row from SQLite and the status would appear not to have moved.
+   * Reconcile first; if the cache is still catching up, say so instead of
+   * implying the command failed.
+   */
+  const settleCloudCommand = async (message: string) => {
+    const result = await reconcileAfterCloudCommand(queryClient, [
+      ['service-order', publicId],
+      ['service-orders'],
+    ])
+    const lag = describeReconcileLag(result)
+
+    toast.success(message, lag ? { description: lag } : undefined)
+  }
+
   const saveEvaluation = useMutation({
     mutationFn: async (revisionReason?: string) => {
       if (!diagnosis.trim()) throw new Error('Informe o diagnóstico técnico.')
@@ -714,13 +815,12 @@ function ServiceOrderDetailContent({
         },
       )
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setRevisingEvaluation(false)
       setEvaluationRevisionOpen(false)
-      toast.success(
+      await settleCloudCommand(
         latestEvaluation ? 'Avaliação atualizada' : 'Avaliação registrada',
       )
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -753,13 +853,12 @@ function ServiceOrderDetailContent({
         clientMessage: quoteClientMessage || null,
       })
     },
-    onSuccess: (result) => {
-      toast.success('Orçamento emitido para aprovação')
+    onSuccess: async (result) => {
       const publicUrl = getPublicUrl(result)
       if (publicUrl) {
         navigator.clipboard?.writeText(publicUrl)
       }
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+      await settleCloudCommand('Orçamento emitido para aprovação')
     },
     onError: (error) => {
       reportActionError(error, 'Erro ao emitir orçamento')
@@ -816,9 +915,8 @@ function ServiceOrderDetailContent({
 
   const generateIntakeDocument = useMutation({
     mutationFn: () => calibraApi.serviceOrders.generateIntakeDocument(id),
-    onSuccess: () => {
-      toast.success('Comprovante enviado para geração')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+    onSuccess: async () => {
+      await settleCloudCommand('Comprovante enviado para geração')
     },
     onError: (error) => {
       reportActionError(error, 'Não foi possível gerar o comprovante')
@@ -837,9 +935,8 @@ function ServiceOrderDetailContent({
 
   const generateTag = useMutation({
     mutationFn: () => calibraApi.serviceOrders.generateTag(id),
-    onSuccess: () => {
-      toast.success('Etiqueta enviada para geração')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+    onSuccess: async () => {
+      await settleCloudCommand('Etiqueta enviada para geração')
     },
     onError: (error) => {
       reportActionError(error, 'Não foi possível gerar a etiqueta')
@@ -869,9 +966,8 @@ function ServiceOrderDetailContent({
         inmetroRepairMarkNotes: repairMarkNotes || null,
       })
     },
-    onSuccess: () => {
-      toast.success('Marca de Reparo atualizada')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+    onSuccess: async () => {
+      await settleCloudCommand('Marca de Reparo atualizada')
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -885,9 +981,8 @@ function ServiceOrderDetailContent({
         serviceStartedAt: serviceStartDraftToIso(serviceStart),
       })
     },
-    onSuccess: () => {
-      toast.success('Início da avaliação atualizado')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+    onSuccess: async () => {
+      await settleCloudCommand('Início da avaliação atualizado')
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -906,9 +1001,8 @@ function ServiceOrderDetailContent({
         inmetroRepairMarkNumber: repairMarkNumber || null,
       })
     },
-    onSuccess: () => {
-      toast.success('Entrega registrada')
-      queryClient.invalidateQueries({ queryKey: ['service-order', publicId] })
+    onSuccess: async () => {
+      await settleCloudCommand('Entrega registrada')
       returnToSyncConflicts()
     },
     onError: (error) => {
@@ -1036,42 +1130,58 @@ function ServiceOrderDetailContent({
                 <HugeiconsIcon icon={File02Icon} className="mr-2 size-4" />
                 Pré-visualizar
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={ACTION_BUTTON_CLASS}
-                onClick={() => generateIntakeDocument.mutate()}
-                disabled={isDesktop || generateIntakeDocument.isPending}
-              >
-                Gerar comprovante
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={ACTION_BUTTON_CLASS}
-                onClick={() => openIntakeDocument.mutate()}
-                disabled={isDesktop || openIntakeDocument.isPending}
-              >
-                Abrir comprovante
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={ACTION_BUTTON_CLASS}
-                onClick={() => generateTag.mutate()}
-                disabled={isDesktop || generateTag.isPending}
-              >
-                Gerar etiqueta
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={ACTION_BUTTON_CLASS}
-                onClick={() => openTag.mutate()}
-                disabled={isDesktop || openTag.isPending}
-              >
-                Abrir etiqueta
-              </Button>
+              <ActionAvailabilityGate availability={generateIntakeAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => generateIntakeDocument.mutate()}
+                    disabled={disabled || generateIntakeDocument.isPending}
+                  >
+                    Gerar comprovante
+                  </Button>
+                )}
+              </ActionAvailabilityGate>
+              <ActionAvailabilityGate availability={openIntakeAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => openIntakeDocument.mutate()}
+                    disabled={disabled || openIntakeDocument.isPending}
+                  >
+                    Abrir comprovante
+                  </Button>
+                )}
+              </ActionAvailabilityGate>
+              <ActionAvailabilityGate availability={generateTagAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => generateTag.mutate()}
+                    disabled={disabled || generateTag.isPending}
+                  >
+                    Gerar etiqueta
+                  </Button>
+                )}
+              </ActionAvailabilityGate>
+              <ActionAvailabilityGate availability={openTagAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => openTag.mutate()}
+                    disabled={disabled || openTag.isPending}
+                  >
+                    Abrir etiqueta
+                  </Button>
+                )}
+              </ActionAvailabilityGate>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1282,17 +1392,23 @@ function ServiceOrderDetailContent({
                       {/* Its own endpoint, so its own save — shown only once the
                       value actually differs from what is stored. */}
                       {serviceStartDirty ? (
-                        <Button
-                          variant="outline"
-                          className="self-end transition-transform active:scale-[0.96]"
-                          onClick={() => updateServiceStart.mutate()}
-                          // serviceOrders.update is a cloud-only stub on
-                          // desktop, so offering this save there guarantees a
-                          // failure. Matches the evaluation/delivery actions.
-                          disabled={isDesktop || updateServiceStart.isPending}
+                        <ActionAvailabilityGate
+                          availability={serviceStartAvailability}
+                          className="self-end"
                         >
-                          Salvar início
-                        </Button>
+                          {({ disabled }) => (
+                            <Button
+                              variant="outline"
+                              className="self-end transition-transform active:scale-[0.96]"
+                              onClick={() => updateServiceStart.mutate()}
+                              disabled={
+                                disabled || updateServiceStart.isPending
+                              }
+                            >
+                              Salvar início
+                            </Button>
+                          )}
+                        </ActionAvailabilityGate>
                       ) : null}
                     </div>
                     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
@@ -1390,27 +1506,33 @@ function ServiceOrderDetailContent({
                           Cancelar revisão
                         </Button>
                       ) : null}
-                      <Button
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => {
-                          if (evaluationNeedsRevisionReason) {
-                            setEvaluationRevisionOpen(true)
-                            return
-                          }
-                          saveEvaluation.mutate(undefined)
-                        }}
-                        disabled={isDesktop || saveEvaluation.isPending}
+                      <ActionAvailabilityGate
+                        availability={evaluationAvailability}
                       >
-                        <HugeiconsIcon
-                          icon={CheckmarkCircle02Icon}
-                          className="mr-2 size-4"
-                        />
-                        {evaluationNeedsRevisionReason
-                          ? 'Salvar revisão'
-                          : latestEvaluation
-                            ? 'Salvar avaliação'
-                            : 'Registrar avaliação'}
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => {
+                              if (evaluationNeedsRevisionReason) {
+                                setEvaluationRevisionOpen(true)
+                                return
+                              }
+                              saveEvaluation.mutate(undefined)
+                            }}
+                            disabled={disabled || saveEvaluation.isPending}
+                          >
+                            <HugeiconsIcon
+                              icon={CheckmarkCircle02Icon}
+                              className="mr-2 size-4"
+                            />
+                            {evaluationNeedsRevisionReason
+                              ? 'Salvar revisão'
+                              : latestEvaluation
+                                ? 'Salvar avaliação'
+                                : 'Registrar avaliação'}
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                     </div>
                   </>
                 )}
@@ -1519,7 +1641,9 @@ function ServiceOrderDetailContent({
                               <div className="space-y-1">
                                 <QuoteItemMaterialPicker
                                   materialId={item.materialId ?? null}
-                                  disabled={isDesktop}
+                                  disabled={
+                                    !materialCatalogAvailability.available
+                                  }
                                   onSelectMaterial={(material) =>
                                     selectQuoteItemMaterial(item.id, material)
                                   }
@@ -1689,18 +1813,24 @@ function ServiceOrderDetailContent({
                       Salvar rascunho
                     </Button>
                     {draftQuotes.map((quote) => (
-                      <Button
+                      <ActionAvailabilityGate
                         key={quote.id}
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => sendQuote.mutate(quote.id)}
-                        disabled={isDesktop || sendQuote.isPending}
+                        availability={sendQuoteAvailability}
                       >
-                        <HugeiconsIcon
-                          icon={SentIcon}
-                          className="mr-2 size-4"
-                        />
-                        Emitir v{quote.version}
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => sendQuote.mutate(quote.id)}
+                            disabled={disabled || sendQuote.isPending}
+                          >
+                            <HugeiconsIcon
+                              icon={SentIcon}
+                              className="mr-2 size-4"
+                            />
+                            Emitir v{quote.version}
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                     ))}
                   </div>
                 </CardContent>
@@ -2092,14 +2222,22 @@ function ServiceOrderDetailContent({
                           Marca física aposta
                         </label>
                         <div className="flex flex-wrap justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            className="active:scale-[0.96] transition-transform"
-                            onClick={() => updateRepairMark.mutate()}
-                            disabled={isDesktop || updateRepairMark.isPending}
+                          <ActionAvailabilityGate
+                            availability={repairMarkAvailability}
                           >
-                            Salvar Marca de Reparo
-                          </Button>
+                            {({ disabled }) => (
+                              <Button
+                                variant="outline"
+                                className="active:scale-[0.96] transition-transform"
+                                onClick={() => updateRepairMark.mutate()}
+                                disabled={
+                                  disabled || updateRepairMark.isPending
+                                }
+                              >
+                                Salvar Marca de Reparo
+                              </Button>
+                            )}
+                          </ActionAvailabilityGate>
                         </div>
                       </div>
                     ) : hasRepairMarkRecord ? (
@@ -2142,14 +2280,20 @@ function ServiceOrderDetailContent({
                     ) : null}
 
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => deliverOrder.mutate()}
-                        disabled={isDesktop || deliverOrder.isPending}
+                      <ActionAvailabilityGate
+                        availability={deliverAvailability}
                       >
-                        Registrar entrega
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            variant="outline"
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => deliverOrder.mutate()}
+                            disabled={disabled || deliverOrder.isPending}
+                          >
+                            Registrar entrega
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                       <Button
                         className="active:scale-[0.96] transition-transform"
                         onClick={() => issueDeliveryDocument.mutate()}
@@ -2161,14 +2305,22 @@ function ServiceOrderDetailContent({
                         />
                         Gerar comprovante de entrega
                       </Button>
-                      <Button
-                        variant="outline"
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => openDeliveryDocument.mutate()}
-                        disabled={isDesktop || openDeliveryDocument.isPending}
+                      <ActionAvailabilityGate
+                        availability={openDeliveryDocumentAvailability}
                       >
-                        Abrir comprovante
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            variant="outline"
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => openDeliveryDocument.mutate()}
+                            disabled={
+                              disabled || openDeliveryDocument.isPending
+                            }
+                          >
+                            Abrir comprovante
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                     </div>
                   </>
                 )}
@@ -2201,7 +2353,7 @@ function ServiceOrderDetailContent({
             </CardContent>
           </Card>
 
-          <ServiceOrderCommunicationsBlock id={id} isDesktop={isDesktop} />
+          <ServiceOrderCommunicationsBlock id={id} />
         </div>
       </div>
     </div>

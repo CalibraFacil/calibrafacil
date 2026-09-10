@@ -107,18 +107,17 @@ import {
 import { cn } from '@/lib/utils'
 import { CertificateReleaseControl } from '@/features/finance/certificate-release'
 import { PrintLabelButton } from '@/features/printing/print-label-button'
+import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
 
 interface ApprovedJobRecordProps {
   job: ApprovedJobRecordData
-  /** Flagging §7.10 requires the cloud API; the action is hidden on desktop. */
-  isDesktop?: boolean
   onBack: () => void
   onRefresh: () => void
 }
 
 export function ApprovedJobRecord({
   job,
-  isDesktop = false,
   onBack,
   onRefresh,
 }: ApprovedJobRecordProps) {
@@ -175,7 +174,17 @@ export function ApprovedJobRecord({
   const [isAmending, setIsAmending] = useState(false)
   // §7.10 out-of-tolerance NC state (#426)
   const isOutOfToleranceAsFound = job.asFoundConformity === 'NON_CONFORMING'
-  const canFlagOutOfTolerance = isOutOfToleranceAsFound && !isDesktop
+  // Both of these are cloud commands against an already-approved record, so
+  // the job's own local queue cannot make them stale — connectivity is the
+  // only real blocker. Previously §7.10 flagging was hidden on desktop
+  // outright and amendment was not gated at all, so it failed with a
+  // transport error instead of an explanation.
+  const flagOutOfToleranceAvailability = useOperationAvailability(
+    'jobs',
+    'flagOutOfTolerance',
+  )
+  const amendAvailability = useOperationAvailability('jobs', 'amend')
+  const canFlagOutOfTolerance = isOutOfToleranceAsFound
   const [isOotDialogOpen, setIsOotDialogOpen] = useState(false)
   const [ootDescription, setOotDescription] = useState('')
   const [ootAffectedScope, setOotAffectedScope] = useState('')
@@ -489,6 +498,7 @@ export function ApprovedJobRecord({
                   <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
                   <DropdownMenuItem
                     className="text-muted-foreground"
+                    disabled={!amendAvailability.available}
                     onClick={() => setIsAmendDialogOpen(true)}
                   >
                     <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
@@ -1148,27 +1158,46 @@ export function ApprovedJobRecord({
                   Enviar por Email
                 </Button>
                 {job.status !== 'SUPERSEDED' && (
-                  <Button
-                    variant="ghost"
-                    className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start text-muted-foreground`}
-                    onClick={() => setIsAmendDialogOpen(true)}
+                  <ActionAvailabilityGate
+                    availability={amendAvailability}
+                    className="w-full"
                   >
-                    <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-                    Retificar Certificado
-                  </Button>
+                    {({ disabled }) => (
+                      <Button
+                        variant="ghost"
+                        disabled={disabled}
+                        className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start text-muted-foreground`}
+                        onClick={() => setIsAmendDialogOpen(true)}
+                      >
+                        <HugeiconsIcon
+                          icon={Edit02Icon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Retificar Certificado
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
                 )}
                 {canFlagOutOfTolerance && (
-                  <Button
-                    variant="outline"
-                    className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive`}
-                    onClick={() => setIsOotDialogOpen(true)}
+                  <ActionAvailabilityGate
+                    availability={flagOutOfToleranceAvailability}
+                    className="w-full"
                   >
-                    <HugeiconsIcon
-                      icon={Alert02Icon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    Registrar NC 7.10
-                  </Button>
+                    {({ disabled }) => (
+                      <Button
+                        variant="outline"
+                        disabled={disabled}
+                        className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive`}
+                        onClick={() => setIsOotDialogOpen(true)}
+                      >
+                        <HugeiconsIcon
+                          icon={Alert02Icon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Registrar NC 7.10
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
                 )}
               </div>
             </div>

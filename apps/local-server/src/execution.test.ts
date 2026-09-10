@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { compileMethodDraft, fingerprintJson } from "@calibra-facil/method-definition";
+import {
+  compileMethodDraft,
+  fingerprintJson,
+} from "@calibra-facil/method-definition";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 
 import { executeLocalCompiledMethod } from "./execution";
@@ -20,8 +23,18 @@ function compiledMethodWithEngineVersion(version: string, name = "Mass error") {
       status: "published",
       name,
       inputs: [
-        { kind: "scalar", key: "indication", label: "Indication", required: true },
-        { kind: "scalar", key: "reference", label: "Reference", required: true },
+        {
+          kind: "scalar",
+          key: "indication",
+          label: "Indication",
+          required: true,
+        },
+        {
+          kind: "scalar",
+          key: "reference",
+          label: "Reference",
+          required: true,
+        },
       ],
       formulas: [
         {

@@ -22,7 +22,7 @@ import {
   buildJobReviewModel,
   buildJobVerdictModel,
   buildScopeComplianceWarnings,
-  desktopCloudActionError,
+  jobCloudCommandTarget,
   formatDate,
   formatDateTime,
   formatExpandedUncertainty,
@@ -406,10 +406,32 @@ describe('job detail model', () => {
     ).toBe('atencao')
   })
 
-  it('keeps the desktop cloud-action error message centralized', () => {
-    expect(desktopCloudActionError().message).toContain(
-      'Esta ação exige validação online',
-    )
+  it('blocks cloud commands while the job still has local readings queued', () => {
+    // The regulated hazard: approving against the server's older snapshot
+    // because the execution save has not been pushed yet.
+    expect(jobCloudCommandTarget({ syncState: 'local' })).toEqual({
+      synced: true,
+      hasPendingLocalChanges: true,
+    })
+  })
+
+  it('allows cloud commands once the job row is acknowledged', () => {
+    expect(jobCloudCommandTarget({ syncState: 'synced' })).toEqual({
+      synced: true,
+      hasPendingLocalChanges: false,
+    })
+  })
+
+  it('reports no local changes for a cloud-read job with no sync metadata', () => {
+    // The browser never sees `syncState`; absence must not be read as dirty.
+    expect(jobCloudCommandTarget({ id: 1 })).toEqual({
+      synced: true,
+      hasPendingLocalChanges: false,
+    })
+    expect(jobCloudCommandTarget(null)).toEqual({
+      synced: true,
+      hasPendingLocalChanges: false,
+    })
   })
 })
 

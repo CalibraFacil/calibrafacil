@@ -53,10 +53,7 @@ const regulatedInterval = {
   operationalizedByDelegate: true,
 };
 
-function seedCustomerAndAssetType(
-  database: LocalDatabase,
-  now: string,
-) {
+function seedCustomerAndAssetType(database: LocalDatabase, now: string) {
   database
     .prepare(
       `
@@ -124,9 +121,7 @@ describe("legal-metrology offline parity", () => {
     );
     expect(listed?.metrologyRegime).toBe("LEGAL");
     expect(listed?.regulatedInterval).toEqual(regulatedInterval);
-    expect(listed?.nextLegalVerificationDate).toBe(
-      "2027-12-31T00:00:00.000Z",
-    );
+    expect(listed?.nextLegalVerificationDate).toBe("2027-12-31T00:00:00.000Z");
     expect(listed?.installedAt).toBe("2026-01-01T00:00:00.000Z");
 
     const detail = getLocalAssetDetail(database, "BAL-LMR-1");

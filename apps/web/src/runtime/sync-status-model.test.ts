@@ -5,6 +5,7 @@ import {
   isDesktopCloudOnlyUnavailableSnapshot,
   runDesktopManualSync,
   type DataSourceIndicatorSnapshot,
+  syncCompletionClearedBlockers,
 } from './sync-status-model'
 
 describe('isDesktopCloudOnlyUnavailableSnapshot', () => {
@@ -229,5 +230,55 @@ describe('runDesktopManualSync', () => {
     )
 
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('syncCompletionClearedBlockers', () => {
+  const base = {
+    lastSyncedAt: '2026-09-10T10:00:00.000Z',
+    pendingOutboxCount: 3,
+  }
+
+  it('is false on the first snapshot, with nothing to compare', () => {
+    expect(syncCompletionClearedBlockers(null, base)).toBe(false)
+  })
+
+  it('is true when queued events were accepted', () => {
+    // The pending count falling is exactly when an entity stops reporting
+    // local changes — and when its cloud actions should become available.
+    expect(
+      syncCompletionClearedBlockers(base, { ...base, pendingOutboxCount: 0 }),
+    ).toBe(true)
+  })
+
+  it('is true when a run completed, even with nothing queued', () => {
+    // A pull can change an entity's remote id or status without the outbox
+    // being involved at all.
+    expect(
+      syncCompletionClearedBlockers(
+        { lastSyncedAt: '2026-09-10T10:00:00.000Z', pendingOutboxCount: 0 },
+        { lastSyncedAt: '2026-09-10T10:05:00.000Z', pendingOutboxCount: 0 },
+      ),
+    ).toBe(true)
+  })
+
+  it('is false for an unchanged snapshot', () => {
+    // Status pushes repeat; refetching everything on each would be a loop.
+    expect(syncCompletionClearedBlockers(base, { ...base })).toBe(false)
+  })
+
+  it('is false when new work was queued rather than drained', () => {
+    expect(
+      syncCompletionClearedBlockers(base, { ...base, pendingOutboxCount: 5 }),
+    ).toBe(false)
+  })
+
+  it('is false before anything has ever synced', () => {
+    expect(
+      syncCompletionClearedBlockers(
+        { lastSyncedAt: null, pendingOutboxCount: 2 },
+        { lastSyncedAt: null, pendingOutboxCount: 2 },
+      ),
+    ).toBe(false)
   })
 })

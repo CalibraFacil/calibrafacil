@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isServiceStartDirty,
   parseServiceOrderForm,
+  serviceOrderCloudCommandTarget,
   serviceStartDraftFromIso,
   serviceStartDraftToIso,
   type ServiceOrderFormData,
@@ -161,3 +162,56 @@ function validServiceOrderForm(): ServiceOrderFormData {
     evaluationFeeCents: '',
   }
 }
+
+describe('serviceOrderCloudCommandTarget', () => {
+  it('treats a cloud-read order as canonical', () => {
+    // The browser response carries neither field; absence must not read as
+    // "unsynced" or the web app would block itself.
+    expect(
+      serviceOrderCloudCommandTarget({ id: 12, publicId: 'so_abc' }),
+    ).toEqual({ synced: true, hasPendingLocalChanges: false })
+  })
+
+  it('blocks cloud commands for an order created offline', () => {
+    // `id` falls back to a stable local surrogate, so it cannot tell this
+    // case apart — only a null remoteId can.
+    expect(
+      serviceOrderCloudCommandTarget({
+        id: 998877,
+        remoteId: null,
+        syncState: 'local',
+      }),
+    ).toEqual({ synced: false, hasPendingLocalChanges: false })
+  })
+
+  it('blocks cloud commands for a synced order with queued local edits', () => {
+    expect(
+      serviceOrderCloudCommandTarget({
+        id: 12,
+        remoteId: 12,
+        syncState: 'local',
+      }),
+    ).toEqual({ synced: true, hasPendingLocalChanges: true })
+  })
+
+  it('allows cloud commands once the order is acknowledged', () => {
+    expect(
+      serviceOrderCloudCommandTarget({
+        id: 12,
+        remoteId: 12,
+        syncState: 'synced',
+      }),
+    ).toEqual({ synced: true, hasPendingLocalChanges: false })
+  })
+
+  it('is safe on a missing order', () => {
+    expect(serviceOrderCloudCommandTarget(null)).toEqual({
+      synced: true,
+      hasPendingLocalChanges: false,
+    })
+    expect(serviceOrderCloudCommandTarget(undefined)).toEqual({
+      synced: true,
+      hasPendingLocalChanges: false,
+    })
+  })
+})

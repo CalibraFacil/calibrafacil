@@ -12,6 +12,7 @@ import {
   localEnvironmentBootstrapSchema,
   syncActionResultSchema,
   syncStateSchema,
+  syncTriggerSchema,
   syncStatusSnapshotSchema,
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "./channels";
@@ -131,6 +132,14 @@ export const desktopIpcInvokeContracts = {
   },
   [desktopIpcChannels.pauseSync]: {
     args: noArgs(),
+    response: syncActionResultSchema,
+  },
+  [desktopIpcChannels.resumeSync]: {
+    args: noArgs(),
+    response: syncActionResultSchema,
+  },
+  [desktopIpcChannels.wakeSync]: {
+    args: oneArg(syncTriggerSchema),
     response: syncActionResultSchema,
   },
   [desktopIpcChannels.retrySync]: {

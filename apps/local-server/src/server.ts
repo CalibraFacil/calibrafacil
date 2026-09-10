@@ -37,6 +37,7 @@ import {
   listLocalServices,
   listLocalServiceOrders,
   listLocalStandards,
+  countPendingOutbox,
   listSyncConflicts,
   openLocalDatabase,
   resolveSyncConflict,
@@ -67,6 +68,8 @@ import {
   localSessionSnapshotResponseSchema,
   localSyncConflictResolutionSchema,
   localSyncConflictsResponseSchema,
+  syncTriggerSchema,
+  type SyncTrigger,
 } from "@calibra-facil/contracts";
 import {
   createLocalEnvironmentBootstrap,
@@ -81,8 +84,15 @@ import {
 import {
   createLocalSyncRuntime,
   notifyCloudConflictResolution,
+  type LocalSyncRuntime,
   type LocalSyncRuntimeOptions,
 } from "./sync";
+import {
+  createLocalSyncScheduler,
+  toSyncSchedulerWireState,
+  type LocalSyncScheduler,
+  type LocalSyncSchedulerOptions,
+} from "./sync-scheduler";
 import { executeLocalCompiledMethod } from "./execution";
 import { registerPrinterRoutes } from "./printing/routes";
 
@@ -90,6 +100,19 @@ export type LocalServerInstance = {
   app: ReturnType<typeof createLocalServer>;
   config: LocalServerConfig;
   database: LocalDatabase;
+  syncRuntime: LocalSyncRuntime;
+  /**
+   * Continuous sync lifecycle. Started by `createLocalServerFromConfig` when
+   * the config actually has a cloud to talk to; the host is responsible for
+   * `stop()` on shutdown.
+   */
+  syncScheduler: LocalSyncScheduler;
+};
+
+export type LocalServerRuntime = {
+  app: Hono;
+  syncRuntime: LocalSyncRuntime;
+  syncScheduler: LocalSyncScheduler;
 };
 
 type CalibrationLocationInput = {
@@ -251,9 +274,81 @@ export function createLocalServer(
   database: LocalDatabase,
   syncOptions: LocalSyncRuntimeOptions = {},
 ) {
+  return createLocalServerRuntime(config, database, syncOptions).app;
+}
+
+/**
+ * Same server as `createLocalServer`, plus the sync handles the host needs to
+ * drive and shut down. `createLocalServer` stays as the app-only entry point
+ * because most callers (and every route test) only want the Hono app.
+ */
+export function createLocalServerRuntime(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  syncOptions: LocalSyncRuntimeOptions & {
+    scheduler?: LocalSyncSchedulerOptions;
+  } = {},
+): LocalServerRuntime {
   const app = new Hono();
   const syncRuntime = createLocalSyncRuntime(config, database, syncOptions);
+  const syncScheduler = createLocalSyncScheduler(
+    syncRuntime,
+    syncOptions.scheduler,
+  );
   const fetchImpl = syncOptions.fetch ?? fetch;
+
+  /**
+   * Route a sync request through the scheduler when it owns the loop, and fall
+   * back to a direct run when it does not (standalone dev, or before the first
+   * bootstrap started it). Either way the underlying runtime serializes, so
+   * this can never produce overlapping syncs.
+   */
+  function requestSync(trigger: SyncTrigger) {
+    const state = syncScheduler.getState();
+
+    if (state.running && !state.paused) {
+      return syncScheduler.request(trigger);
+    }
+
+    if (state.paused) {
+      return Promise.reject(new Error("Sincronização contínua está pausada."));
+    }
+
+    return syncRuntime.runPushSync();
+  }
+
+  /**
+   * Start the loop, and clear an explicit pause.
+   *
+   * Only for deliberate acts: the user pressing sync, or a successful
+   * bootstrap. Host wake events must not come through here — see
+   * `nudgeScheduler`.
+   */
+  function startOrResumeScheduler() {
+    if (!schedulerMayRun()) return;
+
+    syncScheduler.start("startup");
+    syncScheduler.resume();
+  }
+
+  /**
+   * Nudge a loop that is already running, without overriding an explicit
+   * pause. Returning to the window or regaining the network is not consent to
+   * upload work the user deliberately paused.
+   */
+  function nudgeScheduler(trigger: SyncTrigger) {
+    const state = syncScheduler.getState();
+    if (!state.running || state.paused) return;
+
+    void syncScheduler.request(trigger).catch(() => undefined);
+  }
+
+  function schedulerMayRun() {
+    if (!config.syncEnabled || !config.cloudApiUrl) return false;
+    // A managed installation that turned automatic sync off must not begin
+    // uploading on launch; an explicit start still works.
+    return config.autoStartSync !== false;
+  }
 
   app.use(
     "*",
@@ -297,6 +392,30 @@ export function createLocalServer(
   };
 
   app.use("/api/*", requireLocalApiToken);
+
+  /**
+   * Post-write sync scheduling. Every durable local write lands in the outbox,
+   * so instead of asking fifteen route handlers to remember to nudge the
+   * scheduler, we notice the outbox is non-empty after a successful mutating
+   * request. New write routes inherit this for free.
+   *
+   * The scheduler debounces, so a burst of saves still produces one push.
+   */
+  app.use("/api/*", async (c, next) => {
+    await next();
+
+    if (c.req.method === "GET" || c.req.method === "OPTIONS") return;
+    // The sync routes drive the scheduler themselves; re-entering here would
+    // schedule a run for every run.
+    if (c.req.path.startsWith("/api/local/sync/")) return;
+    if (c.res.status >= 400) return;
+    if (countPendingOutbox(database) === 0) return;
+
+    // Deliberately the scheduler, not `requestSync`: when no continuous loop
+    // is running (standalone dev, tests, sync disabled) a write must not
+    // silently trigger a one-off cloud push. It rejects in that case.
+    void syncScheduler.request("local-mutation").catch(() => undefined);
+  });
 
   registerPrinterRoutes(app, database);
 
@@ -343,7 +462,10 @@ export function createLocalServer(
   });
 
   app.get("/api/local/sync/status", (c) => {
-    return c.json(syncRuntime.getStatus());
+    return c.json({
+      ...syncRuntime.getStatus(),
+      scheduler: toSyncSchedulerWireState(syncScheduler.getState()),
+    });
   });
 
   app.get("/api/local/diagnostics", (c) => {
@@ -1489,6 +1611,9 @@ export function createLocalServer(
   app.post("/api/local/sync/start", async (c) => {
     try {
       await syncRuntime.runInitialSync();
+      // A successful bootstrap is exactly when continuous sync becomes
+      // meaningful, so starting it here also doubles as "resume".
+      startOrResumeScheduler();
       return c.json({ ok: true, message: "Initial sync completed." });
     } catch (error) {
       return c.json(
@@ -1503,12 +1628,19 @@ export function createLocalServer(
   });
 
   app.post("/api/local/sync/pause", (c) => {
-    return c.json({ ok: true, message: "Continuous sync is not running." });
+    syncScheduler.pause();
+    return c.json({ ok: true, message: "Continuous sync paused." });
+  });
+
+  app.post("/api/local/sync/resume", (c) => {
+    startOrResumeScheduler();
+    return c.json({ ok: true, message: "Continuous sync resumed." });
   });
 
   app.post("/api/local/sync/retry", async (c) => {
     try {
       await syncRuntime.runInitialSync();
+      startOrResumeScheduler();
       return c.json({ ok: true, message: "Initial sync completed." });
     } catch (error) {
       return c.json(
@@ -1522,7 +1654,52 @@ export function createLocalServer(
     }
   });
 
-  return app;
+  /**
+   * Canonical reconciliation: push queued writes, pull canonical state, and
+   * only then answer. The client calls this after a cloud command whose entity
+   * is read back local-first, so that the next read is not the pre-command
+   * snapshot. Unlike `/retry` it skips the bootstrap leg — the cache already
+   * exists, this is a delta.
+   */
+  app.post("/api/local/sync/push", async (c) => {
+    try {
+      const status = await requestSync("manual");
+      return c.json({ ok: true, status });
+    } catch (error) {
+      return c.json(
+        {
+          ok: false,
+          message: error instanceof Error ? error.message : "Push sync failed.",
+        },
+        503,
+      );
+    }
+  });
+
+  /**
+   * Coalesced wake-up from the host: OS reported the network back, the window
+   * regained focus, the user signed in. Returns immediately with the scheduler
+   * state — the caller is nudging the loop, not waiting on a round trip.
+   */
+  app.post("/api/local/sync/wake", async (c) => {
+    const body = await readJsonOrEmpty(c.req.raw);
+    const trigger = syncTriggerSchema
+      .catch("reconnect")
+      .parse(isRecord(body) ? body.trigger : undefined);
+
+    nudgeScheduler(trigger);
+
+    return c.json({
+      ok: true,
+      scheduler: toSyncSchedulerWireState(syncScheduler.getState()),
+    });
+  });
+
+  app.get("/api/local/sync/scheduler", (c) => {
+    return c.json(toSyncSchedulerWireState(syncScheduler.getState()));
+  });
+
+  return { app, syncRuntime, syncScheduler };
 }
 
 export function createLocalServerFromEnv(
@@ -1536,11 +1713,21 @@ export function createLocalServerFromConfig(
   config: LocalServerConfig,
 ): LocalServerInstance {
   const database = openLocalDatabase({ filePath: config.dbPath });
+  const runtime = createLocalServerRuntime(config, database);
+
+  // Only start the loop when there is somewhere to sync to. Standalone dev
+  // (`CALIBRA_SYNC_ENABLED=false`, or no cloud URL) keeps the routes working
+  // and the scheduler dormant instead of failing on a timer.
+  if (config.syncEnabled && config.cloudApiUrl) {
+    runtime.syncScheduler.start("startup");
+  }
 
   return {
-    app: createLocalServer(config, database),
+    app: runtime.app,
     config,
     database,
+    syncRuntime: runtime.syncRuntime,
+    syncScheduler: runtime.syncScheduler,
   };
 }
 
@@ -1650,6 +1837,10 @@ function parseBoolean(value: string | undefined) {
   if (value === "true") return true;
   if (value === "false") return false;
   return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function readJsonOrEmpty(request: Request) {

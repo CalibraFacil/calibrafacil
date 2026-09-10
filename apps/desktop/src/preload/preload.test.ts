@@ -40,12 +40,14 @@ const expectedBridgeKeys = [
   "pauseSync",
   "pickFile",
   "pickFolder",
+  "resumeSync",
   "retrySync",
   "saveCertificatePdf",
   "saveFile",
   "setSecret",
   "setSettings",
   "startSync",
+  "wakeSync",
 ];
 
 async function importPreload() {

@@ -7,6 +7,11 @@ export function createCloudSyncApi(): SyncApi {
         data: null,
       };
     },
+    async reconcile() {
+      // The browser reads straight from the cloud, so a cloud command is
+      // already canonical by the time it resolves.
+      return { reconciled: false, reason: "browser-has-no-local-cache" };
+    },
     async listConflicts() {
       return {
         data: [],

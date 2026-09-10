@@ -91,9 +91,10 @@ export function getLocalSchemaVersion(database: LocalDatabase) {
   if (!table) return 0;
 
   const row = database
-    .prepare<[], { version: number }>(
-      "SELECT COALESCE(MAX(id), 0) AS version FROM local_schema_migrations",
-    )
+    .prepare<
+      [],
+      { version: number }
+    >("SELECT COALESCE(MAX(id), 0) AS version FROM local_schema_migrations")
     .get();
 
   return row?.version ?? 0;

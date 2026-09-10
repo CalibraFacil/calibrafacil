@@ -572,6 +572,15 @@ export function getLocalServiceOrderDetail(
 
   return {
     id: row.remote_id ?? stableLocalNumericId(row.id),
+    /**
+     * The cloud's own id, or `null` for an order created offline that has not
+     * been pushed yet. `id` above cannot answer this: it falls back to a
+     * stable local surrogate, so a locally-created order looks numerically
+     * identical to a synced one. Cloud commands (deliver, send quote, generate
+     * documents) would 404 — or duplicate — against such an order, so the UI
+     * needs to tell the two apart.
+     */
+    remoteId: row.remote_id ?? null,
     publicId: row.public_id ?? row.id,
     serviceOrderNumber: row.service_order_number,
     customerId: row.customer_remote_id ?? stableLocalNumericId(row.customer_id),
@@ -1930,3 +1939,88 @@ type LocalServiceOrderDeliveryDocumentRow = {
   created_at: string;
   sync_state: string;
 };
+
+/**
+ * The service order a domain event belongs to, whether the event targets the
+ * order itself or one of its child rows.
+ *
+ * Saving a quote or a delivery document marks the *parent* order `local`, so
+ * clearing that state later requires walking back from the child.
+ */
+export function resolveServiceOrderForAggregate(
+  database: LocalDatabase,
+  aggregateKind: string,
+  aggregateId: string,
+): string | null {
+  if (aggregateKind === "service_order") return aggregateId;
+
+  const childTable = SERVICE_ORDER_CHILD_TABLES[aggregateKind];
+  if (!childTable) return null;
+
+  const row = database
+    .prepare<
+      { id: string },
+      { service_order_id: string }
+    >(`SELECT service_order_id FROM ${childTable} WHERE id = @id`)
+    .get({ id: aggregateId });
+
+  return row?.service_order_id ?? null;
+}
+
+const SERVICE_ORDER_CHILD_TABLES: Record<string, string | undefined> = {
+  service_order_quote: "service_order_quotes",
+  service_order_execution: "service_order_executions",
+  service_order_delivery_document: "service_order_delivery_documents",
+};
+
+/**
+ * Put a service order back to `synced` once nothing of its own is still
+ * queued.
+ *
+ * Without this, saving a quote draft marks the parent order `local` and no
+ * acceptance ever clears it — the child event is marked synced, the parent is
+ * not. The order then reports pending local changes forever, which blocks
+ * sending that very quote and every cloud delivery and document action on it.
+ *
+ * "Nothing queued" means no outbox row in a non-terminal state for the order
+ * or any of its children; a rejected or conflicted event must keep the order
+ * dirty, because its local state genuinely differs from the server's.
+ */
+export function recomputeServiceOrderSyncState(
+  database: LocalDatabase,
+  serviceOrderId: string,
+): void {
+  const childIds = Object.values(SERVICE_ORDER_CHILD_TABLES)
+    .filter((table): table is string => Boolean(table))
+    .flatMap((table) =>
+      database
+        .prepare<{ serviceOrderId: string }, { id: string }>(
+          `SELECT id FROM ${table} WHERE service_order_id = @serviceOrderId`,
+        )
+        .all({ serviceOrderId })
+        .map((row) => row.id),
+    );
+
+  const aggregateIds = [serviceOrderId, ...childIds];
+  const placeholders = aggregateIds.map(() => "?").join(", ");
+
+  const unsettled = database
+    .prepare<string[], { total: number }>(
+      `
+SELECT COUNT(*) AS total
+FROM outbox o
+JOIN domain_events e ON e.event_id = o.event_id
+WHERE o.status NOT IN ('synced')
+  AND e.aggregate_id IN (${placeholders})
+`,
+    )
+    .get(...aggregateIds);
+
+  if ((unsettled?.total ?? 0) > 0) return;
+
+  database
+    .prepare(
+      `UPDATE service_orders SET sync_state = 'synced' WHERE id = @id AND remote_id IS NOT NULL`,
+    )
+    .run({ id: serviceOrderId });
+}

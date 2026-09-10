@@ -1319,6 +1319,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-only",
         },
         {
+          "method": "reconcile",
+          "namespace": "sync",
+          "policy": "local-only",
+        },
+        {
           "method": "listConflicts",
           "namespace": "sync",
           "policy": "local-only",

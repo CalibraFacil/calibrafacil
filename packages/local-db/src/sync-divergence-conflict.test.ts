@@ -121,9 +121,10 @@ describe("REQ-REL-SYNC-204 — generic desktop recording of slice-2 conflicts", 
     }
 
     const count = database
-      .prepare<[], { total: number }>(
-        `SELECT COUNT(*) AS total FROM sync_conflicts WHERE status = 'open'`,
-      )
+      .prepare<
+        [],
+        { total: number }
+      >(`SELECT COUNT(*) AS total FROM sync_conflicts WHERE status = 'open'`)
       .get();
     expect(count?.total).toBe(3);
 

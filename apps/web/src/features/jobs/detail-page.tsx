@@ -70,9 +70,15 @@ import {
   useJobDetailData,
   useJobTechniciansData,
 } from '@/features/jobs/queries'
+import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
+import {
+  describeReconcileLag,
+  reconcileAfterCloudCommand,
+} from '@/runtime/reconcile-cloud-command'
 import {
   buildJobReviewModel,
-  desktopCloudActionError,
+  jobCloudCommandTarget,
   formatDate,
   formatDateTime,
   formatReviewValue,
@@ -375,16 +381,58 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     refetchWhileGeneratingPdf: true,
   })
 
+  // Availability is derived, not assumed from the host: a connected desktop
+  // may run every one of these cloud commands, and a *disconnected* browser
+  // may not. What actually blocks is connectivity, the local process, and —
+  // for this job specifically — readings still sitting in the outbox.
+  const jobTarget = jobCloudCommandTarget(job)
+  const approveAvailability = useOperationAvailability(
+    'jobs',
+    'approve',
+    jobTarget,
+  )
+  const rejectAvailability = useOperationAvailability(
+    'jobs',
+    'reject',
+    jobTarget,
+  )
+  const cancelAvailability = useOperationAvailability(
+    'jobs',
+    'cancel',
+    jobTarget,
+  )
+  const assignAvailability = useOperationAvailability(
+    'jobs',
+    'assign',
+    jobTarget,
+  )
+  const techniciansAvailability = useOperationAvailability(
+    'jobs',
+    'listTechnicians',
+  )
+
   const { data: techniciansData } = useJobTechniciansData({
-    enabled: assignDialogOpen && !runtime.isDesktop,
+    enabled: assignDialogOpen && techniciansAvailability.available,
   })
+
+  /**
+   * Jobs are read local-first on desktop, so invalidating after a cloud
+   * command would re-read the pre-command row from SQLite and the screen would
+   * appear not to have changed. Reconcile first, then invalidate.
+   */
+  const settleAfterCloudCommand = useCallback(
+    async (message: string, queryKeys: readonly unknown[][]) => {
+      const result = await reconcileAfterCloudCommand(queryClient, queryKeys)
+      const lag = describeReconcileLag(result)
+
+      toast.success(message, lag ? { description: lag } : undefined)
+    },
+    [queryClient],
+  )
 
   // Approve mutation
   const approveMutation = useMutation({
     mutationFn: async () => {
-      if (runtime.isDesktop) {
-        throw desktopCloudActionError()
-      }
       return calibraApi.jobs.approve(
         apiJobId,
         buildJobApprovalInput(
@@ -393,10 +441,11 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
         ),
       )
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      queryClient.invalidateQueries({ queryKey: ['jobs', id] })
-      toast.success('Job aprovado com sucesso!')
+    onSuccess: async () => {
+      await settleAfterCloudCommand('Job aprovado com sucesso!', [
+        ['jobs'],
+        ['jobs', id],
+      ])
       setApproveDialogOpen(false)
       setEnvJustification('')
       setScopeViolationBlocked(false)
@@ -413,14 +462,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   // Reject mutation
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      if (runtime.isDesktop) {
-        throw desktopCloudActionError()
-      }
       return calibraApi.jobs.reject(apiJobId, rejectReason)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success('Job rejeitado')
+    onSuccess: async () => {
+      await settleAfterCloudCommand('Job rejeitado', [['jobs'], ['jobs', id]])
       setRejectDialogOpen(false)
       setRejectReason('')
     },
@@ -432,14 +477,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      if (runtime.isDesktop) {
-        throw desktopCloudActionError()
-      }
       return calibraApi.jobs.cancel(apiJobId, cancelReason)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success('Job cancelado')
+    onSuccess: async () => {
+      await settleAfterCloudCommand('Job cancelado', [['jobs'], ['jobs', id]])
       setCancelDialogOpen(false)
       setCancelReason('')
       navigate({ to: '/dashboard/jobs' })
@@ -452,14 +493,13 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   // Assign mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
-      if (runtime.isDesktop) {
-        throw desktopCloudActionError()
-      }
       return calibraApi.jobs.assign(apiJobId, selectedTechnician)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs', id] })
-      toast.success('Técnico atribuído com sucesso!')
+    onSuccess: async () => {
+      await settleAfterCloudCommand('Técnico atribuído com sucesso!', [
+        ['jobs'],
+        ['jobs', id],
+      ])
       setAssignDialogOpen(false)
       setSelectedTechnician('')
     },
@@ -535,14 +575,16 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
 
   const isGeneratingPdf = job.status === 'GENERATING_PDF'
   const canExecute = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
-  const canApprove = job.status === 'REVIEW' && !runtime.isDesktop
+  // Status decides whether the action exists at this point in the lifecycle;
+  // availability decides whether it can run right now. Keeping them apart is
+  // what lets the desktop show the review evidence — and the reason — instead
+  // of an empty panel.
+  const canApprove = job.status === 'REVIEW'
   const canShowReviewEvidence = canApprove || isGeneratingPdf
-  const canCancel =
-    ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status) &&
-    !runtime.isDesktop
-  const canAssign =
-    ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status) &&
-    !runtime.isDesktop
+  const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(
+    job.status,
+  )
+  const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
   const financialStatus =
     typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
   const normalizedFinancialStatus = toFinancialStatus(financialStatus)
@@ -724,7 +766,6 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     return (
       <ApprovedJobRecord
         job={job}
-        isDesktop={runtime.isDesktop}
         onBack={() => navigate({ to: '/dashboard/jobs' })}
         onRefresh={refreshJob}
       />
@@ -854,21 +895,31 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 <CertificateProgressButton status="running" />
               ) : canApprove ? (
                 <>
-                  <CertificateProgressButton
-                    status="idle"
-                    onApprove={() => setApproveDialogOpen(true)}
-                  />
-                  <Button
-                    variant="destructive"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() => setRejectDialogOpen(true)}
-                  >
-                    <HugeiconsIcon
-                      icon={MultiplicationSignIcon}
-                      className="mr-2 h-4 w-4"
-                    />
-                    Rejeitar
-                  </Button>
+                  <ActionAvailabilityGate availability={approveAvailability}>
+                    {({ disabled }) => (
+                      <CertificateProgressButton
+                        status="idle"
+                        disabled={disabled}
+                        onApprove={() => setApproveDialogOpen(true)}
+                      />
+                    )}
+                  </ActionAvailabilityGate>
+                  <ActionAvailabilityGate availability={rejectAvailability}>
+                    {({ disabled }) => (
+                      <Button
+                        variant="destructive"
+                        disabled={disabled}
+                        className={ACTION_BUTTON_CLASS}
+                        onClick={() => setRejectDialogOpen(true)}
+                      >
+                        <HugeiconsIcon
+                          icon={MultiplicationSignIcon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Rejeitar
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
                 </>
               ) : canExecute ? (
                 <>
@@ -887,17 +938,22 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                       : 'Continuar execução'}
                   </Button>
                   {canAssign && (
-                    <Button
-                      variant="outline"
-                      className={ACTION_BUTTON_CLASS}
-                      onClick={() => setAssignDialogOpen(true)}
-                    >
-                      <HugeiconsIcon
-                        icon={UserAdd01Icon}
-                        className="mr-2 h-4 w-4"
-                      />
-                      Atribuir técnico
-                    </Button>
+                    <ActionAvailabilityGate availability={assignAvailability}>
+                      {({ disabled }) => (
+                        <Button
+                          variant="outline"
+                          disabled={disabled}
+                          className={ACTION_BUTTON_CLASS}
+                          onClick={() => setAssignDialogOpen(true)}
+                        >
+                          <HugeiconsIcon
+                            icon={UserAdd01Icon}
+                            className="mr-2 h-4 w-4"
+                          />
+                          Atribuir técnico
+                        </Button>
+                      )}
+                    </ActionAvailabilityGate>
                   )}
                 </>
               ) : (
@@ -924,18 +980,26 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
 
           {canCancel && (
             <div className="border-t border-foreground/10 pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  ACTION_BUTTON_CLASS,
-                  'text-destructive hover:bg-destructive/10 hover:text-destructive',
+              <ActionAvailabilityGate availability={cancelAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    className={cn(
+                      ACTION_BUTTON_CLASS,
+                      'text-destructive hover:bg-destructive/10 hover:text-destructive',
+                    )}
+                    onClick={() => setCancelDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={Cancel01Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Cancelar calibração
+                  </Button>
                 )}
-                onClick={() => setCancelDialogOpen(true)}
-              >
-                <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
-                Cancelar calibração
-              </Button>
+              </ActionAvailabilityGate>
             </div>
           )}
         </div>

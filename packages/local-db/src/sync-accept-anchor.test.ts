@@ -120,9 +120,10 @@ function readAnchor(
   id: string,
 ) {
   return database
-    .prepare<[string], { remote_base_updated_at: string | null }>(
-      `SELECT remote_base_updated_at FROM ${table} WHERE ${column} = ?`,
-    )
+    .prepare<
+      [string],
+      { remote_base_updated_at: string | null }
+    >(`SELECT remote_base_updated_at FROM ${table} WHERE ${column} = ?`)
     .get(id);
 }
 
@@ -135,7 +136,10 @@ function acceptEvent(
       {
         eventId: params.eventId,
         remoteEntityId: params.remoteEntityId,
-        remoteEntity: { id: params.remoteEntityId, updatedAt: params.updatedAt },
+        remoteEntity: {
+          id: params.remoteEntityId,
+          updatedAt: params.updatedAt,
+        },
         remoteVersion: 1,
         cloudEventId: `cloud-${params.eventId}`,
       },

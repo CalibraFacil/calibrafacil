@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { Link } from '@tanstack/react-router'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { RefreshIcon } from '@hugeicons/core-free-icons'
@@ -26,7 +27,9 @@ import {
   getDataSourceIndicatorModel,
   isDesktopCloudOnlyUnavailableSnapshot,
   runDesktopManualSync,
+  syncCompletionClearedBlockers,
 } from '@/runtime/sync-status-model'
+import { useQueryClient } from '@tanstack/react-query'
 
 const initialSnapshot: SyncStatusSnapshot = {
   state: 'idle',
@@ -80,7 +83,13 @@ function getServerBrowserOnlineSnapshot() {
   return true
 }
 
-function useBrowserOnlineStatus(isDesktop: boolean) {
+/**
+ * `navigator.onLine` as a subscribed store, and *only* on desktop: in the
+ * browser the value would be a claim about the same connection that serves
+ * every request, so acting on it adds a false negative without adding a
+ * fallback.
+ */
+export function useBrowserOnlineStatus(isDesktop: boolean) {
   return useSyncExternalStore(
     isDesktop ? subscribeToBrowserOnlineStatus : subscribeToNothing,
     getBrowserOnlineSnapshot,
@@ -88,12 +97,77 @@ function useBrowserOnlineStatus(isDesktop: boolean) {
   )
 }
 
-type SyncStatusContextValue = SyncStatusSnapshot & {
+export type SyncStatusContextValue = SyncStatusSnapshot & {
   isDesktop: boolean
   refresh(): Promise<void>
 }
 
 const SyncStatusContext = createContext<SyncStatusContextValue | null>(null)
+
+/**
+ * Tell the local server to sync when the world outside it changes.
+ *
+ * The renderer sees two signals the main process cannot: the OS reporting the
+ * network back, and the operator returning to the window. Both are advisory —
+ * the scheduler coalesces and debounces, so a flapping connection or a user
+ * alt-tabbing produces one sync, not a storm.
+ */
+function useSyncWakeTriggers(isDesktop: boolean) {
+  useMountEffect(() => {
+    if (!isDesktop || typeof window === 'undefined') return
+
+    const wake = () => {
+      void window.calibraBridge?.wakeSync('reconnect').catch(() => undefined)
+    }
+    const wakeOnVisible = () => {
+      if (document.visibilityState === 'visible') wake()
+    }
+
+    window.addEventListener('online', wake)
+    document.addEventListener('visibilitychange', wakeOnVisible)
+
+    return () => {
+      window.removeEventListener('online', wake)
+      document.removeEventListener('visibilitychange', wakeOnVisible)
+    }
+  })
+}
+
+/**
+ * Refetch cached entity data once a sync has changed it underneath.
+ *
+ * A cloud command's availability is derived from the entity's local
+ * `syncState`, which sync rewrites in SQLite without React Query hearing about
+ * it. Without this, a job whose execution has just been pushed keeps reporting
+ * "pending local changes" and stays unapprovable after the sync it was waiting
+ * for succeeded.
+ *
+ * Everything is invalidated except the sync surfaces themselves — narrowing to
+ * a list of entity keys would silently miss whichever one is added next, and
+ * the cost here is a refetch of what is on screen.
+ */
+function useRefetchOnSyncCompletion(isDesktop: boolean) {
+  const queryClient = useQueryClient()
+
+  useMountEffect(() => {
+    if (!isDesktop || typeof window === 'undefined') return
+
+    let previous: SyncStatusSnapshot | null = latestBridgeSnapshot
+
+    return window.calibraBridge?.onSyncStatus((snapshot) => {
+      const cleared = syncCompletionClearedBlockers(previous, snapshot)
+      previous = snapshot
+      if (!cleared) return
+
+      void queryClient.invalidateQueries({
+        predicate: (query) => {
+          const root = query.queryKey[0]
+          return root !== 'desktop-sync-status' && root !== 'local-partition'
+        },
+      })
+    })
+  })
+}
 
 export function SyncStatusProvider({
   children,
@@ -102,6 +176,9 @@ export function SyncStatusProvider({
   children: ReactNode
   isDesktop: boolean
 }) {
+  useSyncWakeTriggers(isDesktop)
+  useRefetchOnSyncCompletion(isDesktop)
+
   const bridgeSnapshot = useSyncExternalStore(
     isDesktop ? subscribeToBridgeSyncStatus : subscribeToNothing,
     getBridgeSnapshot,
@@ -148,6 +225,19 @@ export function useSyncStatus() {
   }
 
   return context
+}
+
+/**
+ * The sync snapshot when there is one, `null` otherwise.
+ *
+ * Availability gating is used far outside the dashboard shell — public routes,
+ * isolated component tests, anything rendered before the provider mounts — and
+ * in those trees "no provider" is a fact, not a bug. Throwing there would turn
+ * a missing wrapper into a blank screen on a page that has no sync surface to
+ * report in the first place.
+ */
+export function useOptionalSyncStatus() {
+  return useContext(SyncStatusContext)
 }
 
 export function useDesktopCloudOnlyUnavailable() {
@@ -296,7 +386,12 @@ export function DesktopSyncButton() {
   )
 }
 
-function useDesktopManualSyncAction(sync: SyncStatusContextValue) {
+/**
+ * The "sincronizar agora" affordance, shared by the status chip and by every
+ * action that a sync could unblock — so pressing it from a blocked button does
+ * exactly what pressing it in the header does.
+ */
+export function useDesktopManualSyncAction(sync: SyncStatusContextValue) {
   const [isSyncing, setIsSyncing] = useState(false)
   const canSync =
     sync.isDesktop &&

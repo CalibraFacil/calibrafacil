@@ -126,9 +126,10 @@ export function getLocalAttachment(
   attachmentId: string,
 ): LocalAttachment | null {
   const row = database
-    .prepare<{ attachmentId: string }, LocalAttachmentRow>(
-      "SELECT * FROM attachments WHERE id = @attachmentId",
-    )
+    .prepare<
+      { attachmentId: string },
+      LocalAttachmentRow
+    >("SELECT * FROM attachments WHERE id = @attachmentId")
     .get({ attachmentId });
 
   return row ? toLocalAttachment(row) : null;

@@ -24,8 +24,14 @@ export function createMethodDefinitionEngine(
       engine.compileFormula(expression, compileOptions),
     evaluateFormula: (expression, inputs, evaluationOptions) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method-definition accepts compiled expressions while math-engine overloads require its concrete formula input.
-      const engineExpression = expression as Parameters<typeof engine.evaluateFormula>[0];
-      return engine.evaluateFormula(engineExpression, inputs, evaluationOptions);
+      const engineExpression = expression as Parameters<
+        typeof engine.evaluateFormula
+      >[0];
+      return engine.evaluateFormula(
+        engineExpression,
+        inputs,
+        evaluationOptions,
+      );
     },
     evaluateMeasurementModel: (input: MeasurementModelInputLike) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method-definition uses a structurally compatible DTO that math-engine brands as MeasurementModelInput.

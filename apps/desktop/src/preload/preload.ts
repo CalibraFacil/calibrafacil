@@ -3,6 +3,7 @@ import type {
   CalibraBridge,
   DesktopUpdateState,
   SyncStatusSnapshot,
+  SyncTrigger,
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "../main/channels";
 
@@ -36,7 +37,10 @@ const calibraBridge: CalibraBridge = {
     ),
   startSync: () => invoke(desktopIpcChannels.startSync),
   pauseSync: () => invoke(desktopIpcChannels.pauseSync),
+  resumeSync: () => invoke(desktopIpcChannels.resumeSync),
   retrySync: () => invoke(desktopIpcChannels.retrySync),
+  wakeSync: (trigger: SyncTrigger) =>
+    invoke(desktopIpcChannels.wakeSync, trigger),
   pickFile: () => invoke(desktopIpcChannels.pickFile),
   pickFolder: () => invoke(desktopIpcChannels.pickFolder),
   saveFile: () => invoke(desktopIpcChannels.saveFile),

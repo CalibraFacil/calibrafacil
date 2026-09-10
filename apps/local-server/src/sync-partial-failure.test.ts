@@ -158,25 +158,28 @@ function bootstrapResponse() {
 
 function readOutboxStatus(database: LocalDatabase, eventId: string) {
   return database
-    .prepare<{ eventId: string }, { status: string }>(
-      "SELECT status FROM outbox WHERE event_id = @eventId",
-    )
+    .prepare<
+      { eventId: string },
+      { status: string }
+    >("SELECT status FROM outbox WHERE event_id = @eventId")
     .get({ eventId })?.status;
 }
 
 function readEventSyncState(database: LocalDatabase, eventId: string) {
   return database
-    .prepare<{ eventId: string }, { sync_state: string }>(
-      "SELECT sync_state FROM domain_events WHERE event_id = @eventId",
-    )
+    .prepare<
+      { eventId: string },
+      { sync_state: string }
+    >("SELECT sync_state FROM domain_events WHERE event_id = @eventId")
     .get({ eventId })?.sync_state;
 }
 
 function readCustomerRemoteId(database: LocalDatabase, entityId: string) {
   return database
-    .prepare<{ entityId: string }, { remote_id: number | null }>(
-      "SELECT remote_id FROM customers WHERE id = @entityId",
-    )
+    .prepare<
+      { entityId: string },
+      { remote_id: number | null }
+    >("SELECT remote_id FROM customers WHERE id = @entityId")
     .get({ entityId })?.remote_id;
 }
 
@@ -222,10 +225,9 @@ function seedCustomer(database: LocalDatabase, name: string) {
   });
 
   const created = database
-    .prepare<
-      [],
-      { event_id: string; aggregate_id: string }
-    >("SELECT event_id, aggregate_id FROM domain_events WHERE aggregate_kind = 'customer'")
+    .prepare<[], { event_id: string; aggregate_id: string }>(
+      "SELECT event_id, aggregate_id FROM domain_events WHERE aggregate_kind = 'customer'",
+    )
     .all()
     .find((row) => !before.has(row.event_id));
 
@@ -637,7 +639,9 @@ describe("local sync partial-failure / conflict reconciliation", () => {
       )
       .run({ eventId: conflicted.eventId });
     database
-      .prepare("UPDATE outbox SET status = 'conflict' WHERE event_id = @eventId")
+      .prepare(
+        "UPDATE outbox SET status = 'conflict' WHERE event_id = @eventId",
+      )
       .run({ eventId: conflicted.eventId });
 
     // Resolve the entity-level conflict (eventId IS NULL). moveConflictedEvents

@@ -243,8 +243,30 @@ export interface JobsApi {
   ): Promise<unknown>;
 }
 
+/**
+ * Outcome of a canonical reconciliation. Never an error: reconciliation runs
+ * *after* a cloud command has already succeeded, so a failure here means the
+ * local cache is briefly behind — not that the command did not happen. The UI
+ * degrades to a "pending sync" hint instead of an action-failed toast.
+ */
+export type SyncReconcileResult = {
+  reconciled: boolean;
+  /** Populated when `reconciled` is false, for support surfaces. */
+  reason?: string;
+};
+
 export interface SyncApi {
   getSession(): Promise<LocalSessionSnapshotResponse>;
+  /**
+   * Push queued local writes, pull canonical cloud state, and resolve once the
+   * local cache reflects the server.
+   *
+   * Call this after any cloud command whose entity is read back local-first
+   * (`local-first-read-through-sync`); otherwise the next read serves the
+   * pre-command snapshot and the UI silently shows a stale status. A no-op in
+   * the browser, where there is no local cache to reconcile.
+   */
+  reconcile(): Promise<SyncReconcileResult>;
   listConflicts(input?: {
     status?: "open" | "resolved" | "ignored";
     limit?: number;

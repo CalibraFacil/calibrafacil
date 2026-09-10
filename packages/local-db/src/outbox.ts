@@ -1,6 +1,10 @@
 import type { SyncPushResponse } from "@calibra-facil/contracts";
 import { stringifySyncConflictPayload } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
+import {
+  recomputeServiceOrderSyncState,
+  resolveServiceOrderForAggregate,
+} from "./service-orders";
 
 export type PendingOutboxEvent = {
   eventId: string;
@@ -262,6 +266,16 @@ WHERE event_id = @eventId
       applyAcceptedRemoteEntity(database, eventsById.get(eventId), accepted);
     }
 
+    // Child acceptances leave the parent order dirty on their own; recompute
+    // it once, after every acceptance in this batch has landed, so an order
+    // with two queued children is not cleared by the first of them.
+    for (const serviceOrderId of touchedServiceOrderIds(
+      database,
+      [...acceptedById.keys()].map((eventId) => eventsById.get(eventId)),
+    )) {
+      recomputeServiceOrderSyncState(database, serviceOrderId);
+    }
+
     for (const [eventId, rejection] of rejectedById) {
       database
         .prepare(
@@ -391,6 +405,30 @@ WHERE event_id IN (${eventIds.map(() => "?").join(",")})
     .all(...eventIds);
 
   return new Map(rows.map((row) => [row.event_id, row]));
+}
+
+/**
+ * Distinct service orders touched by a batch of accepted events, whether the
+ * event targeted the order or one of its child rows.
+ */
+function touchedServiceOrderIds(
+  database: LocalDatabase,
+  events: Array<DomainEventRow | undefined>,
+): string[] {
+  const ids = new Set<string>();
+
+  for (const event of events) {
+    if (!event) continue;
+
+    const serviceOrderId = resolveServiceOrderForAggregate(
+      database,
+      event.aggregate_kind,
+      event.aggregate_id,
+    );
+    if (serviceOrderId) ids.add(serviceOrderId);
+  }
+
+  return [...ids];
 }
 
 function applyAcceptedRemoteEntity(

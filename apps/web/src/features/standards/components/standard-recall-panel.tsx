@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { AlertCircleIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,8 @@ import {
   SignalTile,
 } from '@/components/instrument-panel'
 import { HideFromRole, ShowForRole } from '@/components/permission-gate'
-import { isDesktopRuntime } from '@/runtime/desktop'
+import { OperationUnavailableNotice } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import {
   useImpactedCertificatesData,
   useSendStandardRecall,
@@ -40,8 +41,6 @@ import type {
   StandardRecallNotification,
   StandardStatus,
 } from '@/features/standards/types'
-
-const ONLINE_ONLY_HINT = 'Disponível apenas no modo online'
 
 const TABLE_WRAPPER_CLASS =
   'overflow-x-auto rounded-xl bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
@@ -132,7 +131,6 @@ export function StandardRecallPanel({
         ) : recallQuery.error ? (
           <p className="text-sm text-muted-foreground">
             Não foi possível carregar os dados do recall.
-            {isDesktopRuntime() ? ` ${ONLINE_ONLY_HINT}.` : ''}
           </p>
         ) : recall?.status === 'SENT' ? (
           <RecallSentDashboard id={id} recall={recall} />
@@ -159,15 +157,6 @@ function NcReference({ recall }: { recall: StandardRecall }) {
   )
 }
 
-function OnlineOnlyNote() {
-  return (
-    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      <HugeiconsIcon icon={AlertCircleIcon} className="size-4 shrink-0" />
-      {ONLINE_ONLY_HINT}.
-    </p>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // DRAFT state: review window + impacted certificates + approval-gated send
 // ---------------------------------------------------------------------------
@@ -182,7 +171,15 @@ function RecallDraftWizard({
   /** SENT-state "Adicionar certificados": only rows not yet notified. */
   hideNotified?: boolean
 }) {
-  const desktop = isDesktopRuntime()
+  // The impact query and the notification send are cloud commands; a
+  // connected desktop runs both. Previously the whole wizard was inert there,
+  // which meant a recall could only be worked from a browser.
+  const impactAvailability = useOperationAvailability(
+    'standards',
+    'getImpactedCertificates',
+  )
+  const sendAvailability = useOperationAvailability('standards', 'sendRecall')
+  const blocked = !impactAvailability.available || !sendAvailability.available
   const [fromInput, setFromInput] = useState('')
   const [toInput, setToInput] = useState('')
   const [excludedJobIds, setExcludedJobIds] = useState<number[]>([])
@@ -191,7 +188,7 @@ function RecallDraftWizard({
   const impactedQuery = useImpactedCertificatesData(id, {
     from: dateInputToIsoStart(fromInput),
     to: dateInputToIsoEnd(toInput),
-    enabled: !desktop,
+    enabled: impactAvailability.available,
   })
   const impacted = impactedQuery.data
   const sendMutation = useSendStandardRecall(id)
@@ -254,7 +251,7 @@ function RecallDraftWizard({
             type="date"
             value={fromValue}
             onChange={(event) => setFromInput(event.target.value)}
-            disabled={desktop || sendMutation.isPending}
+            disabled={blocked || sendMutation.isPending}
           />
         </Field>
         <Field>
@@ -263,13 +260,13 @@ function RecallDraftWizard({
             type="date"
             value={toValue}
             onChange={(event) => setToInput(event.target.value)}
-            disabled={desktop || sendMutation.isPending}
+            disabled={blocked || sendMutation.isPending}
           />
         </Field>
       </div>
 
-      {desktop ? (
-        <OnlineOnlyNote />
+      {!impactAvailability.available ? (
+        <OperationUnavailableNotice availability={impactAvailability} />
       ) : impactedQuery.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : impactedQuery.error ? (
@@ -309,7 +306,7 @@ function RecallDraftWizard({
           <Button
             onClick={() => setConfirmOpen(true)}
             disabled={
-              desktop || selectedJobIds.length === 0 || sendMutation.isPending
+              blocked || selectedJobIds.length === 0 || sendMutation.isPending
             }
           >
             {sendMutation.isPending ? (
@@ -317,7 +314,7 @@ function RecallDraftWizard({
             ) : null}
             Aprovar e enviar notificações ({selectedJobIds.length})
           </Button>
-          {desktop ? <OnlineOnlyNote /> : null}
+          <OperationUnavailableNotice availability={sendAvailability} />
         </ShowForRole>
         <HideFromRole role={['owner', 'admin']}>
           <p className="text-sm text-muted-foreground">
@@ -487,7 +484,10 @@ function RecallSentDashboard({
   id: string
   recall: StandardRecall
 }) {
-  const desktop = isDesktopRuntime()
+  const addCertificatesAvailability = useOperationAvailability(
+    'standards',
+    'getImpactedCertificates',
+  )
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -540,13 +540,15 @@ function RecallSentDashboard({
         <Button
           variant="outline"
           onClick={() => setShowAdd((value) => !value)}
-          disabled={desktop}
+          disabled={!addCertificatesAvailability.available}
         >
           <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
           {showAdd ? 'Ocultar novos certificados' : 'Adicionar certificados'}
         </Button>
-        {desktop ? <OnlineOnlyNote /> : null}
-        {showAdd && !desktop ? (
+        <OperationUnavailableNotice
+          availability={addCertificatesAvailability}
+        />
+        {showAdd && addCertificatesAvailability.available ? (
           <div className="rounded-xl border border-border/70 p-4">
             <p className="mb-3 text-sm text-muted-foreground">
               Certificados afetados ainda não notificados. O envio é idempotente

@@ -19,7 +19,9 @@ const tempDirectories: string[] = [];
 function openTempDatabase() {
   const directory = mkdtempSync(path.join(os.tmpdir(), "calibra-printer-db-"));
   tempDirectories.push(directory);
-  return openLocalDatabase({ filePath: path.join(directory, "calibra.sqlite") });
+  return openLocalDatabase({
+    filePath: path.join(directory, "calibra.sqlite"),
+  });
 }
 
 afterEach(() => {
@@ -75,7 +77,10 @@ describe("printer profile repository", () => {
   it("updates an existing profile in place", () => {
     const database = openTempDatabase();
     upsertPrinterProfile(database, networkProfile);
-    upsertPrinterProfile(database, { ...networkProfile, name: "Bench Zebra v2" });
+    upsertPrinterProfile(database, {
+      ...networkProfile,
+      name: "Bench Zebra v2",
+    });
 
     expect(listPrinterProfiles(database)).toHaveLength(1);
     expect(getPrinterProfile(database, "bench")?.name).toBe("Bench Zebra v2");
