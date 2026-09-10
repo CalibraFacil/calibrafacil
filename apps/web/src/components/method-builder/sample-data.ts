@@ -4,6 +4,59 @@ import type {
   MethodDraftMeasurementModelSource,
 } from './types'
 
+/**
+ * Placeholder for every numeric slot of the generated sample data.
+ *
+ * It must be NON-ZERO. This payload is a smoke test for the compiled formula
+ * graph, and real GUM methods divide by their inputs — the k of the standard's
+ * certificate, the eccentricity test load, a nominal load. Seeding zeros made
+ * Preview fail with "Division by zero is not allowed" on those formulas and
+ * then cascade "Formula input is missing a required variable" through every
+ * formula downstream, so no method with a divisor input could pass the
+ * publish-preview gate unless the lab hand-wrote the JSON. `1` divides cleanly
+ * and keeps every derived quantity finite.
+ *
+ * These values are synthetic: they exercise the graph, they do not stand for a
+ * measurement. The lab edits this JSON before reading anything into a result.
+ */
+const SAMPLE_NUMBER = 1
+
+/**
+ * Plausible lab ambient conditions, in the units the certificate renders
+ * (°C, %UR, hPa — see `packages/certificate-data`). Same reasoning as
+ * SAMPLE_NUMBER: a formula dividing by ambient pressure must not blow up.
+ */
+const SAMPLE_ENVIRONMENT: Record<string, number> = {
+  temperature: 20,
+  humidity: 50,
+  pressure: 1013.25,
+}
+
+function sampleEnvironmentValue(field: string): number {
+  return SAMPLE_ENVIRONMENT[field] ?? SAMPLE_NUMBER
+}
+
+/**
+ * Row `index` gets `index + 1`, so a table seeds distinct rows. A column whose
+ * rows all held the same number had a sample standard deviation of exactly 0,
+ * which zeroed the Type A contribution and divided by zero in the
+ * Welch–Satterthwaite degrees-of-freedom formula.
+ */
+function sampleRowNumber(index: number): number {
+  return SAMPLE_NUMBER * (index + 1)
+}
+
+function sampleNumberFromDefault(value: string | number | undefined): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value !== 0) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed !== 0) return parsed
+  }
+  return SAMPLE_NUMBER
+}
+
 export function parseJsonObject(value: string): Record<string, unknown> {
   let parsed: unknown
   try {
@@ -26,18 +79,18 @@ export function buildInitialSampleData(
     draft.inputs.map((input) => [
       input.key,
       input.type === 'number'
-        ? 0
+        ? sampleNumberFromDefault(input.defaultValue)
         : input.type === 'table'
           ? buildInitialTableRows(input.columns ?? [])
           : (input.defaultValue ?? ''),
     ]),
   )
-  sample.environment = { temperature: 0, humidity: 0, pressure: 0 }
+  sample.environment = { ...SAMPLE_ENVIRONMENT }
 
   for (const variable of draft.variables) {
     if (variable.source === 'environment') {
       const environment = ensureRecord(sample, 'environment')
-      environment[variable.field] = 0
+      environment[variable.field] = sampleEnvironmentValue(variable.field)
       continue
     }
 
@@ -57,15 +110,16 @@ export function buildInitialSampleData(
           : 1
       const rows = toRecordArray(sample[variable.fieldKey])
       while (rows.length < rowsRequired) rows.push({})
-      for (const row of rows) {
-        row[variable.columnKey] = row[variable.columnKey] ?? 0
+      for (const [index, row] of rows.entries()) {
+        row[variable.columnKey] =
+          row[variable.columnKey] ?? sampleRowNumber(index)
       }
       sample[variable.fieldKey] = rows
       continue
     }
 
     if (variable.source === 'data_field') {
-      sample[variable.fieldKey] = sample[variable.fieldKey] ?? 0
+      sample[variable.fieldKey] = sample[variable.fieldKey] ?? SAMPLE_NUMBER
     }
   }
 
@@ -78,7 +132,10 @@ export function buildInitialSampleData(
         }
         const observationsInputKey = quantity.uncertainty.observationsInputKey
         if (observationsInputKey) {
-          sample[observationsInputKey] = sample[observationsInputKey] ?? [0, 0]
+          sample[observationsInputKey] = sample[observationsInputKey] ?? [
+            sampleRowNumber(0),
+            sampleRowNumber(1),
+          ]
         }
       }
     }
@@ -93,8 +150,10 @@ function buildInitialTableRows(
   const numericColumns = columns.filter((column) => column.type === 'number')
   if (numericColumns.length === 0) return []
 
-  return [0, 1].map(() =>
-    Object.fromEntries(numericColumns.map((column) => [column.key, 0])),
+  return [0, 1].map((index) =>
+    Object.fromEntries(
+      numericColumns.map((column) => [column.key, sampleRowNumber(index)]),
+    ),
   )
 }
 
@@ -125,9 +184,9 @@ function addStandardSampleBinding(
   if (!standard) {
     standard = {
       id: targetId,
-      uncertainty: 0,
+      uncertainty: SAMPLE_NUMBER,
       coverageFactor: 2,
-      drift: 0,
+      drift: SAMPLE_NUMBER,
       certifiedValues: [],
     }
     standards.push(standard)
@@ -147,7 +206,11 @@ function addStandardSampleBinding(
     const nominal = valueKey.endsWith('_u') ? valueKey.slice(0, -2) : valueKey
     const certifiedValues = toRecordArray(standard.certifiedValues)
     if (!certifiedValues.some((item) => item.nominal === nominal)) {
-      certifiedValues.push({ nominal, value: 0, uncertainty: 0 })
+      certifiedValues.push({
+        nominal,
+        value: SAMPLE_NUMBER,
+        uncertainty: SAMPLE_NUMBER,
+      })
     }
     standard.certifiedValues = certifiedValues
   }
@@ -160,15 +223,15 @@ function addMeasurementSourceSample(
   source: MethodDraftMeasurementModelSource,
 ): void {
   if (source.kind === 'input') {
-    sample[source.key] = sample[source.key] ?? 0
+    sample[source.key] = sample[source.key] ?? SAMPLE_NUMBER
     return
   }
   if (source.kind !== 'table_column') return
 
   const rows = toRecordArray(sample[source.tableKey])
   while (rows.length < 2) rows.push({})
-  for (const row of rows) {
-    row[source.columnKey] = row[source.columnKey] ?? 0
+  for (const [index, row] of rows.entries()) {
+    row[source.columnKey] = row[source.columnKey] ?? sampleRowNumber(index)
   }
   sample[source.tableKey] = rows
 }
