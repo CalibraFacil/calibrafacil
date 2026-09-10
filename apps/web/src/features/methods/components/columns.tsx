@@ -6,6 +6,7 @@ import {
   Copy01Icon,
   Edit02Icon,
   MoreHorizontalIcon,
+  ViewIcon,
 } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@/components/ui/badge'
@@ -111,6 +112,28 @@ export const methodsColumns: ColumnDef<Method>[] = [
             <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {/*
+              Always offered, for every status. The lifecycle actions of a method
+              under review (technical review, quality approval) live on the detail
+              page, where the reviewer can read the formulas before signing off —
+              a regulated approval must not be one click away from a list row.
+              Without this item the menu rendered EMPTY for a method "Em
+              aprovação", "Revisão técnica" or "Arquivado": a control that opens
+              onto nothing.
+            */}
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/methods/$id"
+                  params={{ id: methodRouteId(row.original) }}
+                  className={cn(props.className, 'w-full flex items-center')}
+                >
+                  <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                  Ver detalhes
+                </Link>
+              )}
+            />
             {row.original.status === 'DRAFT' && (
               <DropdownMenuItem
                 render={(props) => (

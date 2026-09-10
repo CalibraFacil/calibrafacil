@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -363,6 +363,19 @@ export function MethodDetailPage({ id }: { id: string }) {
   )
 }
 
+/**
+ * Why the pending lifecycle step shows no button for this user.
+ *
+ * The two-person rule of the method lifecycle is enforced by the API:
+ * `technical-review` accepts only `admin` and `quality-approve` only `owner`,
+ * and it rejects an approval signed by the same user who reviewed. Gating the
+ * buttons alone left an owner staring at a method "Em aprovação" with nothing
+ * to click and no explanation — and the row menu in the list was empty too.
+ */
+function PendingStepHint({ children }: { children: ReactNode }) {
+  return <p className="max-w-md text-sm text-muted-foreground">{children}</p>
+}
+
 function MethodActions({
   method,
   id,
@@ -389,8 +402,18 @@ function MethodActions({
         </Button>
       )}
 
-      <RoleGate roles={['admin']}>
-        {method.status === 'PENDING_APPROVAL' && (
+      {method.status === 'PENDING_APPROVAL' && (
+        <RoleGate
+          roles={['admin']}
+          fallback={
+            <PendingStepHint>
+              A revisão técnica precisa ser registrada por um usuário com perfil
+              Administrador. Quem revisa tecnicamente não pode ser quem aprova a
+              qualidade, por isso o proprietário da conta não executa esta
+              etapa.
+            </PendingStepHint>
+          }
+        >
           <Button
             onClick={() => technicalReviewMutation.mutate()}
             disabled={technicalReviewMutation.isPending}
@@ -404,11 +427,19 @@ function MethodActions({
               ? 'Revisando…'
               : 'Revisar tecnicamente'}
           </Button>
-        )}
-      </RoleGate>
+        </RoleGate>
+      )}
 
-      <RoleGate roles={['owner']}>
-        {method.status === 'TECHNICAL_REVIEWED' && (
+      {method.status === 'TECHNICAL_REVIEWED' && (
+        <RoleGate
+          roles={['owner']}
+          fallback={
+            <PendingStepHint>
+              A aprovação da qualidade é feita pelo proprietário da conta, em
+              usuário diferente de quem registrou a revisão técnica.
+            </PendingStepHint>
+          }
+        >
           <Button
             onClick={() => qualityApproveMutation.mutate()}
             disabled={qualityApproveMutation.isPending}
@@ -422,8 +453,8 @@ function MethodActions({
               ? 'Aprovando…'
               : 'Aprovar qualidade'}
           </Button>
-        )}
-      </RoleGate>
+        </RoleGate>
+      )}
 
       <RoleGate roles={['admin', 'owner']}>
         {(method.status === 'PENDING_APPROVAL' ||
