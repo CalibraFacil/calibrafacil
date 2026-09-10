@@ -20,7 +20,5 @@ export const Route = createFileRoute(
 function CustomerGroupOverviewRoute() {
   const { groupId } = Route.useParams()
 
-  return (
-    <CustomerGroupOverviewTab groupId={Number.parseInt(groupId, 10)} />
-  )
+  return <CustomerGroupOverviewTab groupId={Number.parseInt(groupId, 10)} />
 }

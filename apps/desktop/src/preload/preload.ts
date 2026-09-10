@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type {
   CalibraBridge,
+  DesktopNotificationsPublish,
   DesktopUpdateState,
   SyncStatusSnapshot,
   SyncTrigger,
@@ -41,6 +42,15 @@ const calibraBridge: CalibraBridge = {
   retrySync: () => invoke(desktopIpcChannels.retrySync),
   wakeSync: (trigger: SyncTrigger) =>
     invoke(desktopIpcChannels.wakeSync, trigger),
+  onDeepLink: (listener: (path: string) => void) =>
+    subscribe<string>(desktopIpcChannels.deepLinkRequested, listener),
+  notifyDeepLinkReady: () => invoke<boolean>(desktopIpcChannels.deepLinkReady),
+  publishNotifications: (payload: DesktopNotificationsPublish) =>
+    invoke<boolean>(desktopIpcChannels.publishNotifications, payload),
+  revealFile: (filePath: string) =>
+    invoke<boolean>(desktopIpcChannels.revealFile, filePath),
+  onHistoryCommand: (listener: (command: string) => void) =>
+    subscribe<string>(desktopIpcChannels.historyCommand, listener),
   pickFile: () => invoke(desktopIpcChannels.pickFile),
   pickFolder: () => invoke(desktopIpcChannels.pickFolder),
   saveFile: () => invoke(desktopIpcChannels.saveFile),

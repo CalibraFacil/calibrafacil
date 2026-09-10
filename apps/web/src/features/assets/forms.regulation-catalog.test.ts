@@ -56,7 +56,12 @@ const GAS: LegalMetrologyRegulationCatalogEntry = {
   category: 'Medidores de gás',
   kind: 'per_technology',
   valueMonths: null,
-  byTechnology: { diafragma: 120, ultrassonico: 180, turbina: 60, rotativo: 60 },
+  byTechnology: {
+    diafragma: 120,
+    ultrassonico: 180,
+    turbina: 60,
+    rotativo: 60,
+  },
   anchor: 'first_verification',
   operationalizedByDelegate: true,
   regulationReference: 'Portaria Inmetro nº 156, de 30 de março de 2022',
@@ -148,6 +153,8 @@ describe('secondary-provenance caveat — REQ-CATALOG-005', () => {
   })
 
   it('exposes the verbatim DOU caveat string', () => {
-    expect(REGULATION_CATALOG_SECONDARY_CAVEAT).toBe('(verificar artigo no DOU)')
+    expect(REGULATION_CATALOG_SECONDARY_CAVEAT).toBe(
+      '(verificar artigo no DOU)',
+    )
   })
 })

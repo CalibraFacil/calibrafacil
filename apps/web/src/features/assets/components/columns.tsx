@@ -35,7 +35,9 @@ export interface AssetsTableMeta {
 function getAssetsTableMeta(meta: unknown): AssetsTableMeta | null {
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null
 
-  const onCustomerClick = Object.fromEntries(Object.entries(meta)).onCustomerClick
+  const onCustomerClick = Object.fromEntries(
+    Object.entries(meta),
+  ).onCustomerClick
   if (typeof onCustomerClick !== 'function') return null
 
   return { onCustomerClick }
@@ -113,7 +115,9 @@ export const assetsColumns: ColumnDef<Asset>[] = [
     header: 'Status',
     cell: ({ row }) => {
       const status = getAssetStatus(row.original.status)
-      return <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>
+      return (
+        <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>
+      )
     },
   },
   {

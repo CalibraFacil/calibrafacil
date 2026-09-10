@@ -1,14 +1,17 @@
 import path from "node:path";
 import { Buffer } from "node:buffer";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   app,
   BrowserWindow,
   dialog,
   ipcMain,
+  nativeImage,
+  Notification,
   powerMonitor,
   protocol,
+  screen,
   session as electronSession,
   shell,
   type IpcMainInvokeEvent,
@@ -26,11 +29,32 @@ import {
   syncActionResultSchema,
   syncStatusSnapshotSchema,
   syncTriggerSchema,
+  desktopNotificationsPublishSchema,
   type DesktopAuthFetchRequest,
   type DesktopAuthFetchResponse,
   type SyncTrigger,
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "./channels";
+import {
+  DesktopWindowStateStore,
+  resolveWindowState,
+  type ResolvedWindowState,
+} from "./window-state";
+import {
+  desktopDeepLinkScheme,
+  describeDeepLinkRejection,
+  findDeepLinkInArgv,
+  resolveDeepLink,
+} from "./deep-links";
+import { resolveUnreadBadge } from "./unread-badge";
+import {
+  buildCertificateFileName,
+  buildSupportBundleFileName,
+} from "./download-naming";
+import {
+  observeNotifications,
+  type NativeNotificationRequest,
+} from "./native-notifications";
 import { DesktopCloudAuthProxy } from "./cloud-auth-proxy";
 import { LocalServerManager } from "./local-server-manager";
 import {
@@ -39,21 +63,47 @@ import {
 } from "./ipc-contracts";
 import { DesktopSecretsStore } from "./secrets-store";
 import { DesktopSettingsStore } from "./settings-store";
-import {
-  defaultSupportBundlePath,
-  exportSupportBundle,
-} from "./support-bundle";
+import { exportSupportBundle } from "./support-bundle";
 import { DesktopUpdater } from "./updater";
 import {
   buildDesktopUserAgent,
   buildMainWindowOptions,
   desktopAppName,
+  mainWindowSizeConstraints,
   desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const windowStateStore = new DesktopWindowStateStore(app.getPath("userData"));
+
+/**
+ * A link that arrived before the renderer could receive it — a cold launch,
+ * or a second instance while the first is still booting. Held until the
+ * renderer reports it is ready, then delivered once.
+ */
+let pendingDeepLinkPath: string | null = null;
+let rendererReadyForDeepLinks = false;
+
+/**
+ * Notification ids the host has already accounted for this session. Reset on
+ * quit only: it is a de-duplication set, not a record worth persisting, and
+ * carrying it across launches would suppress the first announcement after an
+ * update.
+ */
+/**
+ * Announcement state, kept **per organization**. One session-global set would
+ * mean switching from A to B leaves B already primed — so B's existing unread
+ * backlog is announced as new, and a slow in-flight response for A can
+ * overwrite B's badge afterwards.
+ */
+let notificationScope: {
+  organizationKey: string;
+  announcedIds: ReadonlySet<number>;
+  primed: boolean;
+  highWaterMarkId: number | null;
+} | null = null;
 const desktopAppScheme = "app";
 const desktopAppHost = "calibra-facil";
 const defaultCloudApiUrl = "https://api.calibrafacil.com";
@@ -190,17 +240,20 @@ function formatErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createWindow() {
+function createWindow(restored: ResolvedWindowState) {
   const desktopUserAgent = buildDesktopUserAgent(app.getVersion());
-  mainWindow = new BrowserWindow(
+  const window = new BrowserWindow(
     buildMainWindowOptions(
       path.join(currentDir, "../preload/preload.cjs"),
       desktopIconPath(),
+      restored,
     ),
   );
-  mainWindow.webContents.setUserAgent(desktopUserAgent);
-  installRendererDiagnostics(mainWindow);
-  hideMainWindowMenu(mainWindow);
+  mainWindow = window;
+  window.webContents.setUserAgent(desktopUserAgent);
+  installRendererDiagnostics(window);
+  hideMainWindowMenu(window);
+  installWindowStatePersistence(window, restored);
 
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
@@ -215,7 +268,7 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  mainWindow
+  window
     .loadURL(rendererUrl(), {
       userAgent: desktopUserAgent,
     })
@@ -225,6 +278,102 @@ function createWindow() {
         error: formatErrorMessage(error),
       });
     });
+}
+
+/**
+ * Back/forward gestures the OS reports to the *window* rather than the page.
+ *
+ * Only the gestures: the keyboard shortcuts live in the renderer, because
+ * deciding whether Alt+Left means "go back" or "previous word" requires
+ * knowing whether a text field has focus, which the main process cannot see.
+ *
+ * The renderer owns the router history, so these are forwarded rather than
+ * applied to `webContents` — driving both would produce two competing
+ * histories.
+ */
+function installHistoryGestures(window: BrowserWindow) {
+  const send = (command: "back" | "forward") => {
+    if (window.isDestroyed()) return;
+    window.webContents.send(desktopIpcChannels.historyCommand, command);
+  };
+
+  // Windows: mouse thumb buttons arrive as app commands.
+  window.on("app-command", (event, command) => {
+    if (command === "browser-backward") {
+      event.preventDefault();
+      send("back");
+    } else if (command === "browser-forward") {
+      event.preventDefault();
+      send("forward");
+    }
+  });
+
+  // macOS: three-finger trackpad swipe, when the system gesture is enabled.
+  // The reported direction is the physical finger movement, while the
+  // platform convention is swipe *right* to go back — as in Safari and
+  // Finder. Mapping them directly navigated the wrong way every time.
+  window.on("swipe", (_event, direction) => {
+    if (direction === "right") send("back");
+    else if (direction === "left") send("forward");
+  });
+}
+
+/**
+ * Restore the saved window state and keep it up to date.
+ *
+ * Order matters: maximize/fullscreen are applied *after* the normal bounds are
+ * set, so unmaximizing later returns the window to the size it had rather than
+ * to the platform default. And the window is only shown once it is positioned,
+ * otherwise the user watches it appear at the default size and jump.
+ */
+function installWindowStatePersistence(
+  window: BrowserWindow,
+  restored: ResolvedWindowState,
+) {
+  if (restored.maximized) window.maximize();
+  if (restored.fullScreen) window.setFullScreen(true);
+
+  window.once("ready-to-show", () => window.show());
+  installHistoryGestures(window);
+
+  // A reload tears down the renderer's listener. Until it re-announces, links
+  // must go back to the buffer rather than into a window that cannot hear
+  // them.
+  window.webContents.on(
+    "did-start-navigation",
+    (_event, _url, isInPlace, isMainFrame) => {
+      // Only a real document load tears down the renderer's subscription. A
+      // TanStack route or hash transition is in-place and keeps it — clearing
+      // readiness there stranded every later deep link in the buffer, because
+      // the still-mounted subscription never re-announces.
+      if (isMainFrame && !isInPlace) rendererReadyForDeepLinks = false;
+    },
+  );
+
+  const capture = () => {
+    if (window.isDestroyed()) return;
+
+    void windowStateStore.save({
+      // `getNormalBounds` is the restore geometry: while maximized,
+      // `getBounds` returns the whole screen, which would make "unmaximize" a
+      // no-op on the next launch.
+      bounds: window.getNormalBounds(),
+      maximized: window.isMaximized(),
+      fullScreen: window.isFullScreen(),
+    });
+  };
+
+  // Listed one by one: Electron's overloads type each event name separately,
+  // so a loop over a union collapses to the first overload's signature.
+  window.on("resized", capture);
+  window.on("moved", capture);
+  window.on("maximize", capture);
+  window.on("unmaximize", capture);
+  window.on("enter-full-screen", capture);
+  window.on("leave-full-screen", capture);
+
+  // `close`, not `closed`: the window must still be alive to be measured.
+  window.on("close", capture);
 }
 
 function desktopIconPath() {
@@ -411,6 +560,54 @@ function registerIpc(
     await broadcastSyncStatus();
     return result;
   });
+  handle(desktopIpcChannels.deepLinkReady, () => {
+    rendererReadyForDeepLinks = true;
+    flushPendingDeepLink();
+    return true;
+  });
+  handle(desktopIpcChannels.publishNotifications, (_event, payload) => {
+    const published = desktopNotificationsPublishSchema.parse(payload);
+
+    // A response that arrives after the user has already switched scope is
+    // stale: applying its badge or announcing its rows would attribute one
+    // organization's work to another.
+    if (
+      notificationScope &&
+      notificationScope.organizationKey !== published.organizationKey
+    ) {
+      notificationScope = null;
+    }
+
+    const scope = notificationScope ?? {
+      organizationKey: published.organizationKey,
+      announcedIds: new Set<number>(),
+      primed: false,
+      highWaterMarkId: published.highWaterMarkId,
+    };
+
+    applyUnreadBadge(published.unreadCount);
+
+    const decision = observeNotifications({
+      entries: published.entries,
+      seen: scope.announcedIds,
+      primed: scope.primed,
+      highWaterMarkId: scope.highWaterMarkId,
+      windowFocused: mainWindow?.isFocused() ?? false,
+    });
+
+    notificationScope = {
+      organizationKey: published.organizationKey,
+      announcedIds: decision.seen,
+      primed: true,
+      highWaterMarkId: scope.highWaterMarkId,
+    };
+
+    for (const request of decision.deliver) {
+      presentNativeNotification(request);
+    }
+
+    return true;
+  });
   handle(desktopIpcChannels.retrySync, async () => {
     await broadcastSyncingStatus();
     const result = await postLocalSyncAction("/api/local/sync/retry");
@@ -437,11 +634,28 @@ function registerIpc(
 
   handle(desktopIpcChannels.saveCertificatePdf, async (_event, input) => {
     const request = certificatePdfExportRequestSchema.parse(input);
-    const filePath = await chooseCertificatePdfPath(request.jobId);
+    const filePath = await chooseCertificatePdfPath(request);
+    // Cancelling is an ordinary outcome, not a failure: `null` all the way up,
+    // so the renderer shows nothing rather than an error toast.
     if (!filePath) return null;
 
     await saveLocalCertificatePdf(request.jobId, filePath);
+    rememberDownloadDirectory(filePath);
     return filePath;
+  });
+
+  handle(desktopIpcChannels.revealFile, async (_event, filePath) => {
+    if (typeof filePath !== "string" || filePath.length === 0) return false;
+
+    // A path saved earlier in the session may have been moved or deleted since.
+    try {
+      await stat(filePath);
+    } catch {
+      return false;
+    }
+
+    shell.showItemInFolder(filePath);
+    return true;
   });
 
   handle(desktopIpcChannels.openExternal, async (_event, url) => {
@@ -455,10 +669,12 @@ function registerIpc(
 
   handle(desktopIpcChannels.exportSupportBundle, async () => {
     const result = await dialog.showSaveDialog({
-      defaultPath: defaultSupportBundlePath(),
+      defaultPath: path.join(downloadDirectory(), buildSupportBundleFileName()),
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (result.canceled || !result.filePath) return null;
+
+    rememberDownloadDirectory(result.filePath);
 
     return exportSupportBundle({
       filePath: result.filePath,
@@ -889,13 +1105,42 @@ function createLocalApiHeaders(init?: HeadersInit) {
   return headers;
 }
 
-async function chooseCertificatePdfPath(jobId: string | number) {
+async function chooseCertificatePdfPath(request: {
+  jobId: string | number;
+  certificateNumber?: string | null;
+  customerName?: string | null;
+}) {
   const result = await dialog.showSaveDialog({
-    defaultPath: `${toSafeFileName(String(jobId)) || "certificado"}.pdf`,
+    defaultPath: path.join(
+      downloadDirectory(),
+      buildCertificateFileName({
+        jobId: request.jobId,
+        certificateNumber: request.certificateNumber,
+        customerName: request.customerName,
+      }),
+    ),
     filters: [{ name: "PDF", extensions: ["pdf"] }],
   });
 
   return result.canceled ? null : (result.filePath ?? null);
+}
+
+/**
+ * Where the next save dialog opens. Labs save certificate after certificate
+ * into the same folder, so re-opening in the OS downloads directory every time
+ * makes the operator navigate on every single export.
+ *
+ * Session-scoped on purpose: persisting it would mean restoring a path that
+ * may since have been a removable drive or a disconnected share.
+ */
+let lastDownloadDirectory: string | null = null;
+
+function downloadDirectory() {
+  return lastDownloadDirectory ?? app.getPath("downloads");
+}
+
+function rememberDownloadDirectory(filePath: string) {
+  lastDownloadDirectory = path.dirname(filePath);
 }
 
 async function saveLocalCertificatePdf(
@@ -990,12 +1235,149 @@ function toArrayBuffer(bytes: Uint8Array) {
   return buffer;
 }
 
-function toSafeFileName(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+/**
+ * Single instance. Without the lock, opening a `calibrafacil://` link while
+ * the app is running starts a *second* copy — which then races the first for
+ * the local server port and the SQLite file. The lock makes the running
+ * instance the one that handles the link.
+ */
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    focusMainWindow();
+    const link = findDeepLinkInArgv(argv);
+    if (link) handleDeepLink(link);
+  });
+
+  // macOS delivers links through this event instead of argv, both cold and
+  // warm. It can fire before `whenReady`, which is why the handler buffers.
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    focusMainWindow();
+    handleDeepLink(url);
+  });
+}
+
+function registerDeepLinkScheme() {
+  // Packaged builds get the registration from the installer (see
+  // electron-builder.yml). This covers `pnpm dev:desktop`, where there is no
+  // installer to do it, and is a no-op when the registration already exists.
+  if (process.defaultApp) {
+    const [entryScript] = process.argv.slice(1);
+    if (entryScript) {
+      app.setAsDefaultProtocolClient(desktopDeepLinkScheme, process.execPath, [
+        path.resolve(entryScript),
+      ]);
+      return;
+    }
+  }
+
+  app.setAsDefaultProtocolClient(desktopDeepLinkScheme);
+}
+
+function handleDeepLink(rawUrl: string) {
+  const resolved = resolveDeepLink(rawUrl);
+
+  if (!resolved.ok) {
+    // Logged, never surfaced as a dialog: an unsolicited link from a hostile
+    // page must not be able to interrupt the operator with a modal.
+    console.warn("[desktop-deep-link] rejected", {
+      reason: resolved.reason,
+      message: describeDeepLinkRejection(resolved.reason),
+    });
+    return;
+  }
+
+  if (!rendererReadyForDeepLinks || !mainWindow || mainWindow.isDestroyed()) {
+    pendingDeepLinkPath = resolved.path;
+    return;
+  }
+
+  mainWindow.webContents.send(
+    desktopIpcChannels.deepLinkRequested,
+    resolved.path,
+  );
+}
+
+function flushPendingDeepLink() {
+  const pending = pendingDeepLinkPath;
+  pendingDeepLinkPath = null;
+  if (pending) {
+    handleDeepLink(`${desktopDeepLinkScheme}://${pending.slice(1)}`);
+  }
+}
+
+/**
+ * macOS and Linux take a numeric badge; Windows only takes a 16x16 taskbar
+ * overlay, which carries presence rather than a count. `resolveUnreadBadge`
+ * owns that decision so it can be tested without Electron.
+ */
+function applyUnreadBadge(unreadCount: number) {
+  const effect = resolveUnreadBadge(unreadCount, process.platform);
+
+  if (effect.kind === "count") {
+    app.setBadgeCount(effect.count);
+    return;
+  }
+
+  if (effect.kind === "overlay") {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    if (!effect.visible) {
+      mainWindow.setOverlayIcon(null, "");
+      return;
+    }
+
+    const overlay = nativeImage.createFromPath(
+      path.resolve(currentDir, "../../assets/notification-overlay.png"),
+    );
+    // A missing or unreadable asset must not throw inside an IPC handler.
+    if (overlay.isEmpty()) return;
+
+    mainWindow.setOverlayIcon(overlay, effect.description);
+  }
+}
+
+function presentNativeNotification(request: NativeNotificationRequest) {
+  if (!Notification.isSupported()) return;
+
+  const notification = new Notification({
+    title: request.title,
+    body: request.body,
+  });
+
+  notification.on("click", () => {
+    focusMainWindow();
+    if (!request.actionPath) return;
+
+    // Routed through the same buffered path as an OS deep link, so a click
+    // during a reload is not lost.
+    handleDeepLink(`${desktopDeepLinkScheme}://${request.actionPath.slice(1)}`);
+  });
+
+  notification.show();
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 app.whenReady().then(async () => {
   installDesktopLogger();
+  registerDeepLinkScheme();
+  // Electron: on Linux the badge is bound to the app's .desktop file, and does
+  // nothing at all unless the name matches. `executableName` in
+  // electron-builder.yml produces calibrafacil.desktop.
+  if (process.platform === "linux") {
+    app.setDesktopName("calibrafacil.desktop");
+  }
   registerPackagedRendererProtocol();
   const settingsStore = new DesktopSettingsStore(app.getPath("userData"));
   const secretsStore = new DesktopSecretsStore(app.getPath("userData"));
@@ -1047,8 +1429,21 @@ app.whenReady().then(async () => {
   }
 
   registerSyncWakeTriggers();
-  createWindow();
+  createWindow(await resolveMainWindowState());
+
+  // Windows and Linux deliver a cold-launch link in argv; macOS already
+  // queued it through `open-url`.
+  const launchLink = findDeepLinkInArgv(process.argv);
+  if (launchLink) handleDeepLink(launchLink);
 });
+
+async function resolveMainWindowState() {
+  return resolveWindowState({
+    saved: await windowStateStore.load(),
+    displays: screen.getAllDisplays(),
+    constraints: mainWindowSizeConstraints,
+  });
+}
 
 /**
  * Host-level reasons to sync that the local server cannot observe on its own.
@@ -1076,14 +1471,33 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+let windowStateFlushed = false;
+
+app.on("before-quit", (event) => {
   cloudAuthProxy?.stop();
   cloudAuthProxy = null;
   localServer.stop();
+
+  // The window's own `close` handler queues the final capture *after* this
+  // runs, and `void flush()` would not delay shutdown anyway — so the newest
+  // geometry could be lost on quit. Defer the quit once, let the close
+  // captures land, then flush and quit for real.
+  if (windowStateFlushed) return;
+
+  event.preventDefault();
+  void (async () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.close();
+    }
+
+    await windowStateStore.flush();
+    windowStateFlushed = true;
+    app.quit();
+  })();
 });
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    void resolveMainWindowState().then(createWindow);
   }
 });

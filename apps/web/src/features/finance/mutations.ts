@@ -59,7 +59,10 @@ function patchReceiptPaid(
 }
 
 /** Reconcile derived aggregates after a finance write without a refetch storm. */
-function reconcile(queryClient: QueryClient, keys: ReadonlyArray<readonly string[]>) {
+function reconcile(
+  queryClient: QueryClient,
+  keys: ReadonlyArray<readonly string[]>,
+) {
   for (const queryKey of keys) {
     queryClient.invalidateQueries({ queryKey, refetchType: 'active' })
   }
@@ -97,7 +100,9 @@ export function useReceiveInstallmentMutation() {
           context.previous,
         )
       }
-      toast.error(error instanceof Error ? error.message : 'Falha ao registrar baixa')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao registrar baixa',
+      )
     },
   })
 }
@@ -112,7 +117,9 @@ export function useIssueDocumentMutation() {
       reconcile(queryClient, [DOCUMENTS_KEY, OVERVIEW_KEY])
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao emitir documento')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao emitir documento',
+      )
     },
   })
 }
@@ -183,7 +190,8 @@ export function useExportErpDocumentMutation() {
 export function useActivateContractMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number | string) => calibraApi.finance.activateContract(id),
+    mutationFn: (id: number | string) =>
+      calibraApi.finance.activateContract(id),
     onSuccess: () => {
       reconcile(queryClient, [CONTRACTS_KEY, OVERVIEW_KEY])
     },

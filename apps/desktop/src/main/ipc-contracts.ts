@@ -8,6 +8,7 @@ import {
   desktopSecretWriteSchema,
   desktopSettingsPatchSchema,
   desktopSettingsSchema,
+  desktopNotificationsPublishSchema,
   desktopUpdateStateSchema,
   localEnvironmentBootstrapSchema,
   syncActionResultSchema,
@@ -26,6 +27,33 @@ function noArgs(): Schema<[]> {
     parse(value) {
       if (Array.isArray(value) && value.length === 0) return [];
       throw new Error("IPC channel does not accept arguments.");
+    },
+  };
+}
+
+function routePathResponse(): Schema<string> {
+  return {
+    parse(value) {
+      if (typeof value === "string" && value.startsWith("/")) return value;
+      throw new Error("Deep-link events carry an in-app route path.");
+    },
+  };
+}
+
+function nonEmptyString(): Schema<string> {
+  return {
+    parse(value) {
+      if (typeof value === "string" && value.length > 0) return value;
+      throw new Error("IPC channel expects a non-empty string.");
+    },
+  };
+}
+
+function booleanResponse(): Schema<boolean> {
+  return {
+    parse(value) {
+      if (typeof value === "boolean") return value;
+      throw new Error("IPC channel expects a boolean response.");
     },
   };
 }
@@ -142,6 +170,18 @@ export const desktopIpcInvokeContracts = {
     args: oneArg(syncTriggerSchema),
     response: syncActionResultSchema,
   },
+  [desktopIpcChannels.deepLinkReady]: {
+    args: noArgs(),
+    response: booleanResponse(),
+  },
+  [desktopIpcChannels.publishNotifications]: {
+    args: oneArg(desktopNotificationsPublishSchema),
+    response: booleanResponse(),
+  },
+  [desktopIpcChannels.revealFile]: {
+    args: oneArg(nonEmptyString()),
+    response: booleanResponse(),
+  },
   [desktopIpcChannels.retrySync]: {
     args: noArgs(),
     response: syncActionResultSchema,
@@ -191,6 +231,11 @@ export const desktopIpcInvokeContracts = {
 export const desktopIpcEventContracts = {
   [desktopIpcChannels.syncStatusChanged]: syncStatusSnapshotSchema,
   [desktopIpcChannels.updateStateChanged]: desktopUpdateStateSchema,
+  // Payload is an in-app route path the main process has already validated
+  // against the deep-link invariant.
+  [desktopIpcChannels.deepLinkRequested]: routePathResponse(),
+  // "back" or "forward", from a mouse thumb button or a trackpad swipe.
+  [desktopIpcChannels.historyCommand]: nonEmptyString(),
 } as const;
 
 export type DesktopIpcInvokeChannel = keyof typeof desktopIpcInvokeContracts;

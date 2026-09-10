@@ -67,7 +67,9 @@ const emptySpec: MethodSpec = {
 // A GUM measurementModel method (e.g. volume): NO explicit `formulas` — the result
 // comes from a measurement model, which must render as its own block.
 const measurementModelSpec: MethodSpec = {
-  dataFields: [{ key: 'I_L', label: 'Pesagem cheia', type: 'number', unit: 'g' }],
+  dataFields: [
+    { key: 'I_L', label: 'Pesagem cheia', type: 'number', unit: 'g' },
+  ],
   formulas: [],
   measurementModels: [
     {

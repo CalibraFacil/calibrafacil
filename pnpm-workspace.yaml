@@ -153,6 +153,14 @@ overrides:
   # GHSA-ph9p-34f9-6g65: tmp <0.2.6 symlink-following lets a local attacker
   # write outside the temp dir. Transitive via electron-builder.
   "tmp@<0.2.6": ^0.2.6
+  # Not an advisory. Every workspace package declares zod ^4.4.3 and the tree
+  # had settled on 4.4.3, but declaring it in apps/desktop re-resolved the range
+  # and moved better-auth's `better-call` peer slot to 4.5.4. From there
+  # packages/auth's inferred Better Auth types can no longer be named without
+  # referencing zod's internal `$strip`, and every `createLabAuth`-style export
+  # fails to type-check (TS2883). Hold the line at the version the auth package
+  # is known to work with; lift it deliberately, with those annotations added.
+  zod: 4.4.3
 
 auditConfig:
   ignoreGhsas:

@@ -268,7 +268,10 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SignalTile
                 label="Total"
-                value={formatFinanceMoney(document.totalCents, document.currency)}
+                value={formatFinanceMoney(
+                  document.totalCents,
+                  document.currency,
+                )}
                 tone={billingDocumentToneOf(document.status)}
               />
               <SignalTile
@@ -408,7 +411,9 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
             </Button>
             <Button
               type="button"
-              disabled={voidMutation.isPending || voidReason.trim().length === 0}
+              disabled={
+                voidMutation.isPending || voidReason.trim().length === 0
+              }
               onClick={() =>
                 voidMutation.mutate(
                   { id: document.id, reason: voidReason },

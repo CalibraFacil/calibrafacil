@@ -43,7 +43,12 @@ export function certificateReleaseQueryOptions(calibrationJobId: number) {
         }>(calibrationJobId)
       } catch (error) {
         // 404 = release row not yet evaluated. Treat as "no badge".
-        if (error instanceof Error && /Liberação ainda não calculada|Certificado não encontrado/.test(error.message)) {
+        if (
+          error instanceof Error &&
+          /Liberação ainda não calculada|Certificado não encontrado/.test(
+            error.message,
+          )
+        ) {
           return null
         }
         throw error
@@ -53,14 +58,20 @@ export function certificateReleaseQueryOptions(calibrationJobId: number) {
   })
 }
 
-export function useCertificateRelease(calibrationJobId: number, enabled = true) {
+export function useCertificateRelease(
+  calibrationJobId: number,
+  enabled = true,
+) {
   return useQuery({
     ...certificateReleaseQueryOptions(calibrationJobId),
     enabled,
   })
 }
 
-export const CERTIFICATE_RELEASE_LABEL: Record<CertificateReleaseStatus, string> = {
+export const CERTIFICATE_RELEASE_LABEL: Record<
+  CertificateReleaseStatus,
+  string
+> = {
   RELEASED: 'Liberado',
   HELD_FOR_BILLING: 'Retido para faturamento',
   HELD_FOR_PAYMENT: 'Retido para pagamento',
@@ -75,7 +86,9 @@ interface CertificateReleaseBadgeProps {
   status: CertificateReleaseStatus
 }
 
-export function CertificateReleaseBadge({ status }: CertificateReleaseBadgeProps) {
+export function CertificateReleaseBadge({
+  status,
+}: CertificateReleaseBadgeProps) {
   const label = CERTIFICATE_RELEASE_LABEL[status]
   const variant =
     status === 'RELEASED' || status === 'RELEASED_BY_EXCEPTION'

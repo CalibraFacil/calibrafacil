@@ -10,7 +10,10 @@ import type {
   AccreditedScopeLine,
   SaveAccreditedScopeLineInput,
 } from '@calibra-facil/client-runtime'
-import { QUANTITY_KIND_OPTIONS_PT, type QuantityKind } from '@calibra-facil/shared'
+import {
+  QUANTITY_KIND_OPTIONS_PT,
+  type QuantityKind,
+} from '@calibra-facil/shared'
 import { dateInputToIso } from '@/features/settings/organization-model'
 
 export interface ScopeLineFormState {

@@ -200,8 +200,8 @@ export function AssetsPage() {
                 setStatusFilter(
                   value === 'all' || value === null
                     ? ''
-                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to AssetStatus values.
-                    : (value as AssetStatus),
+                    : // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to AssetStatus values.
+                      (value as AssetStatus),
                 )
                 setPage(1)
               }}

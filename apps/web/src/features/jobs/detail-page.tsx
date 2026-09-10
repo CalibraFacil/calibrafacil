@@ -511,16 +511,37 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   const saveLocalCertificatePdfMutation = useMutation({
     mutationFn: async () => {
       if (!window.calibraBridge) {
-        throw new Error('Exportacao local disponivel apenas no desktop')
+        throw new Error('Exportação local disponível apenas no desktop')
       }
 
-      return window.calibraBridge.saveCertificatePdf({ jobId: id })
+      // The host names the file from these; without them the operator gets a
+      // downloads folder full of files named after numeric job ids.
+      return window.calibraBridge.saveCertificatePdf({
+        jobId: id,
+        // Optional on the wire, so an unloaded job still saves — it just
+        // gets a plainer name. The button only renders once loaded anyway.
+        certificateNumber: job?.jobId ?? null,
+        customerName: job?.customerName ?? null,
+      })
     },
     onSuccess: (filePath) => {
-      if (filePath) {
-        toast.success('PDF local salvo')
-        queryClient.invalidateQueries({ queryKey: ['jobs', id] })
-      }
+      // A cancelled dialog is not a failure and not a success — say nothing.
+      if (!filePath) return
+
+      toast.success('PDF local salvo', {
+        description: filePath,
+        action: {
+          label: 'Mostrar na pasta',
+          onClick: () => {
+            void window.calibraBridge?.revealFile(filePath).then((revealed) => {
+              if (!revealed) {
+                toast.error('O arquivo não está mais nesse local.')
+              }
+            })
+          },
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ['jobs', id] })
     },
     onError: (error) => {
       toast.error(error.message)

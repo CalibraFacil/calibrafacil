@@ -28,11 +28,7 @@ export function formatDate(date: string | Date | null | undefined): string {
 
 /** Midnight-aligned epoch so "days remaining" ignores the time of day. */
 function startOfDay(date: Date): number {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  ).getTime()
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
 
 export type AssetCalibrationStatus = {

@@ -1,9 +1,4 @@
-import {
-  cloneElement,
-  isValidElement,
-  useId,
-  type ReactNode,
-} from 'react'
+import { cloneElement, isValidElement, useId, type ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 

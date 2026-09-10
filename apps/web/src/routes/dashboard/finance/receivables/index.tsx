@@ -12,7 +12,10 @@ export const Route = createFileRoute('/dashboard/finance/receivables/')({
   validateSearch: parseReceivablesSearch,
   loader: ({ context, location }) =>
     Promise.all([
-      loadFinanceDocumentsData(context.queryClient, routeLocationToUrl(location)),
+      loadFinanceDocumentsData(
+        context.queryClient,
+        routeLocationToUrl(location),
+      ),
       loadFinanceReceiptsData(context.queryClient),
     ]),
   head: () => ({

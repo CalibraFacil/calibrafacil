@@ -5,7 +5,9 @@ Status: implementation in progress. Source audit, focused tests and tooling rese
 
 **Implemented so far** (branch `feat/desktop-web-parity`): PAR-02 (operation availability), PAR-04 (canonical reconciliation), PAR-05 (job online parity), PAR-06 (service-order online parity), PAR-07 (methods and the remaining connected surfaces found in the sweep), and the scheduler half of PAR-08 (continuous sync triggers, coalescing, backoff and host wake signals). See §10.
 
-**Not started**: PAR-01/01A (the executable ledger and dual-host harness — this work was done against unit and component tests, not a packaged Electron run), PAR-03 (auth/transport/bootstrap recovery), the queue-durability and conflict-UX half of PAR-08, PAR-09 through PAR-13.
+PAR-10 and PAR-11 followed on branch `feat/desktop-experience`: window persistence, back/forward, OS deep links, native notifications, the unread badge, and file naming/reveal.
+
+**Not started**: PAR-01/01A (the executable ledger and dual-host harness — all of this was done against unit and component tests, not a packaged Electron run), PAR-03 (auth/transport/bootstrap recovery), the queue-durability and conflict-UX half of PAR-08, PAR-09 (field package and conflict UX), PAR-12 (tabs) and PAR-13 (installer/update/platform gates).
 
 Tooling decision: [local-first tooling research](./local-first-tooling.md). Keep SQLite/outbox + TanStack Query as the default. TanStack DB is already used on one jobs list, but expanding it requires evidence from the pilot below; no new sync service or dependency is selected.
 
@@ -342,3 +344,65 @@ untested rows in §3 must keep counting as untested.
 errors against the React 19 types, and `@calibra-facil/method-templates` has
 one failing fingerprint fixture in a stale `dist/` build (the math-engine 0.4.0
 recompile the operator still owes).
+
+### 2026-09-10 — Desktop experience: window, links, notifications, files
+
+Closes: _"Native tabs, notification delivery, badge handling and OS deep-link
+activation were not found in inspected host/bridge"_ — for everything except
+tabs, which Phase 4 explicitly sequences after durable save/recovery.
+
+**PAR-10 — navigation and window persistence.** Size, position, maximized and
+fullscreen survive restarts. The substance is refusing to restore a position
+no display covers: `resolveWindowState` requires a real overlap before
+trusting saved coordinates, so undocking a monitor keeps the size and drops
+the position rather than opening the window where it cannot be reached. Two
+details that only appear in use — `getNormalBounds` is captured rather than
+`getBounds`, since while maximized the latter returns the screen and
+"unmaximize" would become a no-op; and the window is created hidden so a
+restore does not flash at the default size. Geometry is stored apart from
+`DesktopSettings` because it changes on every drag.
+
+Back/forward is split by necessity: keyboard in the renderer, gestures in the
+host. Deciding whether `Alt`+`Left` means "go back" or "previous word"
+requires knowing what has focus, which the main process cannot see. Gestures
+are forwarded rather than applied to `webContents`, so the router's history
+stays the only history.
+
+**PAR-11 — OS links, notifications and files.** `calibrafacil://` links are
+externally supplied input that navigates the app, so `resolveDeepLink`'s
+contract is an _invariant_ — exactly one leading slash, no scheme prefix, no
+`..`, no control characters — checked against a hostile corpus, rather than a
+list of attacks. Probing the WHATWG parser showed it already resolves `..` and
+throws on `calibrafacil://javascript:`, so asserting specific rejections per
+input would have been testing the parser's current version. Single-instance
+lock, cold/warm launch on all three platforms, and buffering for links that
+arrive before the renderer subscribes.
+
+Native notifications reuse the feed the renderer already polls rather than
+opening a second source of truth. Three rules: never announce twice (keyed on
+id), never announce a backlog (the first poll seeds only — thirty toasts at
+launch is worse than none), and stay quiet while the window is focused.
+
+The badge was grounded in the Electron 42 docs rather than assumed:
+`app.setBadgeCount` is **Linux and macOS only**, and on Linux does nothing
+unless the `.desktop` name matches. Windows has no count badge — only a 16x16
+taskbar overlay — so it gets a dot for presence with the count in the
+accessible description. The overlay ships with its SVG source and the exact
+regeneration command.
+
+Saved files are named `Certificado_R-0001-2026_Cliente.pdf`. Certificate
+numbers contain slashes, which become path separators if left alone, and
+Windows reserves `CON`/`PRN`/`NUL`/`COM1`-`COM9`/`LPT1`-`LPT9` as filenames
+even with an extension. This replaced `toSafeFileName`, which stripped every
+non-ASCII character and mangled Brazilian customer names.
+
+**Evidence.** Unit and component tests only: `@calibra-facil/desktop` (120,
+up from 28) and `@calibra-facil/web` (877). `pnpm lint` reports 0 errors and
+both packages typecheck clean.
+
+**Known limitations, stated rather than hidden.** macOS requires a code-signed
+build for notifications to appear at all — signing is a Phase 5 deliverable.
+Nothing here was exercised in a packaged Electron run: no window restore across
+a real monitor change, no OS link handed over by a real shell, no notification
+click, no save dialog. Those are PAR-01 and Phase 5, and until they run these
+rows stay untested in §3.

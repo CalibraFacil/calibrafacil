@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { OfflineBanner, SyncStatusProvider } from '@/runtime/sync-status'
+import { DesktopLifecycleProvider } from '@/runtime/desktop-lifecycle'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -44,12 +45,14 @@ function RootComponent() {
         forcedTheme={isLanding ? landingTheme : undefined}
       >
         <MotionConfig reducedMotion="user">
-          <SyncStatusProvider isDesktop={runtime.isDesktop}>
-            <OfflineBanner />
-            <NuqsAdapter>
-              <Outlet />
-            </NuqsAdapter>
-          </SyncStatusProvider>
+          <DesktopLifecycleProvider isDesktop={runtime.isDesktop}>
+            <SyncStatusProvider isDesktop={runtime.isDesktop}>
+              <OfflineBanner />
+              <NuqsAdapter>
+                <Outlet />
+              </NuqsAdapter>
+            </SyncStatusProvider>
+          </DesktopLifecycleProvider>
           {!runtime.isDesktop ? <Analytics /> : null}
           <Toaster richColors position="top-center" />
         </MotionConfig>

@@ -13,7 +13,10 @@ function parseGroupId(raw: string): number {
 
 export const Route = createFileRoute('/dashboard/clients/groups/$groupId')({
   loader: ({ context, params }) =>
-    loadCustomerGroupDetailData(context.queryClient, parseGroupId(params.groupId)),
+    loadCustomerGroupDetailData(
+      context.queryClient,
+      parseGroupId(params.groupId),
+    ),
   component: CustomerGroupDetailRoute,
 })
 

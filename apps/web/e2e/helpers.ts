@@ -253,6 +253,21 @@ export async function installDesktopBridge(
         async wakeSync() {
           return { ok: true }
         },
+        onDeepLink() {
+          return () => undefined
+        },
+        async notifyDeepLinkReady() {
+          return true
+        },
+        async publishNotifications() {
+          return true
+        },
+        async revealFile() {
+          return true
+        },
+        onHistoryCommand() {
+          return () => undefined
+        },
         async pickFile() {
           return null
         },

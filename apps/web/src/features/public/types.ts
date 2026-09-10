@@ -34,7 +34,12 @@ export type PublicCheckoutSnapshotData =
         id: string
         status: string
         kind: 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
-        basePlanId: 'STANDARD' | 'PROFESSIONAL' | 'ADVANCED' | 'ENTERPRISE' | null
+        basePlanId:
+          | 'STANDARD'
+          | 'PROFESSIONAL'
+          | 'ADVANCED'
+          | 'ENTERPRISE'
+          | null
         billingCycle: 'MONTHLY' | 'YEARLY' | null
         paymentMethod: 'PIX' | 'BOLETO' | 'CREDIT_CARD'
         providerMode: 'CHECKOUT' | 'PAYMENT' | 'SUBSCRIPTION'

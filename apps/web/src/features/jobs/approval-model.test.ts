@@ -182,12 +182,12 @@ describe('job approval model', () => {
   // the raw text, or always omits it, is caught here.
   describe('REQ-APPR-002 approval payload includes justification only when present', () => {
     it('includes the trimmed justification when the operator typed one', () => {
-      expect(buildJobApprovalInput('  Ambiente avaliado pelo signatario  ')).toEqual(
-        {
-          reason: 'Aprovado',
-          environmentalJustification: 'Ambiente avaliado pelo signatario',
-        },
-      )
+      expect(
+        buildJobApprovalInput('  Ambiente avaliado pelo signatario  '),
+      ).toEqual({
+        reason: 'Aprovado',
+        environmentalJustification: 'Ambiente avaliado pelo signatario',
+      })
     })
 
     it('omits the justification (undefined) for empty / whitespace-only input', () => {
@@ -201,7 +201,9 @@ describe('job approval model', () => {
       })
       // The omitted branch must be `undefined`, not an empty string: a dropped
       // ternary that returned the trimmed value would surface ''.
-      expect(buildJobApprovalInput('').environmentalJustification).toBeUndefined()
+      expect(
+        buildJobApprovalInput('').environmentalJustification,
+      ).toBeUndefined()
     })
   })
 })

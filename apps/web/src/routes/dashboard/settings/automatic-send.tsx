@@ -4,9 +4,7 @@ import { AutomaticSendSettingsPage } from '@/features/settings/automatic-send-pa
 
 export const Route = createFileRoute('/dashboard/settings/automatic-send')({
   head: () => ({
-    meta: [
-      { title: 'Envio Automático | Configurações | CalibraFácil' },
-    ],
+    meta: [{ title: 'Envio Automático | Configurações | CalibraFácil' }],
   }),
   component: AutomaticSendSettingsPage,
 })

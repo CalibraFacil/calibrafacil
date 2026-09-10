@@ -177,7 +177,9 @@ export function CertificateReleasePolicyPage() {
                 }
               >
                 <SelectTrigger id="org-default-mode" className="w-full">
-                  <span className="truncate">{MODE_LABEL[orgDefault.mode]}</span>
+                  <span className="truncate">
+                    {MODE_LABEL[orgDefault.mode]}
+                  </span>
                 </SelectTrigger>
                 <SelectContent
                   alignItemWithTrigger={false}
@@ -196,90 +198,93 @@ export function CertificateReleasePolicyPage() {
       )}
 
       <StaggerItem>
-      <Panel className="p-5 sm:p-6">
-        <PanelHeader
-          eyebrow="Exceções"
-          title="Exceções por cliente, contrato ou serviço"
-          description="Sobrescreve a política padrão para o escopo selecionado."
-        />
-        <div className="mt-4 space-y-4">
-          {overrides.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma exceção configurada.
-            </p>
-          )}
-          <ul className="space-y-3">
-            {overrides.map((policy) => (
-              <li
-                key={policy.id}
-                className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="space-y-1 min-w-0">
-                  <Badge variant="outline">{SCOPE_LABEL[policy.scope]}</Badge>
-                  <p className="text-sm font-medium truncate">
-                    {policy.customerName ||
-                      (policy.customerId
-                        ? `Cliente #${policy.customerId}`
-                        : policy.commercialAgreementId
-                          ? `Contrato #${policy.commercialAgreementId}`
-                          : policy.serviceCategory || 'Escopo')}
-                  </p>
-                  {policy.archivedAt && (
-                    <p className="text-xs text-muted-foreground">
-                      Arquivada em{' '}
-                      {new Date(policy.archivedAt).toLocaleDateString('pt-BR')}
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            eyebrow="Exceções"
+            title="Exceções por cliente, contrato ou serviço"
+            description="Sobrescreve a política padrão para o escopo selecionado."
+          />
+          <div className="mt-4 space-y-4">
+            {overrides.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma exceção configurada.
+              </p>
+            )}
+            <ul className="space-y-3">
+              {overrides.map((policy) => (
+                <li
+                  key={policy.id}
+                  className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <Badge variant="outline">{SCOPE_LABEL[policy.scope]}</Badge>
+                    <p className="text-sm font-medium truncate">
+                      {policy.customerName ||
+                        (policy.customerId
+                          ? `Cliente #${policy.customerId}`
+                          : policy.commercialAgreementId
+                            ? `Contrato #${policy.commercialAgreementId}`
+                            : policy.serviceCategory || 'Escopo')}
                     </p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Select
-                    value={policy.mode}
-                    onValueChange={(value) =>
-                      updateMutation.mutate({
-                        id: policy.id,
-                        mode: isPolicyMode(value) ? value : undefined,
-                      })
-                    }
-                    disabled={policy.archivedAt !== null}
-                  >
-                    <SelectTrigger className="sm:w-64">
-                      {MODE_LABEL[policy.mode]}
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
-                      {(
-                        MODE_KEYS
-                      ).map((mode) => (
-                        <SelectItem key={mode} value={mode}>
-                          {MODE_LABEL[mode]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!policy.archivedAt && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
+                    {policy.archivedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Arquivada em{' '}
+                        {new Date(policy.archivedAt).toLocaleDateString(
+                          'pt-BR',
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select
+                      value={policy.mode}
+                      onValueChange={(value) =>
                         updateMutation.mutate({
                           id: policy.id,
-                          archived: true,
+                          mode: isPolicyMode(value) ? value : undefined,
                         })
                       }
+                      disabled={policy.archivedAt !== null}
                     >
-                      Arquivar
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                      <SelectTrigger className="sm:w-64">
+                        {MODE_LABEL[policy.mode]}
+                      </SelectTrigger>
+                      <SelectContent
+                        alignItemWithTrigger={false}
+                        className="w-auto min-w-56"
+                      >
+                        {MODE_KEYS.map((mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {MODE_LABEL[mode]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!policy.archivedAt && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          updateMutation.mutate({
+                            id: policy.id,
+                            archived: true,
+                          })
+                        }
+                      >
+                        Arquivar
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
 
-          <CreateOverrideForm
-            onSubmit={(input) => createMutation.mutate(input)}
-            disabled={createMutation.isPending}
-          />
-        </div>
-      </Panel>
+            <CreateOverrideForm
+              onSubmit={(input) => createMutation.mutate(input)}
+              disabled={createMutation.isPending}
+            />
+          </div>
+        </Panel>
       </StaggerItem>
     </StaggerGroup>
   )
@@ -349,7 +354,10 @@ function CreateOverrideForm({
             }}
           >
             <SelectTrigger>{SCOPE_LABEL[scope]}</SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
+            <SelectContent
+              alignItemWithTrigger={false}
+              className="w-auto min-w-56"
+            >
               <SelectItem value="customer">Cliente</SelectItem>
               <SelectItem value="agreement">Contrato</SelectItem>
               <SelectItem value="service">Serviço</SelectItem>
@@ -373,10 +381,11 @@ function CreateOverrideForm({
             }}
           >
             <SelectTrigger>{MODE_LABEL[mode]}</SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
-              {(
-                MODE_KEYS
-              ).map((option) => (
+            <SelectContent
+              alignItemWithTrigger={false}
+              className="w-auto min-w-56"
+            >
+              {MODE_KEYS.map((option) => (
                 <SelectItem key={option} value={option}>
                   {MODE_LABEL[option]}
                 </SelectItem>

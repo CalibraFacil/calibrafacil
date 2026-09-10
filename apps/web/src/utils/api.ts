@@ -4,10 +4,15 @@ import {
   createRawCloudClient,
   isDesktopRuntime,
 } from '@calibra-facil/client-runtime'
-import type {
-  AppType,
-  LocalEnvironmentBootstrap,
-} from '@calibra-facil/contracts'
+import type { AppType } from '@calibra-facil/contracts'
+import {
+  createDesktopLocalFetch,
+  createLocalApiEndpointResolver,
+} from '@/runtime/local-api-endpoint'
+import {
+  assertDesktopRequestBodyWithinLimit,
+  encodeDesktopRequestBody,
+} from '@/runtime/desktop-request-body'
 import {
   getDefaultCloudApiUrl,
   getDefaultDesktopLocalApiUrl,
@@ -110,6 +115,28 @@ export const rawCloudClient = createRawCloudClient<AppType>({
 
 export const api = rawCloudClient
 
+/**
+ * Endpoint discovery for the local server. Both the port and the bootstrap
+ * token change between runs, so neither may be resolved once and trusted for
+ * the life of the window — see `local-api-endpoint.ts`.
+ */
+const localApiEndpointResolver = createLocalApiEndpointResolver({
+  bridge: typeof window === 'undefined' ? null : (window.calibraBridge ?? null),
+  fallbackBaseUrl: getLocalApiBaseURL(),
+})
+
+const desktopLocalFetch = createDesktopLocalFetch({
+  resolver: localApiEndpointResolver,
+})
+
+export async function getDesktopLocalApiToken() {
+  if (typeof window === 'undefined' || !window.calibraBridge) {
+    return null
+  }
+
+  return (await localApiEndpointResolver.resolve()).token
+}
+
 export const calibraClient = isDesktopRuntime()
   ? createDesktopHybridApiClient({
       cloud: {
@@ -118,8 +145,12 @@ export const calibraClient = isDesktopRuntime()
         fetch: desktopCloudFetch,
       },
       local: {
+        // A starting point only. The real origin is discovered from the host
+        // and applied by `desktopLocalFetch`, because the local server picks a
+        // different port whenever the default one is taken.
         baseUrl: getLocalApiBaseURL(),
         tokenProvider: getDesktopLocalApiToken,
+        fetch: desktopLocalFetch,
       },
     })
   : createCloudApiClient({
@@ -128,24 +159,6 @@ export const calibraClient = isDesktopRuntime()
     })
 
 export const calibraApi = calibraClient
-
-let desktopLocalApiTokenPromise: Promise<string | null> | null = null
-
-export function getDesktopLocalApiToken() {
-  if (typeof window === 'undefined' || !window.calibraBridge) {
-    return null
-  }
-
-  desktopLocalApiTokenPromise ??= window.calibraBridge
-    .getLocalEnvironmentBootstrap()
-    .then(
-      (bootstrap: LocalEnvironmentBootstrap | null) =>
-        bootstrap?.localApiToken ?? null,
-    )
-    .catch(() => null)
-
-  return desktopLocalApiTokenPromise
-}
 
 async function desktopCloudFetch(input: RequestInfo | URL, init?: RequestInit) {
   if (!isDesktopRuntime() || !window.calibraBridge?.authFetch) {
@@ -184,20 +197,29 @@ async function encodeDesktopCloudRequestBody(request: Request) {
     return null
   }
 
+  // Checked *before* buffering wherever the size is already known. Reading the
+  // body first and validating afterwards defeats the guard entirely: a large
+  // enough upload exhausts the renderer during `arrayBuffer()`, long before
+  // any length check could run.
+  assertDesktopRequestBodyWithinLimit(declaredRequestBodyBytes(request))
+
   return {
     encoding: 'base64' as const,
-    data: arrayBufferToBase64(await request.clone().arrayBuffer()),
+    data: encodeDesktopRequestBody(await request.clone().arrayBuffer()),
   }
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer)
-  const chunkSize = 0x8000
-  let binary = ''
+/**
+ * The body size the request already knows, without consuming it.
+ *
+ * `Content-Length` covers what `fetch` set from a Blob, File or string body —
+ * which is every upload path in this app. Returns null for a streamed body of
+ * unknown length, where there is nothing to check up front.
+ */
+function declaredRequestBodyBytes(request: Request): number | null {
+  const header = request.headers.get('content-length')
+  if (!header) return null
 
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
-  }
-
-  return btoa(binary)
+  const parsed = Number(header)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }

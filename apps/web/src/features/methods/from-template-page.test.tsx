@@ -110,7 +110,9 @@ const ENTRY = {
  */
 function FromTemplateRouteComponent() {
   const rawSearch = useSearch({ strict: false })
-  const search = parseFromTemplateSearch(rawSearch satisfies Record<string, unknown>)
+  const search = parseFromTemplateSearch(
+    rawSearch satisfies Record<string, unknown>,
+  )
   return <FromTemplatePage search={search} />
 }
 
@@ -239,9 +241,7 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     await waitFor(() => {
       // After back, step should be absent (catalog)
       const search = router.state.location.search
-      expect(
-        search.step === undefined || search.step === 'catalog',
-      ).toBe(true)
+      expect(search.step === undefined || search.step === 'catalog').toBe(true)
     })
 
     // Catalog step should be visible again
@@ -313,9 +313,7 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     await waitFor(() => {
       const { search } = router.state.location
       // step should be absent or 'catalog' after clicking "Modelo"
-      expect(
-        search.step === undefined || search.step === 'catalog',
-      ).toBe(true)
+      expect(search.step === undefined || search.step === 'catalog').toBe(true)
     })
   })
 
@@ -333,7 +331,9 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     )
     render(<RouterProvider router={router} />)
 
-    const submit = await screen.findByRole('button', { name: /criar rascunho/i })
+    const submit = await screen.findByRole('button', {
+      name: /criar rascunho/i,
+    })
     expect(submit.hasAttribute('disabled')).toBe(true)
 
     // All checkboxes start unchecked (data-checked absent means unchecked)
@@ -370,7 +370,9 @@ describe('FromTemplatePage — URL-driven wizard', () => {
     await screen.findByText(ENTRY.defaultName)
 
     // Navigate to confirm via history.push (avoids global RegisteredRouter type constraint)
-    router.history.push('/from-template?step=confirm&template=weighing-instrument')
+    router.history.push(
+      '/from-template?step=confirm&template=weighing-instrument',
+    )
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ step: 'confirm' })
     })

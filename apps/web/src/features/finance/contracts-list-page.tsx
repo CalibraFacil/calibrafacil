@@ -181,7 +181,9 @@ export function FinanceContractsPage() {
   const contractsQuery = useFinanceContractsData({ search: '' })
   const activateMutation = useActivateContractMutation()
   const cancelMutation = useCancelContractMutation()
-  const [cancelTarget, setCancelTarget] = useState<ContractListItem | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<ContractListItem | null>(
+    null,
+  )
 
   const columns = useMemo(
     () =>

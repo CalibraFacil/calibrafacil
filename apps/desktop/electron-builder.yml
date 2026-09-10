@@ -21,6 +21,10 @@ files:
   - dist/**
   - package.json
   - assets/icon.png
+  # `files` is an allowlist and `buildResources` does not place arbitrary
+  # assets in the archive, so the Windows unread-badge overlay has to be named
+  # here or `nativeImage.createFromPath` silently returns an empty image.
+  - assets/notification-overlay.png
 extraMetadata:
   main: dist/main/main.cjs
 # Feed served from a Cloudflare R2 bucket (custom domain). Fed by the
@@ -28,6 +32,14 @@ extraMetadata:
 publish:
   provider: generic
   url: https://updates.calibrafacil.com/desktop
+# calibrafacil:// deep links. Windows registers the scheme from NSIS, macOS
+# from the bundle plist, Linux from the .desktop MimeType — each platform needs
+# its own declaration, and `app.setAsDefaultProtocolClient` at runtime only
+# covers the unpackaged/dev case.
+protocols:
+  - name: CalibraFácil
+    schemes:
+      - calibrafacil
 linux:
   icon: assets/icon.png
   target:
@@ -35,6 +47,8 @@ linux:
     - deb
   category: Office
   maintainer: CalibraFácil <contato@calibrafacil.com>
+  mimeTypes:
+    - x-scheme-handler/calibrafacil
 win:
   icon: assets/icon.ico
   target:

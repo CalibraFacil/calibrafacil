@@ -13,7 +13,9 @@ vi.mock('@/utils/api', () => ({
 import { CashForecastPage } from './cash-forecast-page'
 
 function renderWithClient(ui: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
@@ -57,7 +59,11 @@ describe('CashForecastPage', () => {
   it('shows the overdue chip when totals.overdueCents > 0', async () => {
     const env = emptyEnvelope()
     env.totals.overdueCents = 50_000
-    env.buckets.OVERDUE = { confirmedCents: 50_000, projectedCents: 0, confirmedCount: 2 }
+    env.buckets.OVERDUE = {
+      confirmedCents: 50_000,
+      projectedCents: 0,
+      confirmedCount: 2,
+    }
     mocks.getCashForecast.mockResolvedValueOnce(env)
     renderWithClient(<CashForecastPage />)
     expect(await screen.findByTestId('cash-forecast-overdue')).toBeTruthy()

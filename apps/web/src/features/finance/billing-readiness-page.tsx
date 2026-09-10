@@ -75,7 +75,12 @@ const SUMMARY_TILES: Array<{
   label: string
   tone: SignalTone
 }> = [
-  { key: 'ready', status: 'READY', label: 'Prontas para faturar', tone: 'info' },
+  {
+    key: 'ready',
+    status: 'READY',
+    label: 'Prontas para faturar',
+    tone: 'info',
+  },
   { key: 'blocked', status: 'BLOCKED', label: 'Bloqueadas', tone: 'critical' },
   { key: 'billed', status: 'BILLED', label: 'Faturadas', tone: 'neutral' },
   { key: 'sent', status: 'SENT', label: 'Enviadas', tone: 'ok' },

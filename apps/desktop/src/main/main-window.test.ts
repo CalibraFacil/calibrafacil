@@ -23,6 +23,30 @@ describe("main window configuration", () => {
     });
   });
 
+  it("omits coordinates on first launch so the platform centres the window", () => {
+    const options = buildMainWindowOptions("/tmp/preload.cjs");
+
+    expect(options).toMatchObject({ width: 1280, height: 860 });
+    // Passing x/y at all — even zero — pins the window to a corner.
+    expect(options.x).toBeUndefined();
+    expect(options.y).toBeUndefined();
+  });
+
+  it("applies a restored placement", () => {
+    expect(
+      buildMainWindowOptions("/tmp/preload.cjs", undefined, {
+        width: 1400,
+        height: 900,
+        x: 120,
+        y: 64,
+      }),
+    ).toMatchObject({ width: 1400, height: 900, x: 120, y: 64 });
+  });
+
+  it("starts hidden so a restored window never flashes at the default size", () => {
+    expect(buildMainWindowOptions("/tmp/preload.cjs").show).toBe(false);
+  });
+
   it("uses the branded desktop icon when provided", () => {
     const options = buildMainWindowOptions(
       "/tmp/preload.cjs",

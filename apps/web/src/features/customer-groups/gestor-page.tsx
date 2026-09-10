@@ -259,7 +259,9 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
                 <TableBody>
                   {visibleMembers.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell className="font-medium">{m.userName}</TableCell>
+                      <TableCell className="font-medium">
+                        {m.userName}
+                      </TableCell>
                       <TableCell>{m.userEmail}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">
@@ -409,18 +411,27 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Voltar</AlertDialogCancel>
+                                    <AlertDialogCancel>
+                                      Voltar
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       variant="destructive"
                                       onClick={() =>
-                                        cancelInvitationMutation.mutate(inv.id, {
-                                          onSuccess: () =>
-                                            toast.success('Convite cancelado!'),
-                                          onError: (error) =>
-                                            toast.error(error.message),
-                                        })
+                                        cancelInvitationMutation.mutate(
+                                          inv.id,
+                                          {
+                                            onSuccess: () =>
+                                              toast.success(
+                                                'Convite cancelado!',
+                                              ),
+                                            onError: (error) =>
+                                              toast.error(error.message),
+                                          },
+                                        )
                                       }
-                                      disabled={cancelInvitationMutation.isPending}
+                                      disabled={
+                                        cancelInvitationMutation.isPending
+                                      }
                                     >
                                       Cancelar Convite
                                     </AlertDialogAction>

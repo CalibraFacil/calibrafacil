@@ -40,9 +40,7 @@ describe('AutomaticSendSettingsPage', () => {
   it('renders the page header', async () => {
     mocks.listAutomaticSendRules.mockResolvedValueOnce({ data: [] })
     renderWithClient(<AutomaticSendSettingsPage />)
-    expect(
-      await screen.findByText('Regras de envio automático'),
-    ).toBeTruthy()
+    expect(await screen.findByText('Regras de envio automático')).toBeTruthy()
   })
 
   it('lists the org default + overrides separately', async () => {
@@ -78,9 +76,7 @@ describe('AutomaticSendSettingsPage', () => {
 
     renderWithClient(<AutomaticSendSettingsPage />)
     expect(await screen.findByText('Cliente A')).toBeTruthy()
-    expect(
-      await screen.findByText('Regra padrão da organização'),
-    ).toBeTruthy()
+    expect(await screen.findByText('Regra padrão da organização')).toBeTruthy()
     const rows = await screen.findAllByTestId('automatic-send-rule-row')
     expect(rows).toHaveLength(1)
   })

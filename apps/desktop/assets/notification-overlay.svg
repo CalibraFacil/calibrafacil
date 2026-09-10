@@ -1,0 +1,18 @@
+<!--
+  Windows taskbar overlay for unread notifications.
+
+  Windows renders overlays at 16x16 over an arbitrary taskbar colour, so the
+  dot carries a light ring: a bare red circle disappears against a red or dark
+  accent. The count itself is not drawn — 16px leaves no room for legible
+  digits, and rasterising a font at build time would make the asset depend on
+  whatever fonts the building machine happens to have. The number is carried
+  in the overlay's accessible description instead.
+
+  Regenerate with:
+    rsvg-convert -w 16 -h 16 apps/desktop/assets/notification-overlay.svg \
+      -o apps/desktop/assets/notification-overlay.png
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="7.25" fill="#ffffff" fill-opacity="0.95" />
+  <circle cx="8" cy="8" r="5.75" fill="#dc2626" />
+</svg>

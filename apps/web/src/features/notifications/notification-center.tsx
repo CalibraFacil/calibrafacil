@@ -13,6 +13,8 @@ import {
   useNotificationCenterData,
   useUnreadNotificationsData,
 } from './queries'
+import { useDesktopNotificationBridge } from './desktop-bridge'
+import { isDesktopRuntime } from '@/runtime/desktop'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -62,6 +64,14 @@ function ScopedNotificationCenter({
   const [page, setPage] = useState(1)
   const queryClient = useQueryClient()
   const count = useUnreadNotificationsData({ organizationKey, enabled })
+  // Mirrors the same feed to the OS taskbar badge and native notifications.
+  // Scoped here so it starts and stops with the organization the centre is
+  // showing — a badge counting another tenant's unread would be worse than no
+  // badge at all.
+  useDesktopNotificationBridge({
+    enabled: enabled && isDesktopRuntime(),
+    organizationKey,
+  })
   const inbox = useNotificationCenterData({
     organizationKey,
     enabled: enabled && isOpen,

@@ -127,6 +127,42 @@ export const syncStatusSnapshotSchema = z.object({
   scheduler: syncSchedulerStateSchema.nullable().optional(),
 });
 
+/**
+ * What the renderer hands the host so it can drive the OS surfaces: the unread
+ * count for the badge, and the current feed page so the host can decide which
+ * entries deserve a native notification.
+ *
+ * The renderer is already polling this for the in-app notification centre —
+ * the host deliberately does not open a second source of truth.
+ */
+export const desktopNotificationsPublishSchema = z.object({
+  /**
+   * The scope these notifications belong to. The host keeps its
+   * already-announced set per scope, so switching organizations cannot
+   * announce the new one's backlog or let a slow in-flight response from the
+   * previous one overwrite the badge.
+   */
+  organizationKey: z.string().min(1),
+  unreadCount: z.number().int().nonnegative(),
+  /**
+   * Highest notification id known to exist at priming time. Ids are
+   * monotonic, so anything at or below this predates the session even if it
+   * was never on the first page.
+   */
+  highWaterMarkId: z.number().int().nullable(),
+  entries: z
+    .array(
+      z.object({
+        id: z.number().int(),
+        title: z.string(),
+        message: z.string(),
+        status: z.string(),
+        actionUrl: z.string().nullable().optional(),
+      }),
+    )
+    .max(100),
+});
+
 export const desktopUpdateStateSchema = z.object({
   status: z.enum([
     "idle",
@@ -143,6 +179,12 @@ export const desktopUpdateStateSchema = z.object({
 
 export const certificatePdfExportRequestSchema = z.object({
   jobId: z.union([z.string().min(1), z.number().int().positive()]),
+  /**
+   * Used only to name the saved file. Optional so a draft with no number yet
+   * still saves — it just gets a plainer name.
+   */
+  certificateNumber: z.string().nullish(),
+  customerName: z.string().nullish(),
 });
 
 export const desktopAuthFetchRequestSchema = z.object({
@@ -183,6 +225,9 @@ export type DesktopSecretWrite = z.infer<typeof desktopSecretWriteSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;
 export type SyncStatusSnapshot = z.infer<typeof syncStatusSnapshotSchema>;
 export type SyncTrigger = z.infer<typeof syncTriggerSchema>;
+export type DesktopNotificationsPublish = z.infer<
+  typeof desktopNotificationsPublishSchema
+>;
 export type SyncSchedulerState = z.infer<typeof syncSchedulerStateSchema>;
 export type DesktopUpdateState = z.infer<typeof desktopUpdateStateSchema>;
 export type CertificatePdfExportRequest = z.infer<
@@ -220,6 +265,37 @@ export interface CalibraBridge {
    * it twice is not two syncs.
    */
   wakeSync(trigger: SyncTrigger): Promise<SyncActionResult>;
+  /**
+   * Subscribe to `calibrafacil://` links the OS handed the app. The payload is
+   * an in-app route path, already validated by the main process.
+   */
+  onDeepLink(listener: (path: string) => void): () => void;
+  /**
+   * Tell the main process the renderer can receive links. A link that arrived
+   * during a cold launch is buffered until this is called, so the first thing
+   * a user sees after clicking a link is the linked screen — not the
+   * dashboard, with the link silently dropped.
+   */
+  notifyDeepLinkReady(): Promise<boolean>;
+  /**
+   * Publish the unread count and the current feed page so the host can update
+   * the taskbar badge and announce anything new. Safe to call on every poll:
+   * the host de-duplicates by notification id and stays quiet while the window
+   * is focused.
+   */
+  publishNotifications(payload: DesktopNotificationsPublish): Promise<boolean>;
+  /**
+   * Select a file in the OS file manager. Answers "where did it go?" without
+   * making the user hunt for it, and returns `false` when the path is gone.
+   */
+  revealFile(filePath: string): Promise<boolean>;
+  /**
+   * Back/forward gestures the OS reports to the host rather than the page:
+   * mouse thumb buttons on Windows and Linux, trackpad swipe on macOS.
+   * Keyboard shortcuts are handled in the renderer, where text-field focus is
+   * visible.
+   */
+  onHistoryCommand(listener: (command: string) => void): () => void;
   pickFile(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   saveFile(): Promise<string | null>;

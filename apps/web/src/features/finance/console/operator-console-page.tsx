@@ -9,7 +9,10 @@ import {
   ExportStatusBadge,
 } from '@/components/finance-status-badges'
 import { formatFinanceDate } from '@/lib/finance-formatters'
-import { Money, billingDocumentToneOf } from '@/features/finance/finance-display'
+import {
+  Money,
+  billingDocumentToneOf,
+} from '@/features/finance/finance-display'
 import {
   BlueprintField,
   BlueprintGrid,

@@ -44,7 +44,9 @@ export function NewFinanceDocumentPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<FinanceBillingMode>('single')
-  const [pendingMode, setPendingMode] = useState<FinanceBillingMode | null>(null)
+  const [pendingMode, setPendingMode] = useState<FinanceBillingMode | null>(
+    null,
+  )
   const [eligibleQuery, setEligibleQuery] = useState('')
   const [selectedJobIds, setSelectedJobIds] = useState<number[]>([])
   const [dueDate, setDueDate] = useState('')

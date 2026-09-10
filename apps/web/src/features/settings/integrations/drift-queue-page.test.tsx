@@ -77,7 +77,9 @@ describe('IntegrationDriftQueuePage', () => {
     renderWithClient(<IntegrationDriftQueuePage />)
 
     expect(
-      await screen.findByText('Não foi possível carregar a fila de divergências.'),
+      await screen.findByText(
+        'Não foi possível carregar a fila de divergências.',
+      ),
     ).toBeTruthy()
   })
 })

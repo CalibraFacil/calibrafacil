@@ -94,7 +94,12 @@ describe('InstallmentsBlock', () => {
     render(
       <InstallmentsBlock
         installments={[row({ status: 'PAID' })]}
-        summary={summary({ total: 1, totalCents: 10_000, paidCents: 10_000, paidCount: 1 })}
+        summary={summary({
+          total: 1,
+          totalCents: 10_000,
+          paidCents: 10_000,
+          paidCount: 1,
+        })}
       />,
     )
     expect(screen.queryByText(/em atraso/)).toBeNull()
