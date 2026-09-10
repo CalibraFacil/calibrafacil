@@ -142,8 +142,8 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
   return (
     <Panel className="p-5 ring-amber-500/40">
       <PanelHeader
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+        action={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
             <HugeiconsIcon
               icon={AlertDiamondIcon}
               className="size-3.5"
@@ -305,7 +305,6 @@ function OotAssessmentRecord({ event }: { event: OotEvent }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Qualidade"
         title="Avaliação de impacto registrada"
         description={
           <>

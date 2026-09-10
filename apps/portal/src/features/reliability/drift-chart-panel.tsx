@@ -67,7 +67,6 @@ export function DriftChartPanel({ assetId }: { assetId: number }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Programa metrológico"
         title="Deriva do instrumento"
         description="Margem de conformidade 'como recebido' de cada ponto medido ao longo do tempo — margem 0 é o limite de tolerância."
       />

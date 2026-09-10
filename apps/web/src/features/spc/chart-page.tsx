@@ -309,7 +309,6 @@ export function SpcChartPage({ id }: { id: string }) {
       {evaluation && (
         <Panel className="p-4 sm:p-5">
           <PanelHeader
-            eyebrow="Avaliação"
             title="Regras de controle"
             description="Sinais detectados pelo motor de avaliação sobre a série de leituras."
           />
@@ -395,7 +394,6 @@ function ControlChartPanel({ chart }: { chart: SpcChartDetail }) {
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Série temporal"
         title="Carta de controle"
         description={
           limits
@@ -588,7 +586,6 @@ function ReadingsPanel({
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Verificação intermediária"
         title="Leituras do padrão de verificação"
         description="Cada leitura reavalia automaticamente os limites e regras da carta."
       />
@@ -757,7 +754,6 @@ function ChartConfigPanel({
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Parâmetros"
         title="Configuração da carta"
         description="Alterar o tipo ou a janela base dispara um recálculo dos limites."
       />

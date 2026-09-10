@@ -67,7 +67,6 @@ export function CodeEntryPage() {
           <BlueprintOverlay />
           <div className="relative space-y-6">
             <PanelHeader
-              eyebrow="Acesso ao orçamento"
               title="Acessar orçamento com código"
               description="Digite o código de aprovação enviado junto com o orçamento por e-mail."
             />

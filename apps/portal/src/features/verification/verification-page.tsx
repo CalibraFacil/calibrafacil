@@ -314,7 +314,6 @@ function UploadMatch({ token }: { token: string }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Anti-fraude"
         title="Confira o seu arquivo"
         description="Envie o PDF que você recebeu para conferir se é idêntico ao documento emitido."
       />
@@ -424,7 +423,7 @@ export function VerificationPage({ token }: { token: string }) {
       <StatusHero data={data} />
 
       <Panel className="p-5">
-        <PanelHeader eyebrow="Dados do certificado" title="Identificação" />
+        <PanelHeader title="Identificação" />
         <BlueprintGrid className="mt-4 grid-cols-2">
           <BlueprintField label="Ativo">
             <p className="font-medium">{data.asset.name}</p>
@@ -506,7 +505,7 @@ export function VerificationPage({ token }: { token: string }) {
       ) : null}
 
       <Panel className="p-5">
-        <PanelHeader eyebrow="Autenticidade" title="Assinatura digital" />
+        <PanelHeader title="Assinatura digital" />
         {signature.signed ? (
           <>
             <BlueprintGrid className="mt-4 grid-cols-1 sm:grid-cols-2">

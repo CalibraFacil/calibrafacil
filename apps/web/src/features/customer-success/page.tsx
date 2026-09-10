@@ -387,11 +387,7 @@ export function CustomerSuccessPage() {
 
       {/* The journey */}
       <Panel className="p-6">
-        <PanelHeader
-          eyebrow="Sua jornada"
-          title="Caminho até o go-live"
-          description={goLiveLine}
-        />
+        <PanelHeader title="Caminho até o go-live" description={goLiveLine} />
 
         {isBlocked && (
           <div className="mt-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-300">
@@ -475,7 +471,6 @@ export function CustomerSuccessPage() {
       {/* Getting help */}
       <Panel className="p-6">
         <PanelHeader
-          eyebrow="Suporte"
           title="Precisa de ajuda?"
           description={`Primeira resposta em até ${payload.supportPolicy.targetFirstResponseBusinessHours}h úteis · ${payload.supportPolicy.targetResolutionLabel}.`}
           action={

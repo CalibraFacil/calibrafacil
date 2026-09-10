@@ -49,7 +49,6 @@ export function OutOfTolerancePage() {
     <div className="portal-shell space-y-6">
       <div className="space-y-2">
         <PageHeader
-          eyebrow="Qualidade"
           title="Fora de tolerância"
           description="Notificações de resultados fora de tolerância."
         />

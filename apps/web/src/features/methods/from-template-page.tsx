@@ -150,7 +150,6 @@ export function FromTemplatePage({ search }: { search: FromTemplateSearch }) {
     <div className="space-y-6">
       <Panel className="p-5 sm:p-6">
         <PanelHeader
-          eyebrow="Cadastro"
           title="Novo método a partir de modelo"
           description="Modelos curados, fundamentados em guias publicados. Cada modelo entra como RASCUNHO e exige a verificação do seu laboratório antes do uso."
         />
@@ -247,10 +246,7 @@ function ConfirmStep({
 
   return (
     <Panel className="p-5 sm:p-6">
-      <PanelHeader
-        eyebrow="Confirmação"
-        title={`Adotar: ${entry.defaultName}`}
-      />
+      <PanelHeader title={`Adotar: ${entry.defaultName}`} />
       <div className="mt-4 space-y-5">
         <div className="space-y-4">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -396,7 +392,7 @@ function CatalogStep({
     <div className="space-y-4">
       {/* One responsive grid across all templates: each discipline currently has
           a single template, so a per-discipline grid would strand a lone card in
-          a 3-column row. Cards carry their own discipline eyebrow instead. */}
+          a 3-column row. Cards carry their own discipline label instead. */}
       <StaggerGroup className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {templates.map((entry) => (
           <StaggerItem key={entry.templateKey}>
@@ -506,7 +502,6 @@ function ContextStep({
     <div className="space-y-4">
       <Panel className="p-5 sm:p-6">
         <PanelHeader
-          eyebrow="Contexto metrológico"
           title={entry.defaultName}
           description="Rascunho · Não acreditado — exige a verificação do seu laboratório antes do uso."
         />

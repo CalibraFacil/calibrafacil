@@ -70,9 +70,8 @@ export function ActivationChecklist({
   return (
     <Panel>
       <PanelHeader
-        eyebrow="Configuração inicial"
         title="O que falta para emitir a primeira calibração"
-        description="Cada item abre a tela onde ele é resolvido. Você pode fazer na ordem que preferir."
+        description="Cada item abre a tela onde ele é resolvido, na ordem que preferir."
         action={
           <Button variant="ghost" size="sm" onClick={dismiss}>
             Ocultar

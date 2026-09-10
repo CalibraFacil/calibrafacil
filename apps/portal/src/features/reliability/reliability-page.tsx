@@ -309,7 +309,6 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
       {/* Trend */}
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Tendência"
           title="Taxa fora de tolerância por período"
           description="Percentual de calibrações reprovadas na condição 'como recebido', sobre os ciclos com parecer conhecido."
         />
@@ -321,7 +320,6 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
       {/* By asset type */}
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Distribuição"
           title="Por tipo de instrumento"
           description={
             "Reprovações na condição “como recebido” por família de equipamento no período."
@@ -375,7 +373,6 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
       {/* Worst offenders */}
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Reincidência"
           title={
             "Equipamentos com maior reincidência de reprovação “como recebido”"
           }

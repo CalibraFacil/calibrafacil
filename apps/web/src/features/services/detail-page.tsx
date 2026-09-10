@@ -94,7 +94,6 @@ export function ServiceDetailPage({ id }: { id: string }) {
   const detailsCard = (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Especificação"
         title="Configuração e condições"
         description="Método, aplicação e condições comerciais do serviço."
       />
@@ -252,10 +251,7 @@ export function ServiceDetailPage({ id }: { id: string }) {
           <div className="min-w-0">{detailsCard}</div>
           <aside>
             <Panel className="p-4 sm:p-5">
-              <PanelHeader
-                eyebrow="Atividade"
-                title="Histórico de alterações"
-              />
+              <PanelHeader title="Histórico de alterações" />
               <div className="mt-4">
                 <AuditTimeline events={auditEvents} showCard={false} />
               </div>

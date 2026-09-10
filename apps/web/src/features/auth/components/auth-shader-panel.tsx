@@ -12,8 +12,6 @@ const BRAND_MESH_COLORS = [
 ]
 
 type AuthShaderPanelProps = {
-  /** Small caps line above the headline. */
-  eyebrow?: string
   title?: string
   description?: string
 }
@@ -24,7 +22,6 @@ type AuthShaderPanelProps = {
  * the mesh changes, which is why the text is props rather than hardcoded.
  */
 export function AuthShaderPanel({
-  eyebrow = 'ISO/IEC 17025 · GUM · Certificados digitais',
   title = 'Calibração sem complicação.',
   description = 'Fluxos de calibração, cálculo de incertezas e emissão de certificados ISO/IEC 17025 em uma única plataforma.',
 }: AuthShaderPanelProps = {}) {
@@ -45,9 +42,6 @@ export function AuthShaderPanel({
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-blue-950/70 via-blue-950/25 to-transparent" />
 
       <div className="relative z-10 flex flex-col gap-4 p-10 text-white">
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-white/70">
-          {eyebrow}
-        </p>
         <h2 className="max-w-md text-3xl font-semibold leading-tight text-balance">
           {title}
         </h2>

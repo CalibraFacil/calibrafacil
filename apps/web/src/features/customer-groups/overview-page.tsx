@@ -63,12 +63,12 @@ export function CustomerGroupOverviewTab({ groupId }: { groupId: number }) {
   // Worst-first: the units that most need attention surface at the top.
   // (Copy first — sort mutates; the lint warning about sort() is moot here.)
   const rankedBranches = [...branches].sort(
-    (a, b) => b.overdue - a.overdue || b.dueSoon - a.dueSoon || b.total - a.total,
+    (a, b) =>
+      b.overdue - a.overdue || b.dueSoon - a.dueSoon || b.total - a.total,
   )
 
   return (
     <ClientPanel
-      eyebrow="Visão geral"
       title="Programa metrológico do grupo"
       description="Situação consolidada dos instrumentos de todas as unidades, com as unidades que mais precisam de atenção no topo."
     >
@@ -110,8 +110,8 @@ export function CustomerGroupOverviewTab({ groupId }: { groupId: number }) {
                 </EmptyMedia>
                 <EmptyTitle>Nenhuma unidade</EmptyTitle>
                 <EmptyDescription>
-                  Vincule clientes a este grupo na aba Unidades para acompanhar o
-                  programa metrológico consolidado.
+                  Vincule clientes a este grupo na aba Unidades para acompanhar
+                  o programa metrológico consolidado.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

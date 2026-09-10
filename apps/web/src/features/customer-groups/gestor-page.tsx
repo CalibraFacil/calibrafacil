@@ -153,7 +153,6 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
 
   return (
     <ClientPanel
-      eyebrow="Gestor"
       title="Acesso consolidado do grupo"
       description="O gestor do grupo acompanha todas as unidades em um único portal. Gerencie quem tem acesso e os convites pendentes."
       action={

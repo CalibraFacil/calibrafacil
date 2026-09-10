@@ -97,7 +97,9 @@ describe("PublicQuotePage (REQ-QPUB-042/043/044/045)", () => {
 
     renderPage();
 
-    expect(await screen.findByText("OS-2026-042")).toBeTruthy();
+    expect(
+      await screen.findByText("Ordem de serviço OS-2026-042"),
+    ).toBeTruthy();
     // BlueprintField labels from the instrument-identification grid
     expect(screen.getByText("Fabricante / Modelo")).toBeTruthy();
     expect(screen.getByText("Defeito reclamado")).toBeTruthy();

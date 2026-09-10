@@ -37,7 +37,6 @@ export function NotificationsPage() {
   return (
     <div className="portal-shell-sm space-y-6">
       <PageHeader
-        eyebrow="Portal"
         title="Notificações"
         description="Atualizações do laboratório: certificados, solicitações, visitas e qualidade dos últimos 90 dias."
         actions={

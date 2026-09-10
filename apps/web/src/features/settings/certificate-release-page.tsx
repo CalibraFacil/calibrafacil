@@ -200,7 +200,6 @@ export function CertificateReleasePolicyPage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Exceções"
             title="Exceções por cliente, contrato ou serviço"
             description="Sobrescreve a política padrão para o escopo selecionado."
           />

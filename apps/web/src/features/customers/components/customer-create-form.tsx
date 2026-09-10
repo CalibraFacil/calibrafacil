@@ -208,7 +208,6 @@ export function CustomerCreateForm({
         <div className="divide-y divide-foreground/10">
           <section className="pb-6">
             <PanelHeader
-              eyebrow="Identificação"
               title="Dados do cliente"
               description="Nome público e documento usados em ordens, ativos e certificados."
             />
@@ -297,7 +296,6 @@ export function CustomerCreateForm({
           </section>
           <section className="py-6">
             <PanelHeader
-              eyebrow="Contato"
               title="Contato e portal"
               description="Canal principal de atendimento e convite de acesso do cliente."
             />
@@ -346,7 +344,6 @@ export function CustomerCreateForm({
           </section>
           <section className="pt-6">
             <PanelHeader
-              eyebrow="Localização"
               title="Endereço"
               description="Opcional, mas útil para documentos comerciais e entregas."
             />

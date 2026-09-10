@@ -30,7 +30,6 @@ export function CompilePreviewPanel({
     <aside className="min-h-0 space-y-4 overflow-auto xl:sticky xl:top-0">
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Servidor"
           title="Compilação"
           description="Fingerprint, fórmulas normalizadas e diagnósticos."
         />
@@ -66,7 +65,6 @@ export function CompilePreviewPanel({
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Validação"
           title="Preview"
           description="Dados de exemplo enviados ao endpoint de preview."
         />

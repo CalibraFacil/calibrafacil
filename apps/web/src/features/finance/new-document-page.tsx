@@ -144,7 +144,6 @@ export function NewFinanceDocumentPage() {
         <div className="space-y-6">
           <Panel className="p-5">
             <PanelHeader
-              eyebrow="Configuração"
               title="Parâmetros da cobrança"
               description="Defina o tipo, vencimento e desconto antes de selecionar as OS."
             />
@@ -203,7 +202,6 @@ export function NewFinanceDocumentPage() {
 
           <Panel className="p-5">
             <PanelHeader
-              eyebrow="Resumo"
               title="Total da cobrança"
               description="Recalculado conforme as OS selecionadas e o desconto."
             />
@@ -230,7 +228,6 @@ export function NewFinanceDocumentPage() {
 
         <Panel className="flex flex-col p-5">
           <PanelHeader
-            eyebrow="Seleção"
             title="OS elegíveis"
             description="Apenas jobs aprovados ou retificados sem documento ativo."
           />

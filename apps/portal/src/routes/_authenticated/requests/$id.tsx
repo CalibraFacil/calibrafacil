@@ -183,7 +183,7 @@ function RequestDetailPage() {
       </div>
 
       <Panel className="p-5">
-        <PanelHeader eyebrow="Resumo" title="Detalhes da solicitação" />
+        <PanelHeader title="Detalhes da solicitação" />
         <BlueprintGrid className="mt-4 sm:grid-cols-2">
           <BlueprintField label="Cliente">{data.customerName}</BlueprintField>
           <BlueprintField label="Forma de envio">
@@ -227,7 +227,6 @@ function RequestDetailPage() {
       {hasRemittance ? (
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Logística"
             title="Nota fiscal de remessa para conserto"
             description="Dados informados para o envio via transportadora."
           />
@@ -255,7 +254,6 @@ function RequestDetailPage() {
       {isOnsite ? (
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Logística"
             title="Visita técnica no local"
             description="O laboratório confirma a data e designa o técnico."
           />
@@ -290,7 +288,6 @@ function RequestDetailPage() {
 
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Equipamentos"
           title="Ativos solicitados"
           action={
             <span className="text-muted-foreground font-mono text-sm tabular-nums">

@@ -117,7 +117,6 @@ export function NewFinanceContractPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Identificação"
             title="Dados do contrato"
             description="Cliente e referência comercial visível nas cobranças."
           />
@@ -163,7 +162,6 @@ export function NewFinanceContractPage() {
 
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Vigência"
             title="Condições comerciais"
             description="Prazo padrão e janela de vigência usados na emissão."
           />
@@ -202,7 +200,6 @@ export function NewFinanceContractPage() {
 
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Tabela negociada"
           title="Preços por serviço"
           description="Cada termo congela o preço negociado usado no snapshot comercial do job."
         />
@@ -217,7 +214,6 @@ export function NewFinanceContractPage() {
 
       <Panel className="p-5">
         <PanelHeader
-          eyebrow="Notas"
           title="Observações internas"
           description="Descontos acordados, exceções ou notas operacionais."
         />

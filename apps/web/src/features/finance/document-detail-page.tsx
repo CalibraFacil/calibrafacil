@@ -185,7 +185,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
     return (
       <Panel className="p-6">
         <PanelHeader
-          eyebrow="Documento financeiro"
           title={
             documentQuery.isPending
               ? 'Carregando documento…'
@@ -305,7 +304,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
           <Panel className="p-5 sm:p-6">
             <PanelHeader
-              eyebrow="Composição"
               title="Itens do documento"
               description="Materializados a partir do snapshot comercial da OS."
             />
@@ -322,7 +320,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
 
           <Panel className="p-5 sm:p-6">
             <PanelHeader
-              eyebrow="Parâmetros"
               title="Ajustes do rascunho"
               description="Rascunhos permitem ajustar vencimento, desconto e observações."
             />
@@ -352,7 +349,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
         <div className="grid gap-6 xl:grid-cols-2">
           <Panel className="p-5 sm:p-6">
             <PanelHeader
-              eyebrow="Recebíveis"
               title="Parcelas"
               description="Parcela única com baixa integral manual no MVP."
             />
@@ -369,7 +365,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
 
           <Panel className="p-5 sm:p-6">
             <PanelHeader
-              eyebrow="Histórico"
               title="Linha do tempo"
               description="Auditoria e baixas em ordem cronológica."
             />

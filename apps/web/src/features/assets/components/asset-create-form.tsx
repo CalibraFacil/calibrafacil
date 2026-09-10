@@ -416,7 +416,6 @@ export function AssetCreateForm({
               {activeStepId === 'sec-vinculo' ? (
                 <Panel className={PANEL_CLASS}>
                   <PanelHeader
-                    eyebrow="Vínculo"
                     title="Cliente e tipo"
                     description="Definem o proprietário e as especificações técnicas do ativo."
                   />
@@ -538,7 +537,6 @@ export function AssetCreateForm({
               {activeStepId === 'sec-identificacao' ? (
                 <Panel className={PANEL_CLASS}>
                   <PanelHeader
-                    eyebrow="Identificação"
                     title="Dados do instrumento"
                     description="Nome, rastreabilidade e estado operacional."
                   />
@@ -665,7 +663,6 @@ export function AssetCreateForm({
               {activeStepId === 'sec-especificacoes' && hasSpecsSection ? (
                 <Panel className={PANEL_CLASS}>
                   <PanelHeader
-                    eyebrow="Características"
                     title="Especificações técnicas"
                     description="Dados que acompanham o ativo nas calibrações e certificados."
                   />
@@ -747,7 +744,6 @@ export function AssetCreateForm({
               {activeStepId === 'sec-calibracao' ? (
                 <Panel className={PANEL_CLASS}>
                   <PanelHeader
-                    eyebrow="Programação"
                     title="Calibração"
                     description="Datas usadas para histórico e alertas de recalibração."
                   />
@@ -790,7 +786,7 @@ export function AssetCreateForm({
 
               {activeStepId === 'sec-observacoes' ? (
                 <Panel className={PANEL_CLASS}>
-                  <PanelHeader eyebrow="Notas" title="Observações" />
+                  <PanelHeader title="Observações" />
                   <div className="mt-4">
                     <Field>
                       <FieldLabel htmlFor="comments" className="sr-only">
@@ -815,7 +811,6 @@ export function AssetCreateForm({
               {activeStepId === 'sec-revisao' ? (
                 <Panel className={PANEL_CLASS}>
                   <PanelHeader
-                    eyebrow="Revisão"
                     title="Confira antes de criar"
                     description="Revise os dados do ativo. Volte a qualquer seção para ajustar."
                   />

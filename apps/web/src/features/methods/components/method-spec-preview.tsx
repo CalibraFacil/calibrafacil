@@ -78,8 +78,8 @@ export function hasCertificateContent(method: MethodSpec): boolean {
   if (!content) return false
   return Boolean(
     (content.procedureCode ?? '').trim() ||
-      (content.referenceStandards?.length ?? 0) > 0 ||
-      (content.sections?.length ?? 0) > 0,
+    (content.referenceStandards?.length ?? 0) > 0 ||
+    (content.sections?.length ?? 0) > 0,
   )
 }
 
@@ -137,7 +137,7 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
     <>
       {/* Specification — fields / formulas / criteria / uncertainty */}
       <Panel className="divide-y divide-foreground/10">
-        <SpecBlock eyebrow="Campos de entrada" count={method.dataFields.length}>
+        <SpecBlock title="Campos de entrada" count={method.dataFields.length}>
           {method.dataFields.length === 0 ? (
             <EmptyNote>Nenhum campo de entrada definido.</EmptyNote>
           ) : (
@@ -174,7 +174,7 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
           )}
         </SpecBlock>
 
-        <SpecBlock eyebrow="Fórmulas" count={method.formulas.length}>
+        <SpecBlock title="Fórmulas" count={method.formulas.length}>
           {method.formulas.length === 0 ? (
             <EmptyNote>
               {modelCount > 0
@@ -212,7 +212,7 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
         </SpecBlock>
 
         {modelCount > 0 ? (
-          <SpecBlock eyebrow="Modelo de medição (GUM)" count={modelCount}>
+          <SpecBlock title="Modelo de medição (GUM)" count={modelCount}>
             <div className="space-y-2.5">
               {method.measurementModels?.map((model, index) => (
                 <div
@@ -244,7 +244,7 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
         ) : null}
 
         <SpecBlock
-          eyebrow="Critérios de aceitação"
+          title="Critérios de aceitação"
           count={method.validations.length}
         >
           {method.validations.length === 0 ? (
@@ -285,7 +285,7 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
 
         {method.uncertaintyParams.length > 0 ? (
           <SpecBlock
-            eyebrow="Componentes de incerteza (tipo B)"
+            title="Componentes de incerteza (tipo B)"
             count={method.uncertaintyParams.length}
           >
             <div className="grid gap-2 sm:grid-cols-2">
@@ -320,7 +320,6 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
       {hasCertificateContent(method) ? (
         <Panel className="p-4 sm:p-5">
           <PanelHeader
-            eyebrow="Saída"
             title="Conteúdo do certificado"
             description="Textos e blocos que acompanham os certificados gerados."
           />
@@ -330,7 +329,8 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
                 {method.certificateContent.procedureCode}
               </BlueprintField>
             ) : null}
-            {(method.certificateContent?.referenceStandards?.length ?? 0) > 0 ? (
+            {(method.certificateContent?.referenceStandards?.length ?? 0) >
+            0 ? (
               <BlueprintField label="Normas de referência">
                 {method.certificateContent?.referenceStandards?.join(', ')}
               </BlueprintField>
@@ -351,20 +351,18 @@ export function MethodSpecPreview({ method }: { method: MethodSpec }) {
 }
 
 function SpecBlock({
-  eyebrow,
+  title,
   count,
   children,
 }: {
-  eyebrow: string
+  title: string
   count?: number
   children: ReactNode
 }) {
   return (
     <section className="p-4 sm:p-5">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          {eyebrow}
-        </p>
+        <h3 className="text-sm font-semibold">{title}</h3>
         {count !== undefined ? (
           <span className="font-mono text-xs tabular-nums text-muted-foreground">
             {count}

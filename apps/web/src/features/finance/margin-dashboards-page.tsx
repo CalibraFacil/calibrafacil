@@ -162,7 +162,6 @@ export function MarginDashboardsPage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Rentabilidade"
             title="Margem por cliente"
             description="Receita vs. custos de terceiros e peças utilizadas; margem efetiva quando conciliada."
           />

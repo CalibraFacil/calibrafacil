@@ -249,7 +249,7 @@ export function ServiceFormFields({
 }) {
   return (
     <Panel className="divide-y divide-foreground/10">
-      <FormBlock eyebrow="Identificação">
+      <FormBlock title="Identificação">
         <div className="space-y-5">
           <Field>
             <FieldLabel htmlFor="name">Nome do serviço *</FieldLabel>
@@ -284,7 +284,7 @@ export function ServiceFormFields({
         </div>
       </FormBlock>
 
-      <FormBlock eyebrow="Método e instrumento">
+      <FormBlock title="Método e instrumento">
         <div className="grid gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="method">Método de calibração</FieldLabel>
@@ -390,7 +390,7 @@ export function ServiceFormFields({
         </div>
       </FormBlock>
 
-      <FormBlock eyebrow="Condições comerciais">
+      <FormBlock title="Condições comerciais">
         <div className="grid gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="price">Preço</FieldLabel>
@@ -450,7 +450,7 @@ export function ServiceFormFields({
         </div>
       </FormBlock>
 
-      <FormBlock eyebrow="Disponibilidade">
+      <FormBlock title="Disponibilidade">
         <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/40 p-3.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
           <div className="min-w-0 space-y-0.5">
             <FieldLabel htmlFor="isActive" className="text-sm">
@@ -474,17 +474,15 @@ export function ServiceFormFields({
 
 /** A hairline-divided section inside the single service form card. */
 function FormBlock({
-  eyebrow,
+  title,
   children,
 }: {
-  eyebrow: string
+  title: string
   children: ReactNode
 }) {
   return (
     <section className="p-4 sm:p-5">
-      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        {eyebrow}
-      </p>
+      <h3 className="text-sm font-semibold">{title}</h3>
       <div className="mt-4">{children}</div>
     </section>
   )

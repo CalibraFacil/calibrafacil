@@ -417,7 +417,6 @@ function ServiceOrderDetailPage() {
       {canAnswerQuote && latestQuote ? (
         <Panel className="ring-warning/40 p-5">
           <PanelHeader
-            eyebrow="Ação necessária"
             title="Orçamento aguardando sua aprovação"
             description={`${latestQuote.quoteNumber} · validade ${formatDate(latestQuote.validUntil)}`}
             action={
@@ -466,7 +465,6 @@ function ServiceOrderDetailPage() {
         <div className="space-y-5">
           <Panel className="p-5">
             <PanelHeader
-              eyebrow="Instrumento"
               title="Equipamento recebido"
               description="Dados congelados no recebimento da OS."
             />
@@ -493,7 +491,7 @@ function ServiceOrderDetailPage() {
           </Panel>
 
           <Panel className="p-5">
-            <PanelHeader eyebrow="Recebimento" title="Defeito e condição" />
+            <PanelHeader title="Defeito e condição" />
             <div className="mt-4 space-y-4">
               <TextBlock
                 label="Defeito reclamado"
@@ -511,7 +509,6 @@ function ServiceOrderDetailPage() {
           {latestEvaluation ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Avaliação técnica"
                 title="Diagnóstico"
                 description={
                   latestEvaluation.evaluatedAt
@@ -539,7 +536,6 @@ function ServiceOrderDetailPage() {
           {execution ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Serviço executado"
                 title="Reparo realizado"
                 description={
                   execution.finishedAt
@@ -595,7 +591,6 @@ function ServiceOrderDetailPage() {
           {seals.length > 0 ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Selagem"
                 title="Marcas de Reparo e de Selagem"
                 description="Marcas de selagem do instrumento, incluindo a Marca de Reparo do Inmetro quando aplicável."
               />
@@ -616,7 +611,7 @@ function ServiceOrderDetailPage() {
 
           {order.warrantyUntil || order.warrantyTerms?.trim() ? (
             <Panel className="p-5">
-              <PanelHeader eyebrow="Garantia" title="Cobertura do serviço" />
+              <PanelHeader title="Cobertura do serviço" />
               <div className="mt-4 space-y-4">
                 {order.warrantyUntil ? (
                   <BlueprintGrid className="sm:grid-cols-2">
@@ -635,7 +630,7 @@ function ServiceOrderDetailPage() {
         <div className="space-y-5">
           {timeline.length > 0 ? (
             <Panel className="p-5">
-              <PanelHeader eyebrow="Histórico" title="Linha do tempo" />
+              <PanelHeader title="Linha do tempo" />
               <div className="mt-4">
                 <Timeline items={timeline} />
               </div>
@@ -645,8 +640,7 @@ function ServiceOrderDetailPage() {
           {latestQuote && !canAnswerQuote ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Orçamento"
-                title={`${latestQuote.quoteNumber}`}
+                title={`Orçamento ${latestQuote.quoteNumber}`}
                 action={
                   <span className="font-mono text-base font-semibold tabular-nums">
                     {formatCurrency(latestQuote.totalCents)}
@@ -666,7 +660,7 @@ function ServiceOrderDetailPage() {
           />
 
           <Panel className="p-5">
-            <PanelHeader eyebrow="Documentos" title="Comprovantes" />
+            <PanelHeader title="Comprovantes" />
             <div className="mt-4 space-y-2">
               {(order.intakeDocuments?.length ?? 0) === 0 &&
               (order.deliveryDocuments?.length ?? 0) === 0 ? (
@@ -696,7 +690,7 @@ function ServiceOrderDetailPage() {
 
           {order.certificateLinks && order.certificateLinks.length > 0 ? (
             <Panel className="p-5">
-              <PanelHeader eyebrow="Calibração" title="Certificados" />
+              <PanelHeader title="Certificados" />
               <div className="mt-4 space-y-2">
                 {order.certificateLinks.map((link) => (
                   <Link

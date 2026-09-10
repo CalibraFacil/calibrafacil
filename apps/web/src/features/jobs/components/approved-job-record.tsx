@@ -844,7 +844,6 @@ export function ApprovedJobRecord({
           <Panel className="p-4 sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <PanelHeader
-                eyebrow="Identificação"
                 title="Cliente, ativo e método"
                 description="Dados congelados no momento da aprovação, que formam a base imutável deste certificado."
               />
@@ -921,7 +920,6 @@ export function ApprovedJobRecord({
 
           <Panel className="p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Evidência registrada"
               title="Dados de medição"
               description="Valores capturados durante a calibração."
             />
@@ -971,7 +969,6 @@ export function ApprovedJobRecord({
           {standardsSnapshot && standardsSnapshot.length > 0 && (
             <Panel className="p-4 sm:p-5">
               <PanelHeader
-                eyebrow="Rastreabilidade metrológica"
                 title={
                   <span className="inline-flex items-center gap-1.5">
                     Padrões de referência utilizados
@@ -1057,10 +1054,7 @@ export function ApprovedJobRecord({
         <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
           <Panel className="overflow-hidden">
             <div className="border-b border-foreground/10 p-4">
-              <PanelHeader
-                eyebrow="Próxima ação"
-                title="Distribuir certificado"
-              />
+              <PanelHeader title="Distribuir certificado" />
             </div>
             <div className="space-y-3 p-4">
               {job.certificateUrl ? (
@@ -1204,10 +1198,7 @@ export function ApprovedJobRecord({
           </Panel>
 
           <Panel className="p-4 sm:p-5">
-            <PanelHeader
-              eyebrow="Responsabilidade técnica"
-              title="Responsáveis"
-            />
+            <PanelHeader title="Responsáveis" />
             <div className="mt-4 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-medium">
@@ -1243,7 +1234,7 @@ export function ApprovedJobRecord({
           </Panel>
 
           <Panel className="p-4 sm:p-5">
-            <PanelHeader eyebrow="Trilha de auditoria" title="Histórico" />
+            <PanelHeader title="Histórico" />
             <div className="mt-4">
               <AuditTimeline
                 events={buildJobTimelineEvents(job)}

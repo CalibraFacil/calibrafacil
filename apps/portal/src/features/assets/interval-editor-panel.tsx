@@ -82,7 +82,6 @@ export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Programa metrológico"
         title="Periodicidade de calibração"
         description="Você define com que frequência este instrumento deve ser recalibrado — o laboratório não atribui periodicidade."
       />

@@ -23,7 +23,6 @@ export function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Metrologia legal"
         title="Verificação — metrologia legal"
         description="Periodicidade fixada por regulamento (Inmetro / RBMLQ-I) — definida pela regulamentação, não editável."
       />

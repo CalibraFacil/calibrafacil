@@ -109,8 +109,7 @@ export function OperationsToCashPage() {
   }
 
   const attention = data.summary.needsAttention
-  const showAttention =
-    attention.overdueCount > 0 || attention.blockedCount > 0
+  const showAttention = attention.overdueCount > 0 || attention.blockedCount > 0
 
   return (
     <StaggerGroup className="space-y-6">
@@ -122,7 +121,11 @@ export function OperationsToCashPage() {
           {STAGE_ORDER.map((stage) => {
             const bucket = data.summary.stages[stage]
             return (
-              <div key={stage} data-testid={`stage-card-${stage}`} data-stage={stage}>
+              <div
+                key={stage}
+                data-testid={`stage-card-${stage}`}
+                data-stage={stage}
+              >
                 <SignalTile
                   tone={bucket.count > 0 ? STAGE_TONE[stage] : 'neutral'}
                   label={STAGE_LABEL[stage]}
@@ -137,9 +140,11 @@ export function OperationsToCashPage() {
 
       {showAttention ? (
         <StaggerItem>
-          <Panel className="p-5 sm:p-6" data-testid="operations-to-cash-attention">
+          <Panel
+            className="p-5 sm:p-6"
+            data-testid="operations-to-cash-attention"
+          >
             <PanelHeader
-              eyebrow="Atenção"
               title="Requer atenção"
               description="Ordens que travam a conversão em caixa."
             />

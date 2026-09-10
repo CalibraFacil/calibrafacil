@@ -190,7 +190,6 @@ export function StandardsCompositionProfilesPage() {
           {groups.map((group) => (
             <Panel key={group.profileClass} className="p-4 sm:p-5">
               <PanelHeader
-                eyebrow="Classe"
                 title={`Perfis ${group.profileClass}`}
                 description={`${group.rows.length} ${
                   group.rows.length === 1 ? 'perfil' : 'perfis'

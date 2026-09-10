@@ -205,7 +205,6 @@ export function FinanceContractsPage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Comercial"
             title="Contratos"
             description="Preços negociados, vigência e condições comerciais por cliente."
             action={

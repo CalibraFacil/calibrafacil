@@ -100,7 +100,6 @@ export function PublicQuotePage({ token }: { token: string }) {
           <BlueprintOverlay />
           <div className="relative">
             <PanelHeader
-              eyebrow="Acesso ao orçamento"
               title="Link indisponível"
               description="Este link é inválido, expirou ou foi substituído por um orçamento mais recente. Verifique o e-mail mais recente enviado pelo laboratório."
             />
@@ -117,7 +116,6 @@ export function PublicQuotePage({ token }: { token: string }) {
           <BlueprintOverlay />
           <div className="relative">
             <PanelHeader
-              eyebrow="Acesso ao orçamento"
               title="Orçamento já respondido"
               description="Este orçamento já foi aprovado ou recusado e o link deixou de dar acesso aos detalhes. Em caso de dúvida, entre em contato com o laboratório."
             />
@@ -153,8 +151,7 @@ export function PublicQuotePage({ token }: { token: string }) {
             <BlueprintOverlay />
             <div className="relative">
               <PanelHeader
-                eyebrow="Ordem de serviço"
-                title={order.serviceOrderNumber}
+                title={`Ordem de serviço ${order.serviceOrderNumber}`}
                 description={`Entrada em ${formatDate(order.openedAt)}`}
                 action={
                   <span className="rounded-full bg-muted px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -175,7 +172,6 @@ export function PublicQuotePage({ token }: { token: string }) {
           <StaggerItem>
             <Panel className="p-6 sm:p-8">
               <PanelHeader
-                eyebrow="Resposta registrada"
                 title={
                   decision === "approved"
                     ? "Orçamento aprovado"
@@ -207,7 +203,7 @@ export function PublicQuotePage({ token }: { token: string }) {
         {/* Instrument identification */}
         <StaggerItem>
           <Panel className="p-6 sm:p-8">
-            <PanelHeader eyebrow="Instrumento" title="Identificação" />
+            <PanelHeader title="Identificação" />
             <BlueprintGrid className="mt-4 grid-cols-1 sm:grid-cols-2">
               <BlueprintField label="Instrumento">
                 {order.assetSnapshot?.assetName?.trim() || "—"}
@@ -237,7 +233,6 @@ export function PublicQuotePage({ token }: { token: string }) {
           <StaggerItem>
             <Panel className="p-6 sm:p-8">
               <PanelHeader
-                eyebrow="Avaliação técnica"
                 title="Diagnóstico do laboratório"
                 description={
                   evaluation.evaluatedAt
@@ -263,7 +258,6 @@ export function PublicQuotePage({ token }: { token: string }) {
         <StaggerItem>
           <Panel className="p-6 sm:p-8">
             <PanelHeader
-              eyebrow="Orçamento"
               title={
                 quote ? `${quote.quoteNumber} · v${quote.version}` : "Orçamento"
               }

@@ -244,7 +244,6 @@ export function AssetEditForm({
         <div className="min-w-0 space-y-6">
           <Panel id="sec-identificacao" className="scroll-mt-6 p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Identificação"
               title="Dados do instrumento"
               description="Cliente, tipo e unidade base são fixados no cadastro para preservar a rastreabilidade."
             />
@@ -372,7 +371,6 @@ export function AssetEditForm({
           {hasSpecs || showEccentricityIndicator ? (
             <Panel id="sec-especificacoes" className="scroll-mt-6 p-4 sm:p-5">
               <PanelHeader
-                eyebrow="Características"
                 title="Especificações técnicas"
                 description="Parâmetros aplicados durante a calibração do instrumento."
               />
@@ -401,7 +399,6 @@ export function AssetEditForm({
 
           <Panel id="sec-calibracao" className="scroll-mt-6 p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Programação"
               title="Calibração"
               description="Datas de referência usadas para acompanhar a validade do instrumento."
             />
@@ -435,7 +432,7 @@ export function AssetEditForm({
           </Panel>
 
           <Panel id="sec-observacoes" className="scroll-mt-6 p-4 sm:p-5">
-            <PanelHeader eyebrow="Notas" title="Observações" />
+            <PanelHeader title="Observações" />
             <div className="mt-4">
               <Field>
                 <FieldLabel htmlFor="comments" className="sr-only">

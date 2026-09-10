@@ -33,7 +33,6 @@ export function StandardSpcPanel({ standardId }: { standardId: string }) {
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Validade dos resultados"
         title="CEP — Cartas de controle"
         description="Monitoramento estatístico das leituras de verificação intermediária deste padrão."
         action={

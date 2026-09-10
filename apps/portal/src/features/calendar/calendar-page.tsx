@@ -128,7 +128,6 @@ export function CalendarPage({
   return (
     <div className="portal-shell space-y-6">
       <PageHeader
-        eyebrow="Agenda"
         title="Calendário de calibrações"
         description="Vencimentos dos seus instrumentos no mês — planeje as próximas calibrações."
         actions={
@@ -298,7 +297,6 @@ export function CalendarPage({
 
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Detalhe"
             title={
               selectedDate ? formatDateLong(selectedDate) : "Selecione um dia"
             }

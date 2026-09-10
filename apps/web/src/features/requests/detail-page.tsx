@@ -283,7 +283,6 @@ function CalibrationRequestTriagePanel({
     <>
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Itens"
           title="Ativos solicitados"
           description="Selecione o serviço, técnico e prazo para converter cada ativo em ordem de serviço."
         />
@@ -482,7 +481,6 @@ function CalibrationRequestTriagePanel({
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Triagem"
           title="Ação da solicitação"
           description="Registre notas internas e escolha a próxima ação."
         />
@@ -725,7 +723,6 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Contexto"
           title="Resumo"
           description="Contexto enviado pelo cliente e histórico da triagem."
         />

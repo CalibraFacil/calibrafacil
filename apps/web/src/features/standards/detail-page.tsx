@@ -302,7 +302,6 @@ export function StandardDetailPage({ id }: { id: string }) {
         <main className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Identificação"
               title="Dados do padrão"
               description="Informações usadas para reconhecer o padrão no laboratório e nos certificados."
             />
@@ -326,7 +325,6 @@ export function StandardDetailPage({ id }: { id: string }) {
 
           <Panel className="p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Metrologia"
               title="Dados metrológicos"
               description="Valores certificados, incerteza e parâmetros usados nos cálculos."
             />
@@ -376,7 +374,7 @@ export function StandardDetailPage({ id }: { id: string }) {
 
         <aside className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">
-            <PanelHeader eyebrow="Rastreabilidade" title="Certificado" />
+            <PanelHeader title="Certificado" />
             <div className="mt-4 space-y-4">
               <StandardCertificateDocumentPanel standard={standard} />
               <BlueprintGrid>
@@ -406,7 +404,7 @@ export function StandardDetailPage({ id }: { id: string }) {
 
           {auditEvents.length > 0 ? (
             <Panel className="p-4 sm:p-5">
-              <PanelHeader eyebrow="Atividade" title="Histórico" />
+              <PanelHeader title="Histórico" />
               <div className="mt-4">
                 <AuditTimeline events={auditEvents} showCard={false} />
               </div>

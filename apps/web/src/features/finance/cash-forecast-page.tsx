@@ -107,7 +107,11 @@ export function CashForecastPage() {
           {BUCKET_ORDER.map((bucket) => {
             const summary = data.buckets[bucket]
             return (
-              <div key={bucket} data-testid={`bucket-${bucket}`} data-bucket={bucket}>
+              <div
+                key={bucket}
+                data-testid={`bucket-${bucket}`}
+                data-bucket={bucket}
+              >
                 <SignalTile
                   tone={summary.confirmedCents > 0 ? 'info' : 'neutral'}
                   label={BUCKET_LABEL[bucket]}
@@ -128,7 +132,6 @@ export function CashForecastPage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Recebíveis"
             title="Totais em 90 dias"
             description="Parcelas confirmadas em aberto + projeção dos contratos recorrentes ativos."
           />

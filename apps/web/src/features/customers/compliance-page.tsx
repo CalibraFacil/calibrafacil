@@ -234,7 +234,6 @@ function ClientComplianceForm({
 
   return (
     <ClientPanel
-      eyebrow="Conformidade"
       title="Qualificação e Auditoria"
       description="Controle a qualificação ISO 17025, o reconhecimento comercial e o histórico de alterações do cliente."
       icon={<HugeiconsIcon icon={Shield01Icon} className="size-5" />}

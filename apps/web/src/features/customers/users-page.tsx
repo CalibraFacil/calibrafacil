@@ -195,7 +195,6 @@ export function ClientUsersTab({ id }: { id: string }) {
 
   return (
     <ClientPanel
-      eyebrow="Portal"
       title="Acesso do Cliente"
       description="Gerencie quem entra no portal, acompanhe convites enviados e mantenha o acesso do cliente enxuto."
       icon={<HugeiconsIcon icon={UserMultipleIcon} className="size-5" />}

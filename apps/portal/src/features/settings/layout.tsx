@@ -12,7 +12,6 @@ export function SettingsLayout() {
   return (
     <div className="portal-shell space-y-6">
       <PageHeader
-        eyebrow="Portal"
         title="Configurações"
         description="Sua conta, a aparência do portal e como você recebe as atualizações do laboratório."
       />

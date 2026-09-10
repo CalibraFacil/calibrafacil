@@ -39,7 +39,6 @@ export function CertificateContentSection({
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Saída"
         title="Certificado"
         description="Conteúdo persistido no rascunho para emissão."
       />

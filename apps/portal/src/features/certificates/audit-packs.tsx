@@ -420,7 +420,6 @@ export function AuditPacksPanel() {
   return (
     <Panel className="p-4 sm:p-6">
       <PanelHeader
-        eyebrow="Auditoria"
         title="Pacote de auditoria"
         description="Todos os certificados do período + situação da frota em um único ZIP, com links públicos de verificação."
         action={<AuditPackDialog />}

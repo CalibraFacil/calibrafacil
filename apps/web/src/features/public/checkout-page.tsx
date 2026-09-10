@@ -190,14 +190,12 @@ export function PublicCheckoutPage({
               className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"
             />
 
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              {describeOfferKind(offer)}
-            </p>
-            <h1 className="mt-2 text-balance text-2xl font-semibold leading-tight tracking-tight">
+            <h1 className="text-balance text-2xl font-semibold leading-tight tracking-tight">
               {subject.title}
             </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              para <span className="text-foreground">{offer.seller.name}</span>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {describeOfferKind(offer)} · para{' '}
+              <span className="text-foreground">{offer.seller.name}</span>
             </p>
 
             <div className="mt-5 flex items-baseline gap-2">

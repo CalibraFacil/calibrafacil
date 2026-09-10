@@ -17,14 +17,12 @@ import { cn } from '@/lib/utils'
 
 /** A titled console card. `icon` is accepted for back-compat but not rendered. */
 function ClientPanel({
-  eyebrow,
   title,
   description,
   action,
   children,
   className,
 }: {
-  eyebrow?: string
   title: string
   description?: string
   icon?: ReactNode
@@ -34,12 +32,7 @@ function ClientPanel({
 }) {
   return (
     <Panel className={cn('p-4 sm:p-5', className)}>
-      <PanelHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-        action={action}
-      />
+      <PanelHeader title={title} description={description} action={action} />
       <div className="mt-5 space-y-6">{children}</div>
     </Panel>
   )

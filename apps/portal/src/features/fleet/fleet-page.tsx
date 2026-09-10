@@ -179,7 +179,6 @@ export function FleetPage({
   return (
     <div className="portal-shell space-y-6">
       <PageHeader
-        eyebrow="Equipamentos"
         title="Meus equipamentos"
         description="Acompanhe o status de calibração dos seus instrumentos e solicite novas calibrações."
         actions={

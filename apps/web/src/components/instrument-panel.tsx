@@ -59,13 +59,11 @@ export function Panel({
 }
 
 export function PanelHeader({
-  eyebrow,
   title,
   description,
   action,
   className,
 }: {
-  eyebrow?: ReactNode
   title: ReactNode
   description?: ReactNode
   action?: ReactNode
@@ -79,11 +77,6 @@ export function PanelHeader({
       )}
     >
       <div className="min-w-0">
-        {eyebrow ? (
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {eyebrow}
-          </p>
-        ) : null}
         <h2 className="text-balance text-base font-semibold sm:text-lg">
           {title}
         </h2>

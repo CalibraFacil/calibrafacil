@@ -283,7 +283,6 @@ export function ClientCalibrationsTab({ id }: { id: string }) {
 
   return (
     <ClientPanel
-      eyebrow="Calibrações"
       title="Histórico de Calibrações"
       description="Acompanhe ordens, certificados e execuções vinculadas a este cliente."
       icon={<HugeiconsIcon icon={Certificate01Icon} className="size-5" />}

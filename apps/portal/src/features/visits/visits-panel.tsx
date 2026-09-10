@@ -406,7 +406,6 @@ export function PortalVisitsPanel() {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="No local"
         title="Próximas visitas"
         description="Visitas de calibração in loco agendadas para você."
       />

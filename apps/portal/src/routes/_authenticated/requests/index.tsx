@@ -235,7 +235,6 @@ function RequestsPage() {
   return (
     <div className="portal-shell space-y-6">
       <PageHeader
-        eyebrow="Solicitações"
         title="Solicitações de calibração"
         description="Acompanhe os pedidos enviados ao laboratório, do envio à conversão em certificado."
         actions={

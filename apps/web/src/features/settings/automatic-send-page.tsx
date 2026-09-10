@@ -210,91 +210,93 @@ export function AutomaticSendSettingsPage() {
       )}
 
       <StaggerItem>
-      <Panel className="p-5 sm:p-6">
-        <PanelHeader
-          eyebrow="Exceções"
-          title="Exceções por cliente, contrato ou serviço"
-          description="Sobrescreve a regra padrão para o escopo selecionado."
-        />
-        <div className="mt-4 space-y-4">
-          {overrides.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma exceção configurada.
-            </p>
-          )}
-          <ul className="space-y-3">
-            {overrides.map((rule) => (
-              <li
-                key={rule.id}
-                className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
-                data-testid="automatic-send-rule-row"
-              >
-                <div className="space-y-1 min-w-0">
-                  <Badge variant="outline">{SCOPE_LABEL[rule.scope]}</Badge>
-                  <p className="text-sm font-medium truncate">
-                    {rule.customerName ||
-                      (rule.customerId
-                        ? `Cliente #${rule.customerId}`
-                        : rule.commercialAgreementId
-                          ? `Contrato #${rule.commercialAgreementId}`
-                          : rule.serviceCategory || 'Escopo')}
-                  </p>
-                  {rule.archivedAt && (
-                    <p className="text-xs text-muted-foreground">
-                      Arquivada em{' '}
-                      {new Date(rule.archivedAt).toLocaleDateString('pt-BR')}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Select
-                    value={rule.milestone}
-                    onValueChange={(value) => {
-                      if (isMilestone(value)) {
-                        updateMutation.mutate({
-                          id: rule.id,
-                          milestone: value,
-                        })
-                      }
-                    }}
-                    disabled={rule.archivedAt !== null}
-                  >
-                    <SelectTrigger className="sm:w-64">
-                      {MILESTONE_LABEL[rule.milestone]}
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
-                      {MILESTONE_KEYS.map((milestone) => (
-                        <SelectItem key={milestone} value={milestone}>
-                          {MILESTONE_LABEL[milestone]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!rule.archivedAt && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        updateMutation.mutate({
-                          id: rule.id,
-                          archived: true,
-                        })
-                      }
-                    >
-                      Arquivar
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          <CreateOverrideForm
-            onSubmit={(input) => createMutation.mutate(input)}
-            disabled={createMutation.isPending}
+        <Panel className="p-5 sm:p-6">
+          <PanelHeader
+            title="Exceções por cliente, contrato ou serviço"
+            description="Sobrescreve a regra padrão para o escopo selecionado."
           />
-        </div>
-      </Panel>
+          <div className="mt-4 space-y-4">
+            {overrides.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma exceção configurada.
+              </p>
+            )}
+            <ul className="space-y-3">
+              {overrides.map((rule) => (
+                <li
+                  key={rule.id}
+                  className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  data-testid="automatic-send-rule-row"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <Badge variant="outline">{SCOPE_LABEL[rule.scope]}</Badge>
+                    <p className="text-sm font-medium truncate">
+                      {rule.customerName ||
+                        (rule.customerId
+                          ? `Cliente #${rule.customerId}`
+                          : rule.commercialAgreementId
+                            ? `Contrato #${rule.commercialAgreementId}`
+                            : rule.serviceCategory || 'Escopo')}
+                    </p>
+                    {rule.archivedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Arquivada em{' '}
+                        {new Date(rule.archivedAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select
+                      value={rule.milestone}
+                      onValueChange={(value) => {
+                        if (isMilestone(value)) {
+                          updateMutation.mutate({
+                            id: rule.id,
+                            milestone: value,
+                          })
+                        }
+                      }}
+                      disabled={rule.archivedAt !== null}
+                    >
+                      <SelectTrigger className="sm:w-64">
+                        {MILESTONE_LABEL[rule.milestone]}
+                      </SelectTrigger>
+                      <SelectContent
+                        alignItemWithTrigger={false}
+                        className="w-auto min-w-56"
+                      >
+                        {MILESTONE_KEYS.map((milestone) => (
+                          <SelectItem key={milestone} value={milestone}>
+                            {MILESTONE_LABEL[milestone]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!rule.archivedAt && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          updateMutation.mutate({
+                            id: rule.id,
+                            archived: true,
+                          })
+                        }
+                      >
+                        Arquivar
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <CreateOverrideForm
+              onSubmit={(input) => createMutation.mutate(input)}
+              disabled={createMutation.isPending}
+            />
+          </div>
+        </Panel>
       </StaggerItem>
     </StaggerGroup>
   )
@@ -360,7 +362,10 @@ function CreateOverrideForm({
             }}
           >
             <SelectTrigger>{SCOPE_LABEL[scope]}</SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
+            <SelectContent
+              alignItemWithTrigger={false}
+              className="w-auto min-w-56"
+            >
               <SelectItem value="customer">Cliente</SelectItem>
               <SelectItem value="agreement">Contrato</SelectItem>
               <SelectItem value="service">Serviço</SelectItem>
@@ -384,7 +389,10 @@ function CreateOverrideForm({
             }}
           >
             <SelectTrigger>{MILESTONE_LABEL[milestone]}</SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} className="w-auto min-w-56">
+            <SelectContent
+              alignItemWithTrigger={false}
+              className="w-auto min-w-56"
+            >
               {MILESTONE_KEYS.map((option) => (
                 <SelectItem key={option} value={option}>
                   {MILESTONE_LABEL[option]}

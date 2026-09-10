@@ -452,7 +452,6 @@ export function MethodBuilder({
           <div className="space-y-4">
             <Panel id="mb-identificacao" className="scroll-mt-16 p-4 sm:p-5">
               <PanelHeader
-                eyebrow="Identificação"
                 title="Dados do método"
                 description="Dados persistidos no rascunho."
               />

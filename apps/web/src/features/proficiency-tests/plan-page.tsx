@@ -181,7 +181,6 @@ export function ProficiencyTestPlanPage() {
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Cobertura do escopo"
           title="Itens do plano"
           description="Vencimentos calculados a partir da última participação satisfatória."
         />
@@ -303,7 +302,6 @@ export function ProficiencyTestPlanPage() {
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Planejamento"
           title="Adicionar parte do escopo"
           description="Defina a frequência de participação com base no risco da atividade."
         />

@@ -144,7 +144,6 @@ export function ConsolidatedReportsPage() {
     return (
       <Panel className="p-6 sm:p-8">
         <PanelHeader
-          eyebrow="Acesso restrito"
           title="Relatórios consolidados"
           description="Disponíveis apenas para administradores globais da organização."
         />
@@ -427,7 +426,6 @@ export function ConsolidatedReportsPage() {
 
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Ranking"
           title="Comparativo por unidade"
           description="Estado de saúde por unidade no período, com drill-down direto."
         />

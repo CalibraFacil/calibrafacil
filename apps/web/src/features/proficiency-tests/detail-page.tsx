@@ -225,7 +225,6 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
       {/* Identification */}
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Identificação"
           title="Dados da participação"
           action={
             pt.capaId && pt.overallStatus !== 'unsatisfactory' ? (
@@ -285,7 +284,6 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
       {results.length > 0 && (
         <Panel className="p-4 sm:p-5">
           <PanelHeader
-            eyebrow="Desempenho"
             title="Resultados avaliados"
             description="Escores calculados conforme ISO 13528 a partir do relatório do provedor."
           />
@@ -365,7 +363,7 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
       {/* Audit Log */}
       {auditLog && auditLog.data.length > 0 && (
         <Panel className="p-4 sm:p-5">
-          <PanelHeader eyebrow="Atividade" title="Histórico de alterações" />
+          <PanelHeader title="Histórico de alterações" />
           <div className="mt-4 space-y-3">
             {auditLog.data.map((log) => (
               <div
@@ -446,7 +444,6 @@ function RecordResultsPanel({ id }: { id: string }) {
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Relatório do provedor"
         title="Registrar resultados"
         description="Lance os pontos do relatório final. Os escores (En, z, z′, ζ) e o veredito são calculados automaticamente; resultado insatisfatório abre CAPA."
       />

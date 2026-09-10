@@ -65,7 +65,6 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
     return (
       <Panel className="p-6">
         <PanelHeader
-          eyebrow="Contrato comercial"
           title={
             contractQuery.isPending
               ? 'Carregando contrato…'
@@ -118,7 +117,9 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
                     }
                     disabled={activateMutation.isPending}
                   >
-                    {activateMutation.isPending ? 'Ativando…' : 'Ativar contrato'}
+                    {activateMutation.isPending
+                      ? 'Ativando…'
+                      : 'Ativar contrato'}
                   </Button>
                 ) : null}
                 {contract.status === 'ACTIVE' ? (
@@ -156,7 +157,6 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Conformidade"
             title={
               <span className="inline-flex items-center gap-1.5">
                 Compatibilidade com Compliance
@@ -169,7 +169,9 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
             description="Reflete o estado de qualificação do cliente vinculado."
           />
           <BlueprintGrid className="mt-4 grid-cols-2 xl:grid-cols-4">
-            <BlueprintField label="Qualificação">{qualification}</BlueprintField>
+            <BlueprintField label="Qualificação">
+              {qualification}
+            </BlueprintField>
             <BlueprintField label="Requisitos reconhecidos">
               {compliance?.qualityRequirementsAcknowledged ? 'Sim' : 'Não'}
             </BlueprintField>
@@ -188,7 +190,6 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Tabela negociada"
             title="Preços por serviço"
             description="Estes valores alimentam o snapshot comercial dos jobs novos."
           />
@@ -223,7 +224,7 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
 
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
-          <PanelHeader eyebrow="Notas" title="Observações" />
+          <PanelHeader title="Observações" />
           <p className="mt-3 text-pretty text-sm text-muted-foreground">
             {contract.notes || 'Sem observações registradas.'}
           </p>
@@ -259,7 +260,9 @@ export function FinanceContractDetailsPage({ id }: { id: string }) {
                 })
               }
             >
-              {cancelMutation.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
+              {cancelMutation.isPending
+                ? 'Cancelando…'
+                : 'Confirmar cancelamento'}
             </Button>
           </DialogFooter>
         </DialogContent>

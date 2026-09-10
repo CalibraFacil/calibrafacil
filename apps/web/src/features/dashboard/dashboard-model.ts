@@ -324,15 +324,6 @@ export function formatShortDate(dateString: string | null) {
   }).format(new Date(dateString))
 }
 
-export function formatCurrentDate(today = new Date()) {
-  const value = new Intl.DateTimeFormat('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(today)
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
 export function jobTitle(job: DashboardJob) {
   return job.assetName ?? job.serviceName ?? job.jobId
 }

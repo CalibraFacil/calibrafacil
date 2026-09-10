@@ -192,7 +192,7 @@ function EditStandardForm({ standard }: { standard: StandardDetail }) {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Panel className="p-4 sm:p-5">
-          <PanelHeader eyebrow="Rastreabilidade" title="Certificado atual" />
+          <PanelHeader title="Certificado atual" />
           <div className="mt-4">
             <StandardCertificateDocumentPanel standard={standard} />
           </div>

@@ -29,20 +29,26 @@ export function SectionCard({
   return (
     <Panel id={id} className="scroll-mt-16 p-4 sm:p-5">
       <PanelHeader
-        eyebrow={count !== undefined ? `${count}` : undefined}
         title={title}
         description={description}
         action={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onAction}
-            className={ACTION_BUTTON_CLASS}
-          >
-            <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-            {actionLabel}
-          </Button>
+          <>
+            {count !== undefined ? (
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                {count}
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAction}
+              className={ACTION_BUTTON_CLASS}
+            >
+              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
+              {actionLabel}
+            </Button>
+          </>
         }
       />
       <div className="mt-4 space-y-3">{children}</div>

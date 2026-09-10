@@ -429,7 +429,6 @@ export function FinanceReceivablesPage({
           <TabsContent value="documentos" className="mt-4">
             <Panel className="p-5 sm:p-6">
               <PanelHeader
-                eyebrow="Cobrança"
                 title="Documentos"
                 description="Filtre, ordene, emita e exporte cobranças em lote."
               />
@@ -513,7 +512,6 @@ export function FinanceReceivablesPage({
           <TabsContent value="recebimentos" className="mt-4">
             <Panel className="p-5 sm:p-6">
               <PanelHeader
-                eyebrow="Recebíveis"
                 title="Recebimentos"
                 description="Acompanhe parcelas e registre baixas integrais."
               />

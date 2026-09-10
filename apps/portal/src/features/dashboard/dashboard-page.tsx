@@ -198,7 +198,6 @@ function UnitBreakdown() {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Rede"
         title="Por unidade"
         description="Situação de calibração de cada unidade do grupo, da mais crítica para a menos."
       />
@@ -268,7 +267,6 @@ function ComplianceVitals({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Conformidade"
         title="Status da frota"
         description="Distribuição dos seus instrumentos por situação de calibração."
         action={
@@ -443,7 +441,6 @@ function AttentionPanel({ data }: { data: PortalOverview }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Ação necessária"
         title="Precisa de atenção"
         action={
           <span className="rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">
@@ -595,7 +592,6 @@ function RecentCertificates({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Documentos"
         title="Certificados recentes"
         description={
           certificates.available > 0
@@ -697,7 +693,6 @@ function OpenRequests({ requests }: { requests: PortalOverview["requests"] }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Atendimento"
         title="Solicitações abertas"
         action={
           <Button variant="ghost" size="xs" render={<Link to="/requests" />}>
@@ -759,7 +754,6 @@ function ActiveServiceOrders({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Manutenção"
         title="Serviços em andamento"
         action={
           <Button

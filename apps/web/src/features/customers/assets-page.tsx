@@ -85,7 +85,6 @@ export function ClientEquipmentTab({ id }: { id: string }) {
 
   return (
     <ClientPanel
-      eyebrow="Ativos"
       title="Instrumentos do Cliente"
       description="Consulte os instrumentos vinculados, seus identificadores e o próximo ciclo de calibração."
       icon={<HugeiconsIcon icon={Wrench01Icon} className="size-5" />}

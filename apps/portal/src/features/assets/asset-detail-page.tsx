@@ -246,7 +246,6 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
           {/* Identification */}
           <Panel className="p-5">
             <PanelHeader
-              eyebrow="Cadastro"
               title="Identificação"
               description="Dados principais do instrumento cadastrado."
             />
@@ -279,7 +278,6 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
           {specifications.length > 0 ? (
             <Panel className="p-5">
               <PanelHeader
-                eyebrow="Técnico"
                 title="Especificações"
                 description="Características técnicas usadas no processo de calibração."
               />
@@ -299,7 +297,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
 
           {asset.comments ? (
             <Panel className="p-5">
-              <PanelHeader eyebrow="Notas" title="Observações" />
+              <PanelHeader title="Observações" />
               <p className="text-muted-foreground mt-4 text-sm leading-6 text-pretty">
                 {asset.comments}
               </p>
@@ -375,7 +373,6 @@ function CalibrationHistoryPanel({ asset }: { asset: AssetDetail }) {
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Rastreabilidade"
         title="Histórico de calibrações"
         description="Certificados aprovados, do mais recente ao mais antigo."
         action={

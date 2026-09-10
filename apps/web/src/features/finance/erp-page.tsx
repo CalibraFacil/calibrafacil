@@ -139,11 +139,15 @@ function makeErpColumns({
               size="sm"
               disabled={exporting || !hasIntegration}
               title={
-                hasIntegration ? undefined : 'Requer integração financeira ativa'
+                hasIntegration
+                  ? undefined
+                  : 'Requer integração financeira ativa'
               }
               onClick={() => onExport(row.original.id)}
             >
-              {row.original.exportStatus === 'EXPORTED' ? 'Reenviar' : 'Exportar'}
+              {row.original.exportStatus === 'EXPORTED'
+                ? 'Reenviar'
+                : 'Exportar'}
             </Button>
           </div>
         )
@@ -232,7 +236,6 @@ export function FinanceErpPage({ exportFilter }: { exportFilter?: string }) {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Integração ERP"
             title={
               <span className="inline-flex items-center gap-1.5">
                 Fila de exportação

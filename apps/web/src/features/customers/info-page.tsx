@@ -271,7 +271,6 @@ function ClientInfoForm({
     <div className="space-y-6">
       <SyncConflictReturnNotice search={conflictReturn} />
       <ClientPanel
-        eyebrow="Cadastro"
         title="Informações do Cliente"
         description="Dados cadastrais, contato principal e endereço usados no atendimento, nas ordens de serviço e nos documentos financeiros."
         icon={<HugeiconsIcon icon={UserAccountIcon} className="size-5" />}

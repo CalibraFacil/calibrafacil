@@ -83,7 +83,6 @@ export function CustomerGroupUnidadesTab({ groupId }: { groupId: number }) {
 
   return (
     <ClientPanel
-      eyebrow="Unidades"
       title="Unidades do grupo"
       description="Clientes deste laboratório que compõem a rede. O gestor do grupo vê todas as unidades de forma consolidada no portal."
     >
@@ -159,7 +158,9 @@ export function CustomerGroupUnidadesTab({ groupId }: { groupId: number }) {
                   className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-muted/50"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{branch.name}</p>
+                    <p className="truncate text-sm font-medium">
+                      {branch.name}
+                    </p>
                     {branch.taxId ? (
                       <p className="font-mono text-xs tabular-nums text-muted-foreground">
                         {branch.taxId}

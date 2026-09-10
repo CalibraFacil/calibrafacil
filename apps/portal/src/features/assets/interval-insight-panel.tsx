@@ -100,7 +100,6 @@ export function IntervalInsightPanel({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Programa metrológico"
         title="Análise de periodicidade"
         description="Sugestão baseada no histórico de calibração (ILAC-G24 / NCSL RP-1). Apenas indicativo — você decide."
       />

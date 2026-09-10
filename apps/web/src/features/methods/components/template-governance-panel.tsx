@@ -56,7 +56,7 @@ export function TemplateGovernancePanel({
   return (
     <Panel className="divide-y divide-foreground/10">
       <section className="p-4 sm:p-5">
-        <PanelHeader eyebrow="Modelo de medição" title={governance.measurand} />
+        <PanelHeader title={governance.measurand} />
         <p className="mt-2 text-pretty text-sm text-muted-foreground">
           {governance.summary}
         </p>
@@ -65,7 +65,7 @@ export function TemplateGovernancePanel({
         </Badge>
       </section>
 
-      <Eyebrowed eyebrow="A verificar antes do uso">
+      <LabelledSection title="A verificar antes do uso">
         <ul className="space-y-2.5">
           {verificarItems.map((item, index) => {
             const sev = severityMeta(item.severity)
@@ -89,10 +89,10 @@ export function TemplateGovernancePanel({
             )
           })}
         </ul>
-      </Eyebrowed>
+      </LabelledSection>
 
       {governance.omittedComponents.length > 0 ? (
-        <Eyebrowed eyebrow="Componentes situacionais">
+        <LabelledSection title="Componentes situacionais">
           <ul className="space-y-1.5">
             {governance.omittedComponents.map((omitted) => (
               <li key={omitted.ref} className="text-sm">
@@ -113,10 +113,10 @@ export function TemplateGovernancePanel({
             Avalie se algum destes componentes se aplica ao seu processo antes
             de declarar o orçamento de incerteza.
           </p>
-        </Eyebrowed>
+        </LabelledSection>
       ) : null}
 
-      <Eyebrowed eyebrow="Fontes">
+      <LabelledSection title="Fontes">
         <ul className="space-y-1.5">
           {governance.sources.map((source) => (
             <li
@@ -149,10 +149,10 @@ export function TemplateGovernancePanel({
             </li>
           ))}
         </ul>
-      </Eyebrowed>
+      </LabelledSection>
 
       {governance.conformanceNotes.length > 0 ? (
-        <Eyebrowed eyebrow="Notas de conformidade">
+        <LabelledSection title="Notas de conformidade">
           <ul className="space-y-1.5">
             {governance.conformanceNotes.map((note) => (
               <li key={note.ref} className="text-sm">
@@ -165,11 +165,11 @@ export function TemplateGovernancePanel({
               </li>
             ))}
           </ul>
-        </Eyebrowed>
+        </LabelledSection>
       ) : null}
 
       {governance.workedExample ? (
-        <Eyebrowed eyebrow="Exemplo verificado">
+        <LabelledSection title="Exemplo verificado">
           <div className="flex flex-wrap items-center gap-2">
             {governance.workedExample.provenance === 'cited_guide_table' ? (
               <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
@@ -188,24 +188,22 @@ export function TemplateGovernancePanel({
               laboratório.
             </p>
           ) : null}
-        </Eyebrowed>
+        </LabelledSection>
       ) : null}
     </Panel>
   )
 }
 
-function Eyebrowed({
-  eyebrow,
+function LabelledSection({
+  title,
   children,
 }: {
-  eyebrow: string
+  title: string
   children: ReactNode
 }) {
   return (
     <section className="p-4 sm:p-5">
-      <p className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        {eyebrow}
-      </p>
+      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
       {children}
     </section>
   )

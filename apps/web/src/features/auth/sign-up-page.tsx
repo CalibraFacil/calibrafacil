@@ -312,7 +312,6 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
 
       <div className="hidden p-3 lg:block">
         <AuthShaderPanel
-          eyebrow="Cadastro"
           title="Seu laboratório, funcionando hoje."
           description="Cálculo de incerteza, certificado assinado em ICP-Brasil, revisão com papéis distintos e trilha de auditoria já no primeiro plano. A norma não fica em plano caro."
         />

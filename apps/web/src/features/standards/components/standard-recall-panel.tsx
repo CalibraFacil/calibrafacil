@@ -118,7 +118,6 @@ export function StandardRecallPanel({
   return (
     <Panel className="p-4 sm:p-5">
       <PanelHeader
-        eyebrow="Qualidade"
         title="Recall de certificados"
         description="Notificação de clientes sobre certificados emitidos com este padrão fora de tolerância."
       />

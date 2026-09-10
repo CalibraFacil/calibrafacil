@@ -335,7 +335,6 @@ function NewRequestPage() {
   return (
     <div className="portal-shell space-y-6">
       <PageHeader
-        eyebrow="Solicitação"
         title="Nova solicitação de calibração"
         description="Selecione os equipamentos, informe como vai enviá-los e envie ao laboratório."
         actions={
@@ -350,8 +349,7 @@ function NewRequestPage() {
         {/* Step 1 — pick equipment */}
         <Panel className="p-5">
           <PanelHeader
-            eyebrow="Etapa 1 · Equipamentos"
-            title="Selecione os equipamentos"
+            title="Etapa 1 · Selecione os equipamentos"
             description="Marque os instrumentos que precisam de calibração."
             action={
               pageOverdue.length > 0 ? (
@@ -537,7 +535,7 @@ function NewRequestPage() {
           </Panel>
 
           <Panel className="p-5">
-            <PanelHeader eyebrow="Etapa 2 · Envio" title="Como vai enviar?" />
+            <PanelHeader title="Etapa 2 · Como vai enviar?" />
 
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
               <DeliveryOption

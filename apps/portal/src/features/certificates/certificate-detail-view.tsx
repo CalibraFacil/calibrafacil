@@ -449,7 +449,6 @@ function AmendmentChainTimeline({
   return (
     <Panel className="p-5 sm:p-6">
       <PanelHeader
-        eyebrow="Retificações"
         title="Histórico de emissões"
         description="Cadeia de retificações deste certificado, da emissão original à versão vigente."
       />
@@ -786,7 +785,7 @@ export function CertificateDetailView({
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Instrument */}
         <Panel className="p-5 sm:p-6">
-          <PanelHeader eyebrow="Instrumento" title="Equipamento calibrado" />
+          <PanelHeader title="Equipamento calibrado" />
           <BlueprintGrid className="mt-4 sm:grid-cols-2">
             <BlueprintField label="Nome">
               {certificate.assetName}
@@ -826,7 +825,7 @@ export function CertificateDetailView({
 
         {/* Calibration */}
         <Panel className="p-5 sm:p-6">
-          <PanelHeader eyebrow="Calibração" title="Serviço, método e datas" />
+          <PanelHeader title="Serviço, método e datas" />
           <BlueprintGrid className="mt-4 sm:grid-cols-2">
             <BlueprintField label="Serviço" className="sm:col-span-2">
               {certificate.serviceName}
@@ -847,7 +846,6 @@ export function CertificateDetailView({
       {/* Calibration results — the operational outcome */}
       <Panel className="p-5 sm:p-6">
         <PanelHeader
-          eyebrow="Resultado"
           title="Resultados da calibração"
           description="Veredito de conformidade e valores apurados, registrados na data de aprovação."
         />
@@ -921,7 +919,6 @@ export function CertificateDetailView({
       {/* Reference standards (traceability) */}
       <Panel className="p-5 sm:p-6">
         <PanelHeader
-          eyebrow="Rastreabilidade"
           title="Padrões de referência"
           description="Certificados originais dos padrões usados nesta calibração."
         />

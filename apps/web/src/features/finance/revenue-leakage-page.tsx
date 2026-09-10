@@ -215,7 +215,6 @@ export function RevenueLeakagePage({
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Atenção"
             title="Alertas de vazamento"
             description="Ordens paradas em alguma etapa por mais tempo do que o esperado."
           />

@@ -281,7 +281,7 @@ export function MethodDetailPage({ id }: { id: string }) {
 
         <aside className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">
-            <PanelHeader eyebrow="Governança" title="Responsáveis e datas" />
+            <PanelHeader title="Responsáveis e datas" />
             <BlueprintGrid className="mt-4">
               <BlueprintField label="Criado por">
                 {method.createdByName || '—'}
@@ -355,7 +355,7 @@ export function MethodDetailPage({ id }: { id: string }) {
 
           {auditEvents.length > 0 ? (
             <Panel className="p-4 sm:p-5">
-              <PanelHeader eyebrow="Atividade" title="Histórico" />
+              <PanelHeader title="Histórico" />
               <div className="mt-4">
                 <AuditTimeline events={auditEvents} showCard={false} />
               </div>

@@ -269,7 +269,6 @@ export function FinanceBillingReadinessPage({
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Cobrança"
             title="Pronto para faturar"
             description="Trabalho concluído aguardando faturamento. Resolva os bloqueios e envie as ordens prontas."
           />

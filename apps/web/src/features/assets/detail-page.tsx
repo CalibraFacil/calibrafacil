@@ -297,7 +297,6 @@ export function AssetDetailPage({ id }: { id: string }) {
         <main className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">
             <PanelHeader
-              eyebrow="Identificação"
               title="Dados do instrumento"
               description="Informações usadas para reconhecer o ativo no laboratório e nos certificados."
             />
@@ -327,7 +326,6 @@ export function AssetDetailPage({ id }: { id: string }) {
           {hasSpecs || showEccentricityIndicator ? (
             <Panel className="p-4 sm:p-5">
               <PanelHeader
-                eyebrow="Características"
                 title="Especificações técnicas"
                 description="Parâmetros do instrumento aplicados durante a calibração."
               />
@@ -352,7 +350,7 @@ export function AssetDetailPage({ id }: { id: string }) {
 
           {asset.comments ? (
             <Panel className="p-4 sm:p-5">
-              <PanelHeader eyebrow="Notas" title="Observações" />
+              <PanelHeader title="Observações" />
               <p className="mt-4 whitespace-pre-wrap text-pretty text-sm leading-6 text-muted-foreground">
                 {asset.comments}
               </p>
@@ -362,7 +360,7 @@ export function AssetDetailPage({ id }: { id: string }) {
 
         <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
           <Panel className="p-4 sm:p-5">
-            <PanelHeader eyebrow="Programação" title="Calibração" />
+            <PanelHeader title="Calibração" />
             <BlueprintGrid className="mt-4">
               <BlueprintField label="Última calibração" mono>
                 {formatDate(asset.lastCalibrationDate)}
@@ -387,10 +385,7 @@ export function AssetDetailPage({ id }: { id: string }) {
 
           {auditEvents.length > 0 ? (
             <Panel className="p-4 sm:p-5">
-              <PanelHeader
-                eyebrow="Atividade"
-                title="Histórico de alterações"
-              />
+              <PanelHeader title="Histórico de alterações" />
               <div className="mt-4">
                 <AuditTimeline events={auditEvents} showCard={false} />
               </div>

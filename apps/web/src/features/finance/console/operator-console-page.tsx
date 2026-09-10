@@ -175,7 +175,6 @@ export function FinanceOperatorConsolePage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Recebíveis"
             title="Envelhecimento"
             description="Saldo vencido distribuído por faixa de atraso."
           />
@@ -202,7 +201,6 @@ export function FinanceOperatorConsolePage() {
       <StaggerItem>
         <Panel className="p-5 sm:p-6">
           <PanelHeader
-            eyebrow="Cobrança"
             title="Documentos recentes"
             description="Últimas cobranças emitidas ou em preparação."
             action={

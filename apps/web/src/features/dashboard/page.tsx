@@ -50,7 +50,6 @@ import {
   buildPipeline,
   buildTrendSeries,
   defaultQueueView,
-  formatCurrentDate,
   formatDueDate,
   formatShortDate,
   formatStandardDue,
@@ -189,10 +188,7 @@ export function DashboardIndex() {
 
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {formatCurrentDate()}
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-[-0.02em] sm:text-[28px]">
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] sm:text-[28px]">
             Operação do laboratório
           </h1>
           {isLoading ? (
@@ -355,15 +351,16 @@ function PipelinePanel({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Calibrações"
-        title="Pipeline"
-        description="Trabalho em aberto por etapa, da preparação à emissão."
+        title="Calibrações em aberto"
         action={
           isLoading ? (
-            <Skeleton className="h-6 w-24 rounded-full" />
+            <Skeleton className="h-6 w-10 rounded-full" />
           ) : (
-            <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-semibold tabular-nums">
-              {open} em aberto
+            <span
+              aria-label={`${open} em aberto`}
+              className="rounded-full bg-muted px-2.5 py-1 font-mono text-xs font-semibold tabular-nums"
+            >
+              {open}
             </span>
           )
         }
@@ -541,21 +538,7 @@ function WorkQueuePanel({
     <Panel className="overflow-hidden">
       <div className="px-5 pt-5">
         <PanelHeader
-          eyebrow="Fila de trabalho"
-          title={
-            view === 'due'
-              ? 'Por prazo'
-              : view === 'review'
-                ? 'Aguardando revisão'
-                : 'Criadas recentemente'
-          }
-          description={
-            view === 'due'
-              ? 'Calibrações abertas vencidas ou com prazo nos próximos sete dias.'
-              : view === 'review'
-                ? 'Submetidas pela execução e aguardando aprovação técnica.'
-                : 'Últimas calibrações registradas no contexto selecionado.'
-          }
+          title="Fila de trabalho"
           action={
             <SegmentedControl
               name="dashboard-queue-view"
@@ -747,11 +730,7 @@ function HealthPanel({
 
   return (
     <Panel className="p-5">
-      <PanelHeader
-        eyebrow="ISO/IEC 17025"
-        title="Saúde do laboratório"
-        description="Sinais de qualidade, rastreabilidade e pessoal."
-      />
+      <PanelHeader title="Saúde do laboratório" />
       {isLoading ? (
         <div className="mt-4 grid grid-cols-2 gap-2">
           {healthSkeletonKeys.map((key) => (
@@ -856,9 +835,7 @@ function ThroughputPanel({
   return (
     <Panel className="p-5">
       <PanelHeader
-        eyebrow="Ritmo"
-        title="Decisões por dia"
-        description="Calibrações aprovadas e rejeitadas na revisão técnica."
+        title="Aprovações e rejeições por dia"
         action={
           <SegmentedControl
             name="dashboard-trend-window"
@@ -1031,11 +1008,7 @@ function TraceabilityPanel({
 }) {
   return (
     <Panel className="p-5">
-      <PanelHeader
-        eyebrow="Rastreabilidade"
-        title="Padrões a vencer"
-        description="Padrões ativos com calibração vencendo em até 30 dias."
-      />
+      <PanelHeader title="Padrões a vencer em 30 dias" />
 
       {isLoading ? (
         <div className="mt-4 space-y-2">

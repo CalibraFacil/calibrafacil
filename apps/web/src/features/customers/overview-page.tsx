@@ -205,7 +205,6 @@ export function ClientOverviewTab({ id }: { id: string }) {
       {/* Contato — most-used info: keep it first and click-to-act */}
       <Panel className="p-4 sm:p-5">
         <PanelHeader
-          eyebrow="Atendimento"
           title="Contato"
           description="Canais para falar com o cliente sobre coletas, prazos e calibrações."
           action={
@@ -248,11 +247,7 @@ export function ClientOverviewTab({ id }: { id: string }) {
           className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <Panel className="h-full p-4 transition-[box-shadow] group-hover:shadow-[0_1px_2px_rgba(15,23,42,0.06),0_22px_50px_rgba(15,23,42,0.10)] sm:p-5">
-            <PanelHeader
-              eyebrow="Conformidade"
-              title="Qualificação"
-              action={<SeeAll>Ver</SeeAll>}
-            />
+            <PanelHeader title="Qualificação" action={<SeeAll>Ver</SeeAll>} />
             <div className="mt-4 space-y-1 divide-y divide-foreground/[0.06]">
               <FieldRow label="Situação">
                 {qualification ? (
@@ -283,7 +278,7 @@ export function ClientOverviewTab({ id }: { id: string }) {
 
         {/* Financeiro */}
         <Panel className="h-full p-4 sm:p-5">
-          <PanelHeader eyebrow="Financeiro" title="Faturamento" />
+          <PanelHeader title="Faturamento" />
           <StaggerGroup className="mt-4 grid grid-cols-2 gap-3">
             <StaggerItem>
               <SignalTile
@@ -333,7 +328,6 @@ export function ClientOverviewTab({ id }: { id: string }) {
       >
         <Panel className="p-4 transition-[box-shadow] group-hover:shadow-[0_1px_2px_rgba(15,23,42,0.06),0_22px_50px_rgba(15,23,42,0.10)] sm:p-5">
           <PanelHeader
-            eyebrow="Ativos"
             title="Instrumentos do cliente"
             action={<SeeAll>Ver todos</SeeAll>}
           />
@@ -381,7 +375,6 @@ export function ClientOverviewTab({ id }: { id: string }) {
         <Link to="/dashboard/clients/$id/calibrations" params={{ id }}>
           <div className="group">
             <PanelHeader
-              eyebrow="Atividade"
               title="Calibrações recentes"
               action={<SeeAll>Ver todas</SeeAll>}
             />
@@ -448,7 +441,6 @@ export function ClientOverviewTab({ id }: { id: string }) {
       >
         <Panel className="p-4 transition-[box-shadow] group-hover:shadow-[0_1px_2px_rgba(15,23,42,0.06),0_22px_50px_rgba(15,23,42,0.10)] sm:p-5">
           <PanelHeader
-            eyebrow="Portal"
             title="Acesso do cliente"
             action={<SeeAll>Gerenciar</SeeAll>}
           />

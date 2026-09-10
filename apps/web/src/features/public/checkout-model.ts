@@ -91,10 +91,10 @@ export function describeSubject(offer: CheckoutOffer): CheckoutSubject {
 }
 
 /**
- * The eyebrow above the title. The same page serves setup fees and one-off plan
- * purchases, and calling those "Assinatura" tells a customer they are signing
- * up for a recurrence the offer does not have, in the last sentence they read
- * before paying.
+ * What the customer is actually buying, shown under the title. The same page
+ * serves setup fees and one-off plan purchases, and calling those "Assinatura"
+ * tells a customer they are signing up for a recurrence the offer does not
+ * have, in the last sentence they read before paying.
  */
 export function describeOfferKind(offer: CheckoutOffer): string {
   switch (offer.kind) {
