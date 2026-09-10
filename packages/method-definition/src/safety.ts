@@ -81,6 +81,15 @@ export function assertSafeUnknown(value: unknown, path = "draft"): void {
       if ("get" in descriptor || "set" in descriptor) {
         throw new Error(`${currentPath}.${key} must not be an accessor`);
       }
+      // An own key holding literally `undefined` means the same thing as the key
+      // being absent: `canonicalJson` drops it, so it cannot move a fingerprint,
+      // `JSON.stringify` drops it on the wire, and the Zod schemas mark those
+      // fields `.optional()`. Skipping it keeps in-process callers — the draft
+      // mappers that write `field: cond ? value : undefined` — on the same
+      // footing as the identical payload posted as JSON. `undefined` inside an
+      // array stays rejected (see the array branch above): `JSON.stringify`
+      // turns that slot into `null`, which changes its meaning.
+      if (descriptor.value === undefined) continue;
       visit(descriptor.value, `${currentPath}.${key}`);
     }
   }

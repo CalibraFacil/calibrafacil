@@ -90,11 +90,13 @@ async function seedProfessionalSubscription(orgId: string): Promise<void> {
  * Minimal dataFields for a compilable method (one number input, no formulas).
  * The engine accepts this and preview scenarios pass trivially (no errors).
  *
- * IMPORTANT: include `unit` and `defaultValue` to avoid assertSafeUnknown
- * throwing on `draft.inputs[0].unit has unsupported type undefined`.
- * `methodInputToDefinitionInput` explicitly sets optional fields to `undefined`
- * when absent (e.g. `unit: typeof record.unit === "string" ? record.unit : undefined`),
- * which assertSafeUnknown rejects. Including them as real values avoids this.
+ * `unit` and `defaultValue` are spelled out here only to keep the fixture
+ * realistic. They used to be mandatory: `methodInputToDefinitionInput` writes
+ * absent optional fields as an explicit `undefined`
+ * (`unit: typeof record.unit === "string" ? record.unit : undefined`), and
+ * `assertSafeUnknown` rejected any key holding `undefined`, so a fixture without
+ * them 500'd. `assertSafeUnknown` now treats such a key as absent — the same as
+ * the identical payload arriving as JSON.
  */
 const MINIMAL_DATA_FIELDS = [
   {
@@ -112,11 +114,11 @@ const MINIMAL_DATA_FIELDS = [
  * bypassing the POST / handler's initial-status lock and compile gate.
  *
  * SEED NOTES:
- * - description: "" (not null) — methodPayloadToDefinitionDraft maps null→undefined
- *   which assertSafeUnknown rejects; empty string passes the typeof check.
- * - assetTypeId: required for any test that reaches quality-approve compilation,
- *   because methodRecordToDraft maps null→undefined which assertSafeUnknown rejects.
- *   Pass a seeded assetType.id for tests that call quality-approve successfully.
+ * - description: "" (not null) and a seeded assetTypeId keep these rows close to
+ *   real ones. Both used to be load-bearing: the draft mappers map null→undefined
+ *   and `assertSafeUnknown` rejected keys holding `undefined`, so a null
+ *   description or assetTypeId 500'd on every compiling transition. That is fixed
+ *   in `packages/method-definition/src/safety.ts`.
  */
 async function seedMethod(params: {
   orgId: string;
@@ -201,10 +203,11 @@ async function seedExtraMember(params: {
 /**
  * Seed a minimal asset type row and return its id.
  *
- * Required for tests that reach quality-approve compilation: methodRecordToDraft
- * maps assetTypeId=null to undefined which assertSafeUnknown rejects with
- * "draft.assetTypeId has unsupported type undefined". Seeding a real asset type
- * and linking the method to it causes the field to be a string ("1") instead.
+ * Linking a method to a real asset type makes `methodRecordToDraft` emit
+ * assetTypeId as a string ("1"). This used to be required for any test reaching
+ * quality-approve compilation, because a null assetTypeId mapped to `undefined`
+ * and `assertSafeUnknown` rejected it with
+ * "draft.assetTypeId has unsupported type undefined" — no longer the case.
  */
 async function seedAssetType(): Promise<number> {
   const [row] = await db
@@ -358,7 +361,7 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
     });
 
     // Seed an asset type so methodRecordToDraft produces assetTypeId:"1" (string)
-    // instead of undefined, which assertSafeUnknown would reject.
+    // rather than undefined, keeping the seeded row close to a real one.
     const assetTypeId = await seedAssetType();
 
     // Seed TECHNICAL_REVIEWED by admin (distinct from owner)
@@ -1056,8 +1059,7 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
       orgId: "org-dim-ra",
       userId: "user-dim-ra",
     });
-    // assetTypeId required: methodRecordToDraft maps a null assetTypeId to
-    // `undefined`, which assertSafeUnknown rejects.
+    // Link a real asset type so the seeded row matches what POST/PUT would store.
     const assetTypeId = await seedAssetType();
     const methodId = await seedMethod({
       orgId: org.orgId,
