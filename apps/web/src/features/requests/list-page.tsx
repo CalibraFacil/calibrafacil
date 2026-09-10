@@ -154,9 +154,6 @@ export function RequestsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Atendimento
-          </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Solicitações de calibração
           </h1>

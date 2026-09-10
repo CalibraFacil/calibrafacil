@@ -312,9 +312,6 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
       <div className="space-y-3">
         <BackLink />
         <div className="flex flex-col gap-1">
-          <p className="font-mono text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-            Visita in loco
-          </p>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
               {visit.customerName}

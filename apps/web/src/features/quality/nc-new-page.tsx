@@ -154,9 +154,6 @@ export function NewNCPage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Qualidade
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Registrar não conformidade
         </h1>
@@ -324,9 +321,6 @@ export function NewNCPage() {
 
         <aside className="space-y-4">
           <Panel className="p-5">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Como funciona
-            </p>
             <h2 className="mt-0.5 text-base font-semibold">
               Fluxo da não conformidade
             </h2>

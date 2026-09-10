@@ -132,13 +132,13 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
         <BlueprintOverlay />
         <div className="relative space-y-4">
           <div className="min-w-0">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {PT_ACTIVITY_TYPE_LABELS[pt.activityType]}
-            </p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                 {pt.ptRound}
               </h1>
+              <Badge variant="outline">
+                {PT_ACTIVITY_TYPE_LABELS[pt.activityType]}
+              </Badge>
               <Badge
                 variant="outline"
                 className={PT_STATUS_BADGE_CLASSES[pt.overallStatus]}

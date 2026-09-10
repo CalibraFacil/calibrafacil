@@ -100,9 +100,6 @@ export function FinanceLayout() {
       <Panel className="relative overflow-hidden p-5 sm:p-6">
         <BlueprintOverlay />
         <div className="relative flex flex-col gap-1.5">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Operação financeira
-          </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Financeiro
           </h1>

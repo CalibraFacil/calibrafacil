@@ -419,10 +419,12 @@ function TemplateCard({
   const sources = entry.governance.sources
   return (
     <Panel className="flex h-full flex-col p-4">
-      <p className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        {disciplineLabel(entry.discipline)}
-      </p>
-      <h3 className="text-sm font-medium">{entry.defaultName}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h3 className="text-sm font-medium">{entry.defaultName}</h3>
+        <Badge variant="outline" className="shrink-0">
+          {disciplineLabel(entry.discipline)}
+        </Badge>
+      </div>
 
       <div className="mt-2 overflow-x-auto rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-foreground/80">
         {entry.governance.measurand}

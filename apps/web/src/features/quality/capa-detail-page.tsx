@@ -182,9 +182,6 @@ export function CAPADetailPage({ id }: { id: string }) {
         <BlueprintOverlay />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Ação corretiva / preventiva
-            </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-3">
               <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                 {capa.capaNumber}

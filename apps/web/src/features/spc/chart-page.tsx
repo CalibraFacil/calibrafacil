@@ -193,9 +193,6 @@ export function SpcChartPage({ id }: { id: string }) {
         <div className="relative space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Carta de controle
-              </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-3">
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {chart.parameter}

@@ -129,9 +129,6 @@ export function StandardsListPage({
       <OnboardingStepHint step={onboardingStep} expected="referenceStandard" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Cadastro
-          </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Padrões de referência
           </h1>

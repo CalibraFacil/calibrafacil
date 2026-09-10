@@ -138,9 +138,6 @@ export function ReliabilityPage() {
                 strokeWidth={2}
                 className="text-muted-foreground size-4"
               />
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Qualidade · confiabilidade observada
-              </p>
             </div>
             <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
               Confiabilidade da frota

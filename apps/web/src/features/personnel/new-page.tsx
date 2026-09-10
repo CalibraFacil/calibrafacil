@@ -106,9 +106,6 @@ export function NewCompetencePage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Pessoal
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Nova solicitação de competência
         </h1>
@@ -232,9 +229,6 @@ export function NewCompetencePage() {
 
         <aside className="space-y-4">
           <Panel className="p-5">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Como funciona
-            </p>
             <h2 className="mt-0.5 text-base font-semibold">
               Ciclo de qualificação
             </h2>

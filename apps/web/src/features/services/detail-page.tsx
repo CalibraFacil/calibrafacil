@@ -156,9 +156,6 @@ export function ServiceDetailPage({ id }: { id: string }) {
         <div className="relative flex flex-col gap-5 p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Serviço · Catálogo
-              </p>
               <h1 className="text-balance text-2xl font-semibold tracking-tight">
                 {service.name}
               </h1>

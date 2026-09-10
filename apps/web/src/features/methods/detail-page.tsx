@@ -235,10 +235,6 @@ export function MethodDetailPage({ id }: { id: string }) {
         <div className="relative flex flex-col gap-5 p-5 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Método de calibração
-                {method.assetTypeName ? ` · ${method.assetTypeName}` : ''}
-              </p>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {method.name}
@@ -246,6 +242,9 @@ export function MethodDetailPage({ id }: { id: string }) {
                 <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium tabular-nums text-muted-foreground">
                   v{method.version}
                 </span>
+                {method.assetTypeName ? (
+                  <Badge variant="outline">{method.assetTypeName}</Badge>
+                ) : null}
                 <Badge variant={getStatusVariant(method.status)}>
                   {getStatusLabel(method.status)}
                 </Badge>
@@ -312,9 +311,6 @@ export function MethodDetailPage({ id }: { id: string }) {
                 <AccordionItem value="evidence">
                   <AccordionTrigger className="min-h-9 py-0 hover:no-underline">
                     <div className="min-w-0 text-left">
-                      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                        Técnico
-                      </p>
                       <h2 className="text-sm font-semibold">
                         Evidência de publicação
                       </h2>

@@ -30,9 +30,6 @@ export function SignInShaderPanel() {
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-blue-950/70 via-blue-950/25 to-transparent" />
 
       <div className="relative z-10 flex flex-col gap-4 p-10 text-white">
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-white/70">
-          Certificados · Equipamentos · Documentos
-        </p>
         <h2 className="max-w-md text-3xl font-semibold leading-tight text-balance">
           Tudo da sua calibração em um só lugar.
         </h2>

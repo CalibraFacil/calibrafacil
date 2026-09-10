@@ -112,9 +112,6 @@ export function PersonnelPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Pessoal
-          </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Competências do pessoal
           </h1>
@@ -172,10 +169,10 @@ export function PersonnelPage() {
                   <SelectContent>
                     <SelectItem value="">Todos os Status</SelectItem>
                     {COMPETENCE_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {STATUS_LABELS[status]}
-                        </SelectItem>
-                      ))}
+                      <SelectItem key={status} value={status}>
+                        {STATUS_LABELS[status]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {statusFilter && (

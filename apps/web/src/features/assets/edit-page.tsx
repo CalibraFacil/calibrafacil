@@ -54,12 +54,12 @@ export function EditAssetPage({
       <SyncConflictReturnNotice search={conflictReturn} />
 
       <div>
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          {asset.tag}
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Editar ativo
         </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Tag <span className="font-mono tabular-nums">{asset.tag}</span>
+        </p>
       </div>
 
       <AssetEditForm

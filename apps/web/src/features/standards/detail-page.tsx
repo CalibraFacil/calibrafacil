@@ -200,14 +200,12 @@ export function StandardDetailPage({ id }: { id: string }) {
         <div className="relative flex flex-col gap-5 p-5 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Padrão de referência · {kindLabel}
-              </p>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {standard.name}
                 </h1>
                 <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                <Badge variant="outline">{kindLabel}</Badge>
               </div>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
                 {standard.type ? (

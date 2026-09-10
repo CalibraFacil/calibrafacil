@@ -78,9 +78,6 @@ export function DashboardPage() {
           <div className="min-w-0">
             <div className="mb-1 flex items-center gap-2">
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Operação · status em tempo real
-              </p>
             </div>
             <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
               Sua operação de calibração

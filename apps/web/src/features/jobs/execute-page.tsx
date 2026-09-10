@@ -1138,9 +1138,6 @@ function ExecuteJobForm({
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-4">
             <div>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Calibração · Execução
-              </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-3">
                 <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight text-foreground">
                   {job.jobId}

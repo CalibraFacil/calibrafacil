@@ -182,12 +182,14 @@ export function AssetDetailPage({ id }: { id: string }) {
         <div className="relative flex flex-col gap-5 p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                {asset.tag}
-              </p>
-              <h1 className="text-balance text-2xl font-semibold tracking-tight">
-                {asset.name}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-balance text-2xl font-semibold tracking-tight">
+                  {asset.name}
+                </h1>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium tabular-nums text-muted-foreground">
+                  {asset.tag}
+                </span>
+              </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 <Link
                   to="/dashboard/clients/$id"

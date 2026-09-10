@@ -272,9 +272,6 @@ export function ConsolidatedReportsPage() {
         <div className="relative flex flex-col gap-5 p-5 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Relatórios consolidados
-              </p>
               <h1 className="text-balance text-2xl font-semibold tracking-tight">
                 Visão executiva multiunidade
               </h1>

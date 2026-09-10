@@ -639,9 +639,6 @@ export function CertificateDetailView({
                 </span>
               )}
               <div className="min-w-0">
-                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Certificado de calibração
-                </p>
                 <h1 className="text-balance font-mono text-3xl font-semibold tracking-tight tabular-nums">
                   {certificate.jobId}
                 </h1>

@@ -537,9 +537,6 @@ export function ApprovedJobRecord({
                 <HugeiconsIcon icon={CheckmarkBadge02Icon} className="size-8" />
               </span>
               <div className="min-w-0">
-                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Registro de qualidade
-                </p>
                 <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                   {job.jobId}
                 </h1>

@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusPill, TONE } from "@/components/status-pill";
+import { StatusPill } from "@/components/status-pill";
 import { Timeline } from "@/components/timeline";
 import {
   ACTION_BUTTON_CLASS,
@@ -24,7 +24,6 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-  type SignalTone,
 } from "@/components/instrument-panel";
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatDate } from "@/lib/format";
@@ -61,9 +60,6 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
     return (
       <div className="portal-shell">
         <Panel className="p-6">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Instrumento
-          </p>
           <h1 className="mt-1 text-lg font-semibold">
             Equipamento não encontrado
           </h1>
@@ -113,17 +109,13 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
               <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} />
               Equipamentos
             </Button>
-            <div className="mt-4 flex items-center gap-2">
-              <span className={cnDot(calibration.tone)} aria-hidden />
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Instrumento · {asset.assetTypeName}
-              </p>
-            </div>
-            <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h1 className="mt-4 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
               {asset.name}
             </h1>
             <p className="text-muted-foreground mt-2 text-sm text-pretty">
-              Tag <span className="font-mono tabular-nums">{asset.tag}</span>
+              {asset.assetTypeName}
+              {" · "}Tag{" "}
+              <span className="font-mono tabular-nums">{asset.tag}</span>
               {" · "}Série{" "}
               <span className="font-mono tabular-nums">
                 {asset.serialNumber}
@@ -325,10 +317,6 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
       </div>
     </div>
   );
-}
-
-function cnDot(tone: SignalTone): string {
-  return `size-1.5 shrink-0 rounded-full ${TONE[tone].dot}`;
 }
 
 /**

@@ -105,15 +105,6 @@ export function ClientDetailLayout({ id }: ClientDetailLayoutProps) {
         </div>
       ) : customer ? (
         <div className="min-w-0 space-y-1.5">
-          {customer.taxId ? (
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] tabular-nums text-muted-foreground">
-              {customer.taxId}
-            </p>
-          ) : (
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Cliente
-            </p>
-          )}
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
             <h1 className="text-balance text-2xl font-semibold tracking-tight">
               {customer.name}
@@ -124,11 +115,15 @@ export function ClientDetailLayout({ id }: ClientDetailLayoutProps) {
               </Badge>
             )}
           </div>
-          {customer.tradeName && (
+          {customer.tradeName || customer.taxId ? (
             <p className="text-sm text-muted-foreground">
               {customer.tradeName}
+              {customer.tradeName && customer.taxId ? ' · ' : ''}
+              {customer.taxId ? (
+                <span className="font-mono tabular-nums">{customer.taxId}</span>
+              ) : null}
             </p>
-          )}
+          ) : null}
         </div>
       ) : (
         <h1 className="text-2xl font-semibold tracking-tight text-destructive">

@@ -123,9 +123,6 @@ function StatusHero({ data }: { data: VerificationData }) {
           />
         </div>
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Verificação de certificado
-          </p>
           <h1 className={cn("mt-1 text-xl font-semibold", TONE_TEXT[tone])}>
             {title}
           </h1>

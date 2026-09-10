@@ -356,9 +356,6 @@ export function NewServiceOrderPage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Ordem de serviço
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Nova ordem de serviço
         </h1>
@@ -898,9 +895,6 @@ export function NewServiceOrderPage() {
 
         <aside className="xl:sticky xl:top-4 xl:self-start">
           <Panel className="p-5">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Comprovante de recebimento
-            </p>
             <h2 className="mt-1 text-base font-semibold">Resumo da entrada</h2>
 
             <div className="mt-4 space-y-5">

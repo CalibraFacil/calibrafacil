@@ -164,9 +164,6 @@ export function NewProficiencyTestPage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Qualidade
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Novo ensaio de proficiência
         </h1>
@@ -416,9 +413,6 @@ export function NewProficiencyTestPage() {
 
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <Panel className="p-5">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Ensaio de proficiência
-            </p>
             <h2 className="mt-0.5 text-base font-semibold">Resumo</h2>
 
             <dl className="mt-4 space-y-2.5">

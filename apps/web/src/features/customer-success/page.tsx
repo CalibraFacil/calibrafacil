@@ -332,15 +332,13 @@ export function CustomerSuccessPage() {
         <BlueprintOverlay />
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className={cn('size-2 rounded-full', health.dot)} />
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Customer Success · {health.label}
-              </p>
-            </div>
-            <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
               {health.headline}
             </h1>
+            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className={cn('size-2 rounded-full', health.dot)} />
+              {health.label}
+            </p>
             <p className="mt-2 text-pretty text-base text-muted-foreground">
               {payload.profile.publicStatusNote ?? health.note}
             </p>

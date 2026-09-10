@@ -78,9 +78,6 @@ export function VisitsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-            Calibração in loco
-          </p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Visitas
           </h1>

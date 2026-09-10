@@ -73,9 +73,6 @@ export function CompetenceDetailLayout({ id }: CompetenceDetailLayoutProps) {
             </div>
           ) : competence ? (
             <>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Competência
-              </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-3">
                 <h1 className="text-balance text-2xl font-semibold tracking-tight">
                   {competence.userName ?? 'Técnico'}

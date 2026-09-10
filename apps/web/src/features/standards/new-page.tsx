@@ -64,9 +64,6 @@ export function NewStandardPage() {
   return (
     <div className="space-y-6">
       <div className="min-w-0 space-y-1">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Catálogo de padrões
-        </p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight">
           Novo padrão
         </h1>

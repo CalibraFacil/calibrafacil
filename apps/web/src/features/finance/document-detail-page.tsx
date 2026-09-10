@@ -209,9 +209,6 @@ export function FinanceDocumentDetailsPage({ id }: { id: string }) {
           <div className="relative flex flex-col gap-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Documento financeiro
-                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
                     {document.documentNumber ?? `Rascunho #${document.id}`}
