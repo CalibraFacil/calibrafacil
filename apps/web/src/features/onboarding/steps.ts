@@ -83,6 +83,10 @@ export type ActivationStepView = ActivationStep & {
 
 export type ActivationChecklistView = {
   steps: ActivationStepView[]
+  /** What is still open, reachable steps first and blocked ones after. */
+  remaining: ActivationStepView[]
+  /** What is already done, in the canonical order. */
+  completed: ActivationStepView[]
   completedCount: number
   totalCount: number
   /** Hidden entirely once the laboratory has issued a certificate. */
@@ -119,9 +123,21 @@ export function buildActivationChecklistView(
     }
   })
 
+  // Split rather than one flat list: what is left is the only part anyone
+  // acts on, so it goes first and at full weight, and the steps that are
+  // already behind the laboratory become a quiet ledger underneath. Within
+  // each group the canonical order is preserved.
+  const open = steps.filter((step) => !step.done)
+  const completed = steps.filter((step) => step.done)
+
   return {
     steps,
-    completedCount: steps.filter((step) => step.done).length,
+    remaining: [
+      ...open.filter((step) => !step.locked),
+      ...open.filter((step) => step.locked),
+    ],
+    completed,
+    completedCount: completed.length,
     totalCount: steps.length,
     complete: checklist.complete,
   }

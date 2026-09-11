@@ -69,6 +69,45 @@ describe('buildActivationChecklistView', () => {
     ).toBe(true)
   })
 
+  it('puts what is still open first, reachable steps ahead of blocked ones', () => {
+    const view = buildActivationChecklistView(
+      checklist({ organizationProfile: true, customer: true }),
+    )
+
+    expect(view.remaining.map((step) => step.id)).toEqual([
+      'methodPublished',
+      'referenceStandard',
+      'signingCertificate',
+      'firstCertificate',
+    ])
+    expect(view.remaining.at(-1)?.locked).toBe(true)
+  })
+
+  it('keeps the finished steps in their own group, in the canonical order', () => {
+    const view = buildActivationChecklistView(
+      checklist({ customer: true, organizationProfile: true }),
+    )
+
+    expect(view.completed.map((step) => step.id)).toEqual([
+      'organizationProfile',
+      'customer',
+    ])
+    expect(view.completed).toHaveLength(view.completedCount)
+  })
+
+  it('accounts for every step exactly once across the two groups', () => {
+    const view = buildActivationChecklistView(
+      checklist({ methodPublished: true }),
+    )
+
+    const grouped = [...view.remaining, ...view.completed].map(
+      (step) => step.id,
+    )
+
+    expect(grouped).toHaveLength(view.steps.length)
+    expect(new Set(grouped)).toEqual(new Set(view.steps.map((step) => step.id)))
+  })
+
   it('carries the step into the destination as a search param', () => {
     const view = buildActivationChecklistView(checklist())
     const standards = view.steps.find((step) => step.id === 'referenceStandard')
