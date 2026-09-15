@@ -51,6 +51,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Formatting drifted to 500+ files while nothing checked it (#930). Keep
+      # it flat: `pnpm format` locally, `.prettierignore` carries the
+      # byte-stable exclusions (math-engine, generated files).
+      - name: Format check
+        run: bun run format:check
+
       - name: Type Check
         run: bun run check-types
 

@@ -35,9 +35,9 @@ describe("kind-aware specification normalization (°F base)", () => {
     // 212 °F -> 100 °C (canonical), humidity carried verbatim.
     expect(stored.specifications?.faixaMax).toBeCloseTo(100, 9);
     expect(stored.specifications?.umidadeMax).toBe(80);
-    expect(
-      stored.conversions.some((c) => c.fieldPath === "umidadeMax"),
-    ).toBe(false);
+    expect(stored.conversions.some((c) => c.fieldPath === "umidadeMax")).toBe(
+      false,
+    );
 
     const back = denormalizeSpecificationsForDisplay(
       stored.specifications,
@@ -103,7 +103,12 @@ describe("method data normalization", () => {
   // GUM budget while every value test still passes.
   it("converts delta-valued scalar inputs factor-only, absolute inputs affine", () => {
     const deltaFields: MethodInputFieldLike[] = [
-      { key: "indicacao", type: "number", unit: "°C", quantityKind: "indication" },
+      {
+        key: "indicacao",
+        type: "number",
+        unit: "°C",
+        quantityKind: "indication",
+      },
       {
         key: "incerteza_padrao",
         type: "number",
@@ -122,7 +127,11 @@ describe("method data normalization", () => {
     // delta uncertainty: 0.1 °F -> 0.0555.. °C (factor-only, NO +32° offset)
     expect(stored.data?.incerteza_padrao).toBeCloseTo((0.1 * 5) / 9, 9);
 
-    const back = denormalizeMethodDataForDisplay(stored.data, deltaFields, "°F");
+    const back = denormalizeMethodDataForDisplay(
+      stored.data,
+      deltaFields,
+      "°F",
+    );
     expect(back?.indicacao).toBeCloseTo(212, 9);
     expect(back?.incerteza_padrao).toBeCloseTo(0.1, 9);
   });
@@ -149,7 +158,9 @@ describe("method data normalization", () => {
       tableFields,
       "°F",
     );
-    const row = Array.isArray(stored.data?.pontos) ? stored.data.pontos[0] : null;
+    const row = Array.isArray(stored.data?.pontos)
+      ? stored.data.pontos[0]
+      : null;
     expect(row.indicacao).toBeCloseTo(100, 9);
     expect(row.resolucao).toBeCloseTo((0.1 * 5) / 9, 9);
   });
@@ -234,8 +245,6 @@ describe("helpers", () => {
     expect(
       dominantKindForAssetType([{ key: "x", type: "weighing_ranges" }]),
     ).toBe("mass");
-    expect(
-      dominantKindForAssetType([{ key: "x", type: "text" }]),
-    ).toBeNull();
+    expect(dominantKindForAssetType([{ key: "x", type: "text" }])).toBeNull();
   });
 });

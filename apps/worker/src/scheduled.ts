@@ -1321,11 +1321,9 @@ export async function processScheduledNotifications(
             continue;
           }
 
-          await notifyAccreditedScopeLineExpiring(
-            row.id,
-            row.organization_id,
-            { daysRemaining: decision.daysUntilExpiry },
-          );
+          await notifyAccreditedScopeLineExpiring(row.id, row.organization_id, {
+            daysRemaining: decision.daysUntilExpiry,
+          });
 
           await recordScheduledNotification(client, {
             organizationId: row.organization_id,

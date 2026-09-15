@@ -175,10 +175,34 @@ const weighingColumns = [
     unit: "g",
     quantityKind: "indication",
   },
-  { key: "rep_2", label: "Repetibilidade — leitura 2", type: "number", unit: "g", quantityKind: "indication" },
-  { key: "rep_3", label: "Repetibilidade — leitura 3", type: "number", unit: "g", quantityKind: "indication" },
-  { key: "rep_4", label: "Repetibilidade — leitura 4", type: "number", unit: "g", quantityKind: "indication" },
-  { key: "rep_5", label: "Repetibilidade — leitura 5", type: "number", unit: "g", quantityKind: "indication" },
+  {
+    key: "rep_2",
+    label: "Repetibilidade — leitura 2",
+    type: "number",
+    unit: "g",
+    quantityKind: "indication",
+  },
+  {
+    key: "rep_3",
+    label: "Repetibilidade — leitura 3",
+    type: "number",
+    unit: "g",
+    quantityKind: "indication",
+  },
+  {
+    key: "rep_4",
+    label: "Repetibilidade — leitura 4",
+    type: "number",
+    unit: "g",
+    quantityKind: "indication",
+  },
+  {
+    key: "rep_5",
+    label: "Repetibilidade — leitura 5",
+    type: "number",
+    unit: "g",
+    quantityKind: "indication",
+  },
   {
     key: "excentricidade_max",
     label: "Maior diferença de excentricidade (|ΔI_ecc|max)",
@@ -340,7 +364,8 @@ const formulas = [
     // <10 observations, so a flat k=2 is NOT permitted (Appendix B2). Guards the
     // ν=∞ case → k=2. CONFIRMADO (cg-18 App. B3 + EA-4/02 Tabela E.1; reproduz H1:
     // k=2,00 em 100 g e k≈2,87 em carga nula, como na tabela H1 do guia).
-    expression: "if_zero(u_repetibilidade, 2, student_t_inverse_2t(0.0455, veff))",
+    expression:
+      "if_zero(u_repetibilidade, 2, student_t_inverse_2t(0.0455, veff))",
     scope: ROW_SCOPE,
     reporting: {
       includeInCertificate: true,
@@ -366,7 +391,11 @@ const formulas = [
 
 const certificateContent = {
   procedureCode: "[VERIFICAR]",
-  referenceStandards: ["EURAMET cg-18 v4.0", "EA-4/02 M:2022", "UKAS LAB 14 ed.8"],
+  referenceStandards: [
+    "EURAMET cg-18 v4.0",
+    "EA-4/02 M:2022",
+    "UKAS LAB 14 ed.8",
+  ],
   certifiedValuesDisplay: "hidden",
   uncertaintyBudgetDisplay: "full",
   sections: [
@@ -381,7 +410,10 @@ const certificateContent = {
       kind: "definition_list",
       title: "CONVENÇÕES",
       items: [
-        { term: "m_ref", definition: "Massa convencional dos padrões de referência." },
+        {
+          term: "m_ref",
+          definition: "Massa convencional dos padrões de referência.",
+        },
         { term: "E", definition: "Erro de indicação (indicação − m_ref)." },
         { term: "d", definition: "Resolução / intervalo de escala." },
         { term: "U", definition: "Incerteza expandida (U = k·u_c)." },
@@ -542,31 +574,26 @@ export const weighingInstrumentTemplate: TemplateModule = {
     ],
     verificarItems: [
       {
-        item:
-          "Empuxo u(δm_B) entra como incerteza-padrão (u_empuxo); calcule-o por §7.1.2.2 (eq. 7.1.2-5a..5e, pela densidade do ar ou pelo emp da classe do peso). Para pesos E2/E1 o empuxo normalmente DOMINA o orçamento — não use 0. A deriva u(δm_D) (u_deriva, §7.1.2.3: D = k_D·U, k_D∈[1,3]) é preenchida automaticamente a partir do padrão de referência selecionado quando o certificado declara deriva (editável); confira contra o certificado.",
+        item: "Empuxo u(δm_B) entra como incerteza-padrão (u_empuxo); calcule-o por §7.1.2.2 (eq. 7.1.2-5a..5e, pela densidade do ar ou pelo emp da classe do peso). Para pesos E2/E1 o empuxo normalmente DOMINA o orçamento — não use 0. A deriva u(δm_D) (u_deriva, §7.1.2.3: D = k_D·U, k_D∈[1,3]) é preenchida automaticamente a partir do padrão de referência selecionado quando o certificado declara deriva (editável); confira contra o certificado.",
         severity: "action",
         fieldKeys: ["u_empuxo", "u_deriva"],
       },
       {
-        item:
-          "Convecção (§7.1.2.4) é situacional — relevante para classe F1 ou melhor e dependente de aclimatização; some u(δm_conv)=Δm_conv/√3 quando se aplicar.",
+        item: "Convecção (§7.1.2.4) é situacional — relevante para classe F1 ou melhor e dependente de aclimatização; some u(δm_conv)=Δm_conv/√3 quando se aplicar.",
         severity: "info",
       },
       {
-        item:
-          "O divisor de repetibilidade é s (indicação única do ensaio de erro, §7.1.1-5); use s/√N só se a indicação reportada for a média de N leituras (§7.1.1-6). Aqui indicacao é uma leitura única, então usa-se s.",
+        item: "O divisor de repetibilidade é s (indicação única do ensaio de erro, §7.1.1-5); use s/√N só se a indicação reportada for a média de N leituras (§7.1.1-6). Aqui indicacao é uma leitura única, então usa-se s.",
         severity: "info",
         fieldKeys: ["indicacao", "rep_1", "rep_2", "rep_3", "rep_4", "rep_5"],
       },
       {
-        item:
-          "A massa convencional m_ref, a incerteza expandida U e o fator k do peso-padrão são preenchidos automaticamente a partir do padrão de referência selecionado (editável); confira-os contra o certificado do padrão antes de emitir (cg-18 §7.1.2-2: u(δm_c) = U/k; na maioria dos certificados k=2). Para uma carga de vários pesos, some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2) — a soma aritmética ≥ soma quadrática, logo é o tratamento CONSERVADOR.",
+        item: "A massa convencional m_ref, a incerteza expandida U e o fator k do peso-padrão são preenchidos automaticamente a partir do padrão de referência selecionado (editável); confira-os contra o certificado do padrão antes de emitir (cg-18 §7.1.2-2: u(δm_c) = U/k; na maioria dos certificados k=2). Para uma carga de vários pesos, some os δm_c por peso ARITMETICAMENTE (correlacionados), não em quadratura (cg-18 §7.1.2.1; UKAS LAB 14 §4.2.2) — a soma aritmética ≥ soma quadrática, logo é o tratamento CONSERVADOR.",
         severity: "action",
         fieldKeys: ["incerteza_padrao", "k_referencia", "m_ref"],
       },
       {
-        item:
-          "CONFIRMADO (auditoria contra cg-18 Apêndice B3 + EA-4/02 Tabela E.1): o fator de abrangência k é CALCULADO (ν_eff por Welch–Satterthwaite + t-Student bicaudal a 95,45%) e reproduz a tabela H1 do guia (ν_eff≈15538, k=2,00 no ponto 100 g). As fórmulas de cobertura foram mantidas inalteradas. ν_rep = n−1 = 4 vale para exatamente 5 leituras de repetibilidade; termos Tipo B com ν=∞.",
+        item: "CONFIRMADO (auditoria contra cg-18 Apêndice B3 + EA-4/02 Tabela E.1): o fator de abrangência k é CALCULADO (ν_eff por Welch–Satterthwaite + t-Student bicaudal a 95,45%) e reproduz a tabela H1 do guia (ν_eff≈15538, k=2,00 no ponto 100 g). As fórmulas de cobertura foram mantidas inalteradas. ν_rep = n−1 = 4 vale para exatamente 5 leituras de repetibilidade; termos Tipo B com ν=∞.",
         severity: "info",
         fieldKeys: ["rep_1", "rep_2", "rep_3", "rep_4", "rep_5"],
       },
@@ -581,7 +608,8 @@ export const weighingInstrumentTemplate: TemplateModule = {
         ref: "§7.1.1-3a (Nota)",
         component:
           "Intervalo de escala único: o template usa um só d (coluna resolucao) tanto no zero (d₀) quanto na carga (d_L), ou seja, presume d₀ = d_L. Para instrumento multi-intervalo o d_I varia com a carga (Nota da §7.1.1-3a) — informe o d do intervalo de cada ponto.",
-        appliesWhen: "instrumento multi-intervalo / multi-faixa (d varia com a carga)",
+        appliesWhen:
+          "instrumento multi-intervalo / multi-faixa (d varia com a carga)",
       },
     ],
     workedExample: {

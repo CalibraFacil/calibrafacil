@@ -138,9 +138,7 @@ export async function getPaymentPixQrCode(
  *
  * Note: Only available for payments with billingType = BOLETO
  */
-export async function getPaymentBoletoLine(
-  paymentId: string,
-): Promise<{
+export async function getPaymentBoletoLine(paymentId: string): Promise<{
   identificationField: string;
   nossoNumero: string;
   barCode: string;

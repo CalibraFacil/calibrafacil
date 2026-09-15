@@ -143,554 +143,495 @@ describe("signingRouter — real DB + real middleware", () => {
   // REQ-SCERT-001 [HIGH RISK]: Secrets never leak in list or detail responses
   // =========================================================================
 
-  it(
-    "REQ-SCERT-001: GET /certificates MUST NOT include encryptedP12 / encryptedPassword / passwordIv keys or sentinel values",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      const certId = await seedSigningCert({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        createdBy: org.userId,
-      });
+  it("REQ-SCERT-001: GET /certificates MUST NOT include encryptedP12 / encryptedPassword / passwordIv keys or sentinel values", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    const certId = await seedSigningCert({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request("/certificates", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      // The response must contain at least our seeded cert.
-      expect(body.certificates).toBeDefined();
-      expect(body.certificates.length).toBeGreaterThanOrEqual(1);
+    // The response must contain at least our seeded cert.
+    expect(body.certificates).toBeDefined();
+    expect(body.certificates.length).toBeGreaterThanOrEqual(1);
 
-      // The created cert's id must appear to prove we found it.
-      const cert = body.certificates.find(
-        (c: { id: number }) => c.id === certId,
-      );
-      expect(cert).toBeDefined();
+    // The created cert's id must appear to prove we found it.
+    const cert = body.certificates.find((c: { id: number }) => c.id === certId);
+    expect(cert).toBeDefined();
 
-      // Secret keys must be absent from every cert in the response.
-      for (const c of body.certificates) {
-        expect(c).not.toHaveProperty("encryptedP12");
-        expect(c).not.toHaveProperty("encryptedPassword");
-        expect(c).not.toHaveProperty("passwordIv");
-      }
+    // Secret keys must be absent from every cert in the response.
+    for (const c of body.certificates) {
+      expect(c).not.toHaveProperty("encryptedP12");
+      expect(c).not.toHaveProperty("encryptedPassword");
+      expect(c).not.toHaveProperty("passwordIv");
+    }
 
-      // The raw JSON body must not contain any of the sentinel strings.
-      const rawJson = JSON.stringify(body);
-      expect(rawJson).not.toContain(SENTINEL_P12);
-      expect(rawJson).not.toContain(SENTINEL_PW);
-      expect(rawJson).not.toContain(SENTINEL_IV);
-    },
-  );
+    // The raw JSON body must not contain any of the sentinel strings.
+    const rawJson = JSON.stringify(body);
+    expect(rawJson).not.toContain(SENTINEL_P12);
+    expect(rawJson).not.toContain(SENTINEL_PW);
+    expect(rawJson).not.toContain(SENTINEL_IV);
+  });
 
-  it(
-    "REQ-SCERT-001: GET /certificates/:id MUST NOT include encryptedP12 / encryptedPassword / passwordIv keys or sentinel values",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      const certId = await seedSigningCert({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        createdBy: org.userId,
-      });
+  it("REQ-SCERT-001: GET /certificates/:id MUST NOT include encryptedP12 / encryptedPassword / passwordIv keys or sentinel values", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    const certId = await seedSigningCert({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request(`/certificates/${certId}`, {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request(`/certificates/${certId}`, {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      // Secret keys must not appear in the response object.
-      expect(body).not.toHaveProperty("encryptedP12");
-      expect(body).not.toHaveProperty("encryptedPassword");
-      expect(body).not.toHaveProperty("passwordIv");
+    // Secret keys must not appear in the response object.
+    expect(body).not.toHaveProperty("encryptedP12");
+    expect(body).not.toHaveProperty("encryptedPassword");
+    expect(body).not.toHaveProperty("passwordIv");
 
-      // The raw JSON body must not contain any of the sentinel strings.
-      const rawJson = JSON.stringify(body);
-      expect(rawJson).not.toContain(SENTINEL_P12);
-      expect(rawJson).not.toContain(SENTINEL_PW);
-      expect(rawJson).not.toContain(SENTINEL_IV);
+    // The raw JSON body must not contain any of the sentinel strings.
+    const rawJson = JSON.stringify(body);
+    expect(rawJson).not.toContain(SENTINEL_P12);
+    expect(rawJson).not.toContain(SENTINEL_PW);
+    expect(rawJson).not.toContain(SENTINEL_IV);
 
-      // Confirm basic non-secret fields ARE present (proves the cert was found).
-      expect(body.id).toBe(certId);
-      expect(body.serialNumber).toBe("SN-A-1");
-      expect(body.status).toBeDefined();
-    },
-  );
+    // Confirm basic non-secret fields ARE present (proves the cert was found).
+    expect(body.id).toBe(certId);
+    expect(body.serialNumber).toBe("SN-A-1");
+    expect(body.status).toBeDefined();
+  });
 
   // =========================================================================
   // REQ-SCERT-002 [HIGH RISK]: Encrypted at rest on upload
   // =========================================================================
 
-  it(
-    "REQ-SCERT-002: POST /certificates stores encryptedPassword !== plaintext, passwordIv non-empty, encryptedP12 !== raw p12 — DB-verified",
-    async () => {
-      // getCertificateInfo is an untyped spy from the module-level vi.mock, so
-      // mockReturnValueOnce accepts any value — no `as` assertion needed.
-      // The handler reads only: serialNumber, issuerCn, subjectCn, subjectCpfCnpj,
-      // validFrom, validUntil. Fields certificate/privateKey/chain are not used.
-      vi.mocked(getCertificateInfo).mockReturnValueOnce({
-        serialNumber: "SN-UPLOAD-001",
-        issuerCn: "AC Test CA",
-        subjectCn: "Test Lab",
-        subjectCpfCnpj: "12345678000195",
-        validFrom: new Date("2026-01-01T00:00:00.000Z"),
-        // 2 years from now — definitely not expired
-        validUntil: new Date("2028-01-01T00:00:00.000Z"),
-        certificate: null,
-        privateKey: null,
-        chain: [],
-      });
+  it("REQ-SCERT-002: POST /certificates stores encryptedPassword !== plaintext, passwordIv non-empty, encryptedP12 !== raw p12 — DB-verified", async () => {
+    // getCertificateInfo is an untyped spy from the module-level vi.mock, so
+    // mockReturnValueOnce accepts any value — no `as` assertion needed.
+    // The handler reads only: serialNumber, issuerCn, subjectCn, subjectCpfCnpj,
+    // validFrom, validUntil. Fields certificate/privateKey/chain are not used.
+    vi.mocked(getCertificateInfo).mockReturnValueOnce({
+      serialNumber: "SN-UPLOAD-001",
+      issuerCn: "AC Test CA",
+      subjectCn: "Test Lab",
+      subjectCpfCnpj: "12345678000195",
+      validFrom: new Date("2026-01-01T00:00:00.000Z"),
+      // 2 years from now — definitely not expired
+      validUntil: new Date("2028-01-01T00:00:00.000Z"),
+      certificate: null,
+      privateKey: null,
+      chain: [],
+    });
 
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const rawP12 = Buffer.from("dummy-p12-content");
-      const plainPassword = "s3cret-pw-test";
+    const rawP12 = Buffer.from("dummy-p12-content");
+    const plainPassword = "s3cret-pw-test";
 
-      const res = await signingRouter.request(
-        "/certificates",
-        {
-          method: "POST",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(org.unitId),
-          },
-          body: JSON.stringify({
-            name: "Certificado Upload Teste",
-            p12Base64: rawP12.toString("base64"),
-            password: plainPassword,
-          }),
+    const res = await signingRouter.request(
+      "/certificates",
+      {
+        method: "POST",
+        headers: {
+          ...JSON_HEADERS,
+          "x-active-unit-id": String(org.unitId),
         },
-        TEST_ENV,
-      );
+        body: JSON.stringify({
+          name: "Certificado Upload Teste",
+          p12Base64: rawP12.toString("base64"),
+          password: plainPassword,
+        }),
+      },
+      TEST_ENV,
+    );
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      // Response must be redacted — no secrets.
-      expect(body.certificate).toBeDefined();
-      expect(body.certificate).not.toHaveProperty("encryptedP12");
-      expect(body.certificate).not.toHaveProperty("encryptedPassword");
-      expect(body.certificate).not.toHaveProperty("passwordIv");
-      expect(JSON.stringify(body)).not.toContain(plainPassword);
+    // Response must be redacted — no secrets.
+    expect(body.certificate).toBeDefined();
+    expect(body.certificate).not.toHaveProperty("encryptedP12");
+    expect(body.certificate).not.toHaveProperty("encryptedPassword");
+    expect(body.certificate).not.toHaveProperty("passwordIv");
+    expect(JSON.stringify(body)).not.toContain(plainPassword);
 
-      // DB-verify: the persisted row has ENCRYPTED values, not the raw input.
-      const certId = body.certificate.id;
-      expect(typeof certId).toBe("number");
+    // DB-verify: the persisted row has ENCRYPTED values, not the raw input.
+    const certId = body.certificate.id;
+    expect(typeof certId).toBe("number");
 
-      const [row] = await db
-        .select({
-          encryptedP12: organizationSigningCertificate.encryptedP12,
-          encryptedPassword: organizationSigningCertificate.encryptedPassword,
-          passwordIv: organizationSigningCertificate.passwordIv,
-        })
-        .from(organizationSigningCertificate)
-        .where(eq(organizationSigningCertificate.id, certId));
+    const [row] = await db
+      .select({
+        encryptedP12: organizationSigningCertificate.encryptedP12,
+        encryptedPassword: organizationSigningCertificate.encryptedPassword,
+        passwordIv: organizationSigningCertificate.passwordIv,
+      })
+      .from(organizationSigningCertificate)
+      .where(eq(organizationSigningCertificate.id, certId));
 
-      if (!row) throw new Error("REQ-SCERT-002: no row found in DB after insert");
+    if (!row) throw new Error("REQ-SCERT-002: no row found in DB after insert");
 
-      // Password must NOT be stored as plaintext.
-      expect(row.encryptedPassword).not.toBe(plainPassword);
-      // IV must be non-empty.
-      expect(row.passwordIv.length).toBeGreaterThan(0);
-      // P12 must NOT be stored as the raw base64 of the input bytes.
-      expect(row.encryptedP12).not.toBe(rawP12.toString("base64"));
+    // Password must NOT be stored as plaintext.
+    expect(row.encryptedPassword).not.toBe(plainPassword);
+    // IV must be non-empty.
+    expect(row.passwordIv.length).toBeGreaterThan(0);
+    // P12 must NOT be stored as the raw base64 of the input bytes.
+    expect(row.encryptedP12).not.toBe(rawP12.toString("base64"));
 
-      // Round-trip decryption must recover the original password.
-      const recovered = decryptPassword(
-        row.encryptedPassword,
-        row.passwordIv,
-        TEST_MASTER_KEY,
-      );
-      expect(recovered).toBe(plainPassword);
+    // Round-trip decryption must recover the original password.
+    const recovered = decryptPassword(
+      row.encryptedPassword,
+      row.passwordIv,
+      TEST_MASTER_KEY,
+    );
+    expect(recovered).toBe(plainPassword);
 
-      // Round-trip decryption of the p12 blob must recover the original bytes.
-      const recoveredP12 = decryptBinary(row.encryptedP12, TEST_MASTER_KEY);
-      expect(recoveredP12.toString("hex")).toBe(rawP12.toString("hex"));
-    },
-  );
+    // Round-trip decryption of the p12 blob must recover the original bytes.
+    const recoveredP12 = decryptBinary(row.encryptedP12, TEST_MASTER_KEY);
+    expect(recoveredP12.toString("hex")).toBe(rawP12.toString("hex"));
+  });
 
   // =========================================================================
   // REQ-SCERT-003 [HIGH RISK]: Tenant + unit isolation
   // =========================================================================
 
-  it(
-    "REQ-SCERT-003: GET /certificates/:id for another org's cert → 404, org B row unchanged",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-SCERT-003: GET /certificates/:id for another org's cert → 404, org B row unchanged", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const certBId = await seedSigningCert({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        createdBy: orgB.userId,
-        serialNumber: "SN-B-1",
-      });
+    const certBId = await seedSigningCert({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      createdBy: orgB.userId,
+      serialNumber: "SN-B-1",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
 
-      const res = await signingRouter.request(
-        `/certificates/${certBId}`,
-        {
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(orgA.unitId),
-          },
-        },
-      );
+    const res = await signingRouter.request(`/certificates/${certBId}`, {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(orgA.unitId),
+      },
+    });
 
-      expect(res.status).toBe(404);
+    expect(res.status).toBe(404);
 
-      // Org B's row must be unchanged in the DB.
-      const [row] = await db
-        .select({ id: organizationSigningCertificate.id })
-        .from(organizationSigningCertificate)
-        .where(eq(organizationSigningCertificate.id, certBId));
-      expect(row?.id).toBe(certBId);
-    },
-  );
+    // Org B's row must be unchanged in the DB.
+    const [row] = await db
+      .select({ id: organizationSigningCertificate.id })
+      .from(organizationSigningCertificate)
+      .where(eq(organizationSigningCertificate.id, certBId));
+    expect(row?.id).toBe(certBId);
+  });
 
-  it(
-    "REQ-SCERT-003: POST /certificates/:id/set-default for another org's cert → 404",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-SCERT-003: POST /certificates/:id/set-default for another org's cert → 404", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const certBId = await seedSigningCert({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        createdBy: orgB.userId,
-        serialNumber: "SN-B-2",
-      });
+    const certBId = await seedSigningCert({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      createdBy: orgB.userId,
+      serialNumber: "SN-B-2",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
 
-      const res = await signingRouter.request(
-        `/certificates/${certBId}/set-default`,
-        {
-          method: "POST",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(orgA.unitId),
-          },
-        },
-      );
-
-      expect(res.status).toBe(404);
-    },
-  );
-
-  it(
-    "REQ-SCERT-003: DELETE /certificates/:id for another org's cert → 404, org B row isActive unchanged (DB-verified)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-
-      const certBId = await seedSigningCert({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        createdBy: orgB.userId,
-        serialNumber: "SN-B-3",
-        isActive: true,
-      });
-
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-
-      const res = await signingRouter.request(
-        `/certificates/${certBId}`,
-        {
-          method: "DELETE",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(orgA.unitId),
-          },
-          body: JSON.stringify({ reason: "cross-tenant attack" }),
-        },
-      );
-
-      expect(res.status).toBe(404);
-
-      // DB-verify org B's row is still active — revoke must not have happened.
-      const [row] = await db
-        .select({
-          isActive: organizationSigningCertificate.isActive,
-          revokedReason: organizationSigningCertificate.revokedReason,
-        })
-        .from(organizationSigningCertificate)
-        .where(eq(organizationSigningCertificate.id, certBId));
-
-      expect(row?.isActive).toBe(true);
-      expect(row?.revokedReason).toBeNull();
-    },
-  );
-
-  it(
-    "REQ-SCERT-003: GET /certificates for org A returns ONLY org A's certs — definite count",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-
-      await seedSigningCert({
-        organizationId: orgA.orgId,
-        unitId: orgA.unitId,
-        createdBy: orgA.userId,
-        serialNumber: "SN-A-100",
-        name: "Cert Alpha",
-      });
-      await seedSigningCert({
-        organizationId: orgB.orgId,
-        unitId: orgB.unitId,
-        createdBy: orgB.userId,
-        serialNumber: "SN-B-100",
-        name: "Cert Beta",
-      });
-
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-
-      const res = await signingRouter.request("/certificates", {
+    const res = await signingRouter.request(
+      `/certificates/${certBId}/set-default`,
+      {
+        method: "POST",
         headers: {
           ...JSON_HEADERS,
           "x-active-unit-id": String(orgA.unitId),
         },
-      });
+      },
+    );
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(404);
+  });
 
-      // Exactly one cert for org A (definite count).
-      expect(body.certificates).toHaveLength(1);
-      expect(body.certificates[0].name).toBe("Cert Alpha");
+  it("REQ-SCERT-003: DELETE /certificates/:id for another org's cert → 404, org B row isActive unchanged (DB-verified)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      // Org B's cert name must not appear.
-      const rawJson = JSON.stringify(body);
-      expect(rawJson).not.toContain("Cert Beta");
-    },
-  );
+    const certBId = await seedSigningCert({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      createdBy: orgB.userId,
+      serialNumber: "SN-B-3",
+      isActive: true,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await signingRouter.request(`/certificates/${certBId}`, {
+      method: "DELETE",
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(orgA.unitId),
+      },
+      body: JSON.stringify({ reason: "cross-tenant attack" }),
+    });
+
+    expect(res.status).toBe(404);
+
+    // DB-verify org B's row is still active — revoke must not have happened.
+    const [row] = await db
+      .select({
+        isActive: organizationSigningCertificate.isActive,
+        revokedReason: organizationSigningCertificate.revokedReason,
+      })
+      .from(organizationSigningCertificate)
+      .where(eq(organizationSigningCertificate.id, certBId));
+
+    expect(row?.isActive).toBe(true);
+    expect(row?.revokedReason).toBeNull();
+  });
+
+  it("REQ-SCERT-003: GET /certificates for org A returns ONLY org A's certs — definite count", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+
+    await seedSigningCert({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+      serialNumber: "SN-A-100",
+      name: "Cert Alpha",
+    });
+    await seedSigningCert({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      createdBy: orgB.userId,
+      serialNumber: "SN-B-100",
+      name: "Cert Beta",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(orgA.unitId),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // Exactly one cert for org A (definite count).
+    expect(body.certificates).toHaveLength(1);
+    expect(body.certificates[0].name).toBe("Cert Alpha");
+
+    // Org B's cert name must not appear.
+    const rawJson = JSON.stringify(body);
+    expect(rawJson).not.toContain("Cert Beta");
+  });
 
   // =========================================================================
   // REQ-SCERT-004 [HIGH RISK]: RBAC custody gate
   // =========================================================================
 
-  it(
-    "REQ-SCERT-004: GET /certificates as technician → 403 (RBAC custody gate)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "technician" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-SCERT-004: GET /certificates as technician → 403 (RBAC custody gate)", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "technician" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request("/certificates", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      // ESCALATION guard: if this passes with 200, the RBAC gate is missing/broken.
-      if (res.status === 200) {
-        throw new Error(
-          "ESCALATION: REQ-SCERT-004 — technician received 200 from GET /certificates; RBAC custody gate appears broken",
-        );
-      }
+    // ESCALATION guard: if this passes with 200, the RBAC gate is missing/broken.
+    if (res.status === 200) {
+      throw new Error(
+        "ESCALATION: REQ-SCERT-004 — technician received 200 from GET /certificates; RBAC custody gate appears broken",
+      );
+    }
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
-  it(
-    "REQ-SCERT-004: GET /certificates as admin → 200 (RBAC custody gate passes for admin)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-SCERT-004: GET /certificates as admin → 200 (RBAC custody gate passes for admin)", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request("/certificates", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      expect(res.status).toBe(200);
-    },
-  );
+    expect(res.status).toBe(200);
+  });
 
-  it(
-    "REQ-SCERT-004: GET /certificates as operator → 403",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "operator" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-SCERT-004: GET /certificates as operator → 403", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request("/certificates", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      if (res.status === 200) {
-        throw new Error(
-          "ESCALATION: REQ-SCERT-004 — operator received 200 from GET /certificates; RBAC custody gate appears broken",
-        );
-      }
+    if (res.status === 200) {
+      throw new Error(
+        "ESCALATION: REQ-SCERT-004 — operator received 200 from GET /certificates; RBAC custody gate appears broken",
+      );
+    }
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
-  it(
-    "REQ-SCERT-004: GET /certificates as member → 403",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "member" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-SCERT-004: GET /certificates as member → 403", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "member" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request("/certificates", {
-        headers: {
-          ...JSON_HEADERS,
-          "x-active-unit-id": String(org.unitId),
-        },
-      });
+    const res = await signingRouter.request("/certificates", {
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+    });
 
-      if (res.status === 200) {
-        throw new Error(
-          "ESCALATION: REQ-SCERT-004 — member received 200 from GET /certificates; RBAC custody gate appears broken",
-        );
-      }
+    if (res.status === 200) {
+      throw new Error(
+        "ESCALATION: REQ-SCERT-004 — member received 200 from GET /certificates; RBAC custody gate appears broken",
+      );
+    }
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
   // =========================================================================
   // REQ-SCERT-005: State guards
   // =========================================================================
 
-  it(
-    "REQ-SCERT-005: POST /certificates/:id/set-default on a REVOKED cert → 400",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      const certId = await seedSigningCert({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        createdBy: org.userId,
-        isActive: false, // already revoked
-        isDefault: false,
-      });
+  it("REQ-SCERT-005: POST /certificates/:id/set-default on a REVOKED cert → 400", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    const certId = await seedSigningCert({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+      isActive: false, // already revoked
+      isDefault: false,
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      const res = await signingRouter.request(
-        `/certificates/${certId}/set-default`,
-        {
-          method: "POST",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(org.unitId),
-          },
+    const res = await signingRouter.request(
+      `/certificates/${certId}/set-default`,
+      {
+        method: "POST",
+        headers: {
+          ...JSON_HEADERS,
+          "x-active-unit-id": String(org.unitId),
         },
+      },
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    // The error message must mention revocation.
+    expect(JSON.stringify(body)).toMatch(/revog/i);
+  });
+
+  it("REQ-SCERT-005: DELETE /certificates/:id on already-revoked cert → 400", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    const certId = await seedSigningCert({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+      isActive: false, // already revoked
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await signingRouter.request(`/certificates/${certId}`, {
+      method: "DELETE",
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+      body: JSON.stringify({ reason: "tentativa de dupla revogação" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("REQ-SCERT-005: DELETE /certificates/:id on active cert → 200, row isActive false + revokedReason set (DB-verified)", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "admin" });
+    const certId = await seedSigningCert({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+      isActive: true,
+      isDefault: false,
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await signingRouter.request(`/certificates/${certId}`, {
+      method: "DELETE",
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(org.unitId),
+      },
+      body: JSON.stringify({ reason: "certificado comprometido" }),
+    });
+
+    expect(res.status).toBe(200);
+
+    // DB-verify the row is now inactive with the correct reason.
+    const [row] = await db
+      .select({
+        isActive: organizationSigningCertificate.isActive,
+        isDefault: organizationSigningCertificate.isDefault,
+        revokedAt: organizationSigningCertificate.revokedAt,
+        revokedReason: organizationSigningCertificate.revokedReason,
+        revokedBy: organizationSigningCertificate.revokedBy,
+      })
+      .from(organizationSigningCertificate)
+      .where(
+        and(
+          eq(organizationSigningCertificate.id, certId),
+          eq(organizationSigningCertificate.organizationId, org.orgId),
+        ),
       );
 
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      // The error message must mention revocation.
-      expect(JSON.stringify(body)).toMatch(/revog/i);
-    },
-  );
-
-  it(
-    "REQ-SCERT-005: DELETE /certificates/:id on already-revoked cert → 400",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      const certId = await seedSigningCert({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        createdBy: org.userId,
-        isActive: false, // already revoked
-      });
-
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-
-      const res = await signingRouter.request(
-        `/certificates/${certId}`,
-        {
-          method: "DELETE",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(org.unitId),
-          },
-          body: JSON.stringify({ reason: "tentativa de dupla revogação" }),
-        },
-      );
-
-      expect(res.status).toBe(400);
-    },
-  );
-
-  it(
-    "REQ-SCERT-005: DELETE /certificates/:id on active cert → 200, row isActive false + revokedReason set (DB-verified)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-1", role: "admin" });
-      const certId = await seedSigningCert({
-        organizationId: org.orgId,
-        unitId: org.unitId,
-        createdBy: org.userId,
-        isActive: true,
-        isDefault: false,
-      });
-
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-
-      const res = await signingRouter.request(
-        `/certificates/${certId}`,
-        {
-          method: "DELETE",
-          headers: {
-            ...JSON_HEADERS,
-            "x-active-unit-id": String(org.unitId),
-          },
-          body: JSON.stringify({ reason: "certificado comprometido" }),
-        },
-      );
-
-      expect(res.status).toBe(200);
-
-      // DB-verify the row is now inactive with the correct reason.
-      const [row] = await db
-        .select({
-          isActive: organizationSigningCertificate.isActive,
-          isDefault: organizationSigningCertificate.isDefault,
-          revokedAt: organizationSigningCertificate.revokedAt,
-          revokedReason: organizationSigningCertificate.revokedReason,
-          revokedBy: organizationSigningCertificate.revokedBy,
-        })
-        .from(organizationSigningCertificate)
-        .where(
-          and(
-            eq(organizationSigningCertificate.id, certId),
-            eq(
-              organizationSigningCertificate.organizationId,
-              org.orgId,
-            ),
-          ),
-        );
-
-      expect(row?.isActive).toBe(false);
-      expect(row?.isDefault).toBe(false);
-      expect(row?.revokedAt).not.toBeNull();
-      expect(row?.revokedReason).toBe("certificado comprometido");
-      expect(row?.revokedBy).toBe(org.userId);
-    },
-  );
+    expect(row?.isActive).toBe(false);
+    expect(row?.isDefault).toBe(false);
+    expect(row?.revokedAt).not.toBeNull();
+    expect(row?.revokedReason).toBe("certificado comprometido");
+    expect(row?.revokedBy).toBe(org.userId);
+  });
 
   // =========================================================================
   // REQ-SCERT-006: Unauthenticated access → 401

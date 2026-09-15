@@ -44,9 +44,9 @@ describe("validateImportRows", () => {
       field: "name",
       message: "Nome / descrição: obrigatório",
     });
-    expect(result.errors.some((e) => e.row === 2 && e.field === "serialNumber")).toBe(
-      true,
-    );
+    expect(
+      result.errors.some((e) => e.row === 2 && e.field === "serialNumber"),
+    ).toBe(true);
   });
 
   it("treats whitespace-only required cells as empty", () => {

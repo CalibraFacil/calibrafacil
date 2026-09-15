@@ -30,10 +30,26 @@ export type ImportFieldDef = {
  */
 export const IMPORT_FIELDS: Record<ImportEntity, readonly ImportFieldDef[]> = {
   assets: [
-    { key: "tag", label: "Tag / ID interno", required: true, maxLength: 120, unique: true },
+    {
+      key: "tag",
+      label: "Tag / ID interno",
+      required: true,
+      maxLength: 120,
+      unique: true,
+    },
     { key: "name", label: "Nome / descrição", required: true, maxLength: 200 },
-    { key: "serialNumber", label: "Número de série", required: true, maxLength: 120 },
-    { key: "manufacturer", label: "Fabricante", required: false, maxLength: 120 },
+    {
+      key: "serialNumber",
+      label: "Número de série",
+      required: true,
+      maxLength: 120,
+    },
+    {
+      key: "manufacturer",
+      label: "Fabricante",
+      required: false,
+      maxLength: 120,
+    },
     { key: "model", label: "Modelo", required: false, maxLength: 120 },
   ],
 };
@@ -148,7 +164,8 @@ export function validateImportRows(
     validRows,
     errorRows: rows.length - validRows,
     errors,
-    errorsTruncated: rows.length - validRows > 0 && errors.length >= MAX_IMPORT_ERRORS,
+    errorsTruncated:
+      rows.length - validRows > 0 && errors.length >= MAX_IMPORT_ERRORS,
     preview,
   };
 }

@@ -7,8 +7,7 @@ export const Route = createFileRoute('/dashboard/settings/certificate-release')(
     head: () => ({
       meta: [
         {
-          title:
-            'Liberação de Certificados | Configurações | CalibraFácil',
+          title: 'Liberação de Certificados | Configurações | CalibraFácil',
         },
       ],
     }),

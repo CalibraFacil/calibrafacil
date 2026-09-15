@@ -253,7 +253,6 @@ describe("isCompiledMethod", () => {
   });
 });
 
-
 describe("buildLocalJobFileUrl", () => {
   it("builds a certificate URL from the request origin", () => {
     expect(

@@ -29,7 +29,12 @@ interface ControlChartRow {
   params: unknown;
 }
 
-const CHART_TYPES: readonly SpcChartType[] = ["i_mr", "xbar_r", "cusum", "ewma"];
+const CHART_TYPES: readonly SpcChartType[] = [
+  "i_mr",
+  "xbar_r",
+  "cusum",
+  "ewma",
+];
 
 function toChartType(value: string): SpcChartType {
   const match = CHART_TYPES.find((t) => t === value);
@@ -129,10 +134,7 @@ export async function processSpcRecompute(env: SpcRecomputeEnv): Promise<{
           if (evaluation.status === "out_of_control") outOfControl += 1;
           if (evaluation.status === "trending") trending += 1;
         } catch (error) {
-          console.error(
-            `[SPC] Error recomputing chart ${chart.id}:`,
-            error,
-          );
+          console.error(`[SPC] Error recomputing chart ${chart.id}:`, error);
         }
       }
 

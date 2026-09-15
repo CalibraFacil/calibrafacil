@@ -47,9 +47,7 @@ async function postReading(
   index: number,
   parameter = "100 g",
 ) {
-  const measuredAt = new Date(
-    Date.UTC(2026, 0, 1 + index),
-  ).toISOString();
+  const measuredAt = new Date(Date.UTC(2026, 0, 1 + index)).toISOString();
   const res = await spcRouter.request("/readings", {
     method: "POST",
     headers: JSON_HEADERS,

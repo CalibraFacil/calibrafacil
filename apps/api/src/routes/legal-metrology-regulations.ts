@@ -34,6 +34,9 @@ export const legalMetrologyRegulationsRouter = new Hono<{
     return c.json({ data: rows });
   } catch (error) {
     console.error("Error listing legal-metrology regulations:", error);
-    return c.json({ error: "Erro ao listar regulamentos de metrologia legal" }, 500);
+    return c.json(
+      { error: "Erro ao listar regulamentos de metrologia legal" },
+      500,
+    );
   }
 });

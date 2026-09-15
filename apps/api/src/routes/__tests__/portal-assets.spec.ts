@@ -77,9 +77,8 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-const { resolveLabOrganizationIdByPortalHostname } = await import(
-  "../../lib/portal-domains"
-);
+const { resolveLabOrganizationIdByPortalHostname } =
+  await import("../../lib/portal-domains");
 const { portalRouter } = await import("../portal");
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
@@ -373,9 +372,8 @@ describe("GET /assets", () => {
 
     const body = await res.json();
     expect(body.data).toHaveLength(2);
-    expect(body.data.map((row: { customerName: string }) => row.customerName)).toEqual([
-      "Unidade Norte",
-      "Unidade Sul",
-    ]);
+    expect(
+      body.data.map((row: { customerName: string }) => row.customerName),
+    ).toEqual(["Unidade Norte", "Unidade Sul"]);
   });
 });

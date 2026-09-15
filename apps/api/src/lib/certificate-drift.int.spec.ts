@@ -37,7 +37,12 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     .returning();
   const [assetTypeRow] = await db
     .insert(assetType)
-    .values({ name: "Balança Drift", slug: "balanca-drift", definition: [], createdAt: EPOCH })
+    .values({
+      name: "Balança Drift",
+      slug: "balanca-drift",
+      definition: [],
+      createdAt: EPOCH,
+    })
     .returning();
   const [assetRow] = await db
     .insert(asset)
@@ -54,7 +59,12 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     .returning();
   const [serviceRow] = await db
     .insert(service)
-    .values({ unitId, organizationId: orgId, name: "Calibração", createdAt: EPOCH })
+    .values({
+      unitId,
+      organizationId: orgId,
+      name: "Calibração",
+      createdAt: EPOCH,
+    })
     .returning();
   const [jobRow] = await db
     .insert(calibrationJob)

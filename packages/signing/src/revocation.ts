@@ -129,9 +129,7 @@ export async function checkRevocation(
     return {
       checked: true,
       revoked: entry !== undefined,
-      revocationTime: entry
-        ? entry.revocationDate.value.toISOString()
-        : null,
+      revocationTime: entry ? entry.revocationDate.value.toISOString() : null,
     };
   }
 

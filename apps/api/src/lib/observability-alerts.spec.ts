@@ -50,7 +50,11 @@ describe("REQ-REL-OBS-001: cron consecutive-failure alert decider", () => {
 
   it("generates one cron_failing alert spec per failing cron (>= threshold only)", () => {
     const specs = buildCronFailureAlertSpecs([
-      { job: "service-order-emails", consecutiveFailures: T, lastError: "502 gotenberg" },
+      {
+        job: "service-order-emails",
+        consecutiveFailures: T,
+        lastError: "502 gotenberg",
+      },
       { job: "portal-digest", consecutiveFailures: T - 1, lastError: null }, // below threshold
       { job: "operator-alerts", consecutiveFailures: T * 2, lastError: "boom" },
     ]);
@@ -65,7 +69,11 @@ describe("REQ-REL-OBS-001: cron consecutive-failure alert decider", () => {
 
   it("the generated spec carries the real last_error and an escalating severity", () => {
     const [spec] = buildCronFailureAlertSpecs([
-      { job: "service-order-emails", consecutiveFailures: T * 2, lastError: "connection refused" },
+      {
+        job: "service-order-emails",
+        consecutiveFailures: T * 2,
+        lastError: "connection refused",
+      },
     ]);
     expect(spec).toBeDefined();
     expect(spec?.kind).toBe("cron_failing");

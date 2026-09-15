@@ -21,7 +21,11 @@
  *   REQ-P2D-006 → "absent optional sections" describe block
  */
 
-import type { MethodAcceptanceCriterion, MethodDraft, TableInput } from "@calibra-facil/method-definition";
+import type {
+  MethodAcceptanceCriterion,
+  MethodDraft,
+  TableInput,
+} from "@calibra-facil/method-definition";
 import { describe, expect, it } from "vitest";
 
 import { buildDraftFromProduct } from "./product-to-draft";
@@ -43,7 +47,9 @@ function getTableInput(draft: MethodDraft, index: number): TableInput {
   const inp = draft.inputs[index];
   if (!inp) throw new Error(`No input at index ${index}`);
   if (inp.kind !== "table") {
-    throw new Error(`Input at index ${index} has kind "${inp.kind}", expected "table"`);
+    throw new Error(
+      `Input at index ${index} has kind "${inp.kind}", expected "table"`,
+    );
   }
   return inp;
 }
@@ -909,7 +915,9 @@ describe("regression guard: formula count locks formula list (REQ-P2D-003)", () 
 
 describe("type-level guard: return satisfies MethodDraft shape", () => {
   it("REQ-P2D-002/003/004: draft inputs/formulas/criteria are arrays of correct shape", () => {
-    const draft = buildDraftFromProduct(FORCE_SOURCE, { methodId: 1 }) satisfies MethodDraft;
+    const draft = buildDraftFromProduct(FORCE_SOURCE, {
+      methodId: 1,
+    }) satisfies MethodDraft;
     // Inputs
     for (const input of draft.inputs) {
       expect(typeof input.key).toBe("string");

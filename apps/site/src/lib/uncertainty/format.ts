@@ -18,7 +18,10 @@ export function formatSignificant(value: number, digits = 2): string {
   if (magnitude < SMALL || magnitude >= LARGE) {
     // Below a ten-thousandth the decimal form is a row of zeros nobody can
     // read at a glance; scientific notation is what the budget table uses.
-    return value.toExponential(digits - 1).replace(".", ",").replace("e", " × 10^");
+    return value
+      .toExponential(digits - 1)
+      .replace(".", ",")
+      .replace("e", " × 10^");
   }
 
   return new Intl.NumberFormat("pt-BR", {

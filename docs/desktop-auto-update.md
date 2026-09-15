@@ -46,29 +46,29 @@ bucket behind a public custom domain — the standard pattern for proprietary El
 
 All in the Cloudflare dashboard for the `calibrafacil.com` zone + R2.
 
-1. **Create the bucket** — R2 → *Create bucket* → `calibrafacil-desktop-updates`
+1. **Create the bucket** — R2 → _Create bucket_ → `calibrafacil-desktop-updates`
    (matches naming of `calibrafacil-documents`). Location: automatic / ENAM is fine.
 
-2. **Bind the public domain** — bucket → *Settings* → *Custom Domains* → *Connect Domain*
+2. **Bind the public domain** — bucket → _Settings_ → _Custom Domains_ → _Connect Domain_
    → `updates.calibrafacil.com`. Cloudflare adds the proxied CNAME automatically (the zone
    is already on Cloudflare). This makes objects publicly readable at
    `https://updates.calibrafacil.com/<key>`. Update binaries are meant to be public — no
    signed URLs needed. (Optionally add a cache rule, but the workflow already sets
    `Cache-Control: no-cache` on the `*.yml` manifests and `immutable` on installers.)
 
-3. **Create a scoped API token** — R2 → *Manage R2 API Tokens* → *Create* → permission
+3. **Create a scoped API token** — R2 → _Manage R2 API Tokens_ → _Create_ → permission
    **Object Read & Write**, scoped to **only** `calibrafacil-desktop-updates` (least
    privilege; the release CI must not be able to touch the documents bucket). This yields an
    **Access Key ID** and **Secret Access Key** (S3 credentials).
 
 4. **Set GitHub repo secrets + variable** (Settings → Secrets and variables → Actions):
 
-   | Kind     | Name                                  | Value |
-   | -------- | ------------------------------------- | ----- |
-   | Variable | `DESKTOP_UPDATES_R2_BUCKET`           | `calibrafacil-desktop-updates` |
-   | Secret   | `R2_ACCOUNT_ID`                       | Cloudflare account id (the `<id>` in `<id>.r2.cloudflarestorage.com`) |
-   | Secret   | `DESKTOP_UPDATES_R2_ACCESS_KEY_ID`    | from step 3 |
-   | Secret   | `DESKTOP_UPDATES_R2_SECRET_ACCESS_KEY`| from step 3 |
+   | Kind     | Name                                   | Value                                                                 |
+   | -------- | -------------------------------------- | --------------------------------------------------------------------- |
+   | Variable | `DESKTOP_UPDATES_R2_BUCKET`            | `calibrafacil-desktop-updates`                                        |
+   | Secret   | `R2_ACCOUNT_ID`                        | Cloudflare account id (the `<id>` in `<id>.r2.cloudflarestorage.com`) |
+   | Secret   | `DESKTOP_UPDATES_R2_ACCESS_KEY_ID`     | from step 3                                                           |
+   | Secret   | `DESKTOP_UPDATES_R2_SECRET_ACCESS_KEY` | from step 3                                                           |
 
 ## Publishing a release to the feed
 
@@ -95,7 +95,7 @@ The filename in `latest.yml` (`url:`/`path:`) must exactly match the uploaded ob
 ## Gotchas
 
 - **Keep the artifact filename ASCII.** `electron-builder.yml` uses
-  `artifactName: CalibraFacil-${version}-…`, *not* `${productName}` ("CalibraF**á**cil").
+  `artifactName: CalibraFacil-${version}-…`, _not_ `${productName}` ("CalibraF**á**cil").
   GitHub release assets **strip the accent** from the filename but `latest.yml`'s content
   keeps it, so the manifest would point `electron-updater` at a URL that 404s. (This bit the
   first v0.0.2 publish; the manifest was corrected in-place.) An ASCII `artifactName` keeps

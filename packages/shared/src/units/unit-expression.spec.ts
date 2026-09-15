@@ -32,14 +32,14 @@ describe("Unit-expression parser (REQ-DIM-003)", () => {
     ).toBe(true);
     // µm/(m·K) → L/(L·Θ) = Θ⁻¹  (linear thermal-expansion coefficient)
     expect(
-      dimensionsEqual(dimOf("µm/(m·K)"), dimension({ "Θ": rational(-1) })),
+      dimensionsEqual(dimOf("µm/(m·K)"), dimension({ Θ: rational(-1) })),
     ).toBe(true);
     expect(dimensionsEqual(dimOf("kgf/cm²"), KIND_DIMENSIONS.pressure)).toBe(
       true,
     );
   });
 
-  it("treats %, ppm and the literal \"1\" as dimensionless (parsed, not unknown)", () => {
+  it('treats %, ppm and the literal "1" as dimensionless (parsed, not unknown)', () => {
     for (const token of ["%", "1", "ppm", "ppb"]) {
       const result = parseUnitExpression(token);
       expect(result.ok, token).toBe(true);
@@ -107,7 +107,9 @@ describe("Derived-unit coherence (REQ-DIM-004)", () => {
 
   it("identifies V/A ≡ Ω", () => {
     expect(dimensionsEqual(dimOf("V/A"), dimOf("Ω"))).toBe(true);
-    expect(dimensionsEqual(dimOf("V/A"), KIND_DIMENSIONS.resistance)).toBe(true);
+    expect(dimensionsEqual(dimOf("V/A"), KIND_DIMENSIONS.resistance)).toBe(
+      true,
+    );
   });
 });
 

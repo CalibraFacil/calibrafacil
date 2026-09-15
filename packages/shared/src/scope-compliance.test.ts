@@ -73,10 +73,7 @@ describe("evaluateScopeCompliance", () => {
   it("treats range edges as in scope (inclusive bounds)", () => {
     const result = evaluateScopeCompliance({
       scopeLines: [massLine],
-      points: [
-        point({ value: 0 }),
-        point({ value: 500 }),
-      ],
+      points: [point({ value: 0 }), point({ value: 500 })],
       atDate: AT_DATE,
     });
     expect(result.status).toBe("PASS");
@@ -177,9 +174,7 @@ describe("evaluateScopeCompliance", () => {
     const result = evaluateScopeCompliance({
       scopeLines: [massLine],
       // 0.00002 kg = 0.02 g ≥ CMC 0.01 g.
-      points: [
-        point({ expandedUncertainty: 0.00002, uncertaintyUnit: "kg" }),
-      ],
+      points: [point({ expandedUncertainty: 0.00002, uncertaintyUnit: "kg" })],
       atDate: AT_DATE,
     });
     expect(result.status).toBe("PASS");
@@ -280,10 +275,7 @@ describe("evaluateScopeCompliance", () => {
   it("ranks OUT_OF_SCOPE above U_BELOW_CMC when both occur", () => {
     const result = evaluateScopeCompliance({
       scopeLines: [massLine],
-      points: [
-        point({ value: 600 }),
-        point({ expandedUncertainty: 0.001 }),
-      ],
+      points: [point({ value: 600 }), point({ expandedUncertainty: 0.001 })],
       atDate: AT_DATE,
     });
     expect(result.status).toBe("OUT_OF_SCOPE");

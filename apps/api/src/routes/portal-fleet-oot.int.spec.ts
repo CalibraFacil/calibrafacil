@@ -221,7 +221,10 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       conformity: "NON_CONFORMING",
     });
 
-    loginAsPortal({ userId: ctx.portalUserId, organizationId: ctx.clientOrgId });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
     const res = await portalRouter.request(
       "/analytics/fleet?periodMonths=24&bucket=quarter",
       { headers: LOCAL_ORIGIN },
@@ -274,7 +277,10 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       margins: null,
     });
 
-    loginAsPortal({ userId: ctx.portalUserId, organizationId: ctx.clientOrgId });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
     const res = await portalRouter.request(`/assets/${assetId}/drift-series`, {
       headers: LOCAL_ORIGIN,
     });
@@ -363,7 +369,10 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       actorUserId: ctx.portalUserId,
     });
 
-    loginAsPortal({ userId: ctx.portalUserId, organizationId: ctx.clientOrgId });
+    loginAsPortal({
+      userId: ctx.portalUserId,
+      organizationId: ctx.clientOrgId,
+    });
 
     // Open events list carries the suspect-window default
     const listRes = await portalRouter.request("/oot-events?status=OPEN", {

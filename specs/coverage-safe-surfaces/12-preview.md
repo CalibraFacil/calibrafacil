@@ -4,6 +4,7 @@ Target: `packages/method-definition/src/preview.ts` (`runMethodPreview`)
 Test file: `packages/method-definition/tests/preview.test.ts` (Vitest)
 
 ## Context
+
 `runMethodPreview(...)` renders a read-only, deterministic preview of a method
 definition (phases, watermarking, metadata, accreditation-seal rules) for operator
 feedback. Large single export (~1.5k lines of internal helpers). This pass targets the

@@ -110,7 +110,9 @@ describe("normalizeOrigin — valid URL handling", () => {
   });
 
   it("REQ-DOM-007: drops path and query, keeps protocol and host", () => {
-    const result = normalizeOrigin("https://api.calibrafacil.com/v2/jobs?foo=bar");
+    const result = normalizeOrigin(
+      "https://api.calibrafacil.com/v2/jobs?foo=bar",
+    );
     expect(result).toBe("https://api.calibrafacil.com");
   });
 });

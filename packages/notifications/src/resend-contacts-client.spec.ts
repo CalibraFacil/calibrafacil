@@ -84,7 +84,9 @@ describe("REQ-SYNC-004: Resend contacts client idempotent upsert", () => {
   });
 
   it("REQ-SYNC-004 throws on a non-404 error so the caller can count it", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(500, { error: "boom" }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(500, { error: "boom" }));
     const client = createResendContactsClient({
       apiKey: "re_test",
       audienceId: "aud_1",

@@ -4,6 +4,7 @@ Target: `packages/method-templates/src/product-to-draft.ts` (`buildDraftFromProd
 Test file: `packages/method-templates/src/product-to-draft.test.ts` (Vitest)
 
 ## Context
+
 `buildDraftFromProduct(source)` converts a product-format template definition into a
 compilable method-definition draft (normalizes fields, formulas, validations,
 bindings). Feeds the method fingerprint (existing `fingerprint.test.ts` covers

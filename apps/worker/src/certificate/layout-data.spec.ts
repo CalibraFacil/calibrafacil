@@ -334,7 +334,9 @@ describe("buildCertificateLayoutData", () => {
         massJob({ approverSignatureUrl: "data:image/png;base64,SIG" }),
       ),
     );
-    expect(data.signatory.signatureImageDataUrl).toBe("data:image/png;base64,SIG");
+    expect(data.signatory.signatureImageDataUrl).toBe(
+      "data:image/png;base64,SIG",
+    );
   });
 
   it("never invents a conformity verdict", () => {

@@ -81,7 +81,10 @@ describe("sessionsRouter — real DB + real middleware", () => {
 
   it("REQ-SESS-001: happy-path revoke of OWN session -> { status: true } and row deleted", async () => {
     const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
-    const ownSessionId = await seedSession({ id: "sess-a", userId: orgA.userId });
+    const ownSessionId = await seedSession({
+      id: "sess-a",
+      userId: orgA.userId,
+    });
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
     const res = await sessionsRouter.request("/revoke", {
@@ -98,7 +101,10 @@ describe("sessionsRouter — real DB + real middleware", () => {
 
   it("REQ-SESS-002: POST /revoke unauthenticated -> 401 and no session deleted", async () => {
     const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
-    const ownSessionId = await seedSession({ id: "sess-a", userId: orgA.userId });
+    const ownSessionId = await seedSession({
+      id: "sess-a",
+      userId: orgA.userId,
+    });
 
     logout();
     const res = await sessionsRouter.request("/revoke", {

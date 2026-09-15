@@ -17,8 +17,9 @@ vi.mock("@calibra-facil/db", async () => {
   // Real schema table objects (no DB connection — schema.ts is pure table defs),
   // so the route's `eq(calibrationMethod.col, …)` and `db.insert(table)` resolve
   // against genuine drizzle columns; only `db` itself is faked.
-  const schema =
-    await vi.importActual<Record<string, unknown>>("@calibra-facil/db/schema");
+  const schema = await vi.importActual<Record<string, unknown>>(
+    "@calibra-facil/db/schema",
+  );
 
   const resolveNext = () =>
     Promise.resolve(dbQueue.length ? dbQueue.shift() : []);
@@ -103,7 +104,10 @@ const actionRefs = (electrical?.governance?.verificarItems ?? [])
   .map((item) => item.ref)
   .filter((ref): ref is string => typeof ref === "string");
 
-function acknowledgements(templateVersion: number, acceptedVerificarRefs: string[]) {
+function acknowledgements(
+  templateVersion: number,
+  acceptedVerificarRefs: string[],
+) {
   return {
     readVerificarAndOmitted: true,
     acceptsVerificationDuty: true,
@@ -144,9 +148,9 @@ describe("GET /templates (catalog)", () => {
       expect(entry.spec).toBeTruthy();
       expect(typeof entry.counts.verificar).toBe("number");
     }
-    expect(body.map((entry: { templateKey: string }) => entry.templateKey)).toContain(
-      "electrical-indication",
-    );
+    expect(
+      body.map((entry: { templateKey: string }) => entry.templateKey),
+    ).toContain("electrical-indication");
   });
 });
 
@@ -164,7 +168,10 @@ describe("POST /from-template (adoption)", () => {
 
     const res = await postFromTemplate({
       templateKey: "electrical-indication",
-      acknowledgements: acknowledgements(electrical.templateVersion, actionRefs),
+      acknowledgements: acknowledgements(
+        electrical.templateVersion,
+        actionRefs,
+      ),
     });
 
     expect(res.status).toBe(201);

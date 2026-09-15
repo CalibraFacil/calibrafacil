@@ -87,7 +87,8 @@ export const GRANDEZAS: Grandeza[] = [
       { label: "Grandeza", value: "Massa" },
       {
         label: "Faixa típica",
-        value: "De balanças analíticas (mg) a balanças de grande capacidade (t)",
+        value:
+          "De balanças analíticas (mg) a balanças de grande capacidade (t)",
       },
       {
         label: "Padrões de referência",
@@ -624,7 +625,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Ensaios",
-        value: "Erro de indicação, planeza e paralelismo das faces, repetibilidade",
+        value:
+          "Erro de indicação, planeza e paralelismo das faces, repetibilidade",
       },
       {
         label: "Incerteza",
@@ -718,7 +720,10 @@ export const GRANDEZAS: Grandeza[] = [
       },
     ],
     spec: [
-      { label: "Grandeza", value: "Grandezas elétricas (tensão, corrente, resistência)" },
+      {
+        label: "Grandeza",
+        value: "Grandezas elétricas (tensão, corrente, resistência)",
+      },
       {
         label: "Faixa típica",
         value: "De mV a kV, de µA a A e de Ω a MΩ, conforme o calibrador",
@@ -757,7 +762,10 @@ export const GRANDEZAS: Grandeza[] = [
       },
     ],
     related: [
-      { label: "Calibração de termo-higrômetro", href: "/calibracao/termo-higrometro" },
+      {
+        label: "Calibração de termo-higrômetro",
+        href: "/calibracao/termo-higrometro",
+      },
       { label: "Calibração de manômetro", href: "/calibracao/manometro" },
       { label: "Calibração de balança", href: "/calibracao/balanca" },
       {
@@ -844,8 +852,7 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Referências de método",
-        value:
-          "Guias EURAMET de umidade — o laboratório é dono do método",
+        value: "Guias EURAMET de umidade — o laboratório é dono do método",
       },
     ],
     faq: [
@@ -874,7 +881,8 @@ export const GRANDEZAS: Grandeza[] = [
   },
   {
     slug: "pipeta",
-    metaTitle: "Software para calibração de pipeta (volume, método gravimétrico)",
+    metaTitle:
+      "Software para calibração de pipeta (volume, método gravimétrico)",
     description:
       "Sistema para laboratórios que calibram pipetas e micropipetas: método gravimétrico conforme a ISO 8655, erro sistemático e repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
     heading: "Calibração de pipeta",
@@ -941,7 +949,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Ensaios",
-        value: "Erro sistemático e repetibilidade por volume (método gravimétrico)",
+        value:
+          "Erro sistemático e repetibilidade por volume (método gravimétrico)",
       },
       {
         label: "Incerteza",
@@ -949,7 +958,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Referências de método",
-        value: "ISO 8655 (aparelhos volumétricos de pistão) — o laboratório é dono do método",
+        value:
+          "ISO 8655 (aparelhos volumétricos de pistão) — o laboratório é dono do método",
       },
     ],
     faq: [
@@ -1036,7 +1046,8 @@ export const GRANDEZAS: Grandeza[] = [
       { label: "Grandeza", value: "Dureza" },
       {
         label: "Faixa típica",
-        value: "Por escala (Rockwell, Brinell, Vickers, Shore), conforme os blocos",
+        value:
+          "Por escala (Rockwell, Brinell, Vickers, Shore), conforme os blocos",
       },
       {
         label: "Padrões de referência",
@@ -1044,7 +1055,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Ensaios",
-        value: "Erro de indicação e repetibilidade nos blocos-padrão por escala",
+        value:
+          "Erro de indicação e repetibilidade nos blocos-padrão por escala",
       },
       {
         label: "Incerteza",
@@ -1071,7 +1083,10 @@ export const GRANDEZAS: Grandeza[] = [
       },
     ],
     related: [
-      { label: "Calibração de célula de carga", href: "/calibracao/celula-de-carga" },
+      {
+        label: "Calibração de célula de carga",
+        href: "/calibracao/celula-de-carga",
+      },
       { label: "Calibração de torquímetro", href: "/calibracao/torquimetro" },
       { label: "Calibração de micrômetro", href: "/calibracao/micrometro" },
       {
@@ -1149,7 +1164,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Ensaios",
-        value: "Erro de indicação em pontos, repetibilidade, estabilidade da vazão",
+        value:
+          "Erro de indicação em pontos, repetibilidade, estabilidade da vazão",
       },
       {
         label: "Incerteza",
@@ -1249,7 +1265,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Padrões de referência",
-        value: "Padrão de rotação rastreável a tempo e frequência, rastreável à RBC",
+        value:
+          "Padrão de rotação rastreável a tempo e frequência, rastreável à RBC",
       },
       {
         label: "Ensaios",
@@ -1261,7 +1278,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Referências de método",
-        value: "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
+        value:
+          "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
       },
     ],
     faq: [
@@ -1352,11 +1370,13 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Padrões de referência",
-        value: "Base de tempo rastreável a tempo e frequência, rastreável à RBC",
+        value:
+          "Base de tempo rastreável a tempo e frequência, rastreável à RBC",
       },
       {
         label: "Ensaios",
-        value: "Erro por intervalo, erro de marcha (deriva), repetibilidade do acionamento",
+        value:
+          "Erro por intervalo, erro de marcha (deriva), repetibilidade do acionamento",
       },
       {
         label: "Incerteza",
@@ -1364,7 +1384,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Referências de método",
-        value: "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
+        value:
+          "Rastreabilidade a tempo/frequência — o laboratório é dono do método",
       },
     ],
     faq: [
@@ -1455,7 +1476,8 @@ export const GRANDEZAS: Grandeza[] = [
       },
       {
         label: "Padrões de referência",
-        value: "Escala padrão, banco de medição ou fita padrão, rastreáveis à RBC",
+        value:
+          "Escala padrão, banco de medição ou fita padrão, rastreáveis à RBC",
       },
       {
         label: "Ensaios",
@@ -1498,7 +1520,8 @@ export const GRANDEZAS: Grandeza[] = [
   },
   {
     slug: "celula-de-carga",
-    metaTitle: "Software para calibração de célula de carga e dinamômetro (força)",
+    metaTitle:
+      "Software para calibração de célula de carga e dinamômetro (força)",
     description:
       "Sistema para laboratórios que calibram células de carga e dinamômetros: pontos em tração e compressão, histerese e repetibilidade, orçamento de incerteza conforme o GUM e certificado assinado em ICP-Brasil.",
     heading: "Calibração de célula de carga",

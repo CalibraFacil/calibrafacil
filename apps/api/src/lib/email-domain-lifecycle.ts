@@ -95,17 +95,15 @@ export async function saveManagedEmailDomain(
         })
         .where(eq(organizationEmailDomain.id, existing.id))
         .returning();
-      await tx
-        .insert(organizationEventLog)
-        .values({
-          organizationId: actor.organizationId,
-          actorUserId: actor.userId,
-          actorMemberId: actor.memberId,
-          action: "email_sender_domain.updated",
-          entityType: "email_sender_domain",
-          entityId: existing.id,
-          details: { hostname: input.hostname, fromAddress },
-        });
+      await tx.insert(organizationEventLog).values({
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        actorMemberId: actor.memberId,
+        action: "email_sender_domain.updated",
+        entityType: "email_sender_domain",
+        entityId: existing.id,
+        details: { hostname: input.hostname, fromAddress },
+      });
       return { domain: updated!, created: false };
     }
     const collision = await tx.query.organizationEmailDomain.findFirst({
@@ -145,20 +143,18 @@ export async function saveManagedEmailDomain(
           keyLastError: null,
         })
         .returning();
-      await tx
-        .insert(organizationEventLog)
-        .values({
-          organizationId: actor.organizationId,
-          actorUserId: actor.userId,
-          actorMemberId: actor.memberId,
-          action: "email_sender_domain.created",
-          entityType: "email_sender_domain",
-          entityId: created!.id,
-          details: {
-            hostname: input.hostname,
-            fromAddress: created!.fromAddress,
-          },
-        });
+      await tx.insert(organizationEventLog).values({
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        actorMemberId: actor.memberId,
+        action: "email_sender_domain.created",
+        entityType: "email_sender_domain",
+        entityId: created!.id,
+        details: {
+          hostname: input.hostname,
+          fromAddress: created!.fromAddress,
+        },
+      });
       return { domain: created!, created: true };
     } catch (error) {
       // Compensate a rejected database write before releasing the tenant lock.
@@ -200,20 +196,18 @@ export async function removeEmailDomain(actor: Actor) {
     await tx
       .delete(organizationEmailDomain)
       .where(eq(organizationEmailDomain.id, record.id));
-    await tx
-      .insert(organizationEventLog)
-      .values({
-        organizationId: actor.organizationId,
-        actorUserId: actor.userId,
-        actorMemberId: actor.memberId,
-        action: "email_sender_domain.deleted",
-        entityType: "email_sender_domain",
-        entityId: record.id,
-        details: {
-          hostname: record.hostname,
-          wasVerified: Boolean(record.verifiedAt),
-          wasActive: record.isActive,
-        },
-      });
+    await tx.insert(organizationEventLog).values({
+      organizationId: actor.organizationId,
+      actorUserId: actor.userId,
+      actorMemberId: actor.memberId,
+      action: "email_sender_domain.deleted",
+      entityType: "email_sender_domain",
+      entityId: record.id,
+      details: {
+        hostname: record.hostname,
+        wasVerified: Boolean(record.verifiedAt),
+        wasActive: record.isActive,
+      },
+    });
   });
 }

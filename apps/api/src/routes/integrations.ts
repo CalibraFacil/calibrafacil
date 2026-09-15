@@ -32,16 +32,18 @@ import {
   buildIntegrationDriftQueue,
 } from "../lib/integration-drift";
 
-const DRIFT_TARGETS: ReadonlySet<string> = new Set<IntegrationObjectLinkTarget>([
-  "customer",
-  "catalog_item",
-  "service",
-  "sale",
-  "payable",
-  "receivable_installment",
-  "fiscal_document",
-  "remote_document",
-]);
+const DRIFT_TARGETS: ReadonlySet<string> = new Set<IntegrationObjectLinkTarget>(
+  [
+    "customer",
+    "catalog_item",
+    "service",
+    "sale",
+    "payable",
+    "receivable_installment",
+    "fiscal_document",
+    "remote_document",
+  ],
+);
 
 function isDriftTarget(value: string): value is IntegrationObjectLinkTarget {
   return DRIFT_TARGETS.has(value);
@@ -674,7 +676,6 @@ async function upsertContaAzulConnection(params: {
       accessTokenExpiresAt: params.tokenBundle.expiresAt,
       scopes: params.tokenBundle.scopes,
     });
-
 
     if (existing) {
       // Re-authorization may target a different Conta Azul account. Prior

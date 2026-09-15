@@ -51,8 +51,8 @@ export function AwaitingEvaluationEmail({
         </DetailBox>
 
         <Paragraph>
-          Em breve nossa equipe técnica realizará a avaliação e informaremos você
-          sobre os próximos passos. Obrigado pela paciência!
+          Em breve nossa equipe técnica realizará a avaliação e informaremos
+          você sobre os próximos passos. Obrigado pela paciência!
         </Paragraph>
       </EmailCard>
     </ServiceOrderEmailLayout>

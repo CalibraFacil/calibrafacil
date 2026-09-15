@@ -9,6 +9,7 @@ Test file: `packages/math-engine/src/gum/gum-kat.spec.ts` (NEW) — and you MUST
 wire a Vitest runner in this package (see Tooling).
 
 ## CUT-LINE — pair-don't-loop, oracle-gated
+
 This is the GUM uncertainty engine: wrong U/k = invalid certificates. The expected
 values below are an AUTHORITATIVE oracle from JCGM 100:2008 (GUM) and standard
 Student-t tables — independently hand-verifiable. **Assert the ORACLE values. IF the
@@ -17,12 +18,14 @@ relax tolerance or edit the expected value to match.** Do NOT modify any engine 
 Mirror the validated approach in `apps/api/src/lib/math-engine-kat.spec.ts` and EXPAND it.
 
 ## Tooling (test infra, not a production change — report it)
+
 `packages/math-engine` has no test runner. Add: `vitest` (+ `@vitest/coverage-v8`) devDep,
 a `vitest.config.ts` (mirror `packages/shared`), and `"test"`/`"test:run"` scripts in
 package.json. Confirm `pnpm --dir packages/math-engine test:run` works. Do not change `main`
 /`exports` or any `src/**` engine file.
 
 ## Oracle (independently verifiable)
+
 - Type A of `[9.8, 10.0, 10.2]`: mean = 10, sample s = 0.2, standard uncertainty of the
   mean u = s/√n = 0.2/√3, degreesOfFreedom = n−1 = 2.
 - Type B divisors: rectangular ÷√3, triangular ÷√6, U-shaped/arcsine ÷√2. (Read type-b.ts
@@ -54,7 +57,7 @@ package.json. Confirm `pnpm --dir packages/math-engine test:run` works. Do not c
 - REQ-GUM-006: `welchSatterthwaiteDegreesOfFreedom(2,[1,1],[10,10])` SHALL equal 20 and
   `(2,[1,1],[Infinity,10])` SHALL equal 40. [HIGH RISK]
 - REQ-GUM-007: `evaluateMeasurementModel({formula:"x", quantities:{x:{estimate:10,
-  repeatedObservations:[9.8,10,10.2]}}, coverageProbability:0.95})` SHALL produce value=10,
+repeatedObservations:[9.8,10,10.2]}}, coverageProbability:0.95})` SHALL produce value=10,
   combinedStandardUncertainty=0.2/√3, effectiveDegreesOfFreedom=2, coverageFactor≈4.30265,
   expandedUncertainty=(0.2/√3)·4.30265. [HIGH RISK]
 - REQ-GUM-008: A two-component model where Type B dominates SHALL combine in quadrature

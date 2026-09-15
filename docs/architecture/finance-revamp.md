@@ -43,15 +43,15 @@ PR #333 stays mergeable.
 Finance nav is regrouped around operator jobs (single-level nav, the only depth
 the sidebar supports), in `apps/web/src/app/router/route-meta.ts`:
 
-| Label      | Route                                   | Notes |
-|------------|-----------------------------------------|-------|
-| Painel     | `/dashboard/finance`                    | overview → actionable operator console |
-| Cobrança   | `/dashboard/finance/billing-readiness`  | renamed from "Pronto para faturar" |
-| Recebíveis | `/dashboard/finance/receivables`        | **new** unified workspace (merges documents + receipts) |
-| Contratos  | `/dashboard/finance/contracts`          | unchanged URL |
-| Análises   | `/dashboard/finance/analytics`          | **new** hub surfacing the 4 orphaned analytics |
-| Automação  | `/dashboard/finance/automation`         | **new** — release policies + auto-send rules UI |
-| ERP        | `/dashboard/finance/erp`                | unchanged |
+| Label      | Route                                  | Notes                                                   |
+| ---------- | -------------------------------------- | ------------------------------------------------------- |
+| Painel     | `/dashboard/finance`                   | overview → actionable operator console                  |
+| Cobrança   | `/dashboard/finance/billing-readiness` | renamed from "Pronto para faturar"                      |
+| Recebíveis | `/dashboard/finance/receivables`       | **new** unified workspace (merges documents + receipts) |
+| Contratos  | `/dashboard/finance/contracts`         | unchanged URL                                           |
+| Análises   | `/dashboard/finance/analytics`         | **new** hub surfacing the 4 orphaned analytics          |
+| Automação  | `/dashboard/finance/automation`        | **new** — release policies + auto-send rules UI         |
+| ERP        | `/dashboard/finance/erp`               | unchanged                                               |
 
 Old links keep working via redirects (`documents/index`, `receipts` →
 `receivables`) registered in `dashboardRedirectRouteMeta`. `documents/$id` and
@@ -90,7 +90,7 @@ Current anti-pattern (e.g. `document-detail-page.tsx`, `receipts-page.tsx`,
 `billing-readiness-page.tsx`, `integrations-page.tsx`): each mutation fires
 several `invalidateQueries({ queryKey: ['finance','documents'] })`-style **prefix**
 invalidations. A bare prefix matches every cached list variant
-(`['finance','documents', search]`) *and* detail keys, so one action refetches N
+(`['finance','documents', search]`) _and_ detail keys, so one action refetches N
 lists + detail + receipts + overview. `integrations-page.tsx` even carries a
 `predicate: query.queryKey[3] !== 'catalog'` band-aid to dampen the storm.
 
@@ -115,9 +115,9 @@ place via `setQueryData`; aggregate views (overview) invalidate **once** with
 > → Automação (2) → Analytics (3) → Document detail (4) → forms (5)**.
 
 - **Wave 1** — design-system foundation; **operator console** (actionable vitals
-  + worklists); **unified Receivables workspace** (filter + bulk + preview drawer
-  + inline receipt); **Conta Azul lag/bug fixes** (targeted `setQueryData`,
-  optimistic sync state, surfaced errors).
+  - worklists); **unified Receivables workspace** (filter + bulk + preview drawer
+  - inline receipt); **Conta Azul lag/bug fixes** (targeted `setQueryData`,
+    optimistic sync state, surfaced errors).
 - **Wave 2** — Contracts redesign + **Automação** UIs (release policies,
   auto-send rules — backend exists, no UI today).
 - **Wave 3** — actionable Analytics hub (drill-downs from cards into filtered

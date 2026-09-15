@@ -34,7 +34,7 @@ and judge each EARS criterion.
    - `pnpm --dir <pkg> test:run <files>`
    - `pnpm lint`
    - `pnpm check-types`
-   Quote the real exit status / summary lines.
+     Quote the real exit status / summary lines.
 4. **Reason explicitly about every access-control criterion.** State, per access
    REQ ID: which role/permission is required, which real guard enforces it
    (`requirePermission` / `requireRole` / `requireCalibrationAction` /

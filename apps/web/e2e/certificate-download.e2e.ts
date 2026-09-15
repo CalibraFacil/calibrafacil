@@ -70,16 +70,10 @@ test.describe('certificate distribution', () => {
 
     await expect.poll(() => downloadRequests.length).toBeGreaterThan(1)
     await expect
-      .poll(() =>
-        page.evaluate(
-          () => window.__openedUrls?.length ?? 0,
-        ),
-      )
+      .poll(() => page.evaluate(() => window.__openedUrls?.length ?? 0))
       .toBe(1)
 
-    const openedUrls = await page.evaluate(
-      () => window.__openedUrls ?? [],
-    )
+    const openedUrls = await page.evaluate(() => window.__openedUrls ?? [])
     expect(openedUrls).toContainEqual({
       url: signedDownloadUrl,
       target: '_blank',

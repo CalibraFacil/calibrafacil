@@ -201,10 +201,7 @@ export const accreditedScopeRouter = new Hono<{
           .where(
             and(
               eq(accreditedScopeLine.id, input.id),
-              eq(
-                accreditedScopeLine.organizationId,
-                memberData.organizationId,
-              ),
+              eq(accreditedScopeLine.organizationId, memberData.organizationId),
               eq(accreditedScopeLine.unitId, unit.unitId),
             ),
           )

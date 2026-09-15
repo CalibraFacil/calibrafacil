@@ -74,7 +74,8 @@ export async function seedServiceOrder(params: {
       createdAt: EPOCH,
     })
     .returning();
-  if (!assetTypeRow) throw new Error("seedServiceOrder: assetType insert failed");
+  if (!assetTypeRow)
+    throw new Error("seedServiceOrder: assetType insert failed");
 
   const [assetRow] = await db
     .insert(asset)
@@ -109,7 +110,8 @@ export async function seedServiceOrder(params: {
       createdAt: EPOCH,
     })
     .returning();
-  if (!orderRow) throw new Error("seedServiceOrder: service_order insert failed");
+  if (!orderRow)
+    throw new Error("seedServiceOrder: service_order insert failed");
 
   await db.insert(serviceOrderAssetSnapshot).values({
     serviceOrderId: orderRow.id,

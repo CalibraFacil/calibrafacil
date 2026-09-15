@@ -32,9 +32,10 @@ vi.mock("@calibra-facil/db", () => {
     resolve: (value: unknown) => unknown,
     reject: (reason: unknown) => unknown,
   ) =>
-    Promise.resolve(
-      dbState.queue.length > 0 ? dbState.queue.shift() : [],
-    ).then(resolve, reject);
+    Promise.resolve(dbState.queue.length > 0 ? dbState.queue.shift() : []).then(
+      resolve,
+      reject,
+    );
 
   // Update builder — set() is the spy under test; where() resolves to void.
   //

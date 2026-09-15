@@ -12,7 +12,4 @@ export {
   dimensionalInputFromMethodRecord,
   type MethodDimensionalRecord,
 } from "./record-adapter";
-export {
-  formatDimExpr,
-  type DimExpr,
-} from "./dim-expr";
+export { formatDimExpr, type DimExpr } from "./dim-expr";

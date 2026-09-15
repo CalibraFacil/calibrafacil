@@ -6,6 +6,7 @@ Target: `apps/api/src/lib/finance.ts` — `evaluateOrderBlockers`,
 The async DB functions in this file are OUT OF SCOPE.
 
 ## Discipline
+
 `evaluateOrderBlockers` gates whether an order can be billed; a missed blocker = billing on
 bad data, a spurious blocker = stuck revenue. Assert EXACT blocker sets. NOT a cut-line, but
 flag anything that looks wrong. Do NOT modify production code. Read the source for the exact

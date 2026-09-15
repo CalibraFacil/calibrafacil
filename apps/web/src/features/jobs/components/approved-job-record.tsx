@@ -1069,6 +1069,11 @@ export function ApprovedJobRecord({
                       }
                     }}
                   >
+                    {/* No `sandbox` on purpose: Chromium refuses to instantiate its
+                        PDF viewer inside any sandboxed frame (plugins are disabled
+                        regardless of the token list), which would blank the preview.
+                        The src is our own signed certificate URL. */}
+                    {/* oxlint-disable-next-line react/iframe-missing-sandbox */}
                     <iframe
                       src={`${certificatePreviewUrl ?? job.certificateUrl}#toolbar=0&navpanes=0`}
                       className="w-full h-full border-0 pointer-events-none"

@@ -4,6 +4,7 @@ Target: `packages/method-templates/src/util.ts`
 Test file: `packages/method-templates/src/util.test.ts` (Vitest)
 
 ## Context
+
 `safeMethodId` + `stripUndefinedDeep` feed the method fingerprint, so behavior must
 not drift (fingerprint is audit-relevant). Assert exact transforms.
 

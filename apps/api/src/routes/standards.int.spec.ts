@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { standardsRouter } from "./standards";
 import { db } from "@calibra-facil/db";
-import { referenceStandard, referenceStandardAuditLog } from "@calibra-facil/db/schema";
+import {
+  referenceStandard,
+  referenceStandardAuditLog,
+} from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -242,7 +245,10 @@ describe("standardsRouter — real DB + real middleware", () => {
 
     // Verify soft-delete: row must have deletedAt set
     const [row] = await db
-      .select({ deletedAt: referenceStandard.deletedAt, status: referenceStandard.status })
+      .select({
+        deletedAt: referenceStandard.deletedAt,
+        status: referenceStandard.status,
+      })
       .from(referenceStandard)
       .where(eq(referenceStandard.id, standardId));
     expect(row?.deletedAt).not.toBeNull();

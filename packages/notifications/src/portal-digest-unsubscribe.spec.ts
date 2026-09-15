@@ -115,9 +115,7 @@ afterEach(() => {
 
 describe("REQ-DIGEST-001: portal digest List-Unsubscribe header", () => {
   it("REQ-DIGEST-001 sends the digest with a List-Unsubscribe to the portal settings page", async () => {
-    const result = await sendPortalDueDigests(
-      new Date("2026-06-25T12:00:00Z"),
-    );
+    const result = await sendPortalDueDigests(new Date("2026-06-25T12:00:00Z"));
 
     expect(result.sent).toBe(1);
     expect(sendMock).toHaveBeenCalledTimes(1);

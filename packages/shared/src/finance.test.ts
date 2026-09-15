@@ -13,7 +13,10 @@ import {
 // ---------------------------------------------------------------------------
 // Typed fixture builder — avoids `as` assertions (banned by repo rules)
 // ---------------------------------------------------------------------------
-type InstallmentFixture = Pick<FinancialInstallmentStatus, "status" | "amountCents">;
+type InstallmentFixture = Pick<
+  FinancialInstallmentStatus,
+  "status" | "amountCents"
+>;
 
 function installment(
   status: InstallmentFixture["status"],
@@ -51,12 +54,10 @@ describe("summarizeInstallments", () => {
   // REQ-FIN-002: VOID increments voidCount + counts toward total but is excluded
   // from totalCents.  [HIGH RISK]
   it("REQ-FIN-002: VOID installment increments voidCount and total but NOT totalCents", () => {
-    const result = summarizeInstallments([
-      installment("VOID", 10000),
-    ]);
-    expect(result.total).toBe(1);          // VOID still counted in total (row count)
+    const result = summarizeInstallments([installment("VOID", 10000)]);
+    expect(result.total).toBe(1); // VOID still counted in total (row count)
     expect(result.voidCount).toBe(1);
-    expect(result.totalCents).toBe(0);     // excluded from money total
+    expect(result.totalCents).toBe(0); // excluded from money total
     expect(result.paidCents).toBe(0);
     expect(result.openCents).toBe(0);
     expect(result.overdueCents).toBe(0);
@@ -64,9 +65,7 @@ describe("summarizeInstallments", () => {
 
   // REQ-FIN-003: PAID installment → paidCents + totalCents, paidCount++
   it("REQ-FIN-003: PAID installment adds to paidCents and totalCents", () => {
-    const result = summarizeInstallments([
-      installment("PAID", 50000),
-    ]);
+    const result = summarizeInstallments([installment("PAID", 50000)]);
     expect(result.paidCents).toBe(50000);
     expect(result.totalCents).toBe(50000);
     expect(result.paidCount).toBe(1);
@@ -77,9 +76,7 @@ describe("summarizeInstallments", () => {
 
   // REQ-FIN-004: OPEN installment → openCents + totalCents, openCount++
   it("REQ-FIN-004: OPEN installment adds to openCents and totalCents", () => {
-    const result = summarizeInstallments([
-      installment("OPEN", 30000),
-    ]);
+    const result = summarizeInstallments([installment("OPEN", 30000)]);
     expect(result.openCents).toBe(30000);
     expect(result.totalCents).toBe(30000);
     expect(result.openCount).toBe(1);
@@ -91,11 +88,9 @@ describe("summarizeInstallments", () => {
   // REQ-FIN-005: OVERDUE contributes to BOTH openCents AND overdueCents (subset
   // relationship).  [HIGH RISK] — assert the double-attribution explicitly.
   it("REQ-FIN-005: OVERDUE amount is counted in BOTH openCents and overdueCents", () => {
-    const result = summarizeInstallments([
-      installment("OVERDUE", 25000),
-    ]);
-    expect(result.overdueCents).toBe(25000);  // dedicated overdue bucket
-    expect(result.openCents).toBe(25000);     // ALSO in open (overdue ⊆ open)
+    const result = summarizeInstallments([installment("OVERDUE", 25000)]);
+    expect(result.overdueCents).toBe(25000); // dedicated overdue bucket
+    expect(result.openCents).toBe(25000); // ALSO in open (overdue ⊆ open)
     expect(result.totalCents).toBe(25000);
     expect(result.overdueCount).toBe(1);
     // open count does NOT increment for overdue (separate counter)
@@ -118,15 +113,15 @@ describe("summarizeInstallments", () => {
       installment("PAID", 60000),
       installment("OPEN", 15000),
       installment("OVERDUE", 25000),
-      installment("VOID", 99999),   // should not affect any money total
-      installment("PAID", 0),       // zero-amount PAID — still counted
+      installment("VOID", 99999), // should not affect any money total
+      installment("PAID", 0), // zero-amount PAID — still counted
     ];
     const result = summarizeInstallments(fixtures);
     expect(result).toStrictEqual({
       total: 5,
-      totalCents: 100000,   // 60000 + 15000 + 25000 + 0 (VOID excluded, 0-amt PAID included)
-      paidCents: 60000,     // 60000 + 0
-      openCents: 40000,     // OPEN 15000 + OVERDUE 25000
+      totalCents: 100000, // 60000 + 15000 + 25000 + 0 (VOID excluded, 0-amt PAID included)
+      paidCents: 60000, // 60000 + 0
+      openCents: 40000, // OPEN 15000 + OVERDUE 25000
       overdueCents: 25000,
       paidCount: 2,
       openCount: 1,

@@ -103,51 +103,48 @@ describe("organizationMediaRouter -- real DB + real RBAC middleware", () => {
   // org A's upload/delete must touch ONLY org A's logo; org B's logo (the sole
   // discriminator -- a seeded leak row) must be neither read nor mutated.
   // =========================================================================
-  it(
-    "REQ-OM-001: org-A admin upload + delete never reads or affects org-B's logo (organizationId is the sole discriminator)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-om-001a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-om-001b", role: "admin" });
+  it("REQ-OM-001: org-A admin upload + delete never reads or affects org-B's logo (organizationId is the sole discriminator)", async () => {
+    const orgA = await seedOrg({ orgId: "org-om-001a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-om-001b", role: "admin" });
 
-      // Org B's logo is the sole-discriminator leak row.
-      const ORG_B_LOGO = "https://orgB.example/secret-logo.png";
-      await setLogo(orgB.orgId, ORG_B_LOGO);
+    // Org B's logo is the sole-discriminator leak row.
+    const ORG_B_LOGO = "https://orgB.example/secret-logo.png";
+    await setLogo(orgB.orgId, ORG_B_LOGO);
 
-      // --- Org A uploads its own logo ---
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const uploadRes = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        headers: unitHeader(orgA.unitId),
-        body: makeLogoFormData(),
-      });
-      expect(uploadRes.status).toBe(200);
+    // --- Org A uploads its own logo ---
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const uploadRes = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(orgA.unitId),
+      body: makeLogoFormData(),
+    });
+    expect(uploadRes.status).toBe(200);
 
-      const uploadBody = await uploadRes.json();
-      // The returned URL must belong to org A's proxy path, never org B's.
-      expect(typeof uploadBody.logoUrl).toBe("string");
-      expect(uploadBody.logoUrl).not.toBe(ORG_B_LOGO);
+    const uploadBody = await uploadRes.json();
+    // The returned URL must belong to org A's proxy path, never org B's.
+    expect(typeof uploadBody.logoUrl).toBe("string");
+    expect(uploadBody.logoUrl).not.toBe(ORG_B_LOGO);
 
-      // Org A's row got the new logo; org B's leak row is untouched.
-      const orgALogoAfterUpload = await readLogo(orgA.orgId);
-      expect(orgALogoAfterUpload).toBe(uploadBody.logoUrl);
-      expect(orgALogoAfterUpload).not.toBe(ORG_B_LOGO);
-      expect(await readLogo(orgB.orgId)).toBe(ORG_B_LOGO);
+    // Org A's row got the new logo; org B's leak row is untouched.
+    const orgALogoAfterUpload = await readLogo(orgA.orgId);
+    expect(orgALogoAfterUpload).toBe(uploadBody.logoUrl);
+    expect(orgALogoAfterUpload).not.toBe(ORG_B_LOGO);
+    expect(await readLogo(orgB.orgId)).toBe(ORG_B_LOGO);
 
-      // --- Org A deletes its own logo ---
-      const deleteRes = await organizationMediaRouter.request("/logo", {
-        method: "DELETE",
-        headers: unitHeader(orgA.unitId),
-      });
-      expect(deleteRes.status).toBe(200);
-      const deleteBody = await deleteRes.json();
-      expect(deleteBody.logoUrl).toBeNull();
+    // --- Org A deletes its own logo ---
+    const deleteRes = await organizationMediaRouter.request("/logo", {
+      method: "DELETE",
+      headers: unitHeader(orgA.unitId),
+    });
+    expect(deleteRes.status).toBe(200);
+    const deleteBody = await deleteRes.json();
+    expect(deleteBody.logoUrl).toBeNull();
 
-      // Org A's logo cleared; org B's leak row STILL untouched.
-      // (If the org filter were dropped, org B's row would be cleared here.)
-      expect(await readLogo(orgA.orgId)).toBeNull();
-      expect(await readLogo(orgB.orgId)).toBe(ORG_B_LOGO);
-    },
-  );
+    // Org A's logo cleared; org B's leak row STILL untouched.
+    // (If the org filter were dropped, org B's row would be cleared here.)
+    expect(await readLogo(orgA.orgId)).toBeNull();
+    expect(await readLogo(orgB.orgId)).toBe(ORG_B_LOGO);
+  });
 
   // =========================================================================
   // REQ-OM-002 [HIGH RISK]: the manage gate (organization:update via admin/owner)
@@ -155,118 +152,105 @@ describe("organizationMediaRouter -- real DB + real RBAC middleware", () => {
   // admin succeeds and the change is DB-persisted. The 403/200 split on the
   // SAME route proves the permission gate is what's blocking (not the handler).
   // =========================================================================
-  it(
-    "REQ-OM-002: member & operator (no organization:update) -> 403 on upload & delete; admin -> 200 + persisted",
-    async () => {
-      // --- member: no organization statement at all -> 403 ---
-      const memberOrg = await seedOrg({ orgId: "org-om-002m", role: "member" });
-      loginAs({ userId: memberOrg.userId, organizationId: memberOrg.orgId });
+  it("REQ-OM-002: member & operator (no organization:update) -> 403 on upload & delete; admin -> 200 + persisted", async () => {
+    // --- member: no organization statement at all -> 403 ---
+    const memberOrg = await seedOrg({ orgId: "org-om-002m", role: "member" });
+    loginAs({ userId: memberOrg.userId, organizationId: memberOrg.orgId });
 
-      const memberUpload = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        headers: unitHeader(memberOrg.unitId),
-        body: makeLogoFormData(),
-      });
-      expect(memberUpload.status).toBe(403);
+    const memberUpload = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(memberOrg.unitId),
+      body: makeLogoFormData(),
+    });
+    expect(memberUpload.status).toBe(403);
 
-      const memberDelete = await organizationMediaRouter.request("/logo", {
-        method: "DELETE",
-        headers: unitHeader(memberOrg.unitId),
-      });
-      expect(memberDelete.status).toBe(403);
+    const memberDelete = await organizationMediaRouter.request("/logo", {
+      method: "DELETE",
+      headers: unitHeader(memberOrg.unitId),
+    });
+    expect(memberDelete.status).toBe(403);
 
-      // member must not have persisted anything.
-      expect(await readLogo(memberOrg.orgId)).toBeNull();
+    // member must not have persisted anything.
+    expect(await readLogo(memberOrg.orgId)).toBeNull();
 
-      // --- operator: has many permissions but NOT organization:update -> 403 ---
-      const opOrg = await seedOrg({ orgId: "org-om-002o", role: "operator" });
-      loginAs({ userId: opOrg.userId, organizationId: opOrg.orgId });
+    // --- operator: has many permissions but NOT organization:update -> 403 ---
+    const opOrg = await seedOrg({ orgId: "org-om-002o", role: "operator" });
+    loginAs({ userId: opOrg.userId, organizationId: opOrg.orgId });
 
-      const opUpload = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        headers: unitHeader(opOrg.unitId),
-        body: makeLogoFormData(),
-      });
-      expect(opUpload.status).toBe(403);
-      expect(await readLogo(opOrg.orgId)).toBeNull();
+    const opUpload = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(opOrg.unitId),
+      body: makeLogoFormData(),
+    });
+    expect(opUpload.status).toBe(403);
+    expect(await readLogo(opOrg.orgId)).toBeNull();
 
-      // --- admin: organization:update granted -> 200 + persisted ---
-      const adminOrg = await seedOrg({ orgId: "org-om-002a", role: "admin" });
-      loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
+    // --- admin: organization:update granted -> 200 + persisted ---
+    const adminOrg = await seedOrg({ orgId: "org-om-002a", role: "admin" });
+    loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
 
-      const adminUpload = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        headers: unitHeader(adminOrg.unitId),
-        body: makeLogoFormData(),
-      });
-      expect(adminUpload.status).toBe(200);
-      const adminBody = await adminUpload.json();
-      expect(typeof adminBody.logoUrl).toBe("string");
-      // DB-persisted under the admin's own org.
-      expect(await readLogo(adminOrg.orgId)).toBe(adminBody.logoUrl);
-    },
-  );
+    const adminUpload = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(adminOrg.unitId),
+      body: makeLogoFormData(),
+    });
+    expect(adminUpload.status).toBe(200);
+    const adminBody = await adminUpload.json();
+    expect(typeof adminBody.logoUrl).toBe("string");
+    // DB-persisted under the admin's own org.
+    expect(await readLogo(adminOrg.orgId)).toBe(adminBody.logoUrl);
+  });
 
   // =========================================================================
   // REQ-OM-003: unauthenticated upload -> 401 (requireLabAuth fires first)
   // =========================================================================
-  it(
-    "REQ-OM-003: POST /logo without authentication -> 401",
-    async () => {
-      logout();
-      const res = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        body: makeLogoFormData(),
-      });
-      expect(res.status).toBe(401);
-    },
-  );
+  it("REQ-OM-003: POST /logo without authentication -> 401", async () => {
+    logout();
+    const res = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      body: makeLogoFormData(),
+    });
+    expect(res.status).toBe(401);
+  });
 
   // =========================================================================
   // REQ-OM-004: happy-path round-trip -- upload then delete persists/clears the
   // org-scoped logo metadata (storage stubbed).
   // =========================================================================
-  it(
-    "REQ-OM-004: admin upload -> read-back -> delete round-trip persists then clears the org-scoped logo",
-    async () => {
-      const org = await seedOrg({ orgId: "org-om-004", role: "owner" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-OM-004: admin upload -> read-back -> delete round-trip persists then clears the org-scoped logo", async () => {
+    const org = await seedOrg({ orgId: "org-om-004", role: "owner" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      // Pre-existing logo (so the upload also exercises the previous-key cleanup
-      // branch); storage delete is stubbed.
-      await setLogo(
-        org.orgId,
-        "http://localhost/api/organization-media/logo/" +
-          Buffer.from("organization-logos/old/key", "utf8").toString(
-            "base64url",
-          ),
-      );
+    // Pre-existing logo (so the upload also exercises the previous-key cleanup
+    // branch); storage delete is stubbed.
+    await setLogo(
+      org.orgId,
+      "http://localhost/api/organization-media/logo/" +
+        Buffer.from("organization-logos/old/key", "utf8").toString("base64url"),
+    );
 
-      // Upload
-      const uploadRes = await organizationMediaRouter.request("/logo", {
-        method: "POST",
-        headers: unitHeader(org.unitId),
-        body: makeLogoFormData("image/webp"),
-      });
-      expect(uploadRes.status).toBe(200);
-      const uploadBody = await uploadRes.json();
-      expect(typeof uploadBody.logoUrl).toBe("string");
-      expect(uploadBody.logoUrl).toContain(
-        "/api/organization-media/logo/",
-      );
+    // Upload
+    const uploadRes = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(org.unitId),
+      body: makeLogoFormData("image/webp"),
+    });
+    expect(uploadRes.status).toBe(200);
+    const uploadBody = await uploadRes.json();
+    expect(typeof uploadBody.logoUrl).toBe("string");
+    expect(uploadBody.logoUrl).toContain("/api/organization-media/logo/");
 
-      // Read-back: the persisted column equals the returned URL.
-      const persisted = await readLogo(org.orgId);
-      expect(persisted).toBe(uploadBody.logoUrl);
+    // Read-back: the persisted column equals the returned URL.
+    const persisted = await readLogo(org.orgId);
+    expect(persisted).toBe(uploadBody.logoUrl);
 
-      // Delete clears it.
-      const deleteRes = await organizationMediaRouter.request("/logo", {
-        method: "DELETE",
-        headers: unitHeader(org.unitId),
-      });
-      expect(deleteRes.status).toBe(200);
-      expect((await deleteRes.json()).logoUrl).toBeNull();
-      expect(await readLogo(org.orgId)).toBeNull();
-    },
-  );
+    // Delete clears it.
+    const deleteRes = await organizationMediaRouter.request("/logo", {
+      method: "DELETE",
+      headers: unitHeader(org.unitId),
+    });
+    expect(deleteRes.status).toBe(200);
+    expect((await deleteRes.json()).logoUrl).toBeNull();
+    expect(await readLogo(org.orgId)).toBeNull();
+  });
 });

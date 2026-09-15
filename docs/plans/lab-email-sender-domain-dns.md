@@ -33,6 +33,7 @@ panel is Registro.br, Cloudflare, or a modern host — creating 3-4 records is m
 the same motion as the one TXT record they already did for the portal, repeated a few more
 times. Realistic total elapsed time including the person finding their DNS login and waiting
 for propagation is 1-24 hours, because:
+
 - They will get stuck on **MX vs CNAME on the same host name** if we advise them to put the
   SPF TXT on the same label as an existing CNAME/MX for that subdomain — DNS forbids other
   record types coexisting with a CNAME at one name (RFC 1034 §3.6.2, confirmed via search
@@ -67,9 +68,10 @@ Primary/official sources, not blog aggregates, for the actual numbers:
 A calibration lab sending a few hundred certificates a month is **below every one of these
 5,000/day bulk thresholds** by orders of magnitude. Strictly, SPF-or-DKIM (not both, no
 DMARC) already satisfies the letter of all three providers' minimum requirements. But:
+
 - DMARC alignment (not just SPF-or-DKIM) is what actually suppresses Gmail's "via" annotation
   (see (e)) — the real product requirement here isn't "don't get blocked," it's "look like the
-  lab sent it." That needs SPF or DKIM to be *aligned*, i.e. the visible From: domain must
+  lab sent it." That needs SPF or DKIM to be _aligned_, i.e. the visible From: domain must
   match the authenticating domain, which for a delegated CNAME/MX setup means DKIM alignment
   (our DKIM `d=` is the lab's subdomain) — SPF alignment alone would require the envelope
   MAIL FROM to also be on the lab's domain, which the MX/TXT return-path pair above provides.
@@ -109,8 +111,8 @@ DMARC) already satisfies the letter of all three providers' minimum requirements
 
 - **DKIM**: RFC 6376 itself only requires a TXT record at `selector._domainkey.domain`; DNS
   resolution for TXT queries transparently follows a CNAME at that name per RFC 1034 §3.6.2
-  (confirmed via search 2026-09-09), which is why ESPs can point the *name* at a CNAME whose
-  *target* is a TXT record they control. This is a provider convention layered on ordinary DNS
+  (confirmed via search 2026-09-09), which is why ESPs can point the _name_ at a CNAME whose
+  _target_ is a TXT record they control. This is a provider convention layered on ordinary DNS
   behavior, not a DKIM-spec requirement. What it buys: **the lab never touches DNS again when
   we rotate the DKIM key** — we change the TXT record under the CNAME target on our side (or
   Resend/SES does), the lab's CNAME still points at the same name. AWS SES's Easy DKIM is the
@@ -127,11 +129,11 @@ DMARC) already satisfies the letter of all three providers' minimum requirements
   both a CNAME and a TXT record simultaneously (RFC 1034 §3.6.2, "no other data" rule; confirmed
   via search 2026-09-09), so if the SPF-relevant domain (envelope MAIL FROM / return-path
   domain) also needs an MX record, that name must be a plain TXT+MX pair the lab publishes
-  once. What *is* delegated is the SPF **policy content**, via the `include:` mechanism — the
+  once. What _is_ delegated is the SPF **policy content**, via the `include:` mechanism — the
   lab's TXT says `v=spf1 include:amazonses.com ~all`, so we can change which IPs are authorized
   by editing `amazonses.com`'s own SPF record, not the lab's. So: the record itself (TXT+MX)
-  is fixed at the lab's DNS forever; what we can rotate without them is *what's on the other
-  end of the include*.
+  is fixed at the lab's DNS forever; what we can rotate without them is _what's on the other
+  end of the include_.
 - **Net effect**: DKIM key rotation is fully delegate-able (CNAME), the SPF/MX return-path pair
   is a one-time publish that then never needs to change on the lab's side either (because we
   rotate via `include:`, not by asking them to edit the TXT). Practically, once the 3-4 records
@@ -146,6 +148,7 @@ records" (anything left in the parent zone at/below the delegation point is iner
 NS records at 10 per delegation (7 recommended).
 
 What it costs us to operate:
+
 - We'd need to run (or buy, e.g. via Route 53 or Cloudflare as our own authoritative backend)
   redundant, low-latency, correctly-glued nameservers per delegated zone, and automate zone
   creation/teardown per lab — meaningfully more infrastructure than "call the Domains API and
@@ -163,10 +166,10 @@ What it costs us to operate:
   simply doesn't resolve under validating resolvers, a confusing SERVFAIL with no visible DNS
   error) or the registrar won't offer the control at all for an internal subdomain (DS records
   for `.br` itself are handled by Registro.br at the domain level; DS for an internal
-  delegation is a parent-zone TXT-adjacent record the lab's *DNS host*, not the registry, must
+  delegation is a parent-zone TXT-adjacent record the lab's _DNS host_, not the registry, must
   support — inconsistent across providers).
 - **Failure mode when the lab changes DNS provider**: the NS delegation record lives in the
-  *parent* zone. When a lab migrates its main domain to a new host (which the brief already
+  _parent_ zone. When a lab migrates its main domain to a new host (which the brief already
   flags as a real, recurring event for this buyer profile — "web agency who built their site
   years ago"), the new provider's default zone import will not know to recreate a bespoke NS
   delegation for `certificados`. Unlike our current TXT-verification flow, where a dropped
@@ -176,7 +179,7 @@ What it costs us to operate:
 
 Verdict: real, but it converts a one-time DNS chore into a permanent operational dependency
 with a DNSSEC failure mode most of this buyer segment cannot self-diagnose, and a migration
-failure mode that is silent and total rather than degrading. Worth offering as an *opt-in*
+failure mode that is silent and total rather than degrading. Worth offering as an _opt-in_
 path for the rare technically-sophisticated lab (or one we onboard white-glove) but wrong as
 the default flow — the CNAME/TXT/MX shape in the recommendation section gets ~95% of the
 delegation benefit (rotate DKIM freely, rotate SPF's authorized senders freely) with none of
@@ -211,7 +214,7 @@ Organizational Domain when the exact subdomain has no DMARC record of its own (R
 §6.6.3). So if the lab's apex publishes `p=reject` and we publish our own
 `_dmarc.certificados.<lab>.com.br` (as recommended), our subdomain's policy is authoritative
 for itself — a strict apex policy has zero effect on the subdomain's evaluation. **What breaks
-is only the failure case we should design against**: if we *don't* publish a DMARC record on
+is only the failure case we should design against**: if we _don't_ publish a DMARC record on
 the subdomain, mail from `certificados.<lab>.com.br` falls through to the apex's `p=reject`
 (or its `sp=` if narrower), and any authentication gap on our side gets treated as
 apex-level-strict — quarantined or rejected outright, with reports (if `rua` is configured)
@@ -223,13 +226,14 @@ we cannot control or even always know whether a given lab's apex already runs a 
 ## g) Do-nothing fallback: send from our domain, lab's display name, Reply-To lab
 
 What the recipient actually sees:
+
 - **Gmail**: From: shows "Nome do Laboratório" as the display name, `<algo>@calibrafacil.com`
   as the address on hover/expand, and — per (e) — no "via" annotation at all, because
   `calibrafacil.com` is both the visible domain and the aligned DKIM/SPF domain; there's no
   mismatch to flag. Reply-To pointed at the lab's real address means a reply goes to the lab
   without ever appearing "via" anything. This is functionally identical to how most SaaS
   transactional mail already looks (Stripe, Notion, etc., all send "Nome da Empresa via
-  <product>.com" is specifically what they avoid by *not* trying to fake a via-free domain).
+  <product>.com" is specifically what they avoid by _not_ trying to fake a via-free domain).
 - **Outlook/Microsoft**: same mechanism — no cross-domain mismatch, so no equivalent
   third-party annotation.
 - This is a **defensible default**, not a degraded one: it costs zero DNS setup, it's
@@ -273,6 +277,6 @@ What the recipient actually sees:
   tool); the qualitative DNSSEC-chain-of-trust risk in (d) is RFC-grounded and confirmed, the
   prevalence among this buyer segment's domains is not.
 - Resend's exact current (September 2026) Domains API JSON response shape and full DNS-record
-  count for a brand-new domain — confirmed the record *types* (DKIM CNAME(s), SPF TXT, MX)
+  count for a brand-new domain — confirmed the record _types_ (DKIM CNAME(s), SPF TXT, MX)
   from Resend's knowledge base and their public `resend-skills` reference repo, but did not
   get a verbatim API response example.

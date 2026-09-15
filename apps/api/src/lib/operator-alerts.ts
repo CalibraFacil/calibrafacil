@@ -73,7 +73,9 @@ async function computeAlertSpecs(now: Date): Promise<AlertSpec[]> {
       ),
     );
   for (const org of offboarding) {
-    const past = org.deletionAt ? org.deletionAt.getTime() <= now.getTime() : false;
+    const past = org.deletionAt
+      ? org.deletionAt.getTime() <= now.getTime()
+      : false;
     specs.push({
       dedupeKey: `org:${org.id}:offboarding`,
       organizationId: org.id,

@@ -389,9 +389,8 @@ describe("REQ-SOEMAIL-006: shared service-order email layout", () => {
   // @react-email/render mock so these assertions observe actual output, not a
   // constant. (Tautology guard: a layout that dropped the brand would now fail.)
   async function renderToHtml(brand: EmailBrand | undefined): Promise<string> {
-    const { ServiceOrderEmailLayout } = await import(
-      "../../email/emails/service-order-email-layout"
-    );
+    const { ServiceOrderEmailLayout } =
+      await import("../../email/emails/service-order-email-layout");
     const { render } = await vi.importActual<
       typeof import("@react-email/render")
     >("@react-email/render");

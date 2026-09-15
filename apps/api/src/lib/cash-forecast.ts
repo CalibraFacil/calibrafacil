@@ -126,9 +126,10 @@ export function summarizeCashForecast(input: {
   now: Date;
 }): CashForecastSummary {
   const buckets = bucketByDueDate(input.installments, input.now);
-  const dailyRecurring = input.recurringMonthlyCents > 0
-    ? Math.floor(input.recurringMonthlyCents / 30)
-    : 0;
+  const dailyRecurring =
+    input.recurringMonthlyCents > 0
+      ? Math.floor(input.recurringMonthlyCents / 30)
+      : 0;
 
   const summary: CashForecastSummary = {
     buckets: {
@@ -186,7 +187,10 @@ export async function buildCashForecast(
       billingDocument,
       eq(billingDocument.id, receivableInstallment.documentId),
     )
-    .leftJoin(serviceOrder, eq(serviceOrder.billingDocumentId, billingDocument.id))
+    .leftJoin(
+      serviceOrder,
+      eq(serviceOrder.billingDocumentId, billingDocument.id),
+    )
     .where(
       and(
         eq(billingDocument.organizationId, input.organizationId),

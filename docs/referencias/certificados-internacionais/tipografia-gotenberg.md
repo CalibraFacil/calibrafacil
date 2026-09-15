@@ -7,15 +7,15 @@ serviço Gotenberg real (`/forms/chromium/convert/html`) e o PDF inspecionado co
 
 Presentes e **embutidas + subsetadas automaticamente** no PDF:
 
-| Família | Métrica compatível com | Uso proposto |
-| --- | --- | --- |
-| **Liberation Serif** (regular · **bold** · *italic*) | Times New Roman | Título display em caixa-alta, e o corpo se quisermos serifada |
-| **Liberation Sans** (regular · **bold**) | Arial | Rótulos, cabeçalhos de seção — e satisfaz a NIE-Cgcre-009 A.6.2, que exige Arial no símbolo |
-| **Liberation Mono** | Courier New | Numéricos tabulares nas tabelas de resultado |
-| DejaVu Serif / Sans / Sans Mono | — | alternativas |
-| Carlito | Calibri | (não usar antes do Arial no selo — A.6.2) |
-| Caladea | Cambria | alternativa serifada |
-| Noto Serif / Noto Sans | — | alternativas |
+| Família                                              | Métrica compatível com | Uso proposto                                                                                |
+| ---------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
+| **Liberation Serif** (regular · **bold** · _italic_) | Times New Roman        | Título display em caixa-alta, e o corpo se quisermos serifada                               |
+| **Liberation Sans** (regular · **bold**)             | Arial                  | Rótulos, cabeçalhos de seção — e satisfaz a NIE-Cgcre-009 A.6.2, que exige Arial no símbolo |
+| **Liberation Mono**                                  | Courier New            | Numéricos tabulares nas tabelas de resultado                                                |
+| DejaVu Serif / Sans / Sans Mono                      | —                      | alternativas                                                                                |
+| Carlito                                              | Calibri                | (não usar antes do Arial no selo — A.6.2)                                                   |
+| Caladea                                              | Cambria                | alternativa serifada                                                                        |
+| Noto Serif / Noto Sans                               | —                      | alternativas                                                                                |
 
 Os apelidos resolvem: `Times New Roman` → Liberation Serif, `Arial` → Liberation Sans,
 `Courier New` → Liberation Mono. Então declarar `Arial, "Liberation Sans", …` funciona nos dois

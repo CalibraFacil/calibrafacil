@@ -144,9 +144,7 @@ describe("sync helpers — isValidSyncAttachmentObjectKey", () => {
 
   it("rejects a key without the org/ prefix", () => {
     expect(
-      isValidSyncAttachmentObjectKey(
-        "x/123/sync-attachments/asset/9/file.pdf",
-      ),
+      isValidSyncAttachmentObjectKey("x/123/sync-attachments/asset/9/file.pdf"),
     ).toBe(false);
   });
 
@@ -158,9 +156,7 @@ describe("sync helpers — isValidSyncAttachmentObjectKey", () => {
 
   it("rejects a key containing a parent-directory traversal", () => {
     expect(
-      isValidSyncAttachmentObjectKey(
-        "org/123/sync-attachments/../secrets.pdf",
-      ),
+      isValidSyncAttachmentObjectKey("org/123/sync-attachments/../secrets.pdf"),
     ).toBe(false);
   });
 

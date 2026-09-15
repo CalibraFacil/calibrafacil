@@ -32,10 +32,7 @@ function baseInput(
 describe("evaluateRevenueLeakage", () => {
   it("emits no alerts when timestamps are missing or fresh", () => {
     expect(
-      evaluateRevenueLeakage(
-        baseInput({ completedAt: daysAgo(2) }),
-        NOW,
-      ),
+      evaluateRevenueLeakage(baseInput({ completedAt: daysAgo(2) }), NOW),
     ).toEqual([]);
   });
 

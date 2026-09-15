@@ -10,7 +10,10 @@ describe("portalDigestFrequenciesFor", () => {
     // 2026-06-22T12:00:00Z → getUTCDay() === 1 (Monday)
     const monday = new Date("2026-06-22T12:00:00Z");
     expect(monday.getUTCDay()).toBe(1); // guard: confirm day
-    expect(portalDigestFrequenciesFor(monday)).toStrictEqual(["DAILY", "WEEKLY"]);
+    expect(portalDigestFrequenciesFor(monday)).toStrictEqual([
+      "DAILY",
+      "WEEKLY",
+    ]);
   });
 
   // REQ-DIG-002: non-Monday UTC days → DAILY only
@@ -72,6 +75,8 @@ describe("portalDigestFrequenciesFor", () => {
   it("REQ-DIG-003: classifies by UTC — Sunday UTC / Monday local → ['DAILY']", () => {
     const sundayUtcMondayLocal = new Date("2026-06-21T23:30:00Z");
     expect(sundayUtcMondayLocal.getUTCDay()).toBe(0); // Sunday UTC
-    expect(portalDigestFrequenciesFor(sundayUtcMondayLocal)).toStrictEqual(["DAILY"]);
+    expect(portalDigestFrequenciesFor(sundayUtcMondayLocal)).toStrictEqual([
+      "DAILY",
+    ]);
   });
 });

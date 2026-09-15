@@ -122,8 +122,8 @@ beforeEach(() => {
 
   // Suppressed iff the (normalized) address matches the ledgered one, exactly
   // like the real helper would resolve against the stored lowercased address.
-  isEmailSuppressedMock.mockImplementation(async (email: string) =>
-    email.trim().toLowerCase() === SUPPRESSED_EMAIL,
+  isEmailSuppressedMock.mockImplementation(
+    async (email: string) => email.trim().toLowerCase() === SUPPRESSED_EMAIL,
   );
 
   let distinctCall = 0;
@@ -131,9 +131,7 @@ beforeEach(() => {
     distinctCall += 1;
     // 1: customer recipients → suppressed first, allowed second. 2: groups → none.
     return makeChain(
-      distinctCall === 1
-        ? [SUPPRESSED_RECIPIENT, ALLOWED_RECIPIENT]
-        : [],
+      distinctCall === 1 ? [SUPPRESSED_RECIPIENT, ALLOWED_RECIPIENT] : [],
     );
   });
 
@@ -168,9 +166,7 @@ afterEach(() => {
 
 describe("REQ-DIGEST-SUP-001: portal digest honours the suppression ledger", () => {
   it("REQ-DIGEST-SUP-001 skips a suppressed recipient and sends only to the clean address", async () => {
-    const result = await sendPortalDueDigests(
-      new Date("2026-06-25T12:00:00Z"),
-    );
+    const result = await sendPortalDueDigests(new Date("2026-06-25T12:00:00Z"));
 
     // Both recipients were due, but the suppressed one is gated out.
     expect(sendMock).toHaveBeenCalledTimes(1);

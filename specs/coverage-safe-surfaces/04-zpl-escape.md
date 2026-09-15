@@ -5,6 +5,7 @@ Test file: `packages/label-rendering/src/zpl/escape.test.ts` (Vitest — EXTEND 
 do not weaken existing assertions)
 
 ## Context
+
 `escapeZplField(text)` escapes label text for ZPL `^FH` hex mode. The caret/tilde/
 underscore/backslash are ZPL control chars and MUST become `_XX`; other printable
 ASCII passes through; non-ASCII (multi-byte UTF-8) becomes per-byte `_XX` uppercase.

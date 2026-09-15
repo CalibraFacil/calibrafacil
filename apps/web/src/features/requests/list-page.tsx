@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
 import {
   parseAsInteger,
   parseAsString,
@@ -60,6 +59,55 @@ function formatDate(date: string | null | undefined) {
   return new Date(date).toLocaleDateString('pt-BR')
 }
 
+// Module-level so the header/cell renderers are stable component types
+// instead of being re-created on every render of the page.
+const columns = [
+  {
+    accessorKey: 'id',
+    header: 'Solicitação',
+    cell: ({ row }: { row: { original: CalibrationRequestListItem } }) => (
+      <Link
+        to="/dashboard/requests/$id"
+        params={{ id: String(row.original.id) }}
+        className="font-medium hover:underline"
+      >
+        #{row.original.id}
+      </Link>
+    ),
+  },
+  {
+    accessorKey: 'customerName',
+    header: 'Cliente',
+  },
+  {
+    accessorKey: 'itemCount',
+    header: 'Itens',
+    cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
+      `${row.original.itemCount} ativo(s)`,
+  },
+  {
+    accessorKey: 'requestedDueDate',
+    header: 'Prazo solicitado',
+    cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
+      formatDate(row.original.requestedDueDate),
+  },
+  {
+    accessorKey: 'submittedAt',
+    header: 'Enviada em',
+    cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
+      formatDate(row.original.submittedAt),
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }: { row: { original: CalibrationRequestListItem } }) => (
+      <Badge variant={statusVariants[row.original.status]}>
+        {statusLabels[row.original.status]}
+      </Badge>
+    ),
+  },
+]
+
 export function RequestsPage() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
@@ -85,56 +133,6 @@ export function RequestsPage() {
     search,
     statusFilter,
   })
-
-  const columns = useMemo(
-    () => [
-      {
-        accessorKey: 'id',
-        header: 'Solicitação',
-        cell: ({ row }: { row: { original: CalibrationRequestListItem } }) => (
-          <Link
-            to="/dashboard/requests/$id"
-            params={{ id: String(row.original.id) }}
-            className="font-medium hover:underline"
-          >
-            #{row.original.id}
-          </Link>
-        ),
-      },
-      {
-        accessorKey: 'customerName',
-        header: 'Cliente',
-      },
-      {
-        accessorKey: 'itemCount',
-        header: 'Itens',
-        cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
-          `${row.original.itemCount} ativo(s)`,
-      },
-      {
-        accessorKey: 'requestedDueDate',
-        header: 'Prazo solicitado',
-        cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
-          formatDate(row.original.requestedDueDate),
-      },
-      {
-        accessorKey: 'submittedAt',
-        header: 'Enviada em',
-        cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
-          formatDate(row.original.submittedAt),
-      },
-      {
-        accessorKey: 'status',
-        header: 'Status',
-        cell: ({ row }: { row: { original: CalibrationRequestListItem } }) => (
-          <Badge variant={statusVariants[row.original.status]}>
-            {statusLabels[row.original.status]}
-          </Badge>
-        ),
-      },
-    ],
-    [],
-  )
 
   if (error) {
     return (

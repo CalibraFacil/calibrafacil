@@ -116,69 +116,60 @@ describe("profileMediaRouter -- real DB + real requireAuth middleware", () => {
   // A request as user-A must read ONLY user-A's row -> 404, and must NEVER read
   // or serve user-B's avatar. The discriminator is eq(user.id, session.user.id).
   // =========================================================================
-  it(
-    "REQ-PM-001: GET /avatar as user-A (no avatar) -> 404; user-B's stored avatar is never read or leaked (user-scoped via eq(user.id, session.user.id))",
-    async () => {
-      // user-B is the sole-discriminator leak row: it HAS an avatar.
-      await seedUser({ userId: "user-pm-001-b", image: AVATAR_LEAK_URL });
-      // user-A is the caller and has NO avatar.
-      await seedUser({ userId: "user-pm-001-a", image: null });
+  it("REQ-PM-001: GET /avatar as user-A (no avatar) -> 404; user-B's stored avatar is never read or leaked (user-scoped via eq(user.id, session.user.id))", async () => {
+    // user-B is the sole-discriminator leak row: it HAS an avatar.
+    await seedUser({ userId: "user-pm-001-b", image: AVATAR_LEAK_URL });
+    // user-A is the caller and has NO avatar.
+    await seedUser({ userId: "user-pm-001-a", image: null });
 
-      loginAs({
-        userId: "user-pm-001-a",
-        organizationId: "org-pm-001",
-      });
+    loginAs({
+      userId: "user-pm-001-a",
+      organizationId: "org-pm-001",
+    });
 
-      const res = await profileMediaRouter.request("/avatar", {
-        method: "GET",
-        headers: HOST_HEADER,
-      });
+    const res = await profileMediaRouter.request("/avatar", {
+      method: "GET",
+      headers: HOST_HEADER,
+    });
 
-      // user-A has no avatar of their own -> 404. If the scope were broken (the
-      // mutation: drop/neutralize eq(user.id, session.user.id)), user-A would
-      // resolve user-B's image row and get a 302 redirect instead -> RED here.
-      expect(res.status).toBe(404);
+    // user-A has no avatar of their own -> 404. If the scope were broken (the
+    // mutation: drop/neutralize eq(user.id, session.user.id)), user-A would
+    // resolve user-B's image row and get a 302 redirect instead -> RED here.
+    expect(res.status).toBe(404);
 
-      const body = await res.json();
-      const raw = JSON.stringify(body);
-      // Must NOT expose any redirect/presigned URL or user-B's private avatar.
-      expect(raw).not.toContain(AVATAR_LEAK_URL);
-      expect(raw).not.toContain("https://r2.test/signed-avatar");
-      expect(res.headers.get("location")).toBeNull();
+    const body = await res.json();
+    const raw = JSON.stringify(body);
+    // Must NOT expose any redirect/presigned URL or user-B's private avatar.
+    expect(raw).not.toContain(AVATAR_LEAK_URL);
+    expect(raw).not.toContain("https://r2.test/signed-avatar");
+    expect(res.headers.get("location")).toBeNull();
 
-      // The handler is read-only on user.image; user-B's avatar is untouched.
-      expect(await imageOf("user-pm-001-b")).toBe(AVATAR_LEAK_URL);
-    },
-  );
+    // The handler is read-only on user.image; user-B's avatar is untouched.
+    expect(await imageOf("user-pm-001-b")).toBe(AVATAR_LEAK_URL);
+  });
 
   // =========================================================================
   // REQ-PM-002: unauthenticated -> 401 via the real requireAuth guard.
   // logout() nulls the lab session; with no portal_session cookie the real
   // portal getSession also resolves null -> requireAuth throws 401.
   // =========================================================================
-  it(
-    "REQ-PM-002: GET /avatar without authentication -> 401 (requireAuth fires before the handler)",
-    async () => {
-      logout();
-      const res = await profileMediaRouter.request("/avatar", {
-        method: "GET",
-        headers: HOST_HEADER,
-      });
-      expect(res.status).toBe(401);
-    },
-  );
+  it("REQ-PM-002: GET /avatar without authentication -> 401 (requireAuth fires before the handler)", async () => {
+    logout();
+    const res = await profileMediaRouter.request("/avatar", {
+      method: "GET",
+      headers: HOST_HEADER,
+    });
+    expect(res.status).toBe(401);
+  });
 
-  it(
-    "REQ-PM-002b: DELETE /avatar without authentication -> 401",
-    async () => {
-      logout();
-      const res = await profileMediaRouter.request("/avatar", {
-        method: "DELETE",
-        headers: HOST_HEADER,
-      });
-      expect(res.status).toBe(401);
-    },
-  );
+  it("REQ-PM-002b: DELETE /avatar without authentication -> 401", async () => {
+    logout();
+    const res = await profileMediaRouter.request("/avatar", {
+      method: "DELETE",
+      headers: HOST_HEADER,
+    });
+    expect(res.status).toBe(401);
+  });
 
   // =========================================================================
   // happy-path: serve/clear round-trip is user-scoped to the caller's own
@@ -186,76 +177,70 @@ describe("profileMediaRouter -- real DB + real requireAuth middleware", () => {
   // stubbed); when cleared -> GET 404. The 404<->302 hinge is the caller's own
   // image column, never another user's. DELETE -> 200 (storage stubbed).
   // =========================================================================
-  it(
-    "happy-path: GET /avatar -> 302 when the caller's own user.image is set; -> 404 once cleared; DELETE /avatar -> 200",
-    async () => {
-      // A co-tenant user-B with an avatar exists throughout to prove user-A's
-      // 302/404 outcome is driven by user-A's OWN image, not any other user's.
-      await seedUser({ userId: "user-pm-hp-b", image: AVATAR_LEAK_URL });
-      await seedUser({
-        userId: "user-pm-hp-a",
-        image: "https://r2.test/USER-A-OWN-AVATAR",
-      });
+  it("happy-path: GET /avatar -> 302 when the caller's own user.image is set; -> 404 once cleared; DELETE /avatar -> 200", async () => {
+    // A co-tenant user-B with an avatar exists throughout to prove user-A's
+    // 302/404 outcome is driven by user-A's OWN image, not any other user's.
+    await seedUser({ userId: "user-pm-hp-b", image: AVATAR_LEAK_URL });
+    await seedUser({
+      userId: "user-pm-hp-a",
+      image: "https://r2.test/USER-A-OWN-AVATAR",
+    });
 
-      loginAs({ userId: "user-pm-hp-a", organizationId: "org-pm-hp" });
+    loginAs({ userId: "user-pm-hp-a", organizationId: "org-pm-hp" });
 
-      // user-A HAS an avatar -> presigned redirect (storage stubbed).
-      const served = await profileMediaRouter.request("/avatar", {
-        method: "GET",
-        headers: HOST_HEADER,
-      });
-      expect(served.status).toBe(302);
-      expect(served.headers.get("location")).toBe(
-        "https://r2.test/signed-avatar",
-      );
+    // user-A HAS an avatar -> presigned redirect (storage stubbed).
+    const served = await profileMediaRouter.request("/avatar", {
+      method: "GET",
+      headers: HOST_HEADER,
+    });
+    expect(served.status).toBe(302);
+    expect(served.headers.get("location")).toBe(
+      "https://r2.test/signed-avatar",
+    );
 
-      // DELETE -> 200 success (R2 delete stubbed; handler is best-effort).
-      const deleted = await profileMediaRouter.request("/avatar", {
-        method: "DELETE",
-        headers: HOST_HEADER,
-      });
-      expect(deleted.status).toBe(200);
-      const deletedBody = await deleted.json();
-      expect("success" in deletedBody && deletedBody.success).toBe(true);
+    // DELETE -> 200 success (R2 delete stubbed; handler is best-effort).
+    const deleted = await profileMediaRouter.request("/avatar", {
+      method: "DELETE",
+      headers: HOST_HEADER,
+    });
+    expect(deleted.status).toBe(200);
+    const deletedBody = await deleted.json();
+    expect("success" in deletedBody && deletedBody.success).toBe(true);
 
-      // Now clear user-A's own image column (the GET 404-vs-302 discriminator).
-      await db
-        .update(user)
-        .set({ image: null })
-        .where(eq(user.id, "user-pm-hp-a"));
+    // Now clear user-A's own image column (the GET 404-vs-302 discriminator).
+    await db
+      .update(user)
+      .set({ image: null })
+      .where(eq(user.id, "user-pm-hp-a"));
 
-      const afterClear = await profileMediaRouter.request("/avatar", {
-        method: "GET",
-        headers: HOST_HEADER,
-      });
-      // No avatar for the caller -> 404, even though user-B's avatar still exists.
-      expect(afterClear.status).toBe(404);
-      const afterBody = await afterClear.json();
-      expect(JSON.stringify(afterBody)).not.toContain(AVATAR_LEAK_URL);
+    const afterClear = await profileMediaRouter.request("/avatar", {
+      method: "GET",
+      headers: HOST_HEADER,
+    });
+    // No avatar for the caller -> 404, even though user-B's avatar still exists.
+    expect(afterClear.status).toBe(404);
+    const afterBody = await afterClear.json();
+    expect(JSON.stringify(afterBody)).not.toContain(AVATAR_LEAK_URL);
 
-      // user-B's avatar was never read, served, or mutated by user-A's requests.
-      expect(await imageOf("user-pm-hp-b")).toBe(AVATAR_LEAK_URL);
-    },
-  );
+    // user-B's avatar was never read, served, or mutated by user-A's requests.
+    expect(await imageOf("user-pm-hp-b")).toBe(AVATAR_LEAK_URL);
+  });
 
-  it(
-    "happy-path: POST /avatar with a valid PNG -> 200 returns the avatar API URL (upload stubbed)",
-    async () => {
-      await seedUser({ userId: "user-pm-up-a", image: null });
-      loginAs({ userId: "user-pm-up-a", organizationId: "org-pm-up" });
+  it("happy-path: POST /avatar with a valid PNG -> 200 returns the avatar API URL (upload stubbed)", async () => {
+    await seedUser({ userId: "user-pm-up-a", image: null });
+    loginAs({ userId: "user-pm-up-a", organizationId: "org-pm-up" });
 
-      const res = await profileMediaRouter.request("/avatar", {
-        method: "POST",
-        headers: HOST_HEADER,
-        body: makeAvatarFormData("image/png"),
-      });
+    const res = await profileMediaRouter.request("/avatar", {
+      method: "POST",
+      headers: HOST_HEADER,
+      body: makeAvatarFormData("image/png"),
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect("imageUrl" in body && typeof body.imageUrl === "string").toBe(true);
-      if ("imageUrl" in body && typeof body.imageUrl === "string") {
-        expect(body.imageUrl).toContain("/api/profile-media/avatar");
-      }
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect("imageUrl" in body && typeof body.imageUrl === "string").toBe(true);
+    if ("imageUrl" in body && typeof body.imageUrl === "string") {
+      expect(body.imageUrl).toContain("/api/profile-media/avatar");
+    }
+  });
 });

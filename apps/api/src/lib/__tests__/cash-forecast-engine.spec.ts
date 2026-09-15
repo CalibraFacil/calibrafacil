@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  bucketByDueDate,
-  summarizeCashForecast,
-} from "../cash-forecast";
+import { bucketByDueDate, summarizeCashForecast } from "../cash-forecast";
 
 const NOW = new Date("2026-05-27T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;

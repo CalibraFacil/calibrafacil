@@ -213,7 +213,10 @@ describe("unitsRouter — real DB + real middleware", () => {
 
     // Verify persisted in DB with correct org scope
     const [row] = await db
-      .select({ name: organizationUnit.name, organizationId: organizationUnit.organizationId })
+      .select({
+        name: organizationUnit.name,
+        organizationId: organizationUnit.organizationId,
+      })
       .from(organizationUnit)
       .where(
         and(
@@ -261,11 +264,23 @@ describe("unitsRouter — real DB + real middleware", () => {
     await seedEnterpriseSubscription(orgB.orgId);
 
     // Seed 2 extra units for org B
-    await seedUnit({ organizationId: orgB.orgId, createdBy: orgB.userId, name: "Filial B1" });
-    await seedUnit({ organizationId: orgB.orgId, createdBy: orgB.userId, name: "Filial B2" });
+    await seedUnit({
+      organizationId: orgB.orgId,
+      createdBy: orgB.userId,
+      name: "Filial B1",
+    });
+    await seedUnit({
+      organizationId: orgB.orgId,
+      createdBy: orgB.userId,
+      name: "Filial B2",
+    });
 
     // Seed 1 extra unit for org A
-    await seedUnit({ organizationId: orgA.orgId, createdBy: orgA.userId, name: "Filial A1" });
+    await seedUnit({
+      organizationId: orgA.orgId,
+      createdBy: orgA.userId,
+      name: "Filial A1",
+    });
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
     const res = await unitsRouter.request("/admin/units", {

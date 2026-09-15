@@ -19,9 +19,7 @@ function isPaidPlanId(planId: PlanId): planId is PaidPlanId {
 }
 
 function getPlanPricing(planId: PlanId) {
-  return isPaidPlanId(planId)
-    ? PLAN_PRICES[planId]
-    : { monthly: 0, yearly: 0 };
+  return isPaidPlanId(planId) ? PLAN_PRICES[planId] : { monthly: 0, yearly: 0 };
 }
 
 export const plansRouter = new Hono()

@@ -115,9 +115,7 @@ export function isContaAzulInvalidGrantError(error: unknown) {
   return error instanceof ContaAzulOAuthError && error.code === "invalid_grant";
 }
 
-export type ContaAzulRefreshFailureReason =
-  | "invalid_grant"
-  | "refresh_failed";
+export type ContaAzulRefreshFailureReason = "invalid_grant" | "refresh_failed";
 
 export interface ContaAzulRefreshFailurePolicy {
   status: "ACTION_REQUIRED";

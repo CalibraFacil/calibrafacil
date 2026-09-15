@@ -13,7 +13,8 @@
     "build": "tsc -p tsconfig.json",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@calibra-facil/math-engine": "workspace:^",

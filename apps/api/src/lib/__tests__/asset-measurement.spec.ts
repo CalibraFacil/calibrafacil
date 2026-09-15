@@ -143,11 +143,7 @@ describe("asset measurement helpers", () => {
     }
 
     expect(
-      denormalizeMethodDataForDisplay(
-        normalized.data,
-        fields,
-        "kg",
-      ),
+      denormalizeMethodDataForDisplay(normalized.data, fields, "kg"),
     ).toEqual({
       tolerancia_maxima: 0.5,
       pontos: [{ valor_padrao: 2, indicacao: 2.001 }],

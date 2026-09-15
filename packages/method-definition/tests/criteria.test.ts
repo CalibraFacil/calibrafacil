@@ -90,7 +90,9 @@ function buildFakeEngine(): CalculationEngineLike {
               };
             }
           }
-          throw new Error(`Fake engine cannot evaluate expression: ${expression}`);
+          throw new Error(
+            `Fake engine cannot evaluate expression: ${expression}`,
+          );
         },
       } satisfies CompiledFormulaLike;
       return compiled;
@@ -106,7 +108,9 @@ function buildFakeEngine(): CalculationEngineLike {
       return formula.evaluate(inputs);
     },
     evaluateMeasurementModel(): never {
-      throw new Error("evaluateMeasurementModel not supported in criteria fake engine");
+      throw new Error(
+        "evaluateMeasurementModel not supported in criteria fake engine",
+      );
     },
   } satisfies CalculationEngineLike;
   return engine;
@@ -230,9 +234,7 @@ describe("REQ-CRIT-002: compareDecimalInputs scientific notation parity", () => 
 
 describe("REQ-CRIT-003: compareDecimalInputs rejects non-finite values", () => {
   it("throws on 'NaN' string", () => {
-    expect(() => compareDecimalInputs("NaN", "1")).toThrow(
-      "non-finite value",
-    );
+    expect(() => compareDecimalInputs("NaN", "1")).toThrow("non-finite value");
   });
 
   it("throws on 'Infinity' string", () => {
@@ -248,21 +250,15 @@ describe("REQ-CRIT-003: compareDecimalInputs rejects non-finite values", () => {
   });
 
   it("throws on empty string", () => {
-    expect(() => compareDecimalInputs("", "1")).toThrow(
-      "non-finite value",
-    );
+    expect(() => compareDecimalInputs("", "1")).toThrow("non-finite value");
   });
 
   it("throws on non-numeric string 'abc'", () => {
-    expect(() => compareDecimalInputs("abc", "1")).toThrow(
-      "non-finite value",
-    );
+    expect(() => compareDecimalInputs("abc", "1")).toThrow("non-finite value");
   });
 
   it("throws when right operand is non-numeric", () => {
-    expect(() => compareDecimalInputs("1", "xyz")).toThrow(
-      "non-finite value",
-    );
+    expect(() => compareDecimalInputs("1", "xyz")).toThrow("non-finite value");
   });
 });
 
@@ -284,12 +280,7 @@ describe("REQ-CRIT-004: compileCriterionExpression throws without boolean compar
 
   it("throws on a bare identifier (no operator)", () => {
     expect(() =>
-      compileCriterionExpression(
-        criterion("error"),
-        fakeEngine,
-        ["error"],
-        fp,
-      ),
+      compileCriterionExpression(criterion("error"), fakeEngine, ["error"], fp),
     ).toThrow("must be a boolean comparison");
   });
 

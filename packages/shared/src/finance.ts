@@ -90,11 +90,7 @@ export type AutomaticSendOutcome =
 // Phase 2 slice 7 — supplier and transporter records, normalized from
 // the free-text supplierName captured in slice 6.
 
-export type SupplierKind =
-  | "outsourced_lab"
-  | "transporter"
-  | "both"
-  | "other";
+export type SupplierKind = "outsourced_lab" | "transporter" | "both" | "other";
 
 // Phase 2 slice 9 — batch / consolidated billing groups.
 
@@ -358,7 +354,9 @@ export function summarizeInstallments(
 ): FinancialInstallmentsSummary {
   if (installments.length === 0) return { ...EMPTY_INSTALLMENTS_SUMMARY };
 
-  const summary: FinancialInstallmentsSummary = { ...EMPTY_INSTALLMENTS_SUMMARY };
+  const summary: FinancialInstallmentsSummary = {
+    ...EMPTY_INSTALLMENTS_SUMMARY,
+  };
   summary.total = installments.length;
 
   for (const installment of installments) {

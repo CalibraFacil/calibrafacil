@@ -302,7 +302,10 @@ export function EnvironmentSettingsPage() {
                       onClick={openNewOverrideDialog}
                       disabled={availableAssetTypes.length === 0}
                     >
-                      <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
+                      <HugeiconsIcon
+                        icon={Add01Icon}
+                        className="mr-1.5 size-4"
+                      />
                       Adicionar
                     </Button>
                   ) : undefined
@@ -335,7 +338,10 @@ export function EnvironmentSettingsPage() {
                       onClick={openNewOverrideDialog}
                       disabled={availableAssetTypes.length === 0}
                     >
-                      <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
+                      <HugeiconsIcon
+                        icon={Add01Icon}
+                        className="mr-1.5 size-4"
+                      />
                       Adicionar exceção
                     </Button>
                   </Empty>

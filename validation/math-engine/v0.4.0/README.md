@@ -4,8 +4,8 @@ Documento controlado que registra a validação do motor matemático conforme di
 
 ## Revisões do documento
 
-| Rev. | Data       | Descrição                                                                                                                                                                                                                          |
-| ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rev. | Data       | Descrição                                                                                                                                                                                                                                  |
+| ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1.0  | 2026-09-08 | Emissão inicial para a v0.4.0 (sucede `v0.3.0` rev. 1.1): aritmética exata em todo o modo decimal; Welch–Satterthwaite generalizada para grandezas correlacionadas (Castrup 2010/2020 Eq. 46; Willink 2007); guarda de versão na execução. |
 
 A revisão do documento (`\docRevision`) é independente da versão do pacote (`\docVersion`): uma revisão registra alterações que **não** mudam nenhum resultado já validado; qualquer mudança de resultado exige nova versão do pacote e novo diretório de dossiê — foi o caso desta versão (ver `docs/audits/math-engine-0.4.0-release.md`).
@@ -111,7 +111,7 @@ validation/math-engine/v0.4.0/
 ...
 ```
 
-Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do *release* em produção.
+Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do _release_ em produção.
 
 ## Distribuição
 

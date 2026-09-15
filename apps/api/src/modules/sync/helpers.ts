@@ -13,7 +13,10 @@
  *
  * Behavior must match `sync.ts` exactly; sync.ts imports these back.
  */
-import { safeR2Segment, syncAttachmentKey } from "@calibra-facil/shared/storage-keys";
+import {
+  safeR2Segment,
+  syncAttachmentKey,
+} from "@calibra-facil/shared/storage-keys";
 import { type MemberData } from "../../middleware/permission";
 
 export const DEFAULT_SYNC_PULL_LIMIT = 100;

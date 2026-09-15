@@ -51,9 +51,7 @@ export function classifyRenewalRisk(
   now: Date,
 ): { risk: ContractRenewalRisk; daysUntilExpiry: number | null } {
   if (!effectiveTo) return { risk: "LOW", daysUntilExpiry: null };
-  const days = Math.ceil(
-    (effectiveTo.getTime() - now.getTime()) / DAY_MS,
-  );
+  const days = Math.ceil((effectiveTo.getTime() - now.getTime()) / DAY_MS);
   if (days < 0) return { risk: "EXPIRED", daysUntilExpiry: days };
   if (days <= 30) return { risk: "HIGH", daysUntilExpiry: days };
   if (days <= 90) return { risk: "MEDIUM", daysUntilExpiry: days };
@@ -65,10 +63,7 @@ export function summarizeContractIntelligence(
   now: Date = new Date(),
 ): ContractIntelligenceRow[] {
   return inputs.map((row) => {
-    const { risk, daysUntilExpiry } = classifyRenewalRisk(
-      row.effectiveTo,
-      now,
-    );
+    const { risk, daysUntilExpiry } = classifyRenewalRisk(row.effectiveTo, now);
 
     const revenueCents = row.monthlyRecurringCents ?? 0;
     const marginCents = revenueCents - row.outsourcedCostThisPeriodCents;

@@ -51,17 +51,18 @@ a curated reference table, with **provenance** so primary vs secondary rows are 
   only pre-fill the form, never write an asset directly. [HIGH RISK]
 
 ## Out-of-scope / Deferred
+
 - Re-confirming the SECONDARY rows (gas per-tech article, hidrômetro anchor) against the official
   DOU — an operator step recorded in the seed doc; the rows ship flagged `secondary`.
 - Per-lab custom catalog overrides / a catalog admin UI.
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| Table + migration 0068 + idempotent seed | `packages/db/src/schema.ts` + `drizzle/0068_*.sql` + a seed (mirror `seed-asset-types.ts`) | **high (regulatory data)** | pair-don't-loop (migration + seed review) |
-| List endpoint | `apps/api/src/routes/*` (reuse an auth guard) | low | loopable-with-verifier |
-| Form auto-fill + caveat | `apps/web/.../metrology-regime-fields.tsx` + `forms.ts` (a catalog query + a select that patches the regime fields) | med | loopable-with-verifier |
+| Mini-spec                                | Layer (real path)                                                                                                   | Risk                       | Mode                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------- |
+| Table + migration 0068 + idempotent seed | `packages/db/src/schema.ts` + `drizzle/0068_*.sql` + a seed (mirror `seed-asset-types.ts`)                          | **high (regulatory data)** | pair-don't-loop (migration + seed review) |
+| List endpoint                            | `apps/api/src/routes/*` (reuse an auth guard)                                                                       | low                        | loopable-with-verifier                    |
+| Form auto-fill + caveat                  | `apps/web/.../metrology-regime-fields.tsx` + `forms.ts` (a catalog query + a select that patches the regime fields) | med                        | loopable-with-verifier                    |
 
 **Pairing note:** the seed is regulated reference data — REQ-CATALOG-002 needs a test asserting
 the seeded rows match the grounded references + provenance flags, and REQ-CATALOG-006 needs a test

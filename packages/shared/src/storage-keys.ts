@@ -236,7 +236,6 @@ export function issuedCertificatePdfKey(
   return issuedCertificateKey(params, "pdf");
 }
 
-
 export interface JobLabelKeyParams {
   org: OrgRef;
   jobId: string;

@@ -29,7 +29,7 @@ with the calibration reminder.
   reminder (which stays keyed on `next_calibration_date`).
 - **Idempotent:** at most one reminder per asset per dedup window (mirror the 7-day
   `sent_at` window of the sibling checks).
-- **No interval recommendation leaks** — the reminder is about a *regulation-fixed* date,
+- **No interval recommendation leaks** — the reminder is about a _regulation-fixed_ date,
   not a lab recommendation; §7.8.4.3 is not engaged (it's a different regime), but the copy
   must say the period is fixed by regulation (Inmetro/RBMLQ-I), and **indicative** when the
   asset's `regulated_interval.operationalizedByDelegate` is true (Ipem runs the cadence).
@@ -68,10 +68,10 @@ with the calibration reminder.
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| Legal-verification recall check + wiring | `apps/worker/src/scheduled.ts` (+ notification `type`, template) | med (compliance reminder) | loopable-with-verifier |
-| Int coverage | `apps/worker/src/scheduled-notifications.int.spec.ts` (mirror `REQ-WSN`) | med | loopable-with-verifier |
+| Mini-spec                                | Layer (real path)                                                        | Risk                      | Mode                   |
+| ---------------------------------------- | ------------------------------------------------------------------------ | ------------------------- | ---------------------- |
+| Legal-verification recall check + wiring | `apps/worker/src/scheduled.ts` (+ notification `type`, template)         | med (compliance reminder) | loopable-with-verifier |
+| Int coverage                             | `apps/worker/src/scheduled-notifications.int.spec.ts` (mirror `REQ-WSN`) | med                       | loopable-with-verifier |
 
 **Pairing note:** the worker recall is loopable-with-verifier. The HIGH-RISK criteria
 (003 no-spurious-reminder, 004 track independence) MUST each have an int test that fails on

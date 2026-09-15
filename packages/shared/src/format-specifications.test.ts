@@ -6,11 +6,25 @@ describe("formatSpecificationsForDisplay", () => {
   it("pairs number fields with their unit, in definition order (balança)", () => {
     const out = formatSpecificationsForDisplay(
       [
-        { key: "capacity", label: "Capacidade Máxima", type: "number", unit: "g" },
-        { key: "resolution", label: "Resolução (d)", type: "number", unit: "g" },
+        {
+          key: "capacity",
+          label: "Capacidade Máxima",
+          type: "number",
+          unit: "g",
+        },
+        {
+          key: "resolution",
+          label: "Resolução (d)",
+          type: "number",
+          unit: "g",
+        },
         { key: "portaria", label: "Portaria", type: "text" },
       ],
-      { capacity: 220, resolution: 0.001, portaria: "Portaria Inmetro nº 157/2022" },
+      {
+        capacity: 220,
+        resolution: 0.001,
+        portaria: "Portaria Inmetro nº 157/2022",
+      },
     );
     expect(out).toEqual([
       { label: "Capacidade Máxima", value: "220 g" },
@@ -39,7 +53,11 @@ describe("formatSpecificationsForDisplay", () => {
     const out = formatSpecificationsForDisplay(
       [
         { key: "capacity", label: "Capacidade", type: "number", unit: "g" },
-        { key: "weighingRanges", label: "Faixas de pesagem", type: "weighing_ranges" },
+        {
+          key: "weighingRanges",
+          label: "Faixas de pesagem",
+          type: "weighing_ranges",
+        },
         { key: "linearity", label: "Linearidade", type: "number", unit: "g" },
       ],
       { capacity: 500, weighingRanges: [{ min: 0, max: 500 }], linearity: "" },
@@ -50,7 +68,10 @@ describe("formatSpecificationsForDisplay", () => {
   it("returns [] for missing definition or specifications", () => {
     expect(formatSpecificationsForDisplay(null, { a: 1 })).toEqual([]);
     expect(
-      formatSpecificationsForDisplay([{ key: "a", label: "A", type: "text" }], null),
+      formatSpecificationsForDisplay(
+        [{ key: "a", label: "A", type: "text" }],
+        null,
+      ),
     ).toEqual([]);
   });
 });

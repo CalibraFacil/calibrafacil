@@ -61,7 +61,8 @@ describe("certificate-release reconciliation boundary", () => {
     // The engine + reconciliation can mention the table name in comments
     // (the invariant is documented there) but must not import the schema
     // binding it would need to mutate the table.
-    const importLine = /from\s+["']@calibra-facil\/db\/schema["'][^\n]*issuedCertificateSnapshot/s;
+    const importLine =
+      /from\s+["']@calibra-facil\/db\/schema["'][^\n]*issuedCertificateSnapshot/s;
     const importBlock =
       /import\s*\{[^}]*issuedCertificateSnapshot[^}]*\}\s*from\s*["']@calibra-facil\/db\/schema["']/s;
     expect(importLine.test(engine) || importBlock.test(engine)).toBe(false);

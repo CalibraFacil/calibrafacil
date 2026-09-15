@@ -81,8 +81,8 @@ flow (acknowledgements, DRAFT creation, post-adopt navigation) is unchanged.
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Depends on | Risk | Mode |
-| --- | --- | --- | --- | --- |
-| URL-driven wizard (route `validateSearch` + search-prop wiring + step→navigate + deep-link guard + stepper nav) | `apps/web/src/routes/dashboard/methods/from-template.tsx` + `apps/web/src/features/methods/from-template-page.tsx` (+ `components/wizard-stepper.tsx`) | — | low (frontend only, no cut line) | loopable-with-verifier |
+| Mini-spec                                                                                                       | Layer (real path)                                                                                                                                      | Depends on | Risk                             | Mode                   |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------- | ---------------------- |
+| URL-driven wizard (route `validateSearch` + search-prop wiring + step→navigate + deep-link guard + stepper nav) | `apps/web/src/routes/dashboard/methods/from-template.tsx` + `apps/web/src/features/methods/from-template-page.tsx` (+ `components/wizard-stepper.tsx`) | —          | low (frontend only, no cut line) | loopable-with-verifier |
 
 Single mini-spec; covers REQ-FTPL-001 … 009. No pair-don't-loop surface involved.

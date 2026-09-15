@@ -143,7 +143,11 @@ const formulas = [
     expression: "100 * es_td / es_t",
     scope: ROW_SCOPE,
     unit: "%RH",
-    reporting: { includeInCertificate: true, role: "auxiliary", group: "calibration_result" },
+    reporting: {
+      includeInCertificate: true,
+      role: "auxiliary",
+      group: "calibration_result",
+    },
   },
 ];
 
@@ -156,7 +160,8 @@ const MAGNUS_APPROX_HALF_WIDTH = 0.00597;
 // u = a/√3. Entered as a reduced standard uncertainty (distribution documented
 // in governance.verificarItems) so the clean Type B input does not trip the
 // engine's INVALID_TYPE_B_CONFIGURATION "do-not-split-source-fields" guard.
-const MAGNUS_APPROX_STANDARD_UNCERTAINTY = MAGNUS_APPROX_HALF_WIDTH / Math.sqrt(3);
+const MAGNUS_APPROX_STANDARD_UNCERTAINTY =
+  MAGNUS_APPROX_HALF_WIDTH / Math.sqrt(3);
 
 // GUM model for the indication error, propagating through the exp() terms.
 const measurementModels = [
@@ -182,24 +187,45 @@ const measurementModels = [
     quantities: [
       {
         symbol: "leitura_ur",
-        source: { kind: "table_column", tableKey: "pontos_umidade", columnKey: "leitura_ur" },
+        source: {
+          kind: "table_column",
+          tableKey: "pontos_umidade",
+          columnKey: "leitura_ur",
+        },
         unit: "%RH",
         // [VERIFICAR] resolution + short-term instability of the DUT reading.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.2 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.2,
+        },
       },
       {
         symbol: "temperatura",
-        source: { kind: "table_column", tableKey: "pontos_umidade", columnKey: "temperatura" },
+        source: {
+          kind: "table_column",
+          tableKey: "pontos_umidade",
+          columnKey: "temperatura",
+        },
         unit: "°C",
         // [VERIFICAR] reference thermometer standard uncertainty.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.1 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.1,
+        },
       },
       {
         symbol: "ponto_orvalho",
-        source: { kind: "table_column", tableKey: "pontos_umidade", columnKey: "ponto_orvalho" },
+        source: {
+          kind: "table_column",
+          tableKey: "pontos_umidade",
+          columnKey: "ponto_orvalho",
+        },
         unit: "°C",
         // [VERIFICAR] dew-point mirror reference standard uncertainty.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.2 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.2,
+        },
       },
       {
         // Magnus formula-approximation term (Alduchov & Eskridge 1996, Table III,
@@ -240,11 +266,22 @@ const certificateContent = {
       kind: "definition_list",
       title: "CONVENÇÕES",
       items: [
-        { term: "e_w", definition: "Pressão de saturação de vapor sobre água (Magnus, WMO Anexo 4.B, válida de −45 a 60 °C)." },
+        {
+          term: "e_w",
+          definition:
+            "Pressão de saturação de vapor sobre água (Magnus, WMO Anexo 4.B, válida de −45 a 60 °C).",
+        },
         { term: "t_d", definition: "Ponto de orvalho de referência." },
-        { term: "E", definition: "Erro de indicação de UR (indicada − referência)." },
+        {
+          term: "E",
+          definition: "Erro de indicação de UR (indicada − referência).",
+        },
         { term: "U", definition: "Incerteza expandida (U = k·u_c, k = 2)." },
-        { term: "k", definition: "Fator de abrangência igual a 2 (todas as entradas são do Tipo B, ν_eff = ∞; EA-4/02 §5.1, Apêndice E, Tabela E.1)." },
+        {
+          term: "k",
+          definition:
+            "Fator de abrangência igual a 2 (todas as entradas são do Tipo B, ν_eff = ∞; EA-4/02 §5.1, Apêndice E, Tabela E.1).",
+        },
       ],
     },
     {
@@ -272,7 +309,8 @@ export const humidityProductDefinition: TemplateProductDefinition = {
   dataFields: MethodInputFieldSchema.array().parse(dataFields),
   variableBindings: [],
   formulas: MethodFormulaSchema.array().parse(formulas),
-  measurementModels: MethodMeasurementModelSchema.array().parse(measurementModels),
+  measurementModels:
+    MethodMeasurementModelSchema.array().parse(measurementModels),
   validations: [],
   uncertaintyParams: [],
   certificateContent: MethodCertificateContentSchema.parse(certificateContent),
@@ -305,7 +343,8 @@ function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
 const previewScenarios: readonly MethodPreviewScenario[] = [
   {
     key: "ponto_23C_orvalho12C",
-    label: "Ponto: ar 23 °C, orvalho 12 °C, indicado 50,5 %RH (em domínio, −45…60 °C)",
+    label:
+      "Ponto: ar 23 °C, orvalho 12 °C, indicado 50,5 %RH (em domínio, −45…60 °C)",
     inputs: {
       pontos_umidade: [
         { temperatura: 23, ponto_orvalho: 12, leitura_ur: 50.5 },
@@ -334,11 +373,10 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
     // only to confirm the exp() terms evaluate (no EXPONENT_TOO_LARGE/DOMAIN_ERROR)
     // at the engine envelope — it does NOT imply the Magnus fit is valid at 90 °C.
     key: "envelope_90C",
-    label: "Envelope (FORA DO DOMÍNIO −45…60 °C): ar 90 °C, orvalho 85 °C — só teste numérico do motor",
+    label:
+      "Envelope (FORA DO DOMÍNIO −45…60 °C): ar 90 °C, orvalho 85 °C — só teste numérico do motor",
     inputs: {
-      pontos_umidade: [
-        { temperatura: 90, ponto_orvalho: 85, leitura_ur: 75 },
-      ],
+      pontos_umidade: [{ temperatura: 90, ponto_orvalho: 85, leitura_ur: 75 }],
     },
     // No expected assertion — confirms the exp() terms evaluate without error
     // beyond the declared validity range (numeric extrapolation only).
@@ -350,13 +388,15 @@ const previewScenarios: readonly MethodPreviewScenario[] = [
 const governance: MetrologyGovernance = {
   summary:
     "Calibração de termohigrômetro (umidade relativa) por erro de indicação contra referência de ponto de orvalho, pela fórmula de Magnus de pressão de vapor de saturação (válida de −45 a 60 °C sobre água). A incerteza-padrão é propagada pelos termos exp() do motor GUM (sem coeficientes de sensibilidade derivados à mão) e inclui um termo de aproximação da própria fórmula. O fator k = 2 é DECIDIDO: todas as entradas são do Tipo B, logo ν_eff = ∞ e a Tabela E.1 da EA-4/02 dá k = 2,00. RASCUNHO pendente de revisão metrológica.",
-  measurand: "E = UR indicada − UR de referência; UR_ref = 100·e_w(t_d)/e_w(t) por Magnus (WMO CIMO Anexo 4.B, sobre água, −45 a 60 °C)",
+  measurand:
+    "E = UR indicada − UR de referência; UR_ref = 100·e_w(t_d)/e_w(t) por Magnus (WMO CIMO Anexo 4.B, sobre água, −45 a 60 °C)",
   model: "gum_measurement_model",
   sources: [
     {
       title: "WMO No. 8 (Guia CIMO)",
       edition: "ed. 2018 (Vol. I)",
-      section: "Anexo 4.B — pressão de saturação sobre água e_w(t) = 6.112·exp(17.62·t/(243.12 + t)) hPa, válida de −45 a 60 °C; RH = 100·e'_w(p,t_d)/e'_w(p,t)",
+      section:
+        "Anexo 4.B — pressão de saturação sobre água e_w(t) = 6.112·exp(17.62·t/(243.12 + t)) hPa, válida de −45 a 60 °C; RH = 100·e'_w(p,t_d)/e'_w(p,t)",
       url: "https://library.wmo.int/records/item/41650",
     },
     {
@@ -368,13 +408,15 @@ const governance: MetrologyGovernance = {
     {
       title: "Alduchov & Eskridge (1996), J. Appl. Meteor. 35:601",
       edition: "Tabela III (conjunto SA90)",
-      section: "erro relativo máximo de 0,597 % do conjunto 6.112/17.62/243.12 sobre água (−40 a 50 °C) — fonte do termo de aproximação, NÃO da WMO",
+      section:
+        "erro relativo máximo de 0,597 % do conjunto 6.112/17.62/243.12 sobre água (−40 a 50 °C) — fonte do termo de aproximação, NÃO da WMO",
       url: "https://www.osti.gov/biblio/548871",
     },
     {
       title: "EA-4/02",
       edition: "M:2022",
-      section: "§5.1 (k=2 normal+confiável) + §5.3 + Apêndice E2(b) (Tipo B ⇒ ν=∞) + Tabela E.1 (ν=∞ ⇒ k=2,00)",
+      section:
+        "§5.1 (k=2 normal+confiável) + §5.3 + Apêndice E2(b) (Tipo B ⇒ ν=∞) + Tabela E.1 (ν=∞ ⇒ k=2,00)",
       url: "https://www.enac.es/documents/7020/635abf3f-262a-4b3b-952f-10336cdfae9e",
     },
   ],
@@ -455,7 +497,8 @@ const governance: MetrologyGovernance = {
   omittedComponents: [
     {
       ref: "WMO No. 8 Anexo 4.B",
-      component: "Coeficientes de Magnus sobre gelo (conjunto de coeficientes diferente)",
+      component:
+        "Coeficientes de Magnus sobre gelo (conjunto de coeficientes diferente)",
       appliesWhen: "temperatura abaixo de 0 °C",
     },
     {

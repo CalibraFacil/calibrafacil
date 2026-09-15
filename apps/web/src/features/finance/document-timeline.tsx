@@ -120,7 +120,10 @@ export function DocumentTimeline({
   }
 
   return (
-    <Timeline activeIndex={events.length} className="[--timeline-dot-size:1rem]">
+    <Timeline
+      activeIndex={events.length}
+      className="[--timeline-dot-size:1rem]"
+    >
       {events.map((event) => (
         <TimelineItem key={event.key}>
           <TimelineDot className={DOT_TONE_CLASS[event.tone]} />

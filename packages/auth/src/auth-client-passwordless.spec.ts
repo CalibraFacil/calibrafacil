@@ -50,9 +50,9 @@ describe("SEC-09 password-reset client bindings", () => {
       redirectTo: "http://localhost:5173/reset-password",
     });
 
-    expect(fetchCalls.some((url) => url.includes("/api/auth/backoffice/"))).toBe(
-      true,
-    );
+    expect(
+      fetchCalls.some((url) => url.includes("/api/auth/backoffice/")),
+    ).toBe(true);
     expect(fetchCalls.some((url) => url.includes("/api/auth/lab/"))).toBe(
       false,
     );
@@ -66,9 +66,9 @@ describe("SEC-09 password-reset client bindings", () => {
       newPassword: "nova-senha-forte-123",
     });
 
-    expect(fetchCalls.some((url) => url.includes("/api/auth/backoffice/"))).toBe(
-      true,
-    );
+    expect(
+      fetchCalls.some((url) => url.includes("/api/auth/backoffice/")),
+    ).toBe(true);
     expect(fetchCalls.some((url) => url.includes("/api/auth/lab/"))).toBe(
       false,
     );

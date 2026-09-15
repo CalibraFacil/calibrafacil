@@ -248,7 +248,8 @@ export async function syncLabUsersToResendAudience(
 
   const loadMembers = deps.loadMembers ?? loadLabAudienceMembers;
   const isSuppressed =
-    deps.isSuppressed ?? ((email: string) => isEmailSuppressed(email, "marketing"));
+    deps.isSuppressed ??
+    ((email: string) => isEmailSuppressed(email, "marketing"));
 
   const contacts = selectLabAudienceContacts(await loadMembers());
 

@@ -208,7 +208,9 @@ async function settleReceipt(
   try {
     // Release on failure expires the lease immediately so the queue's own
     // 5s·2^n retry backoff is not blocked behind the full receipt lease.
-    await (succeeded ? completeQueueReceipt(params) : releaseQueueReceipt(params));
+    await (succeeded
+      ? completeQueueReceipt(params)
+      : releaseQueueReceipt(params));
   } catch (error) {
     console.error(
       `[QueueReceipt] failed to settle receipt for job ${decision.job.id}`,

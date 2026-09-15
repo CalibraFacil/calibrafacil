@@ -12,41 +12,35 @@ import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
 import { AwaitingEvaluationEmail } from "./awaiting-evaluation-email";
 
-describe(
-  "REQ-SOEMAIL-043: AwaitingEvaluationEmail template renders required fields",
-  () => {
-    async function renderAguardando(): Promise<string> {
-      return render(
-        AwaitingEvaluationEmail({
-          brand: { name: "Lab Sigma", isWhiteLabel: true },
-          serviceOrderNumber: "OS-2026-701",
-          customerName: "Empresa Avaliacao ME",
-        }),
-      );
-    }
-
-    it("REQ-SOEMAIL-043: includes the OS number", async () => {
-      const html = await renderAguardando();
-      expect(html).toContain("OS-2026-701");
-    });
-
-    it(
-      "REQ-SOEMAIL-043: includes status phrase for awaiting_tech_evaluation",
-      async () => {
-        const html = await renderAguardando();
-        // The status-specific phrase that must appear in this email
-        expect(html).toContain("avaliação técnica");
-      },
+describe("REQ-SOEMAIL-043: AwaitingEvaluationEmail template renders required fields", () => {
+  async function renderAguardando(): Promise<string> {
+    return render(
+      AwaitingEvaluationEmail({
+        brand: { name: "Lab Sigma", isWhiteLabel: true },
+        serviceOrderNumber: "OS-2026-701",
+        customerName: "Empresa Avaliacao ME",
+      }),
     );
+  }
 
-    it("REQ-SOEMAIL-043: includes the customer name", async () => {
-      const html = await renderAguardando();
-      expect(html).toContain("Empresa Avaliacao ME");
-    });
+  it("REQ-SOEMAIL-043: includes the OS number", async () => {
+    const html = await renderAguardando();
+    expect(html).toContain("OS-2026-701");
+  });
 
-    it("REQ-SOEMAIL-043: includes the lab name from the brand", async () => {
-      const html = await renderAguardando();
-      expect(html).toContain("Lab Sigma");
-    });
-  },
-);
+  it("REQ-SOEMAIL-043: includes status phrase for awaiting_tech_evaluation", async () => {
+    const html = await renderAguardando();
+    // The status-specific phrase that must appear in this email
+    expect(html).toContain("avaliação técnica");
+  });
+
+  it("REQ-SOEMAIL-043: includes the customer name", async () => {
+    const html = await renderAguardando();
+    expect(html).toContain("Empresa Avaliacao ME");
+  });
+
+  it("REQ-SOEMAIL-043: includes the lab name from the brand", async () => {
+    const html = await renderAguardando();
+    expect(html).toContain("Lab Sigma");
+  });
+});

@@ -283,7 +283,8 @@ const formulas = [
     // (P=0,9545 → α=0,0455) com ν_eff — exigido porque o termo Tipo A se apoia em
     // <10 observações (3 leituras), então um k=2 fixo NÃO é permitido (§5.3).
     // Protege o caso ν=∞ → k=2 (Tabela E.1).
-    expression: "if_zero(u_repetibilidade, 2, student_t_inverse_2t(0.0455, veff))",
+    expression:
+      "if_zero(u_repetibilidade, 2, student_t_inverse_2t(0.0455, veff))",
     scope: ROW_SCOPE,
     reporting: {
       includeInCertificate: true,

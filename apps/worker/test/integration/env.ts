@@ -23,10 +23,7 @@ export const TEST_INTEGRATIONS_MASTER_KEY = Buffer.alloc(32, 7).toString(
 
 /** Minimal in-memory R2 bucket: a Map keyed by object key. */
 export function createFakeBucket(): R2BucketBinding {
-  const store = new Map<
-    string,
-    { body: Uint8Array; contentType?: string }
-  >();
+  const store = new Map<string, { body: Uint8Array; contentType?: string }>();
   return {
     async get(key) {
       const entry = store.get(key);
@@ -46,8 +43,7 @@ export function createFakeBucket(): R2BucketBinding {
       };
     },
     async put(key, body, options) {
-      const bytes =
-        body instanceof Uint8Array ? body : new Uint8Array(body);
+      const bytes = body instanceof Uint8Array ? body : new Uint8Array(body);
       store.set(key, {
         body: bytes,
         contentType: options?.httpMetadata?.contentType,

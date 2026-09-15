@@ -10,7 +10,10 @@
  * Pure + deterministic so the regulated invariants are testable without a DB.
  */
 
-import type { MetrologyRegime, RegulatedInterval } from "@calibra-facil/schemas";
+import type {
+  MetrologyRegime,
+  RegulatedInterval,
+} from "@calibra-facil/schemas";
 
 export type AssetRegimeWriteInput = {
   /** Explicit regime from the client (preferred), or undefined to keep the current one. */

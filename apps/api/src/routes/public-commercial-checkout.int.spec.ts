@@ -236,208 +236,200 @@ describe("publicCommercialCheckoutRouter — real DB, opaque-token boundary", ()
   // =========================================================================
   // REQ-PCC-001  Token isolation: token A returns ONLY offer A, never offer B.
   // =========================================================================
-  it(
-    "REQ-PCC-001: a valid token returns only its own offer; token B's offer never leaks",
-    async () => {
-      await seedSellerOrg({
-        orgId: "org-a",
-        name: "Laboratório Alfa",
-        cnpj: "11111111000111",
-      });
-      await seedSellerOrg({
-        orgId: "org-b",
-        name: "Laboratório Beta",
-        cnpj: "22222222000122",
-      });
+  it("REQ-PCC-001: a valid token returns only its own offer; token B's offer never leaks", async () => {
+    await seedSellerOrg({
+      orgId: "org-a",
+      name: "Laboratório Alfa",
+      cnpj: "11111111000111",
+    });
+    await seedSellerOrg({
+      orgId: "org-b",
+      name: "Laboratório Beta",
+      cnpj: "22222222000122",
+    });
 
-      const offerA = await seedPublicOffer({
-        orgId: "org-a",
-        itemLabel: "Plano Alfa exclusivo",
-        payerName: "Pagador Alfa",
-      });
-      const offerB = await seedPublicOffer({
-        orgId: "org-b",
-        itemLabel: "Plano Beta exclusivo",
-        payerName: "Pagador Beta",
-      });
+    const offerA = await seedPublicOffer({
+      orgId: "org-a",
+      itemLabel: "Plano Alfa exclusivo",
+      payerName: "Pagador Alfa",
+    });
+    const offerB = await seedPublicOffer({
+      orgId: "org-b",
+      itemLabel: "Plano Beta exclusivo",
+      payerName: "Pagador Beta",
+    });
 
-      // Request with token A.
-      const resA = await publicCommercialCheckoutRouter.request(
-        `/${offerA.token}`,
-      );
-      expect(resA.status).toBe(200);
-      const bodyA = await resA.json();
+    // Request with token A.
+    const resA = await publicCommercialCheckoutRouter.request(
+      `/${offerA.token}`,
+    );
+    expect(resA.status).toBe(200);
+    const bodyA = await resA.json();
 
-      // Token A resolves to offer A, and ONLY offer A.
-      expect(bodyA.state).not.toBe("INVALID");
-      expect(bodyA.offer.id).toBe(offerA.offerId);
-      expect(bodyA.offer.seller.name).toBe("Laboratório Alfa");
-      expect(bodyA.offer.seller.cnpj).toBe("11111111000111");
-      expect(bodyA.offer.payer.name).toBe("Pagador Alfa");
-      const labelsA = bodyA.offer.items.map((i: { label: string }) => i.label);
-      expect(labelsA).toContain("Plano Alfa exclusivo");
+    // Token A resolves to offer A, and ONLY offer A.
+    expect(bodyA.state).not.toBe("INVALID");
+    expect(bodyA.offer.id).toBe(offerA.offerId);
+    expect(bodyA.offer.seller.name).toBe("Laboratório Alfa");
+    expect(bodyA.offer.seller.cnpj).toBe("11111111000111");
+    expect(bodyA.offer.payer.name).toBe("Pagador Alfa");
+    const labelsA = bodyA.offer.items.map((i: { label: string }) => i.label);
+    expect(labelsA).toContain("Plano Alfa exclusivo");
 
-      // Offer B never appears in token A's response — by id, seller, payer, item.
-      const serializedA = JSON.stringify(bodyA);
-      expect(bodyA.offer.id).not.toBe(offerB.offerId);
-      expect(serializedA).not.toContain(offerB.offerId);
-      expect(serializedA).not.toContain("Laboratório Beta");
-      expect(serializedA).not.toContain("Pagador Beta");
-      expect(serializedA).not.toContain("Plano Beta exclusivo");
+    // Offer B never appears in token A's response — by id, seller, payer, item.
+    const serializedA = JSON.stringify(bodyA);
+    expect(bodyA.offer.id).not.toBe(offerB.offerId);
+    expect(serializedA).not.toContain(offerB.offerId);
+    expect(serializedA).not.toContain("Laboratório Beta");
+    expect(serializedA).not.toContain("Pagador Beta");
+    expect(serializedA).not.toContain("Plano Beta exclusivo");
 
-      // Symmetry: token B resolves to offer B, and ONLY offer B.
-      const resB = await publicCommercialCheckoutRouter.request(
-        `/${offerB.token}`,
-      );
-      expect(resB.status).toBe(200);
-      const bodyB = await resB.json();
-      expect(bodyB.offer.id).toBe(offerB.offerId);
-      expect(JSON.stringify(bodyB)).not.toContain("Laboratório Alfa");
-    },
-  );
+    // Symmetry: token B resolves to offer B, and ONLY offer B.
+    const resB = await publicCommercialCheckoutRouter.request(
+      `/${offerB.token}`,
+    );
+    expect(resB.status).toBe(200);
+    const bodyB = await resB.json();
+    expect(bodyB.offer.id).toBe(offerB.offerId);
+    expect(JSON.stringify(bodyB)).not.toContain("Laboratório Alfa");
+  });
 
   // =========================================================================
   // REQ-PCC-002  Unknown / malformed token → INVALID, HTTP 404, no side effect.
   // =========================================================================
-  it(
-    "REQ-PCC-002: unknown valid-format and malformed tokens → INVALID/404, no offer mutated",
-    async () => {
-      await seedSellerOrg({
-        orgId: "org-a",
-        name: "Laboratório Alfa",
-        cnpj: "11111111000111",
-      });
-      const offerA = await seedPublicOffer({
-        orgId: "org-a",
-        itemLabel: "Plano Alfa",
-      });
+  it("REQ-PCC-002: unknown valid-format and malformed tokens → INVALID/404, no offer mutated", async () => {
+    await seedSellerOrg({
+      orgId: "org-a",
+      name: "Laboratório Alfa",
+      cnpj: "11111111000111",
+    });
+    const offerA = await seedPublicOffer({
+      orgId: "org-a",
+      itemLabel: "Plano Alfa",
+    });
 
-      // Snapshot the offer's access-tracking columns BEFORE the bad requests.
-      const before = await db.query.commercialOffer.findFirst({
-        where: eq(commercialOffer.id, offerA.offerId),
-      });
-      expect(before).toBeTruthy();
-      const accessLogsBefore = await countAccessLogs(offerA.offerId);
-      expect(accessLogsBefore).toBe(0);
+    // Snapshot the offer's access-tracking columns BEFORE the bad requests.
+    const before = await db.query.commercialOffer.findFirst({
+      where: eq(commercialOffer.id, offerA.offerId),
+    });
+    expect(before).toBeTruthy();
+    const accessLogsBefore = await countAccessLogs(offerA.offerId);
+    expect(accessLogsBefore).toBe(0);
 
-      // (a) A syntactically valid (43-char) token whose hash is not in the DB.
-      const unknown = unknownValidToken();
-      const resUnknownSnapshot =
-        await publicCommercialCheckoutRouter.request(`/${unknown}`);
-      expect(resUnknownSnapshot.status).toBe(200); // snapshot route returns INVALID body w/ 200
-      const unknownSnapshot = await resUnknownSnapshot.json();
-      expect(unknownSnapshot.state).toBe("INVALID");
-      expect(unknownSnapshot.offer).toBeNull();
-      expect(unknownSnapshot.presentation).toBeNull();
+    // (a) A syntactically valid (43-char) token whose hash is not in the DB.
+    const unknown = unknownValidToken();
+    const resUnknownSnapshot = await publicCommercialCheckoutRouter.request(
+      `/${unknown}`,
+    );
+    expect(resUnknownSnapshot.status).toBe(200); // snapshot route returns INVALID body w/ 200
+    const unknownSnapshot = await resUnknownSnapshot.json();
+    expect(unknownSnapshot.state).toBe("INVALID");
+    expect(unknownSnapshot.offer).toBeNull();
+    expect(unknownSnapshot.presentation).toBeNull();
 
-      // The status route maps INVALID -> HTTP 404 (real contract).
-      const resUnknownStatus = await publicCommercialCheckoutRouter.request(
-        `/${unknown}/status`,
-      );
-      expect(resUnknownStatus.status).toBe(404);
-      const unknownStatusBody = await resUnknownStatus.json();
-      expect(unknownStatusBody.state).toBe("INVALID");
+    // The status route maps INVALID -> HTTP 404 (real contract).
+    const resUnknownStatus = await publicCommercialCheckoutRouter.request(
+      `/${unknown}/status`,
+    );
+    expect(resUnknownStatus.status).toBe(404);
+    const unknownStatusBody = await resUnknownStatus.json();
+    expect(unknownStatusBody.state).toBe("INVALID");
 
-      // NOTE: /start is deliberately NOT exercised on the unknown token here —
-      // under the postgres-js harness it returns 404 for ANY token (see the
-      // UNREACHABLE-IN-HARNESS note above), so a 404 assertion would be a
-      // tautology rather than proof of the token boundary.
+    // NOTE: /start is deliberately NOT exercised on the unknown token here —
+    // under the postgres-js harness it returns 404 for ANY token (see the
+    // UNREACHABLE-IN-HARNESS note above), so a 404 assertion would be a
+    // tautology rather than proof of the token boundary.
 
-      // (b) A malformed token (wrong length / illegal chars) -> INVALID/404 too.
-      const resMalformedSnapshot =
-        await publicCommercialCheckoutRouter.request("/not-a-real-token");
-      const malformedSnapshot = await resMalformedSnapshot.json();
-      expect(malformedSnapshot.state).toBe("INVALID");
-      expect(malformedSnapshot.offer).toBeNull();
+    // (b) A malformed token (wrong length / illegal chars) -> INVALID/404 too.
+    const resMalformedSnapshot =
+      await publicCommercialCheckoutRouter.request("/not-a-real-token");
+    const malformedSnapshot = await resMalformedSnapshot.json();
+    expect(malformedSnapshot.state).toBe("INVALID");
+    expect(malformedSnapshot.offer).toBeNull();
 
-      const resMalformedStatus = await publicCommercialCheckoutRouter.request(
-        "/not-a-real-token/status",
-      );
-      expect(resMalformedStatus.status).toBe(404);
+    const resMalformedStatus = await publicCommercialCheckoutRouter.request(
+      "/not-a-real-token/status",
+    );
+    expect(resMalformedStatus.status).toBe(404);
 
-      // No side effect on the real offer: access-tracking columns untouched and
-      // no access-log rows were written for the seeded offer.
-      const after = await db.query.commercialOffer.findFirst({
-        where: eq(commercialOffer.id, offerA.offerId),
-      });
-      expect(after?.publicViewedAt ?? null).toBeNull();
-      expect(after?.publicLastAccessAt ?? null).toBeNull();
-      expect(await countAccessLogs(offerA.offerId)).toBe(0);
-    },
-  );
+    // No side effect on the real offer: access-tracking columns untouched and
+    // no access-log rows were written for the seeded offer.
+    const after = await db.query.commercialOffer.findFirst({
+      where: eq(commercialOffer.id, offerA.offerId),
+    });
+    expect(after?.publicViewedAt ?? null).toBeNull();
+    expect(after?.publicLastAccessAt ?? null).toBeNull();
+    expect(await countAccessLogs(offerA.offerId)).toBe(0);
+  });
 
   // =========================================================================
   // REQ-PCC-003  Happy path: GET /:token snapshot + GET /:token/status shape
   //              for a seeded offer with a pre-existing boleto payment.
   // =========================================================================
-  it(
-    "REQ-PCC-003: GET /:token + /:token/status return the documented snapshot/status shape",
-    async () => {
-      await seedSellerOrg({
-        orgId: "org-a",
-        name: "Laboratório Alfa",
-        cnpj: "11111111000111",
-      });
-      const offer = await seedPublicOffer({
-        orgId: "org-a",
-        itemLabel: "Plano Profissional Anual",
-        paymentMethods: ["BOLETO"],
-        totalAmount: 250_00,
-      });
-      // Pre-existing provider payment -> /start hits the RESUME branch
-      // (coerceStartResponse), which never calls Asaas.
-      const paymentId = await seedBoletoPayment({
-        offerId: offer.offerId,
-        organizationId: offer.organizationId,
-      });
+  it("REQ-PCC-003: GET /:token + /:token/status return the documented snapshot/status shape", async () => {
+    await seedSellerOrg({
+      orgId: "org-a",
+      name: "Laboratório Alfa",
+      cnpj: "11111111000111",
+    });
+    const offer = await seedPublicOffer({
+      orgId: "org-a",
+      itemLabel: "Plano Profissional Anual",
+      paymentMethods: ["BOLETO"],
+      totalAmount: 250_00,
+    });
+    // Pre-existing provider payment -> /start hits the RESUME branch
+    // (coerceStartResponse), which never calls Asaas.
+    const paymentId = await seedBoletoPayment({
+      offerId: offer.offerId,
+      organizationId: offer.organizationId,
+    });
 
-      // --- GET /:token snapshot shape ---
-      const resSnapshot = await publicCommercialCheckoutRouter.request(
-        `/${offer.token}`,
-      );
-      expect(resSnapshot.status).toBe(200);
-      // Public, no-store cache headers from the router's middleware.
-      expect(resSnapshot.headers.get("cache-control")).toBe(
-        "private, no-store, max-age=0",
-      );
-      expect(resSnapshot.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    // --- GET /:token snapshot shape ---
+    const resSnapshot = await publicCommercialCheckoutRouter.request(
+      `/${offer.token}`,
+    );
+    expect(resSnapshot.status).toBe(200);
+    // Public, no-store cache headers from the router's middleware.
+    expect(resSnapshot.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
+    expect(resSnapshot.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 
-      const snapshot = await resSnapshot.json();
-      expect(snapshot.state).toBe("BOLETO_READY"); // boleto payment exists
-      expect(snapshot.offer.id).toBe(offer.offerId);
-      expect(snapshot.offer.totalAmount).toBe(250_00);
-      expect(snapshot.offer.paymentMethod).toBe("BOLETO");
-      expect(snapshot.offer.seller.name).toBe("Laboratório Alfa");
-      expect(snapshot.offer.items[0].label).toBe("Plano Profissional Anual");
-      expect(snapshot.presentation.type).toBe("BOLETO");
-      expect(snapshot.presentation.paymentId).toBe(paymentId);
-      expect(snapshot.presentation.boleto.bankSlipUrl).toBe(
-        "https://asaas.test/boleto/abc",
-      );
+    const snapshot = await resSnapshot.json();
+    expect(snapshot.state).toBe("BOLETO_READY"); // boleto payment exists
+    expect(snapshot.offer.id).toBe(offer.offerId);
+    expect(snapshot.offer.totalAmount).toBe(250_00);
+    expect(snapshot.offer.paymentMethod).toBe("BOLETO");
+    expect(snapshot.offer.seller.name).toBe("Laboratório Alfa");
+    expect(snapshot.offer.items[0].label).toBe("Plano Profissional Anual");
+    expect(snapshot.presentation.type).toBe("BOLETO");
+    expect(snapshot.presentation.paymentId).toBe(paymentId);
+    expect(snapshot.presentation.boleto.bankSlipUrl).toBe(
+      "https://asaas.test/boleto/abc",
+    );
 
-      // The snapshot route marks the offer viewed (a deliberate side effect).
-      const afterView = await db.query.commercialOffer.findFirst({
-        where: eq(commercialOffer.id, offer.offerId),
-      });
-      expect(afterView?.publicViewedAt).toBeTruthy();
+    // The snapshot route marks the offer viewed (a deliberate side effect).
+    const afterView = await db.query.commercialOffer.findFirst({
+      where: eq(commercialOffer.id, offer.offerId),
+    });
+    expect(afterView?.publicViewedAt).toBeTruthy();
 
-      // --- GET /:token/status shape ---
-      const resStatus = await publicCommercialCheckoutRouter.request(
-        `/${offer.token}/status`,
-      );
-      expect(resStatus.status).toBe(200);
-      const status = await resStatus.json();
-      expect(status.state).toBe("BOLETO_READY");
-      expect(status.paymentId).toBe(paymentId);
-      expect(status.status).toBe("PENDING");
-      expect(status.presentation.type).toBe("BOLETO");
+    // --- GET /:token/status shape ---
+    const resStatus = await publicCommercialCheckoutRouter.request(
+      `/${offer.token}/status`,
+    );
+    expect(resStatus.status).toBe(200);
+    const status = await resStatus.json();
+    expect(status.state).toBe("BOLETO_READY");
+    expect(status.paymentId).toBe(paymentId);
+    expect(status.status).toBe("PENDING");
+    expect(status.presentation.type).toBe("BOLETO");
 
-      // The status route is also token-scoped: it logs a STATUS_CHECKED access
-      // row against THIS offer (proves reads land only on the token's offer).
-      const statusRow = await db.query.commercialOfferAccessLog.findFirst({
-        where: eq(commercialOfferAccessLog.eventType, "STATUS_CHECKED"),
-      });
-      expect(statusRow?.offerId).toBe(offer.offerId);
-    },
-  );
+    // The status route is also token-scoped: it logs a STATUS_CHECKED access
+    // row against THIS offer (proves reads land only on the token's offer).
+    const statusRow = await db.query.commercialOfferAccessLog.findFirst({
+      where: eq(commercialOfferAccessLog.eventType, "STATUS_CHECKED"),
+    });
+    expect(statusRow?.offerId).toBe(offer.offerId);
+  });
 });

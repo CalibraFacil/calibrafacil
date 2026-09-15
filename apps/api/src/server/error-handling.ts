@@ -1,9 +1,6 @@
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import {
-  flushErrorReporter,
-  reportServerError,
-} from "../lib/observability";
+import { flushErrorReporter, reportServerError } from "../lib/observability";
 import type { Env } from "./env";
 
 export type ErrorHandlingDeps = {

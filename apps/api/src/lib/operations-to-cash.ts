@@ -41,14 +41,16 @@ export const OPERATIONS_TO_CASH_STAGES: ReadonlyArray<OperationsToCashStage> = [
   "COLLECTED",
 ];
 
-export const OPERATIONS_TO_CASH_STAGE_LABEL: Record<OperationsToCashStage, string> =
-  {
-    READY_TO_BILL: "Pronto para faturar",
-    SENT_TO_FINANCE: "Enviado ao financeiro",
-    INVOICED: "Faturado",
-    PARTIALLY_COLLECTED: "Recebimento parcial",
-    COLLECTED: "Recebido",
-  };
+export const OPERATIONS_TO_CASH_STAGE_LABEL: Record<
+  OperationsToCashStage,
+  string
+> = {
+  READY_TO_BILL: "Pronto para faturar",
+  SENT_TO_FINANCE: "Enviado ao financeiro",
+  INVOICED: "Faturado",
+  PARTIALLY_COLLECTED: "Recebimento parcial",
+  COLLECTED: "Recebido",
+};
 
 export interface OperationsToCashClassifierInput {
   hasBillingDocument: boolean;
@@ -144,7 +146,10 @@ export interface ClassifiedServiceOrderItem extends OperationsToCashClassificati
 
 const EMPTY_BUCKET: OperationsToCashStageBucket = { count: 0, totalCents: 0 };
 
-function emptyStages(): Record<OperationsToCashStage, OperationsToCashStageBucket> {
+function emptyStages(): Record<
+  OperationsToCashStage,
+  OperationsToCashStageBucket
+> {
   return {
     READY_TO_BILL: { ...EMPTY_BUCKET },
     SENT_TO_FINANCE: { ...EMPTY_BUCKET },
@@ -294,9 +299,7 @@ export async function buildOperationsToCash(
           status: receivableInstallment.status,
         })
         .from(receivableInstallment)
-        .where(
-          inArray(receivableInstallment.documentId, billingDocumentIds),
-        )
+        .where(inArray(receivableInstallment.documentId, billingDocumentIds))
     : [];
 
   const installmentsByDoc = new Map<number, ReceivableInstallmentStatus[]>();
@@ -310,12 +313,7 @@ export async function buildOperationsToCash(
     number,
     {
       status: BillingDocumentStatus;
-      exportStatus:
-        | "NOT_EXPORTED"
-        | "PENDING"
-        | "EXPORTED"
-        | "FAILED"
-        | null;
+      exportStatus: "NOT_EXPORTED" | "PENDING" | "EXPORTED" | "FAILED" | null;
     }
   >();
   if (billingDocumentIds.length) {
@@ -346,10 +344,10 @@ export async function buildOperationsToCash(
     const orderLinks = linksByOrder.get(order.id) ?? [];
     const existingDoc = resolvedDocumentLinks.get(order.id) ?? null;
     const docInfo = existingDoc
-      ? billingDocStatusByDoc.get(existingDoc.documentId) ?? null
+      ? (billingDocStatusByDoc.get(existingDoc.documentId) ?? null)
       : null;
     const installmentStatuses = existingDoc
-      ? installmentsByDoc.get(existingDoc.documentId) ?? []
+      ? (installmentsByDoc.get(existingDoc.documentId) ?? [])
       : [];
     const amountCents =
       order.amountApprovedCents > 0

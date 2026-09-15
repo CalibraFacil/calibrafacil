@@ -13,41 +13,35 @@ import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
 import { ReadyForPickupEmail } from "./ready-for-pickup-email";
 
-describe(
-  "REQ-SOEMAIL-051: ReadyForPickupEmail template renders required fields",
-  () => {
-    async function renderProntoParaRetirada(): Promise<string> {
-      return render(
-        ReadyForPickupEmail({
-          brand: { name: "Lab Delta", isWhiteLabel: true },
-          serviceOrderNumber: "OS-2026-700",
-          customerName: "Cliente Retirada Ltda",
-        }),
-      );
-    }
-
-    it("REQ-SOEMAIL-051: includes the OS number", async () => {
-      const html = await renderProntoParaRetirada();
-      expect(html).toContain("OS-2026-700");
-    });
-
-    it(
-      "REQ-SOEMAIL-051: includes a status-specific phrase indicating ready for pickup",
-      async () => {
-        const html = await renderProntoParaRetirada();
-        // Status-specific phrase that must appear
-        expect(html).toContain("pronto para retirada");
-      },
+describe("REQ-SOEMAIL-051: ReadyForPickupEmail template renders required fields", () => {
+  async function renderProntoParaRetirada(): Promise<string> {
+    return render(
+      ReadyForPickupEmail({
+        brand: { name: "Lab Delta", isWhiteLabel: true },
+        serviceOrderNumber: "OS-2026-700",
+        customerName: "Cliente Retirada Ltda",
+      }),
     );
+  }
 
-    it("REQ-SOEMAIL-051: includes the customer name", async () => {
-      const html = await renderProntoParaRetirada();
-      expect(html).toContain("Cliente Retirada Ltda");
-    });
+  it("REQ-SOEMAIL-051: includes the OS number", async () => {
+    const html = await renderProntoParaRetirada();
+    expect(html).toContain("OS-2026-700");
+  });
 
-    it("REQ-SOEMAIL-051: includes the lab name from the brand", async () => {
-      const html = await renderProntoParaRetirada();
-      expect(html).toContain("Lab Delta");
-    });
-  },
-);
+  it("REQ-SOEMAIL-051: includes a status-specific phrase indicating ready for pickup", async () => {
+    const html = await renderProntoParaRetirada();
+    // Status-specific phrase that must appear
+    expect(html).toContain("pronto para retirada");
+  });
+
+  it("REQ-SOEMAIL-051: includes the customer name", async () => {
+    const html = await renderProntoParaRetirada();
+    expect(html).toContain("Cliente Retirada Ltda");
+  });
+
+  it("REQ-SOEMAIL-051: includes the lab name from the brand", async () => {
+    const html = await renderProntoParaRetirada();
+    expect(html).toContain("Lab Delta");
+  });
+});

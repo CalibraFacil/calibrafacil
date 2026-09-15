@@ -4,6 +4,7 @@ Target: `apps/api/src/lib/certificate-numbering.ts`
 Test file: `apps/api/src/lib/__tests__/certificate-numbering.spec.ts` (Vitest `.spec.ts`)
 
 ## Context
+
 Scope = the EXPORTED PURE functions only. The DB-coupled
 `generateCertificateIdentity` (transactions, sequence reservation, collision loop)
 is OUT OF SCOPE for this coverage pass (integration surface). Cert numbers appear on

@@ -19,16 +19,16 @@ regulated boundaries.
 
 ## Verified commands (quote these, don't guess)
 
-| Need | Command |
-| --- | --- |
-| Install / runtime | `pnpm@11`, Node `>=24`. API + worker run under **Bun**; web/portal/local-server under Node+Vite/tsx. |
-| Lint | `pnpm lint` → `turbo run lint` → **oxlint** (NOT ESLint; config `.oxlintrc.json`) |
-| Typecheck | `pnpm check-types` → per-package **native `tsc`** (`typescript@7`, the Go compiler; replaced `tsgo`). The Next/Payload apps (`site`/`docs`/`cms`) stay on `typescript@6.0.3` JS for the compiler API |
-| Format | `pnpm format` → `prettier --write "**/*.{ts,tsx,md}"` |
-| All tests | `pnpm turbo test` (Vitest, per package; there is no root `test` script) |
-| One package, no watch | `pnpm --dir apps/api test:run` |
-| **One file + one test** | `pnpm --dir apps/api test:run src/routes/billing/foo.spec.ts -t "test name"` |
-| Migrations | `cd packages/db && pnpm db:generate` then `pnpm db:migrate` (drizzle-kit) |
+| Need                    | Command                                                                                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Install / runtime       | `pnpm@11`, Node `>=24`. API + worker run under **Bun**; web/portal/local-server under Node+Vite/tsx.                                                                                                 |
+| Lint                    | `pnpm lint` → `turbo run lint` → **oxlint** (NOT ESLint; config `.oxlintrc.json`)                                                                                                                    |
+| Typecheck               | `pnpm check-types` → per-package **native `tsc`** (`typescript@7`, the Go compiler; replaced `tsgo`). The Next/Payload apps (`site`/`docs`/`cms`) stay on `typescript@6.0.3` JS for the compiler API |
+| Format                  | `pnpm format` → `prettier --write "**/*.{ts,tsx,md}"`                                                                                                                                                |
+| All tests               | `pnpm turbo test` (Vitest, per package; there is no root `test` script)                                                                                                                              |
+| One package, no watch   | `pnpm --dir apps/api test:run`                                                                                                                                                                       |
+| **One file + one test** | `pnpm --dir apps/api test:run src/routes/billing/foo.spec.ts -t "test name"`                                                                                                                         |
+| Migrations              | `cd packages/db && pnpm db:generate` then `pnpm db:migrate` (drizzle-kit)                                                                                                                            |
 
 - **Regulated test files are `*.spec.ts`** (e.g. `apps/api/vitest.config.ts` →
   `include: ["src/**/*.spec.ts"]`, all of `packages/signing/src/*.spec.ts`).
@@ -65,14 +65,14 @@ regulated boundaries.
 > These classifications govern whether a surface may be touched by an unattended
 > loop. **When in doubt, treat a surface as pair-don't-loop.**
 
-| Surface | Real location | Class |
-| --- | --- | --- |
-| **Calibration approval workflow** (separation of duties, "approved is immutable") | `packages/auth/src/access.ts` (`CalibrationState` draft→submitted→in_review→approved→rejected; `calibrationWorkflowPermissions`, `canPerformCalibrationAction`); enforced in `apps/api/src/middleware/permission.ts` (`requireCalibrationAction`); approver columns in `packages/db/src/schema.ts` (`technicalReviewedBy`, `approvedBy`) | **pair-don't-loop** |
-| **ICP-Brasil A1 signing / credential custody** | `packages/signing/` (`signer.ts` PKCS#12+PAdES, `chain-validation.ts`, `verify.ts`, `timestamp.ts`, `encryption.ts`); schema `organizationSigningCertificate` (AES-256-GCM encrypted P12 + password) | **pair-don't-loop** |
-| **RBAC / multi-tenant policy layer** | `packages/auth/src/access.ts` (Better-Auth `createAccessControl`, roles); enforced in `apps/api/src/middleware/permission.ts` (`requirePermission`, `requireRole`, `requireOrgType`, `requireOrganization`) + `tier-guard.ts` (`requireFeature`, `requirePlanLimit`) + `resolveMemberUnitScope` in `apps/api/src/lib/units.ts` | **pair-don't-loop** |
-| **GUM uncertainty math engine** | `packages/math-engine` (`gum/`, `uncertainty/type-a.ts`, `type-b.ts`, `numeric/decimal.ts`) | **loopable-with-verifier** — only when gated by the numeric oracle tests **and** a dossier regeneration (`validation/math-engine/v0.3.0/dossier.tex`) |
-| **vigência / accreditation capability-vs-validity separation** | Not modeled. Today: `organization.accreditationActive` (boolean), `organization.accreditationNumber/Body`, `calibrationMethod.accreditedScope` (boolean) — flags, no validity window | **doesn't-exist-yet** |
-| **PSIE state machine + credential-custody boundary** | Not in code. Only `docs/estrategia/precificacao-posicionamento.md` ("lacres/selos Inmetro + PSIE = **não existe no schema**, é a parte que exige construção") | **doesn't-exist-yet** |
+| Surface                                                                           | Real location                                                                                                                                                                                                                                                                                                                            | Class                                                                                                                                                 |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Calibration approval workflow** (separation of duties, "approved is immutable") | `packages/auth/src/access.ts` (`CalibrationState` draft→submitted→in_review→approved→rejected; `calibrationWorkflowPermissions`, `canPerformCalibrationAction`); enforced in `apps/api/src/middleware/permission.ts` (`requireCalibrationAction`); approver columns in `packages/db/src/schema.ts` (`technicalReviewedBy`, `approvedBy`) | **pair-don't-loop**                                                                                                                                   |
+| **ICP-Brasil A1 signing / credential custody**                                    | `packages/signing/` (`signer.ts` PKCS#12+PAdES, `chain-validation.ts`, `verify.ts`, `timestamp.ts`, `encryption.ts`); schema `organizationSigningCertificate` (AES-256-GCM encrypted P12 + password)                                                                                                                                     | **pair-don't-loop**                                                                                                                                   |
+| **RBAC / multi-tenant policy layer**                                              | `packages/auth/src/access.ts` (Better-Auth `createAccessControl`, roles); enforced in `apps/api/src/middleware/permission.ts` (`requirePermission`, `requireRole`, `requireOrgType`, `requireOrganization`) + `tier-guard.ts` (`requireFeature`, `requirePlanLimit`) + `resolveMemberUnitScope` in `apps/api/src/lib/units.ts`           | **pair-don't-loop**                                                                                                                                   |
+| **GUM uncertainty math engine**                                                   | `packages/math-engine` (`gum/`, `uncertainty/type-a.ts`, `type-b.ts`, `numeric/decimal.ts`)                                                                                                                                                                                                                                              | **loopable-with-verifier** — only when gated by the numeric oracle tests **and** a dossier regeneration (`validation/math-engine/v0.3.0/dossier.tex`) |
+| **vigência / accreditation capability-vs-validity separation**                    | Not modeled. Today: `organization.accreditationActive` (boolean), `organization.accreditationNumber/Body`, `calibrationMethod.accreditedScope` (boolean) — flags, no validity window                                                                                                                                                     | **doesn't-exist-yet**                                                                                                                                 |
+| **PSIE state machine + credential-custody boundary**                              | Not in code. Only `docs/estrategia/precificacao-posicionamento.md` ("lacres/selos Inmetro + PSIE = **não existe no schema**, é a parte que exige construção")                                                                                                                                                                            | **doesn't-exist-yet**                                                                                                                                 |
 
 ## Real conventions (detected, not assumed)
 
@@ -137,6 +137,7 @@ translate, expand, or reword them. (Codebase truth: see `packages/shared/src/acc
 
 For anything that affects **a certificate, an accreditation claim, or access
 scoping**, stop and ask the human rather than infer. Specifically:
+
 - regulatory text, accreditation number/scope, seal rendering, or what makes a
   certificate "released" vs technically "approved";
 - which role/permission/tenant boundary applies (read it from the RBAC layer

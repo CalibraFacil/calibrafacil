@@ -22,7 +22,11 @@
  * authoritative (whole-token registry hits report 1) and must not be relied on.
  */
 
-import { type BaseDimension, type Dimension, type Rational } from "./dimensions";
+import {
+  type BaseDimension,
+  type Dimension,
+  type Rational,
+} from "./dimensions";
 import {
   DIMENSIONLESS,
   dimension,
@@ -35,7 +39,11 @@ import {
 import { normalizeUnitToken } from "./registry";
 
 export type UnitParseResult =
-  | { readonly ok: true; readonly dimension: Dimension; readonly factor: number }
+  | {
+      readonly ok: true;
+      readonly dimension: Dimension;
+      readonly factor: number;
+    }
   | { readonly ok: false; readonly reason: string };
 
 interface Resolved {
@@ -99,7 +107,7 @@ const BASE_ATOMS: Record<string, Dimension> = {
   J: ENERGY,
   W: POWER,
   V: VOLTAGE,
-  "Ω": RESISTANCE,
+  Ω: RESISTANCE,
   ohm: RESISTANCE,
   Hz: FREQUENCY,
   rpm: FREQUENCY,
@@ -124,8 +132,8 @@ const SI_PREFIXES: Record<string, number> = {
   f: 1e-15,
   p: 1e-12,
   n: 1e-9,
-  "µ": 1e-6,
-  "μ": 1e-6,
+  µ: 1e-6,
+  μ: 1e-6,
   u: 1e-6,
   m: 1e-3,
   c: 1e-2,

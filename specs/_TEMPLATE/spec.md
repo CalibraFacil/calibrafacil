@@ -14,6 +14,7 @@ like? Plain language — the WHY. No solution detail here.>
 ## Constraints
 
 <Hard boundaries this feature must respect. Cite the real ones, e.g.:>
+
 - Reuse the RBAC layer (`packages/auth/src/access.ts` +
   `apps/api/src/middleware/permission.ts`); do not add inline access rules.
 - Preserve `organizationId` + `unitId` tenant scoping.
@@ -48,12 +49,12 @@ throwaway parts as "no EARS — throwaway" so the verifier won't demand tests.>
 > human, not an unattended /goal or /loop. Loopable minis go through
 > feature-implementer → spec-verifier.
 
-| Mini-spec | Layer (real path) | Depends on | Risk | Mode |
-| --- | --- | --- | --- | --- |
-| <e.g. result DTO + Zod> | `packages/schemas` | — | low | loopable-with-verifier |
-| <e.g. uncertainty calc> | `packages/math-engine` | schema | med | loopable-with-verifier (oracle + dossier) |
-| <e.g. approve endpoint> | `apps/api/src/routes` + RBAC | calc | **high + critical** | **pair-don't-loop** |
-| <e.g. feature page> | `apps/web/src/features/<domain>` | api | low | loopable-with-verifier |
+| Mini-spec               | Layer (real path)                | Depends on | Risk                | Mode                                      |
+| ----------------------- | -------------------------------- | ---------- | ------------------- | ----------------------------------------- |
+| <e.g. result DTO + Zod> | `packages/schemas`               | —          | low                 | loopable-with-verifier                    |
+| <e.g. uncertainty calc> | `packages/math-engine`           | schema     | med                 | loopable-with-verifier (oracle + dossier) |
+| <e.g. approve endpoint> | `apps/api/src/routes` + RBAC     | calc       | **high + critical** | **pair-don't-loop**                       |
+| <e.g. feature page>     | `apps/web/src/features/<domain>` | api        | low                 | loopable-with-verifier                    |
 
 **Rule:** flag every critical-path + high-risk mini as **pair-don't-loop** in the
 Mode column. Anything touching calibration approval, ICP-Brasil signing, or

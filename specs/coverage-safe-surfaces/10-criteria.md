@@ -5,6 +5,7 @@ Test file: `packages/method-definition/tests/criteria.test.ts` (Vitest — the p
 uses `tests/<name>.test.ts`)
 
 ## [REVIEW] Conformity-decision-adjacent
+
 `compareDecimalInputs` and `evaluateCompiledCriterion` decide whether a measurement
 PASSES an acceptance criterion (conformity decision) — adjacent to the regulated
 metrology surface, though NOT the GUM uncertainty engine. Tests assert EXISTING

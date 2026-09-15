@@ -178,7 +178,9 @@ function collectColumns(
     ) => {
       const existing = columns[key];
       if (existing) {
-        columns.ambiguous.push(`${existing.outputKey} + ${candidate.outputKey}`);
+        columns.ambiguous.push(
+          `${existing.outputKey} + ${candidate.outputKey}`,
+        );
         return;
       }
       columns[key] = candidate;

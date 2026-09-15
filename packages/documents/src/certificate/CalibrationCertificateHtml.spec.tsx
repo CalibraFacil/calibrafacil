@@ -186,7 +186,8 @@ describe("CalibrationCertificateHtml", () => {
 
     it("renders the eccentricity diagram inline, and only once", () => {
       const data = massCertificateFixture();
-      if (!data.eccentricity) throw new Error("fixture must carry eccentricity");
+      if (!data.eccentricity)
+        throw new Error("fixture must carry eccentricity");
       data.eccentricity.indicatorSvg =
         '<svg xmlns="http://www.w3.org/2000/svg"><text>Posição do indicador</text></svg>';
       const html = render(data);
@@ -198,7 +199,8 @@ describe("CalibrationCertificateHtml", () => {
 
     it("omits the diagram when the method declares no indicator", () => {
       const data = massCertificateFixture();
-      if (!data.eccentricity) throw new Error("fixture must carry eccentricity");
+      if (!data.eccentricity)
+        throw new Error("fixture must carry eccentricity");
       data.eccentricity.indicatorSvg = null;
       const html = body(data);
       expect(html).toContain("Excentricidade");

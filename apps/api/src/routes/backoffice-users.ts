@@ -111,193 +111,188 @@ const RevokeUserSessionSchema = z.object({
 export const backofficeUsersRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .get(
-    "/",
-    zValidator("query", ListBackofficeUsersQuerySchema),
-    async (c) => {
-      const input = c.req.valid("query");
-      const limit = input.limit ?? 100;
-      const offset = input.offset ?? 0;
-      const platformRole = input.platformRole ?? "all";
-      const membershipScope = input.membershipScope ?? "all";
+  .get("/", zValidator("query", ListBackofficeUsersQuerySchema), async (c) => {
+    const input = c.req.valid("query");
+    const limit = input.limit ?? 100;
+    const offset = input.offset ?? 0;
+    const platformRole = input.platformRole ?? "all";
+    const membershipScope = input.membershipScope ?? "all";
 
-      const labMembershipSubquery = db
-        .select({ userId: member.userId })
-        .from(member)
-        .innerJoin(
-          organization,
-          and(
-            eq(member.organizationId, organization.id),
-            eq(organization.type, "LAB"),
-          ),
-        );
+    const labMembershipSubquery = db
+      .select({ userId: member.userId })
+      .from(member)
+      .innerJoin(
+        organization,
+        and(
+          eq(member.organizationId, organization.id),
+          eq(organization.type, "LAB"),
+        ),
+      );
 
-      const conditions = [];
+    const conditions = [];
 
-      if (input.search) {
-        const pattern = `%${input.search}%`;
-        conditions.push(
-          or(ilike(userTable.name, pattern), ilike(userTable.email, pattern))!,
-        );
-      }
+    if (input.search) {
+      const pattern = `%${input.search}%`;
+      conditions.push(
+        or(ilike(userTable.name, pattern), ilike(userTable.email, pattern))!,
+      );
+    }
 
-      if (input.organizationId) {
-        conditions.push(
-          inArray(
-            userTable.id,
-            db
-              .select({ userId: member.userId })
-              .from(member)
-              .where(eq(member.organizationId, input.organizationId)),
-          ),
-        );
-      }
+    if (input.organizationId) {
+      conditions.push(
+        inArray(
+          userTable.id,
+          db
+            .select({ userId: member.userId })
+            .from(member)
+            .where(eq(member.organizationId, input.organizationId)),
+        ),
+      );
+    }
 
-      if (platformRole === "user") {
-        conditions.push(eq(userTable.role, "user"));
-      } else if (platformRole === "platform_operator") {
-        conditions.push(eq(userTable.role, "platform_operator"));
-      } else if (platformRole === "platform_admin") {
-        conditions.push(eq(userTable.role, "platform_admin"));
-      } else if (platformRole === "platform_access") {
-        conditions.push(
+    if (platformRole === "user") {
+      conditions.push(eq(userTable.role, "user"));
+    } else if (platformRole === "platform_operator") {
+      conditions.push(eq(userTable.role, "platform_operator"));
+    } else if (platformRole === "platform_admin") {
+      conditions.push(eq(userTable.role, "platform_admin"));
+    } else if (platformRole === "platform_access") {
+      conditions.push(
+        or(
+          eq(userTable.role, "platform_operator"),
+          eq(userTable.role, "platform_admin"),
+        )!,
+      );
+    }
+
+    if (membershipScope === "lab_members") {
+      conditions.push(inArray(userTable.id, labMembershipSubquery));
+    } else if (membershipScope === "no_lab_membership") {
+      conditions.push(not(inArray(userTable.id, labMembershipSubquery)));
+    } else if (membershipScope === "backoffice_only") {
+      conditions.push(
+        and(
           or(
             eq(userTable.role, "platform_operator"),
             eq(userTable.role, "platform_admin"),
-          )!,
-        );
-      }
-
-      if (membershipScope === "lab_members") {
-        conditions.push(inArray(userTable.id, labMembershipSubquery));
-      } else if (membershipScope === "no_lab_membership") {
-        conditions.push(not(inArray(userTable.id, labMembershipSubquery)));
-      } else if (membershipScope === "backoffice_only") {
-        conditions.push(
-          and(
-            or(
-              eq(userTable.role, "platform_operator"),
-              eq(userTable.role, "platform_admin"),
-            ),
-            not(inArray(userTable.id, labMembershipSubquery)),
-          )!,
-        );
-      }
-
-      const whereClause =
-        conditions.length > 0 ? and(...conditions) : undefined;
-
-      const [users, totalRows] = await Promise.all([
-        db.query.user.findMany({
-          where: whereClause,
-          orderBy: [asc(userTable.name), asc(userTable.email)],
-          limit,
-          offset,
-        }),
-        db
-          .select({
-            total: sql<number>`count(*)`,
-          })
-          .from(userTable)
-          .where(whereClause),
-      ]);
-
-      const userIds = users.map((user) => user.id);
-
-      const memberships = userIds.length
-        ? await db
-            .select({
-              userId: member.userId,
-              organizationId: organization.id,
-              organizationName: organization.name,
-              organizationSlug: organization.slug,
-              memberRole: member.role,
-            })
-            .from(member)
-            .innerJoin(
-              organization,
-              and(
-                eq(member.organizationId, organization.id),
-                eq(organization.type, "LAB"),
-              ),
-            )
-            .where(inArray(member.userId, userIds))
-            .orderBy(asc(organization.name))
-        : [];
-
-      const membershipsByUser = new Map<
-        string,
-        Array<{
-          organizationId: string;
-          organizationName: string;
-          organizationSlug: string;
-          memberRole: string;
-        }>
-      >();
-
-      for (const row of memberships) {
-        const current = membershipsByUser.get(row.userId) ?? [];
-        current.push({
-          organizationId: row.organizationId,
-          organizationName: row.organizationName,
-          organizationSlug: row.organizationSlug,
-          memberRole: row.memberRole,
-        });
-        membershipsByUser.set(row.userId, current);
-      }
-
-      // Per-user session signals for observability, batched over the page's users
-      // (one grouped scan using session_userId_idx). lastLoginAt ≈ most recent
-      // session start; lastSeenAt ≈ most recent session refresh; isOnline = has a
-      // non-expired session right now.
-      const sessionAgg = userIds.length
-        ? await db
-            .select({
-              userId: authSession.userId,
-              lastLoginAt: max(authSession.createdAt),
-              lastSeenAt: max(authSession.updatedAt),
-              // Use SQL now() — a raw-sql ${jsDate} param isn't type-aware and
-              // serializes to a non-ISO string Postgres rejects.
-              activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > now())`,
-            })
-            .from(authSession)
-            .where(inArray(authSession.userId, userIds))
-            .groupBy(authSession.userId)
-        : [];
-      const sessionAggByUser = new Map(
-        sessionAgg.map((row) => [row.userId, row]),
+          ),
+          not(inArray(userTable.id, labMembershipSubquery)),
+        )!,
       );
+    }
 
-      return c.json({
-        users: users.map((user) => {
-          const agg = sessionAggByUser.get(user.id);
-          const activeSessionCount = Number(agg?.activeSessionCount ?? 0);
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            banned: user.banned,
-            createdAt: user.createdAt,
-            lastLoginAt: agg?.lastLoginAt ?? null,
-            lastSeenAt: agg?.lastSeenAt ?? null,
-            activeSessionCount,
-            isOnline: activeSessionCount > 0,
-            memberships: membershipsByUser.get(user.id) ?? [],
-          };
-        }),
-        total: totalRows[0]?.total ?? 0,
-        filters: {
-          limit,
-          offset,
-          search: input.search ?? "",
-          organizationId: input.organizationId ?? "",
-          platformRole,
-          membershipScope,
-        },
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [users, totalRows] = await Promise.all([
+      db.query.user.findMany({
+        where: whereClause,
+        orderBy: [asc(userTable.name), asc(userTable.email)],
+        limit,
+        offset,
+      }),
+      db
+        .select({
+          total: sql<number>`count(*)`,
+        })
+        .from(userTable)
+        .where(whereClause),
+    ]);
+
+    const userIds = users.map((user) => user.id);
+
+    const memberships = userIds.length
+      ? await db
+          .select({
+            userId: member.userId,
+            organizationId: organization.id,
+            organizationName: organization.name,
+            organizationSlug: organization.slug,
+            memberRole: member.role,
+          })
+          .from(member)
+          .innerJoin(
+            organization,
+            and(
+              eq(member.organizationId, organization.id),
+              eq(organization.type, "LAB"),
+            ),
+          )
+          .where(inArray(member.userId, userIds))
+          .orderBy(asc(organization.name))
+      : [];
+
+    const membershipsByUser = new Map<
+      string,
+      Array<{
+        organizationId: string;
+        organizationName: string;
+        organizationSlug: string;
+        memberRole: string;
+      }>
+    >();
+
+    for (const row of memberships) {
+      const current = membershipsByUser.get(row.userId) ?? [];
+      current.push({
+        organizationId: row.organizationId,
+        organizationName: row.organizationName,
+        organizationSlug: row.organizationSlug,
+        memberRole: row.memberRole,
       });
-    },
-  )
+      membershipsByUser.set(row.userId, current);
+    }
+
+    // Per-user session signals for observability, batched over the page's users
+    // (one grouped scan using session_userId_idx). lastLoginAt ≈ most recent
+    // session start; lastSeenAt ≈ most recent session refresh; isOnline = has a
+    // non-expired session right now.
+    const sessionAgg = userIds.length
+      ? await db
+          .select({
+            userId: authSession.userId,
+            lastLoginAt: max(authSession.createdAt),
+            lastSeenAt: max(authSession.updatedAt),
+            // Use SQL now() — a raw-sql ${jsDate} param isn't type-aware and
+            // serializes to a non-ISO string Postgres rejects.
+            activeSessionCount: sql<number>`count(*) filter (where ${authSession.expiresAt} > now())`,
+          })
+          .from(authSession)
+          .where(inArray(authSession.userId, userIds))
+          .groupBy(authSession.userId)
+      : [];
+    const sessionAggByUser = new Map(
+      sessionAgg.map((row) => [row.userId, row]),
+    );
+
+    return c.json({
+      users: users.map((user) => {
+        const agg = sessionAggByUser.get(user.id);
+        const activeSessionCount = Number(agg?.activeSessionCount ?? 0);
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          banned: user.banned,
+          createdAt: user.createdAt,
+          lastLoginAt: agg?.lastLoginAt ?? null,
+          lastSeenAt: agg?.lastSeenAt ?? null,
+          activeSessionCount,
+          isOnline: activeSessionCount > 0,
+          memberships: membershipsByUser.get(user.id) ?? [],
+        };
+      }),
+      total: totalRows[0]?.total ?? 0,
+      filters: {
+        limit,
+        offset,
+        search: input.search ?? "",
+        organizationId: input.organizationId ?? "",
+        platformRole,
+        membershipScope,
+      },
+    });
+  })
   .post(
     "/",
     requirePlatformAdmin,
@@ -473,39 +468,35 @@ export const backofficeUsersRouter = new Hono<{
 
     return c.json({ ok: true });
   })
-  .post(
-    "/:id/role",
-    zValidator("json", SetPlatformRoleSchema),
-    async (c) => {
-      const auth = createBackofficeAuth();
-      const session = c.get("session");
-      const userId = c.req.param("id");
-      const input = c.req.valid("json");
+  .post("/:id/role", zValidator("json", SetPlatformRoleSchema), async (c) => {
+    const auth = createBackofficeAuth();
+    const session = c.get("session");
+    const userId = c.req.param("id");
+    const input = c.req.valid("json");
 
-      const result = await auth.api.setRole({
-        body: {
-          userId,
-          role: input.role,
-        },
-        headers: c.req.raw.headers,
-      });
+    const result = await auth.api.setRole({
+      body: {
+        userId,
+        role: input.role,
+      },
+      headers: c.req.raw.headers,
+    });
 
-      await db.delete(authSession).where(eq(authSession.userId, userId));
+    await db.delete(authSession).where(eq(authSession.userId, userId));
 
-      await logPlatformEvent({
-        actorUserId: session.user.id,
-        targetUserId: userId,
-        action: "backoffice.user.role.updated",
-        entityType: "user",
-        entityId: userId,
-        details: {
-          role: input.role,
-        },
-      });
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      targetUserId: userId,
+      action: "backoffice.user.role.updated",
+      entityType: "user",
+      entityId: userId,
+      details: {
+        role: input.role,
+      },
+    });
 
-      return c.json(result);
-    },
-  )
+    return c.json(result);
+  })
   .post("/:id/ban", zValidator("json", BanUserSchema), async (c) => {
     const auth = createBackofficeAuth();
     const session = c.get("session");

@@ -165,10 +165,7 @@ describe("recomputeOperatorAlerts — real-DB reconcile of the new REL-04 signal
       .select()
       .from(operatorAlert)
       .where(
-        eq(
-          operatorAlert.dedupeKey,
-          "outbox:service_order_email:dead_letter",
-        ),
+        eq(operatorAlert.dedupeKey, "outbox:service_order_email:dead_letter"),
       );
 
     expect(alert).toBeDefined();

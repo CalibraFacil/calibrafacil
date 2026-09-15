@@ -16,49 +16,43 @@ import { describe, it, expect } from "vitest";
 import { render } from "@react-email/components";
 import { QuoteApprovedEmail } from "./quote-approved-email";
 
-describe(
-  "REQ-SOEMAIL-031: QuoteApprovedEmail template renders the required fields",
-  () => {
-    async function renderApproved(): Promise<string> {
-      return render(
-        QuoteApprovedEmail({
-          brand: { name: "Lab Acme", isWhiteLabel: true },
-          serviceOrderNumber: "OS-2026-042",
-          customerName: "Empresa Teste SA",
-          totalApprovedCents: 146000,
-        }),
-      );
-    }
-
-    it("REQ-SOEMAIL-031: includes the OS number", async () => {
-      const html = await renderApproved();
-      expect(html).toContain("OS-2026-042");
-    });
-
-    it("REQ-SOEMAIL-031: includes the approved total formatted as BRL", async () => {
-      const html = await renderApproved();
-      // 146000 cents → "R$ 1.460,00"
-      expect(html).toContain("1.460,00");
-    });
-
-    it("REQ-SOEMAIL-031: includes the customer name", async () => {
-      const html = await renderApproved();
-      expect(html).toContain("Empresa Teste SA");
-    });
-
-    it(
-      "REQ-SOEMAIL-031: totalApprovedCents=0 renders R$ 0,00 (zero case)",
-      async () => {
-        const html = await render(
-          QuoteApprovedEmail({
-            brand: { name: "Lab Acme", isWhiteLabel: true },
-            serviceOrderNumber: "OS-2026-001",
-            customerName: "Cliente",
-            totalApprovedCents: 0,
-          }),
-        );
-        expect(html).toContain("0,00");
-      },
+describe("REQ-SOEMAIL-031: QuoteApprovedEmail template renders the required fields", () => {
+  async function renderApproved(): Promise<string> {
+    return render(
+      QuoteApprovedEmail({
+        brand: { name: "Lab Acme", isWhiteLabel: true },
+        serviceOrderNumber: "OS-2026-042",
+        customerName: "Empresa Teste SA",
+        totalApprovedCents: 146000,
+      }),
     );
-  },
-);
+  }
+
+  it("REQ-SOEMAIL-031: includes the OS number", async () => {
+    const html = await renderApproved();
+    expect(html).toContain("OS-2026-042");
+  });
+
+  it("REQ-SOEMAIL-031: includes the approved total formatted as BRL", async () => {
+    const html = await renderApproved();
+    // 146000 cents → "R$ 1.460,00"
+    expect(html).toContain("1.460,00");
+  });
+
+  it("REQ-SOEMAIL-031: includes the customer name", async () => {
+    const html = await renderApproved();
+    expect(html).toContain("Empresa Teste SA");
+  });
+
+  it("REQ-SOEMAIL-031: totalApprovedCents=0 renders R$ 0,00 (zero case)", async () => {
+    const html = await render(
+      QuoteApprovedEmail({
+        brand: { name: "Lab Acme", isWhiteLabel: true },
+        serviceOrderNumber: "OS-2026-001",
+        customerName: "Cliente",
+        totalApprovedCents: 0,
+      }),
+    );
+    expect(html).toContain("0,00");
+  });
+});

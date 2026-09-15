@@ -30,7 +30,11 @@ const previousToken = process.env.ASAAS_WEBHOOK_TOKEN;
 const FIXED_NOW = new Date("2026-01-01T00:00:00.000Z");
 const FUTURE = new Date("2099-01-01T00:00:00.000Z");
 
-type SeededOffer = { offerId: string; orgId: string; providerSubscriptionId: string };
+type SeededOffer = {
+  offerId: string;
+  orgId: string;
+  providerSubscriptionId: string;
+};
 
 /** Seed org -> billing customer -> deal -> a plan-recurring offer awaiting payment. */
 async function seedActivatableOffer(orgId: string): Promise<SeededOffer> {
@@ -84,7 +88,10 @@ async function seedActivatableOffer(orgId: string): Promise<SeededOffer> {
       dueDate: FUTURE,
       paymentMethods: ["PIX"],
       termsSnapshot: {},
-      customerSnapshot: { name: `Pagador ${orgId}`, email: `${orgId}@payer.test` },
+      customerSnapshot: {
+        name: `Pagador ${orgId}`,
+        email: `${orgId}@payer.test`,
+      },
       billingCustomerId: customerRow.id,
       providerSubscriptionId,
       issuedAt: FIXED_NOW,

@@ -444,4 +444,3 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
       return c.json({ data: { id } });
     },
   );
-

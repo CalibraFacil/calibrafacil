@@ -8,9 +8,7 @@ function hasRows<T>(value: unknown): value is ExecuteResultWithRows<T> {
   }
 
   const rows = Object.fromEntries(Object.entries(value)).rows;
-  return (
-    Array.isArray(rows)
-  );
+  return Array.isArray(rows);
 }
 
 export function getExecuteRows<T>(result: unknown): T[] {

@@ -20,9 +20,10 @@ import { TransientWebhookError } from "../services/commercial/webhook-errors";
 // backstop for permanent-error acks and lost events.
 
 vi.mock("../services/commercial/reconcile-webhook", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("../services/commercial/reconcile-webhook")
-  >();
+  const actual =
+    await importOriginal<
+      typeof import("../services/commercial/reconcile-webhook")
+    >();
   return {
     ...actual,
     reconcileCommercialWebhook: vi.fn(),

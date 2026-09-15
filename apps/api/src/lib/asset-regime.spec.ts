@@ -21,9 +21,7 @@ const industrialNow = {
 };
 
 /** Base write with nothing supplied — override per case. */
-function write(
-  partial: Partial<AssetRegimeWriteInput>,
-): AssetRegimeWriteInput {
+function write(partial: Partial<AssetRegimeWriteInput>): AssetRegimeWriteInput {
   return {
     metrologyRegime: undefined,
     regulatedInterval: undefined,
@@ -61,7 +59,9 @@ describe("resolveAssetRegimeWrite", () => {
   // Keeps the current regime when no explicit regime is supplied.
   it("keeps the current regime when nothing regime-related is supplied", () => {
     const r = resolveAssetRegimeWrite(
-      write({ current: { metrologyRegime: "LEGAL", regulatedInterval: fixed24 } }),
+      write({
+        current: { metrologyRegime: "LEGAL", regulatedInterval: fixed24 },
+      }),
     );
     expect(r.metrologyRegime).toBe("LEGAL");
     expect(r.regulatedInterval).toEqual(fixed24);

@@ -32,9 +32,7 @@ export {
   OotNotificationHtml,
   type OotNotificationDocumentData,
 } from "./OotNotificationHtml.js";
-export {
-  CalibrationCertificateHtml,
-} from "./certificate/CalibrationCertificateHtml.js";
+export { CalibrationCertificateHtml } from "./certificate/CalibrationCertificateHtml.js";
 export {
   CERTIFICATE_PAGE_STYLES,
   certificateFooterHtml,

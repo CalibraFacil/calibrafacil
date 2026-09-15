@@ -591,9 +591,7 @@ function getTargetPath(
     target === "transporter" ||
     target === "payable"
   ) {
-    throw new Error(
-      "Este alvo é suportado apenas pelo provider Conta Azul",
-    );
+    throw new Error("Este alvo é suportado apenas pelo provider Conta Azul");
   }
   if (target === "service_order") return config.serviceOrderPath;
   return config.billingDocumentPath;

@@ -150,7 +150,8 @@ async function seedVerifiableCert(params: {
       labOrganizationId: orgId,
     })
     .returning({ id: customer.id });
-  if (!customerRow) throw new Error("seedVerifiableCert: customer insert failed");
+  if (!customerRow)
+    throw new Error("seedVerifiableCert: customer insert failed");
 
   const [assetTypeRow] = await db
     .insert(assetType)
@@ -160,7 +161,8 @@ async function seedVerifiableCert(params: {
       definition: [],
     })
     .returning({ id: assetType.id });
-  if (!assetTypeRow) throw new Error("seedVerifiableCert: assetType insert failed");
+  if (!assetTypeRow)
+    throw new Error("seedVerifiableCert: assetType insert failed");
 
   const [assetRow] = await db
     .insert(asset)
@@ -245,65 +247,62 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // assertions go RED (and B's data can leak through). Verified RED then
   // reverted.
   // =========================================================================
-  it(
-    "REQ-VERIFY-001: token A → A's own data only; B's data never leaks",
-    async () => {
-      const certA = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-0001",
-      });
-      const certB = await seedVerifiableCert({
-        orgId: "org-b",
-        token: VALID_UUID_B,
-        jobId: "CAL-B-0001",
-      });
+  it("REQ-VERIFY-001: token A → A's own data only; B's data never leaks", async () => {
+    const certA = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-0001",
+    });
+    const certB = await seedVerifiableCert({
+      orgId: "org-b",
+      token: VALID_UUID_B,
+      jobId: "CAL-B-0001",
+    });
 
-      // --- Lookup by A's token resolves to A's own data, B never leaking. ---
-      const resA = await verifyRouter.request(`/${certA.token}`);
-      expect(resA.status).toBe(200);
-      const bodyA: unknown = await resA.json();
-      expect(isRecord(bodyA)).toBe(true);
-      if (!isRecord(bodyA)) throw new Error("unreachable");
+    // --- Lookup by A's token resolves to A's own data, B never leaking. ---
+    const resA = await verifyRouter.request(`/${certA.token}`);
+    expect(resA.status).toBe(200);
+    const bodyA: unknown = await resA.json();
+    expect(isRecord(bodyA)).toBe(true);
+    if (!isRecord(bodyA)) throw new Error("unreachable");
 
-      expect(bodyA.valid).toBe(true);
-      expect(bodyA.jobId).toBe(certA.jobId);
-      expect(bodyA.lab).toBe(certA.labName);
-      expect(bodyA.customer).toBe(certA.customerName);
-      expect(isRecord(bodyA.asset) && bodyA.asset.name).toBe(certA.assetName);
-      expect(isRecord(bodyA.asset) && bodyA.asset.tag).toBe(certA.assetTag);
-      expect(bodyA.service).toBe(certA.serviceName);
+    expect(bodyA.valid).toBe(true);
+    expect(bodyA.jobId).toBe(certA.jobId);
+    expect(bodyA.lab).toBe(certA.labName);
+    expect(bodyA.customer).toBe(certA.customerName);
+    expect(isRecord(bodyA.asset) && bodyA.asset.name).toBe(certA.assetName);
+    expect(isRecord(bodyA.asset) && bodyA.asset.tag).toBe(certA.assetTag);
+    expect(bodyA.service).toBe(certA.serviceName);
 
-      const serializedA = JSON.stringify(bodyA);
-      expect(serializedA).not.toContain(certB.jobId);
-      expect(serializedA).not.toContain(certB.labName);
-      expect(serializedA).not.toContain(certB.customerName);
-      expect(serializedA).not.toContain(certB.assetTag);
-      expect(serializedA).not.toContain(certB.serviceName);
+    const serializedA = JSON.stringify(bodyA);
+    expect(serializedA).not.toContain(certB.jobId);
+    expect(serializedA).not.toContain(certB.labName);
+    expect(serializedA).not.toContain(certB.customerName);
+    expect(serializedA).not.toContain(certB.assetTag);
+    expect(serializedA).not.toContain(certB.serviceName);
 
-      // --- Lookup by B's token resolves to B's OWN data, A never leaking. ---
-      // Both directions are asserted so the token is provably the discriminator:
-      // a neutralized token filter (with no ORDER BY) would return the SAME
-      // physical-scan row for both tokens, so at least one direction must fail.
-      const resB = await verifyRouter.request(`/${certB.token}`);
-      expect(resB.status).toBe(200);
-      const bodyB: unknown = await resB.json();
-      expect(isRecord(bodyB)).toBe(true);
-      if (!isRecord(bodyB)) throw new Error("unreachable");
+    // --- Lookup by B's token resolves to B's OWN data, A never leaking. ---
+    // Both directions are asserted so the token is provably the discriminator:
+    // a neutralized token filter (with no ORDER BY) would return the SAME
+    // physical-scan row for both tokens, so at least one direction must fail.
+    const resB = await verifyRouter.request(`/${certB.token}`);
+    expect(resB.status).toBe(200);
+    const bodyB: unknown = await resB.json();
+    expect(isRecord(bodyB)).toBe(true);
+    if (!isRecord(bodyB)) throw new Error("unreachable");
 
-      expect(bodyB.jobId).toBe(certB.jobId);
-      expect(bodyB.lab).toBe(certB.labName);
-      expect(bodyB.customer).toBe(certB.customerName);
-      expect(isRecord(bodyB.asset) && bodyB.asset.tag).toBe(certB.assetTag);
+    expect(bodyB.jobId).toBe(certB.jobId);
+    expect(bodyB.lab).toBe(certB.labName);
+    expect(bodyB.customer).toBe(certB.customerName);
+    expect(isRecord(bodyB.asset) && bodyB.asset.tag).toBe(certB.assetTag);
 
-      const serializedB = JSON.stringify(bodyB);
-      expect(serializedB).not.toContain(certA.jobId);
-      expect(serializedB).not.toContain(certA.labName);
-      expect(serializedB).not.toContain(certA.customerName);
-      expect(serializedB).not.toContain(certA.assetTag);
-      expect(serializedB).not.toContain(certA.serviceName);
-    },
-  );
+    const serializedB = JSON.stringify(bodyB);
+    expect(serializedB).not.toContain(certA.jobId);
+    expect(serializedB).not.toContain(certA.labName);
+    expect(serializedB).not.toContain(certA.customerName);
+    expect(serializedB).not.toContain(certA.assetTag);
+    expect(serializedB).not.toContain(certA.serviceName);
+  });
 
   // =========================================================================
   // REQ-VERIFY-002
@@ -316,30 +315,27 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // 200 { valid:true } → this 404 / valid:false assertion goes RED. Verified
   // RED then reverted.
   // =========================================================================
-  it(
-    "REQ-VERIFY-002: unknown valid-UUID token → 404 { valid:false }, no leak",
-    async () => {
-      const seeded = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-0001",
-      });
+  it("REQ-VERIFY-002: unknown valid-UUID token → 404 { valid:false }, no leak", async () => {
+    const seeded = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-0001",
+    });
 
-      const res = await verifyRouter.request(`/${UNKNOWN_UUID}`);
-      expect(res.status).toBe(404);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
+    const res = await verifyRouter.request(`/${UNKNOWN_UUID}`);
+    expect(res.status).toBe(404);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
 
-      expect(body.valid).toBe(false);
-      // No internal/other-cert data leaked through the not-found response.
-      expect(body.jobId).toBeUndefined();
-      const serialized = JSON.stringify(body);
-      expect(serialized).not.toContain(seeded.jobId);
-      expect(serialized).not.toContain(seeded.customerName);
-      expect(serialized).not.toContain(seeded.assetTag);
-    },
-  );
+    expect(body.valid).toBe(false);
+    // No internal/other-cert data leaked through the not-found response.
+    expect(body.jobId).toBeUndefined();
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain(seeded.jobId);
+    expect(serialized).not.toContain(seeded.customerName);
+    expect(serialized).not.toContain(seeded.assetTag);
+  });
 
   // =========================================================================
   // REQ-VERIFY-002b
@@ -350,37 +346,31 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // Mutation proof: removing the inArray(status, ...) filter makes the DRAFT
   // resolvable → 200 → this 404 assertion goes RED.
   // =========================================================================
-  it(
-    "REQ-VERIFY-002b: DRAFT cert (real token) is not publicly verifiable → 404",
-    async () => {
-      const draft = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-DRAFT",
-        status: "DRAFT",
-      });
+  it("REQ-VERIFY-002b: DRAFT cert (real token) is not publicly verifiable → 404", async () => {
+    const draft = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-DRAFT",
+      status: "DRAFT",
+    });
 
-      const res = await verifyRouter.request(`/${draft.token}`);
-      expect(res.status).toBe(404);
-      const body: unknown = await res.json();
-      expect(isRecord(body) && body.valid).toBe(false);
-    },
-  );
+    const res = await verifyRouter.request(`/${draft.token}`);
+    expect(res.status).toBe(404);
+    const body: unknown = await res.json();
+    expect(isRecord(body) && body.valid).toBe(false);
+  });
 
   // =========================================================================
   // REQ-VERIFY-002c
   // A malformed (non-UUID) token is rejected at the format gate before any DB
   // lookup: 400 "Token invalido". This bounds enumeration on the public route.
   // =========================================================================
-  it(
-    "REQ-VERIFY-002c: malformed (non-UUID) token → 400 before lookup",
-    async () => {
-      const res = await verifyRouter.request("/not-a-uuid");
-      expect(res.status).toBe(400);
-      const body: unknown = await res.json();
-      expect(isRecord(body) && body.error).toBe("Token invalido");
-    },
-  );
+  it("REQ-VERIFY-002c: malformed (non-UUID) token → 400 before lookup", async () => {
+    const res = await verifyRouter.request("/not-a-uuid");
+    expect(res.status).toBe(400);
+    const body: unknown = await res.json();
+    expect(isRecord(body) && body.error).toBe("Token invalido");
+  });
 
   // =========================================================================
   // REQ-VERIFY-003
@@ -393,65 +383,64 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // source away from "issue" and drops the stored `overall:"VALID"` →
   // assertions go RED. Verified RED then reverted.
   // =========================================================================
-  it(
-    "REQ-VERIFY-003: stored signature_verdict is surfaced verbatim (source=issue)",
-    async () => {
-      const computedAt = "2026-01-02T03:04:05.000Z";
-      const storedVerdict = {
-        hashMatch: true,
-        signatureCryptographicallyValid: true,
-        chainValid: true,
-        signerChainsToIcpRoot: true,
-        certNotExpiredAtCheckDate: true,
-        signaturePresent: true,
-        signer: {
-          commonName: "FULANO DE TAL:12345678900",
-          cpfCnpj: "12345678900",
-          certificateSerial: "0A1B2C3D",
-        },
-        overall: "VALID",
-        details: ["Assinatura íntegra e cadeia ICP-Brasil válida."],
-        computedAt,
-      } satisfies NonNullable<typeof calibrationJob.$inferInsert.signatureVerdict>;
+  it("REQ-VERIFY-003: stored signature_verdict is surfaced verbatim (source=issue)", async () => {
+    const computedAt = "2026-01-02T03:04:05.000Z";
+    const storedVerdict = {
+      hashMatch: true,
+      signatureCryptographicallyValid: true,
+      chainValid: true,
+      signerChainsToIcpRoot: true,
+      certNotExpiredAtCheckDate: true,
+      signaturePresent: true,
+      signer: {
+        commonName: "FULANO DE TAL:12345678900",
+        cpfCnpj: "12345678900",
+        certificateSerial: "0A1B2C3D",
+      },
+      overall: "VALID",
+      details: ["Assinatura íntegra e cadeia ICP-Brasil válida."],
+      computedAt,
+    } satisfies NonNullable<
+      typeof calibrationJob.$inferInsert.signatureVerdict
+    >;
 
-      const cert = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-SIGNED",
-        signatureMetadata: {
-          signedAt: "2026-01-02T03:00:00.000Z",
-          signerCertificateSerial: "0A1B2C3D",
-          signerName: "FULANO DE TAL",
-          signerCpfCnpj: "12345678900",
-          pdfHash:
-            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-          ltvEnabled: true,
-        },
-        signatureVerdict: storedVerdict,
-      });
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-SIGNED",
+      signatureMetadata: {
+        signedAt: "2026-01-02T03:00:00.000Z",
+        signerCertificateSerial: "0A1B2C3D",
+        signerName: "FULANO DE TAL",
+        signerCpfCnpj: "12345678900",
+        pdfHash:
+          "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        ltvEnabled: true,
+      },
+      signatureVerdict: storedVerdict,
+    });
 
-      const res = await verifyRouter.request(`/${cert.token}/signature`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
+    const res = await verifyRouter.request(`/${cert.token}/signature`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
 
-      expect(body.signed).toBe(true);
-      // Served from the at-issue stored verdict, no R2 round-trip.
-      expect(body.source).toBe("issue");
-      expect(body.computedAt).toBe(computedAt);
-      expect(isRecord(body.verdict)).toBe(true);
-      if (!isRecord(body.verdict)) throw new Error("unreachable");
-      // The stored verdict, verbatim (computedAt is hoisted out of `verdict`).
-      expect(body.verdict.overall).toBe("VALID");
-      expect(body.verdict.hashMatch).toBe(true);
-      expect(body.verdict.signerChainsToIcpRoot).toBe(true);
-      expect(isRecord(body.verdict.signer) && body.verdict.signer.cpfCnpj).toBe(
-        "12345678900",
-      );
-      expect(body.verdict.computedAt).toBeUndefined();
-    },
-  );
+    expect(body.signed).toBe(true);
+    // Served from the at-issue stored verdict, no R2 round-trip.
+    expect(body.source).toBe("issue");
+    expect(body.computedAt).toBe(computedAt);
+    expect(isRecord(body.verdict)).toBe(true);
+    if (!isRecord(body.verdict)) throw new Error("unreachable");
+    // The stored verdict, verbatim (computedAt is hoisted out of `verdict`).
+    expect(body.verdict.overall).toBe("VALID");
+    expect(body.verdict.hashMatch).toBe(true);
+    expect(body.verdict.signerChainsToIcpRoot).toBe(true);
+    expect(isRecord(body.verdict.signer) && body.verdict.signer.cpfCnpj).toBe(
+      "12345678900",
+    );
+    expect(body.verdict.computedAt).toBeUndefined();
+  });
 
   // =========================================================================
   // REQ-VERIFY-003b
@@ -459,25 +448,22 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // GET /:token/signature — never 500s, no R2 access. Guards the unsigned
   // branch of the same surface.
   // =========================================================================
-  it(
-    "REQ-VERIFY-003b: unsigned cert → signature endpoint reports signed:false",
-    async () => {
-      const cert = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-UNSIGNED",
-      });
+  it("REQ-VERIFY-003b: unsigned cert → signature endpoint reports signed:false", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-UNSIGNED",
+    });
 
-      const res = await verifyRouter.request(`/${cert.token}/signature`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
-      expect(body.signed).toBe(false);
-      expect(body.verdict).toBeNull();
-      expect(body.source).toBeNull();
-    },
-  );
+    const res = await verifyRouter.request(`/${cert.token}/signature`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
+    expect(body.signed).toBe(false);
+    expect(body.verdict).toBeNull();
+    expect(body.source).toBeNull();
+  });
 
   // =========================================================================
   // REQ-SEC-VER-001 (SEC-07)
@@ -494,44 +480,41 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // supersedesId query) makes the REJECTED original resolve → `supersedes`
   // becomes non-null → the first assertion below goes RED.
   // =========================================================================
-  it(
-    "REQ-SEC-VER-001: supersedesInfo omits a non-terminal-status original",
-    async () => {
-      // The "original" certificate this amendment corrects — stuck in a
-      // non-terminal state (e.g. reopened for rework after the amendment was
-      // already approved). Its own token is irrelevant to this assertion; it
-      // must not be reachable via the amendment's `supersedes` field either.
-      const original = await seedVerifiableCert({
-        orgId: "org-orig",
-        token: VALID_UUID_B,
-        jobId: "CAL-A-ORIG-NONTERMINAL",
-        status: "REJECTED",
-      });
+  it("REQ-SEC-VER-001: supersedesInfo omits a non-terminal-status original", async () => {
+    // The "original" certificate this amendment corrects — stuck in a
+    // non-terminal state (e.g. reopened for rework after the amendment was
+    // already approved). Its own token is irrelevant to this assertion; it
+    // must not be reachable via the amendment's `supersedes` field either.
+    const original = await seedVerifiableCert({
+      orgId: "org-orig",
+      token: VALID_UUID_B,
+      jobId: "CAL-A-ORIG-NONTERMINAL",
+      status: "REJECTED",
+    });
 
-      const amendment = await seedVerifiableCert({
-        orgId: "org-amend",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-AMENDMENT",
-        status: "APPROVED",
-        supersedesId: original.jobRowId,
-      });
+    const amendment = await seedVerifiableCert({
+      orgId: "org-amend",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-AMENDMENT",
+      status: "APPROVED",
+      supersedesId: original.jobRowId,
+    });
 
-      const res = await verifyRouter.request(`/${amendment.token}`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
+    const res = await verifyRouter.request(`/${amendment.token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
 
-      // isAmendment reflects the raw supersedesId column (unfiltered) — only
-      // the *resolved* `supersedes` payload is status-gated.
-      expect(body.isAmendment).toBe(true);
-      expect(body.supersedes).toBeNull();
+    // isAmendment reflects the raw supersedesId column (unfiltered) — only
+    // the *resolved* `supersedes` payload is status-gated.
+    expect(body.isAmendment).toBe(true);
+    expect(body.supersedes).toBeNull();
 
-      const serialized = JSON.stringify(body);
-      expect(serialized).not.toContain(original.jobId);
-      expect(serialized).not.toContain(original.token);
-    },
-  );
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain(original.jobId);
+    expect(serialized).not.toContain(original.token);
+  });
 
   // =========================================================================
   // REQ-SEC-VER-001 (positive control)
@@ -539,37 +522,34 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // `supersedesInfo` — the fix must not over-filter and break the documented,
   // legitimate amendment-chain-navigation case.
   // =========================================================================
-  it(
-    "REQ-SEC-VER-001: supersedesInfo still includes a terminal-status original",
-    async () => {
-      const original = await seedVerifiableCert({
-        orgId: "org-orig",
-        token: VALID_UUID_B,
-        jobId: "CAL-A-ORIG-TERMINAL",
-        status: "SUPERSEDED",
-      });
+  it("REQ-SEC-VER-001: supersedesInfo still includes a terminal-status original", async () => {
+    const original = await seedVerifiableCert({
+      orgId: "org-orig",
+      token: VALID_UUID_B,
+      jobId: "CAL-A-ORIG-TERMINAL",
+      status: "SUPERSEDED",
+    });
 
-      const amendment = await seedVerifiableCert({
-        orgId: "org-amend",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-AMENDMENT-2",
-        status: "APPROVED",
-        supersedesId: original.jobRowId,
-      });
+    const amendment = await seedVerifiableCert({
+      orgId: "org-amend",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-AMENDMENT-2",
+      status: "APPROVED",
+      supersedesId: original.jobRowId,
+    });
 
-      const res = await verifyRouter.request(`/${amendment.token}`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
+    const res = await verifyRouter.request(`/${amendment.token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
 
-      expect(body.isAmendment).toBe(true);
-      expect(isRecord(body.supersedes)).toBe(true);
-      if (!isRecord(body.supersedes)) throw new Error("unreachable");
-      expect(body.supersedes.jobId).toBe(original.jobId);
-      expect(body.supersedes.verificationToken).toBe(original.token);
-    },
-  );
+    expect(body.isAmendment).toBe(true);
+    expect(isRecord(body.supersedes)).toBe(true);
+    if (!isRecord(body.supersedes)) throw new Error("unreachable");
+    expect(body.supersedes.jobId).toBe(original.jobId);
+    expect(body.supersedes.verificationToken).toBe(original.token);
+  });
 
   // =========================================================================
   // happy-path
@@ -577,87 +557,81 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   // accredited, signed cert — including the accreditation seal (lab active +
   // numbered AND method in accredited scope) and the digital-signature block.
   // =========================================================================
-  it(
-    "happy-path: GET /:token returns the documented public shape (accredited + signed)",
-    async () => {
-      const cert = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-FULL",
-        accreditationActive: true,
-        accreditationNumber: "9999",
-        methodAccreditedScope: true,
-        signatureMetadata: {
-          signedAt: "2026-01-02T03:00:00.000Z",
-          signerCertificateSerial: "DEADBEEF",
-          signerName: "SIGNER NAME",
-          signerCpfCnpj: "98765432100",
-          pdfHash:
-            "1111111111111111111111111111111111111111111111111111111111111111",
-          ltvEnabled: true,
-        },
-      });
+  it("happy-path: GET /:token returns the documented public shape (accredited + signed)", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-FULL",
+      accreditationActive: true,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+      signatureMetadata: {
+        signedAt: "2026-01-02T03:00:00.000Z",
+        signerCertificateSerial: "DEADBEEF",
+        signerName: "SIGNER NAME",
+        signerCpfCnpj: "98765432100",
+        pdfHash:
+          "1111111111111111111111111111111111111111111111111111111111111111",
+        ltvEnabled: true,
+      },
+    });
 
-      const res = await verifyRouter.request(`/${cert.token}`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      expect(isRecord(body)).toBe(true);
-      if (!isRecord(body)) throw new Error("unreachable");
+    const res = await verifyRouter.request(`/${cert.token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
 
-      expect(body.valid).toBe(true);
-      expect(body.jobId).toBe(cert.jobId);
-      expect(body.status).toBe("APPROVED");
-      expect(body.lab).toBe(cert.labName);
-      expect(body.customer).toBe(cert.customerName);
-      expect(body.service).toBe(cert.serviceName);
+    expect(body.valid).toBe(true);
+    expect(body.jobId).toBe(cert.jobId);
+    expect(body.status).toBe("APPROVED");
+    expect(body.lab).toBe(cert.labName);
+    expect(body.customer).toBe(cert.customerName);
+    expect(body.service).toBe(cert.serviceName);
 
-      // Accreditation seal: lab active+numbered AND method in scope → number
-      // surfaced in normalized digits-only form.
-      expect(isRecord(body.accreditation)).toBe(true);
-      if (!isRecord(body.accreditation)) throw new Error("unreachable");
-      expect(body.accreditation.accredited).toBe(true);
-      expect(body.accreditation.number).toBe("9999");
+    // Accreditation seal: lab active+numbered AND method in scope → number
+    // surfaced in normalized digits-only form.
+    expect(isRecord(body.accreditation)).toBe(true);
+    if (!isRecord(body.accreditation)) throw new Error("unreachable");
+    expect(body.accreditation.accredited).toBe(true);
+    expect(body.accreditation.number).toBe("9999");
 
-      // Digital-signature block — ISO 17025 7.8.2.1(q).
-      expect(isRecord(body.digitalSignature)).toBe(true);
-      if (!isRecord(body.digitalSignature)) throw new Error("unreachable");
-      expect(body.digitalSignature.signed).toBe(true);
-      expect(body.digitalSignature.signerName).toBe("SIGNER NAME");
-      expect(body.digitalSignature.signerCpfCnpj).toBe("98765432100");
+    // Digital-signature block — ISO 17025 7.8.2.1(q).
+    expect(isRecord(body.digitalSignature)).toBe(true);
+    if (!isRecord(body.digitalSignature)) throw new Error("unreachable");
+    expect(body.digitalSignature.signed).toBe(true);
+    expect(body.digitalSignature.signerName).toBe("SIGNER NAME");
+    expect(body.digitalSignature.signerCpfCnpj).toBe("98765432100");
 
-      // Amendment fields are present and null for an original certificate.
-      expect(body.isSuperseded).toBe(false);
-      expect(body.isAmendment).toBe(false);
-      expect(body.supersededBy).toBeNull();
-      expect(body.supersedes).toBeNull();
-    },
-  );
+    // Amendment fields are present and null for an original certificate.
+    expect(body.isSuperseded).toBe(false);
+    expect(body.isAmendment).toBe(false);
+    expect(body.supersededBy).toBeNull();
+    expect(body.supersedes).toBeNull();
+  });
 
   // =========================================================================
   // happy-path (unaccredited)
   // When the lab is NOT accredited, the seal must be suppressed and the number
   // withheld even though every other public field is returned.
   // =========================================================================
-  it(
-    "happy-path: unaccredited lab → accreditation seal suppressed, number null",
-    async () => {
-      const cert = await seedVerifiableCert({
-        orgId: "org-a",
-        token: VALID_UUID_A,
-        jobId: "CAL-A-NOACC",
-        accreditationActive: false,
-        accreditationNumber: "9999",
-        methodAccreditedScope: true,
-      });
+  it("happy-path: unaccredited lab → accreditation seal suppressed, number null", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-NOACC",
+      accreditationActive: false,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+    });
 
-      const res = await verifyRouter.request(`/${cert.token}`);
-      expect(res.status).toBe(200);
-      const body: unknown = await res.json();
-      if (!isRecord(body) || !isRecord(body.accreditation)) {
-        throw new Error("unexpected body shape");
-      }
-      expect(body.accreditation.accredited).toBe(false);
-      expect(body.accreditation.number).toBeNull();
-    },
-  );
+    const res = await verifyRouter.request(`/${cert.token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    if (!isRecord(body) || !isRecord(body.accreditation)) {
+      throw new Error("unexpected body shape");
+    }
+    expect(body.accreditation.accredited).toBe(false);
+    expect(body.accreditation.number).toBeNull();
+  });
 });

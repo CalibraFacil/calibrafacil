@@ -265,7 +265,9 @@ describe("verifyPdf with injected fetchCrl (end-to-end)", () => {
     expect(result.certificateRevoked).toBeNull();
     expect(result.overall).toBe("VALID");
     expect(
-      result.details.some((line) => line.includes("Não foi possível consultar")),
+      result.details.some((line) =>
+        line.includes("Não foi possível consultar"),
+      ),
     ).toBe(true);
   });
 

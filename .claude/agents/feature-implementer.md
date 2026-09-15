@@ -36,7 +36,7 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
    `pnpm --dir <pkg> test:run <path>.spec.ts -t "REQ-..."`.
    (e.g. `pnpm --dir apps/api test:run src/routes/foo.spec.ts -t "REQ-CAL-001"`.)
    - **Rendered artifacts must be tested against REAL output, not a mock.** When a
-     criterion says an email / PDF / template / document *contains* or *renders*
+     criterion says an email / PDF / template / document _contains_ or _renders_
      specific fields or values, render the real component to output (e.g.
      `render(...)` HTML) and assert the values APPEAR. Do NOT mock the template
      and assert the props passed to it — a dropped field still passes that, so the
@@ -70,6 +70,7 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
 ## Gates before you report done
 
 Run and report exit status for each:
+
 - `pnpm --dir <pkg> test:run <files>` (the new + nearest existing specs)
 - `pnpm lint`
 - `pnpm check-types`

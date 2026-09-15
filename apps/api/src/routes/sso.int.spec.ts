@@ -117,7 +117,9 @@ describe("ssoRouter — real DB + real middleware", () => {
     });
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -150,7 +152,9 @@ describe("ssoRouter — real DB + real middleware", () => {
     });
 
     loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -174,7 +178,9 @@ describe("ssoRouter — real DB + real middleware", () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
 
     expect(res.status).toBe(403);
   });
@@ -183,7 +189,9 @@ describe("ssoRouter — real DB + real middleware", () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -262,7 +270,9 @@ describe("ssoRouter — real DB + real middleware", () => {
   // ===========================================================================
   it("REQ-SSO-003: GET /providers unauthenticated -> 401", async () => {
     logout();
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
     expect(res.status).toBe(401);
   });
 
@@ -488,7 +498,9 @@ describe("ssoRouter — real DB + real middleware", () => {
     });
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await ssoRouter.request("/providers", { headers: JSON_HEADERS });
+    const res = await ssoRouter.request("/providers", {
+      headers: JSON_HEADERS,
+    });
 
     expect(res.status).toBe(200);
     const body = await res.json();

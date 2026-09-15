@@ -304,7 +304,8 @@ export const backofficeCommercialRouter = new Hono<{
       filters.push(eq(commercialOffer.status, parsedStatus.data));
     if (dealId) filters.push(eq(commercialOffer.dealId, dealId));
     const parsedKind = CommercialOfferKindSchema.safeParse(kind);
-    if (parsedKind.success) filters.push(eq(commercialOffer.kind, parsedKind.data));
+    if (parsedKind.success)
+      filters.push(eq(commercialOffer.kind, parsedKind.data));
 
     const rows = await db
       .select()

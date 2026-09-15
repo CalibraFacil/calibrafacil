@@ -681,96 +681,93 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // pre-existing rows too, so the deletion left no trace via this surface
   // either (mirrors the dashboard-route proof in customers.int.spec.ts).
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010a: DELETE /customers/:id (public API) keeps each asset's audit trail (+ fresh 'delete' row) after the cascade",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a" });
-      await seedApiEntitlement({ orgId: orgA.orgId });
-      const { rawKey } = await seedApiKey({
-        orgId: orgA.orgId,
-        userId: orgA.userId,
-        keyId: "key-customers-write",
-        scopes: ["customers:write"],
-      });
+  it("REQ-CMP-AUD-010a: DELETE /customers/:id (public API) keeps each asset's audit trail (+ fresh 'delete' row) after the cascade", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-customers-write",
+      scopes: ["customers:write"],
+    });
 
-      const customerId = await seedCustomer({
-        labOrgId: orgA.orgId,
-        clientOrgId: "client-aud-papi",
-        name: "Cliente Auditável (API)",
-      });
+    const customerId = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-aud-papi",
+      name: "Cliente Auditável (API)",
+    });
 
-      const assetTypeId = await seedAssetType("balanca-aud-papi");
-      const assetA = await seedAsset({
-        unitId: orgA.unitId,
-        customerId,
-        assetTypeId,
-        tag: "PAPI-AUD-A",
-      });
-      const assetB = await seedAsset({
-        unitId: orgA.unitId,
-        customerId,
-        assetTypeId,
-        tag: "PAPI-AUD-B",
-      });
+    const assetTypeId = await seedAssetType("balanca-aud-papi");
+    const assetA = await seedAsset({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId,
+      tag: "PAPI-AUD-A",
+    });
+    const assetB = await seedAsset({
+      unitId: orgA.unitId,
+      customerId,
+      assetTypeId,
+      tag: "PAPI-AUD-B",
+    });
 
-      // Pre-existing history for each asset (would be cascade-erased today).
-      await db.insert(assetAuditLog).values([
-        {
-          assetId: assetA,
-          action: "create",
-          changes: { asset: { old: null, new: { tag: "PAPI-AUD-A" } } },
-          performedBy: orgA.userId,
-        },
-        {
-          assetId: assetB,
-          action: "create",
-          changes: { asset: { old: null, new: { tag: "PAPI-AUD-B" } } },
-          performedBy: orgA.userId,
-        },
-      ]);
+    // Pre-existing history for each asset (would be cascade-erased today).
+    await db.insert(assetAuditLog).values([
+      {
+        assetId: assetA,
+        action: "create",
+        changes: { asset: { old: null, new: { tag: "PAPI-AUD-A" } } },
+        performedBy: orgA.userId,
+      },
+      {
+        assetId: assetB,
+        action: "create",
+        changes: { asset: { old: null, new: { tag: "PAPI-AUD-B" } } },
+        performedBy: orgA.userId,
+      },
+    ]);
 
-      const res = await publicApiV2Router.request(`/customers/${customerId}`, {
-        method: "DELETE",
-        headers: {
-          "x-api-key": rawKey,
-          "idempotency-key": `del-customer-${customerId}`,
-        },
-      });
-      expect(res.status).toBe(200);
+    const res = await publicApiV2Router.request(`/customers/${customerId}`, {
+      method: "DELETE",
+      headers: {
+        "x-api-key": rawKey,
+        "idempotency-key": `del-customer-${customerId}`,
+      },
+    });
+    expect(res.status).toBe(200);
 
-      // The customer and its cascaded assets are gone…
-      const remainingCustomer = await db
+    // The customer and its cascaded assets are gone…
+    const remainingCustomer = await db
+      .select()
+      .from(customer)
+      .where(eq(customer.id, customerId));
+    expect(remainingCustomer).toHaveLength(0);
+    const remainingAssets = await db
+      .select()
+      .from(asset)
+      .where(inArray(asset.id, [assetA, assetB]));
+    expect(remainingAssets).toHaveLength(0);
+
+    // …but each asset's audit trail SURVIVES: the pre-existing 'create' row
+    // AND a fresh 'delete' row inserted by the route before the cascade.
+    for (const assetId of [assetA, assetB]) {
+      const logs = await db
         .select()
-        .from(customer)
-        .where(eq(customer.id, customerId));
-      expect(remainingCustomer).toHaveLength(0);
-      const remainingAssets = await db
-        .select()
-        .from(asset)
-        .where(inArray(asset.id, [assetA, assetB]));
-      expect(remainingAssets).toHaveLength(0);
+        .from(assetAuditLog)
+        .where(eq(assetAuditLog.assetId, assetId));
+      const actions = logs.map((l) => l.action).toSorted();
+      expect(actions).toEqual(["create", "delete"]);
 
-      // …but each asset's audit trail SURVIVES: the pre-existing 'create' row
-      // AND a fresh 'delete' row inserted by the route before the cascade.
-      for (const assetId of [assetA, assetB]) {
-        const logs = await db
-          .select()
-          .from(assetAuditLog)
-          .where(eq(assetAuditLog.assetId, assetId));
-        const actions = logs.map((l) => l.action).toSorted();
-        expect(actions).toEqual(["create", "delete"]);
-
-        const deleteRow = logs.find((l) => l.action === "delete");
-        // apiKey.createdBy — the actor attributed to an integrator mutation.
-        expect(deleteRow?.performedBy).toBe(orgA.userId);
-        expect(deleteRow?.performedAt).toBeInstanceOf(Date);
-        // The 'delete' row captures the full pre-delete asset row (old) → null.
-        expect(deleteRow?.changes).toMatchObject({
-          asset: { old: { id: assetId }, new: null },
-        });
-      }
-    },
-  );
+      const deleteRow = logs.find((l) => l.action === "delete");
+      // apiKey.createdBy — the actor attributed to an integrator mutation.
+      expect(deleteRow?.performedBy).toBe(orgA.userId);
+      expect(deleteRow?.performedAt).toBeInstanceOf(Date);
+      // The 'delete' row captures the full pre-delete asset row (old) → null.
+      expect(deleteRow?.changes).toMatchObject({
+        asset: { old: { id: assetId }, new: null },
+      });
+    }
+  });
 
   // =========================================================================
   // REQ-CMP-AUD-010a (public API, cross-tenant guard): an org-A key must NOT
@@ -779,67 +776,61 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // request (404) BEFORE any asset is touched, so org B's asset trail is
   // untouched — zero audit rows written, not even a spurious 'delete' row.
   // =========================================================================
-  it(
-    "REQ-CMP-AUD-010a: DELETE /customers/:id (public API) cross-tenant — org A key on org B customer → 404, no asset audit rows written",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a" });
-      const orgB = await seedOrg({ orgId: "org-b" });
-      await seedApiEntitlement({ orgId: orgA.orgId });
-      const { rawKey } = await seedApiKey({
-        orgId: orgA.orgId,
-        userId: orgA.userId,
-        keyId: "key-a-cross-delete",
-        scopes: ["customers:write"],
-      });
+  it("REQ-CMP-AUD-010a: DELETE /customers/:id (public API) cross-tenant — org A key on org B customer → 404, no asset audit rows written", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const orgB = await seedOrg({ orgId: "org-b" });
+    await seedApiEntitlement({ orgId: orgA.orgId });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-a-cross-delete",
+      scopes: ["customers:write"],
+    });
 
-      const customerBId = await seedCustomer({
-        labOrgId: orgB.orgId,
-        clientOrgId: "client-b-papi",
-        name: "Beta Industries (API)",
-      });
-      const assetTypeId = await seedAssetType("balanca-b-papi");
-      const assetB = await seedAsset({
-        unitId: orgB.unitId,
-        customerId: customerBId,
-        assetTypeId,
-        tag: "PAPI-B-ASSET",
-      });
+    const customerBId = await seedCustomer({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b-papi",
+      name: "Beta Industries (API)",
+    });
+    const assetTypeId = await seedAssetType("balanca-b-papi");
+    const assetB = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: customerBId,
+      assetTypeId,
+      tag: "PAPI-B-ASSET",
+    });
 
-      const res = await publicApiV2Router.request(
-        `/customers/${customerBId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "x-api-key": rawKey,
-            "idempotency-key": `del-customer-cross-${customerBId}`,
-          },
-        },
-      );
+    const res = await publicApiV2Router.request(`/customers/${customerBId}`, {
+      method: "DELETE",
+      headers: {
+        "x-api-key": rawKey,
+        "idempotency-key": `del-customer-cross-${customerBId}`,
+      },
+    });
 
-      // resolveExternalResourceId returns the raw numeric id (org-agnostic);
-      // the handler's own SELECT scoped by labOrganizationId is what rejects
-      // org B's customer — 404, matching REQ-PAPI-005's cross-tenant pattern.
-      expect(res.status).toBe(404);
+    // resolveExternalResourceId returns the raw numeric id (org-agnostic);
+    // the handler's own SELECT scoped by labOrganizationId is what rejects
+    // org B's customer — 404, matching REQ-PAPI-005's cross-tenant pattern.
+    expect(res.status).toBe(404);
 
-      // Org B's customer + asset are UNTOUCHED.
-      const stillThereCustomer = await db
-        .select()
-        .from(customer)
-        .where(eq(customer.id, customerBId));
-      expect(stillThereCustomer).toHaveLength(1);
-      const stillThereAsset = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetB));
-      expect(stillThereAsset).toHaveLength(1);
+    // Org B's customer + asset are UNTOUCHED.
+    const stillThereCustomer = await db
+      .select()
+      .from(customer)
+      .where(eq(customer.id, customerBId));
+    expect(stillThereCustomer).toHaveLength(1);
+    const stillThereAsset = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetB));
+    expect(stillThereAsset).toHaveLength(1);
 
-      // No audit rows were written for org B's asset — the cross-tenant guard
-      // fires BEFORE any delete-audit insert would happen.
-      const logs = await db
-        .select()
-        .from(assetAuditLog)
-        .where(eq(assetAuditLog.assetId, assetB));
-      expect(logs).toHaveLength(0);
-    },
-  );
+    // No audit rows were written for org B's asset — the cross-tenant guard
+    // fires BEFORE any delete-audit insert would happen.
+    const logs = await db
+      .select()
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.assetId, assetB));
+    expect(logs).toHaveLength(0);
+  });
 });

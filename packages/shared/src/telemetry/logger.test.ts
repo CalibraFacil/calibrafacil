@@ -5,7 +5,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function lastLine(spy: { mock: { calls: unknown[][] } }): Record<string, unknown> {
+function lastLine(spy: {
+  mock: { calls: unknown[][] };
+}): Record<string, unknown> {
   const call = spy.mock.calls.at(-1);
   return JSON.parse(String(call?.[0]));
 }

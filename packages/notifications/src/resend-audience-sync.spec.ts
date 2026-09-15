@@ -202,7 +202,9 @@ describe("REQ-SYNC-003: suppression-aware", () => {
     const fetchImpl = okFetch();
 
     await syncLabUsersToResendAudience(fullEnv(), {
-      loadMembers: async () => [labRow({ email: "ban@lab.test", banned: true })],
+      loadMembers: async () => [
+        labRow({ email: "ban@lab.test", banned: true }),
+      ],
       isSuppressed: async () => false,
       fetchImpl,
     });
@@ -277,7 +279,11 @@ describe("REQ-SYNC-006: safety gate (default OFF)", () => {
 
     await syncLabUsersToResendAudience(
       fullEnv({ MARKETING_CONTACT_SYNC_ENABLED: "1" }),
-      { loadMembers: async () => [labRow()], isSuppressed: async () => false, fetchImpl },
+      {
+        loadMembers: async () => [labRow()],
+        isSuppressed: async () => false,
+        fetchImpl,
+      },
     );
 
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -288,7 +294,11 @@ describe("REQ-SYNC-006: safety gate (default OFF)", () => {
 
     const result = await syncLabUsersToResendAudience(
       fullEnv({ RESEND_AUDIENCE_ID: undefined }),
-      { loadMembers: async () => [labRow()], isSuppressed: async () => false, fetchImpl },
+      {
+        loadMembers: async () => [labRow()],
+        isSuppressed: async () => false,
+        fetchImpl,
+      },
     );
 
     expect(result.enabled).toBe(false);
@@ -300,7 +310,11 @@ describe("REQ-SYNC-006: safety gate (default OFF)", () => {
 
     const result = await syncLabUsersToResendAudience(
       fullEnv({ RESEND_TOPIC_DICAS_ID: undefined }),
-      { loadMembers: async () => [labRow()], isSuppressed: async () => false, fetchImpl },
+      {
+        loadMembers: async () => [labRow()],
+        isSuppressed: async () => false,
+        fetchImpl,
+      },
     );
 
     expect(result.enabled).toBe(false);

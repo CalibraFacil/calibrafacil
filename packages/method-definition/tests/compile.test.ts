@@ -1660,10 +1660,17 @@ describe("compileMethodDraft", () => {
         formulas: [],
         acceptanceCriteria: [],
         previewScenarios: [
-          { key: "nominal", label: "Nominal", inputs: { indication: "10", reference: "10" } },
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { indication: "10", reference: "10" },
+          },
         ],
         measurementModels: [
-          { ...directModel(), options: { correlatedDegreesOfFreedom: "diagonal" } },
+          {
+            ...directModel(),
+            options: { correlatedDegreesOfFreedom: "diagonal" },
+          },
           { ...directModel(), key: "model_default" },
         ],
       }),
@@ -1682,7 +1689,11 @@ describe("compileMethodDraft", () => {
           formulas: [],
           acceptanceCriteria: [],
           previewScenarios: [
-            { key: "nominal", label: "Nominal", inputs: { indication: "10", reference: "10" } },
+            {
+              key: "nominal",
+              label: "Nominal",
+              inputs: { indication: "10", reference: "10" },
+            },
           ],
           measurementModels: [
             options ? { ...directModel(), options } : directModel(),
@@ -1695,7 +1706,9 @@ describe("compileMethodDraft", () => {
       return result.method.measurementModels[0]?.modelFingerprint;
     };
 
-    const generalized = compileWith({ correlatedDegreesOfFreedom: "generalized" });
+    const generalized = compileWith({
+      correlatedDegreesOfFreedom: "generalized",
+    });
     const diagonal = compileWith({ correlatedDegreesOfFreedom: "diagonal" });
     expect(generalized).toBeDefined();
     expect(generalized).not.toBe(diagonal);
@@ -2819,7 +2832,10 @@ describe("executeCompiledMethod — engine contract guard", () => {
   it("refuses to execute when the numeric contract changed under the same version", () => {
     const compiled = compileMethodDraft(validDraft(), {
       engine: fakeEngine,
-      engineMetadata: { ...metadata, optionsFingerprint: "engine-options:other" },
+      engineMetadata: {
+        ...metadata,
+        optionsFingerprint: "engine-options:other",
+      },
     });
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) throw new Error("compile failed");
@@ -2845,7 +2861,9 @@ describe("executeCompiledMethod — engine contract guard", () => {
     const current = compiledWith("fake-test");
     // The normalized text carries the engine block, so it differs by design;
     // the method definition around it is what must match.
-    expect(current.normalizedMethodJson).not.toBe(snapshot.normalizedMethodJson);
+    expect(current.normalizedMethodJson).not.toBe(
+      snapshot.normalizedMethodJson,
+    );
 
     const reconciled = reconcileCompiledMethodEngine({
       snapshot,
@@ -2873,7 +2891,11 @@ describe("executeCompiledMethod — engine contract guard", () => {
     if (!differentMethod.ok) throw new Error("compile failed");
 
     expect(
-      reconcileCompiledMethodEngine({ snapshot, current: null, engine: fakeEngine }),
+      reconcileCompiledMethodEngine({
+        snapshot,
+        current: null,
+        engine: fakeEngine,
+      }),
     ).toEqual({ compiledMethod: snapshot, adopted: false });
     // Same engine, different method definition: never adopted.
     expect(
@@ -2896,7 +2918,11 @@ describe("executeCompiledMethod — engine contract guard", () => {
   it("leaves an up-to-date snapshot untouched", () => {
     const snapshot = compiledWith("fake-test");
     expect(
-      reconcileCompiledMethodEngine({ snapshot, current: null, engine: fakeEngine }),
+      reconcileCompiledMethodEngine({
+        snapshot,
+        current: null,
+        engine: fakeEngine,
+      }),
     ).toEqual({ compiledMethod: snapshot, adopted: false });
   });
 

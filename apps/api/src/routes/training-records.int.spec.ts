@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { trainingRecordsRouter } from "./training-records";
 import { db } from "@calibra-facil/db";
-import { trainingRecord, trainingRecordAuditLog } from "@calibra-facil/db/schema";
+import {
+  trainingRecord,
+  trainingRecordAuditLog,
+} from "@calibra-facil/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";

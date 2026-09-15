@@ -7,6 +7,7 @@ Target: `packages/shared/src/finance.ts` — `summarizeInstallments`,
 Test file: `packages/shared/src/finance.test.ts`
 
 ## Discipline
+
 Money correctness. Assert EXACT computed values. NOT a cut-line, but if any computed
 value looks wrong (esp. the installment aggregation), FLAG it in your report rather than
 silently asserting it. Do NOT modify production code.
@@ -14,7 +15,7 @@ silently asserting it. Do NOT modify production code.
 ## Acceptance Criteria
 
 - REQ-FIN-001: WHEN `summarizeInstallments` receives an empty array, it SHALL return the
-  zeroed summary (all counts and *Cents fields 0).
+  zeroed summary (all counts and \*Cents fields 0).
 - REQ-FIN-002: `summarizeInstallments.total` SHALL equal the COUNT of all installments
   including `VOID`; a `VOID` installment SHALL increment `voidCount` and SHALL be excluded
   from `totalCents`. [HIGH RISK]

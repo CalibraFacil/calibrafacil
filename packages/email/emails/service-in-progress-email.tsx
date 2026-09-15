@@ -77,8 +77,8 @@ export function ServiceInProgressEmail({
         <Paragraph>{stageMessage}</Paragraph>
 
         <Paragraph>
-          Informaremos você quando houver mais novidades. Obrigado pela paciência
-          e pela confiança em {labName}!
+          Informaremos você quando houver mais novidades. Obrigado pela
+          paciência e pela confiança em {labName}!
         </Paragraph>
       </EmailCard>
     </ServiceOrderEmailLayout>

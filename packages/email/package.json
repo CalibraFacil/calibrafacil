@@ -10,7 +10,8 @@
     "export": "email export",
     "test": "vitest",
     "test:run": "vitest run",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@calibra-facil/shared": "workspace:*",

@@ -13,3 +13,15 @@ packages/signing/src/trust-store.generated.ts
 
 # Read-only reference sources synced by scripts/sync-reference-repos.mjs — never format.
 .repos/
+
+# The signed calculation engine sits under a byte-stability rule (versioned
+# validation dossier, template x preview-scenario diff probe). Never reformat it
+# as part of a sweep; any change there is its own reviewed release (#930).
+packages/math-engine/
+
+# TanStack Router codegen — regenerated on every dev/build; formatting it would
+# create a perpetual working-tree diff.
+apps/*/src/routeTree.gen.ts
+
+# fumadocs codegen (gitignored) — keep local `format:check` runs clean.
+apps/docs/.source/

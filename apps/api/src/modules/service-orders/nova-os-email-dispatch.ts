@@ -98,7 +98,9 @@ function formatDateBR(date: Date): string {
  */
 export async function dispatchNovaOsEmail(
   input: NovaOsEmailDispatchInput,
-): Promise<import("@calibra-facil/notifications").ServiceOrderCustomerEmailResult> {
+): Promise<
+  import("@calibra-facil/notifications").ServiceOrderCustomerEmailResult
+> {
   try {
     // Resolve the lab white-label brand (REQ-SOEMAIL-003).
     // Wrapped here because getLabEmailBrand can fail if the DB is unavailable.

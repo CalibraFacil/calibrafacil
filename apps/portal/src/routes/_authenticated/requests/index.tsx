@@ -10,7 +10,7 @@ import {
   Notebook01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -105,6 +105,68 @@ function getPortalErrorMessage(payload: unknown) {
     .join(", ");
 }
 
+// Module-level so the header/cell renderers are stable component types
+// instead of being re-created on every render of the page.
+const columns: Array<ColumnDef<CalibrationRequest>> = [
+  {
+    accessorKey: "id",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Solicitação" />
+    ),
+    cell: ({ row }) => (
+      <div className="space-y-0.5">
+        <Link
+          to="/requests/$id"
+          params={{ id: String(row.original.id) }}
+          className="font-medium hover:underline"
+        >
+          Solicitação{" "}
+          <span className="font-mono tabular-nums">#{row.original.id}</span>
+        </Link>
+        <p className="text-muted-foreground text-xs">
+          {pluralize(row.original.itemCount, "ativo", "ativos")}
+        </p>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "submittedAt",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Enviada em" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground font-mono tabular-nums">
+        {formatDate(row.original.submittedAt)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "requestedDueDate",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Prazo solicitado" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground font-mono tabular-nums">
+        {formatDate(row.original.requestedDueDate)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
+    cell: ({ row }) => {
+      const status = getRequestStatus(row.original.status);
+      return (
+        <StatusPill tone={status.tone} size="sm">
+          {status.label}
+        </StatusPill>
+      );
+    },
+  },
+];
+
 function RequestsPage() {
   const { status: initialStatus } = Route.useSearch();
   const [page, setPage] = useState(1);
@@ -166,69 +228,6 @@ function RequestsPage() {
     setStatusFilter("");
     setPage(1);
   }
-
-  const columns: Array<ColumnDef<CalibrationRequest>> = useMemo(
-    () => [
-      {
-        accessorKey: "id",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Solicitação" />
-        ),
-        cell: ({ row }) => (
-          <div className="space-y-0.5">
-            <Link
-              to="/requests/$id"
-              params={{ id: String(row.original.id) }}
-              className="font-medium hover:underline"
-            >
-              Solicitação{" "}
-              <span className="font-mono tabular-nums">#{row.original.id}</span>
-            </Link>
-            <p className="text-muted-foreground text-xs">
-              {pluralize(row.original.itemCount, "ativo", "ativos")}
-            </p>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "submittedAt",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Enviada em" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground font-mono tabular-nums">
-            {formatDate(row.original.submittedAt)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "requestedDueDate",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Prazo solicitado" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground font-mono tabular-nums">
-            {formatDate(row.original.requestedDueDate)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "status",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Status" />
-        ),
-        cell: ({ row }) => {
-          const status = getRequestStatus(row.original.status);
-          return (
-            <StatusPill tone={status.tone} size="sm">
-              {status.label}
-            </StatusPill>
-          );
-        },
-      },
-    ],
-    [],
-  );
 
   const hasFilters = Boolean(deferredSearch || statusFilter);
 

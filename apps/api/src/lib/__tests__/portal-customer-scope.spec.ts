@@ -22,9 +22,8 @@ vi.mock("@calibra-facil/db", () => {
   return { db: builder };
 });
 
-const { resolvePortalCustomerScope, applyUnitFilter } = await import(
-  "../portal-customer-scope"
-);
+const { resolvePortalCustomerScope, applyUnitFilter } =
+  await import("../portal-customer-scope");
 
 beforeEach(() => {
   dbQueue.length = 0;

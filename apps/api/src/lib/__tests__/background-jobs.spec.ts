@@ -212,9 +212,9 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockRejectedValue(new Error("worker unreachable"));
 
-    await expect(
-      wakeDocumentWorker("https://dw.example.com"),
-    ).rejects.toThrow("worker unreachable");
+    await expect(wakeDocumentWorker("https://dw.example.com")).rejects.toThrow(
+      "worker unreachable",
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

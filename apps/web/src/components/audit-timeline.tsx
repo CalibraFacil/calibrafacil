@@ -391,7 +391,8 @@ function describeAuditChanges(log: AuditLogRecord): string | undefined {
   const acks = changes.acknowledgements
   if (acks && typeof acks === 'object') {
     const accepted =
-      'acceptedVerificarRefs' in acks && Array.isArray(acks.acceptedVerificarRefs)
+      'acceptedVerificarRefs' in acks &&
+      Array.isArray(acks.acceptedVerificarRefs)
         ? acks.acceptedVerificarRefs.length
         : 0
     parts.push(

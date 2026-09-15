@@ -57,9 +57,7 @@ describe("buildContaAzulOAuthReturnUrl", () => {
       { APP_URL: "https://app.example.com" },
       null,
     );
-    expect(url).toBe(
-      "https://app.example.com/dashboard/settings/integrations",
-    );
+    expect(url).toBe("https://app.example.com/dashboard/settings/integrations");
   });
 
   it("falls back to localhost:5173 when APP_URL is missing/blank", () => {

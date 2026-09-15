@@ -32,10 +32,7 @@ export async function recomputeCertificateReleasesForBillingDocument(params: {
     )
     .innerJoin(
       calibrationJob,
-      eq(
-        calibrationJob.id,
-        serviceOrderCertificateLink.certificateJobId,
-      ),
+      eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
     )
     .where(
       and(

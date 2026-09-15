@@ -122,7 +122,9 @@ export async function buildPortalDocumentPacket(params: {
       calibrationJob,
       eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
     )
-    .where(eq(serviceOrderCertificateLink.serviceOrderId, params.serviceOrderId));
+    .where(
+      eq(serviceOrderCertificateLink.serviceOrderId, params.serviceOrderId),
+    );
 
   const approvedJobs = certificateJobs.filter(
     (row) => row.status === "APPROVED" || row.status === "SUPERSEDED",

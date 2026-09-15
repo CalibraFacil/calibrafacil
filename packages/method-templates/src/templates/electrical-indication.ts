@@ -80,7 +80,8 @@ import type {
  * is derived via the shared buildDraftFromProduct.
  */
 
-const METHOD_NAME = "Calibração de Multímetro (Tensão DC) por Erro de Indicação";
+const METHOD_NAME =
+  "Calibração de Multímetro (Tensão DC) por Erro de Indicação";
 const DMM_ASSET_TYPE_SLUG = "multimetro-digital";
 const methodDescription =
   "Calibração de multímetros digitais em tensão contínua (DC) por comparação direta da indicação contra uma fonte/calibrador de referência. Erro de indicação E = leitura média − valor aplicado (EA-4/02 §S9.3, eq. S9.1); incerteza por soma quadrática de repetibilidade/instabilidade de curto prazo (Tipo A), resolução (retangular, ½·resolução/√3, EA-4/02 §S9.7) e do padrão (U expandida do certificado dividida pelo k do próprio certificado, EA-4/02 §S9.6). Para um DMM de baixa resolução o orçamento é dominado pela resolução (essencialmente retangular): o método dos graus de liberdade efetivos do Anexo E NÃO se aplica (EA-4/02 §S9.11) e adota-se o fator k=2 recomendado pela cg-15 §5.1.5.4. DC apenas; AC adiado. Rascunho pendente de revisão metrológica.";
@@ -295,9 +296,15 @@ const certificateContent = {
       kind: "definition_list",
       title: "CONVENÇÕES",
       items: [
-        { term: "VC", definition: "Valor convencional da tensão aplicada de referência." },
+        {
+          term: "VC",
+          definition: "Valor convencional da tensão aplicada de referência.",
+        },
         { term: "E", definition: "Erro de indicação (indicação − VC)." },
-        { term: "U", definition: "Incerteza expandida (U = k·u_c), com k = 2." },
+        {
+          term: "U",
+          definition: "Incerteza expandida (U = k·u_c), com k = 2.",
+        },
       ],
     },
     {

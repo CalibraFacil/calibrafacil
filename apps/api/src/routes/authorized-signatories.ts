@@ -100,10 +100,7 @@ export const authorizedSignatoriesRouter = new Hono<{
         .limit(1);
 
       if (!targetMember) {
-        return c.json(
-          { error: "Usuário não é membro da organização" },
-          400,
-        );
+        return c.json({ error: "Usuário não é membro da organização" }, 400);
       }
 
       const [created] = await db

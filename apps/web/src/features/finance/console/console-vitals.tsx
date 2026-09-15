@@ -90,10 +90,16 @@ export function ConsoleVitals({ data }: { data?: FinanceOverviewResponse }) {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ReceivablesTile search={{ tab: 'documentos', status: 'DRAFT' }}>
-          <PipelineCount label="Rascunhos" value={counts?.draftDocuments ?? 0} />
+          <PipelineCount
+            label="Rascunhos"
+            value={counts?.draftDocuments ?? 0}
+          />
         </ReceivablesTile>
         <ReceivablesTile search={{ tab: 'documentos', status: 'ISSUED' }}>
-          <PipelineCount label="Emitidos" value={counts?.issuedDocuments ?? 0} />
+          <PipelineCount
+            label="Emitidos"
+            value={counts?.issuedDocuments ?? 0}
+          />
         </ReceivablesTile>
         <ReceivablesTile search={{ tab: 'documentos', status: 'OVERDUE' }}>
           <PipelineCount

@@ -122,7 +122,11 @@ export type CertificateRepeatability = {
 export type CertificateEccentricity = {
   unit?: string | null;
   /** Load positions A–E (circular platform) or 1–4 (road scale). */
-  rows: Array<{ position: string; before?: string | null; after?: string | null }>;
+  rows: Array<{
+    position: string;
+    before?: string | null;
+    after?: string | null;
+  }>;
   /** Largest deviation, the figure that feeds the uncertainty budget. */
   maxDeviationText?: string | null;
   /**

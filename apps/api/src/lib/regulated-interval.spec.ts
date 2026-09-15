@@ -11,7 +11,8 @@ const noAnchors: RegulatedIntervalAnchors = {
   installDate: null,
 };
 
-const iso = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : null);
+const iso = (date: Date | null) =>
+  date ? date.toISOString().slice(0, 10) : null;
 
 describe("deriveRegulatedNextDate", () => {
   // REQ-MLR-020: fixed_months anchored to the last verification.

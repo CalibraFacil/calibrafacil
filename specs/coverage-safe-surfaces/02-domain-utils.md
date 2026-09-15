@@ -4,6 +4,7 @@ Target: `packages/shared/src/domain-utils.ts`
 Test file: `packages/shared/src/domain-utils.test.ts` (Vitest)
 
 ## Context
+
 Hostname/origin normalization + localhost detection used by config/security paths.
 Pure string logic; many reject branches.
 

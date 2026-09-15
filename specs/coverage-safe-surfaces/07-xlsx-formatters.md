@@ -4,6 +4,7 @@ Target: `packages/certificate-data/src/formatters.ts`
 Test file: `packages/certificate-data/src/formatters.test.ts` (Vitest)
 
 ## Context
+
 `getPath` + `formatValue` (date/number/boolean dispatch) resolve and format the
 values that land in a certificate. Output-critical → assert exact strings. Date
 formatting uses UTC; lock that in.

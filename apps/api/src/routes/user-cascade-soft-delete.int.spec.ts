@@ -64,9 +64,9 @@ import { seedOrg } from "../../test/integration/seed";
 function hasCode(value: unknown, code: string): boolean {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      "code" in value &&
-      Reflect.get(value, "code") === code,
+    typeof value === "object" &&
+    "code" in value &&
+    Reflect.get(value, "code") === code,
   );
 }
 
@@ -255,7 +255,9 @@ describe("Better Auth deleteUser — regulated-record preservation (CMP-07 #692)
     expect(competenceAudits).toHaveLength(2);
     // pre-existing row survived
     expect(
-      competenceAudits.some((r) => r.id === seeded.preExistingCompetenceAuditId),
+      competenceAudits.some(
+        (r) => r.id === seeded.preExistingCompetenceAuditId,
+      ),
     ).toBe(true);
     const compDeleteAudit = competenceAudits.find((r) => r.action === "delete");
     expect(compDeleteAudit).toBeDefined();
@@ -336,16 +338,16 @@ describe("Better Auth deleteUser — regulated-record preservation (CMP-07 #692)
   });
 
   it("REQ-CMP-USR-005 [HIGH RISK]: deleting a SECOND user sharing the same org-wide scope must not collide on the tombstoned unique key", async () => {
-    const { orgId, userId: adminUserId } = await seedOrg({ orgId: "org-multi" });
+    const { orgId, userId: adminUserId } = await seedOrg({
+      orgId: "org-multi",
+    });
     const userA = "subject-user-a";
     const userB = "subject-user-b";
 
-    await db
-      .insert(user)
-      .values([
-        { id: userA, name: "Usuário A", email: "user-a@lab.test" },
-        { id: userB, name: "Usuário B", email: "user-b@lab.test" },
-      ]);
+    await db.insert(user).values([
+      { id: userA, name: "Usuário A", email: "user-a@lab.test" },
+      { id: userB, name: "Usuário B", email: "user-b@lab.test" },
+    ]);
 
     // Both users: an org-wide (asset_type_id NULL) competence AND an org-wide
     // signatory — the exact "two org-wide signatories" shape the verifier

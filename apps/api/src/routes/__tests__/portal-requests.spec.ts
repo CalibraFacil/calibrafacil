@@ -41,9 +41,8 @@ vi.mock("@calibra-facil/db", () => {
     };
     return ins;
   };
-  builder.transaction = (
-    callback: (tx: typeof builder) => Promise<unknown>,
-  ) => callback(builder);
+  builder.transaction = (callback: (tx: typeof builder) => Promise<unknown>) =>
+    callback(builder);
   return { db: builder };
 });
 
@@ -76,7 +75,10 @@ vi.mock("../../middleware/permission", () => {
 
 const { portalRequestsRouter } = await import("../portal-requests");
 
-const JSON_HEADERS = { origin: "http://localhost", "content-type": "application/json" };
+const JSON_HEADERS = {
+  origin: "http://localhost",
+  "content-type": "application/json",
+};
 
 // Resolver (group mode): no direct customer, a group, then its branches.
 function pushGroupScope() {
@@ -132,9 +134,9 @@ describe("POST /requests/batch", () => {
 
     const body = await res.json();
     expect(body.created).toHaveLength(2);
-    expect(body.created.map((r: { customerId: number }) => r.customerId)).toEqual([
-      10, 11,
-    ]);
+    expect(
+      body.created.map((r: { customerId: number }) => r.customerId),
+    ).toEqual([10, 11]);
     expect(notifyCalibrationRequestSubmitted).toHaveBeenCalledTimes(2);
   });
 

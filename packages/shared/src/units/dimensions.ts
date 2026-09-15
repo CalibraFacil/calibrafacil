@@ -117,7 +117,7 @@ export const DIMENSIONLESS: Dimension = {
   L: RAT_ZERO,
   T: RAT_ZERO,
   I: RAT_ZERO,
-  "Θ": RAT_ZERO,
+  Θ: RAT_ZERO,
   N: RAT_ZERO,
   J: RAT_ZERO,
 };
@@ -214,7 +214,7 @@ export const KIND_DIMENSIONS = {
   mass: dimension({ M: RAT_ONE }),
   length: dimension({ L: RAT_ONE }),
   time: dimension({ T: RAT_ONE }),
-  temperature: dimension({ "Θ": RAT_ONE }),
+  temperature: dimension({ Θ: RAT_ONE }),
   current: dimension({ I: RAT_ONE }),
   force: dimension({ M: RAT_ONE, L: RAT_ONE, T: rational(-2) }),
   pressure: dimension({ M: RAT_ONE, L: rational(-1), T: rational(-2) }),

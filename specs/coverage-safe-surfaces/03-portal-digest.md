@@ -4,6 +4,7 @@ Target: `packages/shared/src/portal-digest.ts`
 Test file: `packages/shared/src/portal-digest.test.ts` (Vitest)
 
 ## Context
+
 `portalDigestFrequenciesFor(date)` decides which digest frequencies fire on a given
 cron run. WEEKLY only on Monday (UTC). Pure date logic; easy to get the day-of-week
 boundary wrong. Use fixed UTC dates; assert against `getUTCDay`.

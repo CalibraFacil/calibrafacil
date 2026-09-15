@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { calibrationMethod, type MethodSnapshot } from "@calibra-facil/db/schema";
+import {
+  calibrationMethod,
+  type MethodSnapshot,
+} from "@calibra-facil/db/schema";
 import {
   reconcileCompiledMethodEngine,
   type CalculationEngineLike,

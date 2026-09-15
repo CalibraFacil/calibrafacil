@@ -12,7 +12,9 @@ function resolvePublicAppUrl(c: { env?: unknown }) {
       ? Object.fromEntries(Object.entries(c.env))
       : {};
   const configured =
-    typeof envRecord.APP_URL === "string" ? envRecord.APP_URL : process.env.APP_URL;
+    typeof envRecord.APP_URL === "string"
+      ? envRecord.APP_URL
+      : process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")

@@ -1259,7 +1259,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
             })
             .where(eq(organizationIntegration.id, record.integrationId));
 
-          throw new Error(failure.message);
+          throw new Error(failure.message, { cause: error });
         }
       },
     });

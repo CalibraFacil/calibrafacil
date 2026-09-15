@@ -45,7 +45,9 @@ describe("sendMarketingBroadcast", () => {
   it("REQ-BC-001 posts the exact create body and surfaces the returned id", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { object: "broadcast", id: "bc_123" }));
+      .mockResolvedValue(
+        jsonResponse(200, { object: "broadcast", id: "bc_123" }),
+      );
 
     const result = await sendMarketingBroadcast(
       baseEnv,
@@ -80,7 +82,9 @@ describe("sendMarketingBroadcast", () => {
   });
 
   it("REQ-BC-001 falls back to the default from address when env has none", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, { id: "bc_x" }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { id: "bc_x" }));
 
     await sendMarketingBroadcast(
       { RESEND_API_KEY: "re_test", RESEND_AUDIENCE_ID: "aud_1" },
@@ -97,7 +101,9 @@ describe("sendMarketingBroadcast", () => {
   it("REQ-BC-002 creates a DRAFT by default and NEVER calls /send", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { object: "broadcast", id: "bc_draft" }));
+      .mockResolvedValue(
+        jsonResponse(200, { object: "broadcast", id: "bc_draft" }),
+      );
 
     const result = await sendMarketingBroadcast(
       baseEnv,
@@ -116,7 +122,9 @@ describe("sendMarketingBroadcast", () => {
   it("REQ-BC-002 calls create then /send (in order) when send:true", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { object: "broadcast", id: "bc_9" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { object: "broadcast", id: "bc_9" }),
+      )
       .mockResolvedValueOnce(jsonResponse(200, {}));
 
     const result = await sendMarketingBroadcast(

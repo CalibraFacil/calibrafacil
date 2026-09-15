@@ -108,7 +108,6 @@ vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
   resolveLabEmailSender: vi.fn().mockResolvedValue(undefined),
 }));
 
-
 // The email path consults the suppression list before every send; stub it so
 // these template tests never touch the (mocked-away) emailSuppression table.
 vi.mock("./suppression", () => ({

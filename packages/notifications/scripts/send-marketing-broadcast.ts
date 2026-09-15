@@ -37,7 +37,8 @@ function parseArgs(argv: string[]): CliArgs {
     else if (arg.startsWith("--subject=")) args.subject = arg.slice(10);
     else if (arg.startsWith("--name=")) args.name = arg.slice(7);
     else if (arg.startsWith("--preview=")) args.preview = arg.slice(10);
-    else if (arg.startsWith("--scheduled-at=")) args.scheduledAt = arg.slice(15);
+    else if (arg.startsWith("--scheduled-at="))
+      args.scheduledAt = arg.slice(15);
     else if (!arg.startsWith("--")) args.htmlPath = arg;
   }
   return args;
@@ -77,7 +78,9 @@ async function main(): Promise<void> {
   console.log(args.send ? "Broadcast sent." : "Broadcast draft created.");
   console.log(`  id:        ${result.broadcastId}`);
   console.log(`  status:    ${result.status}`);
-  console.log(`  dashboard: https://resend.com/broadcasts/${result.broadcastId}`);
+  console.log(
+    `  dashboard: https://resend.com/broadcasts/${result.broadcastId}`,
+  );
   if (!args.send) {
     console.log(
       "  (DRAFT — review it in the dashboard, then re-run with --send to actually send.)",

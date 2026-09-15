@@ -5,6 +5,7 @@ Test file: `apps/api/src/lib/__tests__/api-keys.spec.ts` (Vitest — `.spec.ts` 
 apps/api config `include: ["src/**/*.spec.ts"]`)
 
 ## Context
+
 [REVIEW: auth-adjacent — key generation/hashing/extraction. NOT the RBAC policy
 layer (access.ts/permission.ts), which is untouched.] Pure crypto/string helpers.
 Tests assert existing behavior only; do not alter the module.

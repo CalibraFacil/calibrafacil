@@ -186,6 +186,5 @@ describe("finance certificate-release routes", () => {
       expect(res.status).toBe(404);
       expect(mocks.recomputeCertificateRelease).not.toHaveBeenCalled();
     });
-
   });
 });

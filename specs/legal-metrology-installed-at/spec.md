@@ -30,7 +30,7 @@ a real `next_legal_verification_date`. Purely additive; no other kind's behavior
   (migration 0067, additive).
 - REQ-INSTALL-002: WHEN a LEGAL asset's `regulated_interval.kind = max_months_from_install`
   and `installed_at` is set, the system SHALL derive `next_legal_verification_date =
-  installed_at + valueMonths` (via `deriveRegulatedNextDate` with `installDate = installed_at`). [HIGH RISK]
+installed_at + valueMonths` (via `deriveRegulatedNextDate` with `installDate = installed_at`). [HIGH RISK]
 - REQ-INSTALL-003: IF `installed_at` is null and `kind = max_months_from_install`, THEN
   `next_legal_verification_date` SHALL remain null (no fabricated date). [HIGH RISK]
 - REQ-INSTALL-004: WHEN a lab member with `equipment:update` (or create) sets `installed_at`,
@@ -42,11 +42,11 @@ a real `next_legal_verification_date`. Purely additive; no other kind's behavior
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| `installed_at` column + migration 0067 | `packages/db/src/schema.ts` + `packages/db/drizzle/0067_*.sql` + journal | med (migration) | pair-don't-loop (migration review) |
-| Anchor wiring | `apps/api/src/routes/assets.ts` (both `deriveRegulatedNextDate` calls → `installDate: installedAt`) + `CreateAsset/UpdateAssetSchema` (`installedAt` optional ISO) | **high (derivation)** | loopable-with-verifier |
-| Response + form | GET selects + `AssetDetailData` (client-runtime) + `asset-create/edit-form.tsx` (DatePicker, mirror `lastCalibrationDate`) | low | loopable-with-verifier |
+| Mini-spec                              | Layer (real path)                                                                                                                                                  | Risk                  | Mode                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | ---------------------------------- |
+| `installed_at` column + migration 0067 | `packages/db/src/schema.ts` + `packages/db/drizzle/0067_*.sql` + journal                                                                                           | med (migration)       | pair-don't-loop (migration review) |
+| Anchor wiring                          | `apps/api/src/routes/assets.ts` (both `deriveRegulatedNextDate` calls → `installDate: installedAt`) + `CreateAsset/UpdateAssetSchema` (`installedAt` optional ISO) | **high (derivation)** | loopable-with-verifier             |
+| Response + form                        | GET selects + `AssetDetailData` (client-runtime) + `asset-create/edit-form.tsx` (DatePicker, mirror `lastCalibrationDate`)                                         | low                   | loopable-with-verifier             |
 
 **Pairing note:** the migration + derivation are the regulated core — REQ-INSTALL-002/003 each
 need a test (unit on `deriveRegulatedNextDate` + an int test on the lab write that asserts the

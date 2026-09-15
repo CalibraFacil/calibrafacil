@@ -47,7 +47,9 @@ describe("method-templates registry — publishable oracle", () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         for (const preview of result.previewResults) {
-          expect(preview.passed, `scenario "${preview.scenarioKey}"`).toBe(true);
+          expect(preview.passed, `scenario "${preview.scenarioKey}"`).toBe(
+            true,
+          );
         }
       });
     });
@@ -147,7 +149,9 @@ describe("method-templates governance — picker contract", () => {
               // Row-scoped methods store per-row arrays; a worked example is one
               // representative point, so compare against the first row.
               const shipped = formulas[key];
-              const representative = Array.isArray(shipped) ? shipped[0] : shipped;
+              const representative = Array.isArray(shipped)
+                ? shipped[0]
+                : shipped;
               expect(representative, `expected.${key}`).toBe(value);
             }
           });
@@ -165,7 +169,9 @@ describe("method-templates governance — picker contract", () => {
           governance.measurand,
           ...governance.conformanceNotes.map((note) => note.note),
           ...governance.verificarItems.map((entry) => entry.item),
-          ...governance.omittedComponents.map((component) => component.component),
+          ...governance.omittedComponents.map(
+            (component) => component.component,
+          ),
           ...governance.omittedComponents.map(
             (component) => component.appliesWhen ?? "",
           ),

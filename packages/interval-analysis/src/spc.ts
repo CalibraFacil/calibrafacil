@@ -289,7 +289,8 @@ export function detectRuleHits(
     let runStart = 0;
     for (let i = 2; i <= values.length; i += 1) {
       const d1 = (values[i - 1] ?? 0) - (values[i - 2] ?? 0);
-      const d2 = i < values.length ? (values[i] ?? 0) - (values[i - 1] ?? 0) : 0;
+      const d2 =
+        i < values.length ? (values[i] ?? 0) - (values[i - 1] ?? 0) : 0;
       const alternates = i < values.length && d1 * d2 < 0;
       if (!alternates) {
         if (i - runStart >= 14) {

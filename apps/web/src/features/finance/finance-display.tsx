@@ -201,7 +201,12 @@ export function MoneyStat({
       <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </p>
-      <Money cents={cents} currency={currency} tone={tone} className="text-sm" />
+      <Money
+        cents={cents}
+        currency={currency}
+        tone={tone}
+        className="text-sm"
+      />
     </div>
   )
 }

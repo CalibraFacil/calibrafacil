@@ -40,8 +40,7 @@ function isPlaintextBackupCodes(value: string): boolean {
   try {
     const parsed: unknown = JSON.parse(value);
     return (
-      Array.isArray(parsed) &&
-      parsed.every((code) => typeof code === "string")
+      Array.isArray(parsed) && parsed.every((code) => typeof code === "string")
     );
   } catch {
     return false;

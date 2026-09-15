@@ -313,7 +313,9 @@ export async function recomputeCertificateRelease(
       .update(certificateRelease)
       .set({
         status: nextStatus,
-        appliedPolicyId: hasExceptionRelease ? existing.appliedPolicyId : policy.id,
+        appliedPolicyId: hasExceptionRelease
+          ? existing.appliedPolicyId
+          : policy.id,
         lastEvaluatedAt: now,
         paymentStateSnapshot: snapshotJson,
         updatedAt: now,

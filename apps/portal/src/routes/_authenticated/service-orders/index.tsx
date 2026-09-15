@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Cancel01Icon,
@@ -150,6 +150,73 @@ function parseServiceOrderStatusFilter(
   }
 }
 
+// Module-level so the header/cell renderers are stable component types
+// instead of being re-created on every render of the page.
+const columns: Array<ColumnDef<PortalServiceOrder>> = [
+  {
+    accessorKey: "serviceOrderNumber",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="OS" />
+    ),
+    cell: ({ row }) => (
+      <div className="space-y-1">
+        <Link
+          to="/service-orders/$id"
+          params={{ id: row.original.publicId }}
+          className="font-medium hover:underline"
+        >
+          {row.original.serviceOrderNumber}
+        </Link>
+        <p className="text-xs text-muted-foreground">
+          Entrada em {formatDate(row.original.openedAt)}
+        </p>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "assetSnapshot.assetName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Instrumento" />
+    ),
+    cell: ({ row }) => {
+      return (
+        <div>
+          <p className="font-medium">{row.original.assetName}</p>
+          <p className="text-xs text-muted-foreground">
+            {row.original.assetSerialNumber
+              ? `Série: ${row.original.assetSerialNumber}`
+              : "Série não informada"}
+          </p>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
+    cell: ({ row }) => (
+      <Badge variant={statusVariants[row.original.status] ?? "secondary"}>
+        {row.original.statusLabel ||
+          statusLabels[row.original.status] ||
+          row.original.status}
+      </Badge>
+    ),
+  },
+  {
+    accessorKey: "readyAt",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Pronta em" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground tabular-nums">
+        {formatDate(row.original.readyAt)}
+      </span>
+    ),
+  },
+];
+
 function ServiceOrdersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -185,74 +252,6 @@ function ServiceOrdersPage() {
       return result;
     },
   });
-
-  const columns: Array<ColumnDef<PortalServiceOrder>> = useMemo(
-    () => [
-      {
-        accessorKey: "serviceOrderNumber",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="OS" />
-        ),
-        cell: ({ row }) => (
-          <div className="space-y-1">
-            <Link
-              to="/service-orders/$id"
-              params={{ id: row.original.publicId }}
-              className="font-medium hover:underline"
-            >
-              {row.original.serviceOrderNumber}
-            </Link>
-            <p className="text-xs text-muted-foreground">
-              Entrada em {formatDate(row.original.openedAt)}
-            </p>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "assetSnapshot.assetName",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Instrumento" />
-        ),
-        cell: ({ row }) => {
-          return (
-            <div>
-              <p className="font-medium">{row.original.assetName}</p>
-              <p className="text-xs text-muted-foreground">
-                {row.original.assetSerialNumber
-                  ? `Série: ${row.original.assetSerialNumber}`
-                  : "Série não informada"}
-              </p>
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "status",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Status" />
-        ),
-        cell: ({ row }) => (
-          <Badge variant={statusVariants[row.original.status] ?? "secondary"}>
-            {row.original.statusLabel ||
-              statusLabels[row.original.status] ||
-              row.original.status}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: "readyAt",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Pronta em" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground tabular-nums">
-            {formatDate(row.original.readyAt)}
-          </span>
-        ),
-      },
-    ],
-    [],
-  );
 
   return (
     <div className="portal-shell space-y-6">

@@ -64,9 +64,9 @@ describe("REQ-WH-001: verifyResendSignature (Svix HMAC-SHA256)", () => {
 
   it("REQ-WH-001 rejects when required headers are missing", () => {
     expect(verifyResendSignature({ ...baseInput(), svixId: null })).toBe(false);
-    expect(
-      verifyResendSignature({ ...baseInput(), svixSignature: null }),
-    ).toBe(false);
+    expect(verifyResendSignature({ ...baseInput(), svixSignature: null })).toBe(
+      false,
+    );
     expect(verifyResendSignature({ ...baseInput(), secret: "" })).toBe(false);
   });
 

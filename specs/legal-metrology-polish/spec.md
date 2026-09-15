@@ -11,12 +11,12 @@
 The regime feature shipped two thin spots flagged in review: (1) `MetrologyRegimeFields`
 blocks a bad LEGAL submission with a form-level message but does not highlight the offending
 regulated field inline (the parse already produces field-keyed errors — they just aren't
-displayed in the component); (2) REQ-MLR-012 (a malformed `regulatedInterval` is rejected with
-400) and REQ-MLR-042 (a portal calibration-interval write never touches the Track-2 columns)
+displayed in the component); (2) REQ-MLR-012 (a malformed `regulatedInterval` is rejected with 400) and REQ-MLR-042 (a portal calibration-interval write never touches the Track-2 columns)
 rely on structural guarantees rather than explicit integration assertions. This item adds the
 inline errors and the two assertions. Purely additive; no behavior change to the API.
 
 ## Constraints
+
 - No new migration. No `as`/`useEffect`. Reuse the existing form `errors` map + `FieldError`
   component; reuse the existing int-spec harnesses (`assets.int.spec.ts`,
   `portal-asset-interval.int.spec.ts`). Extend the existing
@@ -41,11 +41,11 @@ inline errors and the two assertions. Purely additive; no behavior change to the
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| Inline FieldError | `apps/web/.../metrology-regime-fields.tsx` (+ `errors` prop) + create/edit forms pass-through + `metrology-regime-fields.test.tsx` | low | loopable-with-verifier |
-| REQ-MLR-012 int | `apps/api/src/routes/assets.int.spec.ts` (LEGAL + bad regulatedInterval → 400, no row) | med | loopable-with-verifier |
-| REQ-MLR-042 int | `apps/api/src/routes/portal-asset-interval.int.spec.ts` (portal interval write leaves Track 2 untouched) | med | loopable-with-verifier |
+| Mini-spec         | Layer (real path)                                                                                                                  | Risk | Mode                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---- | ---------------------- |
+| Inline FieldError | `apps/web/.../metrology-regime-fields.tsx` (+ `errors` prop) + create/edit forms pass-through + `metrology-regime-fields.test.tsx` | low  | loopable-with-verifier |
+| REQ-MLR-012 int   | `apps/api/src/routes/assets.int.spec.ts` (LEGAL + bad regulatedInterval → 400, no row)                                             | med  | loopable-with-verifier |
+| REQ-MLR-042 int   | `apps/api/src/routes/portal-asset-interval.int.spec.ts` (portal interval write leaves Track 2 untouched)                           | med  | loopable-with-verifier |
 
 **Pairing note:** all loopable-with-verifier. REQ-POLISH-002/003 are HIGH RISK assertions of
 existing regulated behavior — each needs a test that fails if the validation/track-independence

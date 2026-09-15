@@ -26,10 +26,7 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
-import {
-  evaluateMilestone,
-  resolveAutomaticSendRule,
-} from "../automatic-send";
+import { evaluateMilestone, resolveAutomaticSendRule } from "../automatic-send";
 
 beforeEach(() => {
   mocks.ruleRows = [];

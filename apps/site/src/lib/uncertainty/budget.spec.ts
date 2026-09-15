@@ -90,7 +90,10 @@ describe("evaluateBudget", () => {
     if (!evaluation.ok) return;
     const { result } = evaluation;
 
-    expect(result.contributions[0]?.standardUncertainty).toBeCloseTo(0.2886751, 7);
+    expect(result.contributions[0]?.standardUncertainty).toBeCloseTo(
+      0.2886751,
+      7,
+    );
     expect(result.contributions[1]?.standardUncertainty).toBeCloseTo(0.01, 12);
     expect(result.combinedStandardUncertainty).toBeCloseTo(0.28884829, 8);
     expect(result.effectiveDegreesOfFreedom).toBe(Number.POSITIVE_INFINITY);
@@ -153,14 +156,24 @@ describe("evaluateBudget", () => {
 
   it("scales a contribution by its sensitivity coefficient", () => {
     const evaluation = evaluateBudget(
-      [typeB({ id: "a", distribution: "rectangular", halfWidth: "0,5", sensitivity: "2" })],
+      [
+        typeB({
+          id: "a",
+          distribution: "rectangular",
+          halfWidth: "0,5",
+          sensitivity: "2",
+        }),
+      ],
       0.9545,
     );
 
     expect(evaluation.ok).toBe(true);
     if (!evaluation.ok) return;
     // |c| · u = 2 × 0.2886751
-    expect(evaluation.result.combinedStandardUncertainty).toBeCloseTo(0.5773503, 7);
+    expect(evaluation.result.combinedStandardUncertainty).toBeCloseTo(
+      0.5773503,
+      7,
+    );
   });
 
   it("reports the variance share of each contribution", () => {

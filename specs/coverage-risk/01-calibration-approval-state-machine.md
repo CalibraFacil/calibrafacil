@@ -7,6 +7,7 @@ Test file: `packages/auth/src/access.spec.ts` (new — package has NO tests; add
 vitest config/script if missing, see notes).
 
 ## CUT-LINE — pair-don't-loop discipline
+
 This encodes ISO/IEC 17025 separation-of-duties and "approved is immutable".
 The expected matrix BELOW is the **oracle** (intended regulated behavior). Assert
 the SPEC's values. **IF the production code disagrees with any value here, STOP and
@@ -14,6 +15,7 @@ escalate to a human — do NOT edit the test to match the code.** Do NOT modify
 `access.ts`.
 
 ## Oracle: calibrationWorkflowPermissions (intended)
+
 ```
 draft:     canEdit[operator,technician,admin,owner] canDelete[technician,admin,owner]
            canSubmit[operator,technician,admin,owner] canApprove[] canReject[]
@@ -23,6 +25,7 @@ approved:  canEdit[] canDelete[] canSubmit[] canApprove[] canReject[]
 rejected:  canEdit[operator,technician,admin,owner] canDelete[technician,admin,owner]
            canSubmit[operator,technician,admin,owner] canApprove[] canReject[]
 ```
+
 Roles never appearing in ANY list: `member`, `client_user`.
 
 ## Acceptance Criteria
@@ -37,7 +40,7 @@ Roles never appearing in ANY list: `member`, `client_user`.
   calibration action in ANY state: `canPerformCalibrationAction` SHALL return `false` for
   {member,client_user} × every action × every state. [HIGH RISK]
 - REQ-CAL-004: IF a calibration is `submitted`, THEN `canPerformCalibrationAction(role,
-  "submitted","edit")` SHALL return `false` for EVERY role (no edits after submission).
+"submitted","edit")` SHALL return `false` for EVERY role (no edits after submission).
   [HIGH RISK]
 - REQ-CAL-005: WHEN approving or rejecting in `submitted` or `in_review`,
   `canPerformCalibrationAction` SHALL return `true` ONLY for `admin` and `owner`, and
@@ -61,6 +64,7 @@ Roles never appearing in ANY list: `member`, `client_user`.
   a test). [HIGH RISK]
 
 ## Notes for implementer
+
 - If `packages/auth` has no vitest runner, add a minimal `vitest` devDep + `test`/`test:run`
   script + `vitest.config.ts` (mirror another package's). This is test tooling, NOT a
   production change. Report it explicitly.

@@ -61,7 +61,7 @@ pnpm db:studio        # Drizzle Studio on :4000
   10x native port; GA'd, replaced the old `@typescript/native-preview`/`tsgo` beta). Exception:
   the Next.js/Payload apps (`apps/site`, `apps/docs`, `apps/cms`) stay pinned to `typescript@6.0.3`
   — the classic JS build — because their tooling (`next typegen`, `payload generate:types`) imports
-  the TypeScript compiler *API*, which the native `typescript@7` package does not ship (it exposes
+  the TypeScript compiler _API_, which the native `typescript@7` package does not ship (it exposes
   only the `tsc` binary plus an `unstable/*` API). The API `dev`/`start` and worker run under
   **Bun**; the web/portal/local-server run under Node + Vite/tsx.
 - `pnpm.overrides` and `scripts/check-blocked-deps.mjs` pin/forbid specific dependency versions

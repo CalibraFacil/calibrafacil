@@ -191,137 +191,137 @@ export function AccreditedScopeSettingsPage() {
         </Panel>
       ) : (
         <>
-        <Panel className="p-5 sm:p-6">
-          <PanelHeader
-            title="Guarda de emissão"
-            description="Como o sistema reage quando um certificado acreditado viola o escopo: ponto fora de faixa ou incerteza menor que a CMC."
-          />
-          <div className="mt-4 max-w-sm">
-            <Select
-              value={scopeData?.enforcementMode ?? 'warn'}
-              onValueChange={(value) => {
-                if (value === 'warn' || value === 'enforce') {
-                  enforcementMutation.mutate(value)
-                }
-              }}
-            >
-              <SelectTrigger disabled={enforcementMutation.isPending}>
-                {scopeData?.enforcementMode === 'enforce'
-                  ? 'Bloquear emissão acreditada'
-                  : 'Apenas avisar'}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="warn">Apenas avisar</SelectItem>
-                <SelectItem value="enforce">
-                  Bloquear emissão acreditada
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="mt-2 text-xs text-muted-foreground">
-              No modo bloqueio, a aprovação só passa com justificativa
-              documentada e o certificado sai sem o selo de acreditação.
-              Comece no modo aviso e ative o bloqueio depois de validar as
-              linhas do escopo.
-            </p>
-          </div>
-        </Panel>
-        <Panel className="p-5 sm:p-6">
-          <PanelHeader
-            title="Linhas de escopo"
-            description="Uma linha por grandeza e faixa, com a CMC declarada em k=2. Faixas com CMC em degraus entram como linhas separadas."
-            action={
-              lines.length > 0 ? (
-                <Button variant="outline" size="sm" onClick={openNewDialog}>
-                  <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
-                  Adicionar
-                </Button>
-              ) : undefined
-            }
-          />
-          <div className="mt-4">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full rounded-xl" />
-                <Skeleton className="h-16 w-full rounded-xl" />
-              </div>
-            ) : lines.length === 0 ? (
-              <Empty>
-                <EmptyMedia>
-                  <HugeiconsIcon
-                    icon={SecurityCheckIcon}
-                    className="size-8 text-muted-foreground"
-                  />
-                </EmptyMedia>
-                <EmptyHeader>
-                  <EmptyTitle>Nenhuma linha de escopo cadastrada</EmptyTitle>
-                  <EmptyDescription>
-                    Sem linhas cadastradas, os certificados acreditados são
-                    emitidos sem verificação de escopo e CMC.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <Button variant="outline" size="sm" onClick={openNewDialog}>
-                  <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
-                  Adicionar linha
-                </Button>
-              </Empty>
-            ) : (
-              <div className="space-y-2">
-                {lines.map((line) => {
-                  const vigencia = formatVigencia(line)
-                  return (
-                    <div
-                      key={line.id}
-                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
-                    >
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {quantityKindLabelPt(line.quantityKind)}
-                          </span>
-                          {line.description ? (
-                            <span className="truncate text-sm text-muted-foreground">
-                              {line.description}
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              title="Guarda de emissão"
+              description="Como o sistema reage quando um certificado acreditado viola o escopo: ponto fora de faixa ou incerteza menor que a CMC."
+            />
+            <div className="mt-4 max-w-sm">
+              <Select
+                value={scopeData?.enforcementMode ?? 'warn'}
+                onValueChange={(value) => {
+                  if (value === 'warn' || value === 'enforce') {
+                    enforcementMutation.mutate(value)
+                  }
+                }}
+              >
+                <SelectTrigger disabled={enforcementMutation.isPending}>
+                  {scopeData?.enforcementMode === 'enforce'
+                    ? 'Bloquear emissão acreditada'
+                    : 'Apenas avisar'}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="warn">Apenas avisar</SelectItem>
+                  <SelectItem value="enforce">
+                    Bloquear emissão acreditada
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-xs text-muted-foreground">
+                No modo bloqueio, a aprovação só passa com justificativa
+                documentada e o certificado sai sem o selo de acreditação.
+                Comece no modo aviso e ative o bloqueio depois de validar as
+                linhas do escopo.
+              </p>
+            </div>
+          </Panel>
+          <Panel className="p-5 sm:p-6">
+            <PanelHeader
+              title="Linhas de escopo"
+              description="Uma linha por grandeza e faixa, com a CMC declarada em k=2. Faixas com CMC em degraus entram como linhas separadas."
+              action={
+                lines.length > 0 ? (
+                  <Button variant="outline" size="sm" onClick={openNewDialog}>
+                    <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
+                    Adicionar
+                  </Button>
+                ) : undefined
+              }
+            />
+            <div className="mt-4">
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                </div>
+              ) : lines.length === 0 ? (
+                <Empty>
+                  <EmptyMedia>
+                    <HugeiconsIcon
+                      icon={SecurityCheckIcon}
+                      className="size-8 text-muted-foreground"
+                    />
+                  </EmptyMedia>
+                  <EmptyHeader>
+                    <EmptyTitle>Nenhuma linha de escopo cadastrada</EmptyTitle>
+                    <EmptyDescription>
+                      Sem linhas cadastradas, os certificados acreditados são
+                      emitidos sem verificação de escopo e CMC.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <Button variant="outline" size="sm" onClick={openNewDialog}>
+                    <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
+                    Adicionar linha
+                  </Button>
+                </Empty>
+              ) : (
+                <div className="space-y-2">
+                  {lines.map((line) => {
+                    const vigencia = formatVigencia(line)
+                    return (
+                      <div
+                        key={line.id}
+                        className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                      >
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {quantityKindLabelPt(line.quantityKind)}
                             </span>
-                          ) : null}
-                          {vigencia ? (
-                            <Badge variant="secondary">{vigencia}</Badge>
-                          ) : null}
+                            {line.description ? (
+                              <span className="truncate text-sm text-muted-foreground">
+                                {line.description}
+                              </span>
+                            ) : null}
+                            {vigencia ? (
+                              <Badge variant="secondary">{vigencia}</Badge>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground">
+                            <span>
+                              Faixa {line.rangeMin} – {line.rangeMax}{' '}
+                              {line.rangeUnit}
+                            </span>
+                            <span>CMC {formatCmcExpression(line)}</span>
+                            <span>k={line.coverageFactor}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs tabular-nums text-muted-foreground">
-                          <span>
-                            Faixa {line.rangeMin} – {line.rangeMax}{' '}
-                            {line.rangeUnit}
-                          </span>
-                          <span>CMC {formatCmcExpression(line)}</span>
-                          <span>k={line.coverageFactor}</span>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(line)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => deleteMutation.mutate(line.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={Delete02Icon}
+                              className="size-4 text-destructive"
+                            />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(line)}
-                        >
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => deleteMutation.mutate(line.id)}
-                        >
-                          <HugeiconsIcon
-                            icon={Delete02Icon}
-                            className="size-4 text-destructive"
-                          />
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </Panel>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </Panel>
         </>
       )}
 

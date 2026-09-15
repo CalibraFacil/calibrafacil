@@ -49,7 +49,7 @@ validation/math-engine/v0.2.5/
 ...
 ```
 
-Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do *release* em produção.
+Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do _release_ em produção.
 
 ## Distribuição
 

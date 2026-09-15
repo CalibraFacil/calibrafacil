@@ -22,19 +22,16 @@ import type { OrcamentoRecusadoEmailDispatchInput } from "./orcamento-recusado-e
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockSendSOEmail,
-  mockGetLabEmailBrand,
-  mockOrcamentoRecusadoEmail,
-} = vi.hoisted(() => ({
-  mockSendSOEmail: vi
-    .fn()
-    .mockResolvedValue({ sent: true, emailId: "email-id-1" }),
-  mockGetLabEmailBrand: vi.fn().mockResolvedValue(undefined),
-  mockOrcamentoRecusadoEmail: vi
-    .fn()
-    .mockReturnValue("orcamento-recusado-element"),
-}));
+const { mockSendSOEmail, mockGetLabEmailBrand, mockOrcamentoRecusadoEmail } =
+  vi.hoisted(() => ({
+    mockSendSOEmail: vi
+      .fn()
+      .mockResolvedValue({ sent: true, emailId: "email-id-1" }),
+    mockGetLabEmailBrand: vi.fn().mockResolvedValue(undefined),
+    mockOrcamentoRecusadoEmail: vi
+      .fn()
+      .mockReturnValue("orcamento-recusado-element"),
+  }));
 
 vi.mock("@calibra-facil/notifications", () => ({
   sendServiceOrderCustomerEmail: mockSendSOEmail,
@@ -102,148 +99,110 @@ function getTemplateProps(
 // REQ-SOEMAIL-032: rejected email dispatched with OS number + rejectionReason
 // ---------------------------------------------------------------------------
 
-describe(
-  "REQ-SOEMAIL-032: orçamento recusado email dispatched on quote rejection",
-  () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-      mockGetLabEmailBrand.mockResolvedValue({
-        name: "Lab Acme",
-        isWhiteLabel: true,
-      });
-      mockSendSOEmail.mockResolvedValue({ sent: true, emailId: "e-1" });
-      mockOrcamentoRecusadoEmail.mockReturnValue("orcamento-recusado-element");
+describe("REQ-SOEMAIL-032: orçamento recusado email dispatched on quote rejection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLabEmailBrand.mockResolvedValue({
+      name: "Lab Acme",
+      isWhiteLabel: true,
     });
+    mockSendSOEmail.mockResolvedValue({ sent: true, emailId: "e-1" });
+    mockOrcamentoRecusadoEmail.mockReturnValue("orcamento-recusado-element");
+  });
 
-    it(
-      "REQ-SOEMAIL-032: calls sendServiceOrderCustomerEmail once",
-      async () => {
-        const input = makeInput();
-        await dispatchOrcamentoRecusadoEmail(input);
-        expect(mockSendSOEmail).toHaveBeenCalledTimes(1);
-      },
-    );
+  it("REQ-SOEMAIL-032: calls sendServiceOrderCustomerEmail once", async () => {
+    const input = makeInput();
+    await dispatchOrcamentoRecusadoEmail(input);
+    expect(mockSendSOEmail).toHaveBeenCalledTimes(1);
+  });
 
-    it("REQ-SOEMAIL-032: email subject contains the OS number", async () => {
-      const input = makeInput({ serviceOrderNumber: "OS-2026-099" });
-      await dispatchOrcamentoRecusadoEmail(input);
-      const call = mockSendSOEmail.mock.calls[0];
-      expect(call).toBeDefined();
-      expect(call[0].subject).toContain("OS-2026-099");
+  it("REQ-SOEMAIL-032: email subject contains the OS number", async () => {
+    const input = makeInput({ serviceOrderNumber: "OS-2026-099" });
+    await dispatchOrcamentoRecusadoEmail(input);
+    const call = mockSendSOEmail.mock.calls[0];
+    expect(call).toBeDefined();
+    expect(call[0].subject).toContain("OS-2026-099");
+  });
+
+  it("REQ-SOEMAIL-032: template receives serviceOrderNumber", async () => {
+    const input = makeInput({ serviceOrderNumber: "OS-2026-777" });
+    await dispatchOrcamentoRecusadoEmail(input);
+    const props = getTemplateProps(input);
+    expect(props.serviceOrderNumber).toBe("OS-2026-777");
+  });
+
+  it("REQ-SOEMAIL-032: template receives rejectionReason when present", async () => {
+    const input = makeInput({
+      rejectionReason: "Valor acima do orçamento previsto",
     });
+    await dispatchOrcamentoRecusadoEmail(input);
+    const props = getTemplateProps(input);
+    expect(props.rejectionReason).toBe("Valor acima do orçamento previsto");
+  });
 
-    it(
-      "REQ-SOEMAIL-032: template receives serviceOrderNumber",
-      async () => {
-        const input = makeInput({ serviceOrderNumber: "OS-2026-777" });
-        await dispatchOrcamentoRecusadoEmail(input);
-        const props = getTemplateProps(input);
-        expect(props.serviceOrderNumber).toBe("OS-2026-777");
-      },
-    );
+  it("REQ-SOEMAIL-032: template receives null rejectionReason when absent", async () => {
+    const input = makeInput({ rejectionReason: null });
+    await dispatchOrcamentoRecusadoEmail(input);
+    const props = getTemplateProps(input);
+    // Must not be present as a non-null/undefined value
+    expect(props.rejectionReason == null).toBe(true);
+  });
 
-    it(
-      "REQ-SOEMAIL-032: template receives rejectionReason when present",
-      async () => {
-        const input = makeInput({
-          rejectionReason: "Valor acima do orçamento previsto",
-        });
-        await dispatchOrcamentoRecusadoEmail(input);
-        const props = getTemplateProps(input);
-        expect(props.rejectionReason).toBe("Valor acima do orçamento previsto");
-      },
-    );
+  it("REQ-SOEMAIL-032: template receives customerName", async () => {
+    const input = makeInput({ customerName: "Acme Ltda" });
+    await dispatchOrcamentoRecusadoEmail(input);
+    const props = getTemplateProps(input);
+    expect(props.customerName).toBe("Acme Ltda");
+  });
 
-    it(
-      "REQ-SOEMAIL-032: template receives null rejectionReason when absent",
-      async () => {
-        const input = makeInput({ rejectionReason: null });
-        await dispatchOrcamentoRecusadoEmail(input);
-        const props = getTemplateProps(input);
-        // Must not be present as a non-null/undefined value
-        expect(props.rejectionReason == null).toBe(true);
-      },
-    );
-
-    it(
-      "REQ-SOEMAIL-032: template receives customerName",
-      async () => {
-        const input = makeInput({ customerName: "Acme Ltda" });
-        await dispatchOrcamentoRecusadoEmail(input);
-        const props = getTemplateProps(input);
-        expect(props.customerName).toBe("Acme Ltda");
-      },
-    );
-
-    it(
-      "REQ-SOEMAIL-032: resolves the lab brand via getLabEmailBrand(organizationId)",
-      async () => {
-        const input = makeInput({ organizationId: "org-xyz" });
-        await dispatchOrcamentoRecusadoEmail(input);
-        expect(mockGetLabEmailBrand).toHaveBeenCalledWith("org-xyz");
-      },
-    );
-  },
-);
+  it("REQ-SOEMAIL-032: resolves the lab brand via getLabEmailBrand(organizationId)", async () => {
+    const input = makeInput({ organizationId: "org-xyz" });
+    await dispatchOrcamentoRecusadoEmail(input);
+    expect(mockGetLabEmailBrand).toHaveBeenCalledWith("org-xyz");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Best-effort: failed email must not throw out of dispatchOrcamentoRecusadoEmail
 // ---------------------------------------------------------------------------
 
-describe(
-  "REQ-SOEMAIL-032: best-effort containment — failed email does not propagate",
-  () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-      mockGetLabEmailBrand.mockResolvedValue(undefined);
+describe("REQ-SOEMAIL-032: best-effort containment — failed email does not propagate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLabEmailBrand.mockResolvedValue(undefined);
+  });
+
+  it("does not throw when sendServiceOrderCustomerEmail returns a failure result", async () => {
+    mockSendSOEmail.mockResolvedValue({
+      sent: false,
+      error: "Transport failure",
     });
+    const input = makeInput();
+    await expect(dispatchOrcamentoRecusadoEmail(input)).resolves.not.toThrow();
+  });
 
-    it(
-      "does not throw when sendServiceOrderCustomerEmail returns a failure result",
-      async () => {
-        mockSendSOEmail.mockResolvedValue({
-          sent: false,
-          error: "Transport failure",
-        });
-        const input = makeInput();
-        await expect(
-          dispatchOrcamentoRecusadoEmail(input),
-        ).resolves.not.toThrow();
-      },
-    );
+  it("does not throw when sendServiceOrderCustomerEmail throws unexpectedly", async () => {
+    mockSendSOEmail.mockRejectedValueOnce(new Error("Unexpected crash"));
+    const input = makeInput();
+    await expect(dispatchOrcamentoRecusadoEmail(input)).resolves.not.toThrow();
+  });
 
-    it(
-      "does not throw when sendServiceOrderCustomerEmail throws unexpectedly",
-      async () => {
-        mockSendSOEmail.mockRejectedValueOnce(new Error("Unexpected crash"));
-        const input = makeInput();
-        await expect(
-          dispatchOrcamentoRecusadoEmail(input),
-        ).resolves.not.toThrow();
-      },
-    );
+  it("does not throw when getLabEmailBrand throws", async () => {
+    mockGetLabEmailBrand.mockRejectedValueOnce(new Error("DB error"));
+    const input = makeInput();
+    await expect(dispatchOrcamentoRecusadoEmail(input)).resolves.not.toThrow();
+  });
 
-    it("does not throw when getLabEmailBrand throws", async () => {
-      mockGetLabEmailBrand.mockRejectedValueOnce(new Error("DB error"));
-      const input = makeInput();
-      await expect(
-        dispatchOrcamentoRecusadoEmail(input),
-      ).resolves.not.toThrow();
+  it("does not throw when no recipient email is available", async () => {
+    mockSendSOEmail.mockResolvedValue({
+      sent: false,
+      skipped: true,
+      skipReason: "No valid recipient address could be resolved",
     });
-
-    it("does not throw when no recipient email is available", async () => {
-      mockSendSOEmail.mockResolvedValue({
-        sent: false,
-        skipped: true,
-        skipReason: "No valid recipient address could be resolved",
-      });
-      const input = makeInput({
-        clientContactSnapshot: null,
-        customerEmail: null,
-      });
-      await expect(
-        dispatchOrcamentoRecusadoEmail(input),
-      ).resolves.not.toThrow();
+    const input = makeInput({
+      clientContactSnapshot: null,
+      customerEmail: null,
     });
-  },
-);
+    await expect(dispatchOrcamentoRecusadoEmail(input)).resolves.not.toThrow();
+  });
+});

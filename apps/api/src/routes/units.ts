@@ -85,10 +85,7 @@ function isUniqueViolation(error: unknown) {
       ? error.code
       : undefined;
 
-  return (
-    typeof code === "string" &&
-    code === "23505"
-  );
+  return typeof code === "string" && code === "23505";
 }
 
 async function allocateUnitSlug(params: {

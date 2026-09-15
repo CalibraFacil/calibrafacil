@@ -30,9 +30,7 @@ export function DataTableViewOptions<TData>({
 }: {
   table: Table<TData>
 }) {
-  const hideable = table
-    .getAllColumns()
-    .filter((column) => column.getCanHide())
+  const hideable = table.getAllColumns().filter((column) => column.getCanHide())
 
   if (hideable.length === 0) return null
 

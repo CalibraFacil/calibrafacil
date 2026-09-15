@@ -50,9 +50,9 @@ describe("sanitizeErrorMessage (redaction)", () => {
   });
 
   it("keeps ordinary diagnostic text intact", () => {
-    expect(sanitizeErrorMessage('relation "app_queue_job" does not exist')).toBe(
-      'relation "app_queue_job" does not exist',
-    );
+    expect(
+      sanitizeErrorMessage('relation "app_queue_job" does not exist'),
+    ).toBe('relation "app_queue_job" does not exist');
   });
 });
 
@@ -82,13 +82,10 @@ describe("parseStackFrames", () => {
 
 describe("buildErrorEvent", () => {
   it("builds a redacted event with structural tags", () => {
-    const event = buildErrorEvent(
-      new Error("password=topsecret leaked"),
-      {
-        tags: { surface: "api", path: "/api/jobs" },
-        environment: "production",
-      },
-    );
+    const event = buildErrorEvent(new Error("password=topsecret leaked"), {
+      tags: { surface: "api", path: "/api/jobs" },
+      environment: "production",
+    });
 
     expect(event.level).toBe("error");
     expect(event.tags).toEqual({ surface: "api", path: "/api/jobs" });
@@ -139,9 +136,7 @@ describe("createErrorReporter", () => {
   });
 
   it("swallows transport failures (non-interfering)", async () => {
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const reporter = createErrorReporter({
       dsn: DSN,
       fetchImpl: vi.fn(async () => {

@@ -127,7 +127,9 @@ describe("detectRuleHits — Western Electric zone rules", () => {
 
   it("respects the enabledRules toggle", () => {
     const values = [...STABLE, 10.5];
-    const hits = detectRuleHits(values, 10, 0.1, ["weco_8_consecutive_same_side"]);
+    const hits = detectRuleHits(values, 10, 0.1, [
+      "weco_8_consecutive_same_side",
+    ]);
     expect(hits.find((h) => h.rule === "weco_1_beyond_3sigma")).toBeUndefined();
   });
 
@@ -143,15 +145,18 @@ describe("cusumSignals", () => {
   it("accumulates and signals a small sustained shift (NIST §6.3.2.3)", () => {
     // Shift of +1σ from point 5 on: individual points never cross 3σ,
     // but the cumulative sum crosses h = 4σ.
-    const shifted = [10, 10, 10, 10, 10, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1,
-      10.1, 10.1, 10.1, 10.1];
+    const shifted = [
+      10, 10, 10, 10, 10, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1, 10.1,
+      10.1,
+    ];
     const signals = cusumSignals(shifted, 10, 0.1, 0.5, 4);
     expect(signals.length).toBeGreaterThan(0);
     expect(signals[0]).toBeGreaterThanOrEqual(5);
   });
   it("detects downward shifts symmetrically", () => {
-    const shifted = [10, 10, 10, 10, 10, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9,
-      9.9, 9.9, 9.9];
+    const shifted = [
+      10, 10, 10, 10, 10, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9, 9.9,
+    ];
     expect(cusumSignals(shifted, 10, 0.1, 0.5, 4).length).toBeGreaterThan(0);
   });
 });
@@ -161,8 +166,9 @@ describe("ewmaSignals", () => {
     expect(ewmaSignals(STABLE, 10, 0.015)).toEqual([]);
   });
   it("signals a sustained small shift with exact time-varying limits", () => {
-    const shifted = [10, 10, 10, 10.15, 10.15, 10.15, 10.15, 10.15, 10.15,
-      10.15];
+    const shifted = [
+      10, 10, 10, 10.15, 10.15, 10.15, 10.15, 10.15, 10.15, 10.15,
+    ];
     const signals = ewmaSignals(shifted, 10, 0.1, 0.2, 3);
     expect(signals.length).toBeGreaterThan(0);
   });
@@ -195,14 +201,23 @@ describe("evaluateChart", () => {
       baselineWindow: STABLE.length,
     });
     expect(result.status).toBe("out_of_control");
-    expect(
-      result.ruleHits.some((h) => h.rule === "weco_1_beyond_3sigma"),
-    ).toBe(true);
+    expect(result.ruleHits.some((h) => h.rule === "weco_1_beyond_3sigma")).toBe(
+      true,
+    );
   });
 
   it("classifies a sustained same-side run as trending", () => {
-    const drifted = [...STABLE, 10.03, 10.03, 10.03, 10.03, 10.03, 10.03,
-      10.03, 10.03];
+    const drifted = [
+      ...STABLE,
+      10.03,
+      10.03,
+      10.03,
+      10.03,
+      10.03,
+      10.03,
+      10.03,
+      10.03,
+    ];
     const result = evaluateChart(drifted, "i_mr", {
       baselineWindow: STABLE.length,
       enabledRules: ["weco_8_consecutive_same_side"],
@@ -259,7 +274,10 @@ describe("evaluateChart", () => {
   });
 
   it("a constant series (sigma = 0) is insufficient_data, not in_control", () => {
-    const result = evaluateChart(Array.from({ length: 12 }, () => 10), "i_mr");
+    const result = evaluateChart(
+      Array.from({ length: 12 }, () => 10),
+      "i_mr",
+    );
     expect(result.status).toBe("insufficient_data");
   });
 

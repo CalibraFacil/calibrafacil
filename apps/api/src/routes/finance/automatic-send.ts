@@ -3,10 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import {
-  automaticSendRule,
-  customer,
-} from "@calibra-facil/db/schema";
+import { automaticSendRule, customer } from "@calibra-facil/db/schema";
 import {
   withLabPermission,
   type AuthVariables,

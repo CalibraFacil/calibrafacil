@@ -115,9 +115,7 @@ describe("PortalVisitsPanel (#739 customer actions)", () => {
     expect(await screen.findByText("Reagendamento solicitado")).toBeTruthy();
     expect(screen.queryByText("Confirmar presença")).toBeNull();
     expect(screen.queryByText("Solicitar reagendamento")).toBeNull();
-    expect(
-      screen.getByText(/Aguardando resposta do laboratório/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Aguardando resposta do laboratório/)).toBeTruthy();
   });
 
   it("shows the lab's resolution note after a declined request", async () => {
@@ -145,7 +143,9 @@ describe("PortalVisitsPanel (#739 customer actions)", () => {
   });
 
   it("does not render actions for a completed visit", async () => {
-    stubVisits([visitFixture({ status: "COMPLETED", scheduledAt: inDays(-3) })]);
+    stubVisits([
+      visitFixture({ status: "COMPLETED", scheduledAt: inDays(-3) }),
+    ]);
     renderPanel();
 
     expect(await screen.findByText("Concluída")).toBeTruthy();

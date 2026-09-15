@@ -18,7 +18,9 @@ import type { FleetAsset } from "./types";
 export const fleetColumns: ColumnDef<FleetAsset>[] = [
   {
     accessorKey: "tag",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tag" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Tag" />
+    ),
     cell: ({ row }) => (
       <span className="font-mono text-xs font-medium tabular-nums">
         {row.original.tag}

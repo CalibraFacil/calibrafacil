@@ -9,8 +9,7 @@
 
 ## Intent
 
-`asset.metrology_regime`, `regulated_interval`, `next_legal_verification_date` (migration
-0066) and `installed_at` (0067) exist only in `packages/db` (cloud Postgres). The offline
+`asset.metrology_regime`, `regulated_interval`, `next_legal_verification_date` (migration 0066) and `installed_at` (0067) exist only in `packages/db` (cloud Postgres). The offline
 store (`packages/local-db`, SQLite) and the sync path (`packages/sync` +
 `apps/api/src/routes/sync.ts`) do not carry them, so a desktop/offline edit of an
 instrument's regime is lost / not reconciled. Mirror the four columns through the offline +
@@ -18,12 +17,14 @@ sync surfaces. (Note: the customer-owned interval columns from 0065 —
 `calibration_interval_months` etc. — were also never mirrored; out-of-scope here unless trivial.)
 
 ## Constraints
+
 - **Mirror the established pattern** — follow `packages/local-db/src/migrations/0009_asset_subject_to_legal_metrology.ts` (the boolean's offline migration) for shape; the local-db migration journal is **separate** from `packages/db` (next local-db migration number, not 0068). SQLite types: `metrology_regime`→TEXT, `regulated_interval`→TEXT (JSON string), `next_legal_verification_date`/`installed_at`→TEXT (ISO) or INTEGER — match how the existing offline asset dates are stored.
 - **Additive + forward-only** offline migration; **idempotent** (offline migrations re-run on every client). No data loss.
 - **Round-trip integrity** — a value written offline survives the local-db asset read/write AND the sync upsert (no column dropped on the way to/from the cloud). Reuse the existing sync conflict/outbox machinery unchanged.
 - No `as`/`useEffect`. No change to the cloud `packages/db` schema (the columns already exist). No RBAC/tenancy change.
 
 ## Acceptance Criteria (EARS)
+
 - REQ-OFFLINE-001: The local-db `asset` schema SHALL include `metrology_regime`,
   `regulated_interval`, `next_legal_verification_date`, and `installed_at`, added by an
   additive, idempotent local-db migration (mirroring 0009's pattern).
@@ -37,10 +38,11 @@ sync surfaces. (Note: the customer-owned interval columns from 0065 —
   duplicate columns) and SHALL preserve existing offline asset rows.
 
 ## Decomposition
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| local-db schema + migration | `packages/local-db/src/migrations/*` (new) + `migrations/index.ts` + the asset schema/CRUD (`assets.ts`) | med | pair-don't-loop (offline migration review) |
-| sync carry-through | `packages/local-db/src/sync.ts` upsert SQL + `packages/sync` + `apps/api/src/routes/sync.ts` asset column lists | **high (sync integrity)** | loopable-with-verifier |
+
+| Mini-spec                   | Layer (real path)                                                                                               | Risk                      | Mode                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------ |
+| local-db schema + migration | `packages/local-db/src/migrations/*` (new) + `migrations/index.ts` + the asset schema/CRUD (`assets.ts`)        | med                       | pair-don't-loop (offline migration review) |
+| sync carry-through          | `packages/local-db/src/sync.ts` upsert SQL + `packages/sync` + `apps/api/src/routes/sync.ts` asset column lists | **high (sync integrity)** | loopable-with-verifier                     |
 
 **Pairing note:** REQ-OFFLINE-002/003 each need a test that fails on regression — a local-db
 write→read round-trip (incl. the structured `regulated_interval`) and a sync upsert that

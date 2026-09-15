@@ -66,7 +66,7 @@ without ever touching Track 1 — all test-backed.
   `INDUSTRIAL | LEGAL | UNKNOWN` (NOT NULL, default `INDUSTRIAL`), a nullable
   `regulated_interval` jsonb column, and a nullable `next_legal_verification_date` timestamp.
 - REQ-MLR-002: WHEN migration 0066 runs, the system SHALL backfill `metrology_regime =
-  'LEGAL'` for every row whose `subject_to_legal_metrology` is true, and `'INDUSTRIAL'`
+'LEGAL'` for every row whose `subject_to_legal_metrology` is true, and `'INDUSTRIAL'`
   otherwise. [HIGH RISK]
 - REQ-MLR-003: WHEN an asset's `metrology_regime` is written, the system SHALL keep
   `subject_to_legal_metrology` consistent (`true` ⟺ `metrology_regime = 'LEGAL'`). [HIGH RISK]
@@ -78,7 +78,7 @@ without ever touching Track 1 — all test-backed.
 
 - REQ-MLR-010: `RegulatedIntervalSchema` (`@calibra-facil/schemas`) SHALL be a discriminated
   union on `kind ∈ {fixed_months, max_months_from_install, per_technology,
-  not_nationally_fixed}`, each member requiring a trimmed non-empty `regulationReference` and
+not_nationally_fixed}`, each member requiring a trimmed non-empty `regulationReference` and
   a boolean `operationalizedByDelegate`.
 - REQ-MLR-011: For `kind ∈ {fixed_months, max_months_from_install, per_technology}` the
   schema SHALL require `valueMonths` as an integer within `[1, 600]`; for
@@ -180,15 +180,15 @@ without ever touching Track 1 — all test-backed.
 
 ## Decomposition
 
-| Mini-spec | Layer (real path) | Depends on | Risk | Mode |
-| --- | --- | --- | --- | --- |
-| L1 regime/legal-verif schema + backfill | `packages/db/src/schema.ts` + migration 0066 + local-db mirror | — | **high (migration + transition)** | **pair-don't-loop** |
-| L2 RegulatedInterval Zod | `packages/schemas` | — | low | loopable-with-verifier |
-| L3 next-date derivation (pure) | `apps/api/src/lib/regulated-interval.ts` (reuse `deriveNextCalibrationDate`) | L2 | med | loopable-with-verifier (oracle) |
-| L4 lab regulated-interval write | `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema | L1,L2,L3 | **high (regulatory + track independence)** | **pair-don't-loop** |
-| L5 portal lock removal | `apps/api/src/lib/portal-asset-interval.ts` + `apps/api/src/routes/portal.ts` | L1 | **high (relaxes shipped guard)** | **pair-don't-loop** |
-| L6 engine regime-agnostic | `packages/interval-analysis` + `apps/api/src/lib/interval-insight.ts` caller | L1 | **high (removes LEGAL_FIXED)** | loopable-with-verifier (oracle) |
-| L7 two-date UI + regime selector | `apps/portal` asset view + `apps/web/src/features/assets/*` | L4,L5 | med | loopable-with-verifier |
+| Mini-spec                               | Layer (real path)                                                             | Depends on | Risk                                       | Mode                            |
+| --------------------------------------- | ----------------------------------------------------------------------------- | ---------- | ------------------------------------------ | ------------------------------- |
+| L1 regime/legal-verif schema + backfill | `packages/db/src/schema.ts` + migration 0066 + local-db mirror                | —          | **high (migration + transition)**          | **pair-don't-loop**             |
+| L2 RegulatedInterval Zod                | `packages/schemas`                                                            | —          | low                                        | loopable-with-verifier          |
+| L3 next-date derivation (pure)          | `apps/api/src/lib/regulated-interval.ts` (reuse `deriveNextCalibrationDate`)  | L2         | med                                        | loopable-with-verifier (oracle) |
+| L4 lab regulated-interval write         | `apps/api/src/routes/assets.ts` + `CreateAsset/UpdateAsset` schema            | L1,L2,L3   | **high (regulatory + track independence)** | **pair-don't-loop**             |
+| L5 portal lock removal                  | `apps/api/src/lib/portal-asset-interval.ts` + `apps/api/src/routes/portal.ts` | L1         | **high (relaxes shipped guard)**           | **pair-don't-loop**             |
+| L6 engine regime-agnostic               | `packages/interval-analysis` + `apps/api/src/lib/interval-insight.ts` caller  | L1         | **high (removes LEGAL_FIXED)**             | loopable-with-verifier (oracle) |
+| L7 two-date UI + regime selector        | `apps/portal` asset view + `apps/web/src/features/assets/*`                   | L4,L5      | med                                        | loopable-with-verifier          |
 
 **Pairing note:** L1, L4, L5 touch the asset migration, the regulated write path + track
 independence, and the relaxation of a shipped HIGH-RISK guard → **pair-don't-loop**

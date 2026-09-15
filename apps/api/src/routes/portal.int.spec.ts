@@ -1,16 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
-import {
-  asset,
-  assetType,
-  calibrationRequest,
-} from "@calibra-facil/db/schema";
+import { asset, assetType, calibrationRequest } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import {
-  loginAsPortal,
-  logoutPortal,
-} from "../../test/integration/setup";
+import { loginAsPortal, logoutPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import {
   seedPortalContext,
@@ -117,99 +110,96 @@ describe("portalRouter /overview — real DB + real portal middleware", () => {
   // customer-A's data. Customer-B's data is seeded so it WOULD appear if the
   // `inArray(..customerId, customerIds)` scope regressed — assert it is ABSENT.
   // =========================================================================
-  it(
-    "REQ-PORTAL-001: portal session for customer-A sees only customer-A's data (customer isolation)",
-    async () => {
-      const assetTypeId = await ensureAssetType();
+  it("REQ-PORTAL-001: portal session for customer-A sees only customer-A's data (customer isolation)", async () => {
+    const assetTypeId = await ensureAssetType();
 
-      // One shared lab owns both customers (cross-customer, same lab — the real
-      // leak vector: a scope regression returns the lab's other customer too).
-      const ctxA = await seedPortalContext({
-        labOrgId: "portal-lab-1",
-        clientOrgId: "portal-client-a",
-        portalUserId: "portal-user-a",
-        customerName: "Customer A",
-      });
-      const customerBId = await seedPortalCustomer({
-        labOrgId: ctxA.labOrgId,
-        clientOrgId: "portal-client-b",
-        portalUserId: "portal-user-b",
-        customerName: "Customer B",
-      });
+    // One shared lab owns both customers (cross-customer, same lab — the real
+    // leak vector: a scope regression returns the lab's other customer too).
+    const ctxA = await seedPortalContext({
+      labOrgId: "portal-lab-1",
+      clientOrgId: "portal-client-a",
+      portalUserId: "portal-user-a",
+      customerName: "Customer A",
+    });
+    const customerBId = await seedPortalCustomer({
+      labOrgId: ctxA.labOrgId,
+      clientOrgId: "portal-client-b",
+      portalUserId: "portal-user-b",
+      customerName: "Customer B",
+    });
 
-      // Customer A: one due-soon asset + one request.
-      await seedAsset({
-        labUnitId: ctxA.labUnitId,
-        customerId: ctxA.customerId,
-        assetTypeId,
-        name: "Balança A",
-        tag: "EQ-A1",
-        nextCalibrationDate: inDays(10),
-      });
-      await seedRequest({
-        labOrgId: ctxA.labOrgId,
-        labUnitId: ctxA.labUnitId,
-        customerId: ctxA.customerId,
-        clientOrgId: ctxA.clientOrgId,
-        submittedBy: ctxA.portalUserId,
-      });
+    // Customer A: one due-soon asset + one request.
+    await seedAsset({
+      labUnitId: ctxA.labUnitId,
+      customerId: ctxA.customerId,
+      assetTypeId,
+      name: "Balança A",
+      tag: "EQ-A1",
+      nextCalibrationDate: inDays(10),
+    });
+    await seedRequest({
+      labOrgId: ctxA.labOrgId,
+      labUnitId: ctxA.labUnitId,
+      customerId: ctxA.customerId,
+      clientOrgId: ctxA.clientOrgId,
+      submittedBy: ctxA.portalUserId,
+    });
 
-      // Customer B: TWO due-soon assets + one request — strictly more than A, so
-      // a regression that drops the scope would change every count and surface
-      // "Balança B" by name in the attention list.
-      await seedAsset({
-        labUnitId: ctxA.labUnitId,
-        customerId: customerBId,
-        assetTypeId,
-        name: "Balança B1",
-        tag: "EQ-B1",
-        nextCalibrationDate: inDays(5),
-      });
-      await seedAsset({
-        labUnitId: ctxA.labUnitId,
-        customerId: customerBId,
-        assetTypeId,
-        name: "Balança B2",
-        tag: "EQ-B2",
-        nextCalibrationDate: inDays(6),
-      });
-      await seedRequest({
-        labOrgId: ctxA.labOrgId,
-        labUnitId: ctxA.labUnitId,
-        customerId: customerBId,
-        clientOrgId: "portal-client-b",
-        submittedBy: "portal-user-b",
-      });
+    // Customer B: TWO due-soon assets + one request — strictly more than A, so
+    // a regression that drops the scope would change every count and surface
+    // "Balança B" by name in the attention list.
+    await seedAsset({
+      labUnitId: ctxA.labUnitId,
+      customerId: customerBId,
+      assetTypeId,
+      name: "Balança B1",
+      tag: "EQ-B1",
+      nextCalibrationDate: inDays(5),
+    });
+    await seedAsset({
+      labUnitId: ctxA.labUnitId,
+      customerId: customerBId,
+      assetTypeId,
+      name: "Balança B2",
+      tag: "EQ-B2",
+      nextCalibrationDate: inDays(6),
+    });
+    await seedRequest({
+      labOrgId: ctxA.labOrgId,
+      labUnitId: ctxA.labUnitId,
+      customerId: customerBId,
+      clientOrgId: "portal-client-b",
+      submittedBy: "portal-user-b",
+    });
 
-      loginAsPortal({
-        userId: ctxA.portalUserId,
-        organizationId: ctxA.clientOrgId,
-      });
-      const res = await portalRouter.request("/overview", {
-        headers: LOCAL_ORIGIN,
-      });
+    loginAsPortal({
+      userId: ctxA.portalUserId,
+      organizationId: ctxA.clientOrgId,
+    });
+    const res = await portalRouter.request("/overview", {
+      headers: LOCAL_ORIGIN,
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      // Customer A has exactly ONE asset and ONE request — B's three rows are absent.
-      expect(body.equipment.total).toBe(1);
-      expect(body.requests.total).toBe(1);
+    // Customer A has exactly ONE asset and ONE request — B's three rows are absent.
+    expect(body.equipment.total).toBe(1);
+    expect(body.requests.total).toBe(1);
 
-      // The attention list carries the asset name + customerName: B must not leak.
-      const attentionNames = body.equipment.attention.map(
-        (a: { name: string }) => a.name,
-      );
-      expect(attentionNames).toContain("Balança A");
-      expect(attentionNames).not.toContain("Balança B1");
-      expect(attentionNames).not.toContain("Balança B2");
+    // The attention list carries the asset name + customerName: B must not leak.
+    const attentionNames = body.equipment.attention.map(
+      (a: { name: string }) => a.name,
+    );
+    expect(attentionNames).toContain("Balança A");
+    expect(attentionNames).not.toContain("Balança B1");
+    expect(attentionNames).not.toContain("Balança B2");
 
-      const attentionCustomers = body.equipment.attention.map(
-        (a: { customerName: string }) => a.customerName,
-      );
-      expect(attentionCustomers).toEqual(["Customer A"]);
-    },
-  );
+    const attentionCustomers = body.equipment.attention.map(
+      (a: { customerName: string }) => a.customerName,
+    );
+    expect(attentionCustomers).toEqual(["Customer A"]);
+  });
 
   // =========================================================================
   // REQ-PORTAL-002: unauthenticated (portal getSession null) -> 401 via the

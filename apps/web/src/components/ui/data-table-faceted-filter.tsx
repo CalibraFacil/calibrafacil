@@ -75,7 +75,10 @@ export function DataTableFacetedFilter<TData, TValue>({
                 onClick={() => toggle(option.value)}
                 className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
               >
-                <Checkbox checked={isSelected} className="pointer-events-none" />
+                <Checkbox
+                  checked={isSelected}
+                  className="pointer-events-none"
+                />
                 <span className="flex-1 text-left">{option.label}</span>
                 {typeof count === 'number' ? (
                   <span className="font-mono text-xs tabular-nums text-muted-foreground">

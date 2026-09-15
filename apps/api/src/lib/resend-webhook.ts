@@ -53,7 +53,9 @@ export function verifyResendSignature(input: ResendSignatureInput): boolean {
   if (!secret || !svixId || !svixTimestamp || !svixSignature) return false;
 
   const tolerance = input.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS;
-  if (!timestampWithinTolerance(svixTimestamp, input.now ?? new Date(), tolerance)) {
+  if (
+    !timestampWithinTolerance(svixTimestamp, input.now ?? new Date(), tolerance)
+  ) {
     return false;
   }
 

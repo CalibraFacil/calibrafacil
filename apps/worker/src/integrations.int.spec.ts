@@ -268,9 +268,9 @@ describe("processIntegrationSync (worker real-DB integration)", () => {
     // link per entity, NOT four.
     const linksAfterSecond = await objectLinkRows();
     expect(linksAfterSecond).toHaveLength(2);
-    expect(new Set(linksAfterSecond.map((link) => link.local_entity_id))).toEqual(
-      new Set([`customer:${custA1}`, `customer:${custA2}`]),
-    );
+    expect(
+      new Set(linksAfterSecond.map((link) => link.local_entity_id)),
+    ).toEqual(new Set([`customer:${custA1}`, `customer:${custA2}`]));
 
     // getExistingRemoteId found a remote id from run 1 -> the second run reconciles
     // with PUT, not a duplicate POST.

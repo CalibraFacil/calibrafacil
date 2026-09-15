@@ -367,443 +367,426 @@ async function seedOrgFixture(params: {
 
 // ---------------------------------------------------------------------------
 
-describe(
-  "financeCertificateReleaseRouter — payment gate + RBAC (real DB)",
-  () => {
-    beforeEach(async () => {
-      await truncateAll();
+describe("financeCertificateReleaseRouter — payment gate + RBAC (real DB)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // =======================================================================
+  // REQ-CREL-001: Tenant isolation
+  // =======================================================================
+  it("REQ-CREL-001: GET org-B job as org-A → 404; GET /settings/ scoped to org-A only + definite count", async () => {
+    // Two independent orgs.
+    const orgA = await seedOrgFixture({ orgId: "org-a", tagSuffix: "a" });
+    const orgB = await seedOrgFixture({ orgId: "org-b", tagSuffix: "b" });
+
+    // Org-A has one policy (trusted_customer).
+    await seedReleasePolicy({
+      orgId: orgA.orgId,
+      createdByUserId: orgA.userId,
+      mode: "trusted_customer",
+    });
+    // Org-B has a different policy (manual_only) — must NOT leak into org-A.
+    await seedReleasePolicy({
+      orgId: orgB.orgId,
+      createdByUserId: orgB.userId,
+      mode: "manual_only",
     });
 
-    // =======================================================================
-    // REQ-CREL-001: Tenant isolation
-    // =======================================================================
-    it(
-      "REQ-CREL-001: GET org-B job as org-A → 404; GET /settings/ scoped to org-A only + definite count",
-      async () => {
-        // Two independent orgs.
-        const orgA = await seedOrgFixture({ orgId: "org-a", tagSuffix: "a" });
-        const orgB = await seedOrgFixture({ orgId: "org-b", tagSuffix: "b" });
+    // Org-B creates an APPROVED job with SO link.
+    const jobBId = await seedJob({
+      jobId: "JOB-B-001",
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: orgB.customerId,
+      assetId: orgB.assetId,
+      serviceId: orgB.serviceId,
+      createdBy: orgB.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: orgB.customerId,
+      assetId: orgB.assetId,
+      openedByUserId: orgB.userId,
+      jobId: jobBId,
+    });
 
-        // Org-A has one policy (trusted_customer).
-        await seedReleasePolicy({
-          orgId: orgA.orgId,
-          createdByUserId: orgA.userId,
-          mode: "trusted_customer",
-        });
-        // Org-B has a different policy (manual_only) — must NOT leak into org-A.
-        await seedReleasePolicy({
-          orgId: orgB.orgId,
-          createdByUserId: orgB.userId,
-          mode: "manual_only",
-        });
+    // Authenticate as org-A admin.
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
 
-        // Org-B creates an APPROVED job with SO link.
-        const jobBId = await seedJob({
-          jobId: "JOB-B-001",
-          organizationId: orgB.orgId,
-          unitId: orgB.unitId,
-          customerId: orgB.customerId,
-          assetId: orgB.assetId,
-          serviceId: orgB.serviceId,
-          createdBy: orgB.userId,
-          status: "APPROVED",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: orgB.orgId,
-          unitId: orgB.unitId,
-          customerId: orgB.customerId,
-          assetId: orgB.assetId,
-          openedByUserId: orgB.userId,
-          jobId: jobBId,
-        });
+    // GET org-B's job as org-A → 404 (cross-tenant blocked).
+    const getRes = await financeCertificateReleaseRouter.request(`/${jobBId}`, {
+      headers: JSON_HEADERS,
+    });
+    expect(getRes.status).toBe(404);
 
-        // Authenticate as org-A admin.
-        loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    // GET /settings/ as org-A → returns exactly org-A's policies (count = 1).
+    const settingsRes = await settingsCertificateReleasePolicyRouter.request(
+      "/",
+      { headers: JSON_HEADERS },
+    );
+    expect(settingsRes.status).toBe(200);
+    const settingsBody = await settingsRes.json();
+    expect(settingsBody.data).toHaveLength(1);
+    expect(settingsBody.data[0].mode).toBe("trusted_customer");
+  });
 
-        // GET org-B's job as org-A → 404 (cross-tenant blocked).
-        const getRes = await financeCertificateReleaseRouter.request(
-          `/${jobBId}`,
-          { headers: JSON_HEADERS },
-        );
-        expect(getRes.status).toBe(404);
+  // =======================================================================
+  // REQ-CREL-002 [HIGH RISK]: PAYMENT GATE
+  // =======================================================================
+  it("REQ-CREL-002 [HIGH RISK]: release_after_full_payment — UNPAID (billing DRAFT / installment OPEN) → HELD_FOR_PAYMENT; PAID (billing PAID / installment PAID) → RELEASED (DB-verified)", async () => {
+    const org = await seedOrgFixture({
+      orgId: "org-gate",
+      tagSuffix: "gate",
+    });
+    await seedReleasePolicy({
+      orgId: org.orgId,
+      createdByUserId: org.userId,
+      mode: "release_after_full_payment",
+    });
 
-        // GET /settings/ as org-A → returns exactly org-A's policies (count = 1).
-        const settingsRes = await settingsCertificateReleasePolicyRouter.request(
-          "/",
-          { headers: JSON_HEADERS },
-        );
-        expect(settingsRes.status).toBe(200);
-        const settingsBody = await settingsRes.json();
-        expect(settingsBody.data).toHaveLength(1);
-        expect(settingsBody.data[0].mode).toBe("trusted_customer");
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    // ---- UNPAID scenario ----
+    const billingDraftId = await seedBillingDocument({
+      orgId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    await seedInstallment({ documentId: billingDraftId, status: "OPEN" });
+
+    const unpaidJobId = await seedJob({
+      jobId: "JOB-UNPAID-001",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      openedByUserId: org.userId,
+      jobId: unpaidJobId,
+      billingDocumentId: billingDraftId,
+    });
+
+    const unpaidRes = await financeCertificateReleaseRouter.request(
+      `/${unpaidJobId}`,
+      { headers: JSON_HEADERS },
+    );
+    expect(unpaidRes.status).toBe(200);
+    const unpaidBody = await unpaidRes.json();
+    // ORACLE: payment outstanding → release BLOCKED
+    expect(unpaidBody.data.status).toBe("HELD_FOR_PAYMENT");
+
+    // Verify the status was persisted to the DB (not just in the response).
+    const [dbUnpaidRow] = await db
+      .select({ status: certificateRelease.status })
+      .from(certificateRelease)
+      .where(eq(certificateRelease.calibrationJobId, unpaidJobId));
+    expect(dbUnpaidRow?.status).toBe("HELD_FOR_PAYMENT");
+
+    // ---- PAID scenario ----
+    const billingPaidId = await seedBillingDocument({
+      orgId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      createdBy: org.userId,
+      status: "PAID",
+    });
+    await seedInstallment({ documentId: billingPaidId, status: "PAID" });
+
+    const paidJobId = await seedJob({
+      jobId: "JOB-PAID-001",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      openedByUserId: org.userId,
+      jobId: paidJobId,
+      billingDocumentId: billingPaidId,
+    });
+
+    const paidRes = await financeCertificateReleaseRouter.request(
+      `/${paidJobId}`,
+      { headers: JSON_HEADERS },
+    );
+    expect(paidRes.status).toBe(200);
+    const paidBody = await paidRes.json();
+    // ORACLE: payment complete → release ALLOWED
+    expect(paidBody.data.status).toBe("RELEASED");
+
+    // Verify the DB reflects RELEASED.
+    const [dbPaidRow] = await db
+      .select({ status: certificateRelease.status })
+      .from(certificateRelease)
+      .where(eq(certificateRelease.calibrationJobId, paidJobId));
+    expect(dbPaidRow?.status).toBe("RELEASED");
+  });
+
+  // =======================================================================
+  // REQ-CREL-003 [HIGH RISK]: Exception override
+  // =======================================================================
+  it("REQ-CREL-003 [HIGH RISK]: exception release with reason on HELD APPROVED job → 200 + RELEASED_BY_EXCEPTION (sticky); empty reason → 400; non-APPROVED job → 409", async () => {
+    const org = await seedOrgFixture({
+      orgId: "org-exc",
+      tagSuffix: "exc",
+    });
+    await seedReleasePolicy({
+      orgId: org.orgId,
+      createdByUserId: org.userId,
+      mode: "release_after_full_payment",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    // Seed an APPROVED job with unpaid billing → will be HELD_FOR_PAYMENT.
+    const billingId = await seedBillingDocument({
+      orgId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    await seedInstallment({ documentId: billingId, status: "OPEN" });
+
+    const heldJobId = await seedJob({
+      jobId: "JOB-HELD-001",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      openedByUserId: org.userId,
+      jobId: heldJobId,
+      billingDocumentId: billingId,
+    });
+
+    // Confirm initial state is HELD_FOR_PAYMENT.
+    const initRes = await financeCertificateReleaseRouter.request(
+      `/${heldJobId}`,
+      { headers: JSON_HEADERS },
+    );
+    expect(initRes.status).toBe(200);
+    expect((await initRes.json()).data.status).toBe("HELD_FOR_PAYMENT");
+
+    // --- Empty reason must be rejected ---
+    const emptyReasonRes = await financeCertificateReleaseRouter.request(
+      `/${heldJobId}/release-by-exception`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "" }),
       },
     );
+    expect(emptyReasonRes.status).toBe(400);
 
-    // =======================================================================
-    // REQ-CREL-002 [HIGH RISK]: PAYMENT GATE
-    // =======================================================================
-    it(
-      "REQ-CREL-002 [HIGH RISK]: release_after_full_payment — UNPAID (billing DRAFT / installment OPEN) → HELD_FOR_PAYMENT; PAID (billing PAID / installment PAID) → RELEASED (DB-verified)",
-      async () => {
-        const org = await seedOrgFixture({
-          orgId: "org-gate",
-          tagSuffix: "gate",
-        });
-        await seedReleasePolicy({
-          orgId: org.orgId,
-          createdByUserId: org.userId,
-          mode: "release_after_full_payment",
-        });
-
-        loginAs({ userId: org.userId, organizationId: org.orgId });
-
-        // ---- UNPAID scenario ----
-        const billingDraftId = await seedBillingDocument({
-          orgId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          createdBy: org.userId,
-          status: "DRAFT",
-        });
-        await seedInstallment({ documentId: billingDraftId, status: "OPEN" });
-
-        const unpaidJobId = await seedJob({
-          jobId: "JOB-UNPAID-001",
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          serviceId: org.serviceId,
-          createdBy: org.userId,
-          status: "APPROVED",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          openedByUserId: org.userId,
-          jobId: unpaidJobId,
-          billingDocumentId: billingDraftId,
-        });
-
-        const unpaidRes = await financeCertificateReleaseRouter.request(
-          `/${unpaidJobId}`,
-          { headers: JSON_HEADERS },
-        );
-        expect(unpaidRes.status).toBe(200);
-        const unpaidBody = await unpaidRes.json();
-        // ORACLE: payment outstanding → release BLOCKED
-        expect(unpaidBody.data.status).toBe("HELD_FOR_PAYMENT");
-
-        // Verify the status was persisted to the DB (not just in the response).
-        const [dbUnpaidRow] = await db
-          .select({ status: certificateRelease.status })
-          .from(certificateRelease)
-          .where(eq(certificateRelease.calibrationJobId, unpaidJobId));
-        expect(dbUnpaidRow?.status).toBe("HELD_FOR_PAYMENT");
-
-        // ---- PAID scenario ----
-        const billingPaidId = await seedBillingDocument({
-          orgId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          createdBy: org.userId,
-          status: "PAID",
-        });
-        await seedInstallment({ documentId: billingPaidId, status: "PAID" });
-
-        const paidJobId = await seedJob({
-          jobId: "JOB-PAID-001",
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          serviceId: org.serviceId,
-          createdBy: org.userId,
-          status: "APPROVED",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          openedByUserId: org.userId,
-          jobId: paidJobId,
-          billingDocumentId: billingPaidId,
-        });
-
-        const paidRes = await financeCertificateReleaseRouter.request(
-          `/${paidJobId}`,
-          { headers: JSON_HEADERS },
-        );
-        expect(paidRes.status).toBe(200);
-        const paidBody = await paidRes.json();
-        // ORACLE: payment complete → release ALLOWED
-        expect(paidBody.data.status).toBe("RELEASED");
-
-        // Verify the DB reflects RELEASED.
-        const [dbPaidRow] = await db
-          .select({ status: certificateRelease.status })
-          .from(certificateRelease)
-          .where(eq(certificateRelease.calibrationJobId, paidJobId));
-        expect(dbPaidRow?.status).toBe("RELEASED");
+    // --- Valid reason on APPROVED job → RELEASED_BY_EXCEPTION ---
+    const excRes = await financeCertificateReleaseRouter.request(
+      `/${heldJobId}/release-by-exception`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          reason: "Cliente viajará; certificado necessário urgente",
+        }),
       },
     );
+    expect(excRes.status).toBe(200);
+    const excBody = await excRes.json();
+    expect(excBody.data.status).toBe("RELEASED_BY_EXCEPTION");
 
-    // =======================================================================
-    // REQ-CREL-003 [HIGH RISK]: Exception override
-    // =======================================================================
-    it(
-      "REQ-CREL-003 [HIGH RISK]: exception release with reason on HELD APPROVED job → 200 + RELEASED_BY_EXCEPTION (sticky); empty reason → 400; non-APPROVED job → 409",
-      async () => {
-        const org = await seedOrgFixture({
-          orgId: "org-exc",
-          tagSuffix: "exc",
-        });
-        await seedReleasePolicy({
-          orgId: org.orgId,
-          createdByUserId: org.userId,
-          mode: "release_after_full_payment",
-        });
+    // --- Subsequent GET must still return RELEASED_BY_EXCEPTION (sticky) ---
+    const stickyRes = await financeCertificateReleaseRouter.request(
+      `/${heldJobId}`,
+      { headers: JSON_HEADERS },
+    );
+    expect(stickyRes.status).toBe(200);
+    const stickyBody = await stickyRes.json();
+    expect(stickyBody.data.status).toBe("RELEASED_BY_EXCEPTION");
 
-        loginAs({ userId: org.userId, organizationId: org.orgId });
+    // --- non-APPROVED job (REVIEW) → 409 (NOT_APPROVED) ---
+    const reviewJobId = await seedJob({
+      jobId: "JOB-REVIEW-001",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "REVIEW",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      openedByUserId: org.userId,
+      jobId: reviewJobId,
+    });
 
-        // Seed an APPROVED job with unpaid billing → will be HELD_FOR_PAYMENT.
-        const billingId = await seedBillingDocument({
-          orgId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          createdBy: org.userId,
-          status: "DRAFT",
-        });
-        await seedInstallment({ documentId: billingId, status: "OPEN" });
-
-        const heldJobId = await seedJob({
-          jobId: "JOB-HELD-001",
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          serviceId: org.serviceId,
-          createdBy: org.userId,
-          status: "APPROVED",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          openedByUserId: org.userId,
-          jobId: heldJobId,
-          billingDocumentId: billingId,
-        });
-
-        // Confirm initial state is HELD_FOR_PAYMENT.
-        const initRes = await financeCertificateReleaseRouter.request(
-          `/${heldJobId}`,
-          { headers: JSON_HEADERS },
-        );
-        expect(initRes.status).toBe(200);
-        expect((await initRes.json()).data.status).toBe("HELD_FOR_PAYMENT");
-
-        // --- Empty reason must be rejected ---
-        const emptyReasonRes = await financeCertificateReleaseRouter.request(
-          `/${heldJobId}/release-by-exception`,
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ reason: "" }),
-          },
-        );
-        expect(emptyReasonRes.status).toBe(400);
-
-        // --- Valid reason on APPROVED job → RELEASED_BY_EXCEPTION ---
-        const excRes = await financeCertificateReleaseRouter.request(
-          `/${heldJobId}/release-by-exception`,
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({
-              reason: "Cliente viajará; certificado necessário urgente",
-            }),
-          },
-        );
-        expect(excRes.status).toBe(200);
-        const excBody = await excRes.json();
-        expect(excBody.data.status).toBe("RELEASED_BY_EXCEPTION");
-
-        // --- Subsequent GET must still return RELEASED_BY_EXCEPTION (sticky) ---
-        const stickyRes = await financeCertificateReleaseRouter.request(
-          `/${heldJobId}`,
-          { headers: JSON_HEADERS },
-        );
-        expect(stickyRes.status).toBe(200);
-        const stickyBody = await stickyRes.json();
-        expect(stickyBody.data.status).toBe("RELEASED_BY_EXCEPTION");
-
-        // --- non-APPROVED job (REVIEW) → 409 (NOT_APPROVED) ---
-        const reviewJobId = await seedJob({
-          jobId: "JOB-REVIEW-001",
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          serviceId: org.serviceId,
-          createdBy: org.userId,
-          status: "REVIEW",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId: org.customerId,
-          assetId: org.assetId,
-          openedByUserId: org.userId,
-          jobId: reviewJobId,
-        });
-
-        const notApprovedRes = await financeCertificateReleaseRouter.request(
-          `/${reviewJobId}/release-by-exception`,
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ reason: "valid reason" }),
-          },
-        );
-        // Route maps NOT_APPROVED → 409
-        expect(notApprovedRes.status).toBe(409);
+    const notApprovedRes = await financeCertificateReleaseRouter.request(
+      `/${reviewJobId}/release-by-exception`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "valid reason" }),
       },
     );
+    // Route maps NOT_APPROVED → 409
+    expect(notApprovedRes.status).toBe(409);
+  });
 
-    // =======================================================================
-    // REQ-CREL-004 [HIGH RISK]: RBAC
-    // =======================================================================
-    it(
-      "REQ-CREL-004 [HIGH RISK]: member (no financial:export) → 403 on exception-release; member (no financial:contract_create) → 403 on POST /settings/; admin → 200 on both",
-      async () => {
-        const adminOrg = await seedOrgFixture({
-          orgId: "org-rbac",
-          role: "admin",
-          tagSuffix: "rbac",
-        });
-        await seedReleasePolicy({
-          orgId: adminOrg.orgId,
-          createdByUserId: adminOrg.userId,
-          mode: "release_after_full_payment",
-        });
+  // =======================================================================
+  // REQ-CREL-004 [HIGH RISK]: RBAC
+  // =======================================================================
+  it("REQ-CREL-004 [HIGH RISK]: member (no financial:export) → 403 on exception-release; member (no financial:contract_create) → 403 on POST /settings/; admin → 200 on both", async () => {
+    const adminOrg = await seedOrgFixture({
+      orgId: "org-rbac",
+      role: "admin",
+      tagSuffix: "rbac",
+    });
+    await seedReleasePolicy({
+      orgId: adminOrg.orgId,
+      createdByUserId: adminOrg.userId,
+      mode: "release_after_full_payment",
+    });
 
-        // Add a second user with "member" role in the same org.
-        const memberUserId = "user-member-rbac";
-        const memberId = `member-rbac-${memberUserId}`;
-        await db.insert(user).values({
-          id: memberUserId,
-          name: "Member User",
-          email: `${memberUserId}@lab.test`,
-        });
-        await db.insert(member).values({
-          id: memberId,
-          organizationId: adminOrg.orgId,
-          userId: memberUserId,
-          role: "member",
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        });
+    // Add a second user with "member" role in the same org.
+    const memberUserId = "user-member-rbac";
+    const memberId = `member-rbac-${memberUserId}`;
+    await db.insert(user).values({
+      id: memberUserId,
+      name: "Member User",
+      email: `${memberUserId}@lab.test`,
+    });
+    await db.insert(member).values({
+      id: memberId,
+      organizationId: adminOrg.orgId,
+      userId: memberUserId,
+      role: "member",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
 
-        // Seed an APPROVED job (no billing doc so it resolves via fallback policy
-        // → RELEASED under "release_after_full_payment" without billing = HELD_FOR_BILLING,
-        // but for RBAC tests the status value is irrelevant — only HTTP status matters).
-        const jobId = await seedJob({
-          jobId: "JOB-RBAC-001",
-          organizationId: adminOrg.orgId,
-          unitId: adminOrg.unitId,
-          customerId: adminOrg.customerId,
-          assetId: adminOrg.assetId,
-          serviceId: adminOrg.serviceId,
-          createdBy: adminOrg.userId,
-          status: "APPROVED",
-        });
-        await seedServiceOrderWithLink({
-          organizationId: adminOrg.orgId,
-          unitId: adminOrg.unitId,
-          customerId: adminOrg.customerId,
-          assetId: adminOrg.assetId,
-          openedByUserId: adminOrg.userId,
-          jobId,
-        });
+    // Seed an APPROVED job (no billing doc so it resolves via fallback policy
+    // → RELEASED under "release_after_full_payment" without billing = HELD_FOR_BILLING,
+    // but for RBAC tests the status value is irrelevant — only HTTP status matters).
+    const jobId = await seedJob({
+      jobId: "JOB-RBAC-001",
+      organizationId: adminOrg.orgId,
+      unitId: adminOrg.unitId,
+      customerId: adminOrg.customerId,
+      assetId: adminOrg.assetId,
+      serviceId: adminOrg.serviceId,
+      createdBy: adminOrg.userId,
+      status: "APPROVED",
+    });
+    await seedServiceOrderWithLink({
+      organizationId: adminOrg.orgId,
+      unitId: adminOrg.unitId,
+      customerId: adminOrg.customerId,
+      assetId: adminOrg.assetId,
+      openedByUserId: adminOrg.userId,
+      jobId,
+    });
 
-        // --- Member: lacks financial:export → 403 on exception-release ---
-        loginAs({ userId: memberUserId, organizationId: adminOrg.orgId });
-        const memberExcRes = await financeCertificateReleaseRouter.request(
-          `/${jobId}/release-by-exception`,
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ reason: "member bypass attempt" }),
-          },
-        );
-        expect(memberExcRes.status).toBe(403);
-
-        // --- Member: lacks financial:contract_create → 403 on POST /settings/ ---
-        const memberPolicyRes =
-          await settingsCertificateReleasePolicyRouter.request("/", {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ mode: "trusted_customer" }),
-          });
-        expect(memberPolicyRes.status).toBe(403);
-
-        // --- Admin: has financial:contract_create → 200 on POST /settings/ ---
-        loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
-        const adminPolicyRes =
-          await settingsCertificateReleasePolicyRouter.request("/", {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ mode: "trusted_customer" }),
-          });
-        expect(adminPolicyRes.status).toBe(200);
-
-        // --- Admin: has financial:export → 200 on exception-release ---
-        // Trigger initial recompute so the release row exists.
-        await financeCertificateReleaseRouter.request(`/${jobId}`, {
-          headers: JSON_HEADERS,
-        });
-        const adminExcRes = await financeCertificateReleaseRouter.request(
-          `/${jobId}/release-by-exception`,
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ reason: "Admin authorized override" }),
-          },
-        );
-        expect(adminExcRes.status).toBe(200);
-        expect((await adminExcRes.json()).data.status).toBe(
-          "RELEASED_BY_EXCEPTION",
-        );
+    // --- Member: lacks financial:export → 403 on exception-release ---
+    loginAs({ userId: memberUserId, organizationId: adminOrg.orgId });
+    const memberExcRes = await financeCertificateReleaseRouter.request(
+      `/${jobId}/release-by-exception`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "member bypass attempt" }),
       },
     );
+    expect(memberExcRes.status).toBe(403);
 
-    // =======================================================================
-    // REQ-CREL-005: Unauthenticated → 401
-    // =======================================================================
-    it(
-      "REQ-CREL-005: unauthenticated GET and exception-release → 401",
-      async () => {
-        logout();
+    // --- Member: lacks financial:contract_create → 403 on POST /settings/ ---
+    const memberPolicyRes =
+      await settingsCertificateReleasePolicyRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ mode: "trusted_customer" }),
+      });
+    expect(memberPolicyRes.status).toBe(403);
 
-        const getRes = await financeCertificateReleaseRouter.request("/999", {
-          headers: JSON_HEADERS,
-        });
-        expect(getRes.status).toBe(401);
-
-        const postRes = await financeCertificateReleaseRouter.request(
-          "/999/release-by-exception",
-          {
-            method: "POST",
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ reason: "anon bypass" }),
-          },
-        );
-        expect(postRes.status).toBe(401);
+    // --- Admin: has financial:contract_create → 200 on POST /settings/ ---
+    loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
+    const adminPolicyRes = await settingsCertificateReleasePolicyRouter.request(
+      "/",
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ mode: "trusted_customer" }),
       },
     );
-  },
-);
+    expect(adminPolicyRes.status).toBe(200);
+
+    // --- Admin: has financial:export → 200 on exception-release ---
+    // Trigger initial recompute so the release row exists.
+    await financeCertificateReleaseRouter.request(`/${jobId}`, {
+      headers: JSON_HEADERS,
+    });
+    const adminExcRes = await financeCertificateReleaseRouter.request(
+      `/${jobId}/release-by-exception`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "Admin authorized override" }),
+      },
+    );
+    expect(adminExcRes.status).toBe(200);
+    expect((await adminExcRes.json()).data.status).toBe(
+      "RELEASED_BY_EXCEPTION",
+    );
+  });
+
+  // =======================================================================
+  // REQ-CREL-005: Unauthenticated → 401
+  // =======================================================================
+  it("REQ-CREL-005: unauthenticated GET and exception-release → 401", async () => {
+    logout();
+
+    const getRes = await financeCertificateReleaseRouter.request("/999", {
+      headers: JSON_HEADERS,
+    });
+    expect(getRes.status).toBe(401);
+
+    const postRes = await financeCertificateReleaseRouter.request(
+      "/999/release-by-exception",
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "anon bypass" }),
+      },
+    );
+    expect(postRes.status).toBe(401);
+  });
+});

@@ -161,207 +161,189 @@ describe("signaturesRouter -- real DB + real RBAC middleware", () => {
   // =========================================================================
   // REQ-VSIG-001: Owner upload persists scoped to (member, org)
   // =========================================================================
-  it(
-    "REQ-VSIG-001: POST /my-signature as owner -> 200 and persists exactly one memberVisualSignature row scoped to (member, org) with correct dimensions",
-    async () => {
-      const org = await seedOrg({ orgId: "org-vsig-001", role: "owner" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-VSIG-001: POST /my-signature as owner -> 200 and persists exactly one memberVisualSignature row scoped to (member, org) with correct dimensions", async () => {
+    const org = await seedOrg({ orgId: "org-vsig-001", role: "owner" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      // Valid PNG: 200x100 -- within [100..800]x[50..400]
-      const pngBuf = makePngBuffer(200, 100);
-      const form = makePngFormData(pngBuf);
+    // Valid PNG: 200x100 -- within [100..800]x[50..400]
+    const pngBuf = makePngBuffer(200, 100);
+    const form = makePngFormData(pngBuf);
 
-      const res = await signaturesRouter.request("/my-signature", {
-        method: "POST",
-        headers: unitHeader(org.unitId),
-        body: form,
-      });
+    const res = await signaturesRouter.request("/my-signature", {
+      method: "POST",
+      headers: unitHeader(org.unitId),
+      body: form,
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toHaveProperty("message");
-      expect(body.dimensions).toEqual({ width: 200, height: 100 });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty("message");
+    expect(body.dimensions).toEqual({ width: 200, height: 100 });
 
-      // DB-verify: exactly one row, keyed (memberId, organizationId), correct dims
-      const rows = await db
-        .select()
-        .from(memberVisualSignature)
-        .where(
-          and(
-            eq(memberVisualSignature.memberId, org.memberId),
-            eq(memberVisualSignature.organizationId, org.orgId),
-          ),
-        );
+    // DB-verify: exactly one row, keyed (memberId, organizationId), correct dims
+    const rows = await db
+      .select()
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, org.memberId),
+          eq(memberVisualSignature.organizationId, org.orgId),
+        ),
+      );
 
-      expect(rows).toHaveLength(1);
-      const row = rows[0];
-      if (!row) throw new Error("REQ-VSIG-001: expected persisted row");
-      expect(row.memberId).toBe(org.memberId);
-      expect(row.organizationId).toBe(org.orgId);
-      // Dimensions must match the IHDR we encoded in the buffer
-      expect(row.width).toBe(200);
-      expect(row.height).toBe(100);
-    },
-  );
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    if (!row) throw new Error("REQ-VSIG-001: expected persisted row");
+    expect(row.memberId).toBe(org.memberId);
+    expect(row.organizationId).toBe(org.orgId);
+    // Dimensions must match the IHDR we encoded in the buffer
+    expect(row.width).toBe(200);
+    expect(row.height).toBe(100);
+  });
 
   // =========================================================================
   // REQ-VSIG-002: Cross-org guard on GET /member/:memberId
   // =========================================================================
-  it(
-    "REQ-VSIG-002: GET /member/:memberId for a memberId belonging to org B -> 404 when called by org A admin; no cross-tenant signature data returned",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-vsig-002a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-vsig-002b", role: "admin" });
+  it("REQ-VSIG-002: GET /member/:memberId for a memberId belonging to org B -> 404 when called by org A admin; no cross-tenant signature data returned", async () => {
+    const orgA = await seedOrg({ orgId: "org-vsig-002a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-vsig-002b", role: "admin" });
 
-      // Org B's member has a signature in the DB
-      await seedSignature({
-        memberId: orgB.memberId,
-        organizationId: orgB.orgId,
-        width: 300,
-        height: 150,
-      });
+    // Org B's member has a signature in the DB
+    await seedSignature({
+      memberId: orgB.memberId,
+      organizationId: orgB.orgId,
+      width: 300,
+      height: 150,
+    });
 
-      // Org A's admin tries to read org B's member signature by memberId
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await signaturesRouter.request(`/member/${orgB.memberId}`, {
-        headers: unitHeader(orgA.unitId),
-      });
+    // Org A's admin tries to read org B's member signature by memberId
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await signaturesRouter.request(`/member/${orgB.memberId}`, {
+      headers: unitHeader(orgA.unitId),
+    });
 
-      // The handler verifies target member belongs to the caller's org first.
-      // orgB.memberId is not found under orgA -> 404 "Membro nao encontrado".
-      expect(res.status).toBe(404);
+    // The handler verifies target member belongs to the caller's org first.
+    // orgB.memberId is not found under orgA -> 404 "Membro nao encontrado".
+    expect(res.status).toBe(404);
 
-      const body = await res.json();
-      // Must NOT expose any signature URL or hasSignature:true
-      expect(body).not.toHaveProperty("url");
-      const raw = JSON.stringify(body);
-      expect(raw).not.toContain('"hasSignature":true');
-      expect(raw).not.toContain("https://r2.test/signed");
-    },
-  );
+    const body = await res.json();
+    // Must NOT expose any signature URL or hasSignature:true
+    expect(body).not.toHaveProperty("url");
+    const raw = JSON.stringify(body);
+    expect(raw).not.toContain('"hasSignature":true');
+    expect(raw).not.toContain("https://r2.test/signed");
+  });
 
   // =========================================================================
   // REQ-VSIG-003: RBAC on GET /member/:memberId
   // =========================================================================
-  it(
-    "REQ-VSIG-003: GET /member/:memberId -- technician (no calibration:approve) -> 403; same-org admin -> 200 proving the 403 is the RBAC gate",
-    async () => {
-      const orgAdmin = await seedOrg({ orgId: "org-vsig-003", role: "admin" });
+  it("REQ-VSIG-003: GET /member/:memberId -- technician (no calibration:approve) -> 403; same-org admin -> 200 proving the 403 is the RBAC gate", async () => {
+    const orgAdmin = await seedOrg({ orgId: "org-vsig-003", role: "admin" });
 
-      const techUserId = "user-vsig-003-tech";
-      const techMemberId = await seedExtraMember({
-        orgId: orgAdmin.orgId,
-        userId: techUserId,
-        role: "technician",
-      });
+    const techUserId = "user-vsig-003-tech";
+    const techMemberId = await seedExtraMember({
+      orgId: orgAdmin.orgId,
+      userId: techUserId,
+      role: "technician",
+    });
 
-      // Pre-seed a signature for the admin member so the admin call returns hasSignature:true
-      await seedSignature({
-        memberId: orgAdmin.memberId,
-        organizationId: orgAdmin.orgId,
-        width: 400,
-        height: 200,
-      });
+    // Pre-seed a signature for the admin member so the admin call returns hasSignature:true
+    await seedSignature({
+      memberId: orgAdmin.memberId,
+      organizationId: orgAdmin.orgId,
+      width: 400,
+      height: 200,
+    });
 
-      // --- technician call: calibration:approve absent -> 403 ---
-      loginAs({ userId: techUserId, organizationId: orgAdmin.orgId });
-      const techRes = await signaturesRouter.request(
-        `/member/${orgAdmin.memberId}`,
-        { headers: unitHeader(orgAdmin.unitId) },
-      );
-      expect(techRes.status).toBe(403);
+    // --- technician call: calibration:approve absent -> 403 ---
+    loginAs({ userId: techUserId, organizationId: orgAdmin.orgId });
+    const techRes = await signaturesRouter.request(
+      `/member/${orgAdmin.memberId}`,
+      { headers: unitHeader(orgAdmin.unitId) },
+    );
+    expect(techRes.status).toBe(403);
 
-      // --- admin call: calibration:approve present -> 200 ---
-      loginAs({ userId: orgAdmin.userId, organizationId: orgAdmin.orgId });
-      const adminRes = await signaturesRouter.request(
-        `/member/${orgAdmin.memberId}`,
-        { headers: unitHeader(orgAdmin.unitId) },
-      );
-      expect(adminRes.status).toBe(200);
-      const adminBody = await adminRes.json();
-      expect(adminBody.hasSignature).toBe(true);
-      expect(adminBody.url).toBe("https://r2.test/signed");
+    // --- admin call: calibration:approve present -> 200 ---
+    loginAs({ userId: orgAdmin.userId, organizationId: orgAdmin.orgId });
+    const adminRes = await signaturesRouter.request(
+      `/member/${orgAdmin.memberId}`,
+      { headers: unitHeader(orgAdmin.unitId) },
+    );
+    expect(adminRes.status).toBe(200);
+    const adminBody = await adminRes.json();
+    expect(adminBody.hasSignature).toBe(true);
+    expect(adminBody.url).toBe("https://r2.test/signed");
 
-      // techMemberId is used to validate seedExtraMember ran correctly
-      expect(techMemberId).toBeDefined();
-    },
-  );
+    // techMemberId is used to validate seedExtraMember ran correctly
+    expect(techMemberId).toBeDefined();
+  });
 
   // =========================================================================
   // REQ-VSIG-004: Upload validation -- non-PNG -> 400, no DB row
   // =========================================================================
-  it(
-    "REQ-VSIG-004: POST /my-signature with content-type text/plain -> 400 and no memberVisualSignature row persisted",
-    async () => {
-      const org = await seedOrg({ orgId: "org-vsig-004", role: "admin" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-VSIG-004: POST /my-signature with content-type text/plain -> 400 and no memberVisualSignature row persisted", async () => {
+    const org = await seedOrg({ orgId: "org-vsig-004", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      // content-type "text/plain" is not in ALLOWED_CONTENT_TYPES
-      const badBuf = Buffer.from("not a png at all");
-      const form = makePngFormData(badBuf, "text/plain");
+    // content-type "text/plain" is not in ALLOWED_CONTENT_TYPES
+    const badBuf = Buffer.from("not a png at all");
+    const form = makePngFormData(badBuf, "text/plain");
 
-      const res = await signaturesRouter.request("/my-signature", {
-        method: "POST",
-        headers: unitHeader(org.unitId),
-        body: form,
-      });
+    const res = await signaturesRouter.request("/my-signature", {
+      method: "POST",
+      headers: unitHeader(org.unitId),
+      body: form,
+    });
 
-      expect(res.status).toBe(400);
+    expect(res.status).toBe(400);
 
-      // DB must have zero rows -- nothing was persisted
-      const rows = await db
-        .select({ id: memberVisualSignature.id })
-        .from(memberVisualSignature)
-        .where(
-          and(
-            eq(memberVisualSignature.memberId, org.memberId),
-            eq(memberVisualSignature.organizationId, org.orgId),
-          ),
-        );
-      expect(rows).toHaveLength(0);
-    },
-  );
+    // DB must have zero rows -- nothing was persisted
+    const rows = await db
+      .select({ id: memberVisualSignature.id })
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, org.memberId),
+          eq(memberVisualSignature.organizationId, org.orgId),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+  });
 
-  it(
-    "REQ-VSIG-004b: POST /my-signature with correct content-type but bad PNG magic -> 400 and no memberVisualSignature row persisted",
-    async () => {
-      const org = await seedOrg({ orgId: "org-vsig-004b", role: "admin" });
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+  it("REQ-VSIG-004b: POST /my-signature with correct content-type but bad PNG magic -> 400 and no memberVisualSignature row persisted", async () => {
+    const org = await seedOrg({ orgId: "org-vsig-004b", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      // Correct MIME type but first byte wrong -> getPngDimensions -> null -> 400
-      const badMagic = Buffer.from("NOTPNG this is junk 1234567890");
-      const form = makePngFormData(badMagic, "image/png");
+    // Correct MIME type but first byte wrong -> getPngDimensions -> null -> 400
+    const badMagic = Buffer.from("NOTPNG this is junk 1234567890");
+    const form = makePngFormData(badMagic, "image/png");
 
-      const res = await signaturesRouter.request("/my-signature", {
-        method: "POST",
-        headers: unitHeader(org.unitId),
-        body: form,
-      });
+    const res = await signaturesRouter.request("/my-signature", {
+      method: "POST",
+      headers: unitHeader(org.unitId),
+      body: form,
+    });
 
-      expect(res.status).toBe(400);
+    expect(res.status).toBe(400);
 
-      const rows = await db
-        .select({ id: memberVisualSignature.id })
-        .from(memberVisualSignature)
-        .where(
-          and(
-            eq(memberVisualSignature.memberId, org.memberId),
-            eq(memberVisualSignature.organizationId, org.orgId),
-          ),
-        );
-      expect(rows).toHaveLength(0);
-    },
-  );
+    const rows = await db
+      .select({ id: memberVisualSignature.id })
+      .from(memberVisualSignature)
+      .where(
+        and(
+          eq(memberVisualSignature.memberId, org.memberId),
+          eq(memberVisualSignature.organizationId, org.orgId),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+  });
 
   // =========================================================================
   // REQ-VSIG-005: Unauthenticated GET /my-signature -> 401
   // =========================================================================
-  it(
-    "REQ-VSIG-005: GET /my-signature without authentication -> 401 (requireLabAuth fires before handler)",
-    async () => {
-      logout();
-      const res = await signaturesRouter.request("/my-signature");
-      expect(res.status).toBe(401);
-    },
-  );
+  it("REQ-VSIG-005: GET /my-signature without authentication -> 401 (requireLabAuth fires before handler)", async () => {
+    logout();
+    const res = await signaturesRouter.request("/my-signature");
+    expect(res.status).toBe(401);
+  });
 });

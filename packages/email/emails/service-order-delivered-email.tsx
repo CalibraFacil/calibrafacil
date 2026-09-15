@@ -41,8 +41,8 @@ export function ServiceOrderDeliveredEmail({
         <Title>Confirmação de entrega</Title>
         <Paragraph>
           Olá, {customerName}! Confirmamos que o equipamento da ordem de serviço{" "}
-          {serviceOrderNumber} foi entregue com sucesso. Este é o seu comprovante
-          de entrega.
+          {serviceOrderNumber} foi entregue com sucesso. Este é o seu
+          comprovante de entrega.
         </Paragraph>
 
         <DetailBox>

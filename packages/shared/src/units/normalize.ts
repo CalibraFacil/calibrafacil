@@ -208,12 +208,14 @@ export function normalizeRangeSpecsForStorage(
       resolutionUnit: canonical,
     };
 
-    const fields: Array<{ key: "min" | "max" | "resolution"; mode: ConvertMode }> =
-      [
-        { key: "min", mode: "absolute" },
-        { key: "max", mode: "absolute" },
-        { key: "resolution", mode: "delta" },
-      ];
+    const fields: Array<{
+      key: "min" | "max" | "resolution";
+      mode: ConvertMode;
+    }> = [
+      { key: "min", mode: "absolute" },
+      { key: "max", mode: "absolute" },
+      { key: "resolution", mode: "delta" },
+    ];
 
     for (const { key, mode } of fields) {
       const numericValue = parseNumericValue(range[key]);
@@ -272,12 +274,14 @@ export function normalizeRangeSpecsForDisplay(
       resolutionUnit: baseUnit,
     };
 
-    const fields: Array<{ key: "min" | "max" | "resolution"; mode: ConvertMode }> =
-      [
-        { key: "min", mode: "absolute" },
-        { key: "max", mode: "absolute" },
-        { key: "resolution", mode: "delta" },
-      ];
+    const fields: Array<{
+      key: "min" | "max" | "resolution";
+      mode: ConvertMode;
+    }> = [
+      { key: "min", mode: "absolute" },
+      { key: "max", mode: "absolute" },
+      { key: "resolution", mode: "delta" },
+    ];
 
     for (const { key, mode } of fields) {
       const numericValue = parseNumericValue(range[key]);

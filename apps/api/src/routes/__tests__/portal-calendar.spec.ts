@@ -71,9 +71,8 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-const { resolveLabOrganizationIdByPortalHostname } = await import(
-  "../../lib/portal-domains"
-);
+const { resolveLabOrganizationIdByPortalHostname } =
+  await import("../../lib/portal-domains");
 const { portalRouter } = await import("../portal");
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };

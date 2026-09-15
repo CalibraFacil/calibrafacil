@@ -39,9 +39,7 @@ function budgetEntry(entry: unknown): {
   }
 
   const symbol: unknown = Reflect.get(entry, "symbol");
-  const contributionPercent = Number(
-    Reflect.get(entry, "contributionPercent"),
-  );
+  const contributionPercent = Number(Reflect.get(entry, "contributionPercent"));
 
   if (typeof symbol !== "string" || !Number.isFinite(contributionPercent)) {
     throw new Error("Invalid uncertainty budget entry");

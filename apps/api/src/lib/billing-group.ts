@@ -56,7 +56,9 @@ export function evaluateBillingGroupCompatibility(
     .map((row) =>
       row.billingReferenceDate ? new Date(row.billingReferenceDate) : null,
     )
-    .filter((date): date is Date => date !== null && !Number.isNaN(date.getTime()));
+    .filter(
+      (date): date is Date => date !== null && !Number.isNaN(date.getTime()),
+    );
   if (dates.length === inputs.length && dates.length > 1) {
     const sorted = dates.slice().sort((a, b) => a.getTime() - b.getTime());
     const spread = sorted[sorted.length - 1]!.getTime() - sorted[0]!.getTime();

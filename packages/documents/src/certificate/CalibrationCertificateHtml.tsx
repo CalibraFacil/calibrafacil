@@ -92,26 +92,12 @@ function ResultTable({ table }: { table: CertificateResultTable }) {
         <thead>
           <tr>
             <th>Ponto</th>
-            {showReference ? (
-              <th className="num">
-                VVC{unit}
-              </th>
-            ) : null}
-            {showIndication ? (
-              <th className="num">
-                Indicação{unit}
-              </th>
-            ) : null}
-            <th className="num">
-              Erro{unit}
-            </th>
-            <th className="num">
-              U{unit}
-            </th>
+            {showReference ? <th className="num">VVC{unit}</th> : null}
+            {showIndication ? <th className="num">Indicação{unit}</th> : null}
+            <th className="num">Erro{unit}</th>
+            <th className="num">U{unit}</th>
             {showK ? <th className="num no-caps">k</th> : null}
-            {showVeff ? (
-              <th className="num no-caps">ν(eff)</th>
-            ) : null}
+            {showVeff ? <th className="num no-caps">ν(eff)</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -130,9 +116,7 @@ function ResultTable({ table }: { table: CertificateResultTable }) {
                 <td className="num">{row.coverageFactor ?? "—"}</td>
               ) : null}
               {showVeff ? (
-                <td className="num">
-                  {row.effectiveDegreesOfFreedom ?? "—"}
-                </td>
+                <td className="num">{row.effectiveDegreesOfFreedom ?? "—"}</td>
               ) : null}
             </tr>
           ))}
@@ -163,9 +147,7 @@ function RepeatabilityTable({ data }: { data: CertificateRepeatability }) {
                 {unit}
               </th>
             ))}
-            <th className="num">
-              Repetibilidade{unit}
-            </th>
+            <th className="num">Repetibilidade{unit}</th>
           </tr>
         </thead>
         <tbody>
@@ -204,12 +186,8 @@ function EccentricityBlock({ data }: { data: CertificateEccentricity }) {
             <thead>
               <tr>
                 <th>Posição</th>
-                <th className="num">
-                  Antes do ajuste{unit}
-                </th>
-                <th className="num">
-                  Depois do ajuste{unit}
-                </th>
+                <th className="num">Antes do ajuste{unit}</th>
+                <th className="num">Depois do ajuste{unit}</th>
               </tr>
             </thead>
             <tbody>
@@ -293,9 +271,7 @@ export function CalibrationCertificateHtml({
       <head>
         <meta charSet="utf-8" />
         <title>{`Certificado de Calibração ${data.certificateNumber}`}</title>
-        <style
-          dangerouslySetInnerHTML={{ __html: CERTIFICATE_PAGE_STYLES }}
-        />
+        <style dangerouslySetInnerHTML={{ __html: CERTIFICATE_PAGE_STYLES }} />
       </head>
       <body>
         {/* ── identity page ─────────────────────────────────────────────
@@ -343,11 +319,7 @@ export function CalibrationCertificateHtml({
           <div className="fields">
             <FieldRow label="Razão social" value={data.customer.name} wide />
             <FieldRow label="CNPJ / CPF" value={data.customer.taxId} mono />
-            <FieldRow
-              label="Endereço"
-              value={data.customer.addressText}
-              wide
-            />
+            <FieldRow label="Endereço" value={data.customer.addressText} wide />
           </div>
         </Section>
 
@@ -356,11 +328,7 @@ export function CalibrationCertificateHtml({
             <FieldRow label="Descrição" value={data.item.description} wide />
             <FieldRow label="Fabricante" value={data.item.manufacturer} />
             <FieldRow label="Modelo" value={data.item.model} />
-            <FieldRow
-              label="Nº de série"
-              value={data.item.serialNumber}
-              mono
-            />
+            <FieldRow label="Nº de série" value={data.item.serialNumber} mono />
             <FieldRow label="Identificação" value={data.item.tag} mono />
             <FieldRow label="Capacidade" value={data.item.capacityText} />
             <FieldRow label="Divisão" value={data.item.divisionText} />
@@ -550,10 +518,7 @@ export function CalibrationCertificateHtml({
           >
             <div className="fields fields--single">
               <FieldRow label="Resultado" value={data.conformity.verdict} />
-              <FieldRow
-                label="Aplica-se a"
-                value={data.conformity.appliesTo}
-              />
+              <FieldRow label="Aplica-se a" value={data.conformity.appliesTo} />
               <FieldRow
                 label="Especificação"
                 value={data.conformity.specification}
@@ -606,13 +571,15 @@ export function CalibrationCertificateHtml({
               laboratório.
             </li>
             <li>
-              Este certificado não tem valor para fins de metrologia legal e
-              não autoriza o uso do instrumento em relações de consumo.
+              Este certificado não tem valor para fins de metrologia legal e não
+              autoriza o uso do instrumento em relações de consumo.
             </li>
             {showSeal ? (
               /* NIE-Cgcre-009 §11.5.8.1 — optional MRA declaration, with the
                  norm's exact wording. */
-              <li>A Cgcre é signatária do Acordo de Reconhecimento Mútuo da ILAC.</li>
+              <li>
+                A Cgcre é signatária do Acordo de Reconhecimento Mútuo da ILAC.
+              </li>
             ) : (
               <li>
                 Os resultados deste certificado não estão cobertos pela

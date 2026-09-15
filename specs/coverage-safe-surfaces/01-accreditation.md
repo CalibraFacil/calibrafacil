@@ -4,6 +4,7 @@ Target: `packages/shared/src/accreditation.ts`
 Test file: `packages/shared/src/accreditation.test.ts` (Vitest)
 
 ## Context
+
 Pure helpers for ISO/IEC 17025 accreditation: normalize/format the accreditation
 number (digits-only storage, `CAL`-prefixed display) and decide accreditation
 status + seal emission. Used on issued certificates → assert exact strings VERBATIM.
@@ -47,8 +48,8 @@ status + seal emission. Used on issued certificates → assert exact strings VER
   ("Calibração / NBR ISO/IEC / 17025"); §4.1 gave a 3-year transition, to Jul/2027.
   See `docs/referencias/nie-cgcre-009-simbolo-acreditacao.md`.
 - REQ-ACCR-013: `ACCREDITATION_SEAL_FONT_FAMILY` SHALL name Arial before any other
-  family, per NIE-Cgcre-009 A.6.2 (*"A fonte da letra a ser usada no símbolo é a
-  Arial"*). A Calibri clone such as Carlito must not precede it: Carlito ships with
+  family, per NIE-Cgcre-009 A.6.2 (_"A fonte da letra a ser usada no símbolo é a
+  Arial"_). A Calibri clone such as Carlito must not precede it: Carlito ships with
   LibreOffice and would win inside the Gotenberg Chromium container.
 - REQ-ACCR-014: IF `shouldRenderAccreditationSeal` is told that any result on the
   certificate came from an external provider (`hasExternalProviderResults === true`),

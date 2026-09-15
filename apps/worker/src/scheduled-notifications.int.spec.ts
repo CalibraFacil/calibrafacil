@@ -121,10 +121,7 @@ async function scheduledNotificationRows(filters?: {
       if (filters?.type && row.type !== filters.type) return false;
       if (filters?.entityType && row.entity_type !== filters.entityType)
         return false;
-      if (
-        filters?.entityId !== undefined &&
-        row.entity_id !== filters.entityId
-      )
+      if (filters?.entityId !== undefined && row.entity_id !== filters.entityId)
         return false;
       return true;
     });

@@ -11,17 +11,25 @@ import type {
 } from "./types";
 
 /** The version the engine instance reports about itself, when it does. */
-function runningEngineVersion(engine: CalculationEngineLike): string | undefined {
+function runningEngineVersion(
+  engine: CalculationEngineLike,
+): string | undefined {
   const engineOptions: unknown = engine.options;
-  if (engineOptions === null || typeof engineOptions !== "object") return undefined;
+  if (engineOptions === null || typeof engineOptions !== "object")
+    return undefined;
   const version = Reflect.get(engineOptions, "engineVersion");
-  return typeof version === "string" && version.length > 0 ? version : undefined;
+  return typeof version === "string" && version.length > 0
+    ? version
+    : undefined;
 }
 
 /** The options fingerprint of the running engine, computed exactly as `compileMethodDraft` computes it. */
-function runningEngineOptionsFingerprint(engine: CalculationEngineLike): string | undefined {
+function runningEngineOptionsFingerprint(
+  engine: CalculationEngineLike,
+): string | undefined {
   const engineOptions: unknown = engine.options;
-  if (engineOptions === null || typeof engineOptions !== "object") return undefined;
+  if (engineOptions === null || typeof engineOptions !== "object")
+    return undefined;
   return fingerprintJson(engineOptions, "engine-options");
 }
 
@@ -37,10 +45,19 @@ function engineContractMismatch(
   method: CompiledMethod,
   engine: CalculationEngineLike,
 ):
-  | { readonly field: "version"; readonly compiled: string; readonly running: string }
-  | { readonly field: "options"; readonly compiled: string; readonly running: string }
+  | {
+      readonly field: "version";
+      readonly compiled: string;
+      readonly running: string;
+    }
+  | {
+      readonly field: "options";
+      readonly compiled: string;
+      readonly running: string;
+    }
   | undefined {
-  if (method.engine.version === DEFAULT_ENGINE_METADATA.version) return undefined;
+  if (method.engine.version === DEFAULT_ENGINE_METADATA.version)
+    return undefined;
   const running = runningEngineVersion(engine);
   if (running !== undefined && running !== method.engine.version) {
     return { field: "version", compiled: method.engine.version, running };
@@ -48,12 +65,22 @@ function engineContractMismatch(
   // Same version, different numeric contract (a changed METHOD_ENGINE_OPTIONS,
   // or a number-mode engine): the results would differ while still being
   // stamped with the compiled options fingerprint (review).
-  if (method.engine.optionsFingerprint === DEFAULT_ENGINE_METADATA.optionsFingerprint) {
+  if (
+    method.engine.optionsFingerprint ===
+    DEFAULT_ENGINE_METADATA.optionsFingerprint
+  ) {
     return undefined;
   }
   const runningOptions = runningEngineOptionsFingerprint(engine);
-  if (runningOptions !== undefined && runningOptions !== method.engine.optionsFingerprint) {
-    return { field: "options", compiled: method.engine.optionsFingerprint, running: runningOptions };
+  if (
+    runningOptions !== undefined &&
+    runningOptions !== method.engine.optionsFingerprint
+  ) {
+    return {
+      field: "options",
+      compiled: method.engine.optionsFingerprint,
+      running: runningOptions,
+    };
   }
   return undefined;
 }
@@ -85,7 +112,8 @@ function methodIdentityWithoutEngine(method: CompiledMethod): string | null {
   } catch {
     return null;
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+    return null;
   const entries = Object.entries(parsed).filter(([key]) => key !== "engine");
   return canonicalJson(Object.fromEntries(entries));
 }
@@ -161,7 +189,10 @@ export function executeCompiledMethod(
       diagnostics,
       outputs: {},
       canonicalResultJson,
-      calculationFingerprint: fingerprintJson(canonicalResultJson, "calculation"),
+      calculationFingerprint: fingerprintJson(
+        canonicalResultJson,
+        "calculation",
+      ),
       resultFingerprint: fingerprintJson(canonicalResultJson, "result"),
     };
   }
@@ -182,10 +213,12 @@ export function executeCompiledMethod(
     outputs[result.key] = result.value;
   }
 
-	  for (const result of preview.measurementModelResults) {
+  for (const result of preview.measurementModelResults) {
     const modelResult = result.result;
     const value =
-      modelResult && typeof modelResult === "object" && !Array.isArray(modelResult)
+      modelResult &&
+      typeof modelResult === "object" &&
+      !Array.isArray(modelResult)
         ? Object.fromEntries(Object.entries(modelResult)).value
         : null;
     outputs[result.key] = Array.isArray(modelResult)

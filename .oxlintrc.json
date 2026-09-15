@@ -44,6 +44,16 @@
     // and this repo does not run React Compiler, so keep it advisory instead
     // of failing the build on a library's design.
     "react/incompatible-library": "warn",
+    // Promoted from the advisory `suspicious` tier after the existing sites were
+    // fixed (#930): these read as real defects, not style.
+    // `allowAsProps` keeps render props (DataTable `bulkActions`, Recharts
+    // `formatter`) out of scope — the receiver calls them as functions, so they
+    // are not unstable element types.
+    "react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
+    "react/jsx-no-constructed-context-values": "error",
+    "react/memo-dependencies": "error",
+    "react/iframe-missing-sandbox": "error",
+    "eslint/preserve-caught-error": "error",
     "calibra/no-api-import-in-frontend": "error",
     "calibra/no-hono-client-outside-client-runtime": "error",
     "calibra/no-router-coupling-in-features": "error"

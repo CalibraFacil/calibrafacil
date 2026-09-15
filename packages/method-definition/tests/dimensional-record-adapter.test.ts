@@ -62,7 +62,12 @@ describe("dimensionalInputFromMethodRecord", () => {
       { symbol: "ref", unit: "mm" },
     ]);
     expect(input.formulas).toEqual([
-      { id: "erro", expression: "ind - ref", resultUnit: "mm", resultSymbol: "E" },
+      {
+        id: "erro",
+        expression: "ind - ref",
+        resultUnit: "mm",
+        resultSymbol: "E",
+      },
     ]);
   });
 });
@@ -74,7 +79,9 @@ describe("checkMethodRecordDimensions", () => {
         { key: "massa", type: "number", unit: "g" },
         { key: "tensao", type: "number", unit: "V" },
       ],
-      formulas: [{ outputKey: "erro", expression: "massa + tensao", unit: "g" }],
+      formulas: [
+        { outputKey: "erro", expression: "massa + tensao", unit: "g" },
+      ],
     });
     expect(diags.length).toBeGreaterThan(0);
     expect(diags[0]?.code).toBe("DIMENSIONAL_MISMATCH");

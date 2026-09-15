@@ -330,7 +330,9 @@ describe("financial ERP integration config", () => {
       "catalog_item",
     );
     expect(getContaAzulReferenceLinkTarget("products")).toBe("product");
-    expect(getContaAzulReferenceLinkTarget("serviceCategories")).toBe("service");
+    expect(getContaAzulReferenceLinkTarget("serviceCategories")).toBe(
+      "service",
+    );
     expect(getContaAzulReferenceLinkTarget("sellers")).toBe("seller");
     expect(getContaAzulReferenceLinkTarget("protocols")).toBeNull();
 

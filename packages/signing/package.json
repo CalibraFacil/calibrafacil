@@ -10,7 +10,8 @@
     "build": "tsc",
     "check-types": "tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "lint": "oxlint"
   },
   "keywords": [
     "icp-brasil",

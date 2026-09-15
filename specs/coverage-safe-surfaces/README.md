@@ -10,7 +10,7 @@ REQ IDs are stable and append-only. Each REQ maps to ≥1 test that FAILS on reg
 (no tautologies — enforced by spec-verifier with mutation reasoning).
 
 Cut-line note: none of these targets are RBAC/tenancy, ICP signing, GUM uncertainty
-math, or the calibration-approval state machine. Two are *adjacent* and flagged
+math, or the calibration-approval state machine. Two are _adjacent_ and flagged
 `[REVIEW]`: `api-keys` (auth-adjacent key hashing, not the policy layer) and
 `criteria` (conformity-criteria compilation, not GUM math). Tests assert existing
 behavior only.

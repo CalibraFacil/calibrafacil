@@ -62,7 +62,10 @@ export function dimensionlessExpr(): DimExpr {
 
 /** A single fresh unknown factor — the dimension a caller could not determine. */
 export function wildcardExpr(id: number): DimExpr {
-  return { concrete: DIMENSIONLESS, wildcards: new Map([[id, { n: 1, d: 1 }]]) };
+  return {
+    concrete: DIMENSIONLESS,
+    wildcards: new Map([[id, { n: 1, d: 1 }]]),
+  };
 }
 
 function pruneWildcards(

@@ -60,10 +60,7 @@ export async function buildPortalBranchFinancialHistory(params: {
       totalCents: billingDocument.totalCents,
     })
     .from(serviceOrder)
-    .innerJoin(
-      organizationUnit,
-      eq(serviceOrder.unitId, organizationUnit.id),
-    )
+    .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
     .innerJoin(customer, eq(customer.id, serviceOrder.customerId))
     .innerJoin(
       billingDocument,

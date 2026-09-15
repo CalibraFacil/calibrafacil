@@ -113,9 +113,7 @@ const BASE_EVENT = {
 // REQ-SOEMAIL-061 — canceled enqueues an outbox row
 // REQ-SOEMAIL-062 — warranty_return enqueues an outbox row
 // ---------------------------------------------------------------------------
-describe(
-  "REQ-SOEMAIL-041/042/043/044/051/052/053/054/061/062: qualifying status transitions enqueue outbox rows",
-  () => {
+describe("REQ-SOEMAIL-041/042/043/044/051/052/053/054/061/062: qualifying status transitions enqueue outbox rows", () => {
   const TRIGGER_CASES: Array<{
     label: string;
     toStatus: string;
@@ -275,10 +273,7 @@ describe("No status in newValue → no outbox row", () => {
   it("event with no newValue at all does not enqueue", async () => {
     const executor = buildMockExecutor();
 
-    await recordServiceOrderEvent(
-      { ...BASE_EVENT },
-      toDbExecutor(executor),
-    );
+    await recordServiceOrderEvent({ ...BASE_EVENT }, toDbExecutor(executor));
 
     expect(getOutboxInserts(executor)).toHaveLength(0);
   });

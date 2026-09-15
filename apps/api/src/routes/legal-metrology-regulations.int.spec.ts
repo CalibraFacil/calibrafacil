@@ -138,9 +138,7 @@ describe("legal-metrology regulation catalog — real DB", () => {
       .values({
         name: "Hidrômetro",
         slug: "hidrometro-seed",
-        definition: [
-          { key: "x", label: "X", type: "number", required: true },
-        ],
+        definition: [{ key: "x", label: "X", type: "number", required: true }],
       })
       .returning({ id: assetType.id });
     if (!type) throw new Error("assetType insert failed");
@@ -172,15 +170,11 @@ describe("legal-metrology regulation catalog — real DB", () => {
 
     // First seed run.
     await seedLegalMetrologyRegulations();
-    expect(
-      await db.select().from(legalMetrologyRegulation),
-    ).toHaveLength(9);
+    expect(await db.select().from(legalMetrologyRegulation)).toHaveLength(9);
 
     // Second seed run — idempotent (still 9, ON CONFLICT DO NOTHING).
     await seedLegalMetrologyRegulations();
-    expect(
-      await db.select().from(legalMetrologyRegulation),
-    ).toHaveLength(9);
+    expect(await db.select().from(legalMetrologyRegulation)).toHaveLength(9);
 
     // The asset row is byte-for-byte unchanged, and there is still exactly one asset.
     const assetsAfter = await db.select().from(asset);

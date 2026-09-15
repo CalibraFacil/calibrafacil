@@ -176,10 +176,7 @@ function ContributionCard({
     <li className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-start gap-3">
         <span
-          className={cn(
-            numeric,
-            "mt-2 text-xs text-muted-foreground",
-          )}
+          className={cn(numeric, "mt-2 text-xs text-muted-foreground")}
           aria-hidden
         >
           {index + 1}
@@ -344,13 +341,7 @@ function ContributionCard({
   );
 }
 
-function BudgetRow({
-  row,
-  unit,
-}: {
-  row: ContributionResult;
-  unit: string;
-}) {
+function BudgetRow({ row, unit }: { row: ContributionResult; unit: string }) {
   return (
     <tr className="border-b border-border last:border-0">
       <td className="py-2.5 pr-3 text-foreground">{row.label}</td>
@@ -364,14 +355,18 @@ function BudgetRow({
         {formatSignificant(row.standardUncertainty)}
         {unit ? ` ${unit}` : ""}
       </td>
-      <td className={cn(numeric, "py-2.5 pr-3 text-right text-muted-foreground")}>
+      <td
+        className={cn(numeric, "py-2.5 pr-3 text-right text-muted-foreground")}
+      >
         {formatQuantity(row.sensitivity)}
       </td>
       <td className={cn(numeric, "py-2.5 pr-3 text-right text-foreground")}>
         {formatSignificant(row.contribution)}
         {unit ? ` ${unit}` : ""}
       </td>
-      <td className={cn(numeric, "py-2.5 pr-3 text-right text-muted-foreground")}>
+      <td
+        className={cn(numeric, "py-2.5 pr-3 text-right text-muted-foreground")}
+      >
         {formatDegreesOfFreedom(row.degreesOfFreedom)}
       </td>
       <td className={cn(numeric, "py-2.5 text-right text-muted-foreground")}>
@@ -435,7 +430,10 @@ export function UncertaintyCalculator() {
   return (
     <section className="mt-12">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Unidade" hint="Só rótulo: entra na leitura dos resultados.">
+        <Field
+          label="Unidade"
+          hint="Só rótulo: entra na leitura dos resultados."
+        >
           <input
             value={unit}
             onChange={(event) => setUnit(event.target.value)}
@@ -540,7 +538,9 @@ export function UncertaintyCalculator() {
                   className={cn(
                     numeric,
                     "mt-1.5 text-xl",
-                    tile.strong ? "font-semibold text-primary" : "text-foreground",
+                    tile.strong
+                      ? "font-semibold text-primary"
+                      : "text-foreground",
                   )}
                 >
                   {tile.value}
@@ -556,8 +556,8 @@ export function UncertaintyCalculator() {
                 {evaluation.result.dominant.label}
               </strong>
               , com {formatPercent(evaluation.result.dominant.indexPercent)} da
-              variância combinada. Reduzir qualquer outra fonte antes dessa
-              muda pouco o resultado.
+              variância combinada. Reduzir qualquer outra fonte antes dessa muda
+              pouco o resultado.
             </p>
           ) : null}
 

@@ -139,147 +139,138 @@ describe("financeOverviewRouter — real DB + real RBAC + feature gate", () => {
   // in org A's overview response.
   // [HIGH VALUE — money data isolation]
   // =========================================================================
-  it(
-    "REQ-FINOVW-001: GET / returns only the authed org's financial totals — org B's documents excluded",
-    async () => {
-      // Two independent labs, each with PROFESSIONAL subscription.
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-      await seedProfessionalSubscription(orgA.orgId);
-      await seedProfessionalSubscription(orgB.orgId);
+  it("REQ-FINOVW-001: GET / returns only the authed org's financial totals — org B's documents excluded", async () => {
+    // Two independent labs, each with PROFESSIONAL subscription.
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    await seedProfessionalSubscription(orgA.orgId);
+    await seedProfessionalSubscription(orgB.orgId);
 
-      const custA = await seedCustomer({
-        labOrgId: orgA.orgId,
-        clientOrgId: "client-a1",
-        name: "Acme SP",
-      });
-      const custB = await seedCustomer({
-        labOrgId: orgB.orgId,
-        clientOrgId: "client-b1",
-        name: "Beta Industries",
-      });
+    const custA = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+      name: "Acme SP",
+    });
+    const custB = await seedCustomer({
+      labOrgId: orgB.orgId,
+      clientOrgId: "client-b1",
+      name: "Beta Industries",
+    });
 
-      // Org A: 2 DRAFT documents
-      await seedBillingDocument({
-        orgId: orgA.orgId,
-        unitId: orgA.unitId,
-        customerId: custA,
-        createdBy: orgA.userId,
+    // Org A: 2 DRAFT documents
+    await seedBillingDocument({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      createdBy: orgA.userId,
+      status: "DRAFT",
+      totalCents: 50_00,
+    });
+    await seedBillingDocument({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      createdBy: orgA.userId,
+      status: "DRAFT",
+      totalCents: 75_00,
+    });
+
+    // Org B: 3 DRAFT documents — must be completely invisible to org A
+    await Promise.all([
+      seedBillingDocument({
+        orgId: orgB.orgId,
+        unitId: orgB.unitId,
+        customerId: custB,
+        createdBy: orgB.userId,
         status: "DRAFT",
-        totalCents: 50_00,
-      });
-      await seedBillingDocument({
-        orgId: orgA.orgId,
-        unitId: orgA.unitId,
-        customerId: custA,
-        createdBy: orgA.userId,
+        totalCents: 200_00,
+      }),
+      seedBillingDocument({
+        orgId: orgB.orgId,
+        unitId: orgB.unitId,
+        customerId: custB,
+        createdBy: orgB.userId,
         status: "DRAFT",
-        totalCents: 75_00,
-      });
+        totalCents: 200_00,
+      }),
+      seedBillingDocument({
+        orgId: orgB.orgId,
+        unitId: orgB.unitId,
+        customerId: custB,
+        createdBy: orgB.userId,
+        status: "DRAFT",
+        totalCents: 200_00,
+      }),
+    ]);
 
-      // Org B: 3 DRAFT documents — must be completely invisible to org A
-      await Promise.all([
-        seedBillingDocument({
-          orgId: orgB.orgId,
-          unitId: orgB.unitId,
-          customerId: custB,
-          createdBy: orgB.userId,
-          status: "DRAFT",
-          totalCents: 200_00,
-        }),
-        seedBillingDocument({
-          orgId: orgB.orgId,
-          unitId: orgB.unitId,
-          customerId: custB,
-          createdBy: orgB.userId,
-          status: "DRAFT",
-          totalCents: 200_00,
-        }),
-        seedBillingDocument({
-          orgId: orgB.orgId,
-          unitId: orgB.unitId,
-          customerId: custB,
-          createdBy: orgB.userId,
-          status: "DRAFT",
-          totalCents: 200_00,
-        }),
-      ]);
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await financeOverviewRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await financeOverviewRouter.request("/", {
-        headers: JSON_HEADERS,
-      });
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    // Org A has exactly 2 DRAFT documents — not 5 (which would indicate cross-tenant leak)
+    expect(body.counts.draftDocuments).toBe(2);
 
-      // Org A has exactly 2 DRAFT documents — not 5 (which would indicate cross-tenant leak)
-      expect(body.counts.draftDocuments).toBe(2);
+    // Recent documents must only carry org A's records (max 8 returned)
+    expect(body.recentDocuments).toHaveLength(2);
 
-      // Recent documents must only carry org A's records (max 8 returned)
-      expect(body.recentDocuments).toHaveLength(2);
+    // Confirm every returned document belongs to org A via a direct DB check
+    const returnedIds: number[] = body.recentDocuments.map(
+      (d: { id: number }) => d.id,
+    );
+    const dbRows = await db
+      .select({
+        id: billingDocument.id,
+        organizationId: billingDocument.organizationId,
+      })
+      .from(billingDocument)
+      .where(inArray(billingDocument.id, returnedIds));
+    expect(dbRows).toHaveLength(2);
+    for (const row of dbRows) {
+      expect(row.organizationId).toBe(orgA.orgId);
+    }
 
-      // Confirm every returned document belongs to org A via a direct DB check
-      const returnedIds: number[] = body.recentDocuments.map(
-        (d: { id: number }) => d.id,
-      );
-      const dbRows = await db
-        .select({
-          id: billingDocument.id,
-          organizationId: billingDocument.organizationId,
-        })
-        .from(billingDocument)
-        .where(inArray(billingDocument.id, returnedIds));
-      expect(dbRows).toHaveLength(2);
-      for (const row of dbRows) {
-        expect(row.organizationId).toBe(orgA.orgId);
-      }
-
-      // Other totals: no installments or receipts seeded, so all zero
-      expect(body.totals.openCents).toBe(0);
-      expect(body.totals.receivedCents).toBe(0);
-    },
-  );
+    // Other totals: no installments or receipts seeded, so all zero
+    expect(body.totals.openCents).toBe(0);
+    expect(body.totals.receivedCents).toBe(0);
+  });
 
   // =========================================================================
   // REQ-FINOVW-002: GET / as "member" → 403 (financial:read absent)
   // =========================================================================
-  it(
-    "REQ-FINOVW-002: GET / as member → 403 (financial:read not granted to member role)",
-    async () => {
-      // Even with a valid subscription the "member" role has no financial perms
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
-      await seedProfessionalSubscription(org.orgId);
+  it("REQ-FINOVW-002: GET / as member → 403 (financial:read not granted to member role)", async () => {
+    // Even with a valid subscription the "member" role has no financial perms
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    await seedProfessionalSubscription(org.orgId);
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await financeOverviewRouter.request("/", {
-        headers: JSON_HEADERS,
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await financeOverviewRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
   // =========================================================================
   // REQ-FINOVW-003: GET / as admin with FREE plan → 403 (feature gate)
   // (no subscription row → tier defaults to FREE → "financial" feature absent)
   // =========================================================================
-  it(
-    "REQ-FINOVW-003: GET / as admin with no subscription (FREE plan) → 403 (requireFeature blocks financial)",
-    async () => {
-      // Admin role has financial:read permission, but no subscription row is
-      // seeded → tier-guard falls back to FREE plan → hasFeature("financial")=false
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      // Intentionally no subscription — defaults to FREE
+  it("REQ-FINOVW-003: GET / as admin with no subscription (FREE plan) → 403 (requireFeature blocks financial)", async () => {
+    // Admin role has financial:read permission, but no subscription row is
+    // seeded → tier-guard falls back to FREE plan → hasFeature("financial")=false
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    // Intentionally no subscription — defaults to FREE
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await financeOverviewRouter.request("/", {
-        headers: JSON_HEADERS,
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await financeOverviewRouter.request("/", {
+      headers: JSON_HEADERS,
+    });
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
   // =========================================================================
   // REQ-FINOVW-004: Unauthenticated → 401

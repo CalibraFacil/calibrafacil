@@ -55,7 +55,9 @@ export async function truncateAll(): Promise<void> {
   // This is safe: table names come from pg_tables (system catalog), not user
   // input, so no SQL-injection risk despite raw interpolation here.
   const existsUnion = tables
-    .map((name) => `SELECT '${name}' AS t WHERE EXISTS(SELECT 1 FROM "${name}")`)
+    .map(
+      (name) => `SELECT '${name}' AS t WHERE EXISTS(SELECT 1 FROM "${name}")`,
+    )
     .join(" UNION ALL ");
 
   const existsResult = await db.execute(sql.raw(existsUnion));

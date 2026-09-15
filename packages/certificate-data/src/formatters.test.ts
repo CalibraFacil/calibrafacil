@@ -123,11 +123,11 @@ describe("formatValue", () => {
   });
 
   // REQ-XLSX-008: boolean → "true"/"false"
-  it("REQ-XLSX-008: true maps to the string \"true\"", () => {
+  it('REQ-XLSX-008: true maps to the string "true"', () => {
     expect(formatValue(true)).toBe("true");
   });
 
-  it("REQ-XLSX-008: false maps to the string \"false\"", () => {
+  it('REQ-XLSX-008: false maps to the string "false"', () => {
     expect(formatValue(false)).toBe("false");
   });
 

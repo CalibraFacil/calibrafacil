@@ -22,9 +22,9 @@ como `(y ± U)`, ambos na unidade da grandeza, ou com `U` em termos relativos (`
 
 > ⚠️ **Nota 1 — regra dura de formatação, e fácil de errar:**
 > o sinal `±` **só** pode preceder `U` quando o resultado completo é transcrito como `y ± U`.
-> *"Quando da apresentação dos valores medidos e suas respectivas incertezas de medição em uma
+> _"Quando da apresentação dos valores medidos e suas respectivas incertezas de medição em uma
 > tabela, **não é correto utilizar o sinal ±**. Neste caso, deve-se relatar apenas o valor de U
-> isoladamente."* Também não se usa `±` quando `U` aparece separado, na forma `U = 0,3 °C`.
+> isoladamente."_ Também não se usa `±` quando `U` aparece separado, na forma `U = 0,3 °C`.
 
 **Consequência para o layout:** nossa tabela de resultados tem coluna `U` com valor puro, **sem
 `±`, sem `+/-`**, e o cabeçalho não pode trazer `±`. Um cabeçalho tipo `U ± · kg` viola a Nota 1.
@@ -105,7 +105,7 @@ efetivamente calibrado.
 ## O que esta norma NÃO diz
 
 - Não trata de tipografia, tamanho de página, ordem de seções nem estilo de tabela. A única regra
-  de *apresentação* é a Nota 1 do A.6.1 (proibição do `±` em tabela) e o A.6.3 (arredondamento).
+  de _apresentação_ é a Nota 1 do A.6.1 (proibição do `±` em tabela) e o A.6.3 (arredondamento).
 - Não trata do conteúdo geral do certificado (§7.8.2 da ISO/IEC 17025 continua pendente).
 - Não trata do símbolo de acreditação — isso é a
   [NIE-Cgcre-009](./nie-cgcre-009-simbolo-acreditacao.md).

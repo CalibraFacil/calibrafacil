@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
 import { db } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
-import { loginAsBackoffice, logoutBackoffice } from "../../test/integration/setup";
+import {
+  loginAsBackoffice,
+  logoutBackoffice,
+} from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 
 // Real-DB + real-RBAC integration tests for the INTERNAL CUSTOMER-SUCCESS router.

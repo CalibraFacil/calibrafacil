@@ -13,6 +13,7 @@ item completes the transition: migrate every read to `metrology_regime === 'LEGA
 the column (forward-only migration). `metrology_regime` becomes the single source of truth.
 
 ## Constraints
+
 - **Behaviour-preserving.** `metrology_regime === 'LEGAL'` is exactly the old boolean (0066
   backfilled it that way and every write kept them in lock-step), so each replaced read MUST
   yield identical behaviour — especially the **repair-seal / lacre (Etiqueta de Reparo)
@@ -25,13 +26,14 @@ the column (forward-only migration). `metrology_regime` becomes the single sourc
   client-runtime DTO all lose the field — update every consumer + test.
 
 ## Acceptance Criteria (EARS)
+
 - REQ-DROPBOOL-001: Every read of `subjectToLegalMetrology` / `subject_to_legal_metrology`
   SHALL be replaced by a `metrology_regime === 'LEGAL'` predicate with identical behaviour —
   in particular the service-order repair-seal/lacre fields SHALL render iff the asset's
   `metrology_regime = 'LEGAL'` (service-order read-model, `ServiceOrderHtml`, web
   `detail-model` + `new-page`, worker). [HIGH RISK — regulated repair-seal gating]
 - REQ-DROPBOOL-002: The portal family-pool exclusion (was `eq(asset.subjectToLegalMetrology,
-  false)`) SHALL exclude `metrology_regime = 'LEGAL'` siblings — identical pool. [HIGH RISK]
+false)`) SHALL exclude `metrology_regime = 'LEGAL'` siblings — identical pool. [HIGH RISK]
 - REQ-DROPBOOL-003: `resolveAssetRegimeWrite` SHALL no longer emit `subjectToLegalMetrology`,
   and asset create/update + sync SHALL no longer write it; `metrology_regime` (+
   `regulated_interval`) remains the persisted regime state.
@@ -44,16 +46,18 @@ the column (forward-only migration). `metrology_regime` becomes the single sourc
   with no behaviour regression. [HIGH RISK]
 
 ## Out-of-scope
+
 - Renaming/reshaping `metrology_regime` or `regulated_interval` (already the source of truth).
 - The `INDUSTRIAL`/`UNKNOWN` distinction in gating — both map to "not legal" exactly as the
   old `false` did.
 
 ## Decomposition
-| Mini-spec | Layer (real path) | Risk | Mode |
-| --- | --- | --- | --- |
-| Migrate reads | `service-order.read-model.ts`, `ServiceOrderHtml.tsx`, web `detail-model.tsx`/`new-page.tsx`, `worker/src/index.ts`, `portal.ts` (family pool + selects), `assets.ts`, `$id.tsx` | **high (repair-seal gating)** | **pair-don't-loop** |
-| Drop column + types | `schema.ts` + `drizzle/0069_*.sql` + journal; `schemas`, `client-runtime`, `local-db` (+ its migration), `sync.ts` | **high (destructive migration)** | **pair-don't-loop** |
-| Test migration | every `*.spec.ts`/`*.test.ts` referencing the boolean → `metrology_regime` | med | loopable-with-verifier |
+
+| Mini-spec           | Layer (real path)                                                                                                                                                                | Risk                             | Mode                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------- |
+| Migrate reads       | `service-order.read-model.ts`, `ServiceOrderHtml.tsx`, web `detail-model.tsx`/`new-page.tsx`, `worker/src/index.ts`, `portal.ts` (family pool + selects), `assets.ts`, `$id.tsx` | **high (repair-seal gating)**    | **pair-don't-loop**    |
+| Drop column + types | `schema.ts` + `drizzle/0069_*.sql` + journal; `schemas`, `client-runtime`, `local-db` (+ its migration), `sync.ts`                                                               | **high (destructive migration)** | **pair-don't-loop**    |
+| Test migration      | every `*.spec.ts`/`*.test.ts` referencing the boolean → `metrology_regime`                                                                                                       | med                              | loopable-with-verifier |
 
 **Pairing note:** the repair-seal gating (001) + the destructive migration (004) are
 pair-don't-loop. Each behaviour-preserving claim needs a test proving the regime predicate

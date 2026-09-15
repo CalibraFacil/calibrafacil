@@ -81,9 +81,10 @@ describe("claimQueueReceipt (real ON CONFLICT semantics)", () => {
   it("takes over a RUNNING receipt whose lease expired (crashed worker)", async () => {
     const params = { jobType: "LABEL", idempotencyKey: "vq:msg-2" };
 
-    expect(
-      await claimQueueReceipt({ ...params, leaseMs: 1 }),
-    ).toMatchObject({ outcome: "claimed", attempts: 1 });
+    expect(await claimQueueReceipt({ ...params, leaseMs: 1 })).toMatchObject({
+      outcome: "claimed",
+      attempts: 1,
+    });
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(await claimQueueReceipt(params)).toEqual({
@@ -163,10 +164,7 @@ describe("runWithQueueReceipt (enforce + shadow against real receipts)", () => {
 
     await runWithQueueReceipt(enforceParams, run);
     expect(
-      await runWithQueueReceipt(
-        { ...enforceParams, mode: "shadow" },
-        run,
-      ),
+      await runWithQueueReceipt({ ...enforceParams, mode: "shadow" }, run),
     ).toEqual({ ran: true });
     expect(run).toHaveBeenCalledTimes(2);
   });
@@ -212,9 +210,7 @@ describe("drainQueue under enforce mode (end-to-end duplicate delivery)", () => 
     });
 
     workerQueue.mockImplementation(
-      async (batch: {
-        messages: Array<{ ack: () => void }>;
-      }) => {
+      async (batch: { messages: Array<{ ack: () => void }> }) => {
         for (const message of batch.messages) message.ack();
       },
     );

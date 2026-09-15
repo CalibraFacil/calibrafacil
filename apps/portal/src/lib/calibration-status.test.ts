@@ -79,10 +79,7 @@ describe("getInstrumentStatus", () => {
     expect(info.status).toBe("OVERDUE");
     expect(info.description).toBe("Vencida há 3 dias");
 
-    const unscheduled = getInstrumentStatus(
-      { nextCalibrationDate: null },
-      NOW,
-    );
+    const unscheduled = getInstrumentStatus({ nextCalibrationDate: null }, NOW);
     expect(unscheduled.status).toBe("UNSCHEDULED");
   });
 });

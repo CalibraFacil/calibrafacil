@@ -296,90 +296,87 @@ describe("dashboardRouter — real DB + real middleware (READ-ONLY aggregation)"
   // Likewise dropping eq(nonConformance.organizationId, ...) makes
   // openNonConformances include org-B's NCs → 1 ≠ 3 → RED.
   // =========================================================================
-  it(
-    "REQ-DASH-001: /stats counts ONLY the caller's org — job + NC aggregates exclude org B's rows",
-    async () => {
-      const orgA = await seedDashboardFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
-      const orgB = await seedDashboardFixture({
-        orgId: "org-b",
-        userId: "user-b",
-        tagSuffix: "b",
-      });
+  it("REQ-DASH-001: /stats counts ONLY the caller's org — job + NC aggregates exclude org B's rows", async () => {
+    const orgA = await seedDashboardFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const orgB = await seedDashboardFixture({
+      orgId: "org-b",
+      userId: "user-b",
+      tagSuffix: "b",
+    });
 
-      // Org A: 2 "pending" jobs (DRAFT + REVIEW are in the pending set).
+    // Org A: 2 "pending" jobs (DRAFT + REVIEW are in the pending set).
+    await seedJob({
+      jobId: "A-1",
+      organizationId: "org-a",
+      unitId: orgA.unitId,
+      customerId: orgA.customerId,
+      assetId: orgA.assetId,
+      serviceId: orgA.serviceId,
+      createdBy: orgA.userId,
+      status: "DRAFT",
+    });
+    await seedJob({
+      jobId: "A-2",
+      organizationId: "org-a",
+      unitId: orgA.unitId,
+      customerId: orgA.customerId,
+      assetId: orgA.assetId,
+      serviceId: orgA.serviceId,
+      createdBy: orgA.userId,
+      status: "REVIEW",
+    });
+
+    // Org B: 3 "pending" jobs that WOULD inflate org A's count if the org
+    // filter regressed (DRAFT, IN_PROGRESS, REVIEW are all in the pending set).
+    for (const [i, status] of (
+      ["DRAFT", "IN_PROGRESS", "REVIEW"] as const
+    ).entries()) {
       await seedJob({
-        jobId: "A-1",
-        organizationId: "org-a",
-        unitId: orgA.unitId,
-        customerId: orgA.customerId,
-        assetId: orgA.assetId,
-        serviceId: orgA.serviceId,
-        createdBy: orgA.userId,
-        status: "DRAFT",
+        jobId: `B-${i}`,
+        organizationId: "org-b",
+        unitId: orgB.unitId,
+        customerId: orgB.customerId,
+        assetId: orgB.assetId,
+        serviceId: orgB.serviceId,
+        createdBy: orgB.userId,
+        status,
       });
-      await seedJob({
-        jobId: "A-2",
-        organizationId: "org-a",
-        unitId: orgA.unitId,
-        customerId: orgA.customerId,
-        assetId: orgA.assetId,
-        serviceId: orgA.serviceId,
-        createdBy: orgA.userId,
-        status: "REVIEW",
-      });
+    }
 
-      // Org B: 3 "pending" jobs that WOULD inflate org A's count if the org
-      // filter regressed (DRAFT, IN_PROGRESS, REVIEW are all in the pending set).
-      for (const [i, status] of (
-        ["DRAFT", "IN_PROGRESS", "REVIEW"] as const
-      ).entries()) {
-        await seedJob({
-          jobId: `B-${i}`,
-          organizationId: "org-b",
-          unitId: orgB.unitId,
-          customerId: orgB.customerId,
-          assetId: orgB.assetId,
-          serviceId: orgB.serviceId,
-          createdBy: orgB.userId,
-          status,
-        });
-      }
+    // Org A: 1 open NC. Org B: 2 open NCs (would leak into org A's count).
+    await seedNC({
+      orgId: "org-a",
+      detectedByUserId: orgA.userId,
+      suffix: "A1",
+    });
+    await seedNC({
+      orgId: "org-b",
+      detectedByUserId: orgB.userId,
+      suffix: "B1",
+    });
+    await seedNC({
+      orgId: "org-b",
+      detectedByUserId: orgB.userId,
+      suffix: "B2",
+    });
 
-      // Org A: 1 open NC. Org B: 2 open NCs (would leak into org A's count).
-      await seedNC({
-        orgId: "org-a",
-        detectedByUserId: orgA.userId,
-        suffix: "A1",
-      });
-      await seedNC({
-        orgId: "org-b",
-        detectedByUserId: orgB.userId,
-        suffix: "B1",
-      });
-      await seedNC({
-        orgId: "org-b",
-        detectedByUserId: orgB.userId,
-        suffix: "B2",
-      });
+    loginAs({ userId: orgA.userId, organizationId: "org-a" });
+    const res = await dashboardRouter.request("/stats", {
+      headers: JSON_HEADERS,
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: "org-a" });
-      const res = await dashboardRouter.request("/stats", {
-        headers: JSON_HEADERS,
-      });
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-
-      // Unit-scoped + org-scoped aggregate: only org A's 2 pending jobs.
-      expect(body.pendingCalibrations).toBe(2);
-      // Org-only (cross-domain) aggregate: only org A's 1 open NC.
-      expect(body.openNonConformances).toBe(1);
-    },
-  );
+    // Unit-scoped + org-scoped aggregate: only org A's 2 pending jobs.
+    expect(body.pendingCalibrations).toBe(2);
+    // Org-only (cross-domain) aggregate: only org A's 1 open NC.
+    expect(body.openNonConformances).toBe(1);
+  });
 
   // =========================================================================
   // REQ-DASH-002: Unit isolation.
@@ -390,127 +387,121 @@ describe("dashboardRouter — real DB + real middleware (READ-ONLY aggregation)"
   // pending query (so only the org filter remains) makes pendingCalibrations
   // include unit B's job (same org) → 1 ≠ 2 → RED.
   // =========================================================================
-  it(
-    "REQ-DASH-002: admin scoped to unit A sees only unit-A job aggregates, not unit B's (same org)",
-    async () => {
-      const org = await seedDashboardFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
-      const unitA = org.unitId; // default "Matriz" unit
+  it("REQ-DASH-002: admin scoped to unit A sees only unit-A job aggregates, not unit B's (same org)", async () => {
+    const org = await seedDashboardFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const unitA = org.unitId; // default "Matriz" unit
 
-      // Second unit B in the SAME org, with its own asset (asset.unitId = B).
-      const unitB = await seedUnit({
-        organizationId: "org-a",
-        name: "Filial B",
-        slug: "filial-b",
-        createdBy: org.userId,
-      });
-      const assetB = await seedAsset({
-        unitId: unitB,
-        customerId: org.customerId,
-        assetTypeId: org.assetTypeId,
-        tag: "TAG-B",
-      });
-      const serviceB = await seedService({
-        organizationId: "org-a",
-        unitId: unitB,
-      });
+    // Second unit B in the SAME org, with its own asset (asset.unitId = B).
+    const unitB = await seedUnit({
+      organizationId: "org-a",
+      name: "Filial B",
+      slug: "filial-b",
+      createdBy: org.userId,
+    });
+    const assetB = await seedAsset({
+      unitId: unitB,
+      customerId: org.customerId,
+      assetTypeId: org.assetTypeId,
+      tag: "TAG-B",
+    });
+    const serviceB = await seedService({
+      organizationId: "org-a",
+      unitId: unitB,
+    });
 
-      // Unit A: 1 pending job.
-      await seedJob({
-        jobId: "UA-1",
-        organizationId: "org-a",
-        unitId: unitA,
-        customerId: org.customerId,
-        assetId: org.assetId,
-        serviceId: org.serviceId,
-        createdBy: org.userId,
-        status: "DRAFT",
-      });
-      // Unit B (same org): 1 pending job that WOULD leak if the unit filter died.
-      await seedJob({
-        jobId: "UB-1",
-        organizationId: "org-a",
-        unitId: unitB,
-        customerId: org.customerId,
-        assetId: assetB,
-        serviceId: serviceB,
-        createdBy: org.userId,
-        status: "IN_PROGRESS",
-      });
+    // Unit A: 1 pending job.
+    await seedJob({
+      jobId: "UA-1",
+      organizationId: "org-a",
+      unitId: unitA,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    // Unit B (same org): 1 pending job that WOULD leak if the unit filter died.
+    await seedJob({
+      jobId: "UB-1",
+      organizationId: "org-a",
+      unitId: unitB,
+      customerId: org.customerId,
+      assetId: assetB,
+      serviceId: serviceB,
+      createdBy: org.userId,
+      status: "IN_PROGRESS",
+    });
 
-      loginAs({ userId: org.userId, organizationId: "org-a" });
-      const res = await dashboardRouter.request("/stats", {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(unitA) },
-      });
+    loginAs({ userId: org.userId, organizationId: "org-a" });
+    const res = await dashboardRouter.request("/stats", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(unitA) },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      // Only unit A's 1 pending job — unit B's job is excluded by the unit scope.
-      expect(body.pendingCalibrations).toBe(1);
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Only unit A's 1 pending job — unit B's job is excluded by the unit scope.
+    expect(body.pendingCalibrations).toBe(1);
+  });
 
   // Sanity-check that the unit filter is load-bearing in REQ-DASH-002: when the
   // SAME admin selects scope "all", both units fold in (proves the seeded data is
   // genuinely cross-unit, so the scoped count above is not a seeding artifact).
-  it(
-    "REQ-DASH-002 (counter-proof): same org under scope=all counts both units' pending jobs",
-    async () => {
-      const org = await seedDashboardFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
-      const unitB = await seedUnit({
-        organizationId: "org-a",
-        name: "Filial B",
-        slug: "filial-b",
-        createdBy: org.userId,
-      });
-      const assetB = await seedAsset({
-        unitId: unitB,
-        customerId: org.customerId,
-        assetTypeId: org.assetTypeId,
-        tag: "TAG-B",
-      });
-      const serviceB = await seedService({
-        organizationId: "org-a",
-        unitId: unitB,
-      });
-      await seedJob({
-        jobId: "UA-1",
-        organizationId: "org-a",
-        unitId: org.unitId,
-        customerId: org.customerId,
-        assetId: org.assetId,
-        serviceId: org.serviceId,
-        createdBy: org.userId,
-        status: "DRAFT",
-      });
-      await seedJob({
-        jobId: "UB-1",
-        organizationId: "org-a",
-        unitId: unitB,
-        customerId: org.customerId,
-        assetId: assetB,
-        serviceId: serviceB,
-        createdBy: org.userId,
-        status: "IN_PROGRESS",
-      });
+  it("REQ-DASH-002 (counter-proof): same org under scope=all counts both units' pending jobs", async () => {
+    const org = await seedDashboardFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const unitB = await seedUnit({
+      organizationId: "org-a",
+      name: "Filial B",
+      slug: "filial-b",
+      createdBy: org.userId,
+    });
+    const assetB = await seedAsset({
+      unitId: unitB,
+      customerId: org.customerId,
+      assetTypeId: org.assetTypeId,
+      tag: "TAG-B",
+    });
+    const serviceB = await seedService({
+      organizationId: "org-a",
+      unitId: unitB,
+    });
+    await seedJob({
+      jobId: "UA-1",
+      organizationId: "org-a",
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    await seedJob({
+      jobId: "UB-1",
+      organizationId: "org-a",
+      unitId: unitB,
+      customerId: org.customerId,
+      assetId: assetB,
+      serviceId: serviceB,
+      createdBy: org.userId,
+      status: "IN_PROGRESS",
+    });
 
-      loginAs({ userId: org.userId, organizationId: "org-a" });
-      const res = await dashboardRouter.request("/stats", {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": "all" },
-      });
+    loginAs({ userId: org.userId, organizationId: "org-a" });
+    const res = await dashboardRouter.request("/stats", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": "all" },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.pendingCalibrations).toBe(2);
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pendingCalibrations).toBe(2);
+  });
 
   // =========================================================================
   // REQ-DASH-003: Unauthenticated → 401 (requireLabAuth, first in the chain).
@@ -544,93 +535,88 @@ describe("dashboardRouter — real DB + real middleware (READ-ONLY aggregation)"
   // =========================================================================
   // REQ-DASH-005: Happy path — documented shape + correct numbers.
   // =========================================================================
-  it(
-    "REQ-DASH-005: /stats returns the documented shape with correct seeded numbers",
-    async () => {
-      const org = await seedDashboardFixture({
-        orgId: "org-a",
-        userId: "user-a",
-        tagSuffix: "a",
-      });
+  it("REQ-DASH-005: /stats returns the documented shape with correct seeded numbers", async () => {
+    const org = await seedDashboardFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
 
-      // 1 DRAFT + 1 REVIEW = 2 pending. 1 NC open.
-      await seedJob({
-        jobId: "H-1",
-        organizationId: "org-a",
-        unitId: org.unitId,
-        customerId: org.customerId,
-        assetId: org.assetId,
-        serviceId: org.serviceId,
-        createdBy: org.userId,
-        status: "DRAFT",
-      });
-      await seedJob({
-        jobId: "H-2",
-        organizationId: "org-a",
-        unitId: org.unitId,
-        customerId: org.customerId,
-        assetId: org.assetId,
-        serviceId: org.serviceId,
-        createdBy: org.userId,
-        status: "REVIEW",
-      });
-      await seedNC({
-        orgId: "org-a",
-        detectedByUserId: org.userId,
-        suffix: "H1",
-      });
+    // 1 DRAFT + 1 REVIEW = 2 pending. 1 NC open.
+    await seedJob({
+      jobId: "H-1",
+      organizationId: "org-a",
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "DRAFT",
+    });
+    await seedJob({
+      jobId: "H-2",
+      organizationId: "org-a",
+      unitId: org.unitId,
+      customerId: org.customerId,
+      assetId: org.assetId,
+      serviceId: org.serviceId,
+      createdBy: org.userId,
+      status: "REVIEW",
+    });
+    await seedNC({
+      orgId: "org-a",
+      detectedByUserId: org.userId,
+      suffix: "H1",
+    });
 
-      loginAs({ userId: org.userId, organizationId: "org-a" });
-      const res = await dashboardRouter.request("/stats", {
-        headers: JSON_HEADERS,
-      });
+    loginAs({ userId: org.userId, organizationId: "org-a" });
+    const res = await dashboardRouter.request("/stats", {
+      headers: JSON_HEADERS,
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
+    expect(res.status).toBe(200);
+    const body = await res.json();
 
-      // Documented KPI fields are present and well-typed.
-      for (const key of [
-        "pendingCalibrations",
-        "approvedThisMonth",
-        "rejectedThisMonth",
-        "approvalRate",
-        "expiringStandards",
-        "overdueJobs",
-        "openNonConformances",
-        "capasOpen",
-        "serviceOrdersInProgress",
-      ] as const) {
-        expect(typeof body[key]).toBe("number");
-      }
-      expect(Array.isArray(body.statusBreakdown)).toBe(true);
-      expect(Array.isArray(body.recentJobs)).toBe(true);
-      expect(Array.isArray(body.calibrationTrend)).toBe(true);
+    // Documented KPI fields are present and well-typed.
+    for (const key of [
+      "pendingCalibrations",
+      "approvedThisMonth",
+      "rejectedThisMonth",
+      "approvalRate",
+      "expiringStandards",
+      "overdueJobs",
+      "openNonConformances",
+      "capasOpen",
+      "serviceOrdersInProgress",
+    ] as const) {
+      expect(typeof body[key]).toBe("number");
+    }
+    expect(Array.isArray(body.statusBreakdown)).toBe(true);
+    expect(Array.isArray(body.recentJobs)).toBe(true);
+    expect(Array.isArray(body.calibrationTrend)).toBe(true);
 
-      // Correct numbers for the seeded data.
-      expect(body.pendingCalibrations).toBe(2);
-      expect(body.openNonConformances).toBe(1);
-      // No approve/reject decisions this month → approvalRate defaults to 100.
-      expect(body.approvedThisMonth).toBe(0);
-      expect(body.rejectedThisMonth).toBe(0);
-      expect(body.approvalRate).toBe(100);
+    // Correct numbers for the seeded data.
+    expect(body.pendingCalibrations).toBe(2);
+    expect(body.openNonConformances).toBe(1);
+    // No approve/reject decisions this month → approvalRate defaults to 100.
+    expect(body.approvedThisMonth).toBe(0);
+    expect(body.rejectedThisMonth).toBe(0);
+    expect(body.approvalRate).toBe(100);
 
-      // recentJobs reflects exactly the 2 seeded jobs (org + unit scoped).
-      const recentJobIds = body.recentJobs.map(
-        (j: { jobId: string }) => j.jobId,
-      );
-      expect(recentJobIds).toContain("H-1");
-      expect(recentJobIds).toContain("H-2");
-      expect(body.recentJobs).toHaveLength(2);
+    // recentJobs reflects exactly the 2 seeded jobs (org + unit scoped).
+    const recentJobIds = body.recentJobs.map((j: { jobId: string }) => j.jobId);
+    expect(recentJobIds).toContain("H-1");
+    expect(recentJobIds).toContain("H-2");
+    expect(body.recentJobs).toHaveLength(2);
 
-      // statusBreakdown carries DRAFT + REVIEW counts of 1 each.
-      const statusMap = new Map<string, number>(
-        body.statusBreakdown.map((s: { status: string; count: number }) => [
-          s.status,
-          s.count,
-        ]),
-      );
-      expect(statusMap.get("DRAFT")).toBe(1);
-      expect(statusMap.get("REVIEW")).toBe(1);
-    },
-  );
+    // statusBreakdown carries DRAFT + REVIEW counts of 1 each.
+    const statusMap = new Map<string, number>(
+      body.statusBreakdown.map((s: { status: string; count: number }) => [
+        s.status,
+        s.count,
+      ]),
+    );
+    expect(statusMap.get("DRAFT")).toBe(1);
+    expect(statusMap.get("REVIEW")).toBe(1);
+  });
 });

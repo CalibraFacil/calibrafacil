@@ -82,8 +82,7 @@ const fakeEngine: CalculationEngineLike = {
         expression
           .match(/[a-zA-Z][a-zA-Z0-9_]*/g)
           ?.filter(
-            (token) =>
-              !["abs", "mean", "std", "min", "max"].includes(token),
+            (token) => !["abs", "mean", "std", "min", "max"].includes(token),
           ) ?? [],
       ),
     ].toSorted();
@@ -579,12 +578,20 @@ describe("runMethodPreview", () => {
 
       const result1 = runMethodPreview(
         method,
-        { key: "s1", label: "s1", inputs: { indication: "10.02", reference: "10" } },
+        {
+          key: "s1",
+          label: "s1",
+          inputs: { indication: "10.02", reference: "10" },
+        },
         opts,
       );
       const result2 = runMethodPreview(
         method,
-        { key: "s2", label: "s2", inputs: { indication: "10.05", reference: "10" } },
+        {
+          key: "s2",
+          label: "s2",
+          inputs: { indication: "10.05", reference: "10" },
+        },
         opts,
       );
 

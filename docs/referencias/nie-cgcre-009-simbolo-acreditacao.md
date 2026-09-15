@@ -13,8 +13,8 @@ e o Catálogo de marcas do Inmetro.
 
 ## 1. Posição na página — regra dura
 
-**§11.5.2** — *"O símbolo da acreditação deve ser colocado na **primeira página** do relatório ou
-do certificado."*
+**§11.5.2** — _"O símbolo da acreditação deve ser colocado na **primeira página** do relatório ou
+do certificado."_
 
 Quando houver mais de uma folha, a partir da segunda o laboratório **pode** substituir o símbolo
 por uma frase. Para laboratório de calibração o texto é dado literalmente:
@@ -104,8 +104,8 @@ NBR ISO/IEC
 17025
 ```
 
-A Rev. 27 mudou exatamente isso — o histórico de revisão diz *"os dizeres do símbolo de
-acreditação foram alterados"*. A redação vigente (A.5/A.8) é de **duas** linhas e traz **ABNT**:
+A Rev. 27 mudou exatamente isso — o histórico de revisão diz _"os dizeres do símbolo de
+acreditação foram alterados"_. A redação vigente (A.5/A.8) é de **duas** linhas e traz **ABNT**:
 
 ```
 ABNT NBR

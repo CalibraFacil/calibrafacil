@@ -61,16 +61,16 @@ pass or fail on.
   and the org+unit scope (`resolveMemberUnitScope`). Name the role and the
   guard. These are almost always `[HIGH RISK]`.
   - Good: `REQ-ACCESS-002: IF a member without the admin or owner role calls
-    approve on a calibration in_review, THEN the API SHALL reject with 403 via
-    requireCalibrationAction. [HIGH RISK]`
+approve on a calibration in_review, THEN the API SHALL reject with 403 via
+requireCalibrationAction. [HIGH RISK]`
   - Bad: `The system SHALL only let authorized users approve.`
 - **Metrology criteria state value AND uncertainty.** A result criterion must
   specify the value **and** its expanded uncertainty plus the coverage factor
   `k` (and distribution/νeff where relevant) — never value-only. Bind the real
   engine (`packages/math-engine`, decimal backend).
   - Good: `REQ-UNC-001: WHEN combining the given Type A and Type B components,
-    the engine SHALL report y = 10.000 g with U = 0.012 g at k = 2.00
-    (≈95%, normal), matching the oracle in type-b.spec.ts.`
+the engine SHALL report y = 10.000 g with U = 0.012 g at k = 2.00
+(≈95%, normal), matching the oracle in type-b.spec.ts.`
   - Bad: `The engine SHALL compute the correct result.`
 - **Don't over-spec throwaways.** Prototypes, internal dashboards, one-off
   scripts, and disposable spikes get light or no EARS — reserve full criteria

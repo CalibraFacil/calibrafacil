@@ -2,6 +2,7 @@ import { ComponentProps, useCallback } from "react";
 import {
   DayPicker,
   getDefaultClassNames,
+  type CustomComponents,
   type DayButton,
 } from "react-day-picker";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -136,62 +137,83 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }) => {
-          return (
-            <div
-              data-slot="calendar"
-              ref={rootRef}
-              className={cn(className)}
-              {...props}
-            />
-          );
-        },
-        Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === "left") {
-            return (
-              <HugeiconsIcon
-                icon={ArrowLeftIcon}
-                strokeWidth={2}
-                className={cn("size-4", className)}
-                {...props}
-              />
-            );
-          }
-
-          if (orientation === "right") {
-            return (
-              <HugeiconsIcon
-                icon={ArrowRightIcon}
-                strokeWidth={2}
-                className={cn("size-4", className)}
-                {...props}
-              />
-            );
-          }
-
-          return (
-            <HugeiconsIcon
-              icon={ArrowDownIcon}
-              strokeWidth={2}
-              className={cn("size-4", className)}
-              {...props}
-            />
-          );
-        },
+        Root: CalendarRoot,
+        Chevron: CalendarChevron,
         DayButton: CalendarDayButton,
-        WeekNumber: ({ children, ...props }) => {
-          return (
-            <td {...props}>
-              <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
-              </div>
-            </td>
-          );
-        },
+        WeekNumber: CalendarWeekNumber,
         ...components,
       }}
       {...props}
     />
+  );
+}
+
+// react-day-picker renders `components.*` as element types, so these must be
+// stable module-level components: defining them inline in Calendar's render
+// gave DayPicker a new type every render, remounting the grid and dropping
+// focus/state.
+function CalendarRoot({
+  className,
+  rootRef,
+  ...props
+}: ComponentProps<CustomComponents["Root"]>) {
+  return (
+    <div
+      data-slot="calendar"
+      ref={rootRef}
+      className={cn(className)}
+      {...props}
+    />
+  );
+}
+
+function CalendarChevron({
+  className,
+  orientation,
+  ...props
+}: ComponentProps<CustomComponents["Chevron"]>) {
+  if (orientation === "left") {
+    return (
+      <HugeiconsIcon
+        icon={ArrowLeftIcon}
+        strokeWidth={2}
+        className={cn("size-4", className)}
+        {...props}
+      />
+    );
+  }
+
+  if (orientation === "right") {
+    return (
+      <HugeiconsIcon
+        icon={ArrowRightIcon}
+        strokeWidth={2}
+        className={cn("size-4", className)}
+        {...props}
+      />
+    );
+  }
+
+  return (
+    <HugeiconsIcon
+      icon={ArrowDownIcon}
+      strokeWidth={2}
+      className={cn("size-4", className)}
+      {...props}
+    />
+  );
+}
+
+function CalendarWeekNumber({
+  children,
+  ...props
+}: ComponentProps<CustomComponents["WeekNumber"]>) {
+  return (
+    <td {...props}>
+      <div className="flex size-(--cell-size) items-center justify-center text-center">
+        {children}
+      </div>
+    </td>
   );
 }
 

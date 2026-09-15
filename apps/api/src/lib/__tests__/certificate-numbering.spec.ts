@@ -313,14 +313,14 @@ describe("REQ-CERTNUM-007: buildCertificateSequenceKey — project scope fallbac
     );
   });
 
-  it('REQ-CERTNUM-007 uses config.projectCode as fallback when context.projectCode is absent', () => {
+  it("REQ-CERTNUM-007 uses config.projectCode as fallback when context.projectCode is absent", () => {
     const configWithProject: CertificateNumberingConfig = {
       ...baseConfig,
       projectCode: "CONF_PROJ",
     };
-    expect(
-      buildCertificateSequenceKey("project", ctx, configWithProject),
-    ).toBe("project:CONF_PROJ");
+    expect(buildCertificateSequenceKey("project", ctx, configWithProject)).toBe(
+      "project:CONF_PROJ",
+    );
   });
 
   it("REQ-CERTNUM-007 context.projectCode takes precedence over config.projectCode", () => {

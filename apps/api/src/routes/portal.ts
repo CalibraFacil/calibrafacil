@@ -2077,8 +2077,7 @@ export const portalRouter = new Hono<{
           labEmail: organization.email,
           labPhone: organization.phone,
           // Accreditation seal - frozen method flag with current-method fallback
-          scopeOverrideJustification:
-            calibrationJob.scopeOverrideJustification,
+          scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
           serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
           labAccreditationActive: organization.accreditationActive,
           labAccreditationNumber: organization.accreditationNumber,

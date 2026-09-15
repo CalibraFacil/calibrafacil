@@ -485,7 +485,8 @@ export function extractScopeEvaluationPoints(input: {
     }))
     .filter((entry) => entry.values.some((value) => value !== null))
     .sort(
-      (a, b) => suffixRank(a.formula.outputKey) - suffixRank(b.formula.outputKey),
+      (a, b) =>
+        suffixRank(a.formula.outputKey) - suffixRank(b.formula.outputKey),
     );
   for (const entry of ranked) {
     const tableKey = tableKeyOf(entry.formula);
@@ -564,7 +565,8 @@ function extractPointsForTable(params: {
   );
   if (kFormulas.length === 0) {
     kFormulas = formulas.filter(
-      (f) => tableKeyOf(f) === tableKey && /(^|_)fator_k(_|$)/.test(f.outputKey),
+      (f) =>
+        tableKeyOf(f) === tableKey && /(^|_)fator_k(_|$)/.test(f.outputKey),
     );
   }
   const kFormula =

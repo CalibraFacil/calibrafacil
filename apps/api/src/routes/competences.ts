@@ -513,10 +513,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
       // competence always has an owning user, but guard the type: a competence
       // whose user was deleted cannot receive training assignments.
       if (!existing.userId) {
-        return c.json(
-          { error: "Competência sem usuário associado" },
-          400,
-        );
+        return c.json({ error: "Competência sem usuário associado" }, 400);
       }
 
       const existingUserId = existing.userId;

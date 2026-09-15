@@ -3,6 +3,7 @@
 > Author: spec-driven loop. Consumes the `ears-spec` + `calibrafacil-domain`
 > skills. Drives `feature-implementer` → `spec-verifier` per mini-spec.
 > Decisions confirmed with the operator (2026-06-19):
+>
 > 1. **Recipient** = the customer's contact email directly (no portal account required).
 > 2. **Scope** = all service-order lifecycle transitions.
 > 3. **Quote email** = full inline summary + highlighted approval link, no PDF attachment.
@@ -28,7 +29,7 @@ to the right customer, proven by tests.
   `customer.email`.
 - **Reuse, never reinvent, the existing infra:**
   - White-label brand via `getLabEmailBrand(organizationId)` / `createLabEmailBrand`
-    + `EmailBrand` (`packages/notifications/src/service.ts`).
+    - `EmailBrand` (`packages/notifications/src/service.ts`).
   - Transport via the existing Resend + `@react-email/render` path.
   - Email layout + primitives from `packages/email` (`emails/components/email-layout.tsx`:
     `EmailLayout`, `DetailBox`/`DetailRow`, `ActionButton`, `LinkFallback`, etc.).
@@ -71,7 +72,7 @@ to the right customer, proven by tests.
 - REQ-SOEMAIL-006: The shared service-order email layout SHALL render the company
   header (name, address, CNPJ, phone, website, logo) from `EmailBrand`, and WHERE
   `EmailBrand.isWhiteLabel` is set, SHALL NOT render the Calibra Fácil platform
-  *marketing* branding (the platform pitch line). A minimal "via CalibraFácil"
+  _marketing_ branding (the platform pitch line). A minimal "via CalibraFácil"
   attribution is permitted — this matches the deliberate, platform-wide
   white-label contract already implemented in `packages/email/.../email-layout.tsx`
   and used by every transactional email. (Reconciled 2026-06-19 after the verifier
@@ -220,19 +221,19 @@ existing per-email payload is stored in the outbox `payload`.
 > that is BOTH critical-path AND high-risk would be pair-don't-loop — **none here
 > are**, because email dispatch is not a cut-line surface (no calibration
 > approval, signing, RBAC policy, or math). Mini-spec C carries HIGH RISK
-> *criteria* (financial accuracy + approval-link/tenant safety) → it stays
+> _criteria_ (financial accuracy + approval-link/tenant safety) → it stays
 > loopable but gets the verifier's strongest scrutiny.
 
-| Mini-spec | Layer (real path) | Depends on | Risk | Mode |
-| --- | --- | --- | --- | --- |
-| **A. Dispatch + shared SO email layout** | `packages/notifications/src` (new customer dispatch), `packages/email` (layout/primitives) | — | med (tenant isolation, transport) | loopable-with-verifier |
-| **B. Nova OS** | `apps/api/src/modules/service-orders/service-order.commands.ts` + new template | A | low | loopable-with-verifier |
-| **C. Novo orçamento** | `service-order.quotes.ts` (`sendServiceOrderQuote`) + new template; reuse token from `service-order-workflow.ts` | A | **HIGH (financial + approval link)** | loopable-with-verifier (max verifier scrutiny) |
-| **D. Aprovado / recusado** | `service-order.quotes.ts` (approve/reject handlers) + template | A, C | med (financial total) | loopable-with-verifier |
-| **E. Avaliação / execução / andamento** | `service-order.execution.ts` + `service-order.evaluations.ts` (eval-state transitions) + templates | A, H | low | loopable-with-verifier |
-| **F. Revisão final / conclusão / entrega** | `service-order.commands.ts` (final-review/ready/deliver/close) + templates | A, H | low | loopable-with-verifier |
-| **G. Cancelamento / garantia** | `service-order.commands.ts` + template | A, H | low | loopable-with-verifier |
-| **H. Idempotency / dedup** | `packages/db` (forward-only migration: `service_order_email_log`) + `apps/api` send-once helper; retrofit B & C callers | A | med (migration + at-most-once) | loopable-with-verifier |
+| Mini-spec                                  | Layer (real path)                                                                                                       | Depends on | Risk                                 | Mode                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------ | ---------------------------------------------- |
+| **A. Dispatch + shared SO email layout**   | `packages/notifications/src` (new customer dispatch), `packages/email` (layout/primitives)                              | —          | med (tenant isolation, transport)    | loopable-with-verifier                         |
+| **B. Nova OS**                             | `apps/api/src/modules/service-orders/service-order.commands.ts` + new template                                          | A          | low                                  | loopable-with-verifier                         |
+| **C. Novo orçamento**                      | `service-order.quotes.ts` (`sendServiceOrderQuote`) + new template; reuse token from `service-order-workflow.ts`        | A          | **HIGH (financial + approval link)** | loopable-with-verifier (max verifier scrutiny) |
+| **D. Aprovado / recusado**                 | `service-order.quotes.ts` (approve/reject handlers) + template                                                          | A, C       | med (financial total)                | loopable-with-verifier                         |
+| **E. Avaliação / execução / andamento**    | `service-order.execution.ts` + `service-order.evaluations.ts` (eval-state transitions) + templates                      | A, H       | low                                  | loopable-with-verifier                         |
+| **F. Revisão final / conclusão / entrega** | `service-order.commands.ts` (final-review/ready/deliver/close) + templates                                              | A, H       | low                                  | loopable-with-verifier                         |
+| **G. Cancelamento / garantia**             | `service-order.commands.ts` + template                                                                                  | A, H       | low                                  | loopable-with-verifier                         |
+| **H. Idempotency / dedup**                 | `packages/db` (forward-only migration: `service_order_email_log`) + `apps/api` send-once helper; retrofit B & C callers | A          | med (migration + at-most-once)       | loopable-with-verifier                         |
 
 **Order:** A first (done), then B (done), then C (in flight), then **H** (dedup
 foundation; retrofits B & C to the send-once helper), then D, then E/F/G route

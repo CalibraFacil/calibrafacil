@@ -248,7 +248,6 @@ describe("buildCertificateData", () => {
   });
 });
 
-
 /**
  * ISO/IEC 17025 §7.8 content items the product had no home for until now —
  * see docs/referencias/iso-17025-7.8-conteudo.md. Each is a field an assessor
@@ -294,10 +293,7 @@ describe("§7.8 content items", () => {
   it("§7.8.2.1(h)/(g): leaves them null when the job has no service order", () => {
     // In-loco calibration, or an item handed straight to the bench: there was
     // no receipt event, and §7.8.2.1 permits omission with valid reason.
-    const serviceOrder = at(
-      buildCertificateData(goldenJob()),
-      "serviceOrder",
-    );
+    const serviceOrder = at(buildCertificateData(goldenJob()), "serviceOrder");
 
     expect(serviceOrder.receivedAt).toBeNull();
     expect(serviceOrder.receivedAtText).toBe("");

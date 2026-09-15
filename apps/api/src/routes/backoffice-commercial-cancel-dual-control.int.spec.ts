@@ -113,7 +113,11 @@ async function seedBaseline(): Promise<Baseline> {
 
   const [deal] = await db
     .insert(commercialDeal)
-    .values({ organizationId: PRIMARY_ORG, title: "Deal Primary", status: "OPEN" })
+    .values({
+      organizationId: PRIMARY_ORG,
+      title: "Deal Primary",
+      status: "OPEN",
+    })
     .returning({ id: commercialDeal.id });
   if (!deal) throw new Error("seed: commercialDeal failed");
 

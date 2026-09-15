@@ -113,7 +113,10 @@ interface ExtractedSignature {
  * segments and the hex `/Contents` blob between them. Returns `null` when the
  * structure at that offset is not a well-formed signature.
  */
-function extractSignatureAt(pdf: Buffer, tag: number): ExtractedSignature | null {
+function extractSignatureAt(
+  pdf: Buffer,
+  tag: number,
+): ExtractedSignature | null {
   const open = pdf.indexOf(0x5b /* [ */, tag);
   const close = pdf.indexOf(0x5d /* ] */, open);
   if (open === -1 || close === -1) return null;
@@ -178,15 +181,18 @@ interface ExtractedSignatures {
  * `/ByteRange`.
  */
 function extractSignatures(pdf: Buffer): ExtractedSignatures {
-  const candidates: Array<{ extracted: ExtractedSignature; isTimestamp: boolean }> =
-    [];
+  const candidates: Array<{
+    extracted: ExtractedSignature;
+    isTimestamp: boolean;
+  }> = [];
 
   let tag = pdf.indexOf("/ByteRange");
   while (tag !== -1) {
     const extracted = extractSignatureAt(pdf, tag);
     if (extracted) {
       const dictStart = pdf.lastIndexOf("<<", tag);
-      const windowStart = dictStart === -1 ? Math.max(0, tag - 2048) : dictStart;
+      const windowStart =
+        dictStart === -1 ? Math.max(0, tag - 2048) : dictStart;
       const windowEnd = Math.min(pdf.length, tag + 512);
       const window = pdf.toString("latin1", windowStart, windowEnd);
       const isTimestamp =

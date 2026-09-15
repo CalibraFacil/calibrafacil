@@ -20,7 +20,11 @@ import {
  */
 
 /** Distributions offered publicly — the four that cover an ordinary budget. */
-export type DistributionId = "normal" | "rectangular" | "triangular" | "u-shaped";
+export type DistributionId =
+  | "normal"
+  | "rectangular"
+  | "triangular"
+  | "u-shaped";
 
 export type ContributionKind = "typeA" | "typeB";
 
@@ -257,7 +261,8 @@ function evaluateTypeB(
     issues.push({
       contributionId: input.id,
       field: "degreesOfFreedom",
-      message: "Graus de liberdade devem ser um número maior que zero, ou vazio para infinito.",
+      message:
+        "Graus de liberdade devem ser um número maior que zero, ou vazio para infinito.",
     });
     return null;
   }

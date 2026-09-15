@@ -150,173 +150,191 @@ describe("assetsRouter — real DB + real middleware", () => {
   });
 
   // REQ-ASSET-01 ---------------------------------------------------------------
-  it(
-    "REQ-ASSET-01: GET / returns only the authenticated org's assets (tenant isolation)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-ASSET-01: GET / returns only the authenticated org's assets (tenant isolation)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const typeId = await seedAssetType("type-iso-01");
-      const customerA = await seedCustomer({ labOrganizationId: orgA.orgId, name: "Cust A" });
-      const customerB = await seedCustomer({ labOrganizationId: orgB.orgId, name: "Cust B" });
+    const typeId = await seedAssetType("type-iso-01");
+    const customerA = await seedCustomer({
+      labOrganizationId: orgA.orgId,
+      name: "Cust A",
+    });
+    const customerB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      name: "Cust B",
+    });
 
-      await seedAsset({ unitId: orgA.unitId, customerId: customerA, assetTypeId: typeId, tag: "TAG-A1", name: "Asset A" });
-      await seedAsset({ unitId: orgB.unitId, customerId: customerB, assetTypeId: typeId, tag: "TAG-B1", name: "Asset B" });
+    await seedAsset({
+      unitId: orgA.unitId,
+      customerId: customerA,
+      assetTypeId: typeId,
+      tag: "TAG-A1",
+      name: "Asset A",
+    });
+    await seedAsset({
+      unitId: orgB.unitId,
+      customerId: customerB,
+      assetTypeId: typeId,
+      tag: "TAG-B1",
+      name: "Asset B",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await assetsRouter.request("/", {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-      });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await assetsRouter.request("/", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      const tags = body.data.map((a: { tag: string }) => a.tag);
-      expect(tags).toContain("TAG-A1");
-      expect(tags).not.toContain("TAG-B1");
-      expect(body.pagination.total).toBe(1);
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const tags = body.data.map((a: { tag: string }) => a.tag);
+    expect(tags).toContain("TAG-A1");
+    expect(tags).not.toContain("TAG-B1");
+    expect(body.pagination.total).toBe(1);
+  });
 
   // REQ-ASSET-02 ---------------------------------------------------------------
-  it(
-    "REQ-ASSET-02: GET /:id of another org's asset leaks no data (cross-tenant isolation)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+  it("REQ-ASSET-02: GET /:id of another org's asset leaks no data (cross-tenant isolation)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-      const typeId = await seedAssetType("type-iso-02");
-      const customerB = await seedCustomer({ labOrganizationId: orgB.orgId, name: "Cust B" });
-      const assetBId = await seedAsset({
-        unitId: orgB.unitId,
-        customerId: customerB,
-        assetTypeId: typeId,
-        tag: "TAG-B-CROSS",
-        name: "Org B Asset",
-      });
+    const typeId = await seedAssetType("type-iso-02");
+    const customerB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      name: "Cust B",
+    });
+    const assetBId = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: customerB,
+      assetTypeId: typeId,
+      tag: "TAG-B-CROSS",
+      name: "Org B Asset",
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      // Use the numeric id directly — resolveAssetRouteId scopes by
-      // customer.labOrganizationId so the foreign asset resolves to null -> 400
-      const res = await assetsRouter.request(`/${assetBId}`, {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-      });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    // Use the numeric id directly — resolveAssetRouteId scopes by
+    // customer.labOrganizationId so the foreign asset resolves to null -> 400
+    const res = await assetsRouter.request(`/${assetBId}`, {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+    });
 
-      // The route id resolver scopes by org; the foreign asset yields null -> 400.
-      // Org B's data is never returned across the tenant boundary.
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body).not.toHaveProperty("name");
-      expect(body).not.toHaveProperty("tag");
-    },
-  );
+    // The route id resolver scopes by org; the foreign asset yields null -> 400.
+    // Org B's data is never returned across the tenant boundary.
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).not.toHaveProperty("name");
+    expect(body).not.toHaveProperty("tag");
+  });
 
   // REQ-ASSET-03 ---------------------------------------------------------------
-  it(
-    "REQ-ASSET-03: POST / as role=member -> 403 (equipment:create not granted to member)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
-      const typeId = await seedAssetType("type-iso-03");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+  it("REQ-ASSET-03: POST / as role=member -> 403 (equipment:create not granted to member)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const typeId = await seedAssetType("type-iso-03");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          customerId: cid,
-          assetTypeId: typeId,
-          name: "Blocked Asset",
-          serialNumber: "SN-BLOCKED",
-          tag: "TAG-BLOCKED",
-        }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        customerId: cid,
+        assetTypeId: typeId,
+        name: "Blocked Asset",
+        serialNumber: "SN-BLOCKED",
+        tag: "TAG-BLOCKED",
+      }),
+    });
 
-      expect(res.status).toBe(403);
-    },
-  );
+    expect(res.status).toBe(403);
+  });
 
   // REQ-ASSET-04 ---------------------------------------------------------------
-  it(
-    "REQ-ASSET-04: POST / as admin -> 201, persists org/unit-scoped asset + audit log entry",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-iso-04");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+  it("REQ-ASSET-04: POST / as admin -> 201, persists org/unit-scoped asset + audit log entry", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-iso-04");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          customerId: cid,
-          assetTypeId: typeId,
-          name: "New Asset",
-          serialNumber: "SN-NEW-001",
-          tag: "TAG-NEW-001",
-        }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        customerId: cid,
+        assetTypeId: typeId,
+        name: "New Asset",
+        serialNumber: "SN-NEW-001",
+        tag: "TAG-NEW-001",
+      }),
+    });
 
-      expect(res.status).toBe(201);
-      const created = await res.json();
-      expect(created.name).toBe("New Asset");
-      expect(created.tag).toBe("TAG-NEW-001");
-      // Asset is persisted under the active unit from the header
-      expect(created.unitId).toBe(org.unitId);
+    expect(res.status).toBe(201);
+    const created = await res.json();
+    expect(created.name).toBe("New Asset");
+    expect(created.tag).toBe("TAG-NEW-001");
+    // Asset is persisted under the active unit from the header
+    expect(created.unitId).toBe(org.unitId);
 
-      // Audit log must have one "create" entry performed by the authed user
-      const logs = await db
-        .select()
-        .from(assetAuditLog)
-        .where(eq(assetAuditLog.assetId, created.id));
-      expect(logs).toHaveLength(1);
-      expect(logs[0]?.action).toBe("create");
-      expect(logs[0]?.performedBy).toBe(org.userId);
-    },
-  );
+    // Audit log must have one "create" entry performed by the authed user
+    const logs = await db
+      .select()
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.assetId, created.id));
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.action).toBe("create");
+    expect(logs[0]?.performedBy).toBe(org.userId);
+  });
 
   // REQ-ASSET-05 ---------------------------------------------------------------
-  it(
-    "REQ-ASSET-05: Unit-scope — asset in unit-B is excluded when requesting with unit-A header",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+  it("REQ-ASSET-05: Unit-scope — asset in unit-B is excluded when requesting with unit-A header", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
 
-      // Seed a second unit within the same org
-      const { organizationUnit } = await import("@calibra-facil/db/schema");
-      const [unitB] = await db
-        .insert(organizationUnit)
-        .values({
-          organizationId: org.orgId,
-          name: "Branch",
-          slug: "branch",
-          status: "ACTIVE",
-          isDefault: false,
-          createdBy: org.userId,
-        })
-        .returning({ id: organizationUnit.id });
+    // Seed a second unit within the same org
+    const { organizationUnit } = await import("@calibra-facil/db/schema");
+    const [unitB] = await db
+      .insert(organizationUnit)
+      .values({
+        organizationId: org.orgId,
+        name: "Branch",
+        slug: "branch",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: org.userId,
+      })
+      .returning({ id: organizationUnit.id });
 
-      if (!unitB) throw new Error("failed to seed unit B");
+    if (!unitB) throw new Error("failed to seed unit B");
 
-      const typeId = await seedAssetType("type-iso-05");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const typeId = await seedAssetType("type-iso-05");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
 
-      // Asset in default unit (org.unitId)
-      await seedAsset({ unitId: org.unitId, customerId: cid, assetTypeId: typeId, tag: "TAG-UNIT-A", name: "Unit-A Asset" });
-      // Asset in unit B
-      await seedAsset({ unitId: unitB.id, customerId: cid, assetTypeId: typeId, tag: "TAG-UNIT-B", name: "Unit-B Asset" });
+    // Asset in default unit (org.unitId)
+    await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-UNIT-A",
+      name: "Unit-A Asset",
+    });
+    // Asset in unit B
+    await seedAsset({
+      unitId: unitB.id,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-UNIT-B",
+      name: "Unit-B Asset",
+    });
 
-      // Request scoped to unit A only
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request("/", {
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-      });
+    // Request scoped to unit A only
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request("/", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
 
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      const tags = body.data.map((a: { tag: string }) => a.tag);
-      expect(tags).toContain("TAG-UNIT-A");
-      expect(tags).not.toContain("TAG-UNIT-B");
-    },
-  );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const tags = body.data.map((a: { tag: string }) => a.tag);
+    expect(tags).toContain("TAG-UNIT-A");
+    expect(tags).not.toContain("TAG-UNIT-B");
+  });
 
   // REQ-ASSET-06 ---------------------------------------------------------------
   it("REQ-ASSET-06: GET / unauthenticated -> 401", async () => {
@@ -326,454 +344,424 @@ describe("assetsRouter — real DB + real middleware", () => {
   });
 
   // REQ-MLR-030 ---------------------------------------------------------------
-  it(
-    "REQ-MLR-030 [HIGH]: lab LEGAL write persists the regulated period + derives next_legal_verification_date, and leaves the customer interval (Track 1) untouched",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-mlr-030");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-MLR-030",
-      });
+  it("REQ-MLR-030 [HIGH]: lab LEGAL write persists the regulated period + derives next_legal_verification_date, and leaves the customer interval (Track 1) untouched", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-mlr-030");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-MLR-030",
+    });
 
-      // Simulate a customer-owned calibration interval already set (Track 1) + a last date.
-      await db
-        .update(asset)
-        .set({
-          calibrationIntervalMonths: 12,
-          intervalSetBy: "customer_confirmed",
-          nextCalibrationDate: new Date("2025-01-15T00:00:00.000Z"),
-          lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z"),
-        })
-        .where(eq(asset.id, assetId));
+    // Simulate a customer-owned calibration interval already set (Track 1) + a last date.
+    await db
+      .update(asset)
+      .set({
+        calibrationIntervalMonths: 12,
+        intervalSetBy: "customer_confirmed",
+        nextCalibrationDate: new Date("2025-01-15T00:00:00.000Z"),
+        lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z"),
+      })
+      .where(eq(asset.id, assetId));
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_REGULATED,
-        }),
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_REGULATED,
+      }),
+    });
+    expect(res.status).toBe(200);
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      // Track 2 persisted + derived.
-      expect(row?.metrologyRegime).toBe("LEGAL");
-      expect(row?.regulatedInterval).toMatchObject({
-        kind: "fixed_months",
-        valueMonths: 24,
-        regulationReference: "Portaria Inmetro nº 124/2022",
-      });
-      // 2024-01-15 + 24 months.
-      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
-        "2026-01-15",
-      );
-      // Track 1 (customer-owned) is NOT touched by the regime write.
-      expect(row?.calibrationIntervalMonths).toBe(12);
-      expect(row?.intervalSetBy).toBe("customer_confirmed");
-      expect(row?.nextCalibrationDate?.toISOString().slice(0, 10)).toBe(
-        "2025-01-15",
-      );
-    },
-  );
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    // Track 2 persisted + derived.
+    expect(row?.metrologyRegime).toBe("LEGAL");
+    expect(row?.regulatedInterval).toMatchObject({
+      kind: "fixed_months",
+      valueMonths: 24,
+      regulationReference: "Portaria Inmetro nº 124/2022",
+    });
+    // 2024-01-15 + 24 months.
+    expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+      "2026-01-15",
+    );
+    // Track 1 (customer-owned) is NOT touched by the regime write.
+    expect(row?.calibrationIntervalMonths).toBe(12);
+    expect(row?.intervalSetBy).toBe("customer_confirmed");
+    expect(row?.nextCalibrationDate?.toISOString().slice(0, 10)).toBe(
+      "2025-01-15",
+    );
+  });
 
   // REQ-POLISH-002 ------------------------------------------------------------
   // Hardens REQ-MLR-012: a malformed regulatedInterval (empty regulationReference OR
   // valueMonths outside [1,600]) is rejected by RegulatedIntervalSchema at the zValidator
   // gate — BEFORE the handler runs — so no Track-2 column is partially written.
-  it(
-    "REQ-POLISH-002 [HIGH]: a LEGAL PUT with a malformed regulatedInterval -> 400 and writes NO Track-2 columns (no partial write)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-polish-002");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-POLISH-002",
-      });
+  it("REQ-POLISH-002 [HIGH]: a LEGAL PUT with a malformed regulatedInterval -> 400 and writes NO Track-2 columns (no partial write)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-polish-002");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-POLISH-002",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
 
-      async function readAsset() {
-        const [row] = await db
-          .select()
-          .from(asset)
-          .where(eq(asset.id, assetId))
-          .limit(1);
-        return row;
-      }
+    async function readAsset() {
+      const [row] = await db
+        .select()
+        .from(asset)
+        .where(eq(asset.id, assetId))
+        .limit(1);
+      return row;
+    }
 
-      // Case A — empty regulationReference (otherwise valid) is rejected, nothing persisted.
-      const emptyReference = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: {
-            kind: "fixed_months",
-            valueMonths: 24,
-            anchor: "last_verification",
-            regulationReference: "",
-            operationalizedByDelegate: false,
-          },
-        }),
-      });
-      expect(emptyReference.status).toBe(400);
-      const afterEmptyReference = await readAsset();
-      expect(afterEmptyReference?.regulatedInterval).toBeNull();
-      expect(afterEmptyReference?.nextLegalVerificationDate).toBeNull();
+    // Case A — empty regulationReference (otherwise valid) is rejected, nothing persisted.
+    const emptyReference = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: {
+          kind: "fixed_months",
+          valueMonths: 24,
+          anchor: "last_verification",
+          regulationReference: "",
+          operationalizedByDelegate: false,
+        },
+      }),
+    });
+    expect(emptyReference.status).toBe(400);
+    const afterEmptyReference = await readAsset();
+    expect(afterEmptyReference?.regulatedInterval).toBeNull();
+    expect(afterEmptyReference?.nextLegalVerificationDate).toBeNull();
 
-      // Case B — valueMonths outside [1,600] is rejected, nothing persisted.
-      const outOfRange = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: {
-            kind: "fixed_months",
-            valueMonths: 999,
-            anchor: "last_verification",
-            regulationReference: "Portaria Inmetro nº 124/2022",
-            operationalizedByDelegate: false,
-          },
-        }),
-      });
-      expect(outOfRange.status).toBe(400);
-      const afterOutOfRange = await readAsset();
-      expect(afterOutOfRange?.regulatedInterval).toBeNull();
-      expect(afterOutOfRange?.nextLegalVerificationDate).toBeNull();
-    },
-  );
+    // Case B — valueMonths outside [1,600] is rejected, nothing persisted.
+    const outOfRange = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: {
+          kind: "fixed_months",
+          valueMonths: 999,
+          anchor: "last_verification",
+          regulationReference: "Portaria Inmetro nº 124/2022",
+          operationalizedByDelegate: false,
+        },
+      }),
+    });
+    expect(outOfRange.status).toBe(400);
+    const afterOutOfRange = await readAsset();
+    expect(afterOutOfRange?.regulatedInterval).toBeNull();
+    expect(afterOutOfRange?.nextLegalVerificationDate).toBeNull();
+  });
 
   // REQ-MLR-031 ---------------------------------------------------------------
-  it(
-    "REQ-MLR-031 [HIGH]: switching to INDUSTRIAL clears the regulated period (Track 2) and keeps the customer interval (Track 1)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-mlr-031");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-MLR-031",
-      });
+  it("REQ-MLR-031 [HIGH]: switching to INDUSTRIAL clears the regulated period (Track 2) and keeps the customer interval (Track 1)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-mlr-031");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-MLR-031",
+    });
 
-      // Start as a LEGAL asset with a regulated period AND a customer-owned interval.
-      await db
-        .update(asset)
-        .set({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_REGULATED,
-          nextLegalVerificationDate: new Date("2026-01-15T00:00:00.000Z"),
-          calibrationIntervalMonths: 12,
-          intervalSetBy: "customer_confirmed",
-        })
-        .where(eq(asset.id, assetId));
+    // Start as a LEGAL asset with a regulated period AND a customer-owned interval.
+    await db
+      .update(asset)
+      .set({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_REGULATED,
+        nextLegalVerificationDate: new Date("2026-01-15T00:00:00.000Z"),
+        calibrationIntervalMonths: 12,
+        intervalSetBy: "customer_confirmed",
+      })
+      .where(eq(asset.id, assetId));
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ metrologyRegime: "INDUSTRIAL" }),
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ metrologyRegime: "INDUSTRIAL" }),
+    });
+    expect(res.status).toBe(200);
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      expect(row?.metrologyRegime).toBe("INDUSTRIAL");
-      expect(row?.regulatedInterval).toBeNull();
-      expect(row?.nextLegalVerificationDate).toBeNull();
-      // Customer-owned interval (Track 1) is intact.
-      expect(row?.calibrationIntervalMonths).toBe(12);
-      expect(row?.intervalSetBy).toBe("customer_confirmed");
-    },
-  );
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.metrologyRegime).toBe("INDUSTRIAL");
+    expect(row?.regulatedInterval).toBeNull();
+    expect(row?.nextLegalVerificationDate).toBeNull();
+    // Customer-owned interval (Track 1) is intact.
+    expect(row?.calibrationIntervalMonths).toBe(12);
+    expect(row?.intervalSetBy).toBe("customer_confirmed");
+  });
 
   // REQ-MLR-032 ---------------------------------------------------------------
-  it(
-    "REQ-MLR-032 [HIGH]: a regime / regulated-interval change writes an asset_audit_log row",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-mlr-032");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-MLR-032",
-      });
+  it("REQ-MLR-032 [HIGH]: a regime / regulated-interval change writes an asset_audit_log row", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-mlr-032");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-MLR-032",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_REGULATED,
-        }),
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_REGULATED,
+      }),
+    });
+    expect(res.status).toBe(200);
 
-      const logs = await db
-        .select()
-        .from(assetAuditLog)
-        .where(eq(assetAuditLog.assetId, assetId));
-      const updateLog = logs.find((l) => l.action === "update");
-      expect(updateLog).toBeTruthy();
-      expect(updateLog?.performedBy).toBe(org.userId);
-      // The regime change is captured in the audit diff (INDUSTRIAL -> LEGAL).
-      expect(updateLog?.changes).toHaveProperty("metrologyRegime");
-    },
-  );
+    const logs = await db
+      .select()
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.assetId, assetId));
+    const updateLog = logs.find((l) => l.action === "update");
+    expect(updateLog).toBeTruthy();
+    expect(updateLog?.performedBy).toBe(org.userId);
+    // The regime change is captured in the audit diff (INDUSTRIAL -> LEGAL).
+    expect(updateLog?.changes).toHaveProperty("metrologyRegime");
+  });
 
   // REQ-INSTALL-002 / 003 / 004 ------------------------------------------------
-  it(
-    "REQ-INSTALL-002/004 [HIGH]: lab creates a LEGAL asset with max_months_from_install + installed_at -> next_legal_verification_date = installed + valueMonths",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-install-002");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
+  it("REQ-INSTALL-002/004 [HIGH]: lab creates a LEGAL asset with max_months_from_install + installed_at -> next_legal_verification_date = installed + valueMonths", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-install-002");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          customerId: cid,
-          assetTypeId: typeId,
-          name: "Hidrômetro",
-          serialNumber: "SN-INSTALL-002",
-          tag: "TAG-INSTALL-002",
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_FROM_INSTALL,
-          installedAt: "2020-03-01T00:00:00.000Z",
-        }),
-      });
-      expect(res.status).toBe(201);
-      const created = await res.json();
-
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, created.id))
-        .limit(1);
-      // REQ-INSTALL-004: the installation date is persisted.
-      expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
-      // REQ-INSTALL-002: 2020-03-01 + 84 months = 2027-03-01 (ceiling from install).
-      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
-        "2027-03-01",
-      );
-    },
-  );
-
-  it(
-    "REQ-INSTALL-003 [HIGH]: a LEGAL max_months_from_install asset with installed_at null leaves next_legal_verification_date null (no fabricated date)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-install-003");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
         customerId: cid,
         assetTypeId: typeId,
-        tag: "TAG-INSTALL-003",
-      });
+        name: "Hidrômetro",
+        serialNumber: "SN-INSTALL-002",
+        tag: "TAG-INSTALL-002",
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_FROM_INSTALL,
+        installedAt: "2020-03-01T00:00:00.000Z",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const created = await res.json();
 
-      // A last verification IS present — proves the date is NOT fabricated from it.
-      await db
-        .update(asset)
-        .set({ lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z") })
-        .where(eq(asset.id, assetId));
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, created.id))
+      .limit(1);
+    // REQ-INSTALL-004: the installation date is persisted.
+    expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
+    // REQ-INSTALL-002: 2020-03-01 + 84 months = 2027-03-01 (ceiling from install).
+    expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+      "2027-03-01",
+    );
+  });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_FROM_INSTALL,
-        }),
-      });
-      expect(res.status).toBe(200);
+  it("REQ-INSTALL-003 [HIGH]: a LEGAL max_months_from_install asset with installed_at null leaves next_legal_verification_date null (no fabricated date)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-install-003");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-INSTALL-003",
+    });
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      expect(row?.installedAt).toBeNull();
-      expect(row?.nextLegalVerificationDate).toBeNull();
-    },
-  );
+    // A last verification IS present — proves the date is NOT fabricated from it.
+    await db
+      .update(asset)
+      .set({ lastCalibrationDate: new Date("2024-01-15T00:00:00.000Z") })
+      .where(eq(asset.id, assetId));
 
-  it(
-    "REQ-INSTALL-002/004 [HIGH]: PUT setting installed_at on a LEGAL max_months_from_install asset derives the date",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-install-002b");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-INSTALL-002B",
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_FROM_INSTALL,
+      }),
+    });
+    expect(res.status).toBe(200);
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_FROM_INSTALL,
-          installedAt: "2018-06-10T00:00:00.000Z",
-        }),
-      });
-      expect(res.status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.installedAt).toBeNull();
+    expect(row?.nextLegalVerificationDate).toBeNull();
+  });
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      expect(row?.installedAt?.toISOString()).toBe("2018-06-10T00:00:00.000Z");
-      // 2018-06-10 + 84 months = 2025-06-10.
-      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
-        "2025-06-10",
-      );
-    },
-  );
+  it("REQ-INSTALL-002/004 [HIGH]: PUT setting installed_at on a LEGAL max_months_from_install asset derives the date", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-install-002b");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-INSTALL-002B",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_FROM_INSTALL,
+        installedAt: "2018-06-10T00:00:00.000Z",
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.installedAt?.toISOString()).toBe("2018-06-10T00:00:00.000Z");
+    // 2018-06-10 + 84 months = 2025-06-10.
+    expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+      "2025-06-10",
+    );
+  });
 
   // REQ-INSTALL-002 (standalone PATCH) ----------------------------------------
-  it(
-    "REQ-INSTALL-002 [HIGH]: PUT setting ONLY installed_at on an existing LEGAL max_months_from_install asset re-derives next_legal_verification_date",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-install-002c");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-INSTALL-002C",
-      });
-      // Already LEGAL + max_months_from_install but WITHOUT an install date → date is null.
-      await db
-        .update(asset)
-        .set({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_FROM_INSTALL,
-          nextLegalVerificationDate: null,
-        })
-        .where(eq(asset.id, assetId));
+  it("REQ-INSTALL-002 [HIGH]: PUT setting ONLY installed_at on an existing LEGAL max_months_from_install asset re-derives next_legal_verification_date", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-install-002c");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-INSTALL-002C",
+    });
+    // Already LEGAL + max_months_from_install but WITHOUT an install date → date is null.
+    await db
+      .update(asset)
+      .set({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_FROM_INSTALL,
+        nextLegalVerificationDate: null,
+      })
+      .where(eq(asset.id, assetId));
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      // PATCH with ONLY the install date — no regime/regulatedInterval field.
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ installedAt: "2020-03-01T00:00:00.000Z" }),
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    // PATCH with ONLY the install date — no regime/regulatedInterval field.
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ installedAt: "2020-03-01T00:00:00.000Z" }),
+    });
+    expect(res.status).toBe(200);
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
-      // Re-derived from the standalone install-date PATCH: 2020-03-01 + 84 months.
-      expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
-        "2027-03-01",
-      );
-    },
-  );
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.installedAt?.toISOString()).toBe("2020-03-01T00:00:00.000Z");
+    // Re-derived from the standalone install-date PATCH: 2020-03-01 + 84 months.
+    expect(row?.nextLegalVerificationDate?.toISOString().slice(0, 10)).toBe(
+      "2027-03-01",
+    );
+  });
 
   // Regime preservation (regression for the omitted-boolean reset) -----------
-  it(
-    "REQ-INSTALL-002 regression: a non-regime update (name only) preserves a LEGAL asset's regime + regulated interval",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-install-regime");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-INSTALL-REGIME",
-      });
-      await db
-        .update(asset)
-        .set({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_FROM_INSTALL,
-        })
-        .where(eq(asset.id, assetId));
+  it("REQ-INSTALL-002 regression: a non-regime update (name only) preserves a LEGAL asset's regime + regulated interval", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-install-regime");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-INSTALL-REGIME",
+    });
+    await db
+      .update(asset)
+      .set({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_FROM_INSTALL,
+      })
+      .where(eq(asset.id, assetId));
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      // Update an unrelated field (name) with NO metrologyRegime in the request.
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ name: "Renamed" }),
-      });
-      expect(res.status).toBe(200);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    // Update an unrelated field (name) with NO metrologyRegime in the request.
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ name: "Renamed" }),
+    });
+    expect(res.status).toBe(200);
 
-      const [row] = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.id, assetId))
-        .limit(1);
-      expect(row?.name).toBe("Renamed");
-      // The regime is NOT silently reset by a non-regime (name-only) update.
-      expect(row?.metrologyRegime).toBe("LEGAL");
-      expect(row?.regulatedInterval).toMatchObject({
-        kind: "max_months_from_install",
-      });
-    },
-  );
+    const [row] = await db
+      .select()
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1);
+    expect(row?.name).toBe("Renamed");
+    // The regime is NOT silently reset by a non-regime (name-only) update.
+    expect(row?.metrologyRegime).toBe("LEGAL");
+    expect(row?.regulatedInterval).toMatchObject({
+      kind: "max_months_from_install",
+    });
+  });
 
   // REQ-MLR-033 ---------------------------------------------------------------
-  it(
-    "REQ-MLR-033 [HIGH]: PUT a regime / regulated-interval change as role=member -> 403 (equipment:update not granted)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "member" });
-      const typeId = await seedAssetType("type-mlr-033");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const assetId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "TAG-MLR-033",
-      });
+  it("REQ-MLR-033 [HIGH]: PUT a regime / regulated-interval change as role=member -> 403 (equipment:update not granted)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const typeId = await seedAssetType("type-mlr-033");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const assetId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "TAG-MLR-033",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${assetId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          metrologyRegime: "LEGAL",
-          regulatedInterval: LEGAL_REGULATED,
-        }),
-      });
-      expect(res.status).toBe(403);
-    },
-  );
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${assetId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
+        metrologyRegime: "LEGAL",
+        regulatedInterval: LEGAL_REGULATED,
+      }),
+    });
+    expect(res.status).toBe(403);
+  });
 
   // =========================================================================
   // SEC-03 — dashboard tag-collision checks are org-scoped. Same-org duplicates
@@ -788,70 +776,64 @@ describe("assetsRouter — real DB + real middleware", () => {
   // =========================================================================
 
   // REQ-SEC-TAG-003a (dashboard POST) ---------------------------------------
-  it(
-    "REQ-SEC-TAG-002/003a: POST / with a tag already used in the SAME org → tag conflict (org-scoped check)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-sec-post-same");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      await seedAsset({
-        unitId: org.unitId,
+  it("REQ-SEC-TAG-002/003a: POST / with a tag already used in the SAME org → tag conflict (org-scoped check)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-sec-post-same");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "DASH-SAME",
+    });
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({
         customerId: cid,
         assetTypeId: typeId,
+        name: "Dup Asset",
+        serialNumber: "SN-DUP",
         tag: "DASH-SAME",
-      });
+      }),
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({
-          customerId: cid,
-          assetTypeId: typeId,
-          name: "Dup Asset",
-          serialNumber: "SN-DUP",
-          tag: "DASH-SAME",
-        }),
-      });
-
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toBe("Tag já está em uso");
-    },
-  );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Tag já está em uso");
+  });
 
   // REQ-SEC-TAG-003a (dashboard PUT) ----------------------------------------
-  it(
-    "REQ-SEC-TAG-002/003a: PUT /:id changing to a tag already used in the SAME org → tag conflict (org-scoped check)",
-    async () => {
-      const org = await seedOrg({ orgId: "org-a", role: "admin" });
-      const typeId = await seedAssetType("type-sec-put-same");
-      const cid = await seedCustomer({ labOrganizationId: org.orgId });
-      const editableId = await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "DASH-T1",
-      });
-      await seedAsset({
-        unitId: org.unitId,
-        customerId: cid,
-        assetTypeId: typeId,
-        tag: "DASH-T2",
-      });
+  it("REQ-SEC-TAG-002/003a: PUT /:id changing to a tag already used in the SAME org → tag conflict (org-scoped check)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const typeId = await seedAssetType("type-sec-put-same");
+    const cid = await seedCustomer({ labOrganizationId: org.orgId });
+    const editableId = await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "DASH-T1",
+    });
+    await seedAsset({
+      unitId: org.unitId,
+      customerId: cid,
+      assetTypeId: typeId,
+      tag: "DASH-T2",
+    });
 
-      loginAs({ userId: org.userId, organizationId: org.orgId });
-      const res = await assetsRouter.request(`/${editableId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-        body: JSON.stringify({ tag: "DASH-T2" }),
-      });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await assetsRouter.request(`/${editableId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ tag: "DASH-T2" }),
+    });
 
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toBe("Tag ja esta em uso");
-    },
-  );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Tag ja esta em uso");
+  });
 
   // REQ-SEC-TAG-001 (dashboard POST) — cross-org duplicate tag now SUCCEEDS --
   // BEHAVIOR CHANGE (SEC-03b, #638): part (a) mapped a tag used only by another
@@ -861,101 +843,95 @@ describe("assetsRouter — real DB + real middleware", () => {
   // each scoped to its own lab org. This closes the cross-tenant existence
   // oracle (the 409-vs-201 signal that leaked another lab's tags). Intended flip
   // of part (a)'s REQ-SEC-TAG-004a/005a assertion — not a test loosening.
-  it(
-    "REQ-SEC-TAG-001: POST / with a tag used ONLY by another org → 201 (both orgs hold the tag)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-      const typeB = await seedAssetType("type-sec-post-xorg-b");
-      const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
-      await seedAsset({
-        unitId: orgB.unitId,
-        customerId: cidB,
-        assetTypeId: typeB,
-        tag: "DASH-SHARED-POST",
-      });
+  it("REQ-SEC-TAG-001: POST / with a tag used ONLY by another org → 201 (both orgs hold the tag)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const typeB = await seedAssetType("type-sec-post-xorg-b");
+    const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
+    await seedAsset({
+      unitId: orgB.unitId,
+      customerId: cidB,
+      assetTypeId: typeB,
+      tag: "DASH-SHARED-POST",
+    });
 
-      const typeA = await seedAssetType("type-sec-post-xorg-a");
-      const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
+    const typeA = await seedAssetType("type-sec-post-xorg-a");
+    const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await assetsRouter.request("/", {
-        method: "POST",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-        body: JSON.stringify({
-          customerId: cidA,
-          assetTypeId: typeA,
-          name: "Org A Asset",
-          serialNumber: "SN-A-XORG",
-          tag: "DASH-SHARED-POST",
-        }),
-      });
-
-      expect(res.status).toBe(201);
-
-      // Both orgs now hold the tag, each scoped to its own lab org.
-      const holders = await db
-        .select({
-          customerId: asset.customerId,
-          labOrganizationId: asset.labOrganizationId,
-        })
-        .from(asset)
-        .where(eq(asset.tag, "DASH-SHARED-POST"));
-      expect(holders).toHaveLength(2);
-      expect(holders.map((h) => h.customerId).sort()).toEqual(
-        [cidA, cidB].sort(),
-      );
-      // REQ-SEC-TAG-006: the created row persists org A's lab org (== customer's).
-      const orgAHolder = holders.find((h) => h.customerId === cidA);
-      expect(orgAHolder?.labOrganizationId).toBe(orgA.orgId);
-    },
-  );
-
-  // REQ-SEC-TAG-001 (dashboard PUT) — cross-org tag change now SUCCEEDS ------
-  it(
-    "REQ-SEC-TAG-001: PUT /:id changing to a tag used ONLY by another org → 200 (per-org tag namespace)",
-    async () => {
-      const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
-      const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-      const typeB = await seedAssetType("type-sec-put-xorg-b");
-      const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
-      await seedAsset({
-        unitId: orgB.unitId,
-        customerId: cidB,
-        assetTypeId: typeB,
-        tag: "DASH-SHARED-PUT",
-      });
-
-      const typeA = await seedAssetType("type-sec-put-xorg-a");
-      const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
-      const editableId = await seedAsset({
-        unitId: orgA.unitId,
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await assetsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+      body: JSON.stringify({
         customerId: cidA,
         assetTypeId: typeA,
-        tag: "DASH-A-PUT",
-      });
+        name: "Org A Asset",
+        serialNumber: "SN-A-XORG",
+        tag: "DASH-SHARED-POST",
+      }),
+    });
 
-      loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
-      const res = await assetsRouter.request(`/${editableId}`, {
-        method: "PUT",
-        headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
-        body: JSON.stringify({ tag: "DASH-SHARED-PUT" }),
-      });
+    expect(res.status).toBe(201);
 
-      expect(res.status).toBe(200);
+    // Both orgs now hold the tag, each scoped to its own lab org.
+    const holders = await db
+      .select({
+        customerId: asset.customerId,
+        labOrganizationId: asset.labOrganizationId,
+      })
+      .from(asset)
+      .where(eq(asset.tag, "DASH-SHARED-POST"));
+    expect(holders).toHaveLength(2);
+    expect(holders.map((h) => h.customerId).sort()).toEqual(
+      [cidA, cidB].sort(),
+    );
+    // REQ-SEC-TAG-006: the created row persists org A's lab org (== customer's).
+    const orgAHolder = holders.find((h) => h.customerId === cidA);
+    expect(orgAHolder?.labOrganizationId).toBe(orgA.orgId);
+  });
 
-      // Org A's asset took the tag; org B still owns its own row → both hold it.
-      const [orgARow] = await db
-        .select({ tag: asset.tag })
-        .from(asset)
-        .where(eq(asset.id, editableId))
-        .limit(1);
-      expect(orgARow?.tag).toBe("DASH-SHARED-PUT");
-      const holders = await db
-        .select({ id: asset.id })
-        .from(asset)
-        .where(eq(asset.tag, "DASH-SHARED-PUT"));
-      expect(holders).toHaveLength(2);
-    },
-  );
+  // REQ-SEC-TAG-001 (dashboard PUT) — cross-org tag change now SUCCEEDS ------
+  it("REQ-SEC-TAG-001: PUT /:id changing to a tag used ONLY by another org → 200 (per-org tag namespace)", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const typeB = await seedAssetType("type-sec-put-xorg-b");
+    const cidB = await seedCustomer({ labOrganizationId: orgB.orgId });
+    await seedAsset({
+      unitId: orgB.unitId,
+      customerId: cidB,
+      assetTypeId: typeB,
+      tag: "DASH-SHARED-PUT",
+    });
+
+    const typeA = await seedAssetType("type-sec-put-xorg-a");
+    const cidA = await seedCustomer({ labOrganizationId: orgA.orgId });
+    const editableId = await seedAsset({
+      unitId: orgA.unitId,
+      customerId: cidA,
+      assetTypeId: typeA,
+      tag: "DASH-A-PUT",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await assetsRouter.request(`/${editableId}`, {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(orgA.unitId) },
+      body: JSON.stringify({ tag: "DASH-SHARED-PUT" }),
+    });
+
+    expect(res.status).toBe(200);
+
+    // Org A's asset took the tag; org B still owns its own row → both hold it.
+    const [orgARow] = await db
+      .select({ tag: asset.tag })
+      .from(asset)
+      .where(eq(asset.id, editableId))
+      .limit(1);
+    expect(orgARow?.tag).toBe("DASH-SHARED-PUT");
+    const holders = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(eq(asset.tag, "DASH-SHARED-PUT"));
+    expect(holders).toHaveLength(2);
+  });
 });

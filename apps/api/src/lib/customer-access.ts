@@ -28,7 +28,10 @@ export async function getLabCustomerById(
   const [financialSummary, activeCommercialAgreement, group] =
     await Promise.all([
       loadCustomerFinancialSummary(labOrganizationId, foundCustomer.id),
-      loadCustomerActiveCommercialAgreement(labOrganizationId, foundCustomer.id),
+      loadCustomerActiveCommercialAgreement(
+        labOrganizationId,
+        foundCustomer.id,
+      ),
       // Secondary lookup (keeps the whole-row select() above intact) so the
       // detail payload can show which group/rede the customer belongs to.
       foundCustomer.groupId === null

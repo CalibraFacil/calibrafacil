@@ -173,7 +173,10 @@ describe("verifyPdf", () => {
   }
 
   it("still verifies the ORIGINAL signature when a DocTimeStamp is appended (regression: lastIndexOf hazard)", async () => {
-    const stamped = appendDocTimeStamp(signedPdf, Buffer.from([0x30, 0x03, 0x02, 0x01, 0x01]));
+    const stamped = appendDocTimeStamp(
+      signedPdf,
+      Buffer.from([0x30, 0x03, 0x02, 0x01, 0x01]),
+    );
 
     const result = await verifyPdf(stamped, {
       trustAnchors: trustAnchorsFrom(root.cert),

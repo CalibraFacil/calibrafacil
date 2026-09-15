@@ -9,10 +9,12 @@ Test file: `packages/auth/src/access.spec.ts` (same file as spec 01, or a siblin
 `access-roles.spec.ts`).
 
 ## CUT-LINE — pair-don't-loop discipline
+
 Tenant/role partitioning + backoffice gate. Assert the SPEC's intended values; if code
 disagrees, STOP and escalate. Do NOT modify `access.ts`.
 
 ## Oracle (intended)
+
 - `ROLE_HIERARCHY` (low→high): `["client_user","member","operator","technician","admin","owner"]`
 - `INTERNAL_ROLES`: `["member","operator","technician","admin","owner"]` (NO client_user)
 - `PORTAL_ACCESS_ROLES`: `["client_user"]`
@@ -46,5 +48,6 @@ disagrees, STOP and escalate. Do NOT modify `access.ts`.
   null/undefined, and unknown roles. [HIGH RISK]
 
 ## Notes
+
 - Table-driven assertions over all 6 roles for REQ-ROLE-001/004.
 - `canAccessBackoffice("user")` MUST be false — a default platform user is not backoffice.

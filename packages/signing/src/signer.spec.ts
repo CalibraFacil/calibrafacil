@@ -9,10 +9,10 @@ import { SigningError } from "./types";
  * `validateCertificateValidity` production logic, not by constructing
  * `SigningError` directly.
  */
-function makeSelfSignedCert(validity?: {
-  notBefore: Date;
-  notAfter: Date;
-}): { cert: forge.pki.Certificate; key: forge.pki.rsa.PrivateKey } {
+function makeSelfSignedCert(validity?: { notBefore: Date; notAfter: Date }): {
+  cert: forge.pki.Certificate;
+  key: forge.pki.rsa.PrivateKey;
+} {
   const keys = forge.pki.rsa.generateKeyPair(2048);
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
@@ -134,9 +134,8 @@ describe("PDF Signing", () => {
     });
 
     it("REQ-TST-SIG-002: validateCertificateValidity throws CERTIFICATE_EXPIRED for a real certificate past its validity window", async () => {
-      const { parsePkcs12, validateCertificateValidity } = await import(
-        "./signer"
-      );
+      const { parsePkcs12, validateCertificateValidity } =
+        await import("./signer");
       const { cert, key } = makeSelfSignedCert({
         notBefore: new Date(Date.now() - 2 * 365 * 86_400_000),
         notAfter: new Date(Date.now() - 86_400_000), // expired yesterday
@@ -144,9 +143,7 @@ describe("PDF Signing", () => {
       const p12Buffer = makeP12Buffer(key, cert, "password123");
       const certInfo = parsePkcs12(p12Buffer, "password123");
 
-      expect(() => validateCertificateValidity(certInfo)).toThrow(
-        SigningError,
-      );
+      expect(() => validateCertificateValidity(certInfo)).toThrow(SigningError);
       try {
         validateCertificateValidity(certInfo);
       } catch (error) {
@@ -157,9 +154,8 @@ describe("PDF Signing", () => {
     });
 
     it("REQ-TST-SIG-002: validateCertificateValidity throws CERTIFICATE_NOT_YET_VALID for a real certificate before its validity window", async () => {
-      const { parsePkcs12, validateCertificateValidity } = await import(
-        "./signer"
-      );
+      const { parsePkcs12, validateCertificateValidity } =
+        await import("./signer");
       const { cert, key } = makeSelfSignedCert({
         notBefore: new Date(Date.now() + 86_400_000), // starts tomorrow
         notAfter: new Date(Date.now() + 2 * 365 * 86_400_000),
@@ -167,9 +163,7 @@ describe("PDF Signing", () => {
       const p12Buffer = makeP12Buffer(key, cert, "password123");
       const certInfo = parsePkcs12(p12Buffer, "password123");
 
-      expect(() => validateCertificateValidity(certInfo)).toThrow(
-        SigningError,
-      );
+      expect(() => validateCertificateValidity(certInfo)).toThrow(SigningError);
       try {
         validateCertificateValidity(certInfo);
       } catch (error) {
@@ -189,9 +183,7 @@ describe("PDF Signing", () => {
       // WRONG_PASSWORD.
       const corrupted = p12Buffer.subarray(0, p12Buffer.length - 20);
 
-      expect(() => parsePkcs12(corrupted, "password123")).toThrow(
-        SigningError,
-      );
+      expect(() => parsePkcs12(corrupted, "password123")).toThrow(SigningError);
       try {
         parsePkcs12(corrupted, "password123");
       } catch (error) {

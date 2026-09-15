@@ -28,7 +28,9 @@ export const TEMPLATE_ENGINE_OPTIONS: CalculationEngineOptions = {
 
 export function createTemplateEngine(): CalculationEngineLike {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible (same pattern as apps/api compileDraftWithEngine).
-  return createCalculationEngine(TEMPLATE_ENGINE_OPTIONS) as unknown as CalculationEngineLike;
+  return createCalculationEngine(
+    TEMPLATE_ENGINE_OPTIONS,
+  ) as unknown as CalculationEngineLike;
 }
 
 /** Engine metadata (version + options fingerprint) for `compileMethodDraft`. */

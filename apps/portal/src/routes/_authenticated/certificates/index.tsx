@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -158,6 +158,84 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
   );
 }
 
+// Module-level so the header/cell renderers are stable component types
+// instead of being re-created on every render of the page.
+const columns: ColumnDef<Certificate>[] = [
+  {
+    accessorKey: "jobId",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Certificado" />
+    ),
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+          <HugeiconsIcon icon={File01Icon} className="size-4 text-primary" />
+        </div>
+        <span className="font-medium">{row.original.jobId}</span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "assetName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Instrumento" />
+    ),
+    cell: ({ row }) => (
+      <div>
+        <div className="font-medium">{row.original.assetName}</div>
+        <div className="text-xs text-muted-foreground">
+          {row.original.assetTag}
+          {row.original.assetManufacturer && (
+            <span> · {row.original.assetManufacturer}</span>
+          )}
+        </div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "serviceName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Serviço" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{row.original.serviceName}</span>
+    ),
+  },
+  {
+    accessorKey: "approvedAt",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Data" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground tabular-nums">
+        {formatDate(row.original.approvedAt)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    // §7.8.8: a superseded original and its retificação must be
+    // distinguishable at a glance — same vocabulary as the public
+    // verification page.
+    cell: ({ row }) =>
+      row.original.isSuperseded ? (
+        <StatusPill tone="warning">Substituído</StatusPill>
+      ) : row.original.isAmendment ? (
+        <StatusPill tone="info">
+          Retificação nº {row.original.amendmentNumber ?? 1}
+        </StatusPill>
+      ) : (
+        <StatusPill tone="ok">Aprovado</StatusPill>
+      ),
+  },
+  {
+    id: "actions",
+    header: "",
+    cell: ({ row }) => <DownloadButton certificate={row.original} />,
+  },
+];
+
 function CertificatesPage() {
   const navigate = useNavigate();
   const { assetId } = Route.useSearch();
@@ -213,90 +291,6 @@ function CertificatesPage() {
       return response.json();
     },
   });
-
-  const columns: ColumnDef<Certificate>[] = useMemo(
-    () => [
-      {
-        accessorKey: "jobId",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Certificado" />
-        ),
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-              <HugeiconsIcon
-                icon={File01Icon}
-                className="size-4 text-primary"
-              />
-            </div>
-            <span className="font-medium">{row.original.jobId}</span>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "assetName",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Instrumento" />
-        ),
-        cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{row.original.assetName}</div>
-            <div className="text-xs text-muted-foreground">
-              {row.original.assetTag}
-              {row.original.assetManufacturer && (
-                <span> · {row.original.assetManufacturer}</span>
-              )}
-            </div>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "serviceName",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Serviço" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.serviceName}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "approvedAt",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Data" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground tabular-nums">
-            {formatDate(row.original.approvedAt)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        // §7.8.8: a superseded original and its retificação must be
-        // distinguishable at a glance — same vocabulary as the public
-        // verification page.
-        cell: ({ row }) =>
-          row.original.isSuperseded ? (
-            <StatusPill tone="warning">Substituído</StatusPill>
-          ) : row.original.isAmendment ? (
-            <StatusPill tone="info">
-              Retificação nº {row.original.amendmentNumber ?? 1}
-            </StatusPill>
-          ) : (
-            <StatusPill tone="ok">Aprovado</StatusPill>
-          ),
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => <DownloadButton certificate={row.original} />,
-      },
-    ],
-    [],
-  );
 
   const handleRowClick = (certificate: Certificate) => {
     navigate({

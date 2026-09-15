@@ -1,10 +1,7 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import type { ReactNode } from "react";
-import {
-  EmailLayout,
-  type EmailBrand,
-} from "./components/email-layout";
+import { EmailLayout, type EmailBrand } from "./components/email-layout";
 
 export interface ServiceOrderEmailLayoutProps {
   /** Text shown in the email client preview (pre-header). */

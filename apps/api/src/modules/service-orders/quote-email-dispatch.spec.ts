@@ -30,9 +30,11 @@ const {
   mockDbSelect: vi.fn().mockReturnValue({
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
-        limit: vi.fn().mockResolvedValue([
-          { name: "Empresa Teste SA", email: "empresa@example.com" },
-        ]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { name: "Empresa Teste SA", email: "empresa@example.com" },
+          ]),
       }),
     }),
   }),
@@ -64,7 +66,12 @@ vi.mock("drizzle-orm", () => ({
 
 // Mock db schema (just placeholders — the mock db ignores them)
 vi.mock("@calibra-facil/db/schema", () => ({
-  customer: { name: "customer.name", email: "customer.email", labOrganizationId: "customer.labOrganizationId", id: "customer.id" },
+  customer: {
+    name: "customer.name",
+    email: "customer.email",
+    labOrganizationId: "customer.labOrganizationId",
+    id: "customer.id",
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -87,7 +94,10 @@ const BASE_ORDER = {
   serviceOrderNumber: "OS-2026-042",
   publicId: "pub-abc-123",
   customerId: 101,
-  clientContactSnapshot: { email: "cliente@example.com" } satisfies Record<string, unknown>,
+  clientContactSnapshot: { email: "cliente@example.com" } satisfies Record<
+    string,
+    unknown
+  >,
 } satisfies import("./quote-email-dispatch").QuoteEmailOrderContext;
 
 /** Flush microtasks so the void(async()) iife completes */
@@ -105,9 +115,11 @@ describe("dispatchApprovedQuoteEmailOnce (manual path)", () => {
     mockDbSelect.mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            { name: "Empresa Teste SA", email: "empresa@example.com" },
-          ]),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { name: "Empresa Teste SA", email: "empresa@example.com" },
+            ]),
         }),
       }),
     });
@@ -268,9 +280,11 @@ describe("dispatchRejectedQuoteEmailOnce (manual path)", () => {
     mockDbSelect.mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            { name: "Empresa Teste SA", email: "empresa@example.com" },
-          ]),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { name: "Empresa Teste SA", email: "empresa@example.com" },
+            ]),
         }),
       }),
     });

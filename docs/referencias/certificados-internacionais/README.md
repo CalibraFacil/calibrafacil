@@ -1,7 +1,7 @@
 # Como certificados de calibração reais se parecem
 
 Levantamento editorial de certificados publicados por laboratórios acreditados de quatro países,
-mais a única norma de *apresentação* encontrada. Feito porque o desenho da PR #587 saiu "web-y" —
+mais a única norma de _apresentação_ encontrada. Feito porque o desenho da PR #587 saiu "web-y" —
 um dashboard impresso em papel — e a comparação com documentos reais é o que expõe isso.
 
 Serve de base para o desenho do layout fixo (#865). **Não substitui** as normas de conteúdo:
@@ -11,12 +11,12 @@ Serve de base para o desenho do layout fixo (#865). **Não substitui** as normas
 
 ## Fontes
 
-| País | Documento | O que é |
-| --- | --- | --- |
-| 🇬🇧 | **UKAS LAB 5 ed. 5, jan/2025** — *Reporting calibration results* | Norma de apresentação, com Fig. 1 (1ª página) e Fig. 2 (continuação). `ukas.com` |
-| 🇩🇪 | DAkkS/DKD — Kalibrierlabor Westfalen, 2016 | Certificado real, 2 páginas, bilíngue DE/EN |
-| 🇫🇷 | COFRAC — GFP Contrôle, acreditação 2-1614, 2018 | Certificado real, 7 páginas, formulário FS42 V15.1 |
-| 🇧🇷 | RBC/Cgcre — laboratório de massa acreditado, **CAL 0388**, 2023 | Certificado real, 3 páginas, bilíngue PT/EN, laboratório de massa |
+| País | Documento                                                        | O que é                                                                          |
+| ---- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 🇬🇧   | **UKAS LAB 5 ed. 5, jan/2025** — _Reporting calibration results_ | Norma de apresentação, com Fig. 1 (1ª página) e Fig. 2 (continuação). `ukas.com` |
+| 🇩🇪   | DAkkS/DKD — Kalibrierlabor Westfalen, 2016                       | Certificado real, 2 páginas, bilíngue DE/EN                                      |
+| 🇫🇷   | COFRAC — GFP Contrôle, acreditação 2-1614, 2018                  | Certificado real, 7 páginas, formulário FS42 V15.1                               |
+| 🇧🇷   | RBC/Cgcre — laboratório de massa acreditado, **CAL 0388**, 2023           | Certificado real, 3 páginas, bilíngue PT/EN, laboratório de massa                |
 
 ---
 
@@ -39,7 +39,7 @@ identificação clara do fim" — que hoje **não temos**.
 
 **3. Monocromático. Cor só no logo do laboratório.**
 Nenhum dos quatro usa cor semântica. Sem verde de aprovado, sem vermelho de erro negativo, sem
-ícone, sem medalhão, sem *badge*. O brasileiro tem um filete vermelho no rodapé — é a marca da
+ícone, sem medalhão, sem _badge_. O brasileiro tem um filete vermelho no rodapé — é a marca da
 empresa, não sinalização de estado.
 
 **4. Título em caixa-alta, centrado, display.**
@@ -57,8 +57,8 @@ O alemão: grade completa, cabeçalho com cinza claro.
 
 **7. Declarações permanentes em corpo pequeno ao pé, separadas por fio.**
 Rastreabilidade ao SI, MRA, "não reproduzir exceto na íntegra". O francês:
-*"La reproduction de ce certificat n'est autorisée que sous la forme de fac-similé photographique
-intégral."*
+_"La reproduction de ce certificat n'est autorisée que sous la forme de fac-similé photographique
+intégral."_
 
 **8. Assinatura por nome e cargo — sem imagem.**
 `Le Responsable du Laboratoire / Jérôme Parvery` (FR) · `Leiter des Kalibrierlaboratoriums` +
@@ -73,8 +73,8 @@ identificação do formulário, não do certificado.
 - **Bilíngue:** Alemanha e **Brasil** dobram todo rótulo (PT/EN, DE/EN), com o inglês em itálico
   ou corpo menor abaixo. França e Reino Unido, não. Para cliente exportador, vale considerar.
 - **Seções numeradas:** o brasileiro numera de 1 a 6 (`1. Dados do Solicitante` … `6. Resultados
-  da Calibração`). Os outros três não numeram. Vale notar que a PR #587 **também** numerava — o
-  problema dela nunca foi numerar, foi o *estilo* da numeração (eyebrow azul de marca).
+da Calibração`). Os outros três não numeram. Vale notar que a PR #587 **também** numerava — o
+  problema dela nunca foi numerar, foi o _estilo_ da numeração (eyebrow azul de marca).
 - **Densidade:** o francês é o mais arejado (capa quase vazia); o brasileiro o mais denso.
 
 ## O que o certificado brasileiro confirma na prática
@@ -82,8 +82,8 @@ identificação do formulário, não do certificado.
 Vale registrar porque valida três leituras normativas contra um documento real emitido:
 
 - **A frase do NIE-009 §11.5.2** está lá, literal, no cabeçalho de **todas** as páginas:
-  *"Laboratório de Calibração Acreditado pela Cgcre de acordo com a Norma NBR ISO/IEC 17025 Sob o
-  n°0388"*, com a tradução inglesa abaixo.
+  _"Laboratório de Calibração Acreditado pela Cgcre de acordo com a Norma NBR ISO/IEC 17025 Sob o
+  n°0388"_, com a tradução inglesa abaixo.
 - **Sem `±` na tabela de resultados** — coluna `Incerteza de medição (g)` com valor puro,
   exatamente como a NIT-DICLA-021 A.6.1 Nota 1 exige. Confirma que a regra é seguida na prática,
   e que um cabeçalho tipo `U ± (g)` destoaria.

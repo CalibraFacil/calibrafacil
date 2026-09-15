@@ -346,7 +346,9 @@ export const MethodMeasurementModelSchema = z
     options: z
       .object({
         allowNonSmoothWithExplicitSensitivities: z.boolean().optional(),
-        correlatedDegreesOfFreedom: z.enum(["generalized", "diagonal"]).optional(),
+        correlatedDegreesOfFreedom: z
+          .enum(["generalized", "diagonal"])
+          .optional(),
       })
       .strict()
       .optional(),

@@ -88,8 +88,7 @@ function mapRow(row: QueueRow): IntegrationDriftRow | null {
     driftStatus: "REMOTE_MISSING",
     driftCheckedAt:
       typeof drift?.checkedAt === "string" ? drift.checkedAt : null,
-    driftReason:
-      typeof drift?.reason === "string" ? drift.reason : null,
+    driftReason: typeof drift?.reason === "string" ? drift.reason : null,
     lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.toISOString() : null,
   };
 }
@@ -116,10 +115,7 @@ export async function buildIntegrationDriftQueue(params: {
     .from(integrationObjectLink)
     .innerJoin(
       organizationIntegration,
-      eq(
-        organizationIntegration.id,
-        integrationObjectLink.integrationId,
-      ),
+      eq(organizationIntegration.id, integrationObjectLink.integrationId),
     )
     .where(
       and(

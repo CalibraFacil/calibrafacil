@@ -124,7 +124,11 @@ describe("processScheduledIntegrationSyncs (worker real-DB integration)", () => 
       organizationId: orgA.orgId,
       createdBy: orgA.userId,
       schedules: [
-        { target: "customer", mode: "scheduled", nextScheduledRunAt: pastIso() },
+        {
+          target: "customer",
+          mode: "scheduled",
+          nextScheduledRunAt: pastIso(),
+        },
         {
           target: "service_order",
           mode: "scheduled",
@@ -215,7 +219,11 @@ describe("processScheduledIntegrationSyncs (worker real-DB integration)", () => 
       organizationId: orgA.orgId,
       createdBy: orgA.userId,
       schedules: [
-        { target: "customer", mode: "scheduled", nextScheduledRunAt: pastIso() },
+        {
+          target: "customer",
+          mode: "scheduled",
+          nextScheduledRunAt: pastIso(),
+        },
       ],
     });
     await seedScheduledIntegration({
@@ -275,7 +283,11 @@ describe("processScheduledIntegrationSyncs (worker real-DB integration)", () => 
       createdBy: orgA.userId,
       schedules: [
         // DUE -> dispatched + advanced.
-        { target: "customer", mode: "scheduled", nextScheduledRunAt: pastIso() },
+        {
+          target: "customer",
+          mode: "scheduled",
+          nextScheduledRunAt: pastIso(),
+        },
         // DUE but ACTIVE run exists -> skipped, NOT advanced.
         {
           target: "service_order",

@@ -4,8 +4,9 @@ import type { Env } from "./env";
 function getConnectionString(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
-  const connectionString =
-    Object.fromEntries(Object.entries(value)).connectionString;
+  const connectionString = Object.fromEntries(
+    Object.entries(value),
+  ).connectionString;
   return typeof connectionString === "string" ? connectionString : null;
 }
 

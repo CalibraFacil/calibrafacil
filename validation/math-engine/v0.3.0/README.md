@@ -4,9 +4,9 @@ Documento controlado que registra a validação do motor matemático conforme di
 
 ## Revisões do documento
 
-| Rev. | Data       | Descrição                                                                                                                                          |
-| ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0  | 2026-06-09 | Emissão inicial para a v0.3.0.                                                                                                                     |
+| Rev. | Data       | Descrição                                                                                                                                                                                                                                                                                                                      |
+| ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.0  | 2026-06-09 | Emissão inicial para a v0.3.0.                                                                                                                                                                                                                                                                                                 |
 | 1.1  | 2026-09-08 | Revalidação sob a mesma versão após a auditoria técnica de 2026-09-07 (19 achados, `docs/audits/math-engine-2026-09-07*.md`); camada 3 + gate documentados; evidência da camada 1 reimplementada em `src/gum/reference-evidence.spec.ts`; corrigidas as declarações sobre truncamento de ν_eff e limiar da aproximação normal. |
 
 A revisão do documento (`\docRevision`) é independente da versão do pacote (`\docVersion`): uma revisão registra alterações que **não** mudam nenhum resultado já validado; qualquer mudança de resultado exige nova versão do pacote e novo diretório de dossiê.
@@ -95,7 +95,7 @@ validation/math-engine/v0.2.5/
 ...
 ```
 
-Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do *release* em produção.
+Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do _release_ em produção.
 
 ## Distribuição
 

@@ -111,7 +111,11 @@ describe("extractApiKeyFromRequest", () => {
   });
 
   it("REQ-APIKEY-008: bearer scheme match is case-insensitive (BEARER, bearer, Bearer)", () => {
-    const variants = ["BEARER token-upper", "bearer token-lower", "Bearer token-mixed"];
+    const variants = [
+      "BEARER token-upper",
+      "bearer token-lower",
+      "Bearer token-mixed",
+    ];
     const expected = ["token-upper", "token-lower", "token-mixed"];
     for (let i = 0; i < variants.length; i++) {
       const req = new Request("https://example.com/api", {

@@ -46,11 +46,7 @@ export const CreateProficiencyTestSchema = z.object({
   provider: z.string().trim().min(2, "Provedor é obrigatório").max(300),
   providerAccreditation: z.string().trim().max(300).optional(),
   ptRound: z.string().trim().min(1, "Rodada é obrigatória").max(100),
-  scopePart: z
-    .string()
-    .trim()
-    .min(2, "Parte do escopo é obrigatória")
-    .max(300),
+  scopePart: z.string().trim().min(2, "Parte do escopo é obrigatória").max(300),
   metrologyKind: z.string().trim().max(100).optional(),
   standardId: z.coerce.number().int().positive().optional(),
   unitId: z.coerce.number().int().positive().optional(),
@@ -154,11 +150,7 @@ export type ListProficiencyTestsQuery = z.infer<
 // --- PT participation plan (NIT-DICLA-026 §9.4; default 4-year cycle) ---
 
 export const CreatePtPlanItemSchema = z.object({
-  scopePart: z
-    .string()
-    .trim()
-    .min(2, "Parte do escopo é obrigatória")
-    .max(300),
+  scopePart: z.string().trim().min(2, "Parte do escopo é obrigatória").max(300),
   riskJustification: z.string().trim().max(2000).optional(),
   frequencyMonths: z.coerce
     .number()

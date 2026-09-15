@@ -35,7 +35,9 @@ export function AuditTab({ id }: AuditTabProps) {
     <Card>
       <CardHeader>
         <CardTitle>Histórico de alterações</CardTitle>
-        <CardDescription>Registro de atividades desta competência</CardDescription>
+        <CardDescription>
+          Registro de atividades desta competência
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <AuditTimeline events={timelineEvents} showCard={false} />

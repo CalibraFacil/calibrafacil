@@ -144,7 +144,8 @@ export async function seedCompetence(params: {
       userId: params.userId,
       scopeDescription: params.scopeDescription ?? "Calibração de massa",
       status: params.status ?? "ACTIVE",
-      expiresAt: params.expiresAt === undefined ? daysFromNow(-3) : params.expiresAt,
+      expiresAt:
+        params.expiresAt === undefined ? daysFromNow(-3) : params.expiresAt,
       deletedAt: params.deletedAt ?? null,
       requestedBy: params.userId,
       createdBy: params.userId,

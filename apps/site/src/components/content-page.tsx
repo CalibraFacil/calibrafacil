@@ -89,7 +89,10 @@ export function ContentPage({ model }: { model: ContentPageModel }) {
       ) : null}
 
       <nav className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-        <Link href={parent.href} className="transition-colors hover:text-foreground">
+        <Link
+          href={parent.href}
+          className="transition-colors hover:text-foreground"
+        >
           {parent.label}
         </Link>
         <span className="mx-2 text-border">/</span>

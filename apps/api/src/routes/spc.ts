@@ -69,7 +69,10 @@ export async function recomputeControlChart(
         eq(checkStandardReading.parameter, chart.parameter),
       ),
     )
-    .orderBy(asc(checkStandardReading.measuredAt), asc(checkStandardReading.id));
+    .orderBy(
+      asc(checkStandardReading.measuredAt),
+      asc(checkStandardReading.id),
+    );
 
   const params: SpcChartParams = chart.params ?? {};
   const evaluation: SpcEvaluation = {
@@ -163,56 +166,52 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /charts/:id - Chart detail incl. chronological readings
   // =========================================================================
-  .get(
-    "/charts/:id",
-    ...withLabPermission({ spc: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-      const chart = await loadChartScoped(id, member.organizationId);
-      if (!chart) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
+  .get("/charts/:id", ...withLabPermission({ spc: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) {
+      return c.json({ error: "ID inválido" }, 400);
+    }
+    const chart = await loadChartScoped(id, member.organizationId);
+    if (!chart) {
+      return c.json({ error: "Carta de controle não encontrada" }, 404);
+    }
 
-      const [readings, [standard]] = await Promise.all([
-        db
-          .select({
-            id: checkStandardReading.id,
-            value: checkStandardReading.value,
-            uncertainty: checkStandardReading.uncertainty,
-            measuredAt: checkStandardReading.measuredAt,
-            sourceJobId: checkStandardReading.sourceJobId,
-            createdBy: checkStandardReading.createdBy,
-          })
-          .from(checkStandardReading)
-          .where(
-            and(
-              eq(checkStandardReading.organizationId, member.organizationId),
-              eq(checkStandardReading.standardId, chart.standardId),
-              eq(checkStandardReading.parameter, chart.parameter),
-            ),
-          )
-          .orderBy(
-            asc(checkStandardReading.measuredAt),
-            asc(checkStandardReading.id),
+    const [readings, [standard]] = await Promise.all([
+      db
+        .select({
+          id: checkStandardReading.id,
+          value: checkStandardReading.value,
+          uncertainty: checkStandardReading.uncertainty,
+          measuredAt: checkStandardReading.measuredAt,
+          sourceJobId: checkStandardReading.sourceJobId,
+          createdBy: checkStandardReading.createdBy,
+        })
+        .from(checkStandardReading)
+        .where(
+          and(
+            eq(checkStandardReading.organizationId, member.organizationId),
+            eq(checkStandardReading.standardId, chart.standardId),
+            eq(checkStandardReading.parameter, chart.parameter),
           ),
-        db
-          .select({ id: referenceStandard.id, name: referenceStandard.name })
-          .from(referenceStandard)
-          .where(eq(referenceStandard.id, chart.standardId))
-          .limit(1),
-      ]);
+        )
+        .orderBy(
+          asc(checkStandardReading.measuredAt),
+          asc(checkStandardReading.id),
+        ),
+      db
+        .select({ id: referenceStandard.id, name: referenceStandard.name })
+        .from(referenceStandard)
+        .where(eq(referenceStandard.id, chart.standardId))
+        .limit(1),
+    ]);
 
-      return c.json({
-        ...chart,
-        standardName: standard?.name ?? null,
-        readings,
-      });
-    },
-  )
+    return c.json({
+      ...chart,
+      standardName: standard?.name ?? null,
+      readings,
+    });
+  })
 
   // =========================================================================
   // POST /charts - Create a control chart for a standard/parameter pair
@@ -434,7 +433,10 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (chart.capaId) {
         return c.json({ error: "Carta já possui CAPA vinculada" }, 400);
       }
-      if (chart.status === "in_control" || chart.status === "insufficient_data") {
+      if (
+        chart.status === "in_control" ||
+        chart.status === "insufficient_data"
+      ) {
         return c.json(
           { error: "Carta sob controle estatístico — nada a escalar" },
           400,
@@ -488,7 +490,10 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
 
       const refreshed = await loadChartScoped(id, member.organizationId);
       return c.json(
-        { message: "CAPA criada com sucesso", data: { chart: refreshed, capa: newCapa } },
+        {
+          message: "CAPA criada com sucesso",
+          data: { chart: refreshed, capa: newCapa },
+        },
         201,
       );
     },

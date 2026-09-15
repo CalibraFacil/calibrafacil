@@ -14,7 +14,7 @@ import { resolvePdfRenderRequest } from "./index";
 
 const CERTIFICATE = '<html lang="pt-BR" data-pdf-layout="certificate">';
 const FULL_PAGE = '<html data-pdf-layout="full-page">';
-const PLAIN = "<html lang=\"pt-BR\">";
+const PLAIN = '<html lang="pt-BR">';
 
 describe("resolvePdfRenderRequest", () => {
   it("gives the certificate its own margins and both running templates", () => {
@@ -27,9 +27,9 @@ describe("resolvePdfRenderRequest", () => {
     expect(extraFiles["footer.html"]).toBe("<div>footer</div>");
     // Setting any margin* here would override the @page box the layout
     // declares, and the running header would have nowhere to render.
-    expect(Object.keys(properties).filter((k) => k.startsWith("margin"))).toEqual(
-      [],
-    );
+    expect(
+      Object.keys(properties).filter((k) => k.startsWith("margin")),
+    ).toEqual([]);
   });
 
   it("omits a running template that was not supplied", () => {

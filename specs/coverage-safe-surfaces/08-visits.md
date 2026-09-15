@@ -4,7 +4,8 @@ Target: `apps/api/src/lib/visits.ts` (`syncVisitStatusFromJobs`)
 Test file: `apps/api/src/lib/__tests__/visits.spec.ts` (Vitest — `.spec.ts`)
 
 ## Context
-A *visit* lifecycle state machine (PROPOSED/CONFIRMED → IN_PROGRESS → COMPLETED),
+
+A _visit_ lifecycle state machine (PROPOSED/CONFIRMED → IN_PROGRESS → COMPLETED),
 DISTINCT from the regulated calibration-approval state machine (that one is
 pair-don't-loop and is NOT touched here). DB-coupled: mock `@calibra-facil/db` with
 `vi.mock` so `db.select(...).from(...).where(...)` returns scripted rows and `db.update`

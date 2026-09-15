@@ -32,7 +32,9 @@ export function assertEphemeralTestDb(rawUrl: string | undefined): string {
   try {
     host = new URL(rawUrl).hostname;
   } catch {
-    throw new Error("[int-guard] DATABASE_URL is not a valid URL — refusing to run.");
+    throw new Error(
+      "[int-guard] DATABASE_URL is not a valid URL — refusing to run.",
+    );
   }
 
   if (host.endsWith("neon.tech")) {

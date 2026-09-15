@@ -56,10 +56,14 @@ function attemptPasswordSignIn(
   auth: { handler: (req: Request) => Promise<Response> },
   basePath: string,
 ) {
-  return postWithTimeout(auth, `http://localhost:3000${basePath}/sign-in/email`, {
-    email: "nobody@example.com",
-    password: "irrelevant-password-123",
-  });
+  return postWithTimeout(
+    auth,
+    `http://localhost:3000${basePath}/sign-in/email`,
+    {
+      email: "nobody@example.com",
+      password: "irrelevant-password-123",
+    },
+  );
 }
 
 // Request phase of the password-reset flow (the endpoint backoffice-users.ts

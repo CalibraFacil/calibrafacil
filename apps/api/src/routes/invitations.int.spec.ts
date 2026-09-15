@@ -138,10 +138,13 @@ describe("invitationsRouter — real DB (public router)", () => {
       role: "technician",
     });
 
-    const res = await invitationsRouter.request(`/${invId}/request-setup-link`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-    });
+    const res = await invitationsRouter.request(
+      `/${invId}/request-setup-link`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+      },
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -237,10 +240,13 @@ describe("invitationsRouter — real DB (public router)", () => {
       expiresAt: new Date("2000-01-01T00:00:00.000Z"), // expired
     });
 
-    const res = await invitationsRouter.request(`/${invId}/request-setup-link`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-    });
+    const res = await invitationsRouter.request(
+      `/${invId}/request-setup-link`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+      },
+    );
 
     expect(res.status).toBe(404);
 
@@ -277,10 +283,13 @@ describe("invitationsRouter — real DB (public router)", () => {
       expiresAt: new Date("2099-01-01T00:00:00.000Z"),
     });
 
-    const res = await invitationsRouter.request(`/${invId}/request-setup-link`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-    });
+    const res = await invitationsRouter.request(
+      `/${invId}/request-setup-link`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+      },
+    );
 
     // organization.type="LAB" is the SOLE discriminator vs REQ-INV-001's happy
     // path: same pending, same not-expired, same matching user — only the org

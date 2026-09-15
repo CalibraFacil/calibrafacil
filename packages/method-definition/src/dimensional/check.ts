@@ -125,7 +125,10 @@ function parseDecimalToRational(raw: string): Rational | null {
 /** A NumberLiteral (optionally wrapped in a unary sign) → its rational value. */
 function numericLiteralRational(node: FormulaAstNode): Rational | null {
   if (node.kind === "NumberLiteral") return parseDecimalToRational(node.raw);
-  if (node.kind === "UnaryExpression" && node.argument.kind === "NumberLiteral") {
+  if (
+    node.kind === "UnaryExpression" &&
+    node.argument.kind === "NumberLiteral"
+  ) {
     const value = parseDecimalToRational(node.argument.raw);
     if (!value) return null;
     return node.operator === "-" ? rational(-value.n, value.d) : value;
@@ -197,7 +200,11 @@ function addDiagnostic(
     code,
     formulaId: ctx.formulaId,
     message,
-    detail: { fragment, ...(left ? { left } : {}), ...(right ? { right } : {}) },
+    detail: {
+      fragment,
+      ...(left ? { left } : {}),
+      ...(right ? { right } : {}),
+    },
   });
 }
 

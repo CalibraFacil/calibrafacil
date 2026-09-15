@@ -181,127 +181,123 @@ describe.skipIf(!LIVE)("Conta Azul live contract (sandbox)", () => {
     expect(extractItems(categories).length).toBeGreaterThan(0);
   }, 30_000);
 
-  it(
-    "exercises the undocumented protocol + acquittance flow end-to-end",
-    async (ctx) => {
-      // --- Resolve reference data needed to build a receivable event ---
-      const accountId = firstItemId(await client.listFinancialAccounts());
-      const categoryId = firstItemId(await client.listCategories());
+  it("exercises the undocumented protocol + acquittance flow end-to-end", async (ctx) => {
+    // --- Resolve reference data needed to build a receivable event ---
+    const accountId = firstItemId(await client.listFinancialAccounts());
+    const categoryId = firstItemId(await client.listCategories());
 
-      // A financial account (conta financeira) is mandatory to create a
-      // receivable event, and it can only be created in the ERP UI. Skip
-      // (rather than fail) when the test account hasn't been set up — this is
-      // an account-provisioning gap, not a contract violation.
-      if (!accountId) {
-        ctx.skip(
-          "test account has no financial account (conta financeira); create one in the ERP to exercise the protocol/baixa flow",
-        );
-        return;
-      }
-
-      let contatoId = firstItemId(
-        await client.searchPessoas({ tamanho_pagina: 10, pagina: 1 }),
+    // A financial account (conta financeira) is mandatory to create a
+    // receivable event, and it can only be created in the ERP UI. Skip
+    // (rather than fail) when the test account hasn't been set up — this is
+    // an account-provisioning gap, not a contract violation.
+    if (!accountId) {
+      ctx.skip(
+        "test account has no financial account (conta financeira); create one in the ERP to exercise the protocol/baixa flow",
       );
+      return;
+    }
 
-      if (!contatoId) {
-        const created = await client.createPessoa({
-          ativo: true,
-          nome: "Contrato Teste CalibraFácil",
-          tipo_pessoa: "Jurídica",
-          cnpj: "11222333000181",
-          perfis: [{ tipo_perfil: "Cliente" }],
-        });
-        logRaw("createPessoa", created);
-        contatoId = extractId(created);
-      }
+    let contatoId = firstItemId(
+      await client.searchPessoas({ tamanho_pagina: 10, pagina: 1 }),
+    );
 
-      expect(categoryId, "test account needs a category").toBeTruthy();
-      expect(contatoId, "could not resolve/create a customer").toBeTruthy();
-      if (!categoryId || !contatoId) return;
-
-      // --- Create a tiny receivable event (async → 202 + protocolId) ---
-      const event: ContaAzulReceivableEventCreate = {
-        data_competencia: today(),
-        valor: 1.23,
-        observacao: "Contract test (CalibraFácil) — safe to delete",
-        descricao: "CF contract test receivable",
-        contato: contatoId,
-        conta_financeira: accountId,
-        rateio: [{ id_categoria: categoryId, valor: 1.23 }],
-        condicao_pagamento: {
-          parcelas: [
-            {
-              descricao: "Parcela 1",
-              data_vencimento: inDays(7),
-              nota: "",
-              conta_financeira: accountId,
-              // valor_liquido is required by the live API (the TS type marks it
-              // optional, but Conta Azul rejects the create without it). The
-              // real adapter sets both — mirror that here.
-              detalhe_valor: { valor_bruto: 1.23, valor_liquido: 1.23 },
-            },
-          ],
-        },
-      };
-
-      const protocol =
-        await client.createReceivableEvent<ContaAzulProtocolResponse>(event);
-      logRaw("createReceivableEvent → protocol", protocol);
-      // Live API returns `protocolo`; older assumption was `protocolId`.
-      const protocolId = protocol.protocolo ?? protocol.protocolId ?? "";
-      expect(protocolId.length).toBeGreaterThan(0);
-
-      // --- Poll the undocumented /v1/protocolo/{id} until it settles ---
-      let status: ContaAzulProtocolStatusResponse | undefined;
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        status = await client.getProtocol(protocolId);
-        if (status.status && status.status !== "PENDING") break;
-        await sleep(2_000);
-      }
-      logRaw("getProtocol (final)", status);
-      expect(status, "protocol never returned").toBeTruthy();
-      // evento_financeiro_id is the field the adapter relies on to link back.
-      const eventoFinanceiroId =
-        typeof status?.evento_financeiro_id === "string"
-          ? status.evento_financeiro_id
-          : null;
-      expect(
-        eventoFinanceiroId,
-        "protocol did not yield evento_financeiro_id",
-      ).toBeTruthy();
-      if (!eventoFinanceiroId) return;
-
-      // --- Validate installment shape via the documented installments call ---
-      const installments =
-        await client.getInstallmentsByEventId<ContaAzulInstallment[]>(
-          eventoFinanceiroId,
-        );
-      logRaw("getInstallmentsByEventId", installments);
-      expect(Array.isArray(installments)).toBe(true);
-      const installment = installments[0];
-      expect(installment, "event produced no installment").toBeTruthy();
-      if (!installment) return;
-      expect(typeof installment.id).toBe("string");
-      expect(typeof installment.status).toBe("string");
-
-      // --- Create an acquittance (baixa) on the undocumented surface ---
-      const acquittance = await client.createAcquittance(installment.id, {
-        data_pagamento: today(),
-        composicao_valor: { valor_bruto: 1.23 },
-        conta_financeira: accountId,
-        metodo_pagamento: "PIX_COBRANCA",
-        observacao: "Contract test acquittance — safe to delete",
+    if (!contatoId) {
+      const created = await client.createPessoa({
+        ativo: true,
+        nome: "Contrato Teste CalibraFácil",
+        tipo_pessoa: "Jurídica",
+        cnpj: "11222333000181",
+        perfis: [{ tipo_perfil: "Cliente" }],
       });
-      logRaw("createAcquittance", acquittance);
-      createdAcquittanceId = extractId(acquittance);
+      logRaw("createPessoa", created);
+      contatoId = extractId(created);
+    }
 
-      // List acquittances back to confirm the round-trip shape.
-      const acquittances = await client.listInstallmentAcquittances(
-        installment.id,
+    expect(categoryId, "test account needs a category").toBeTruthy();
+    expect(contatoId, "could not resolve/create a customer").toBeTruthy();
+    if (!categoryId || !contatoId) return;
+
+    // --- Create a tiny receivable event (async → 202 + protocolId) ---
+    const event: ContaAzulReceivableEventCreate = {
+      data_competencia: today(),
+      valor: 1.23,
+      observacao: "Contract test (CalibraFácil) — safe to delete",
+      descricao: "CF contract test receivable",
+      contato: contatoId,
+      conta_financeira: accountId,
+      rateio: [{ id_categoria: categoryId, valor: 1.23 }],
+      condicao_pagamento: {
+        parcelas: [
+          {
+            descricao: "Parcela 1",
+            data_vencimento: inDays(7),
+            nota: "",
+            conta_financeira: accountId,
+            // valor_liquido is required by the live API (the TS type marks it
+            // optional, but Conta Azul rejects the create without it). The
+            // real adapter sets both — mirror that here.
+            detalhe_valor: { valor_bruto: 1.23, valor_liquido: 1.23 },
+          },
+        ],
+      },
+    };
+
+    const protocol =
+      await client.createReceivableEvent<ContaAzulProtocolResponse>(event);
+    logRaw("createReceivableEvent → protocol", protocol);
+    // Live API returns `protocolo`; older assumption was `protocolId`.
+    const protocolId = protocol.protocolo ?? protocol.protocolId ?? "";
+    expect(protocolId.length).toBeGreaterThan(0);
+
+    // --- Poll the undocumented /v1/protocolo/{id} until it settles ---
+    let status: ContaAzulProtocolStatusResponse | undefined;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      status = await client.getProtocol(protocolId);
+      if (status.status && status.status !== "PENDING") break;
+      await sleep(2_000);
+    }
+    logRaw("getProtocol (final)", status);
+    expect(status, "protocol never returned").toBeTruthy();
+    // evento_financeiro_id is the field the adapter relies on to link back.
+    const eventoFinanceiroId =
+      typeof status?.evento_financeiro_id === "string"
+        ? status.evento_financeiro_id
+        : null;
+    expect(
+      eventoFinanceiroId,
+      "protocol did not yield evento_financeiro_id",
+    ).toBeTruthy();
+    if (!eventoFinanceiroId) return;
+
+    // --- Validate installment shape via the documented installments call ---
+    const installments =
+      await client.getInstallmentsByEventId<ContaAzulInstallment[]>(
+        eventoFinanceiroId,
       );
-      logRaw("listInstallmentAcquittances", acquittances);
-      expect(extractItems(acquittances).length).toBeGreaterThan(0);
-    },
-    120_000,
-  );
+    logRaw("getInstallmentsByEventId", installments);
+    expect(Array.isArray(installments)).toBe(true);
+    const installment = installments[0];
+    expect(installment, "event produced no installment").toBeTruthy();
+    if (!installment) return;
+    expect(typeof installment.id).toBe("string");
+    expect(typeof installment.status).toBe("string");
+
+    // --- Create an acquittance (baixa) on the undocumented surface ---
+    const acquittance = await client.createAcquittance(installment.id, {
+      data_pagamento: today(),
+      composicao_valor: { valor_bruto: 1.23 },
+      conta_financeira: accountId,
+      metodo_pagamento: "PIX_COBRANCA",
+      observacao: "Contract test acquittance — safe to delete",
+    });
+    logRaw("createAcquittance", acquittance);
+    createdAcquittanceId = extractId(acquittance);
+
+    // List acquittances back to confirm the round-trip shape.
+    const acquittances = await client.listInstallmentAcquittances(
+      installment.id,
+    );
+    logRaw("listInstallmentAcquittances", acquittances);
+    expect(extractItems(acquittances).length).toBeGreaterThan(0);
+  }, 120_000);
 });

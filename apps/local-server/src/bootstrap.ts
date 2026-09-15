@@ -110,7 +110,9 @@ export function parseLocalServerBootstrapConfig(
       error instanceof Error
         ? error.message
         : "Unknown bootstrap parsing error.";
-    throw new Error(`Invalid local server bootstrap config: ${message}`);
+    throw new Error(`Invalid local server bootstrap config: ${message}`, {
+      cause: error,
+    });
   }
 }
 
@@ -129,7 +131,9 @@ function readBootstrapConfig(
       error instanceof Error
         ? error.message
         : "Unknown bootstrap decoding error.";
-    throw new Error(`Invalid local server bootstrap config: ${message}`);
+    throw new Error(`Invalid local server bootstrap config: ${message}`, {
+      cause: error,
+    });
   }
 }
 

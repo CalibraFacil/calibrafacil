@@ -40,8 +40,9 @@ export function FinalReviewEmail({
         <Badge variant="info">Em revisão final</Badge>
         <Title>Serviço em revisão final</Title>
         <Paragraph>
-          Olá, {customerName}! O serviço da ordem de serviço {serviceOrderNumber}{" "}
-          está passando pela etapa de revisão final em {labName}.
+          Olá, {customerName}! O serviço da ordem de serviço{" "}
+          {serviceOrderNumber} está passando pela etapa de revisão final em{" "}
+          {labName}.
         </Paragraph>
 
         <DetailBox>

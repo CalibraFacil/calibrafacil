@@ -163,51 +163,93 @@ const measurementModels = [
       // pelas dos seus próprios certificados / série de medições.
       {
         symbol: "I_L",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "I_L" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "I_L",
+        },
         unit: "g",
         // [VERIFICAR] balance standard uncertainty (cg-19 §6.3.1). Tabela 2: u(Δm)=0,00127 g
         // → repartida entre I_L e I_E (0,0009 g cada → ~0,00127 g combinada). ν=∞ (Type B).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0009 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.0009,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
         symbol: "I_E",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "I_E" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "I_E",
+        },
         unit: "g",
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0009 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.0009,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
         symbol: "t_w",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "t_w" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "t_w",
+        },
         unit: "°C",
         // [VERIFICAR] thermometer standard uncertainty (cg-19 §6.3.2). Tabela 2: u(t)=0,0152 °C. ν=∞.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0152 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.0152,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
         symbol: "rho_a",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "rho_a" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "rho_a",
+        },
         unit: "g/mL",
         // [VERIFICAR] air-density uncertainty (cg-19 §6.3.4 / CIPM). Tabela 2: u(ρ_A)=1,76e-6 g/mL. ν=∞.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.00000176 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.00000176,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
         symbol: "rho_b",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "rho_b" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "rho_b",
+        },
         unit: "g/mL",
         // [VERIFICAR] reference-weight density uncertainty (cg-19 §6.3.5: weight-set
         // certificate or OIML R 111-1 class). Tabela 2: u(ρ_B)=0,0346 g/mL. ν=∞ (Type B).
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.0346 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.0346,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
         symbol: "gamma",
-        source: { kind: "table_column", tableKey: "determinacoes", columnKey: "gamma" },
+        source: {
+          kind: "table_column",
+          tableKey: "determinacoes",
+          columnKey: "gamma",
+        },
         unit: "1/°C",
         // [VERIFICAR] cubic expansion coefficient uncertainty (cg-19 §6.3.6). Tabela 2: u(γ)=2,89e-7 1/°C. ν=∞.
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.000000289 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.000000289,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
@@ -220,7 +262,10 @@ const measurementModels = [
         symbol: "dv_men",
         source: { kind: "constant", value: 0 },
         unit: "mL",
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.00866 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.00866,
+        },
         degreesOfFreedom: "Infinity",
       },
       {
@@ -233,7 +278,10 @@ const measurementModels = [
         symbol: "dv_rep",
         source: { kind: "constant", value: 0 },
         unit: "mL",
-        uncertainty: { kind: "direct_standard_uncertainty", standardUncertainty: 0.014 },
+        uncertainty: {
+          kind: "direct_standard_uncertainty",
+          standardUncertainty: 0.014,
+        },
         degreesOfFreedom: 9,
       },
     ],
@@ -259,9 +307,15 @@ const certificateContent = {
       kind: "definition_list",
       title: "CONVENÇÕES",
       items: [
-        { term: "V₀", definition: "Volume à temperatura de referência de 20 °C." },
+        {
+          term: "V₀",
+          definition: "Volume à temperatura de referência de 20 °C.",
+        },
         { term: "ρ_W", definition: "Densidade da água (Tanaka, cg-19 Eq. 2)." },
-        { term: "ρ_B", definition: "Densidade dos pesos de referência (cg-19 §6.3.5)." },
+        {
+          term: "ρ_B",
+          definition: "Densidade dos pesos de referência (cg-19 §6.3.5).",
+        },
         {
           term: "U",
           definition:
@@ -294,7 +348,8 @@ export const volumeProductDefinition: TemplateProductDefinition = {
   dataFields: MethodInputFieldSchema.array().parse(dataFields),
   variableBindings: [],
   formulas: [],
-  measurementModels: MethodMeasurementModelSchema.array().parse(measurementModels),
+  measurementModels:
+    MethodMeasurementModelSchema.array().parse(measurementModels),
   validations: [],
   uncertaintyParams: [],
   certificateContent: MethodCertificateContentSchema.parse(certificateContent),
@@ -432,7 +487,16 @@ const governance: MetrologyGovernance = {
       ref: "cg-19 §6.3.4 / CIPM",
       item: "As INCERTEZAS-PADRÃO de entrada são valores REPRESENTATIVOS, retirados do exemplo trabalhado da cg-19 v4.1 §7.1 (Tabela 2). O metrologista deve substituí-las pelas dos seus próprios certificados (balança, termômetro, jogo de pesos, densidade do ar) e pela série de repetibilidade do laboratório.",
       severity: "action",
-      fieldKeys: ["I_L", "I_E", "t_w", "rho_a", "rho_b", "gamma", "dv_men", "dv_rep"],
+      fieldKeys: [
+        "I_L",
+        "I_E",
+        "t_w",
+        "rho_a",
+        "rho_b",
+        "gamma",
+        "dv_men",
+        "dv_rep",
+      ],
     },
     {
       ref: "cg-19 §6.3.4",
@@ -478,7 +542,8 @@ const governance: MetrologyGovernance = {
     {
       ref: "cg-19 §6.3.7.2",
       component: "manuseio do instrumento (pipetas de pistão)",
-      appliesWhen: "instrumentos de pistão ou variabilidade de manuseio relevante",
+      appliesWhen:
+        "instrumentos de pistão ou variabilidade de manuseio relevante",
     },
     {
       ref: "cg-19 §6.3.8",
@@ -489,7 +554,8 @@ const governance: MetrologyGovernance = {
   workedExample: {
     scenarioKey: "balao_100mL_20C",
     provenance: "engine_characterization",
-    source: "Motor (modo decimal); k = 2.1059 derivado de ν_eff = 17.43 (Welch–Satterthwaite, Student-t 95 %)",
+    source:
+      "Motor (modo decimal); k = 2.1059 derivado de ν_eff = 17.43 (Welch–Satterthwaite, Student-t 95 %)",
     expected: {
       estimate: 100.104665735215,
       standardUncertainty: 0.01651493136661448,

@@ -51,8 +51,8 @@ export function WarrantyReturnEmail({
         </DetailBox>
 
         <Paragraph>
-          Nossa equipe irá avaliar o equipamento e entrar em contato com você
-          em breve. Se tiver dúvidas, entre em contato com {labName}.
+          Nossa equipe irá avaliar o equipamento e entrar em contato com você em
+          breve. Se tiver dúvidas, entre em contato com {labName}.
         </Paragraph>
       </EmailCard>
     </ServiceOrderEmailLayout>

@@ -33,7 +33,11 @@ export async function parseSpreadsheet(
   const columnCount = Math.max(sheet.actualColumnCount, sheet.columnCount, 0);
   const cellText = (rowNumber: number, columnNumber: number): string => {
     const value = sheet.getRow(rowNumber).getCell(columnNumber).text;
-    return typeof value === "string" ? value : value == null ? "" : String(value);
+    return typeof value === "string"
+      ? value
+      : value == null
+        ? ""
+        : String(value);
   };
 
   const headers: string[] = [];
