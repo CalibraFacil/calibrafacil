@@ -20,6 +20,7 @@ const navLinks = [
   { label: "Portal do cliente", href: "/#portal" },
   { label: "Cobertura", href: "/#cobertura" },
   { label: "Preços", href: "/#planos" },
+  { label: "Ferramentas", href: "/ferramentas" },
   { label: "Recursos", href: "/recursos" },
   { label: "Blog", href: "/blog" },
 ];
