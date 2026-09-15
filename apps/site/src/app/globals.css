@@ -77,6 +77,20 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  /* The hero settles in one short rise. Always paired with `motion-safe:`, so
+     a reduced-motion visitor gets the finished state with no class at all. */
+  --animate-hero-rise: hero-rise 0.6s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @layer base {
