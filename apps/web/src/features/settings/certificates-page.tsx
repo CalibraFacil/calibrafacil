@@ -345,8 +345,13 @@ function CertificateCard({
 
   const status = statusConfig[certificate.status]
   const validUntil = new Date(certificate.validUntil)
+  // Deliberate live-clock read: the countdown has to stay truthful while the
+  // page is open, so it is recomputed on every render rather than frozen at
+  // mount. This project does not run React Compiler, so nothing memoizes it.
+  // oxlint-disable-next-line react/purity
+  const nowMs = Date.now()
   const daysUntilExpiry = Math.ceil(
-    (validUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    (validUntil.getTime() - nowMs) / (1000 * 60 * 60 * 24),
   )
 
   return (

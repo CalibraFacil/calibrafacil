@@ -282,6 +282,10 @@ export function CalibrationCertificateHtml({
   // Numbered in reading order; computed so inserting a conditional section
   // never leaves a gap in the sequence.
   let sectionNumber = 0;
+  // `next()` is only ever called while the tree below is being built, and this
+  // component renders exactly once per document in the PDF pipeline, so the
+  // counter cannot leak across renders.
+  // oxlint-disable-next-line react/immutability
   const next = () => (sectionNumber += 1);
 
   return (

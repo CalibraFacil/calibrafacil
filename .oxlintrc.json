@@ -1,7 +1,10 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "import", "unicorn"],
-  "jsPlugins": ["./packages/oxlint-plugin-calibra/src/index.ts"],
+  "jsPlugins": [
+    "./packages/oxlint-plugin-calibra/src/index.ts",
+    "@shadcn/lint"
+  ],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
@@ -35,6 +38,12 @@
         ]
       }
     ],
+    // React Compiler diagnostic, not a defect: it fires on third-party APIs
+    // whose return values the compiler cannot memoize (TanStack Table's
+    // `useReactTable`, react-hook-form's `watch`). There is no call-site fix,
+    // and this repo does not run React Compiler, so keep it advisory instead
+    // of failing the build on a library's design.
+    "react/incompatible-library": "warn",
     "calibra/no-api-import-in-frontend": "error",
     "calibra/no-hono-client-outside-client-runtime": "error",
     "calibra/no-router-coupling-in-features": "error"

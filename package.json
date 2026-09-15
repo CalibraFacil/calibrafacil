@@ -56,8 +56,9 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
+    "@shadcn/lint": "^0.1.0",
     "better-sqlite3": "^12.11.1",
-    "oxlint": "^1.68.0",
+    "oxlint": "^1.83.0",
     "prettier": "^3.8.3",
     "turbo": "^2.9.16",
     "typescript": "7.0.2"

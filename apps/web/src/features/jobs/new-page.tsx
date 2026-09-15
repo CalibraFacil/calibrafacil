@@ -74,7 +74,7 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
   const selectedAsset = useMemo(() => {
     if (!formData.assetId || !assetsData?.data) return null
     return assetsData.data.find((a) => a.id === formData.assetId) || null
-  }, [formData.assetId, assetsData?.data])
+  }, [formData.assetId, assetsData])
 
   const { data: servicesData, isLoading: servicesLoading } =
     useNewJobServicesData({
@@ -88,12 +88,12 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
   const selectedCustomer = useMemo(() => {
     if (!formData.customerId || !customersData?.data) return null
     return customersData.data.find((c) => c.id === formData.customerId) || null
-  }, [formData.customerId, customersData?.data])
+  }, [formData.customerId, customersData])
 
   const selectedService = useMemo(() => {
     if (!formData.serviceId || !servicesData?.data) return null
     return servicesData.data.find((s) => s.id === formData.serviceId) || null
-  }, [formData.serviceId, servicesData?.data])
+  }, [formData.serviceId, servicesData])
 
   // Computed display values for combobox inputs
   const selectedCustomerName = useMemo(() => {
@@ -122,7 +122,7 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
       (t) => t.id === formData.technicianId,
     )
     return tech?.name || ''
-  }, [formData.technicianId, techniciansData?.data])
+  }, [formData.technicianId, techniciansData])
 
   // Create mutation
   const createMutation = useMutation({

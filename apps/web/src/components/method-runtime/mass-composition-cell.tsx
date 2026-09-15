@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -168,13 +168,19 @@ export function MassCompositionCell({
     displayUnit != null && isMassUnit(displayUnit)
       ? displayUnit
       : normalizedTargetUnit
-  const toFormatUnit = (valueInTargetUnit: number): number =>
-    convertMassValue(valueInTargetUnit, normalizedTargetUnit, formatUnit) ??
-    valueInTargetUnit
-  const formatTargetNumber = (valueInTargetUnit: number | null): string =>
-    valueInTargetUnit == null
-      ? '-'
-      : formatNumber(toFormatUnit(valueInTargetUnit), formatUnit)
+  const toFormatUnit = useCallback(
+    (valueInTargetUnit: number): number =>
+      convertMassValue(valueInTargetUnit, normalizedTargetUnit, formatUnit) ??
+      valueInTargetUnit,
+    [normalizedTargetUnit, formatUnit],
+  )
+  const formatTargetNumber = useCallback(
+    (valueInTargetUnit: number | null): string =>
+      valueInTargetUnit == null
+        ? '-'
+        : formatNumber(toFormatUnit(valueInTargetUnit), formatUnit),
+    [toFormatUnit, formatUnit],
+  )
 
   const resolvedTarget = useMemo(() => {
     if (!target) return null

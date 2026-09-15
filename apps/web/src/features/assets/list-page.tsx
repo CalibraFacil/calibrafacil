@@ -89,7 +89,7 @@ export function AssetsPage() {
     if (!customerIdParam || !customersData?.data) return ''
     const customer = customersData.data.find((c) => c.id === customerIdParam)
     return customer?.name || ''
-  }, [customerIdParam, customersData?.data])
+  }, [customerIdParam, customersData])
 
   const { data, isLoading, error } = useAssetsListData({
     activeOrganizationId,

@@ -190,19 +190,14 @@ export function AssetCreateForm({
       (c) => c.id === formData.customerId,
     )
     return customer?.name || ''
-  }, [
-    lockCustomer,
-    lockedCustomerName,
-    formData.customerId,
-    customersData?.data,
-  ])
+  }, [lockCustomer, lockedCustomerName, formData.customerId, customersData])
 
   const selectedAssetType = useMemo(() => {
     if (!formData.assetTypeId || !assetTypesData?.data) return null
     return (
       assetTypesData.data.find((t) => t.id === formData.assetTypeId) || null
     )
-  }, [formData.assetTypeId, assetTypesData?.data])
+  }, [formData.assetTypeId, assetTypesData])
 
   const filteredAssetTypes = useMemo(() => {
     const all = assetTypesData?.data ?? []

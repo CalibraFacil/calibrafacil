@@ -700,9 +700,12 @@ function ExecuteJobForm({
   )
 
   // Update field
-  const updateField = useCallback((key: string, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [key]: value }))
-  }, [])
+  const updateField = useCallback(
+    (key: string, value: unknown) => {
+      setFormData((prev) => ({ ...prev, [key]: value }))
+    },
+    [setFormData],
+  )
 
   // Build environment payload (only send if any value is set)
   const environmentPayload = useMemo(
@@ -747,7 +750,7 @@ function ExecuteJobForm({
         },
       }))
     },
-    [],
+    [setCalibrationPhases],
   )
 
   // Compute environment warnings
@@ -1038,15 +1041,21 @@ function ExecuteJobForm({
     )
   }
 
-  // Backdate handling for the performed (execution) date
+  // Backdate handling for the performed (execution) date.
+  // Deliberate live-clock read: the "not in the future" gate and the backdate
+  // day count must be measured against the real clock at the moment the
+  // technician submits, not against a value frozen when the page mounted.
+  // This project does not run React Compiler, so nothing memoizes it.
+  // oxlint-disable-next-line react/purity
+  const nowMs = Date.now()
   const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
   const isPerformedDateValid =
     performedDate != null &&
     !Number.isNaN(performedDate.getTime()) &&
-    performedDate.getTime() <= Date.now()
+    performedDate.getTime() <= nowMs
   const backdateDays =
     performedDate && !Number.isNaN(performedDate.getTime())
-      ? Math.floor((Date.now() - performedDate.getTime()) / MS_PER_DAY)
+      ? Math.floor((nowMs - performedDate.getTime()) / MS_PER_DAY)
       : 0
   const requiresBackdateReason = backdateDays > BACKDATE_REASON_THRESHOLD_DAYS
   const isBackdateReasonSatisfied =

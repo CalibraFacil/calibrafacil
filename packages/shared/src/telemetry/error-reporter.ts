@@ -240,7 +240,7 @@ export function createErrorReporter(
     async flush(timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS) {
       if (pending.size === 0) return;
       await Promise.race([
-        Promise.allSettled([...pending]),
+        Promise.allSettled(pending),
         new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
       ]);
     },

@@ -62,9 +62,8 @@ const DEFAULT_SYNC_LIMIT = 50;
 function isGenericHttpSyncTarget(
   target: IntegrationSyncTarget,
 ): target is (typeof INTEGRATION_TARGETS)[number] {
-  return INTEGRATION_TARGETS.includes(
-    target as (typeof INTEGRATION_TARGETS)[number],
-  );
+  const targets: readonly IntegrationSyncTarget[] = INTEGRATION_TARGETS;
+  return targets.includes(target);
 }
 
 function toIso(value: unknown): string | null {

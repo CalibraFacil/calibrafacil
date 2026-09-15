@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { useMountEffect } from '@/hooks/use-mount-effect'
@@ -20,8 +20,12 @@ type RoutePrewarmIntentHandlers = {
   onBlur: () => void
 }
 
+/**
+ * Debounce box for hover/focus prewarm intent. The callback is supplied per
+ * `schedule` call rather than captured at construction, so the box can stay
+ * stable across renders without a render-time ref write.
+ */
 export function createRoutePrewarmIntent(
-  prewarmFn: PrewarmFn,
   options: UseRoutePrewarmIntentOptions = {},
 ) {
   const debounceMs = options.debounceMs ?? PREWARM_DEBOUNCE_MS
@@ -33,7 +37,7 @@ export function createRoutePrewarmIntent(
     timer = undefined
   }
 
-  const schedule = () => {
+  const schedule = (prewarmFn: PrewarmFn) => {
     if (timer) return
 
     timer = setTimeout(() => {
@@ -44,33 +48,15 @@ export function createRoutePrewarmIntent(
     }, debounceMs)
   }
 
-  return {
-    handlers: {
-      onMouseEnter: schedule,
-      onFocus: schedule,
-      onTouchStart: schedule,
-      onMouseLeave: cancel,
-      onBlur: cancel,
-    } satisfies RoutePrewarmIntentHandlers,
-    cancel,
-  }
+  return { schedule, cancel }
 }
 
 export function useRoutePrewarmIntent(
   prewarmFn: PrewarmFn,
   options: UseRoutePrewarmIntentOptions = {},
 ): RoutePrewarmIntentHandlers {
-  const prewarmRef = useRef(prewarmFn)
-  prewarmRef.current = prewarmFn
-
   const debounceMs = options.debounceMs
-  const controller = useMemo(
-    () =>
-      createRoutePrewarmIntent(() => prewarmRef.current(), {
-        debounceMs,
-      }),
-    [debounceMs],
-  )
+  const [controller] = useState(() => createRoutePrewarmIntent({ debounceMs }))
 
   useMountEffect(() => {
     return () => {
@@ -78,7 +64,19 @@ export function useRoutePrewarmIntent(
     }
   })
 
-  return controller.handlers
+  // Handlers are rebuilt each render and close over this render's `prewarmFn`,
+  // which is what keeps the controller itself stable and ref-free.
+  const schedule = () => {
+    controller.schedule(prewarmFn)
+  }
+
+  return {
+    onMouseEnter: schedule,
+    onFocus: schedule,
+    onTouchStart: schedule,
+    onMouseLeave: controller.cancel,
+    onBlur: controller.cancel,
+  }
 }
 
 export function usePathPrewarmIntent(

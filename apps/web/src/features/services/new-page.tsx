@@ -69,14 +69,14 @@ export function NewServicePage() {
   const selectedMethod = useMemo(() => {
     if (!formData.methodId || !methodsData?.data) return null
     return methodsData.data.find((m) => m.id === formData.methodId) ?? null
-  }, [formData.methodId, methodsData?.data])
+  }, [formData.methodId, methodsData])
 
   const selectedAssetType = useMemo(() => {
     if (!formData.assetTypeId || !assetTypesData?.data) return null
     return (
       assetTypesData.data.find((at) => at.id === formData.assetTypeId) ?? null
     )
-  }, [formData.assetTypeId, assetTypesData?.data])
+  }, [formData.assetTypeId, assetTypesData])
 
   const selectedMethodName = selectedMethod?.name || ''
   const selectedAssetTypeName = selectedAssetType?.name || ''

@@ -202,7 +202,7 @@ describe("calculateFinancialDueDate", () => {
 describe("formatMoney", () => {
   // REQ-FIN-009: exact pt-BR BRL strings incl. non-breaking space  [HIGH RISK]
   it("REQ-FIN-009: formats cents as pt-BR BRL with correct separators", () => {
-    // 123456 cents = R$ 1.234,56
+    // 123456 cents = R$<NBSP>1.234,56
     expect(formatMoney(123456)).toBe(`R$${NBSP}1.234,56`);
     // zero
     expect(formatMoney(0)).toBe(`R$${NBSP}0,00`);
@@ -211,7 +211,7 @@ describe("formatMoney", () => {
   });
 
   it("REQ-FIN-009 (negative): negative cents render with minus sign", () => {
-    // -50099 cents = -R$ 500,99
+    // -50099 cents = -R$<NBSP>500,99
     expect(formatMoney(-50099)).toBe(`-R$${NBSP}500,99`);
   });
 

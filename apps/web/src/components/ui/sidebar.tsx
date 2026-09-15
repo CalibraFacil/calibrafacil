@@ -6,8 +6,8 @@ import {
   forwardRef,
   useCallback,
   useContext,
+  useEffectEvent,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import { mergeProps } from '@base-ui/react/merge-props'
@@ -112,8 +112,11 @@ function SidebarProvider({
       ? setOpenMobile((state) => !state)
       : setOpen((state) => !state)
   }, [isMobile, setOpen, setOpenMobile])
-  const toggleSidebarRef = useRef(toggleSidebar)
-  toggleSidebarRef.current = toggleSidebar
+  // Effect Event: the listener is registered once on mount but always
+  // calls the latest toggleSidebar, without a render-time ref write.
+  const onToggleShortcut = useEffectEvent(() => {
+    toggleSidebar()
+  })
 
   useMountEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -122,7 +125,7 @@ function SidebarProvider({
         (event.metaKey || event.ctrlKey)
       ) {
         event.preventDefault()
-        toggleSidebarRef.current()
+        onToggleShortcut()
       }
     }
 
