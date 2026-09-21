@@ -10,7 +10,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics/track";
-import { DEMO_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 import { BrandLockup } from "./brand";
@@ -62,14 +61,12 @@ export function LandingNav() {
             size="sm"
             render={
               <a
-                href={DEMO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track("demo_click", { location: "nav" })}
+                href="/#contato"
+                onClick={() => track("lead_cta_click", { location: "nav" })}
               />
             }
           >
-            Agendar demonstração
+            Falar com a equipe
             <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
           </Button>
         </div>

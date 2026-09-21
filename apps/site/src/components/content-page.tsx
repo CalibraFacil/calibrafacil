@@ -231,7 +231,8 @@ export function ContentPage({ model }: { model: ContentPageModel }) {
         </h2>
         <p className="mt-3 max-w-[54ch] text-sm leading-relaxed text-muted-foreground">
           Uma demonstração de 30 minutos com o produto rodando na sequência que
-          o avaliador costuma pedir. Sem slide-deck, sem promessa de roadmap.
+          o avaliador costuma pedir, aos sábados ou à noite. Sem slide-deck, sem
+          promessa de roadmap.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <a href={CONTACT_URL} className={ctaPrimary}>

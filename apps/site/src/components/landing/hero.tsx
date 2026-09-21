@@ -41,14 +41,13 @@ export function Hero() {
               className="bg-[linear-gradient(180deg,#5b53ea_0%,#4f46e5_45%,#3f3ad6_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(20,71,230,0.35),0_8px_20px_-8px_rgba(79,70,229,0.5)] hover:brightness-[1.06]"
               render={
                 <TrackedLink
-                  href={DEMO_URL}
-                  event="demo_click"
+                  href={CONTACT_URL}
+                  event="lead_cta_click"
                   params={{ location: "hero" }}
-                  external
                 />
               }
             >
-              Agendar demonstração
+              Falar com a equipe
               <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
             </Button>
             <Button
@@ -57,13 +56,14 @@ export function Hero() {
               className="shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
               render={
                 <TrackedLink
-                  href={CONTACT_URL}
-                  event="lead_cta_click"
+                  href={DEMO_URL}
+                  event="demo_click"
                   params={{ location: "hero" }}
+                  external
                 />
               }
             >
-              Falar com a equipe
+              Agendar demonstração
             </Button>
           </div>
         </div>

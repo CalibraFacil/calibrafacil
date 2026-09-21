@@ -317,7 +317,8 @@ function DemoBanner() {
       <p className="text-[14.5px] leading-relaxed text-foreground">
         Prefere ver funcionando antes de escolher?{" "}
         <span className="text-muted-foreground">
-          A demonstração é sobre a sua operação, não um tour genérico.
+          A demonstração é sobre a sua operação, não um tour genérico. Os
+          horários são aos sábados e à noite, em número limitado.
         </span>
       </p>
       <Button

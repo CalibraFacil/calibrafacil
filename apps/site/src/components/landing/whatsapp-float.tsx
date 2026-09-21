@@ -1,15 +1,16 @@
 "use client";
 
 import { track } from "@/lib/analytics/track";
+import { whatsappUrl } from "@/lib/site";
 
 // Floating WhatsApp CTA shown on every marketing page. Reuses the number and
 // the whatsapp_click event that already exist in the footer — this just makes
 // the channel visible instead of buried at the bottom of the page. Sits below
 // the consent banner (z-[60]) so it never blocks the LGPD choice. Uses the
 // official WhatsApp glyph (inline SVG) — a brand mark, not a generic UI icon.
-const WHATSAPP_HREF = `https://wa.me/5551900000000?text=${encodeURIComponent(
+const WHATSAPP_HREF = whatsappUrl(
   "Olá! Vim pelo site do CalibraFácil e queria saber mais sobre o sistema.",
-)}`;
+);
 
 export function WhatsAppFloat() {
   return (

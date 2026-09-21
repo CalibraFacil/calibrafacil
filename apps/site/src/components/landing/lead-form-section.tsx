@@ -19,11 +19,15 @@ import {
   type LeadFormField,
 } from "@/lib/lead-form";
 import { PRICING_TIERS } from "@/lib/pricing";
+import { DEMO_URL, whatsappUrl } from "@/lib/site";
 
 import { usePlanIntent } from "./plan-intent";
 import { SectionHeading } from "./surfaces";
 
-const DEMO_URL = "https://cal.com/calibrafacil/30min?user=calibrafacil";
+// The always-open channel, for anyone the thin demo calendar does not fit.
+const WHATSAPP_HREF = whatsappUrl(
+  "Olá! Vim pelo site do CalibraFácil e queria falar sobre o sistema.",
+);
 
 const controlClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20";
@@ -130,7 +134,7 @@ export function LeadFormSection() {
         <SectionHeading
           center
           title="Conte como é o seu laboratório."
-          body="Quais grandezas calibra, quantas calibrações por mês, se é acreditado ou está implantando a norma. A demonstração é sobre a sua operação."
+          body="Quais grandezas calibra, quantas calibrações por mês, se é acreditado ou está implantando a norma. Respondemos por e-mail com o que o sistema faz no seu escopo."
         />
 
         {submitted ? (
@@ -143,8 +147,9 @@ export function LeadFormSection() {
               Contato recebido.
             </h3>
             <p className="mx-auto mt-2 max-w-[42ch] text-sm leading-relaxed text-muted-foreground">
-              Nossa equipe responde em breve pelo e-mail informado. Se preferir
-              adiantar, agende uma demonstração de 30 minutos.
+              Respondemos pelo e-mail informado, normalmente em um dia útil. Se
+              preferir ver funcionando antes, os horários de demonstração são
+              aos sábados e à noite.
             </p>
             <Button
               variant="outline"
@@ -317,13 +322,15 @@ export function LeadFormSection() {
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
               </Button>
               <a
-                href={DEMO_URL}
+                href={WHATSAPP_HREF}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => track("demo_click", { location: "lead_form" })}
+                onClick={() =>
+                  track("whatsapp_click", { location: "lead_form" })
+                }
                 className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
               >
-                ou agende uma demonstração
+                ou fale pelo WhatsApp
               </a>
             </div>
           </form>

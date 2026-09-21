@@ -1,6 +1,7 @@
 "use client";
 
 import { track } from "@/lib/analytics/track";
+import { whatsappUrl } from "@/lib/site";
 
 import { BrandLockup } from "./brand";
 
@@ -107,7 +108,9 @@ export function LandingFooter() {
               contato@calibrafacil.com
             </a>
             <a
-              href="https://wa.me/5551900000000"
+              href={whatsappUrl(
+                "Olá! Vim pelo site do CalibraFácil e queria saber mais sobre o sistema.",
+              )}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => track("whatsapp_click", { location: "footer" })}
