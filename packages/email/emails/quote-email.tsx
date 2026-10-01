@@ -440,10 +440,9 @@ QuoteEmail.PreviewProps = {
   freightCents: 4000,
   discountCents: 1000,
   totalCents: 46000,
-  approvalUrl:
-    "https://portal.calibrafacil.com/orcamento/OS-2026-042?token=preview",
+  approvalUrl: "https://portal.example.com/orcamento/OS-2026-042?token=preview",
   approvalCode: "K7WM3P9A",
-  codeEntryUrl: "https://portal.calibrafacil.com/access-code",
+  codeEntryUrl: "https://portal.example.com/access-code",
 } satisfies QuoteEmailProps;
 
 export default QuoteEmail;

@@ -13,15 +13,22 @@ big-picture architecture.
 Turborepo + pnpm monorepo. Run these from the repo root unless noted.
 
 ```bash
-pnpm dev              # all apps except email/worker (web :5173, portal :5174, api :3000)
+pnpm setup:dev        # one-time: env files, Docker services, migrations, demo seed
+pnpm dev              # api :3000, lab app :5173, portal :5174
 pnpm dev:isolated     # web+api+portal on this worktree's own port slot (parallel-safe)
-pnpm dev:all          # everything incl. email + worker
+pnpm dev:all          # every app with a dev script (incl. email, worker, docs, site, desktop)
 pnpm dev:desktop      # web + Electron desktop shell
+pnpm services:up      # start the Docker services (Postgres, S3, Mailpit, Gotenberg)
 pnpm build            # build all apps/packages
 pnpm lint             # oxlint across the monorepo (incl. the no-useEffect rule)
 pnpm format           # Prettier on **/*.{ts,tsx,md}
 pnpm check-types      # type-check all packages
 ```
+
+Local development needs no cloud account: `docker-compose.yml` runs Postgres, an
+S3-compatible store, Mailpit (every email, magic links included, lands at
+http://localhost:8025 through a local Resend-compatible relay) and Gotenberg. The seed
+creates a demo lab; sign in as `admin@laboratorio.test` (passwordless).
 
 Single app / package:
 
@@ -44,10 +51,13 @@ Database (Drizzle, in `packages/db`):
 
 ```bash
 cd packages/db
-pnpm db:generate      # generate a migration from schema changes
 pnpm db:migrate       # apply migrations
 pnpm db:studio        # Drizzle Studio on :4000
 ```
+
+`drizzle-kit generate` does not produce usable migrations past the early snapshots:
+write new migrations by hand (`packages/db/drizzle/NNNN_name.sql`) and append the entry
+to `drizzle/meta/_journal.json`.
 
 ## Tooling notes (non-obvious)
 
@@ -59,10 +69,10 @@ pnpm db:studio        # Drizzle Studio on :4000
   `satisfies`, or schema parsing instead.
 - **`check-types` runs the native Go compiler** — `tsc` from `typescript@7` (TypeScript 7.0, the
   10x native port; GA'd, replaced the old `@typescript/native-preview`/`tsgo` beta). Exception:
-  the Next.js/Payload apps (`apps/site`, `apps/docs`, `apps/cms`) stay pinned to `typescript@6.0.3`
-  — the classic JS build — because their tooling (`next typegen`, `payload generate:types`) imports
-  the TypeScript compiler _API_, which the native `typescript@7` package does not ship (it exposes
-  only the `tsc` binary plus an `unstable/*` API). The API `dev`/`start` and worker run under
+  the Next.js apps (`apps/site`, `apps/docs`) stay pinned to `typescript@6.0.3` — the classic
+  JS build — because their tooling (`next typegen`) imports the TypeScript compiler _API_, which
+  the native `typescript@7` package does not ship (it exposes only the `tsc` binary plus an
+  `unstable/*` API). The API `dev`/`start` and worker run under
   **Bun**; the web/portal/local-server run under Node + Vite/tsx.
 - `pnpm.overrides` and `scripts/check-blocked-deps.mjs` pin/forbid specific dependency versions
   after supply-chain incidents (TanStack, axios). Don't loosen these; `check-blocked-deps`
@@ -73,14 +83,18 @@ pnpm db:studio        # Drizzle Studio on :4000
 The same React frontend (`apps/web`) runs in two modes, and most of the architecture exists to
 keep these in parity:
 
-- **Cloud:** Vercel-hosted. `apps/api` (Hono) → Neon PostgreSQL + Cloudflare R2. Background work
-  (PDF generation, compliance checks, syncs) runs in `apps/worker` via Vercel Queue + Cron. The
-  deployed API entrypoints are the generated Vercel functions in `apps/api/api/` (`[...route].js`,
-  `cron/`, `queues/`); the Hono app itself is wired in `apps/api/src/app.ts` with route handlers
-  in `apps/api/src/routes/`.
+- **Cloud:** `apps/api` (Hono) → PostgreSQL + S3-compatible object storage (Cloudflare R2 in
+  the original deployment), Gotenberg for PDFs and Resend for email. Background work (PDF
+  generation, compliance checks, syncs) runs in `apps/worker`: in-process in development, via
+  Vercel Queue + Cron or the always-on worker in production. On Vercel the API entrypoints are
+  the generated functions in `apps/api/api/` (`[...route].js`, `cron/`, `queues/`); elsewhere
+  `apps/api/src/bun.ts` serves the same app plus the `/api/cron/*` handlers. The Hono app itself
+  is wired in `apps/api/src/app.ts` with route handlers in `apps/api/src/routes/`. Deployment
+  URLs, CORS and auth origins all come from environment variables (see `DEPLOYMENT.md`).
 - **Desktop/offline:** `apps/desktop` (Electron) embeds the web UI and talks to `apps/local-server`,
   a local Hono server backed by SQLite via `packages/local-db`. `packages/local-db` keeps an
-  **outbox** and conflict records; `packages/sync` reconciles local changes with the cloud when
+  **outbox** and conflict records; `apps/local-server/src/sync.ts` (with the API's
+  `/api/sync` routes) reconciles local changes with the cloud when
   online. `apps/web/src/runtime/` holds the client-side cloud-vs-desktop logic (cloud-only route
   blocking, desktop auth, sync-conflict UI).
 
@@ -151,8 +165,12 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
 
 ## Packages quick reference
 
-`db` (Drizzle schema + migrations), `schemas` (Zod), `contracts` (client-facing DTOs + AppType),
-`client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `documents` (certificate/label
-templates), `email` (React Email), `notifications`, `local-db` (SQLite offline store),
-`sync` (offline↔cloud reconciliation), `signing` (certificate signing), `method-definition`,
-`shared` (plans/config/types).
+`db` (Drizzle schema + migrations + seeds), `schemas` (Zod), `contracts` (client-facing DTOs +
+AppType), `client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `math-engine` (GUM
+uncertainty engine, versioned with dossiers in `validation/`), `method-definition` (method
+compiler), `method-templates` (catalog of calibration methods), `certificate-data` +
+`documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),
+`label-rendering` (ZPL/TSPL thermal labels), `email` (React Email), `email-sender`,
+`notifications`, `interval-analysis` (calibration intervals), `local-db` (SQLite offline
+store), `shared` (plans, config, public URLs, storage endpoints), `oxlint-plugin-calibra`
+(architecture lint rules).

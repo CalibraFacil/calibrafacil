@@ -1,6 +1,7 @@
 {
   "name": "@calibra-facil/documents",
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

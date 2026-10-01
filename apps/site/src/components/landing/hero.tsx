@@ -1,11 +1,9 @@
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { CONTACT_URL, DEMO_URL } from "@/lib/site";
-
-import { TrackedLink } from "./tracked-link";
+import { OPEN_SOURCE_URL, REPOSITORY_URL } from "@/lib/site";
 
 export function Hero() {
   return (
@@ -30,40 +28,34 @@ export function Hero() {
             Calibração, incerteza e certificado no mesmo registro.
           </h1>
           <p className="mx-auto mt-6 max-w-[60ch] text-[17px] leading-relaxed text-pretty text-muted-foreground motion-safe:animate-hero-rise motion-safe:[animation-delay:60ms] md:text-lg">
-            O CalibraFácil acompanha cada calibração do cadastro do equipamento
-            à aprovação do certificado, com cálculo de incerteza, assinatura
-            ICP-Brasil e portal do cliente. Feito para laboratórios sob a
-            ISO/IEC 17025, acreditados ou em implantação.
+            O CalibraFácil é um software de código aberto que acompanha cada
+            calibração do cadastro do equipamento à aprovação do certificado,
+            com cálculo de incerteza, assinatura ICP-Brasil e portal do cliente.
+            Feito para laboratórios sob a ISO/IEC 17025, acreditados ou em
+            implantação.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3 motion-safe:animate-hero-rise motion-safe:[animation-delay:120ms]">
             <Button
               size="lg"
               className="bg-[linear-gradient(180deg,#5b53ea_0%,#4f46e5_45%,#3f3ad6_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(20,71,230,0.35),0_8px_20px_-8px_rgba(79,70,229,0.5)] hover:brightness-[1.06]"
               render={
-                <TrackedLink
-                  href={CONTACT_URL}
-                  event="lead_cta_click"
-                  params={{ location: "hero" }}
+                <a
+                  href={REPOSITORY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 />
               }
             >
-              Falar com a equipe
-              <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+              Ver no GitHub
+              <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
             </Button>
             <Button
               variant="outline"
               size="lg"
               className="shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
-              render={
-                <TrackedLink
-                  href={DEMO_URL}
-                  event="demo_click"
-                  params={{ location: "hero" }}
-                  external
-                />
-              }
+              render={<a href={OPEN_SOURCE_URL} />}
             >
-              Agendar demonstração
+              Rodar localmente
             </Button>
           </div>
         </div>

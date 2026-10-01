@@ -18,8 +18,7 @@ import {
  * GUM-math regression when ENGINE_VERSION is bumped: if any of these fail in CI,
  * the upgraded engine produced a wrong number.
  *
- * See .goals/claim-code-parity.md (B4) and
- * docs/estrategia/precificacao-posicionamento.md (A5 — validation dossier).
+ * See the versioned validation dossiers under validation/math-engine/.
  *
  * All expected values are hand-verifiable from JCGM 100:2008 (GUM):
  *   - Type A standard uncertainty of the mean = s / √n, dof = n − 1

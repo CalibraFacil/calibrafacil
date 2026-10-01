@@ -30,7 +30,7 @@ export function CertificateReadyEmail({
   jobId = "CAL-2024-0001",
   assetName = "Instrumento",
   customerName,
-  portalUrl = "https://calibrafacil.com/portal/certificates",
+  portalUrl = "https://app.example.com/portal/certificates",
   logoSrc,
   brand,
 }: CertificateReadyEmailProps) {

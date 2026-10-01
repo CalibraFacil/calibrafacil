@@ -7,8 +7,7 @@ PDF-label job — **off** the Vercel queue function.
 It is the "phase 2" of the build-time work in PR #398: moving the heavy
 `processBackgroundJob` graph (react-dom SSR, XLSX templating, `@resvg/resvg-js`,
 signing) out of `apps/api/api/queues/background.js` so that Vercel function
-stops carrying a ~6 MB bundle and a native dependency. See
-`.goals/document-worker-extraction.md` for the full design and decisions.
+stops carrying a ~6 MB bundle and a native dependency.
 
 ## How it works (push-driven, scale-to-zero — no idle DB polling)
 

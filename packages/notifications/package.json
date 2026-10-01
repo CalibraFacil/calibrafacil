@@ -21,7 +21,7 @@
     "iso17025"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@calibra-facil/shared": "workspace:*",
     "@calibra-facil/email-sender": "workspace:*",

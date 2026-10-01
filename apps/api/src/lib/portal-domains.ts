@@ -8,9 +8,7 @@ import {
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import { organizationHasEntitlement } from "./organization-plan";
-
-const DEFAULT_PORTAL_URL_PRODUCTION = "https://portal.calibrafacil.com";
-const DEFAULT_PORTAL_URL_DEVELOPMENT = "http://localhost:5174";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
   try {
@@ -21,7 +19,8 @@ function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
       /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname);
 
     if (!isLocalHost) {
-      return DEFAULT_PORTAL_URL_PRODUCTION;
+      // Convention: the portal lives on the "portal." subdomain of the app.
+      return `${url.protocol}//portal.${url.hostname.replace(/^www\./, "")}`;
     }
 
     url.port = "5174";
@@ -90,9 +89,7 @@ export async function getPortalBaseUrlForLabOrganization(
     if (portalUrl) return portalUrl;
   }
 
-  return process.env.NODE_ENV === "production"
-    ? DEFAULT_PORTAL_URL_PRODUCTION
-    : DEFAULT_PORTAL_URL_DEVELOPMENT;
+  return portalBaseUrl();
 }
 
 export async function getPortalBaseUrlForClientOrganization(

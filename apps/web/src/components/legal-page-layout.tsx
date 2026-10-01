@@ -4,8 +4,12 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { BrandLockup } from '@/components/brand'
 import { ModeToggle } from '@/components/mode-toggle'
-import { Badge } from '@/components/ui/badge'
-import { LEGAL_ENTITY, LEGAL_LAST_UPDATED, LEGAL_VERSION } from '@/lib/legal'
+import {
+  LEGAL_ENTITY,
+  LEGAL_ENTITY_IS_PLACEHOLDER,
+  LEGAL_LAST_UPDATED,
+  LEGAL_VERSION,
+} from '@/lib/legal'
 
 interface LegalPageLayoutProps {
   children: ReactNode
@@ -46,7 +50,6 @@ export function LegalPageLayout({
           <div className="border-b border-border/60 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),transparent)] px-8 py-10 md:px-10 md:py-10">
             <div className="flex flex-wrap items-start justify-between gap-6">
               <div className="max-w-3xl space-y-4">
-                <Badge variant="outline">Documento jurídico</Badge>
                 <div className="space-y-3">
                   <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
                     {title}
@@ -72,7 +75,7 @@ export function LegalPageLayout({
             <div className="mt-8 grid gap-4 border-t border-border/60 pt-5 text-sm text-muted-foreground md:grid-cols-[1.2fr_0.8fr]">
               <div>
                 <p className="font-semibold uppercase tracking-[0.16em] text-foreground/70">
-                  Emitente
+                  Operador desta instância
                 </p>
                 <p className="mt-1">
                   {LEGAL_ENTITY.legalName} · CNPJ {LEGAL_ENTITY.cnpj}
@@ -81,11 +84,9 @@ export function LegalPageLayout({
 
               <div className="md:text-right">
                 <p className="font-semibold uppercase tracking-[0.16em] text-foreground/70">
-                  Foro e contato
+                  Contato
                 </p>
-                <p className="mt-1">
-                  {LEGAL_ENTITY.forum} · {LEGAL_ENTITY.dpoEmail}
-                </p>
+                <p className="mt-1">{LEGAL_ENTITY.email}</p>
               </div>
             </div>
           </div>
@@ -102,7 +103,7 @@ export function LegalPageLayout({
                     <p>{title}</p>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Licenciante</p>
+                    <p className="font-medium text-foreground">Operador</p>
                     <p>{LEGAL_ENTITY.legalName}</p>
                   </div>
                   <div>
@@ -117,17 +118,21 @@ export function LegalPageLayout({
               <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">Escopo</p>
                 <p className="mt-2">
-                  Documento público de referência contratual, privacidade e
-                  governança operacional da plataforma.
+                  Calibra Fácil é software de código aberto. Este documento
+                  descreve como esta instância, mantida pelo operador acima,
+                  trata o uso do sistema e os dados pessoais.
                 </p>
               </div>
             </aside>
 
             <div>
-              <div className="mb-8 border-y border-border/60 py-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                Documento destinado a referência contratual e governança de
-                tratamento de dados
-              </div>
+              {LEGAL_ENTITY_IS_PLACEHOLDER && (
+                <div className="mb-8 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+                  O operador desta instância ainda não configurou os seus dados
+                  de identificação (variáveis VITE_OPERATOR_*). Revise este
+                  documento antes de colocar a instância em uso.
+                </div>
+              )}
               {children}
             </div>
           </div>
@@ -136,13 +141,13 @@ export function LegalPageLayout({
             <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
               <div>
                 <p className="font-semibold uppercase tracking-[0.16em] text-foreground/70">
-                  Identificação da licenciante
+                  Identificação do operador
                 </p>
                 <p className="mt-2 font-medium text-foreground">
                   {LEGAL_ENTITY.legalName}
                 </p>
                 <p>CNPJ: {LEGAL_ENTITY.cnpj}</p>
-                <p>{LEGAL_ENTITY.fullAddress}</p>
+                <p>{LEGAL_ENTITY.address}</p>
               </div>
 
               <div className="md:text-right">

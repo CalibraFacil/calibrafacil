@@ -10,20 +10,18 @@ describe("mapOpenCnpj", () => {
     const result = mapOpenCnpj(
       {
         cnpj: CNPJ14,
-        razao_social:
-          "CONSTRUTORA MODELO LTDA",
+        razao_social: "CONSTRUTORA MODELO LTDA",
         nome_fantasia: "MODELO",
         situacao_cadastral: "Ativa",
-        tipo_logradouro: "RODOVIA",
+        tipo_logradouro: "RUA",
         logradouro: "DAS INDUSTRIAS",
-        numero: "S/N",
-        complemento:
-          "LOTE  013                 QUADRA066                 SETOR 010",
-        bairro: "NAO INFORMADO",
-        cep: "99500000",
+        numero: "100",
+        complemento: "SALA  01                 BLOCO B                 ANDAR 2",
+        bairro: "CENTRO",
+        cep: "90000000",
         uf: "RS",
         municipio: "CIDADE MODELO",
-        email: "COMPRAS@MODELO.COM.BR",
+        email: "COMPRAS@CONSTRUTORA.EXAMPLE",
         telefones: [
           { ddd: "51", numero: "30000001", is_fax: false },
           { ddd: "51", numero: "30000002", is_fax: true },
@@ -36,15 +34,15 @@ describe("mapOpenCnpj", () => {
       taxId: FORMATTED,
       name: "CONSTRUTORA MODELO LTDA",
       tradeName: "MODELO",
-      email: "COMPRAS@MODELO.COM.BR",
+      email: "COMPRAS@CONSTRUTORA.EXAMPLE",
       phone: "(51) 3000-0001",
       status: "Ativa",
       address: {
-        cep: "99500-000",
-        street: "RODOVIA DAS INDUSTRIAS",
-        number: "S/N",
-        complement: "LOTE 013 QUADRA066 SETOR 010",
-        neighbourhood: "NAO INFORMADO",
+        cep: "90000-000",
+        street: "RUA DAS INDUSTRIAS",
+        number: "100",
+        complement: "SALA 01 BLOCO B ANDAR 2",
+        neighbourhood: "CENTRO",
         city: "CIDADE MODELO",
         state: "RS",
       },
@@ -79,16 +77,15 @@ describe("mapBrasilApi", () => {
     const result = mapBrasilApi(
       {
         cnpj: CNPJ14,
-        razao_social:
-          "CONSTRUTORA MODELO LTDA",
+        razao_social: "CONSTRUTORA MODELO LTDA",
         nome_fantasia: "MODELO",
         descricao_situacao_cadastral: "ATIVA",
-        descricao_tipo_de_logradouro: "RODOVIA",
+        descricao_tipo_de_logradouro: "RUA",
         logradouro: "DAS INDUSTRIAS",
-        numero: "S/N",
-        complemento: "LOTE 013 QUADRA066 SETOR 010",
-        bairro: "NAO INFORMADO",
-        cep: "99500000",
+        numero: "100",
+        complemento: "SALA 01 BLOCO B ANDAR 2",
+        bairro: "CENTRO",
+        cep: "90000000",
         uf: "RS",
         municipio: "CIDADE MODELO",
         email: null,
@@ -105,11 +102,11 @@ describe("mapBrasilApi", () => {
       phone: "(51) 3000-0001",
       status: "ATIVA",
       address: {
-        cep: "99500-000",
-        street: "RODOVIA DAS INDUSTRIAS",
-        number: "S/N",
-        complement: "LOTE 013 QUADRA066 SETOR 010",
-        neighbourhood: "NAO INFORMADO",
+        cep: "90000-000",
+        street: "RUA DAS INDUSTRIAS",
+        number: "100",
+        complement: "SALA 01 BLOCO B ANDAR 2",
+        neighbourhood: "CENTRO",
         city: "CIDADE MODELO",
         state: "RS",
       },
@@ -118,9 +115,9 @@ describe("mapBrasilApi", () => {
 
   it("accepts a numeric cep", () => {
     const result = mapBrasilApi(
-      { razao_social: "ACME LTDA", cep: 99500000 },
+      { razao_social: "ACME LTDA", cep: 90000000 },
       CNPJ14,
     );
-    expect(result?.address.cep).toBe("99500-000");
+    expect(result?.address.cep).toBe("90000-000");
   });
 });

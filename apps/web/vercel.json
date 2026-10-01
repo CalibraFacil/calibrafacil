@@ -6,59 +6,12 @@
   "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs web",
   "outputDirectory": "dist",
   "routes": [
-    { "src": "/blog", "dest": "https://calibra-facil-cms.vercel.app/blog" },
     {
-      "src": "/blog/(.*)",
-      "dest": "https://calibra-facil-cms.vercel.app/blog/$1"
-    },
-    { "src": "/docs", "dest": "https://docs.calibrafacil.com/docs" },
-    { "src": "/docs/(.*)", "dest": "https://docs.calibrafacil.com/docs/$1" },
-    {
-      "src": "/ferramentas",
-      "dest": "https://calibra-facil-site.vercel.app/ferramentas"
+      "handle": "filesystem"
     },
     {
-      "src": "/ferramentas/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/ferramentas/$1"
-    },
-    {
-      "src": "/recursos",
-      "dest": "https://calibra-facil-site.vercel.app/recursos"
-    },
-    {
-      "src": "/recursos/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/recursos/$1"
-    },
-    {
-      "src": "/solucoes",
-      "dest": "https://calibra-facil-site.vercel.app/solucoes"
-    },
-    {
-      "src": "/solucoes/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/solucoes/$1"
-    },
-    {
-      "src": "/calibracao",
-      "dest": "https://calibra-facil-site.vercel.app/calibracao"
-    },
-    {
-      "src": "/calibracao/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/calibracao/$1"
-    },
-    {
-      "src": "/_next/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/_next/$1"
-    },
-    {
-      "src": "/dashboard-preview-(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/dashboard-preview-$1"
-    },
-    {
-      "src": "/landing/(.*)",
-      "dest": "https://calibra-facil-site.vercel.app/landing/$1"
-    },
-    { "src": "/", "dest": "https://calibra-facil-site.vercel.app/" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }

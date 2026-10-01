@@ -12,9 +12,10 @@
 // when `opts.send === true`. An accidental call therefore leaves a reviewable
 // draft in the dashboard rather than blasting the live audience.
 
-const RESEND_BASE_URL = "https://api.resend.com";
+const RESEND_BASE_URL =
+  process.env.RESEND_BASE_URL?.replace(/\/+$/, "") || "https://api.resend.com";
 
-const DEFAULT_FROM_EMAIL = "CalibraFácil <no-reply@calibrafacil.com>";
+const DEFAULT_FROM_EMAIL = "CalibraFácil <no-reply@example.com>";
 
 /**
  * Resend REQUIRES an unsubscribe link in broadcast HTML. This native token is
@@ -25,7 +26,7 @@ const UNSUBSCRIBE_TOKEN = "{{{RESEND_UNSUBSCRIBE_URL}}}";
 export interface SendMarketingBroadcastEnv {
   RESEND_API_KEY?: string;
   RESEND_AUDIENCE_ID?: string;
-  /** Defaults to "CalibraFácil <no-reply@calibrafacil.com>". */
+  /** Defaults to "CalibraFácil <no-reply@example.com>". */
   RESEND_FROM_EMAIL?: string;
   /** Defaults to the resolved `from` address. */
   RESEND_REPLY_TO_EMAIL?: string;

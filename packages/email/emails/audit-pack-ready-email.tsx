@@ -32,7 +32,7 @@ export function AuditPackReadyEmail({
   periodLabel = "últimos 12 meses",
   certificateCount = 0,
   expiresAtLabel,
-  portalUrl = "https://calibrafacil.com/portal/certificates",
+  portalUrl = "https://app.example.com/portal/certificates",
   logoSrc,
   brand,
 }: AuditPackReadyEmailProps) {

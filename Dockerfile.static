@@ -1,7 +1,8 @@
 FROM node:24-bookworm-slim AS build
 
 ARG APP_NAME
-ARG VITE_API_URL=https://api.calibrafacil.com
+# Public URL of the API the app calls, e.g. https://api.example.com (required).
+ARG VITE_API_URL
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl unzip \

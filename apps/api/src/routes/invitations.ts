@@ -16,6 +16,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
 import { withDbWakeRetry } from "../lib/db-retry";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 // Aliased user table for joining the inviter onto an invitation row.
 const inviter = alias(user, "inviter");
@@ -41,9 +42,7 @@ function resolveTrustedAppUrl(c: { env?: unknown }) {
     if (trimmed) return trimmed;
   }
 
-  return process.env.NODE_ENV === "production"
-    ? "https://calibrafacil.com"
-    : "http://localhost:5173";
+  return appBaseUrl();
 }
 
 function normalizeEmail(email: string) {

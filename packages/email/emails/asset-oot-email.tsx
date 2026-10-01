@@ -36,7 +36,7 @@ export function AssetOotEmail({
   assetTag = "EQ-0001",
   assetName,
   jobId = "CAL-2024-0001",
-  portalUrl = "https://calibrafacil.com/portal",
+  portalUrl = "https://app.example.com/portal",
   logoSrc,
   brand,
 }: AssetOotEmailProps) {

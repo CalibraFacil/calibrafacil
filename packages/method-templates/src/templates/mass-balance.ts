@@ -4,27 +4,23 @@ import { buildDraftFromProduct } from "../product-to-draft";
 import type { BuildDraftArgs } from "../types";
 
 /**
- * Exemplo "Calibração Rastreável de Balanças - FOR 50/51" — mass indication-error
- * method (indication before/after adjustment, repeatability, eccentricity,
- * weight composition, full GUM uncertainty budget).
+ * Example lab-authored method: "Calibração Rastreável de Balanças" — mass
+ * indication-error method (indication before/after adjustment, repeatability,
+ * eccentricity, weight composition, full GUM uncertainty budget).
  *
- * This is a faithful extraction of the draft-builder in
- * `packages/db/scripts/seed-exemplo-balance-method.mjs`. `buildDraft` produces the
- * exact same draft that seed's `buildDefinitionDraft` produced, so it
- * reproduces the production method fingerprint
- * `method:a614c64c40b142acec5681ffe73c8de04b15fa223300103599efdde750394da4`
- * (asserted by `fingerprint.test.ts`). The seed script imports `buildDraft`
- * from here so there is a single source of truth.
+ * It was digitized from a pilot laboratory's calibration workbook and is kept as
+ * a complete, real-world example of a LAB-SPECIFIC method: it is not a platform
+ * catalog template (see `registry.ts`). `fingerprint.test.ts` pins its compiled
+ * fingerprint as a regression guard.
  *
- * NOTE: `certificateContent` and `uncertaintyParams` live with the seed/DB row,
- * NOT in the draft — they are not part of `buildDefinitionDraft` and do not
- * affect the fingerprint, so they are intentionally not ported here.
+ * NOTE: `certificateContent` and `uncertaintyParams` are not part of the draft
+ * and do not affect the fingerprint, so they are intentionally not included.
  */
 
-export const METHOD_NAME = "Calibração Rastreável de Balanças - FOR 50/51";
+export const METHOD_NAME = "Calibração Rastreável de Balanças";
 export const BALANCE_ASSET_TYPE_SLUG = "balanca-digital";
 export const methodDescription =
-  "Método importado do workbook FOR 50/FOR 51 rastreável da Laboratório Exemplo, contemplando indicação antes e após ajuste, repetibilidade, excentricidade, composição de pesos e orçamento de incerteza com resolução por faixa, repetibilidade, erro dos pesos, incerteza dos pesos, empuxo, deriva e excentricidade. As condições ambientais são registradas pelo fluxo de execução e congeladas no job.";
+  "Método de exemplo derivado da planilha de calibração rastreável de balanças de um laboratório piloto, contemplando indicação antes e após ajuste, repetibilidade, excentricidade, composição de pesos e orçamento de incerteza com resolução por faixa, repetibilidade, erro dos pesos, incerteza dos pesos, empuxo, deriva e excentricidade. As condições ambientais são registradas pelo fluxo de execução e congeladas no job.";
 
 function safeVeffExpression(
   combinedUncertaintyKey: string,
@@ -831,10 +827,11 @@ export function buildDraft(args: BuildDraftArgs = {}): MethodDraft {
       dataFields,
       formulas,
       validations,
-      // Must stay "seed-exemplo-balance-method" — this is part of the fingerprint.
+      // `source` is part of the fingerprint — changing it churns the pin in
+      // fingerprint.test.ts.
       metadata: {
         validationStatus: "pending_revalidation",
-        source: "seed-exemplo-balance-method",
+        source: "example-lab-balance-method",
       },
     },
     args,

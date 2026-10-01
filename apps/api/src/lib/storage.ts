@@ -6,10 +6,14 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
 import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
 
 export interface R2Env {
   R2_ACCOUNT_ID: string;
+  /** S3-compatible endpoint override (non-R2 stores, local dev). */
+  R2_ENDPOINT?: string;
+  R2_REGION?: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   /** Documents bucket: regulated lab records (certs, SO docs, standards, sync). */
@@ -93,13 +97,17 @@ export async function resolveReadBucketName(
 }
 
 export function createR2Client(env: R2Env): R2S3Client {
-  // R2 S3 endpoint is derived from the account id; credentials are an R2 API
-  // token's S3 pair (access key id + secret). Rotating the token requires
-  // updating R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY and redeploying.
+  // The R2 S3 endpoint is derived from the account id unless R2_ENDPOINT points
+  // at another S3-compatible store; credentials are the S3 key pair (access key
+  // id + secret). Rotating it requires updating R2_ACCESS_KEY_ID /
+  // R2_SECRET_ACCESS_KEY and redeploying.
+  const { endpoint, region, forcePathStyle } =
+    resolveS3EndpointConfigFromProcess(env);
   // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
   return new S3Client({
-    region: "auto",
-    endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    region,
+    endpoint,
+    forcePathStyle,
     credentials: {
       accessKeyId: env.R2_ACCESS_KEY_ID,
       secretAccessKey: env.R2_SECRET_ACCESS_KEY,
@@ -146,7 +154,7 @@ export async function generatePresignedUploadUrl(
 
 /**
  * Extract R2 key from stored certificateUrl
- * Format: https://certificates.calibrafacil.com/job-123.pdf -> job-123.pdf
+ * Format: https://storage.invalid/job-123.pdf -> job-123.pdf (see storedObjectUrl)
  */
 export function extractKeyFromUrl(certificateUrl: string): string {
   const url = new URL(certificateUrl);

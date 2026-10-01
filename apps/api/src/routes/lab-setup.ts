@@ -16,6 +16,7 @@ import {
   session as authSession,
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -38,9 +39,7 @@ function resolveTrustedAppUrl(c: { env?: unknown }) {
     if (trimmed) return trimmed;
   }
 
-  return process.env.NODE_ENV === "production"
-    ? "https://calibrafacil.com"
-    : "http://localhost:5173";
+  return appBaseUrl();
 }
 
 function tokenStatusHttpCode(status: string) {

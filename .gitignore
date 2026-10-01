@@ -60,5 +60,5 @@ tmp/
 # Local client workbook samples must stay out of git.
 packages/documents/src/*.xlsx
 
-# Read-only reference sources synced by scripts/sync-reference-repos.mjs
+# Optional local checkouts of upstream dependency sources (read-only references).
 .repos/

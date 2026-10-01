@@ -1,4 +1,5 @@
 import app from "./index";
+import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
 
 type BunServer = {
   hostname: string;
@@ -83,7 +84,7 @@ async function createEnv(): Promise<BunApiEnv> {
         R2_ACCOUNT_ID: "local",
         R2_BUCKET_NAME: "calibrafacil-documents-dev",
         R2_MEDIA_BUCKET_NAME: "calibrafacil-media-dev",
-        RESEND_FROM_EMAIL: "Calibra Facil <noreply@calibrafacil.com>",
+        RESEND_FROM_EMAIL: "Calibra Facil <noreply@example.com>",
       };
 
   const env: Record<string, unknown> = {
@@ -111,16 +112,10 @@ async function createEnv(): Promise<BunApiEnv> {
     for (const key of [
       "DATABASE_URL",
       "BETTER_AUTH_SECRET",
-      "ASAAS_API_KEY",
-      "ASAAS_ENVIRONMENT",
-      "ASAAS_WEBHOOK_TOKEN",
-      "BACKOFFICE_BOOTSTRAP_TOKEN",
-      "INTERNAL_OPERATOR_EMAILS",
       "PUBLIC_API_MASTER_KEY",
       "INTEGRATIONS_MASTER_KEY",
       "SIGNING_MASTER_KEY",
       "PORTAL_SERVICE_USER_ID",
-      "R2_ACCOUNT_ID",
       "R2_ACCESS_KEY_ID",
       "R2_SECRET_ACCESS_KEY",
       "R2_BUCKET_NAME",
@@ -130,6 +125,9 @@ async function createEnv(): Promise<BunApiEnv> {
       if (typeof env[key] !== "string" || env[key].length === 0) {
         throw new Error(`${key} is required in production`);
       }
+    }
+    if (!env.R2_ACCOUNT_ID && !env.R2_ENDPOINT) {
+      throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required in production");
     }
   }
 
@@ -154,6 +152,13 @@ const server = Bun.serve({
   // @ts-expect-error Bun supports idleTimeout, but the bundled type in this workspace has not caught up.
   idleTimeout: 120,
   fetch(request) {
+    // On Vercel, /api/cron/* are separate functions triggered by vercel.json.
+    // Here (local dev, Docker, any VM) the same handlers are served by this
+    // process, so any scheduler can trigger them with the CRON_SECRET bearer
+    // token. See DEPLOYMENT.md for the schedule.
+    if (new URL(request.url).pathname.startsWith("/api/cron/")) {
+      return dispatchCron(request);
+    }
     return app.fetch(request, env);
   },
 });

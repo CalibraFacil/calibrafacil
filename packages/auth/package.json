@@ -35,7 +35,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@calibra-facil/db": "workspace:^",
     "@repo/typescript-config": "workspace:^",

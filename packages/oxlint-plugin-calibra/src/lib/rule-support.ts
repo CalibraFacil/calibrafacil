@@ -1,5 +1,5 @@
 // Minimal structural typings + shared helpers for the calibra oxlint plugin
-//. oxlint's JS-plugin API is ESLint-shaped: a rule exposes
+// oxlint's JS-plugin API is ESLint-shaped: a rule exposes
 // `create(context)` returning ESTree visitors. We type only the slice we read
 // (import sources and specifier names) instead of depending on a full ESTree
 // type package — the rules fail closed on unexpected shapes.
@@ -80,7 +80,7 @@ export function resolveRelativeImport(
 }
 
 /**
- * LEGACY_BASELINE ratchet (ported from reference-project): existing violations are
+ * LEGACY_BASELINE ratchet: existing violations are
  * grandfathered as an exact per-file count; net-new occurrences fail. An
  * unlisted file must have zero. Keys are repo-relative path suffixes.
  */

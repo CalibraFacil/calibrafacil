@@ -12,15 +12,13 @@ apps/api/src/**/*.test.ts
 packages/email/.react-email
 packages/email/node_modules
 
-# Non-API app build outputs (cms/.next is ~114MB, docs/.next ~37MB). The API is
+# Non-API app build outputs (docs/.next is ~37MB). The API is
 # bundled by esbuild from fresh vercel-src/ source and never reads these, so
 # excluding them only shrinks the post-deploy build cache (off critical path).
 apps/web/dist
 apps/portal/dist
-apps/backoffice/dist
 apps/local-server/dist
 apps/desktop/dist
-apps/cms/.next
 apps/docs/.next
 
 # TypeScript incremental caches — regenerated each deploy, never reused across
@@ -31,8 +29,6 @@ apps/docs/.next
 # scoped via `--filter @calibra-facil/api...`. apps/api/.turbo is kept.
 apps/web/.turbo
 apps/portal/.turbo
-apps/backoffice/.turbo
-apps/cms/.turbo
 apps/docs/.turbo
 apps/desktop/.turbo
 apps/local-server/.turbo

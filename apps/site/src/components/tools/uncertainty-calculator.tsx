@@ -9,7 +9,6 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { track } from "@/lib/analytics/track";
 import { cn } from "@/lib/utils";
 import {
   COVERAGE_PROBABILITIES,
@@ -413,7 +412,6 @@ export function UncertaintyCalculator() {
       emptyContribution(`c${nextId}`),
     ]);
     setNextId((current) => current + 1);
-    track("tool_uncertainty_add_contribution");
   };
 
   const removeContribution = (id: string) => {

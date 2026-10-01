@@ -1,5 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import { createBackofficeAuth, createLabAuth } from "@calibra-facil/auth";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 // Shared backoffice helpers used by the backoffice parent router AND its
 // extracted sub-routers (organizations, users). Lifted here verbatim — zero
@@ -140,7 +141,5 @@ export function resolveTrustedAppUrl(c: { env?: unknown }) {
     if (trimmed) return trimmed;
   }
 
-  return process.env.NODE_ENV === "production"
-    ? "https://calibrafacil.com"
-    : "http://localhost:5173";
+  return appBaseUrl();
 }

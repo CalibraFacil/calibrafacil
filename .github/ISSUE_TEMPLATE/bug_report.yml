@@ -1,0 +1,52 @@
+name: Bug report
+description: Something does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please check existing issues first. Never include real customer
+        data, certificates or credentials — use made-up values.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Ideally starting from a fresh `pnpm setup:dev` with the demo laboratory.
+      placeholder: |
+        1. Sign in as admin@laboratorio.test
+        2. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Lab app (apps/web)
+        - Client portal (apps/portal)
+        - API / worker
+        - Math engine / uncertainty
+        - Certificates / signing
+        - Desktop / offline
+        - Local setup / tooling
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Output of `git rev-parse --short HEAD`, or the desktop app version.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      render: shell

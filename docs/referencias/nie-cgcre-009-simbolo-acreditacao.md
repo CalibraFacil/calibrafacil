@@ -88,7 +88,7 @@ como resolvido: era decisão de produto sem respaldo, agora tem cláusula.
   - centro: quadrado com gradiente azul + o "a" estilizado + a marca do Inmetro no canto inferior
     esquerdo. Gradiente linear duas cores, de `C100 M51 K20` a `C100 M10 Y50`, midpoint 45; o "a"
     em `C70`
-  - faixa inferior (ciano, texto preto): **codificação do tipo + número do acreditado** — `CAL 9999`
+  - faixa inferior (ciano, texto preto): **codificação do tipo + número do acreditado** — ex.: `CAL 0000`
 
 > **Não há dimensão mínima em mm no documento.** O que é regulado é **proporção** (§10.2, grid de
 > construção A.2), não tamanho absoluto. A pergunta "dimensão mínima" do #865 tem resposta

@@ -94,7 +94,7 @@ export function CalibrationRequestEmail({
   actorName,
   reason,
   jobCodes,
-  actionUrl = "https://calibrafacil.com/dashboard/requests/123",
+  actionUrl = "https://app.example.com/dashboard/requests/123",
   logoSrc,
   brand,
 }: CalibrationRequestEmailProps) {
@@ -163,7 +163,7 @@ CalibrationRequestEmail.PreviewProps = {
   labName: "CalibraFácil Metrologia",
   itemCount: 3,
   requestedDueDate: "21/06/2026",
-  actionUrl: "https://calibrafacil.com/dashboard/requests/123",
+  actionUrl: "https://app.example.com/dashboard/requests/123",
 } satisfies CalibrationRequestEmailProps;
 
 export default CalibrationRequestEmail;

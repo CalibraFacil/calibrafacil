@@ -18,7 +18,7 @@ describe("AuditPackReadyEmail template renders the required fields", () => {
         periodLabel: "01/01/2026 a 30/06/2026",
         certificateCount: 42,
         expiresAtLabel: "17/07/2026",
-        portalUrl: "https://portal.calibrafacil.com/certificates",
+        portalUrl: "https://portal.example.com/certificates",
         brand: { name: "Lab Acme", isWhiteLabel: true },
       }),
     );
@@ -43,6 +43,6 @@ describe("AuditPackReadyEmail template renders the required fields", () => {
 
   it("links to the portal certificates page", async () => {
     const html = await renderReady();
-    expect(html).toContain("https://portal.calibrafacil.com/certificates");
+    expect(html).toContain("https://portal.example.com/certificates");
   });
 });

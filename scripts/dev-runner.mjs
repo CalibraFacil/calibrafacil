@@ -1,18 +1,18 @@
 // Typed dev-runner with per-worktree port offsets.
 //
-// Running `pnpm dev` in more than one checkout (agent worktrees under
-// .claude/worktrees, parallel clones) collides on the fixed ports
-// (api 3000 / web 5173 / portal 5174) and — worse — inherits the tunnel
-// API_URL from apps/api/.env, which scopes session cookies to
-// .calibrafacil.com and silently breaks auth on localhost (the documented
-// magic-link "works but session never sticks" footgun).
+// Running `pnpm dev` in more than one checkout (git worktrees, parallel
+// clones) collides on the fixed ports (api 3000 / web 5173 / portal 5174) and
+// — worse — inherits a tunnel API_URL / AUTH_COOKIE_DOMAIN from
+// apps/api/.env, which scopes session cookies to the tunnel domain and
+// silently breaks auth on localhost (magic link "works but the session never
+// sticks").
 //
 // This runner gives every worktree its own deterministic port slot, probes
 // that the whole trio is actually free (advancing slots atomically when not),
 // SYNTHESIZES the matching localhost env (API_URL/APP_URL/PORTAL_APP_URL +
 // vite ports/proxy origin — real env beats .env in apps/api/src/bun.ts), and
 // then execs the normal turbo dev pipeline. The PRIMARY checkout keeps slot 0
-// = the standard ports, so the cloudflared-tunnel workflow is untouched.
+// = the standard ports.
 //
 //   pnpm dev:isolated              # web + api + portal on this worktree's slot
 //   pnpm dev:isolated --print-env  # just print the synthesized env (for agents)
@@ -74,7 +74,7 @@ export function portPlanForSlot(slot) {
  * Env for the dev processes. Overrides the tunnel values a developer may have
  * in apps/api/.env: bun.ts spreads real env AFTER the .env file, so these win
  * — cookies scope to localhost and the vite same-origin /api proxy carries
- * them, instead of Set-Cookie for .calibrafacil.com being silently dropped.
+ * them, instead of Set-Cookie for a tunnel domain being silently dropped.
  */
 export function synthesizeEnv(plan) {
   const apiOrigin = `http://localhost:${plan.api}`;

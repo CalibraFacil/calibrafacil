@@ -1,6 +1,7 @@
 {
   "name": "@calibra-facil/oxlint-plugin-calibra",
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "private": true,
   "description": "Custom oxlint rules enforcing Calibra Fácil architectural boundaries",

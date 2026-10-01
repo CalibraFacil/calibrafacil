@@ -12,11 +12,10 @@ import {
 /**
  * Engine options used to compile every method template.
  *
- * These MUST stay byte-identical to the options in
- * `packages/db/scripts/seed-exemplo-balance-method.mjs` — the resulting
- * `optionsFingerprint` is folded into every published method's fingerprint, so
- * a drift here would change the fingerprint of already-published methods. The
- * seed script imports {@link TEMPLATE_ENGINE_OPTIONS} from here so there is a
+ * These MUST stay stable — the resulting `optionsFingerprint` is folded into
+ * every published method's fingerprint, so a drift here would change the
+ * fingerprint of already-published methods. Seed scripts import
+ * {@link TEMPLATE_ENGINE_OPTIONS} from here so there is a
  * single source of truth.
  */
 export const TEMPLATE_ENGINE_OPTIONS: CalculationEngineOptions = {

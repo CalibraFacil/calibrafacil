@@ -21,7 +21,7 @@ interface LabAccessLinkEmailProps {
 
 export function LabAccessLinkEmail({
   recipientName = "usuário",
-  accessUrl = "https://calibrafacil.com/claim-account",
+  accessUrl = "https://app.example.com/claim-account",
   organizationName = "seu laboratório",
   logoSrc,
   brand,
@@ -56,7 +56,7 @@ export function LabAccessLinkEmail({
 LabAccessLinkEmail.PreviewProps = {
   recipientName: "Ana",
   organizationName: "Laboratório Exemplo",
-  accessUrl: "https://calibrafacil.com/claim-account?token=abc",
+  accessUrl: "https://app.example.com/claim-account?token=abc",
 } satisfies LabAccessLinkEmailProps;
 
 export default LabAccessLinkEmail;

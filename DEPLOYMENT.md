@@ -1,266 +1,152 @@
-# Deployment Guide
+# Deploying Calibra Fácil
 
-This document describes how to deploy CalibraFacil to production.
+This guide covers running your own production instance. For local development, see the
+[Quick start](./README.md#quick-start) instead.
 
-## Architecture Overview
+> Whoever operates an instance is responsible for it: infrastructure, backups, updates,
+> data protection (LGPD) and the legal pages shown to its users. The software comes without
+> warranty (see [`LICENSE`](./LICENSE)).
 
-| App             | Platform              | URL                     |
-| --------------- | --------------------- | ----------------------- |
-| API             | Vercel Functions      | api.calibrafacil.com    |
-| Web             | Vercel                | calibrafacil.com        |
-| Portal          | Vercel                | portal.calibrafacil.com |
-| CMS (blog)      | Vercel                | blog.calibrafacil.com   |
-| Backoffice      | Vercel                | ops.calibrafacil.com    |
-| Background jobs | Vercel Queue and Cron | (API project)           |
-| Docs            | Vercel                | calibrafacil.com/docs   |
-| Database        | Neon PostgreSQL       | (direct connection)     |
-| Object storage  | Cloudflare R2         | (certificate assets)    |
+## What you need
 
-## Prerequisites
+| Component      | Requirement                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| API + worker   | [Bun](https://bun.sh) 1.x (or Vercel Functions)                              |
+| Web apps       | Static hosting for `apps/web` and `apps/portal` (SPA fallback to index.html) |
+| Database       | PostgreSQL 15+ with the `pg_trgm` and `unaccent` extensions available        |
+| Object storage | Any S3-compatible store (Cloudflare R2, AWS S3, MinIO, …) — two buckets      |
+| PDF rendering  | [Gotenberg](https://gotenberg.dev) 8 reachable from the API/worker           |
+| E-mail         | A [Resend](https://resend.com) account (the code uses the Resend API)        |
+| Optional       | Sentry (errors), Asaas (billing), Conta Azul (ERP)                           |
 
-- Vercel project access for the API, web, and portal apps
-- Cloudflare account access for the docs site and R2 storage
-- GitHub repository access
+A typical layout uses one domain with three hosts:
 
-## Initial Setup
+| Host                 | Serves                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `app.example.com`    | lab app (`apps/web`)                                                                     |
+| `portal.example.com` | client portal (`apps/portal`), including the `/v/:token` page that verifies certificates |
+| `api.example.com`    | API (`apps/api`)                                                                         |
 
-### 1. Configure Vercel Projects
+## Environment variables
 
-The API, web, and portal apps deploy through Vercel. Each project should point at
-the matching app directory:
+### API (`apps/api`) and worker (`apps/worker`)
 
-| Project    | Root Directory    | Build                         |
-| ---------- | ----------------- | ----------------------------- |
-| API        | `apps/api`        | `pnpm build:vercel-functions` |
-| Web        | `apps/web`        | `pnpm build`                  |
-| Portal     | `apps/portal`     | `pnpm build`                  |
-| CMS        | `apps/cms`        | `pnpm build`                  |
-| Backoffice | `apps/backoffice` | `pnpm build`                  |
+`apps/api/.env.example` documents every variable. The essentials for production:
 
-Vercel-specific routing, cron, queue, and output settings live in each app's
-`vercel.json`.
+| Variable                                                                                            | Notes                                                                               |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `NODE_ENV=production`                                                                               |                                                                                     |
+| `DATABASE_URL`                                                                                      | PostgreSQL connection string                                                        |
+| `API_URL`, `APP_URL`, `PORTAL_APP_URL`                                                              | Public URLs of the three hosts                                                      |
+| `VERIFY_URL`                                                                                        | Optional; host of the verification page (defaults to `PORTAL_APP_URL`)              |
+| `BETTER_AUTH_SECRET`                                                                                | ≥ 32 random characters                                                              |
+| `AUTH_COOKIE_DOMAIN`                                                                                | e.g. `.example.com` when API and apps are on different subdomains                   |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                                                               | Sender must be a domain verified in Resend                                          |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                          | Object-storage credentials                                                          |
+| `R2_BUCKET_NAME`, `R2_MEDIA_BUCKET_NAME`                                                            | Documents bucket (regulated records) and media bucket (logos, etc.)                 |
+| `R2_ACCOUNT_ID` **or** `R2_ENDPOINT` (+ `R2_REGION`)                                                | Cloudflare R2 account, or the endpoint of any S3-compatible store                   |
+| `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                       |
+| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice |
+| `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                      |
+| `PORTAL_SERVICE_USER_ID`                                                                            | Id of a `user` row that owns client-portal organizations (see below)                |
+| `BACKGROUND_JOBS_MODE`                                                                              | `local` (jobs run inside the API process) or `vercel` (Vercel Queue)                |
 
-#### CMS (Payload — blog / content)
+Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
+`AUTH_TRUSTED_ORIGINS`. Billing (`ASAAS_*`), the operator bootstrap token
+(`BACKOFFICE_BOOTSTRAP_TOKEN`) and the ERP integration (`CONTA_AZUL_*`) are optional: the
+features that need them stay unavailable until they are configured.
 
-`apps/cms` is a **Next.js 16 + Payload 3** app for the marketing blog and content
-(SEO), intentionally isolated from the rest of the platform:
+### Frontends (build time)
 
-- **Own Vercel project**, root dir `apps/cms`, framework `nextjs`, region `gru1`.
-  Enable **Fluid Compute** to amortize Payload's cold-start initialization.
-- **Own database.** `DATABASE_URI` must point to a **dedicated Neon database/branch**
-  (or at minimum the dedicated `payload` Postgres schema the config declares) — never
-  the app's `DATABASE_URL`. Payload runs its own migrations (`payload migrate`); they
-  must never share a schema with the app's `drizzle-kit` migrations.
-- **Media** is stored in a **dedicated R2 bucket** (`S3_*` env) via the S3-compatible
-  API (`@payloadcms/storage-s3`) — not the regulated documents bucket.
-- **Auth** uses Payload's native auth for a small set of internal editors. Bridging to
-  Better-Auth is deferred (see `.goals/payload-blog-and-backoffice-extraction.md`).
-- **Env vars:** see `apps/cms/.env.example` (`DATABASE_URI`, `PAYLOAD_SECRET`,
-  `NEXT_PUBLIC_SERVER_URL`, `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`,
-  `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
-- **Scheduled publishing** uses Payload's Jobs Queue; on Vercel, add a Cron hitting
-  `/api/payload-jobs/run`.
-- Admin UI at `/admin`; public blog at `/`, posts at `/posts/<slug>`; `sitemap.xml`,
-  `robots.txt`, and `feed.xml` (RSS) are served by the app.
+| App            | Variables                                                                                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`, `VITE_OPERATOR_*` (identity shown on the legal pages: `LEGAL_NAME`, `CNPJ`, `ADDRESS`, `EMAIL`, `DPO_NAME`, `DPO_EMAIL`), optional `VITE_SENTRY_DSN` |
+| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                                                                                              |
+| `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md))                                                                |
 
-#### Backoffice (internal operations)
+Review the legal pages (`/termos-de-uso`, `/privacidade`) and the content-security policy in
+`apps/web/public/_headers` before going live.
 
-`apps/backoffice` is the internal operations console, extracted from `apps/web`
-into its own cloud-only Vite SPA at `ops.calibrafacil.com`:
-
-- **Own Vercel project**, root dir `apps/backoffice`, region `gru1`, SPA rewrites
-  (mirrors `apps/portal/vercel.json`).
-- Talks to the same `apps/api` backend (`/api/backoffice/*`); no API changes.
-- Auth via the dedicated backoffice Better-Auth instance; `ops.calibrafacil.com`
-  is registered in `trustedOrigins` (`packages/auth/src/auth.ts`) and shares
-  cookies across the `.calibrafacil.com` zone.
-- Set `VITE_LAB_APP_URL` if the lab app isn't at the default origin (used for
-  cross-app links back to the dashboard).
-
-### 2. Configure Production Environment Variables
-
-Set production secrets in Vercel for the API project:
-
-| Variable                  | Description                                    |
-| ------------------------- | ---------------------------------------------- |
-| `BETTER_AUTH_SECRET`      | Auth secret key                                |
-| `DATABASE_URL`            | Neon PostgreSQL connection string              |
-| `RESEND_API_KEY`          | Resend email API key                           |
-| `RESEND_FROM_EMAIL`       | Sender email address                           |
-| `APP_URL`                 | Web app URL                                    |
-| `API_URL`                 | API base URL                                   |
-| `PORTAL_URL`              | Portal URL                                     |
-| `R2_ACCOUNT_ID`           | Cloudflare R2 account id                       |
-| `R2_ACCESS_KEY_ID`        | Cloudflare R2 access key                       |
-| `R2_SECRET_ACCESS_KEY`    | Cloudflare R2 secret                           |
-| `R2_BUCKET_NAME`          | Certificate bucket name                        |
-| `CHROMIUM_PACK_R2_BUCKET` | Optional R2 bucket for Chromium pack           |
-| `CHROMIUM_PACK_R2_KEY`    | Optional R2 key for Chromium pack              |
-| `CHROMIUM_PACK_URL`       | Optional public fallback URL for Chromium pack |
-| `SIGNING_MASTER_KEY`      | Certificate signing master key                 |
-| `INTEGRATIONS_MASTER_KEY` | Integration credential encryption key          |
-
-Set app-specific public variables, such as `VITE_API_URL`, on the web and portal
-Vercel projects.
-
-Optional Turbo Remote Cache settings can remain in GitHub Actions:
-
-| Secret or Variable | Description                                                   |
-| ------------------ | ------------------------------------------------------------- |
-| `TURBO_TOKEN`      | Vercel Turbo remote cache token                               |
-| `TURBO_TEAM`       | Vercel team name, usually configured as a repository variable |
-
-### 3. Configure Docs Deployment
-
-Docs remain on Cloudflare Pages. Keep the Cloudflare secrets in GitHub Actions:
-
-| Secret Name             | Description                       |
-| ----------------------- | --------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | Token with Pages edit permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id             |
-
-The docs deployment command is defined in `apps/docs/package.json`.
-
-## CI/CD Workflows
-
-### Pull Request Workflow (`.github/workflows/ci.yml`)
-
-Runs on every PR to `main`:
-
-- Linting with oxlint
-- Type checking with TypeScript
-- Unit tests with Vitest
-
-### Deploy Workflow (`.github/workflows/deploy.yml`)
-
-Runs on push to `main`:
-
-1. Quality checks (lint, typecheck, test)
-2. Docs deployment when `apps/docs` changes
-
-The API, web, and portal projects deploy through Vercel's Git integration.
-
-### Database Migration Workflow (`.github/workflows/db-migrate.yml`)
-
-**Manual trigger only** - requires explicit confirmation:
-
-1. Go to Actions > Database Migration
-2. Select environment (production/staging)
-3. Type `migrate` to confirm
-4. Run workflow
-
-## Local Development
-
-### Setup
-
-1. Copy environment files:
-
-   ```bash
-   cp apps/api/.env.example apps/api/.env
-   cp apps/worker/.env.example apps/worker/.env
-   cp .env.example .env  # if exists
-   ```
-
-2. Fill in the secret values in `.env` files.
-
-3. Start development:
-   ```bash
-   pnpm dev
-   ```
-
-### Running Individual Apps
+## Database
 
 ```bash
-# API only
-pnpm turbo dev --filter=@calibra-facil/api
-
-# Web only
-pnpm turbo dev --filter=@calibra-facil/web
-
-# Portal only
-pnpm turbo dev --filter=@calibra-facil/portal
-
-# Local background worker only
-pnpm dev:worker
+DATABASE_URL=… pnpm --dir packages/db db:migrate     # schema
+DATABASE_URL=… bun packages/db/src/seed-asset-types.ts  # asset types + legal-metrology catalog
 ```
 
-## Manual Deployment
+Create the portal service account once and put its id in `PORTAL_SERVICE_USER_ID`:
 
-Manual deploys should go through the package scripts:
+```sql
+INSERT INTO "user" (id, name, email, email_verified)
+VALUES ('portal-service', 'Portal service account', 'portal-service@example.com', true);
+```
+
+The first laboratory can be created through the self-service sign-up (`PUBLIC_SIGNUP_ENABLED=true`
+on the API, then turn it off again). Plans and feature limits come from the original commercial
+service; to unlock everything for a laboratory:
+
+```sql
+INSERT INTO subscription (organization_id, plan_id, status, current_period_end)
+VALUES ('<organization id>', 'ENTERPRISE', 'ACTIVE', '2099-12-31')
+ON CONFLICT (organization_id)
+DO UPDATE SET plan_id = 'ENTERPRISE', status = 'ACTIVE', current_period_end = '2099-12-31';
+```
+
+## Scheduled jobs
+
+The API serves its scheduled jobs at `/api/cron/<job>`, protected by
+`Authorization: Bearer $CRON_SECRET`. On Vercel they are declared in `apps/api/vercel.json`;
+anywhere else, trigger them with your scheduler of choice:
+
+| Job                           | Schedule (UTC) |
+| ----------------------------- | -------------- |
+| `integrations`                | `*/30 * * * *` |
+| `operator-alerts`             | `*/30 * * * *` |
+| `service-order-emails`        | `*/30 * * * *` |
+| `oot-emails`                  | `*/30 * * * *` |
+| `queue-backstop`              | `*/30 * * * *` |
+| `subscription-reconciliation` | `0 3 * * *`    |
+| `spc-recompute`               | `0 3 * * *`    |
+| `email-domain-health`         | `30 3 * * *`   |
+| `marketing-contact-sync`      | `0 6 * * *`    |
+| `certificate-drift`           | `0 6 * * *`    |
+| `notifications`               | `0 8 * * *`    |
+| `portal-digest`               | `0 9 * * *`    |
+| `auth-maintenance`            | `30 4 * * 1`   |
+
+Example crontab line:
+
+```cron
+*/30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://api.example.com/api/cron/queue-backstop
+```
+
+## Hosting options
+
+### A server with Bun
 
 ```bash
-pnpm deploy:api
-pnpm deploy:web
-pnpm deploy:portal
-pnpm deploy:docs
+pnpm install --frozen-lockfile
+NODE_ENV=production bun apps/api/src/bun.ts            # API on $PORT (default 3000)
+VITE_API_URL=https://api.example.com pnpm turbo build --filter=@calibra-facil/web --filter=@calibra-facil/portal
+# serve apps/web/dist and apps/portal/dist as static SPAs
 ```
 
-## Database Migrations
+With `BACKGROUND_JOBS_MODE=local` the API process also renders PDFs and runs integration
+jobs. To move that work to a separate process, run the worker (`bun apps/worker/src/bun.ts`),
+which polls the database job queue.
 
-### Generate a new migration
+The repository root also contains Dockerfiles: `Dockerfile.api`, `Dockerfile.worker`,
+`Dockerfile.document-worker` and `Dockerfile.static` (build arg `APP_NAME=web|portal`).
 
-When you modify `packages/db/src/schema.ts`:
+### Vercel
 
-```bash
-cd packages/db
-pnpm db:generate
-```
+`apps/api`, `apps/web`, `apps/portal`, `apps/docs` and `apps/site` each ship a `vercel.json`.
+Create one Vercel project per app with the app directory as its root, set the environment
+variables above (`BACKGROUND_JOBS_MODE=vercel` for the API), and Vercel runs the crons and
+the background-job queue declared in `apps/api/vercel.json`.
 
-This creates a new migration file in `packages/db/drizzle/`.
+## Updating
 
-### Run migrations locally
-
-```bash
-cd packages/db
-pnpm db:migrate
-```
-
-### Run migrations in production
-
-Use the GitHub Actions workflow (recommended) or:
-
-```bash
-DATABASE_URL=<production-url> cd packages/db && pnpm db:migrate
-```
-
-## Rollback
-
-### Vercel Apps
-
-Use the Vercel dashboard deployment history for the API, web, and portal apps.
-
-### Docs
-
-Use the Cloudflare Pages deployment history for docs.
-
-### Database
-
-Database migrations are forward-only. For rollback:
-
-1. Create a new migration that reverses the changes
-2. Test thoroughly in staging
-3. Deploy the reversal migration
-
-## Monitoring
-
-- **Vercel Observability**: Runtime logs, function metrics, cron activity, and queue activity in Vercel
-- **Cloudflare Analytics**: Docs and R2 analytics in the Cloudflare dashboard
-- **Application logs**: Use each provider dashboard for production logs
-
-## Troubleshooting
-
-### Deployment fails with "environment variable not found"
-
-Confirm the missing variable is set on the correct Vercel project and
-environment. API-only secrets should be configured on the API project.
-
-### Queue or cron jobs are not running
-
-Check `apps/api/vercel.json` and the API project's Vercel deployment logs. Queue
-handlers and cron routes are part of the API project.
-
-### Build fails in CI
-
-1. Check that `pnpm-lock.yaml` is up to date
-2. Ensure all required environment variables are set in GitHub or Vercel
-3. Review the workflow logs for specific errors
+Pull the new version, run `pnpm --dir packages/db db:migrate` **before** deploying the new code
+(new columns are read as soon as the code ships), then deploy the API, worker and frontends
+together.

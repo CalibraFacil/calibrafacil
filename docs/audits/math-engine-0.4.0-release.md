@@ -46,13 +46,13 @@ Every calculation fingerprint changes (the version is part of the digest). The o
 
 - math-engine 149 (dossier gate on `v0.4.0/manifest.json`; former byte-stability pins converted to exactness pins — `c_k = "0.023"`, `s = 0.001` exact; new `gum/correlated-dof.spec.ts`: reduction to G.2b, hand-computed two-component cases for ρ ∈ {0.5, 1, −0.5}, ν = ∞ term cancellation, scale invariance, invalid matrices, policy plumbing and fingerprinting).
 - method-definition 166 (execution guard: version mismatch, options mismatch, agreement, `"unknown"` skip, version-less engine skip; option pass-through and fingerprinting; snapshot reconciliation).
-- method-templates 129 (Exemplo method id=6 fingerprint fixture bumped: `method:c867d03d… → method:37a5f84f…`).
+- method-templates 129 (example lab method id=6 fingerprint fixture bumped: `method:c867d03d… → method:37a5f84f…`).
 - apps/api 1375 (KAT pin 0.4.0; int-spec fixtures now import `ENGINE_VERSION`), apps/local-server 38 (incl. the new `execution.test.ts` for snapshot reconciliation), apps/web jobs + method-runtime 184. `tsc` clean in all six packages.
 
 ## Operator steps (production)
 
 1. Deploy API + worker + web together (the engine is a workspace package).
-2. Re-seed Exemplo's method id=6 (`EXEMPLO_FORCE_METHOD_TEMPLATE_UPDATE`) and recompile/re-approve every published method — until then `ENGINE_VERSION_MISMATCH` blocks execution of 0.3.0 snapshots. Jobs already open pick the recompiled method up automatically on their next save/submit (reconciliation above) as long as the method definition itself did not change; a method that did change must be handled deliberately. Issued certificates are untouched; their snapshots stay reproducible with 0.3.0.
+2. Recompile/re-approve every published method — until then `ENGINE_VERSION_MISMATCH` blocks execution of 0.3.0 snapshots. Jobs already open pick the recompiled method up automatically on their next save/submit (reconciliation above) as long as the method definition itself did not change; a method that did change must be handled deliberately. Issued certificates are untouched; their snapshots stay reproducible with 0.3.0.
 3. Sign dossier `v0.4.0` rev. 1.0 (`make` in the directory; PDF is gitignored).
 4. Desktop/local-server ships the same package; release a desktop build so offline execution matches.
 

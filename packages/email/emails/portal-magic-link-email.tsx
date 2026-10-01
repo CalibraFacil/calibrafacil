@@ -20,7 +20,7 @@ interface PortalMagicLinkEmailProps {
 
 export function PortalMagicLinkEmail({
   recipientName = "usuário",
-  magicLinkUrl = "https://calibrafacil.com/portal/sign-in",
+  magicLinkUrl = "https://app.example.com/portal/sign-in",
   logoSrc,
   brand,
 }: PortalMagicLinkEmailProps) {
@@ -52,7 +52,7 @@ export function PortalMagicLinkEmail({
 
 PortalMagicLinkEmail.PreviewProps = {
   recipientName: "Ana",
-  magicLinkUrl: "https://calibrafacil.com/portal/sign-in?token=abc",
+  magicLinkUrl: "https://app.example.com/portal/sign-in?token=abc",
 } satisfies PortalMagicLinkEmailProps;
 
 export default PortalMagicLinkEmail;

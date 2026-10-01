@@ -4,63 +4,35 @@ import { PortalSection } from "@/components/landing/portal-section";
 import { CoverageSection } from "@/components/landing/coverage-section";
 import { TrustSection } from "@/components/landing/trust-section";
 import { VideoSection } from "@/components/landing/video-section";
-import { PricingSection } from "@/components/landing/pricing-section";
-import { PlanIntentProvider } from "@/components/landing/plan-intent";
-import { LeadFormSection } from "@/components/landing/lead-form-section";
-import { PRICING_FAQ, PRICING_TIERS } from "@/lib/pricing";
-import { SITE_URL } from "@/lib/site";
+import { OpenSourceSection } from "@/components/landing/open-source-section";
+import { LICENSE_URL, REPOSITORY_URL, SITE_URL } from "@/lib/site";
 
-const orgJsonLd = {
+const projectJsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "Organization",
+      "@type": "SoftwareSourceCode",
       name: "CalibraFácil",
       url: SITE_URL,
-      logo: `${SITE_URL}/logo-mark-light.svg`,
+      codeRepository: REPOSITORY_URL,
+      license: LICENSE_URL,
+      programmingLanguage: "TypeScript",
       description:
-        "Software para laboratórios de calibração: cálculo de incerteza conforme o GUM, certificados com revisão e aprovação, assinatura ICP-Brasil e portal do cliente.",
+        "Software de código aberto para laboratórios de calibração: cálculo de incerteza conforme o GUM, certificados com revisão e aprovação, assinatura ICP-Brasil e portal do cliente.",
     },
     {
       "@type": "SoftwareApplication",
       name: "CalibraFácil",
       applicationCategory: "BusinessApplication",
-      operatingSystem: "Web",
+      operatingSystem: "Web, Windows, macOS, Linux",
       url: SITE_URL,
       description:
         "Gestão de laboratórios de calibração sob a ISO/IEC 17025: clientes, equipamentos, calibrações, cálculo de incerteza, certificados, rastreabilidade, histórico e portal do cliente.",
-      offers: PRICING_TIERS.flatMap((tier) =>
-        tier.price.kind === "fixed"
-          ? [
-              {
-                "@type": "Offer",
-                name: tier.name,
-                description: tier.audience,
-                url: `${SITE_URL}/#planos`,
-                priceCurrency: "BRL",
-                price: tier.price.yearlyMonthly,
-                priceSpecification: {
-                  "@type": "UnitPriceSpecification",
-                  priceCurrency: "BRL",
-                  price: tier.price.yearlyMonthly,
-                  unitCode: "MON",
-                  billingDuration: 12,
-                  billingIncrement: 1,
-                  description:
-                    "Mensalidade equivalente no plano anual, por laboratório.",
-                },
-              },
-            ]
-          : [],
-      ),
-    },
-    {
-      "@type": "FAQPage",
-      mainEntity: PRICING_FAQ.map((item) => ({
-        "@type": "Question",
-        name: item.question,
-        acceptedAnswer: { "@type": "Answer", text: item.answer },
-      })),
+      offers: {
+        "@type": "Offer",
+        price: 0,
+        priceCurrency: "BRL",
+      },
     },
   ],
 };
@@ -70,7 +42,7 @@ export default function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectJsonLd) }}
       />
       <Hero />
       <ProductSection />
@@ -78,12 +50,7 @@ export default function HomePage() {
       <CoverageSection />
       <TrustSection />
       <VideoSection />
-      {/* One provider so a plan clicked in the table lands preselected in the
-          form a few hundred pixels below it. */}
-      <PlanIntentProvider>
-        <PricingSection />
-        <LeadFormSection />
-      </PlanIntentProvider>
+      <OpenSourceSection />
     </>
   );
 }

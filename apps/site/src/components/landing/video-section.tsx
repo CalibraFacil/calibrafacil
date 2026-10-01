@@ -3,19 +3,10 @@
 import { useState } from "react";
 import Image from "next/image";
 
-import { track } from "@/lib/analytics/track";
-
 // Product film. No video bytes are downloaded until the visitor presses
 // play: the facade is a poster image and the video element mounts on click.
 const VIDEO_SRC = "/landing/calibra-facil.mp4";
 const POSTER = "/landing/calibra-facil-poster.jpg";
-
-function isDark() {
-  return (
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark")
-  );
-}
 
 function PlayIcon() {
   return (
@@ -29,12 +20,7 @@ export function VideoSection() {
   const [playing, setPlaying] = useState(false);
 
   const startPlayback = () => {
-    const dark = isDark();
     setPlaying(true);
-    track("video_play", {
-      location: "landing_video",
-      theme: dark ? "dark" : "light",
-    });
   };
 
   return (

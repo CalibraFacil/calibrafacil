@@ -78,8 +78,6 @@
     "*.config.js",
     "*.config.ts",
     "*.config.mjs",
-    "routeTree.gen.ts",
-    "apps/cms/src/payload-types.ts",
-    "apps/cms/src/app/(payload)/admin/importMap.js"
+    "routeTree.gen.ts"
   ]
 }

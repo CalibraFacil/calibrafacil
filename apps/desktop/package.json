@@ -1,6 +1,7 @@
 {
   "name": "@calibra-facil/desktop",
   "version": "0.0.3",
+  "license": "MIT",
   "private": true,
   "productName": "CalibraFácil",
   "description": "CalibraFácil desktop host",

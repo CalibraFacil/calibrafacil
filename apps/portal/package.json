@@ -1,5 +1,6 @@
 {
   "name": "@calibra-facil/portal",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

@@ -123,6 +123,7 @@ import {
   stripAssetSpecData,
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
+import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -3261,7 +3262,7 @@ export const jobsRouter = new Hono<{
           assetTag: job.assetTag ?? "-",
           calibrationDate: job.performedAt,
           // Same public verification URL the worker encodes into the PDF QR.
-          verifyUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+          verifyUrl: certificateVerificationUrl(job.verificationToken),
         },
         defaultRenderOptions(language, dpi),
       );

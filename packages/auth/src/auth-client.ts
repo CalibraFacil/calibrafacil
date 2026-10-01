@@ -17,7 +17,8 @@ function getApiBaseURL(): string {
     if (isDesktopRuntime()) {
       return (
         import.meta.env.VITE_DESKTOP_AUTH_API_URL ??
-        "https://api.calibrafacil.com"
+        import.meta.env.VITE_API_URL ??
+        "http://localhost:3000"
       );
     }
 
@@ -30,14 +31,9 @@ function getApiBaseURL(): string {
       return `http://${host}:3000`;
     }
 
-    if (
-      /^dev-(portal|web|api|ops)\.calibrafacil\.com$/.test(host) ||
-      host === "devbox.example.ts.net"
-    ) {
-      return window.location.origin;
-    }
-
-    return "https://api.calibrafacil.com";
+    // Any other host without VITE_API_URL: the API is expected on the same
+    // origin (a reverse proxy, or a dev tunnel forwarding /api to the API).
+    return window.location.origin;
   }
 
   // Fallback for local development

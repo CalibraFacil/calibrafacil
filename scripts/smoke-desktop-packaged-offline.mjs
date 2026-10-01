@@ -10,12 +10,12 @@ import Database from "better-sqlite3";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const appPath = path.join(root, "apps/desktop/out/linux-unpacked/calibrafacil");
 const apiBase = normalizeBaseUrl(
-  process.env.CALIBRA_PARITY_API_URL ?? "https://api.calibrafacil.com",
+  process.env.CALIBRA_PARITY_API_URL ?? "http://localhost:3000",
 );
 const email = process.env.CALIBRA_PARITY_EMAIL;
 const password = process.env.CALIBRA_PARITY_PASSWORD;
 const activeUnitId = process.env.CALIBRA_PARITY_ACTIVE_UNIT_ID ?? "1";
-const origin = process.env.CALIBRA_PARITY_ORIGIN ?? "https://calibrafacil.com";
+const origin = process.env.CALIBRA_PARITY_ORIGIN ?? "http://localhost:5173";
 const onlineWebParityRoutes = [
   {
     path: "/dashboard/standards",
@@ -89,7 +89,7 @@ Set:
   CALIBRA_PARITY_PASSWORD='...'
 
 Optional:
-  CALIBRA_PARITY_API_URL='https://api.calibrafacil.com'
+  CALIBRA_PARITY_API_URL='http://localhost:3000'
   CALIBRA_PARITY_ACTIVE_UNIT_ID='1'
 `);
   process.exit(2);
@@ -207,7 +207,7 @@ try {
       body: JSON.stringify({
         name: customerName,
         taxId: createPseudoCnpj(),
-        email: `offline-${Date.now()}@calibrafacil.com`,
+        email: `offline-${Date.now()}@laboratorio.test`,
         phone: "51999999999",
       }),
     },

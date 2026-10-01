@@ -283,8 +283,7 @@ export async function drainOotEmailOutbox(options?: {
         }
 
         const brand = await getLabEmailBrand(row.organizationId);
-        const apiBaseUrl =
-          process.env.API_URL ?? "https://api.calibrafacil.com";
+        const apiBaseUrl = process.env.API_URL ?? "http://localhost:3000";
         const ackUrl = `${apiBaseUrl}/api/public/oot-ack/${notification.ackToken}`;
 
         const sendResult = await sendOotCustomerEmail({

@@ -1,11 +1,15 @@
-"use client";
-
-import { track } from "@/lib/analytics/track";
-import { whatsappUrl } from "@/lib/site";
+import {
+  CONTRIBUTING_URL,
+  DISCUSSIONS_URL,
+  DOCS_URL,
+  LICENSE_URL,
+  OPEN_SOURCE_URL,
+  REPOSITORY_URL,
+} from "@/lib/site";
 
 import { BrandLockup } from "./brand";
 
-type FooterLink = { label: string; href: string };
+type FooterLink = { label: string; href: string; external?: boolean };
 type FooterColumn = { heading: string; links: FooterLink[] };
 
 const footerColumns: FooterColumn[] = [
@@ -16,8 +20,7 @@ const footerColumns: FooterColumn[] = [
       { label: "Portal do cliente", href: "/#portal" },
       { label: "Cobertura", href: "/#cobertura" },
       { label: "Como é construído", href: "/#fundamentos" },
-      { label: "Preços", href: "/#planos" },
-      { label: "Documentação", href: "/docs" },
+      { label: "Documentação", href: DOCS_URL },
     ],
   },
   {
@@ -26,15 +29,17 @@ const footerColumns: FooterColumn[] = [
       { label: "Recursos", href: "/recursos" },
       { label: "Soluções por segmento", href: "/solucoes" },
       { label: "Calibração por grandeza", href: "/calibracao" },
-      { label: "Blog", href: "/blog" },
+      { label: "Ferramentas", href: "/ferramentas" },
     ],
   },
   {
-    heading: "Empresa",
+    heading: "Código aberto",
     links: [
-      { label: "Falar com a equipe", href: "/#contato" },
-      { label: "Política de privacidade", href: "/privacidade" },
-      { label: "Termos de uso", href: "/termos-de-uso" },
+      { label: "Repositório no GitHub", href: REPOSITORY_URL, external: true },
+      { label: "Rodar localmente", href: OPEN_SOURCE_URL },
+      { label: "Como contribuir", href: CONTRIBUTING_URL, external: true },
+      { label: "Discussões", href: DISCUSSIONS_URL, external: true },
+      { label: "Licença MIT", href: LICENSE_URL, external: true },
     ],
   },
 ];
@@ -50,9 +55,9 @@ export function LandingFooter() {
               textClassName="text-[15px]"
             />
             <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-              Software para laboratórios de calibração: cálculo de incerteza,
-              certificados com revisão e aprovação, assinatura ICP-Brasil e
-              portal do cliente.
+              Software de código aberto para laboratórios de calibração: cálculo
+              de incerteza, certificados com revisão e aprovação, assinatura
+              ICP-Brasil e portal do cliente.
             </p>
             <div className="flex items-center gap-3 pt-1">
               <img
@@ -83,9 +88,9 @@ export function LandingFooter() {
                   <li key={link.href}>
                     <a
                       href={link.href}
-                      onClick={() => {
-                        if (link.href === "/blog") track("blog_click");
-                      }}
+                      {...(link.external
+                        ? { target: "_blank", rel: "noopener noreferrer" }
+                        : {})}
                       className="text-[13.5px] text-muted-foreground transition-colors hover:text-foreground"
                     >
                       {link.label}
@@ -98,26 +103,10 @@ export function LandingFooter() {
         </div>
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6 text-[12.5px] text-muted-foreground">
-          <span>© 2026 CalibraFácil</span>
-          <span className="flex flex-wrap gap-x-5 gap-y-2">
-            <a
-              href="mailto:contato@calibrafacil.com"
-              onClick={() => track("email_click", { location: "footer" })}
-              className="transition-colors hover:text-foreground"
-            >
-              contato@calibrafacil.com
-            </a>
-            <a
-              href={whatsappUrl(
-                "Olá! Vim pelo site do CalibraFácil e queria saber mais sobre o sistema.",
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("whatsapp_click", { location: "footer" })}
-              className="transition-colors hover:text-foreground"
-            >
-              WhatsApp (51) 90000-0000
-            </a>
+          <span>© 2025–2026 Calibra Fácil contributors · Licença MIT</span>
+          <span>
+            Software fornecido sem garantia. Cada laboratório é responsável pela
+            validação do seu uso (ISO/IEC 17025).
           </span>
         </div>
       </div>

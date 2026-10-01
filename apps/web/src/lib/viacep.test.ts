@@ -72,7 +72,7 @@ describe('ViaCEP helpers', () => {
     expect(
       mergeViaCepAddress(
         {
-          cep: '92200000',
+          cep: '90000000',
           street: 'Rua Um',
           complement: '',
           neighbourhood: 'Bairro Um',
@@ -95,7 +95,7 @@ describe('ViaCEP helpers', () => {
     expect(
       mergeViaCepAddress(
         {
-          cep: '92200000',
+          cep: '90000000',
           street: '',
           complement: 'Sala 101',
           neighbourhood: '',
@@ -103,10 +103,10 @@ describe('ViaCEP helpers', () => {
           state: '',
         },
         {
-          cep: '92200-000',
+          cep: '90000-000',
           street: 'Rua Exemplo',
-          neighbourhood: 'Rio Branco',
-          city: 'Canoas',
+          neighbourhood: 'Centro',
+          city: 'Porto Alegre',
           state: 'RS',
         },
       ).complement,

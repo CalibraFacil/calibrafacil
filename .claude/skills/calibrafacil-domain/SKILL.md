@@ -46,19 +46,19 @@ regulated boundaries.
 - **Calibration math:** `packages/math-engine` (parser, evaluator, `uncertainty/`,
   `gum/`, `numeric/`, `audit/`).
 - **Signing / documents:** `packages/signing`, `packages/documents`,
-  `packages/label-rendering`, `packages/certificate-xlsx-template`,
+  `packages/label-rendering`, `packages/certificate-data`,
   `packages/method-definition`, `packages/method-templates`.
 - **Auth / access:** `packages/auth` (`access.ts`, `lab-access.ts`, Better-Auth).
 - **API:** `apps/api` (Hono — `src/app.ts`, `src/routes/`, `src/modules/`,
-  `src/middleware/`, `src/services/`, `src/lib/`); deployed via generated
-  `apps/api/api/` Vercel functions.
+  `src/middleware/`, `src/services/`, `src/lib/`); runs under Bun
+  (`src/bun.ts`) or as generated `apps/api/api/` Vercel functions.
 - **Frontends:** `apps/web` (lab dashboard; thin `src/routes/` adapters +
   `src/features/<domain>/`), `apps/portal` (cloud-only client portal),
-  `apps/backoffice`, `apps/cms`, `apps/docs`.
-- **Jobs / offline:** `apps/worker` (Vercel Queue + Cron), `services/document-worker`,
-  `services/gotenberg`; `apps/desktop` (Electron), `apps/local-server`,
-  `packages/sync`.
-- **Validation dossiers:** `validation/math-engine/v0.2.4|v0.3.0/dossier.tex`.
+  `apps/docs` (user docs), `apps/site` (project website).
+- **Jobs / offline:** `apps/worker` (in-process, Vercel Queue + Cron or the always-on
+  worker), `services/document-worker`, `services/gotenberg`; `apps/desktop` (Electron),
+  `apps/local-server` + `packages/local-db` (SQLite, outbox, sync).
+- **Validation dossiers:** `validation/math-engine/v<version>/dossier.tex` (+ `manifest.json`).
 
 ## Regulated cut lines (CONFIRMED — the hard boundary for /goal and /loop)
 
@@ -128,7 +128,7 @@ translate, expand, or reword them. (Codebase truth: see `packages/shared/src/acc
   materials (MRC), unrelated — a long-standing mis-citation corrected in #646
   (pending Cgcre confirmation that no dedicated signature-form NIT exists).
 - **OIML R 76** — international recommendation for non-automatic weighing
-  instruments (balances). ⚠️ **TODO / assumption:** supplied by the operator;
+  instruments (balances). ⚠️ **TODO / assumption:**
   **not found referenced anywhere in the codebase today.** Use the exact token
   "OIML R 76"; confirm spelling/edition with a human before putting it on a
   certificate.

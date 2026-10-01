@@ -2,7 +2,7 @@
 
 > EARS spec (ears-spec + calibrafacil-domain). Deferred item #3 of the legal-metrology epic
 > (#423). Stacks on item 2 (installed_at). Seed data (primary-grounded 2026-06-29):
-> `.goals/legal-metrology-catalog-seed.md`.
+> internal design notes (not published).
 
 ## Intent
 
@@ -34,7 +34,7 @@ a curated reference table, with **provenance** so primary vs secondary rows are 
   `value_months` (nullable int), `by_technology` (nullable jsonb), `anchor`,
   `operationalized_by_delegate` (bool), `regulation_reference` (text), `provenance`
   (`primary|secondary`), `note` (nullable), and a unique natural key for idempotent seeding.
-- REQ-CATALOG-002: The seed SHALL populate the grounded entries from `.goals/legal-metrology-catalog-seed.md`
+- REQ-CATALOG-002: The seed SHALL populate the grounded entries from the internal research notes (not published)
   (taxímetro 24 / cronotacógrafo 24 / etilômetro 12 / radar 12 / balança 12 calendar_year /
   esfigmo 12 / gás per-technology / hidrômetro ≤84 install / energia not_nationally_fixed),
   each with the correct `regulation_reference` (verbatim Portaria) and `provenance`

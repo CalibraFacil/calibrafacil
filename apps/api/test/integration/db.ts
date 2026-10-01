@@ -1,6 +1,6 @@
 import { db } from "@calibra-facil/db";
 import { sql } from "drizzle-orm";
-import { assertEphemeralTestDb } from "./guard";
+import { assertHarnessWorkerDb } from "./guard";
 
 // Reuse the REAL db singleton (pointed at the test Postgres by setup.ts) — never
 // open a second pool.
@@ -36,8 +36,8 @@ function rowsOf(result: unknown): Array<Record<string, unknown>> {
  * — identical isolation guarantee to the naive approach.
  */
 export async function truncateAll(): Promise<void> {
-  // Last line of defense: never TRUNCATE a non-local/Neon database.
-  assertEphemeralTestDb(process.env.DATABASE_URL);
+  // Last line of defense: only ever TRUNCATE a per-worker harness database.
+  assertHarnessWorkerDb(process.env.DATABASE_URL);
 
   // Step 1: discover all public tables (except drizzle bookkeeping).
   const listResult = await db.execute(

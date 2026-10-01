@@ -103,7 +103,7 @@ export const FEATURES: Feature[] = [
       },
       {
         title: "Marca do laboratório",
-        body: "Domínio e identidade visual próprios nos planos que incluem domínio personalizado.",
+        body: "Domínio e identidade visual próprios no portal do cliente.",
       },
     ],
   },

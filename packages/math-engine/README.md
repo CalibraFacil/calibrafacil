@@ -2,7 +2,9 @@
 
 Secure, dependency-light, ESM-first TypeScript calculation engine for calibration formulas and GUM-aligned uncertainty propagation.
 
-**Status for this implementation:** Em produção no Calibra Fácil / In production use.
+**Status:** stable. Every released `ENGINE_VERSION` has a versioned validation dossier in [`validation/math-engine/`](../../validation/math-engine/).
+
+> **No warranty.** This package is provided "as is", without warranty of any kind, under the MIT License. The validation dossiers are technical references, not approvals: each laboratory that uses the engine is solely responsible for validating it for its own use (ISO/IEC 17025:2017 §7.2.2 and §7.11) and for the results it issues.
 
 This package is the calculation core only — not a UI, report renderer, certificate generator, accreditation claim, legal-compliance claim, or substitute for laboratory method validation. It implements the GUM (JCGM 100:2008) methodology and is audit-friendly; regulated use relies on the validation evidence maintained per engine version (a fresh validation pass is expected on each `ENGINE_VERSION` bump).
 

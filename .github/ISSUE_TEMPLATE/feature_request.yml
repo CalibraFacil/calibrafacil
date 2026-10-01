@@ -1,0 +1,24 @@
+name: Proposal
+description: Suggest a concrete improvement. Open-ended ideas fit better in Discussions.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What does a laboratory, technician or customer need to do that is hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should it work? Cite the standard or guide when the change is metrological (ISO/IEC 17025, GUM, EURAMET, NIT-DICLA…).
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this.

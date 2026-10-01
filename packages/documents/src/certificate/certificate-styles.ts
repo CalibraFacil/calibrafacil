@@ -162,7 +162,7 @@ export const CERTIFICATE_PAGE_STYLES = `
     font-family: "Liberation Mono", "Courier New", monospace;
     font-variant-numeric: tabular-nums;
   }
-  /* Eccentricity: table left, platform diagram right — the FOR 51 layout. */
+  /* Eccentricity: table left, platform diagram right — the legacy-form layout. */
   .ecc { display: flex; gap: 5mm; align-items: flex-start; }
   .ecc__table { flex: 1; min-width: 0; }
   /* The generated diagram is a 170×100 viewBox, so it needs real width to be
@@ -193,7 +193,7 @@ export const CERTIFICATE_PAGE_STYLES = `
      with the name and role beneath. The first cut of this layout omitted the
      image, reasoning that the German and French certificates authorise by name
      alone and the file carries a PAdES signature anyway. That is true of those
-     two and false here: the Brazilian RBC certificate surveyed and Exemplo's own
+     two and false here: the Brazilian RBC certificate surveyed and a pilot lab's own
      legacy document both show one, and it is what laboratories expect. The
      name and role still stand on their own when there is no image.
 

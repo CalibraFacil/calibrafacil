@@ -11,8 +11,8 @@ import type { TemplateKey, TemplateModule } from "./types";
  * `satisfies Record<TemplateKey, TemplateModule>` guard makes this total: add a
  * key to {@link TemplateKey} and this map fails to compile until it is filled.
  *
- * Lab-specific methods (Exemplo `mass-balance`) are intentionally absent — they are
- * controlled by their seed script, not offered as platform templates.
+ * Lab-specific methods (e.g. the example `mass-balance`) are intentionally
+ * absent — they belong to a lab, not to the platform catalog.
  */
 export const TEMPLATE_REGISTRY = {
   "force-indication": forceIndicationTemplate,

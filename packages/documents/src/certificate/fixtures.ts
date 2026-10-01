@@ -1,16 +1,16 @@
 import type { CalibrationCertificateData } from "./types.js";
 
 /**
- * Review fixture: the real production job CAL-2026-9001 (Laboratório Exemplo,
- * 2000 kg platform scale, calibrated on site), transcribed so the layout can
- * be judged against real data rather than lorem. Values are already rounded
+ * Review fixture: a realistic (fictional) job CAL-2026-9001 — a 2000 kg
+ * platform scale calibrated on site — so the layout can be judged against
+ * plausible data rather than lorem. Values are already rounded
  * per NIT-DICLA-021 A.6.3 — U at two significant figures, the error to U's
  * last decimal place.
  */
 export function massCertificateFixture(): CalibrationCertificateData {
   return {
     certificateNumber: "CAL-2026-9001",
-    verificationUrl: "https://verify.calibrafacil.com/v/tok-demo",
+    verificationUrl: "https://verify.example.com/v/tok-demo",
     accredited: true,
     lab: {
       name: "Laboratório Exemplo de Metrologia Ltda",
@@ -26,7 +26,7 @@ export function massCertificateFixture(): CalibrationCertificateData {
       name: "Britagem Modelo Ltda",
       taxId: "00.000.000/0001-00",
       addressText:
-        "Rua Celeste Magagnin, 133 — Vila Nova, Bento Gonçalves/RS — CEP 95.706-040",
+        "Rua Exemplo, 100 — Distrito Industrial, Caxias do Sul/RS — CEP 95.000-000",
     },
     item: {
       description:
@@ -47,13 +47,13 @@ export function massCertificateFixture(): CalibrationCertificateData {
       issuedAtText: "25/06/2026",
     },
     method: {
-      name: "Calibração Rastreável de Balanças — FOR 50/51",
+      name: "Calibração Rastreável de Balanças",
       version: 6,
-      procedureCode: "PBT09",
+      procedureCode: "PT-01",
       referenceStandards: ["EURAMET cg-18", "EA-4/02 M:2022", "UKAS LAB 14"],
     },
     locationText:
-      "Instalações do cliente (em loco) — Rua Celeste Magagnin, 133, Bento Gonçalves/RS",
+      "Instalações do cliente (em loco) — Rua Exemplo, 100, Caxias do Sul/RS",
     environment: {
       temperatureText: "23,0 °C",
       humidityText: "50 %",
@@ -174,32 +174,32 @@ export function massCertificateFixture(): CalibrationCertificateData {
     standards: [
       {
         name: "JPO1 — Jogo de pesos padrão",
-        certificateNumber: "01031/26",
-        issuer: "SENAI",
+        certificateNumber: "0001/26",
+        issuer: "Laboratório Acreditado A",
         validUntilText: "26/03/2028",
       },
       {
         name: "JPO3 — Jogo de pesos padrão",
-        certificateNumber: "01762/26",
-        issuer: "SENAI",
+        certificateNumber: "0002/26",
+        issuer: "Laboratório Acreditado A",
         validUntilText: "18/05/2028",
       },
       {
         name: "JMP500 — Massa padrão 500 kg",
-        certificateNumber: "SURRS-M036/2026",
-        issuer: "SURRS",
+        certificateNumber: "LAB-M003/2026",
+        issuer: "Laboratório Acreditado B",
         validUntilText: "03/03/2028",
       },
     ],
     traceabilityStatementText:
-      "As medições realizadas são metrologicamente rastreáveis ao Sistema Internacional de Unidades (SI) por meio dos padrões relacionados neste certificado, calibrados por SENAI e SURRS.",
+      "As medições realizadas são metrologicamente rastreáveis ao Sistema Internacional de Unidades (SI) por meio dos padrões relacionados neste certificado, calibrados por laboratórios acreditados.",
     methodDeviations: null,
     conformity: null,
     observations: null,
     signatory: {
       name: "Carlos Andrade",
       role: "Responsável Técnico — Signatário Autorizado",
-      placeAndDateText: "Canoas/RS, 25 de junho de 2026",
+      placeAndDateText: "Porto Alegre/RS, 25 de junho de 2026",
     },
     provenance: {
       engineVersion: "math-engine 0.3.0",

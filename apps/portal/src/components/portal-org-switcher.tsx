@@ -34,9 +34,11 @@ function getWebAppUrl(): string {
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
   if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-    return `https://${host}:5173`;
+    return `http://${host}:5173`;
   }
-  return "https://calibrafacil.com";
+  // Convention when VITE_WEB_URL is unset: the portal is served on the
+  // "portal." subdomain of the lab app's domain.
+  return `${window.location.protocol}//${host.replace(/^portal\./, "")}`;
 }
 
 export function PortalOrgSwitcher() {

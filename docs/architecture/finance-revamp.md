@@ -1,7 +1,7 @@
 # Financeiro revamp — architecture & decision record
 
 Status: **in progress** (Wave 1). Branch: `pr-333-merge-main` (folded onto the
-native Conta Azul PR #333). Tracking goal: `.goals/financeiro-revamp.md`.
+native Conta Azul PR #333).
 
 ## Context
 

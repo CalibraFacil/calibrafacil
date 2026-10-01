@@ -76,6 +76,28 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+/** Comma-separated env list, trimmed, empty entries dropped. */
+function readEnvList(name: string): string[] {
+  return (readEnv(name) ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function originOf(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+// Sender used when neither RESEND_FROM_EMAIL nor EMAIL_FROM is configured. The
+// example.com domain is reserved, so a misconfigured deployment fails loudly at
+// the email provider instead of impersonating a real domain.
+const DEFAULT_EMAIL_FROM = "Calibra Fácil <noreply@example.com>";
+
 function getEmailLogoSrc(): string {
   const explicitLogoUrl = readEnv("EMAIL_LOGO_URL");
   if (explicitLogoUrl) return explicitLogoUrl;
@@ -83,7 +105,7 @@ function getEmailLogoSrc(): string {
   const appUrl = readEnv("APP_URL") ?? readEnv("WEB_URL");
   if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
 
-  return "https://calibrafacil.com/logo192.png";
+  return "http://localhost:5173/logo192.png";
 }
 
 function resolveApiBaseUrl(fallback: string): string {
@@ -94,7 +116,7 @@ function resolveWebBaseUrl(isProduction: boolean): string {
   return (
     readEnv("APP_URL") ??
     readEnv("WEB_URL") ??
-    (isProduction ? "https://calibrafacil.com" : "http://localhost:5173")
+    (isProduction ? getRequiredEnv("APP_URL") : "http://localhost:5173")
   );
 }
 
@@ -138,12 +160,6 @@ function isProductionLikeUrl(value: string | undefined): boolean {
 
   try {
     const { protocol, hostname } = new URL(value);
-    // dev-*.calibrafacil.com is a reserved prefix for dev tunnels (e.g.
-    // dev-portal, dev-web). Never treat those as production-like, even
-    // though they are https:.
-    if (/^dev-[\w-]+\.calibrafacil\.com$/.test(hostname.toLowerCase())) {
-      return false;
-    }
     return protocol === "https:" && !isLocalDevelopmentUrl(value)
       ? !hostname.endsWith(".local")
       : false;
@@ -157,7 +173,7 @@ function isProductionRuntime(): boolean {
 
   // Explicit env always wins. A common dev workflow runs the local API behind a
   // Cloudflare/ngrok tunnel so `API_URL`/`APP_URL` look production-like
-  // (`https://dev-api.calibrafacil.com`) even though the process is the local
+  // (`https://dev-api.example.com`) even though the process is the local
   // one with `NODE_ENV=development`. URL-based inference must not override that.
   if (runtimeEnv === "development" || runtimeEnv === "test") {
     return false;
@@ -193,29 +209,24 @@ function createBaseUrlConfig(
 
   // Dev: dynamic per-request resolution from the incoming Host header.
   // The same list is automatically added to trustedOrigins by better-auth,
-  // so magic-link URLs and origin trust both derive from the tunnel hostname
-  // the user actually hit (dev-portal vs dev-web), with no extra rewriting.
+  // so magic-link URLs and origin trust both derive from the hostname the user
+  // actually hit, with no extra rewriting. AUTH_DEV_ALLOWED_HOSTS adds extra
+  // hosts (comma-separated, wildcards allowed) for tunnels or LAN testing.
   return {
     allowedHosts: [
       "localhost:3000",
       "localhost:5173",
       "localhost:5174",
-      "*.calibrafacil.com",
-      "devbox.example.ts.net",
+      ...readEnvList("AUTH_DEV_ALLOWED_HOSTS"),
     ],
     protocol: "auto",
   };
 }
 
-function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
-  if (!apiUrl) return null;
-
-  try {
-    const { hostname } = new URL(apiUrl);
-    return hostname.endsWith(".calibrafacil.com") ? ".calibrafacil.com" : null;
-  } catch {
-    return null;
-  }
+// Shared parent domain for the session cookies (e.g. ".example.com") when the
+// API and the frontends live on different subdomains. Unset = host-only cookies.
+function getCrossSubDomainCookieDomain(): string | null {
+  return readEnv("AUTH_COOKIE_DOMAIN") ?? null;
 }
 
 function shouldUseCrossSubDomainCookies(
@@ -228,8 +239,11 @@ function shouldUseCrossSubDomainCookies(
 
   try {
     const url = new URL(apiUrl);
+    const domain = cookieDomain.replace(/^\./, "").toLowerCase();
+    const hostname = url.hostname.toLowerCase();
     return (
-      url.protocol === "https:" && url.hostname.endsWith(".calibrafacil.com")
+      url.protocol === "https:" &&
+      (hostname === domain || hostname.endsWith(`.${domain}`))
     );
   } catch {
     return false;
@@ -296,27 +310,19 @@ const DEV_TRUSTED_ORIGINS = [
   "https://localhost:5173",
   "https://localhost:5174",
   "https://localhost:5175",
-  "https://dev-web.calibrafacil.com",
-  "https://dev-portal.calibrafacil.com",
-  "https://dev-ops.calibrafacil.com",
-  "https://dev-api.calibrafacil.com",
-  "http://192.168.0.10:5173",
-  "http://192.168.0.10:5174",
-  "http://192.168.0.10:5175",
-  "https://192.168.0.10:5173",
-  "https://192.168.0.10:5174",
-  "https://192.168.0.10:5175",
-  "https://dev-portal.calibrafacil.com",
-  "https://dev-web.calibrafacil.com",
 ];
 
-const PROD_TRUSTED_ORIGINS = [
-  "app://calibra-facil",
-  "https://calibrafacil.com",
-  "https://www.calibrafacil.com",
-  "https://portal.calibrafacil.com",
-  "https://ops.calibrafacil.com",
-];
+// Production trusts only the configured deployment: the desktop shell, the lab
+// web app (APP_URL), the client portal (PORTAL_APP_URL), the public site
+// (SITE_URL) and any extra origins listed in AUTH_TRUSTED_ORIGINS.
+function getConfiguredTrustedOrigins(): string[] {
+  return [
+    originOf(readEnv("APP_URL")),
+    originOf(readEnv("PORTAL_APP_URL")),
+    originOf(readEnv("SITE_URL")),
+    ...readEnvList("AUTH_TRUSTED_ORIGINS").map((entry) => originOf(entry)),
+  ].filter((origin): origin is string => origin !== null);
+}
 
 type AuthSurface = "lab" | "backoffice" | "portal";
 
@@ -391,7 +397,9 @@ function createTrustedOrigins(
   isProduction: boolean,
   surface: AuthSurface,
 ): string[] | ((request?: Request) => Promise<string[]>) {
-  const baseOrigins = isProduction ? PROD_TRUSTED_ORIGINS : DEV_TRUSTED_ORIGINS;
+  const baseOrigins = isProduction
+    ? ["app://calibra-facil", ...getConfiguredTrustedOrigins()]
+    : [...DEV_TRUSTED_ORIGINS, ...getConfiguredTrustedOrigins()];
 
   return async (request?: Request) => {
     const origins = new Set(baseOrigins);
@@ -826,13 +834,13 @@ async function sendPortalMagicLink(
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Fácil <noreply@calibrafacil.com>";
+    DEFAULT_EMAIL_FROM;
 
   if (pendingInvitation) {
     // #584: the portal INVITATION is lab-branded and may leave through the
     // lab's own sending domain when one is active. The login magic link below
     // stays on the platform sender on purpose: auth mail is the most
-    // deliverability-sensitive, so it rides the established calibrafacil.com.
+    // deliverability-sensitive, so it rides the platform sender.
     const invitation = pendingInvitation;
     const outcome = await sendEmailWithLabSender({
       organizationId: labBrand?.sender?.organizationId,
@@ -979,7 +987,7 @@ async function sendLabMagicLink(
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Fácil <noreply@calibrafacil.com>";
+    DEFAULT_EMAIL_FROM;
 
   const accessUrl = buildLabMagicLinkAccessUrl(data);
 
@@ -1037,7 +1045,7 @@ async function sendLabVerificationOtp(data: {
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Fácil <noreply@calibrafacil.com>";
+    DEFAULT_EMAIL_FROM;
 
   await sendResend(resend, {
     from: fromEmail,
@@ -1082,7 +1090,7 @@ export async function sendLabAccountSetupEmail(input: {
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Fácil <noreply@calibrafacil.com>";
+    DEFAULT_EMAIL_FROM;
 
   await sendResend(resend, {
     from: fromEmail,
@@ -1325,7 +1333,7 @@ function createOrganizationPlugin() {
       const fromEmail =
         process.env.RESEND_FROM_EMAIL ||
         process.env.EMAIL_FROM ||
-        "Calibra Fácil <noreply@calibrafacil.com>";
+        DEFAULT_EMAIL_FROM;
 
       await sendResend(resend, {
         from: fromEmail,
@@ -1348,14 +1356,11 @@ function createOrganizationPlugin() {
 function createSharedConfig(surface: AuthSurface) {
   const isProduction = isProductionRuntime();
   const configuredApiUrl = readEnv("API_URL");
-  const crossSubDomainCookieDomain =
-    getCookieDomainFromApiUrl(configuredApiUrl);
-  // Enable cross-sub-domain cookies whenever the API host is on the
-  // .calibrafacil.com zone. In dev, this lets the lab_session / portal_session
-  // cookies be shared across dev-web and dev-portal tunnels; in prod, it
-  // preserves the existing api.calibrafacil.com → frontends behavior.
-  // shouldUseCrossSubDomainCookies adds an extra https/protocol guard so that
-  // plaintext .calibrafacil.com hosts cannot opt in by accident.
+  const crossSubDomainCookieDomain = getCrossSubDomainCookieDomain();
+  // Enable cross-sub-domain cookies when AUTH_COOKIE_DOMAIN is set (e.g. API on
+  // api.example.com serving frontends on example.com / portal.example.com).
+  // shouldUseCrossSubDomainCookies adds an extra https/host guard so that a
+  // plaintext or out-of-domain API host cannot opt in by accident.
   const useCrossSubDomainCookies = shouldUseCrossSubDomainCookies(
     isProduction,
     configuredApiUrl,
@@ -1401,7 +1406,7 @@ function createSharedConfig(surface: AuthSurface) {
         const fromEmail =
           process.env.RESEND_FROM_EMAIL ||
           process.env.EMAIL_FROM ||
-          "Calibra Fácil <noreply@calibrafacil.com>";
+          DEFAULT_EMAIL_FROM;
 
         await sendResend(resend, {
           from: fromEmail,
@@ -1460,7 +1465,7 @@ function createSharedConfig(surface: AuthSurface) {
         const fromEmail =
           process.env.RESEND_FROM_EMAIL ||
           process.env.EMAIL_FROM ||
-          "Calibra Fácil <noreply@calibrafacil.com>";
+          DEFAULT_EMAIL_FROM;
 
         await sendResend(resend, {
           from: fromEmail,
@@ -1520,12 +1525,13 @@ function createSharedConfig(surface: AuthSurface) {
       updateAge: 60 * 60 * 24, // 1 day
     },
     advanced: {
-      crossSubDomainCookies: useCrossSubDomainCookies
-        ? {
-            enabled: true,
-            domain: crossSubDomainCookieDomain ?? ".calibrafacil.com",
-          }
-        : { enabled: false },
+      crossSubDomainCookies:
+        useCrossSubDomainCookies && crossSubDomainCookieDomain
+          ? {
+              enabled: true,
+              domain: crossSubDomainCookieDomain,
+            }
+          : { enabled: false },
       defaultCookieAttributes: {
         sameSite: defaultSameSite,
         secure: useSecureCookies,
@@ -1732,48 +1738,28 @@ async function findDefaultActiveOrganizationId(
 }
 
 // Web origins where the LAB UI is actually served. These are the only origins a
-// LAB passkey ceremony may run from; portal/ops/api hosts and the Electron
-// `app://` scheme are intentionally excluded (the LAB UI is not served there and
-// custom schemes are not valid WebAuthn origins). Mirrors the web entries in
-// PROD_TRUSTED_ORIGINS / DEV_TRUSTED_ORIGINS.
-const PROD_LAB_WEB_ORIGINS = [
-  "https://calibrafacil.com",
-  "https://www.calibrafacil.com",
-];
-
-const DEV_LAB_WEB_ORIGINS = [
-  "https://dev-web.calibrafacil.com",
-  "http://localhost:5173",
-  "https://localhost:5173",
-  "http://192.168.0.10:5173",
-  "https://192.168.0.10:5173",
-];
+// LAB passkey ceremony may run from; portal/api hosts and the Electron `app://`
+// scheme are intentionally excluded (the LAB UI is not served there and custom
+// schemes are not valid WebAuthn origins). In production the APP_URL origin is
+// the primary origin; PASSKEY_EXTRA_ORIGINS can add more (e.g. a www variant).
+const DEV_LAB_WEB_ORIGINS = ["http://localhost:5173", "https://localhost:5173"];
 
 // The relying-party ID must be a registrable domain so a single credential works
-// across the apex and every subdomain (calibrafacil.com + www). Returning
-// url.hostname (e.g. "www.calibrafacil.com") would scope the credential to that
-// exact host and break the apex, and vice-versa. localhost / LAN IPs keep their
-// own host. `PASSKEY_RP_ID` lets ops pin it explicitly if ever needed.
+// across the apex and its www variant. A leading "www." is therefore stripped;
+// localhost / LAN IPs keep their own host. `PASSKEY_RP_ID` pins it explicitly.
 function resolveLabPasskeyRpId(hostname: string): string {
   const explicit = readEnv("PASSKEY_RP_ID");
   if (explicit) return explicit;
 
-  const normalized = hostname.toLowerCase();
-  if (
-    normalized === "calibrafacil.com" ||
-    normalized.endsWith(".calibrafacil.com")
-  ) {
-    return "calibrafacil.com";
-  }
-
-  return normalized;
+  return hostname.toLowerCase().replace(/^www\./, "");
 }
 
 function resolveLabPasskeyOrigins(
   isProduction: boolean,
   primaryOrigin: string,
 ): string[] {
-  const base = isProduction ? PROD_LAB_WEB_ORIGINS : DEV_LAB_WEB_ORIGINS;
+  const extra = readEnvList("PASSKEY_EXTRA_ORIGINS");
+  const base = isProduction ? extra : [...DEV_LAB_WEB_ORIGINS, ...extra];
   return [...new Set([primaryOrigin, ...base])];
 }
 

@@ -28,7 +28,7 @@ export function PortalInvitationEmail({
   organizationName = "Cliente",
   labName,
   role = "viewer",
-  inviteUrl = "https://calibrafacil.com/portal/accept-invite",
+  inviteUrl = "https://app.example.com/portal/accept-invite",
   logoSrc,
   brand,
 }: PortalInvitationEmailProps) {
@@ -76,7 +76,7 @@ PortalInvitationEmail.PreviewProps = {
   organizationName: "ACME Laboratórios",
   labName: "CalibraFácil Metrologia",
   role: "viewer",
-  inviteUrl: "https://calibrafacil.com/portal/accept-invite?token=abc",
+  inviteUrl: "https://app.example.com/portal/accept-invite?token=abc",
 } satisfies PortalInvitationEmailProps;
 
 export default PortalInvitationEmail;

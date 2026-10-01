@@ -5,6 +5,7 @@ import {
   getPublicRequestMeta,
   startCommercialPublicCheckout,
 } from "../services/commercial/public-checkout";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
   const envRecord =
@@ -18,7 +19,7 @@ function resolvePublicAppUrl(c: { env?: unknown }) {
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
-    : "https://calibrafacil.com";
+    : appBaseUrl();
 }
 
 function withPublicCheckoutHeaders(c: {

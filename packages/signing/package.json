@@ -20,7 +20,7 @@
     "pades"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@signpdf/placeholder-pdf-lib": "^3.2.5",
     "@signpdf/signer-p12": "^3.2.5",

@@ -1,15 +1,19 @@
 ---
 title: Validação do Motor Matemático
-description: Como a CalibraFácil valida o motor de cálculo de incerteza distribuído na plataforma — método, escopo, evidências e referências normativas.
+description: Como o motor de cálculo de incerteza é verificado — método, escopo, evidências e referências normativas.
 ---
 
-O motor matemático que calcula a incerteza nas calibrações é **validado pela CalibraFácil para distribuição em produção na plataforma**. A validação é desenhada para servir de evidência reutilizável por laboratórios usuários na composição da própria validação de método sob **ISO/IEC 17025:2017, cláusula 7.2.2** (validação de métodos).
+O motor matemático que calcula a incerteza nas calibrações é verificado a cada versão, e as evidências ficam publicadas com o código-fonte. Elas podem servir de insumo para a validação de método e de software que cada laboratório conduz sob a **ISO/IEC 17025:2017, cláusulas 7.2.2 e 7.11**.
 
-**Pacote validado:** `@calibra-facil/math-engine` versão `0.4.0`.
+<Aside type="caution">
+O Calibra Fácil é software de código aberto, fornecido sem garantia nos termos da licença MIT. Os dossiês de validação são referências técnicas, não aprovações: **cada laboratório é o único responsável por validar o software para o seu próprio uso** e pelos resultados e certificados que emitir.
+</Aside>
+
+**Pacote verificado:** `@calibra-facil/math-engine` versão `0.4.0`.
 
 ## Método de validação
 
-A CalibraFácil valida o motor por **comparação direta com planilhas Excel usadas como referência por laboratórios acreditados pelo Inmetro/RBC**. Para cada função coberta, o motor é executado contra entradas equivalentes às das planilhas de referência; o resultado produzido pelo motor coincide com o da planilha dentro da tolerância numérica declarada no dossiê de validação.
+O motor é verificado por **comparação direta com planilhas Excel usadas como referência por laboratórios acreditados pelo Inmetro/RBC**. Para cada função coberta, o motor é executado contra entradas equivalentes às das planilhas de referência; o resultado produzido pelo motor coincide com o da planilha dentro da tolerância numérica declarada no dossiê de validação.
 
 A comparação de resultados com outros métodos validados é uma técnica reconhecida pela **ISO/IEC 17025:2017, cláusula 7.2.2.1, item d)** (técnicas usadas para validação de métodos). Desvios além da tolerância declarada bloqueiam a publicação de nova versão do pacote.
 
@@ -26,24 +30,24 @@ A comparação de resultados com outros métodos validados é uma técnica recon
 
 ## Dossiê de validação
 
-A evidência de validação de cada versão do `@calibra-facil/math-engine` é organizada em um **dossiê de validação** mantido pela CalibraFácil, ancorado à versão do pacote (`0.4.0` no momento desta publicação). O dossiê é o documento citável em auditorias do laboratório usuário.
+A evidência de validação de cada versão do `@calibra-facil/math-engine` é organizada em um **dossiê de validação** versionado junto com o código (`validation/math-engine/` no repositório), ancorado à versão do pacote (`0.4.0` no momento desta publicação).
 
 Conteúdo do dossiê para cada versão liberada:
 
-- relação das planilhas de referência utilizadas, com origem e escopo metrológico declarado;
+- descrição das planilhas de referência utilizadas e do seu escopo metrológico;
 - faixas numéricas e cenários cobertos por função (Tipo A, Tipo B por distribuição, combinação com correlação, Welch-Satterthwaite, fator de abrangência);
 - tolerância numérica aplicada na comparação;
 - resultado por função, com o desvio máximo observado contra a planilha de referência;
-- aprovação formal pelo responsável da qualidade da CalibraFácil, com data e identificação da versão do pacote.
+- os testes automatizados que reproduzem cada verificação.
 
-O dossiê é fornecido ao laboratório usuário ou ao seu auditor mediante solicitação, no formato PDF assinado eletronicamente.
+O dossiê é publicado como fonte LaTeX no repositório; qualquer pessoa pode gerar o PDF com `make` e reexecutar os testes que o sustentam.
 
 ## Trilha de auditoria
 
 Cada calibração executada no CalibraFácil carrega, em seu *snapshot* imutável:
 
 - a versão do pacote `@calibra-facil/math-engine` em uso, exposta como `ENGINE_VERSION`;
-- o *fingerprint* canônico da fórmula compilada e do resultado, calculado como FNV-1a 64-bit sobre JSON canônico (ver [Rastreabilidade](/conceitos/rastreabilidade));
+- o *fingerprint* canônico da fórmula compilada e do resultado, calculado como SHA-256 sobre JSON canônico (ver [Rastreabilidade](/conceitos/rastreabilidade));
 - a referência ao método de calibração aplicado, também em snapshot.
 
 Esses elementos permitem reconstruir, em auditoria, o cálculo exato realizado em uma calibração específica e correlacioná-lo com o dossiê de validação da versão do motor em uso.
@@ -52,11 +56,11 @@ Esses elementos permitem reconstruir, em auditoria, o cálculo exato realizado e
 
 - **Método de Monte Carlo (GUM Supplement 1)** não é implementado pelo motor. Modelos fortemente não-lineares — em que a propagação de primeira ordem é insuficiente — exigem avaliação por método independente conforme a política metrológica do laboratório usuário. O motor rejeita o uso de funções não-suaves (`abs`, `floor`, `ceil`, `round`, `min`, `max`) em propagação GUM, a menos que o autor do método forneça coeficientes de sensibilidade explícitos.
 - **Álgebra dimensional de unidades** não é implementada. Unidades são metadados textuais; a coerência dimensional é responsabilidade do projeto do método.
-- **Certificação metrológica por terceiro independente** não foi conduzida. A validação atual cobre o motor conforme distribuído na plataforma. O laboratório usuário utiliza essa evidência como entrada da sua própria validação de método sob ISO/IEC 17025.
+- **Certificação metrológica por terceiro independente** não foi conduzida. As verificações cobrem o motor conforme publicado no repositório. O laboratório usuário pode usar essa evidência como entrada da sua própria validação sob a ISO/IEC 17025.
 
 ## Referências normativas
 
 - **JCGM 100:2008 (GUM)** — *Evaluation of measurement data — Guide to the expression of uncertainty in measurement.*
 - **JCGM 200:2012 (VIM)** — vocabulário internacional de metrologia.
-- **ISO/IEC 17025:2017** — cláusula 7.2.2 (validação de métodos), incluindo 7.2.2.1 (técnicas) e 7.2.2.4 (registros de validação).
+- **ISO/IEC 17025:2017** — cláusula 7.2.2 (validação de métodos), incluindo 7.2.2.1 (técnicas) e 7.2.2.4 (registros de validação), e cláusula 7.11 (controle de dados e gestão da informação).
 - **EA-4/02 M:2022** — *Evaluation of the Uncertainty of Measurement in Calibration.*

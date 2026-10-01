@@ -18,13 +18,14 @@ import {
 } from "../../lib/storage";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { getServiceOrderDetail } from "./service-order.read-model";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 export type ServiceOrderDocumentEnv = R2Env & {
   PORTAL_APP_URL?: string;
 };
 
 export function buildPortalBaseUrl(env: ServiceOrderDocumentEnv) {
-  return env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com";
+  return env.PORTAL_APP_URL ?? portalBaseUrl();
 }
 
 export async function enqueueServiceOrderDocumentJob(

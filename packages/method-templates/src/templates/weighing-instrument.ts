@@ -20,8 +20,8 @@ import type {
  * electronic balance) by error of indication, grounded in EURAMET cg-18.
  *
  * This is the GENERIC, guide-grounded mass/balance template — the platform mass
- * method. Exemplo's FOR 50/51 method lives only in its seed script (mass-balance.ts
- * + seed-exemplo-balance-method.mjs), not in this catalog.
+ * method. The lab-specific example method (mass-balance.ts) is not part of this
+ * catalog.
  *
  * ⚠️ DRAFT — pending metrologist review. Model + the full uncertainty budget were
  * read from the cited guide and validated against its Appendix H1 worked example
@@ -113,7 +113,7 @@ const weighingColumns = [
     // A pesagem usa o vínculo genérico `standard_value` (um único valor de
     // referência por ponto, casando com o modelo deste template). O vínculo mais
     // rico `mass_standard_composition` (composição de pesos empilhados + empuxo,
-    // como a Exemplo usa no seu seed) é uma possível evolução futura.
+    // como no método de exemplo mass-balance.ts) é uma possível evolução futura.
     key: "m_ref",
     label: "Massa convencional dos padrões (m_ref)",
     type: "number",

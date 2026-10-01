@@ -29,6 +29,7 @@ import {
   type QueueReceiptClaim,
   type QueueReceiptsMode,
 } from "@calibra-facil/db/queue-receipts";
+import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
 import worker from "./index.js";
 
 export type WorkerEnv = Parameters<typeof worker.queue>[1];
@@ -56,10 +57,12 @@ function requiredEnv(name: string) {
 }
 
 function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
-  const accountId = requiredEnv("R2_ACCOUNT_ID");
+  const { endpoint, region, forcePathStyle } =
+    resolveS3EndpointConfigFromProcess();
   const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region,
+    endpoint,
+    forcePathStyle,
     credentials: {
       accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),

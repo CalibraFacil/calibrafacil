@@ -19,7 +19,7 @@ const BASE_PROPS = {
   technicianName: "João Técnico",
   addressText: "Rua das Flores, 100 — São Paulo, SP",
   labName: "Lab Metrologia",
-  actionUrl: "https://calibrafacil.com/portal/requests/42",
+  actionUrl: "https://app.example.com/portal/requests/42",
   brand: { name: "Lab Metrologia", isWhiteLabel: true as const },
 } as const;
 
@@ -158,30 +158,30 @@ describe("REQ-VISITEMAIL-003: renders lab brand name + CTA actionUrl", () => {
   it("scheduled: brand name and actionUrl appear", async () => {
     const html = await renderVariant("scheduled");
     expect(html).toContain("Lab Metrologia");
-    expect(html).toContain("https://calibrafacil.com/portal/requests/42");
+    expect(html).toContain("https://app.example.com/portal/requests/42");
   });
 
   it("confirmed: brand name and actionUrl appear", async () => {
     const html = await renderVariant("confirmed");
     expect(html).toContain("Lab Metrologia");
-    expect(html).toContain("https://calibrafacil.com/portal/requests/42");
+    expect(html).toContain("https://app.example.com/portal/requests/42");
   });
 
   it("rescheduled: brand name and actionUrl appear", async () => {
     const html = await renderVariant("rescheduled");
     expect(html).toContain("Lab Metrologia");
-    expect(html).toContain("https://calibrafacil.com/portal/requests/42");
+    expect(html).toContain("https://app.example.com/portal/requests/42");
   });
 
   it("cancelled: brand name and actionUrl appear", async () => {
     const html = await renderVariant("cancelled");
     expect(html).toContain("Lab Metrologia");
-    expect(html).toContain("https://calibrafacil.com/portal/requests/42");
+    expect(html).toContain("https://app.example.com/portal/requests/42");
   });
 
   it("reminder: brand name and actionUrl appear", async () => {
     const html = await renderVariant("reminder");
     expect(html).toContain("Lab Metrologia");
-    expect(html).toContain("https://calibrafacil.com/portal/requests/42");
+    expect(html).toContain("https://app.example.com/portal/requests/42");
   });
 });

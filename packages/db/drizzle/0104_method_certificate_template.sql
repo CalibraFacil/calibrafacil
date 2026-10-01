@@ -14,8 +14,8 @@ CREATE INDEX "method_certificate_template_id_idx" ON "calibration_method" USING 
 
 -- Backfill 1: method-scoped ACTIVE assignments map directly onto the method.
 -- Ties resolve exactly like the old resolver did (priority desc, created_at desc).
--- Verified state on 2026-07-19 (dev + prod identical): 4 ACTIVE assignments, all
--- Exemplo, all method_id = 6 -> template_id = 3, so this UPDATE is the whole story.
+-- Verified state on 2026-07-19: 4 ACTIVE assignments, all for one lab and
+-- method, so this UPDATE is the whole story.
 UPDATE "calibration_method" m
 SET "certificate_template_id" = picked.template_id
 FROM (

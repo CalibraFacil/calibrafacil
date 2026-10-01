@@ -57,7 +57,11 @@ vi.mock('@/features/assets/queries', () => ({
   useNewAssetCustomersData: () => ({
     data: {
       data: [
-        { id: 10, name: 'Tecnologia Ambiental Modelo', taxId: '00.000.000/0001-00' },
+        {
+          id: 10,
+          name: 'Tecnologia Ambiental Modelo',
+          taxId: '00.000.000/0001-00',
+        },
       ],
     },
     isLoading: false,
@@ -256,7 +260,9 @@ describe('AssetCreateForm', () => {
     })
 
     expect(screen.getByText('Tecnologia Ambiental Modelo')).toBeTruthy()
-    expect(screen.queryByRole('option', { name: /Ambiental Modelo/ })).toBeNull()
+    expect(
+      screen.queryByRole('option', { name: /Ambiental Modelo/ }),
+    ).toBeNull()
     expect(
       screen.getByText('Faltam 4 campos obrigatórios').parentElement
         ?.textContent,

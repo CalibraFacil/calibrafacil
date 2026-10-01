@@ -1,11 +1,10 @@
 # Gotenberg on Cloudflare Containers
 
 Hosts [Gotenberg](https://gotenberg.dev) as a Cloudflare Container, fronted by a
-Worker that adds a shared-secret gate. The API worker/`apps/worker` converts
-XLSX certificate templates to PDF by POSTing to
-`${GOTENBERG_URL}/forms/libreoffice/convert` (see
-`packages/certificate-xlsx-template/src/conversion.ts`). On Vercel's serverless
-runtime there is no LibreOffice, so a reachable Gotenberg is required in prod.
+Worker that adds a shared-secret gate. `apps/worker` renders certificates and documents from HTML to PDF by POSTing to
+`${GOTENBERG_URL}/forms/chromium/convert/html`. Any Gotenberg 8 instance works
+(locally, `docker-compose.yml` runs one); this folder is one way to host it on
+Cloudflare Containers.
 
 This folder is **not** part of the pnpm workspace (the workspace globs only
 `apps/*` and `packages/*`); it has its own `package.json` and is deployed with
@@ -36,16 +35,16 @@ npx wrangler deploy
 `https://calibrafacil-gotenberg.<account>.workers.dev` (or attach a custom
 domain/route in `wrangler.jsonc`).
 
-## Wire it into the app (Vercel — `calibra-facil-api`, Production)
+## Wire it into the app (Vercel example)
 
-The worker runs as functions inside the `calibra-facil-api` Vercel project.
+On Vercel, the worker runs as functions inside the API project.
 
 ```bash
 # from repo root, with the api project linked (apps/api/.vercel)
 printf 'https://calibrafacil-gotenberg.<account>.workers.dev' \
-  | vercel env add GOTENBERG_URL production --cwd apps/api --scope calibra-facil
+  | vercel env add GOTENBERG_URL production --cwd apps/api --scope <your-team>
 printf '<the same secret you set above>' \
-  | vercel env add GOTENBERG_TOKEN production --sensitive --cwd apps/api --scope calibra-facil
+  | vercel env add GOTENBERG_TOKEN production --sensitive --cwd apps/api --scope <your-team>
 ```
 
 Then redeploy the API (any `apps/api` change, since the ignore-step skips

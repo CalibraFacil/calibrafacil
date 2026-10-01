@@ -34,7 +34,7 @@ export function CertificateAmendedEmail({
   assetName,
   customerName,
   reason = "Correção de dados do certificado",
-  actionUrl = "https://calibrafacil.com/portal/certificates",
+  actionUrl = "https://app.example.com/portal/certificates",
   logoSrc,
   brand,
 }: CertificateAmendedEmailProps) {
@@ -86,7 +86,7 @@ CertificateAmendedEmail.PreviewProps = {
   customerName: "ACME Laboratórios",
   reason: "Correção da identificação do instrumento.",
   // Deep link to the superseded certificate's detail page (#744).
-  actionUrl: "https://portal.calibrafacil.com/certificates/CAL-2026-0012",
+  actionUrl: "https://portal.example.com/certificates/CAL-2026-0012",
 } satisfies CertificateAmendedEmailProps;
 
 export default CertificateAmendedEmail;

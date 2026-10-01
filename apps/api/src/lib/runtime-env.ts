@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
 
 export type ApiRuntimeEnv = Record<string, unknown>;
 
@@ -46,17 +47,11 @@ export type WorkerRuntimeEnv = {
 const requiredProductionEnv = [
   "DATABASE_URL",
   "BETTER_AUTH_SECRET",
-  "ASAAS_API_KEY",
-  "ASAAS_ENVIRONMENT",
-  "ASAAS_WEBHOOK_TOKEN",
-  "BACKOFFICE_BOOTSTRAP_TOKEN",
-  "INTERNAL_OPERATOR_EMAILS",
   "PUBLIC_API_MASTER_KEY",
   "INTEGRATIONS_MASTER_KEY",
   "SIGNING_MASTER_KEY",
   "QUOTE_APPROVAL_CODE_PEPPER",
   "PORTAL_SERVICE_USER_ID",
-  "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
   "R2_BUCKET_NAME",
@@ -80,11 +75,13 @@ type LocalS3Client = S3Client & {
 };
 
 function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
-  const accountId = requiredEnv("R2_ACCOUNT_ID");
+  const { endpoint, region, forcePathStyle } =
+    resolveS3EndpointConfigFromProcess();
   // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client has command-specific send overloads that are narrower than the base client type exposes.
   const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region,
+    endpoint,
+    forcePathStyle,
     credentials: {
       accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
@@ -130,6 +127,9 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
   if (isProduction) {
     for (const key of requiredProductionEnv) {
       requiredEnv(key);
+    }
+    if (!process.env.R2_ACCOUNT_ID && !process.env.R2_ENDPOINT) {
+      throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required");
     }
   }
 

@@ -20,7 +20,7 @@ interface EmailConfirmationEmailProps {
 
 export function EmailConfirmationEmail({
   recipientName = "usuário",
-  confirmationUrl = "https://calibrafacil.com/confirm-email",
+  confirmationUrl = "https://app.example.com/confirm-email",
   logoSrc,
   brand,
 }: EmailConfirmationEmailProps) {
@@ -52,7 +52,7 @@ export function EmailConfirmationEmail({
 
 EmailConfirmationEmail.PreviewProps = {
   recipientName: "Ana",
-  confirmationUrl: "https://calibrafacil.com/confirm-email?token=abc",
+  confirmationUrl: "https://app.example.com/confirm-email?token=abc",
 } satisfies EmailConfirmationEmailProps;
 
 export default EmailConfirmationEmail;

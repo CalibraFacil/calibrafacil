@@ -139,7 +139,12 @@ let notificationScope: {
 } | null = null;
 const desktopAppScheme = "app";
 const desktopAppHost = "calibra-facil";
-const defaultCloudApiUrl = "https://api.calibrafacil.com";
+// Cloud API and web origin this desktop build talks to, baked in at build time
+// (see build-env.d.ts); runtime env vars below can still override them.
+const defaultCloudApiUrl =
+  import.meta.env.VITE_DESKTOP_AUTH_API_URL ?? "http://localhost:3000";
+const defaultCloudWebOrigin =
+  import.meta.env.VITE_DESKTOP_AUTH_ORIGIN ?? "http://localhost:5173";
 const packagedRendererUrl = `${desktopAppScheme}://${desktopAppHost}/`;
 const localServer = new LocalServerManager();
 
@@ -794,8 +799,9 @@ function assertAllowedDesktopAuthUrl(url: URL) {
   const configuredOrigin = configuredApiUrl
     ? safeUrlOrigin(configuredApiUrl)
     : null;
+  const defaultOrigin = safeUrlOrigin(defaultCloudApiUrl);
   const allowedOrigins = new Set([
-    "https://api.calibrafacil.com",
+    ...(defaultOrigin ? [defaultOrigin] : []),
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     ...(configuredOrigin ? [configuredOrigin] : []),
@@ -835,7 +841,7 @@ function getDesktopAuthOrigin(url: URL) {
     return safeUrlOrigin(rendererUrl()) ?? "http://localhost:5173";
   }
 
-  return "https://calibrafacil.com";
+  return defaultCloudWebOrigin;
 }
 
 function createDesktopAuthHeaders(entries: Array<[string, string]>) {

@@ -53,7 +53,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
  * Allows auditors and clients to verify certificate authenticity
  * using an unguessable UUID token.
  *
- * URL: https://verify.calibrafacil.com/v/{verificationToken}
+ * Human page: {VERIFY_URL}/v/{verificationToken} (portal route /v/$token).
  */
 export const verifyRouter = new Hono<{ Bindings: R2Env }>()
   // =========================================================================

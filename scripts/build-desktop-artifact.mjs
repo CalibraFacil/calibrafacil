@@ -21,7 +21,6 @@ const rendererBuildStartedAt = new Date().toISOString();
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
-validateDesktopReleaseSignoff();
 validateLinuxPackagePrerequisites();
 
 run(pnpmCommand, ["--dir", "apps/local-server", "run", "bundle"]);
@@ -80,22 +79,6 @@ function run(command, args, options = {}) {
     stdio: "inherit",
     shell: process.platform === "win32",
   });
-}
-
-function validateDesktopReleaseSignoff() {
-  if (isDirectoryBuildRequested()) {
-    return;
-  }
-
-  try {
-    run(process.execPath, ["scripts/check-offline-release-signoff.mjs"]);
-  } catch {
-    process.exit(1);
-  }
-}
-
-function isDirectoryBuildRequested() {
-  return electronBuilderArgs.some((arg) => arg === "--dir");
 }
 
 function validateRendererAssets() {

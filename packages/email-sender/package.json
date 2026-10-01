@@ -20,7 +20,7 @@
     "white-label"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@calibra-facil/shared": "workspace:*",
     "resend": "^6.12.4"

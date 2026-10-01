@@ -1,8 +1,3 @@
-# https://www.robotstxt.org/robotstxt.html
+# The lab app is private by default. The public project site lives in apps/site.
 User-agent: *
-Allow: /
-Disallow: /dashboard
-Disallow: /accept-invitation
-Disallow: /sign-in
-
-Sitemap: https://calibrafacil.com/sitemap.xml
+Disallow: /

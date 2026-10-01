@@ -147,7 +147,7 @@ CompetenceNotificationEmail.PreviewProps = {
   scopeDescription: "Calibração dimensional",
   dueDate: "21/06/2026",
   daysRemaining: 30,
-  actionUrl: "https://calibrafacil.com/dashboard/personnel/123",
+  actionUrl: "https://app.example.com/dashboard/personnel/123",
 } satisfies CompetenceNotificationEmailProps;
 
 export default CompetenceNotificationEmail;

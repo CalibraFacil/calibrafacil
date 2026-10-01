@@ -49,9 +49,9 @@ beforeEach(() => {
 
 describe("formatLabFromHeader", () => {
   it("builds a first-party From without 'via CalibraFácil'", () => {
-    expect(formatLabFromHeader("Laboratório Exemplo", "os@mail.exemplo.com.br")).toBe(
-      "Laboratório Exemplo <os@mail.exemplo.com.br>",
-    );
+    expect(
+      formatLabFromHeader("Laboratório Exemplo", "os@mail.laboratorio.example"),
+    ).toBe("Laboratório Exemplo <os@mail.laboratorio.example>");
   });
 
   it("strips header-breaking characters from the display name", () => {

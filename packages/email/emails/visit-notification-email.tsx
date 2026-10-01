@@ -107,7 +107,7 @@ export function VisitNotificationEmail({
   addressText,
   labName,
   reason,
-  actionUrl = "https://calibrafacil.com/portal/requests",
+  actionUrl = "https://app.example.com/portal/requests",
   logoSrc,
   brand,
 }: VisitNotificationEmailProps) {
@@ -181,7 +181,7 @@ VisitNotificationEmail.PreviewProps = {
   technicianName: "João Técnico",
   addressText: "Rua das Flores, 100 — São Paulo, SP",
   labName: "Lab Metrologia",
-  actionUrl: "https://calibrafacil.com/portal/requests/42",
+  actionUrl: "https://app.example.com/portal/requests/42",
   brand: { name: "Lab Metrologia", isWhiteLabel: true },
 } satisfies VisitNotificationEmailProps;
 

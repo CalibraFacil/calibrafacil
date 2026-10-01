@@ -2,7 +2,7 @@
 
 > The spec is the prompt. Implementation runs against the Acceptance Criteria below;
 > `spec-verifier` checks them. Authored with `ears-spec` + `calibrafacil-domain`.
-> Source: design doc `.goals/legal-metrology-regime.md`, issue #423 (legal-metrology half).
+> Source: internal design notes (not published), issue #423 (legal-metrology half).
 > Companion to `specs/calibration-interval-customer-owned/spec.md`.
 >
 > **Supersedes** `REQ-ACCESS-INT-005` and `REQ-INTERVAL-030` of the customer-owned spec:

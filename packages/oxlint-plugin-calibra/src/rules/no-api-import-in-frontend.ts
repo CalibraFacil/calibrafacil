@@ -17,7 +17,7 @@ const FRONTEND_PATTERN = /(^|\/)apps\/(web|portal)\//;
 
 // No known violations today — this rule is pure prevention. If a violation
 // must ever be grandfathered, add "<repo-relative path>": <count> here; new
-// occurrences beyond the listed count still fail (reference-project baseline ratchet).
+// occurrences beyond the listed count still fail (baseline ratchet).
 const LEGACY_BASELINE: Baseline = new Map<string, number>([]);
 
 function isApiImport(filename: string, source: string): boolean {

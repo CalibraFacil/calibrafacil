@@ -75,7 +75,7 @@ not on mount, so we never ping `localhost` on every page load.
   `node-zpl` is stale and drags `jimp`. The renderers are license-clean,
   dependency-light, fully unit-tested, and pure (run everywhere).
 - **Commands are built server-side.** `verification_token` is not exposed in the
-  general job DTO; the QR payload (`https://verify.calibrafacil.com/v/{token}`) is
+  general job DTO; the QR payload (`{VERIFY_URL}/v/{token}`) is
   embedded only in the dedicated `label-commands` response (least exposure — the
   token isn't sprinkled across general job data).
 - **Injection / accents are handled per renderer.** ZPL hex-escapes `^`/`~`/`_`

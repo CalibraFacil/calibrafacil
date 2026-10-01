@@ -3,7 +3,7 @@
 > The spec is the prompt. Implementation runs against the Acceptance Criteria below;
 > `spec-verifier` checks them. Authored with `ears-spec` + `calibrafacil-domain`, and
 > revised after an independent oracle-math + EARS verification pass (see "Verification
-> notes" at the end). Source: design doc `.goals/calibration-interval-customer-owned.md`,
+> notes" at the end). Source: internal design notes (not published),
 > issue **#423**. Builds on the **Phase A+B** spec
 > (`specs/calibration-interval-customer-owned.md`, PR #597): the as-found verdict +
 > customer-owned interval already exist. Scope: **Phase C (insight)**, **Phase D

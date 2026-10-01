@@ -13,6 +13,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, lt, ne, or, SQL } from "drizzle-orm";
 import { getPortalBaseUrlForClientOrganization } from "./portal-domains";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -68,7 +69,8 @@ function getPortalAppUrlFallback(): string {
         /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname);
 
       if (!isLocalHost) {
-        return "https://portal.calibrafacil.com";
+        // Convention: the portal lives on the "portal." subdomain of the app.
+        return `${url.protocol}//portal.${url.hostname.replace(/^www\./, "")}`;
       }
 
       url.port = "5174";
@@ -78,11 +80,7 @@ function getPortalAppUrlFallback(): string {
     }
   }
 
-  if (process.env.NODE_ENV === "production") {
-    return "https://portal.calibrafacil.com";
-  }
-
-  return "http://localhost:5174";
+  return portalBaseUrl();
 }
 
 async function getInvitationUrl(

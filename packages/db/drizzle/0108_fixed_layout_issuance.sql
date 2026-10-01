@@ -56,7 +56,7 @@ ALTER TABLE "issued_certificate_snapshot"
   ALTER COLUMN "render_policy" DROP NOT NULL;
 
 -- ── the lab-authored template tables ────────────────────────────────────────
--- 0107 kept these because they held the R2 keys of Exemplo's 15 template versions
+-- 0107 kept these because they held the R2 keys of a lab's 15 template versions
 -- and the archive copy had not been made. They are dropped here.
 --
 -- OPERATOR PRECONDITION: copy the 9 blobs listed in

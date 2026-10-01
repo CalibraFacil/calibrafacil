@@ -1,5 +1,6 @@
 {
   "name": "@calibra-facil/docs",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

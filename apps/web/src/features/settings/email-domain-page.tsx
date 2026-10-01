@@ -188,7 +188,7 @@ export function EmailDomainSettingsPage() {
             Envie os e-mails de OS, orçamentos e portal a partir do domínio do
             seu laboratório. Você publica alguns registros de DNS e pronto, sem
             criar conta em outro serviço. Sem configuração, tudo continua saindo
-            de calibrafacil.com.
+            do remetente padrão da plataforma.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -221,7 +221,7 @@ export function EmailDomainSettingsPage() {
               value={
                 payload.statusSummary.status === 'active' && domain
                   ? domain.fromAddress
-                  : 'noreply@calibrafacil.com'
+                  : 'Remetente padrão da plataforma'
               }
             />
             <StatusMetric

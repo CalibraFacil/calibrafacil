@@ -169,7 +169,7 @@ export type CertificateSignatory = {
    * The layout first shipped without this on the reasoning that the German and
    * French certificates authorise by name alone and the file itself carries a
    * PAdES signature. That reasoning does not survive contact with the Brazilian
-   * convention: the RBC certificate surveyed, and Exemplo's own legacy document,
+   * convention: the RBC certificate surveyed, and a pilot lab's legacy document,
    * both show a handwritten signature above the rule, and laboratories expect
    * it. Null when the signatory has not uploaded one — the name and role below
    * the rule still authorise the document on their own.

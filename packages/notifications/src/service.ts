@@ -73,6 +73,7 @@ import {
   type PortalDueDigestItem,
   type EmailBrand,
 } from "@calibra-facil/email";
+import { appBaseUrl, portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 // Track if email misconfiguration warning has been logged this session
 let emailMisconfigWarningLogged = false;
@@ -459,7 +460,7 @@ function getEmailLogoSrc(): string {
   const appUrl = process.env.WEB_URL ?? process.env.APP_URL;
   if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
 
-  return "https://calibrafacil.com/logo192.png";
+  return `${appBaseUrl()}/logo192.png`;
 }
 
 function sanitizeMailHeader(value: string): string {
@@ -484,19 +485,11 @@ function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
 }
 
 function getWebBaseUrl(): string {
-  return (
-    process.env.WEB_URL ??
-    process.env.APP_URL ??
-    "https://calibrafacil.com"
-  ).replace(/\/$/, "");
+  return appBaseUrl();
 }
 
 function getPortalBaseUrl(): string {
-  return (
-    process.env.PORTAL_APP_URL ??
-    process.env.PORTAL_URL ??
-    "https://portal.calibrafacil.com"
-  ).replace(/\/$/, "");
+  return portalBaseUrl();
 }
 
 function formatLabAddress(

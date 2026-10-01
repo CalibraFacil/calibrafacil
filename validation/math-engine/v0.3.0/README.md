@@ -1,6 +1,8 @@
 # Dossiê de Validação — `@calibra-facil/math-engine` v0.3.0
 
-Documento controlado que registra a validação do motor matemático conforme distribuído na plataforma CalibraFácil. Serve como evidência reutilizável por laboratórios usuários na composição da sua própria validação de método sob ISO/IEC 17025:2017 §7.2.1.3.
+Referência técnica que registra as verificações do motor matemático do projeto de código aberto Calibra Fácil. Pode servir de insumo para a validação de método e de software que cada laboratório conduz sob a ISO/IEC 17025:2017 (§7.2.2 e §7.11).
+
+> **Isenção de responsabilidade.** Este dossiê não é um documento de aprovação e não contém assinaturas. O software é fornecido "no estado em que se encontra", sem garantia de qualquer tipo, nos termos da [licença MIT](../../../LICENSE). Cada laboratório é o único responsável por validar o software para o seu próprio uso e pelos resultados que emitir.
 
 ## Revisões do documento
 
@@ -8,6 +10,7 @@ Documento controlado que registra a validação do motor matemático conforme di
 | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1.0  | 2026-06-09 | Emissão inicial para a v0.3.0.                                                                                                                                                                                                                                                                                                 |
 | 1.1  | 2026-09-08 | Revalidação sob a mesma versão após a auditoria técnica de 2026-09-07 (19 achados, `docs/audits/math-engine-2026-09-07*.md`); camada 3 + gate documentados; evidência da camada 1 reimplementada em `src/gum/reference-evidence.spec.ts`; corrigidas as declarações sobre truncamento de ν_eff e limiar da aproximação normal. |
+| 1.2  | 2026-10-01 | Edição pública para a distribuição em código aberto (licença MIT): bloco de aprovação e assinatura substituído pelo aviso de isenção de responsabilidade; identificação do laboratório de origem removida. Conteúdo técnico inalterado.                                                                                        |
 
 A revisão do documento (`\docRevision`) é independente da versão do pacote (`\docVersion`): uma revisão registra alterações que **não** mudam nenhum resultado já validado; qualquer mudança de resultado exige nova versão do pacote e novo diretório de dossiê.
 
@@ -15,7 +18,7 @@ A revisão do documento (`\docRevision`) é independente da versão do pacote (`
 
 - `dossier.tex` — fonte LaTeX (única fonte da verdade).
 - `Makefile` — pipeline de build.
-- O PDF compilado **não é versionado**; é gerado a partir da fonte e assinado eletronicamente antes de ser distribuído.
+- O PDF compilado **não é versionado**; gere-o a partir da fonte com `make`.
 - `manifest.json` — **sidecar legível por máquina** (DOM-11 / #664). Espelha a
   versão validada e fixa um _fingerprint_ de referência do motor para o gate
   automatizado. Ver abaixo.
@@ -76,14 +79,12 @@ Para iteração contínua:
 make watch
 ```
 
-## Preenchimento antes da assinatura
+## Apêndices
 
-O documento é entregue pronto exceto pelos apêndices controlados:
-
-1. **Apêndice A — Planilhas de referência.** Listar cada planilha Excel usada como referência: identificação interna, origem (laboratório acreditado, número Inmetro/RBC), escopo metrológico, data e responsável.
+1. **Apêndice A — Planilhas de referência.** Descreve cada planilha usada na camada de comparação operacional (escopo metrológico, vigência). A identificação do laboratório de origem é omitida na edição pública e as planilhas não são redistribuídas.
 2. **Apêndice B — Resultados operacionais por cenário.** Para cada cenário executado contra as planilhas: identificação, entradas, valor de referência, valor do motor, desvio observado, tolerância, conclusão.
 
-Os campos do bloco de aprovação (responsável pela validação, responsável da qualidade, aprovação técnica) ficam em branco até a assinatura. A versão eletrônica do PDF assinado é a versão controlada.
+O dossiê não tem bloco de aprovação nem assinatura; a seção "Natureza deste documento e isenção de responsabilidade" explica o seu alcance.
 
 ## Versionamento
 
@@ -95,8 +96,8 @@ validation/math-engine/v0.2.5/
 ...
 ```
 
-Mudança de `ENGINE_VERSION` exposta pelo pacote requer novo dossiê aprovado antes do _release_ em produção.
+Mudança de `ENGINE_VERSION` exposta pelo pacote requer um novo diretório de dossiê antes do _release_.
 
 ## Distribuição
 
-O PDF assinado é distribuído mediante solicitação ao laboratório usuário ou ao seu auditor, conforme descrito em `apps/docs/content/docs/incerteza/validacao.mdx`.
+A fonte e o processo de build são públicos: qualquer pessoa pode gerar o PDF com `make`. O documento é fornecido sem garantia, nos termos da licença MIT; cada laboratório permanece o único responsável pela sua própria validação (ISO/IEC 17025:2017 §7.2.2 e §7.11).

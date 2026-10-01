@@ -3,8 +3,8 @@
  * publish-time dimensional lint (`@calibra-facil/method-definition`).
  *
  * This is the operator's pre-flight before the "hard error everywhere" gate is
- * turned on for pre-existing methods (issue #663 §2 cleanup pass — Exemplo id=6,
- * demo id=3, humidity templates): it reconstructs the checker input from each
+ * turned on for pre-existing methods (issue #663 §2 cleanup pass — lab method
+ * id=6, demo id=3, humidity templates): it reconstructs the checker input from each
  * method's stored `data_fields` / `formulas` / `measurement_models` /
  * `variable_bindings` and reports, grouped by status, which methods carry a
  * dimensional incoherence.

@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  ArrowRight01Icon,
   Cancel01Icon,
+  GithubIcon,
   Menu01Icon,
 } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { track } from "@/lib/analytics/track";
+import { DOCS_URL, OPEN_SOURCE_URL, REPOSITORY_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 import { BrandLockup } from "./brand";
@@ -18,10 +18,10 @@ const navLinks = [
   { label: "Produto", href: "/#fluxo" },
   { label: "Portal do cliente", href: "/#portal" },
   { label: "Cobertura", href: "/#cobertura" },
-  { label: "Preços", href: "/#planos" },
+  { label: "Código aberto", href: OPEN_SOURCE_URL },
   { label: "Ferramentas", href: "/ferramentas" },
   { label: "Recursos", href: "/recursos" },
-  { label: "Blog", href: "/blog" },
+  { label: "Documentação", href: DOCS_URL },
 ];
 
 export function LandingNav() {
@@ -39,9 +39,6 @@ export function LandingNav() {
             <a
               key={link.href}
               href={link.href}
-              onClick={() => {
-                if (link.href === "/blog") track("blog_click");
-              }}
               className="rounded-md px-2.5 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
             >
               {link.label}
@@ -51,23 +48,17 @@ export function LandingNav() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Button
-            variant="ghost"
-            size="sm"
-            render={<a href="/sign-in" onClick={() => track("signin_click")} />}
-          >
-            Entrar
-          </Button>
-          <Button
             size="sm"
             render={
               <a
-                href="/#contato"
-                onClick={() => track("lead_cta_click", { location: "nav" })}
+                href={REPOSITORY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
               />
             }
           >
-            Falar com a equipe
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+            <HugeiconsIcon icon={GithubIcon} data-icon="inline-start" />
+            GitHub
           </Button>
         </div>
 
@@ -99,44 +90,25 @@ export function LandingNav() {
               key={link.href}
               href={link.href}
               className="rounded-md px-3 py-2.5 text-[15px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
-              onClick={() => {
-                if (link.href === "/blog") track("blog_click");
-                setMobileOpen(false);
-              }}
+              onClick={() => setMobileOpen(false)}
             >
               {link.label}
             </a>
           ))}
           <div className="mt-3 flex flex-col gap-2 border-t border-border pt-4">
             <Button
-              variant="outline"
               className="w-full"
               render={
                 <a
-                  href="/sign-in"
-                  onClick={() => {
-                    track("signin_click");
-                    setMobileOpen(false);
-                  }}
+                  href={REPOSITORY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileOpen(false)}
                 />
               }
             >
-              Entrar
-            </Button>
-            <Button
-              className="w-full"
-              render={
-                <a
-                  href="/#contato"
-                  onClick={() => {
-                    track("lead_cta_click", { location: "nav_mobile" });
-                    setMobileOpen(false);
-                  }}
-                />
-              }
-            >
-              Falar com a equipe
-              <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+              <HugeiconsIcon icon={GithubIcon} data-icon="inline-start" />
+              Ver no GitHub
             </Button>
           </div>
         </div>

@@ -97,7 +97,7 @@ export function buildEmailDomainStatusSummary(
       status: "not_configured" as const,
       canActivate: false,
       message:
-        "Nenhum domínio de envio configurado. Os e-mails saem de calibrafacil.com.",
+        "Nenhum domínio de envio configurado. Os e-mails saem do remetente padrão da plataforma.",
       keyHealth,
     };
   }

@@ -1,7 +1,9 @@
+# Static-hosting headers (Cloudflare Pages / Netlify format). When the API is
+# served from a different origin than this app, add that origin to connect-src.
 /*
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
   Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-JZmHg0x7u0Qf6VY9wsUWXR9eVTmV7N1qNlDVc3RrXbA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.calibrafacil.com https://o0.ingest.us.sentry.io https://*.ingest.sentry.io; frame-src 'none'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'sha256-JZmHg0x7u0Qf6VY9wsUWXR9eVTmV7N1qNlDVc3RrXbA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.ingest.sentry.io; frame-src 'none'

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { UncertaintyCalculator } from "@/components/tools/uncertainty-calculator";
-import { absoluteUrl, CONTACT_URL, DEMO_URL, SITE_NAME } from "@/lib/site";
+import { absoluteUrl, REPOSITORY_URL, SITE_NAME } from "@/lib/site";
 
 const TITLE = "Calculadora de incerteza de medição (GUM)";
 const DESCRIPTION =
@@ -181,18 +181,20 @@ export default function UncertaintyCalculatorPage() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <a
-            href={CONTACT_URL}
+            href={REPOSITORY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
-            Falar com um especialista
+            Ver o código no GitHub
           </a>
           <a
-            href={DEMO_URL}
+            href={`${REPOSITORY_URL}/tree/main/packages/math-engine`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center rounded-md border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
           >
-            Agendar demonstração
+            Conhecer o motor de cálculo
           </a>
         </div>
       </section>
@@ -221,10 +223,6 @@ export default function UncertaintyCalculatorPage() {
         </h2>
         <ul className="mt-5 grid gap-2.5">
           {[
-            {
-              label: "Como montar um orçamento de incerteza (GUM)",
-              href: "/blog/posts/orcamento-de-incerteza-de-medicao-gum",
-            },
             {
               label: "Cálculo de incerteza no CalibraFácil",
               href: "/recursos/calculo-de-incerteza-gum",

@@ -10,8 +10,8 @@ import { safeMethodId, stripUndefinedDeep } from "./util";
 /**
  * Generic product-format → method-definition draft conversion, shared by every
  * template so each one authors a SINGLE (product) representation. The converter
- * functions are extracted verbatim from the Exemplo seed; the mass-balance
- * fingerprint test (method:a614c64c…) guards against any behavioural drift.
+ * functions were extracted verbatim from the original lab seed; the mass-balance
+ * fingerprint test guards against any behavioural drift.
  */
 
 function objectRecord(value: unknown): Record<string, unknown> | null {

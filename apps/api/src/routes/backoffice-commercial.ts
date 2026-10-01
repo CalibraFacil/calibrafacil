@@ -34,13 +34,14 @@ import { previewCommercialOffer } from "../services/commercial/preview";
 import { issueCommercialOffer } from "../services/commercial/issue";
 import { cancelCommercialOffer } from "../services/commercial/cancel";
 import { reissueCommercialOffer } from "../services/commercial/reissue";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
   const configured = toRecord(c.env).APP_URL ?? process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
-    : "https://calibrafacil.com";
+    : appBaseUrl();
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

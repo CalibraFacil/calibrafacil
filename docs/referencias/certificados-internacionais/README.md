@@ -11,12 +11,16 @@ Serve de base para o desenho do layout fixo (#865). **Não substitui** as normas
 
 ## Fontes
 
+Os certificados analisados pertencem a terceiros (laboratórios e seus clientes) e **não são
+redistribuídos** neste repositório; ficam registradas apenas as observações de layout. A UKAS
+LAB 5 está disponível em `ukas.com`.
+
 | País | Documento                                                        | O que é                                                                          |
 | ---- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | 🇬🇧   | **UKAS LAB 5 ed. 5, jan/2025** — _Reporting calibration results_ | Norma de apresentação, com Fig. 1 (1ª página) e Fig. 2 (continuação). `ukas.com` |
 | 🇩🇪   | DAkkS/DKD — Kalibrierlabor Westfalen, 2016                       | Certificado real, 2 páginas, bilíngue DE/EN                                      |
 | 🇫🇷   | COFRAC — GFP Contrôle, acreditação 2-1614, 2018                  | Certificado real, 7 páginas, formulário FS42 V15.1                               |
-| 🇧🇷   | RBC/Cgcre — laboratório de massa acreditado, **CAL 0388**, 2023           | Certificado real, 3 páginas, bilíngue PT/EN, laboratório de massa                |
+| 🇧🇷   | RBC/Cgcre — laboratório de massa acreditado, 2023                | Certificado real, 3 páginas, bilíngue PT/EN                                      |
 
 ---
 
@@ -65,7 +69,7 @@ intégral."_
 `Bearbeiter`, dois nomes (DE). Nenhum dos dois usa assinatura digitalizada.
 
 **9. Controle de documento no rodapé.**
-`FS42 V15.1 du 29/05/2015` (FR). O legado da Exemplo fazia o mesmo (`FOR 51 REVISÃO: 04`). É
+`FS42 V15.1 du 29/05/2015` (FR). O certificado legado de um laboratório piloto fazia o mesmo (`FOR XX REVISÃO: NN`). É
 identificação do formulário, não do certificado.
 
 ## Onde divergem
@@ -83,7 +87,7 @@ Vale registrar porque valida três leituras normativas contra um documento real 
 
 - **A frase do NIE-009 §11.5.2** está lá, literal, no cabeçalho de **todas** as páginas:
   _"Laboratório de Calibração Acreditado pela Cgcre de acordo com a Norma NBR ISO/IEC 17025 Sob o
-  n°0388"_, com a tradução inglesa abaixo.
+  n°XXXX"_, com a tradução inglesa abaixo.
 - **Sem `±` na tabela de resultados** — coluna `Incerteza de medição (g)` com valor puro,
   exatamente como a NIT-DICLA-021 A.6.1 Nota 1 exige. Confirma que a regra é seguida na prática,
   e que um cabeçalho tipo `U ± (g)` destoaria.

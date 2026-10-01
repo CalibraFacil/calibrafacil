@@ -9,7 +9,7 @@ import { buildCertificateLayoutData } from "./layout-data";
  * deliberately uses output keys whose SPELLING contradicts their declared
  * metadata, so anything that sniffs `_antes`/`_apos` produces the wrong table.
  *
- * Shapes mirror production (Neon neon-project-id, calibration_job
+ * Shapes mirror a real production record (calibration_job
  * id 29): row-scoped formulas yield parallel arrays, and the math engine writes
  * every number as a string.
  */

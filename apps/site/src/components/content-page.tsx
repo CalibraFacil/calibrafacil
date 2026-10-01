@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CONTACT_URL, DEMO_URL } from "@/lib/site";
+import { OPEN_SOURCE_URL, REPOSITORY_URL } from "@/lib/site";
 
 // A minimalist, editorial content page for /recursos/* and /calibracao/*.
 // Typography-led: a single readable column, hairline rules between sections,
@@ -107,16 +107,16 @@ export function ContentPage({ model }: { model: ContentPageModel }) {
       </p>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <a href={CONTACT_URL} className={ctaPrimary}>
-          Falar com um especialista
-        </a>
         <a
-          href={DEMO_URL}
+          href={REPOSITORY_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className={ctaOutline}
+          className={ctaPrimary}
         >
-          Agendar demonstração
+          Ver no GitHub
+        </a>
+        <a href={OPEN_SOURCE_URL} className={ctaOutline}>
+          Rodar localmente
         </a>
       </div>
 
@@ -230,21 +230,21 @@ export function ContentPage({ model }: { model: ContentPageModel }) {
           Quer ver rodando no seu escopo?
         </h2>
         <p className="mt-3 max-w-[54ch] text-sm leading-relaxed text-muted-foreground">
-          Uma demonstração de 30 minutos com o produto rodando na sequência que
-          o avaliador costuma pedir, aos sábados ou à noite. Sem slide-deck, sem
-          promessa de roadmap.
+          O código é aberto. Três comandos sobem uma cópia completa na sua
+          máquina, com um laboratório de demonstração pronto para testar o fluxo
+          de ponta a ponta.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <a href={CONTACT_URL} className={ctaPrimary}>
-            Falar com um especialista
-          </a>
           <a
-            href={DEMO_URL}
+            href={REPOSITORY_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className={ctaOutline}
+            className={ctaPrimary}
           >
-            Agendar demonstração
+            Ver no GitHub
+          </a>
+          <a href={OPEN_SOURCE_URL} className={ctaOutline}>
+            Rodar localmente
           </a>
         </div>
       </section>

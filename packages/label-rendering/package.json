@@ -1,6 +1,7 @@
 {
   "name": "@calibra-facil/label-rendering",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Pure, dependency-free thermal-label rendering. Pluggable command languages (ZPL, TSPL) behind one LabelRenderer interface.",

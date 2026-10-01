@@ -112,40 +112,23 @@ const legacyRedirects = [
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Docs are served at calibrafacil.com/docs (proxied from apps/web via a Vercel
-  // rewrite), consolidating SEO authority onto one host. basePath prefixes every
-  // route, asset and Next <Link> (Fumadocs uses Next Link, so source.baseUrl
-  // stays "/").
-  //
-  // docs.calibrafacil.com must stay a plain alias of this project: it is the
-  // public origin that the apps/web rewrite proxies (this project's *.vercel.app
-  // URL is behind deployment protection, so it cannot be the origin). Do NOT
-  // redirect that domain at the Vercel domain level — it would break
-  // calibrafacil.com/docs. Its bare root is handled in redirects() below.
+  // Docs live under /docs so they can share a host with the project site
+  // (apps/site rewrites /docs/* here when DOCS_ORIGIN is set). basePath prefixes
+  // every route, asset and Next <Link> (Fumadocs uses Next Link, so
+  // source.baseUrl stays "/").
   basePath: "/docs",
-  // Allow the dev tunnel hostname to talk to `next dev` cross-origin.
-  // Without this, Next blocks /_next/webpack-hmr (WS) and /_next/static
-  // requests from non-localhost origins, which breaks hydration when
-  // the dev server is reached via a Cloudflare/ngrok-style tunnel.
-  allowedDevOrigins: ["dev-docs.calibrafacil.com"],
+  // Extra origins (a tunnel, another device) allowed to talk to `next dev`,
+  // comma-separated in NEXT_DEV_ALLOWED_ORIGINS. Without them Next blocks
+  // /_next/webpack-hmr and /_next/static requests from non-localhost origins.
+  allowedDevOrigins: (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   async redirects() {
-    return [
-      // Nothing is served at the bare origin (every route lives under basePath),
-      // so anyone landing on the legacy docs host gets a 404. Send them to the
-      // canonical URL. Scoped to "/" and to that host on purpose: proxied
-      // traffic always arrives as /docs/*, so it never matches this rule.
-      {
-        source: "/",
-        has: [{ type: "host", value: "docs.calibrafacil.com" }],
-        destination: "https://calibrafacil.com/docs",
-        permanent: true,
-        basePath: false,
-      },
-      ...legacyRedirects.map((rule) => ({ ...rule, permanent: true })),
-    ];
+    return [...legacyRedirects.map((rule) => ({ ...rule, permanent: true }))];
   },
 };
 

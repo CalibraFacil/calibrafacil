@@ -81,7 +81,7 @@ function runLocalBackgroundJob(message: BackgroundJobMessage) {
 // going through Vercel Queue. This is an opt-in, per-job-type allowlist
 // (default empty = everything stays on Vercel Queue), so cutover and rollback
 // are a single env-var change with no redeploy. See
-// `.goals/document-worker-extraction.md`.
+// `services/document-worker/README.md`.
 
 const DOCUMENT_WORKER_DRAIN_PATH = "/drain";
 

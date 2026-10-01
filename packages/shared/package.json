@@ -12,7 +12,9 @@
     "./cnpj": "./src/cnpj.ts",
     "./mass-units": "./src/mass-units.ts",
     "./plans": "./src/plans.ts",
+    "./public-urls": "./src/public-urls.ts",
     "./storage-keys": "./src/storage-keys.ts",
+    "./storage-endpoint": "./src/storage-endpoint.ts",
     "./telemetry": "./src/telemetry/index.ts",
     "./units": "./src/units/index.ts",
     "./format": "./src/format.ts"
@@ -24,7 +26,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",

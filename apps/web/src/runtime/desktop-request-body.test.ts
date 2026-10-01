@@ -17,7 +17,7 @@ function decode(base64: string) {
 
 describe('encodeDesktopRequestBody', () => {
   it('round-trips an ASCII body', () => {
-    const bytes = [...'{"nome":"Exemplo"}'].map((c) => c.charCodeAt(0))
+    const bytes = [...'{"nome":"Lab"}'].map((c) => c.charCodeAt(0))
 
     expect(decode(encodeDesktopRequestBody(bufferOf(bytes)))).toEqual(bytes)
   })

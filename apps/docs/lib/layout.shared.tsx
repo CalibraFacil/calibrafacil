@@ -27,8 +27,8 @@ export function baseOptions(): BaseLayoutProps {
       url: "/",
     },
     links: [
-      { text: "Plataforma", url: site.productUrl, external: true },
-      { text: "Entrar", url: site.loginUrl, external: true },
+      { text: "Projeto", url: site.productUrl, external: true },
+      { text: "GitHub", url: site.repositoryUrl, external: true },
     ],
   };
 }

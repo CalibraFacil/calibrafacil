@@ -95,8 +95,7 @@ const SAMPLE_PROPS: QuoteEmailProps = {
   freightCents: 8000,
   discountCents: 3000,
   totalCents: 115000,
-  approvalUrl:
-    "https://portal.calibrafacil.com/service-order-access/tok-abc123",
+  approvalUrl: "https://portal.example.com/service-order-access/tok-abc123",
 };
 
 async function renderEmail(
@@ -296,14 +295,14 @@ describe("REQ-SOEMAIL-023: approval URL present, internalNotes absent [HIGH RISK
   it("renders the approval URL", async () => {
     const html = await renderEmail();
     expect(html).toContain(
-      "https://portal.calibrafacil.com/service-order-access/tok-abc123",
+      "https://portal.example.com/service-order-access/tok-abc123",
     );
   });
 
   it("approval URL appears as a clickable link (href)", async () => {
     const html = await renderEmail();
     expect(html).toContain(
-      'href="https://portal.calibrafacil.com/service-order-access/tok-abc123"',
+      'href="https://portal.example.com/service-order-access/tok-abc123"',
     );
   });
 
@@ -326,7 +325,7 @@ describe("REQ-SOEMAIL-023: approval URL present, internalNotes absent [HIGH RISK
     });
     // The original URL must not be there if we pass a different URL
     expect(html).not.toContain(
-      "https://portal.calibrafacil.com/service-order-access/tok-abc123",
+      "https://portal.example.com/service-order-access/tok-abc123",
     );
     // The new URL must appear
     expect(html).toContain("https://other.example.com/different");
@@ -379,10 +378,10 @@ describe("REQ-QPUB-020: approval code section", () => {
     const html = await renderEmail({
       ...SAMPLE_PROPS,
       approvalCode: "K7WM3P9A",
-      codeEntryUrl: "https://portal.calibrafacil.com/access-code",
+      codeEntryUrl: "https://portal.example.com/access-code",
     });
     expect(html).toContain("K7WM3P9A");
-    expect(html).toContain("https://portal.calibrafacil.com/access-code");
+    expect(html).toContain("https://portal.example.com/access-code");
     expect(html).toContain("Prefere digitar um código?");
   });
 
@@ -396,7 +395,7 @@ describe("REQ-QPUB-020: approval code section", () => {
     const html = await renderEmail({
       ...SAMPLE_PROPS,
       approvalCode: "XYZW2345",
-      codeEntryUrl: "https://portal.calibrafacil.com/access-code",
+      codeEntryUrl: "https://portal.example.com/access-code",
     });
     expect(html).toContain("XYZW2345");
     expect(html).not.toContain("K7WM3P9A");

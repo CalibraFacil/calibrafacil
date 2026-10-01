@@ -1,48 +1,42 @@
-export const LEGAL_LAST_UPDATED = '09/04/2026'
-export const LEGAL_VERSION = '1.1'
-export const LEGAL_TECHNICAL_RETENTION_YEARS = 5
+export const LEGAL_LAST_UPDATED = '01/10/2026'
+export const LEGAL_VERSION = '2.0'
+
+/**
+ * Identity of whoever operates THIS deployment.
+ *
+ * Calibra Fácil is open-source software (MIT): there is no central provider —
+ * each deployment is run by its own operator, who is the data controller under
+ * the LGPD and sets the terms of service for its users. Operators configure
+ * these values at build time (VITE_OPERATOR_*) and should have the legal pages
+ * reviewed before going live.
+ */
+function configured(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : fallback
+}
 
 export const LEGAL_ENTITY = {
-  legalName: 'OPERADOR EXEMPLO',
-  representativeName: 'Operador Exemplo',
-  cnpj: '00.000.000/0000-00',
-  addressLine: 'Rua Exemplo, 100',
-  district: 'Centro',
-  city: 'Porto Alegre',
-  state: 'RS',
-  postalCode: '90000-000',
-  email: 'contato@calibrafacil.com',
-  forum: 'Porto Alegre/RS',
-  dpoName: 'Operador Exemplo',
-  dpoEmail: 'privacidade@calibrafacil.com',
-  get cityState() {
-    return `${this.city}/${this.state}`
-  },
-  get fullAddress() {
-    return `${this.addressLine}, bairro ${this.district}, ${this.city}/${this.state}, CEP ${this.postalCode}`
-  },
-} as const
+  legalName: configured(
+    import.meta.env.VITE_OPERATOR_LEGAL_NAME,
+    'Operador desta instância',
+  ),
+  cnpj: configured(import.meta.env.VITE_OPERATOR_CNPJ, 'não informado'),
+  address: configured(import.meta.env.VITE_OPERATOR_ADDRESS, 'não informado'),
+  email: configured(import.meta.env.VITE_OPERATOR_EMAIL, 'não informado'),
+  dpoName: configured(
+    import.meta.env.VITE_OPERATOR_DPO_NAME,
+    'Encarregado designado pelo operador',
+  ),
+  dpoEmail: configured(
+    import.meta.env.VITE_OPERATOR_DPO_EMAIL ??
+      import.meta.env.VITE_OPERATOR_EMAIL,
+    'não informado',
+  ),
+}
 
-export const LEGAL_SUBPROCESSORS = [
-  {
-    name: 'Cloudflare',
-    role: 'Hospedagem (Workers, Pages) e armazenamento (R2)',
-    sharedData: 'Dados de acesso, documentos armazenados e arquivos exportados',
-  },
-  {
-    name: 'Neon',
-    role: 'Banco de dados PostgreSQL',
-    sharedData: 'Dados persistidos na plataforma',
-  },
-  {
-    name: 'Asaas',
-    role: 'Processamento de pagamentos e faturamento',
-    sharedData:
-      'Dados de cobrança e informações fiscais necessárias ao pagamento',
-  },
-  {
-    name: 'Resend',
-    role: 'Envio de e-mails transacionais',
-    sharedData: 'Nome e endereço de e-mail dos destinatários',
-  },
-] as const
+/** True when the operator has not filled in its identity yet. */
+export const LEGAL_ENTITY_IS_PLACEHOLDER =
+  !import.meta.env.VITE_OPERATOR_LEGAL_NAME?.trim()
+
+export const PROJECT_REPOSITORY_URL =
+  'https://github.com/CalibraFacil/calibrafacil'

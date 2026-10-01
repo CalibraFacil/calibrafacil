@@ -43,6 +43,7 @@ import type {
   QuoteApprovedOutboxPayload,
   QuoteRejectedOutboxPayload,
 } from "./email-outbox-payloads";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 type ServiceOrderMember = AuthVariables["member"];
 
@@ -384,8 +385,7 @@ export async function sendServiceOrderQuote(input: {
     ],
   );
 
-  const portalAppUrl =
-    process.env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com";
+  const portalAppUrl = portalBaseUrl();
 
   if (orderRow) {
     const openedAtIso =

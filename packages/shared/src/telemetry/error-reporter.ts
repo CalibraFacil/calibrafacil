@@ -10,7 +10,7 @@
 // the runtime situation stabilizes, it can be swapped for the official SDK
 // behind the same ErrorReporter interface.
 //
-// Design rules (the reference project's "non-interfering telemetry"):
+// Design rules:
 //   - capture NEVER throws and never alters control flow;
 //   - payloads are REDACTED: structural tags, error type, sanitized message,
 //     stack frames — never request bodies, headers, cookies or env values;

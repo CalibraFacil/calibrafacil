@@ -26,7 +26,7 @@
 \usepackage[
   pdfauthor={CalibraFácil},
   pdftitle={Dossiê de Validação — @calibra-facil/math-engine v0.3.0 (rev. 1.1)},
-  pdfsubject={Validação do motor matemático de cálculo de incerteza para uso em produção no CalibraFácil},
+  pdfsubject={Verificação técnica do motor matemático de cálculo de incerteza do projeto Calibra Fácil},
   pdfkeywords={GUM, ISO/IEC 17025, incerteza de medição, calibração, validação de método},
   colorlinks=true,
   linkcolor=black,
@@ -39,10 +39,10 @@
 \newcommand{\docTitle}{Dossiê de Validação}
 \newcommand{\docSubject}{Motor Matemático \texttt{@calibra-facil/math-engine}}
 \newcommand{\docVersion}{0.3.0}
-\newcommand{\docRevision}{1.1}
+\newcommand{\docRevision}{1.2}
 \newcommand{\docId}{CF-VAL-MATH-ENGINE-0.3.0}
 \newcommand{\docDate}{\today}
-\newcommand{\organizationName}{CalibraFácil}
+\newcommand{\organizationName}{Projeto Calibra Fácil}
 \newcommand{\auditDate}{7 de setembro de 2026}
 
 % Table cell helpers
@@ -58,7 +58,7 @@
 \fancyhead[R]{\small Versão do pacote \docVersion}
 \fancyfoot[L]{\small \organizationName}
 \fancyfoot[C]{\small \thepage}
-\fancyfoot[R]{\small Documento controlado}
+\fancyfoot[R]{\small Referência técnica --- licença MIT}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
 
@@ -84,42 +84,35 @@
     \begin{tabularx}{0.85\textwidth}{l X}
       \toprule
       \textbf{Identificação} & \docId \\
-      \textbf{Versão do pacote validado} & \texttt{@calibra-facil/math-engine} \docVersion \\
+      \textbf{Versão do pacote} & \texttt{@calibra-facil/math-engine} \docVersion \\
       \textbf{Versão deste documento} & \docRevision{} (revalidação após auditoria técnica de \auditDate) \\
-      \textbf{Emitido por} & \organizationName \\
+      \textbf{Publicado por} & \organizationName{} (código aberto) \\
       \textbf{Data} & \docDate \\
-      \textbf{Classificação} & Documento controlado --- distribuição mediante solicitação \\
+      \textbf{Classificação} & Documento técnico de referência --- distribuído com o código-fonte (licença MIT) \\
       \bottomrule
     \end{tabularx}
     \vfill
     \begin{minipage}{0.85\textwidth}
       \small\itshape
-      Este documento registra a validação técnica realizada pela \organizationName{} sobre o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{}, distribuído na plataforma CalibraFácil para cálculo de incerteza de medição em calibrações conforme \mbox{ISO/IEC 17025:2017}. A revisão \docRevision{} incorpora a remediação de uma auditoria técnica independente do código-fonte, conduzida sob a regra de que nenhum resultado corretamente produzido pela versão \docVersion{} é alterado. O documento serve como evidência de validação reutilizável pelo laboratório usuário na composição da sua própria validação de método sob a referida norma.
+      Este documento registra as verificações técnicas executadas sobre o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{}, componente do projeto de código aberto Calibra Fácil para cálculo de incerteza de medição em calibrações conforme \mbox{ISO/IEC 17025:2017}. A revisão \docRevision{} incorpora a remediação de uma auditoria técnica independente do código-fonte, conduzida sob a regra de que nenhum resultado corretamente produzido pela versão \docVersion{} é alterado. É uma referência técnica que um laboratório pode consultar ao planejar a sua própria validação; não valida o uso do software por terceiros.
     \end{minipage}
   \end{center}
 \end{titlepage}
 
 % ---------------------------------------------------------------------------
-% Approval block
+% Nature of this document / disclaimer
 % ---------------------------------------------------------------------------
-\section*{Aprovação}
-\addcontentsline{toc}{section}{Aprovação}
+\section*{Natureza deste documento e isenção de responsabilidade}
+\addcontentsline{toc}{section}{Natureza deste documento e isenção de responsabilidade}
 
-\begin{tabularx}{\textwidth}{l X l l}
-  \toprule
-  \textbf{Responsável} & \textbf{Nome} & \textbf{Assinatura} & \textbf{Data} \\
-  \midrule
-  Validação, qualidade e aprovação técnica\textsuperscript{*} & --- & \rule[-0.2em]{4cm}{0.4pt} & \rule[-0.2em]{2.5cm}{0.4pt} \\
-  \bottomrule
-\end{tabularx}
+Este dossiê é uma referência técnica publicada com o código-fonte do projeto Calibra Fácil, distribuído sob a licença MIT. Ele descreve as verificações executadas sobre o pacote durante o seu desenvolvimento e aponta para os testes automatizados que permitem reproduzi-las. \textbf{Não é um documento de aprovação, não contém assinaturas e não atesta a adequação do software ao uso de nenhum laboratório.}
 
-\vspace{0.3cm}
-{\small
-\textsuperscript{*}\,A \organizationName{} opera atualmente sob regime de fundador único. O signatário assina, neste documento, os papéis de validador, responsável da qualidade e aprovador técnico. A separação formal de responsabilidades será adotada quando o quadro de pessoal da \organizationName{} permitir, e será refletida em versão futura deste dossiê. A independência metrológica do conteúdo aqui registrado deriva (i) da comparação com valores publicados em normas e tabelas reconhecidas, (ii) da comparação com as planilhas de laboratório acreditado descritas no Apêndice~\ref{app:planilhas} e (iii) da auditoria técnica independente do código-fonte registrada na Seção~\ref{sec:auditoria}.
-}
+O software é fornecido \emph{no estado em que se encontra}, sem garantia de qualquer tipo, expressa ou implícita, conforme os termos da licença MIT. Os autores e contribuidores não se responsabilizam por resultados de medição, certificados emitidos ou decisões tomadas com base neste software ou neste documento.
 
-\vspace{0.4cm}
-A versão eletrônica deste documento é a versão controlada. Cópias impressas devem ser tratadas como referência informativa, exceto quando assinadas na linha da tabela acima.
+Cada laboratório que utilizar o motor é o único responsável por validar o software e os seus métodos de calibração no próprio contexto, conforme a ABNT NBR ISO/IEC 17025:2017 (em especial as cláusulas 7.2.2 e 7.11), e por todos os resultados que emitir. As evidências aqui registradas podem servir de insumo para essa validação, mas não a substituem.
+
+\vspace{0.2cm}
+{\small\itshape English summary: this dossier is a technical reference distributed with the MIT-licensed source code of the Calibra Fácil project. It is not an approval and carries no signature. The software is provided ``as is'', without warranty of any kind; each laboratory is solely responsible for validating it for its own use (ISO/IEC 17025:2017, clauses 7.2.2 and 7.11) and for every result it issues.}
 
 % ---------------------------------------------------------------------------
 % TOC
@@ -131,7 +124,7 @@ A versão eletrônica deste documento é a versão controlada. Cópias impressas
 % ---------------------------------------------------------------------------
 \section{Sumário Executivo}
 
-A \organizationName{} validou o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{} para uso em produção como componente de cálculo de incerteza de medição na plataforma CalibraFácil. A validação foi conduzida em três camadas complementares:
+Este dossiê registra as verificações do pacote \texttt{@calibra-facil/math-engine} versão \docVersion{} como componente de cálculo de incerteza de medição. As verificações foram conduzidas em três camadas complementares:
 
 \begin{enumerate}
   \item \textbf{Validação metrológica de referência:} comparação dos resultados do pacote com valores publicados em normas e tabelas reconhecidas internacionalmente --- JCGM 100:2008 (GUM), Tabela G.2 e Anexo F, e tabelas de quantis t-Student NIST/SEMATECH. Implementada como testes automatizados de resposta conhecida (\emph{known-answer tests}) que executam a cada liberação.
@@ -139,9 +132,9 @@ A \organizationName{} validou o pacote \texttt{@calibra-facil/math-engine} vers�
   \item \textbf{Auditoria técnica independente do código-fonte (rev.\ \docRevision):} revisão adversarial do motor por auditor automatizado independente da equipe de desenvolvimento, em duas passagens mais três rodadas de revisão de código, com reprodução pública de cada achado. Todos os achados foram corrigidos e convertidos em testes de regressão.
 \end{enumerate}
 
-Os resultados das camadas 1 e 2 estão dentro das tolerâncias declaradas neste dossiê e \textbf{foram reverificados sem alteração após a remediação da camada 3}. \textbf{O pacote é aprovado para uso em produção na plataforma CalibraFácil} para as funções e regimes descritos na seção de escopo.
+Os resultados das camadas 1 e 2 estão dentro das tolerâncias declaradas neste dossiê e \textbf{foram reverificados sem alteração após a remediação da camada 3}. Os resultados são consistentes com as referências para as funções e regimes descritos na seção de escopo.
 
-A validação cobre o motor de cálculo \emph{conforme distribuído na plataforma}. O laboratório usuário utiliza esta evidência como insumo da sua própria validação de método sob a ISO/IEC 17025:2017, cláusula 7.2.2 (validação de métodos), e permanece responsável pela validação operacional das suas calibrações.
+As verificações cobrem o motor de cálculo \emph{conforme publicado neste repositório}. O laboratório usuário pode usar esta evidência como insumo da sua própria validação de método e de software sob a ISO/IEC 17025:2017 (cláusulas 7.2.2 e 7.11) e é o único responsável por essa validação e pelos resultados das suas calibrações.
 
 \subsection{Alterações em relação à versão 0.2.4}
 
@@ -228,7 +221,7 @@ Esta revisão também \textbf{corrige duas declarações imprecisas da revisão 
   \item \textbf{Álgebra dimensional de unidades} --- não implementada. Unidades são metadados textuais; a coerência dimensional do modelo é responsabilidade do projeto do método.
   \item \textbf{Funções não-suaves em propagação GUM} --- \texttt{abs}, \texttt{floor}, \texttt{ceil}, \texttt{round}, \texttt{min}, \texttt{max} e \texttt{if\_zero} são rejeitadas pelo motor em propagação GUM, exceto quando o autor do método fornece coeficientes de sensibilidade explícitos para \emph{todas} as variáveis e ativa \texttt{allowNonSmoothWithExplicitSensitivities}.
   \item \textbf{Graus de liberdade efetivos em modelos correlacionados} --- a fórmula de Welch--Satterthwaite usa apenas as contribuições diagonais; o motor emite o diagnóstico \texttt{WELCH\_SATTERTHWAITE\_CORRELATION\_LIMITATION} e o laboratório usuário deve validar \(\nu_{\text{eff}}\) por método próprio nesses modelos.
-  \item \textbf{Certificação metrológica por terceiro independente} --- não foi conduzida. A validação registrada neste dossiê é interna à \organizationName{}; a auditoria da Seção~\ref{sec:auditoria} é independente da equipe de desenvolvimento, mas não constitui certificação por organismo acreditado.
+  \item \textbf{Certificação metrológica por terceiro independente} --- não foi conduzida. A validação registrada neste dossiê é interna ao \organizationName{}; a auditoria da Seção~\ref{sec:auditoria} é independente da equipe de desenvolvimento, mas não constitui certificação por organismo acreditado.
 \end{itemize}
 
 % ---------------------------------------------------------------------------
@@ -262,7 +255,7 @@ Esta revisão também \textbf{corrige duas declarações imprecisas da revisão 
 
 \subsection{Planilhas de cálculo de referência}
 
-As planilhas usadas na camada de validação operacional foram fornecidas por laboratório acreditado pelo Inmetro/RBC. A identificação detalhada da planilha, escopo metrológico declarado e responsável da origem são registrados no Apêndice~\ref{app:planilhas}.
+As planilhas usadas na camada de validação operacional foram fornecidas por laboratório acreditado pelo Inmetro/RBC. A descrição da planilha e do seu escopo metrológico consta do Apêndice~\ref{app:planilhas}; a planilha não é redistribuída com o projeto.
 
 % ---------------------------------------------------------------------------
 \section{Metodologia da Validação}
@@ -297,12 +290,12 @@ O \texttt{manifest.json} adjacente a este documento registra a versão validada,
 
 \subsection{Critério de liberação}
 
-A liberação de uma versão do pacote para uso em produção exige:
+A publicação de uma nova versão do pacote exige:
 
 \begin{enumerate}
   \item passagem em 100\% dos testes automatizados das camadas 1 e 3 e do gate motor \(\leftrightarrow\) dossiê;
   \item desvio máximo observado na camada 2 inferior à tolerância declarada;
-  \item aprovação formal pelo responsável da qualidade da \organizationName{}, registrada na seção de Aprovação deste dossiê.
+  \item revisão técnica das alterações, registrada em um novo dossiê versionado neste repositório.
 \end{enumerate}
 
 Falha em qualquer um destes critérios bloqueia a liberação e exige investigação e correção antes de nova rodada de validação.
@@ -558,14 +551,14 @@ Cada calibração executada na plataforma CalibraFácil carrega, em \emph{snapsh
   \item os dados de entrada e os resultados intermediários do cálculo de incerteza.
 \end{itemize}
 
-\textbf{Correlação com este dossiê:} qualquer calibração com \texttt{ENGINE\_VERSION = "\docVersion"} corresponde à validação aqui registrada, em qualquer das suas revisões: os resultados de modelos válidos com entradas representáveis em \emph{double} são idênticos entre a rev.\ 1.0 e a rev.\ \docRevision{}, e o \emph{fingerprint} registrado no \emph{snapshot} é reproduzível pelo motor corrente. Mudança de \texttt{ENGINE\_VERSION} requer novo dossiê de validação aprovado.
+\textbf{Correlação com este dossiê:} qualquer calibração com \texttt{ENGINE\_VERSION = "\docVersion"} corresponde à validação aqui registrada, em qualquer das suas revisões: os resultados de modelos válidos com entradas representáveis em \emph{double} são idênticos entre a rev.\ 1.0 e a rev.\ \docRevision{}, e o \emph{fingerprint} registrado no \emph{snapshot} é reproduzível pelo motor corrente. Mudança de \texttt{ENGINE\_VERSION} requer novo dossiê de validação.
 
 % ---------------------------------------------------------------------------
 \section{Conclusão}
 
-Considerando os resultados das três camadas de validação, as tolerâncias declaradas, a remediação integral dos achados da auditoria técnica e as garantias arquiteturais verificadas, a \organizationName{} \textbf{aprova o pacote} \texttt{@calibra-facil/math-engine} \textbf{versão \docVersion{} para uso em produção na plataforma CalibraFácil}, dentro do escopo declarado na Seção~\ref{sec:escopo} e com as limitações da Seção~\ref{sec:limitacoes}.
+Considerando os resultados das três camadas de validação, as tolerâncias declaradas, a remediação integral dos achados da auditoria técnica e as garantias arquiteturais verificadas, as verificações registradas neste dossiê \textbf{não identificaram desvios fora das tolerâncias declaradas} para o pacote \texttt{@calibra-facil/math-engine} versão \docVersion{}, dentro do escopo declarado na Seção~\ref{sec:escopo} e com as limitações da Seção~\ref{sec:limitacoes}.
 
-Esta aprovação é interna à \organizationName{} e cobre a distribuição do componente na plataforma. O laboratório usuário utiliza esta evidência como insumo da sua própria validação de método sob ISO/IEC 17025:2017, cláusula 7.2.2 (validação de métodos), e permanece responsável pela validação operacional das suas calibrações.
+Esta conclusão é técnica e não constitui aprovação, certificação nem garantia de qualquer natureza (ver \emph{Natureza deste documento e isenção de responsabilidade}). O laboratório usuário é o único responsável pela validação do software e dos seus métodos sob a ISO/IEC 17025:2017 (cláusulas 7.2.2 e 7.11) e pelos resultados das suas calibrações.
 
 % ---------------------------------------------------------------------------
 \appendix
@@ -573,32 +566,21 @@ Esta aprovação é interna à \organizationName{} e cobre a distribuição do c
 \section{Planilhas de Referência}
 \label{app:planilhas}
 
-\subsection{Entrada A.1 --- Laboratório Exemplo, FOR 50 / FOR 51}
+\subsection{Entrada A.1 --- Planilha de calibração de balanças de laboratório acreditado}
 
 \begin{tabularx}{\textwidth}{l X}
   \toprule
-  \textbf{Identificador interno CalibraFácil} & \texttt{CF-REF-EXEMPLO-FOR50-51-2026.04} \\
-  \textbf{Identificação na origem} & FOR 50 (Formulário) + FOR 51 (Certificado), com folhas auxiliares \texttt{Cálculo U}, \texttt{Pesos F1}, \texttt{Pesos M1 - M2} e \texttt{Valores máximos} \\
-  \textbf{Nome do arquivo recebido} & \texttt{FOR 50 e FOR 51 Rastreado - apartir 14.4.26.xlsx} \\
-   & \emph{(nome preservado como recebido da Laboratório Exemplo; o documento da origem não é renomeado)} \\
-  \textbf{Origem} & \textbf{Laboratório Exemplo} --- laboratório acreditado pelo Inmetro/RBC \\
-  \textbf{Responsável na origem} & (omitido) (última modificação registrada nos metadados do arquivo) \\
-  \textbf{Criação original} & 2015-12-14 \\
-  \textbf{Última revisão registrada} & 2026-04-15 \\
+  \textbf{Identificador neste dossiê} & \texttt{CF-REF-LAB-A-BAL-2026.04} \\
+  \textbf{Descrição} & Formulário de calibração e certificado de balanças, com folhas auxiliares de cálculo de incerteza, tabelas de pesos padrão (classes F1 e M1/M2) e valores máximos \\
+  \textbf{Origem} & Laboratório de calibração acreditado pela Cgcre/Inmetro (RBC); identificação omitida nesta edição pública \\
   \textbf{Vigência adotada para comparação} & a partir de 14 de abril de 2026 \\
-  \textbf{Escopo metrológico} & Calibração de massas com pesos padrão OIML classes F1 e M1/M2, propagação de incerteza segundo GUM (folha \texttt{Cálculo U}) \\
-  \textbf{Folhas relevantes para validação} & \texttt{FOR 50 - Formulario}, \texttt{Cálculo U}, \texttt{Pesos F1}, \texttt{Pesos M1 - M2}, \texttt{Valores máximos} \\
-  \textbf{Curador da cópia local} & CalibraFácil \\
-  \textbf{Forma de obtenção} & Cópia controlada fornecida pela Laboratório Exemplo em formato Excel para fins de validação cruzada \\
-  \textbf{Classificação} & Documento controlado --- distribuição mediante solicitação \\
+  \textbf{Escopo metrológico} & Calibração de massas com pesos padrão OIML classes F1 e M1/M2, propagação de incerteza segundo GUM \\
+  \textbf{Disponibilidade} & Cópia cedida para fins de validação cruzada; não é redistribuída com o projeto \\
   \bottomrule
 \end{tabularx}
 
-\vspace{0.2cm}
-{\small Em todas as citações deste dossiê, a planilha de referência é referida pelo \emph{identificador interno CalibraFácil} (\texttt{CF-REF-EXEMPLO-FOR50-51-2026.04}). O nome do arquivo recebido fica registrado para preservar a rastreabilidade até o documento original da Laboratório Exemplo.}
-
 \vspace{0.3cm}
-Laboratório Exemplo é o primeiro laboratório acreditado operando na plataforma CalibraFácil em produção. A planilha FOR 50/51 é, no momento desta emissão, a única planilha de laboratório acreditado utilizada na camada operacional de validação do motor matemático.
+No momento da emissão desta versão, a planilha descrita acima era a única planilha de laboratório acreditado utilizada na camada operacional de verificação do motor matemático.
 
 \section{Resultados Operacionais por Cenário}
 \label{app:planilhas-resultados}
@@ -606,7 +588,7 @@ Laboratório Exemplo é o primeiro laboratório acreditado operando na plataform
 Detalhamento por cenário operacional executado contra a planilha registrada no Apêndice~\ref{app:planilhas}. Cada cenário registra: identificação da planilha de referência; entradas numéricas; valor de referência da planilha; valor calculado pelo motor; desvio absoluto observado; tolerância aplicada; conclusão (\textsf{PASS}/\textsf{FAIL}).
 
 \vspace{0.3cm}
-\textit{Esta seção é populada pela \organizationName{} à medida que cenários operacionais da Laboratório Exemplo (calibrações reais, com seus respectivos certificados emitidos no FOR 51) são reproduzidos no motor e seus desvios numéricos consolidados. O resumo executivo do conjunto de cenários executados na versão \docVersion{} é registrado na Seção~\ref{sec:resultados}.}
+\textit{Esta seção é populada à medida que cenários operacionais do laboratório de origem (calibrações reais e os respectivos certificados) são reproduzidos no motor e seus desvios numéricos consolidados. O resumo executivo do conjunto de cenários executados na versão \docVersion{} é registrado na Seção~\ref{sec:resultados}.}
 
 \section{Histórico de Revisões}
 
@@ -615,7 +597,8 @@ Detalhamento por cenário operacional executado contra a planilha registrada no 
   \textbf{Rev.} & \textbf{Data} & \textbf{Pacote} & \textbf{Descrição} \\
   \midrule
   1.0 & 2026-06-09 & \docVersion & Emissão inicial para a versão \docVersion{} do pacote. Revalidação após a primeira auditoria técnica: tolerância de covariância/PSD relativa, diferenciação de \texttt{if\_zero}, \texttt{round()} exato, escopo do limite de expoente, limite de magnitude do decimal, \emph{fingerprints} SHA-256. Valores de referência reverificados e inalterados em relação à v0.2.4. \\
-  \docRevision & \docDate & \docVersion & Revalidação sob a mesma versão do pacote após a auditoria técnica independente de \auditDate{} (19 achados corrigidos, Seção~\ref{sec:auditoria}), sob a regra de estabilidade byte a byte dos resultados válidos. Nova camada 3 (auditoria + regressões) e gate motor \(\leftrightarrow\) dossiê documentados. Evidência da camada 1 reimplementada no monorepo (\texttt{src/gum/reference-evidence.spec.ts}); graus de liberdade do caso aditivo declarados explicitamente. Corrigidas as declarações sobre truncamento de \(\nu_{\text{eff}}\) e sobre o limiar da aproximação normal. Valores de referência reexecutados e inalterados. \\
+  1.1 & 2026-09-09 & \docVersion & Revalidação sob a mesma versão do pacote após a auditoria técnica independente de \auditDate{} (19 achados corrigidos, Seção~\ref{sec:auditoria}), sob a regra de estabilidade byte a byte dos resultados válidos. Nova camada 3 (auditoria + regressões) e gate motor \(\leftrightarrow\) dossiê documentados. Evidência da camada 1 reimplementada no monorepo (\texttt{src/gum/reference-evidence.spec.ts}); graus de liberdade do caso aditivo declarados explicitamente. Corrigidas as declarações sobre truncamento de \(\nu_{\text{eff}}\) e sobre o limiar da aproximação normal. Valores de referência reexecutados e inalterados. \\
+  \docRevision & \docDate & \docVersion & Edição pública para a distribuição em código aberto (licença MIT): a seção de aprovação e assinatura foi substituída pelo aviso de isenção de responsabilidade; a identificação do laboratório de origem da planilha de referência e as referências à operação comercial da plataforma foram removidas. Conteúdo técnico, tolerâncias e resultados inalterados. \\
   \bottomrule
 \end{tabularx}
 

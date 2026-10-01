@@ -1042,7 +1042,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                     <p className="mt-1 text-pretty text-sm text-muted-foreground">
                       {isGeneratingPdf
                         ? 'A aprovação foi registrada. Mantemos a evidência visível enquanto o certificado é gerado.'
-                        : 'Revise os dados executados antes de aprovar o certificado da Laboratório Exemplo.'}
+                        : 'Revise os dados executados antes de aprovar o certificado.'}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

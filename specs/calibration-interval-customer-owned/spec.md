@@ -2,7 +2,7 @@
 
 > The spec is the prompt. Implementation runs against the Acceptance Criteria
 > below; `spec-verifier` checks them. Authored with `ears-spec` + `calibrafacil-domain`.
-> Source: design doc `.goals/calibration-interval-customer-owned.md`, issue #423.
+> Source: internal design notes (not published), issue #423.
 > Scope of THIS spec: **Phase A (reliability data foundation)** + **Phase B (the
 > compliance flip)**. Engine phases C/D/E are deferred (see Out-of-scope).
 

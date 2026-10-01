@@ -129,7 +129,7 @@ export interface NovoOrcamentoEmailDispatchInput {
    */
   approvalCode: string | null;
   /**
-   * Base URL for the portal, e.g. "https://portal.calibrafacil.com".
+   * Base URL for the portal, e.g. "https://portal.example.com".
    * Comes from PORTAL_APP_URL env var. The caller resolves this.
    */
   portalAppUrl: string;

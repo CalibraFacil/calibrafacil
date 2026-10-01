@@ -9,10 +9,8 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
 ];
 
-// Marketing site served at calibrafacil.com/precos + /recursos/* (proxied from
-// apps/web via Vercel rewrites). No basePath: it serves those paths at the root
-// of its own deployment and apps/web maps the public paths onto it. The Vite
-// landing keeps owning "/" until the homepage is ported here (staged cutover).
+// Project site (landing, content pages and the public uncertainty calculator).
+// No basePath: it serves its paths at the root of its own deployment.
 const config: NextConfig = {
   reactStrictMode: true,
   // Next writes its own AGENTS.md/CLAUDE.md into the app on dev start. The
@@ -33,16 +31,25 @@ const config: NextConfig = {
     // until there is a reason to take on that build step.
     extensionAlias: { ".js": [".ts", ".js"] },
   },
-  // Dev only: the landing is usually reviewed from another device on the
-  // tailnet (phone, laptop), which Next otherwise rejects as a cross-origin
-  // dev request and refuses to serve /_next assets to. Ignored in production.
-  allowedDevOrigins: [
-    "*.tailnet-example.ts.net",
-    "devbox.example.ts.net",
-    "100.64.0.10",
-  ],
+  // Dev only: extra origins (another device on your network, a tunnel) that
+  // may load /_next assets from the dev server, comma-separated in
+  // NEXT_DEV_ALLOWED_ORIGINS. Ignored in production.
+  allowedDevOrigins: (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  // Serve the documentation (apps/docs, built with basePath "/docs") under the
+  // same host when DOCS_ORIGIN points at its deployment.
+  async rewrites() {
+    const docsOrigin = process.env.DOCS_ORIGIN?.replace(/\/+$/, "");
+    if (!docsOrigin) return [];
+    return [
+      { source: "/docs", destination: `${docsOrigin}/docs` },
+      { source: "/docs/:path*", destination: `${docsOrigin}/docs/:path*` },
+    ];
   },
 };
 

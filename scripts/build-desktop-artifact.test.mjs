@@ -1,7 +1,5 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -15,24 +13,9 @@ const rootPackage = JSON.parse(
 const desktopPackage = JSON.parse(
   readFileSync(path.join(root, "apps/desktop/package.json"), "utf8"),
 );
-const incompleteSignoffDir = mkdtempSync(
-  path.join(tmpdir(), "calibra-desktop-release-gate-"),
-);
-const incompleteSignoffPath = path.join(incompleteSignoffDir, "signoff.md");
-writeFileSync(incompleteSignoffPath, "Final decision: `pending`\n");
-
-assertSourceOrder(
-  "validateDesktopReleaseSignoff();",
-  'run(pnpmCommand, ["--dir", "apps/local-server", "run", "bundle"]);',
-  "release sign-off must run before local-server bundle work",
-);
 assertIncludes(
   'run(pnpmCommand, [\n    "--dir",\n    "apps/desktop",\n    "exec",\n    "electron-builder",',
   "builder must invoke electron-builder through the Windows-safe pnpm command",
-);
-assertIncludes(
-  'run(process.execPath, ["scripts/check-offline-release-signoff.mjs"]);',
-  "builder must invoke the release sign-off checker",
 );
 assertIncludes(
   'process.platform === "win32" ? "pnpm.cmd" : "pnpm"',
@@ -41,14 +24,6 @@ assertIncludes(
 assertIncludes(
   'process.platform === "win32" ? "npm.cmd" : "npm"',
   "builder must use the npm command shim on Windows",
-);
-assertIncludes(
-  'arg === "--dir"',
-  "only explicit directory builds may skip the release sign-off checker",
-);
-assertNotIncludes(
-  'startsWith("--dir=")',
-  "directory build detection must not accept --dir=... installer-like arguments",
 );
 
 for (const scriptName of [
@@ -86,61 +61,10 @@ if (
   );
 }
 
-assertBlockedInstallerBuild(["scripts/build-desktop-artifact.mjs"]);
-assertBlockedInstallerBuild([
-  "scripts/build-desktop-artifact.mjs",
-  "--dir=false",
-]);
-assertBlockedInstallerBuild([
-  "scripts/build-desktop-artifact.mjs",
-  "--dir=dist",
-]);
-
 console.log("Desktop artifact release gate checks passed.");
-
-function assertBlockedInstallerBuild(args) {
-  const blockedInstallerBuild = spawnSync("node", args, {
-    cwd: root,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      CALIBRA_OFFLINE_RELEASE_SIGNOFF_WORKSHEET: incompleteSignoffPath,
-    },
-  });
-
-  if (blockedInstallerBuild.status !== 1) {
-    fail(
-      `${args.join(" ")} should stop at release sign-off; got exit ${blockedInstallerBuild.status}`,
-    );
-  }
-
-  const output = `${blockedInstallerBuild.stdout}\n${blockedInstallerBuild.stderr}`;
-  if (!output.includes("Offline/local-first release sign-off is incomplete.")) {
-    fail(`${args.join(" ")} did not surface the release sign-off failure`);
-  }
-  if (output.includes("apps/local-server")) {
-    fail(
-      `${args.join(" ")} reached local-server build work before sign-off passed`,
-    );
-  }
-}
 
 function assertIncludes(needle, message) {
   if (!builderSource.includes(needle)) {
-    fail(message);
-  }
-}
-
-function assertNotIncludes(needle, message) {
-  if (builderSource.includes(needle)) {
-    fail(message);
-  }
-}
-
-function assertSourceOrder(first, second, message) {
-  const firstIndex = builderSource.indexOf(first);
-  const secondIndex = builderSource.indexOf(second);
-  if (firstIndex === -1 || secondIndex === -1 || firstIndex > secondIndex) {
     fail(message);
   }
 }

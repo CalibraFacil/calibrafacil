@@ -15,8 +15,8 @@ import type {
 
 /**
  * Stable key for a curated PLATFORM method template (repo source of truth).
- * Lab-specific methods (e.g. Exemplo's seeded `mass-balance`) are NOT catalog
- * templates — they live in their seed script, not the registry.
+ * Lab-specific methods (e.g. the example `mass-balance`) are NOT catalog
+ * templates — they are not in the registry.
  */
 export type TemplateKey =
   | "force-indication"

@@ -2,7 +2,7 @@
  * Seed for the legal-metrology regulation catalog (deferred #3 of issue #423).
  *
  * Populates `legal_metrology_regulation` with the primary-grounded Portaria → regulated-
- * interval-shape table (research 2026-06-29; see `.goals/legal-metrology-catalog-seed.md`).
+ * interval-shape table (research 2026-06-29; see specs/legal-metrology-catalog/spec.md).
  * There is no public Inmetro registry, so the rows are curated in-house WITH provenance:
  *   - `primary`   the period shape was confirmed against the official Inmetro RTM / DOU.
  *   - `secondary` corroborated, but the exact article still needs operator re-confirmation

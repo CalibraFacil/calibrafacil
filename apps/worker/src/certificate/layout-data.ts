@@ -8,7 +8,7 @@
  *
  * That constraint is the whole point. The WYSIWYG editor (#863) and the XLSX
  * importer (#865) both died from being modelled on one laboratory's method: a
- * heuristic like "keys ending in _antes are the as-found phase" reads Exemplo's
+ * heuristic like "keys ending in _antes are the as-found phase" reads a pilot lab's
  * naming convention as if it were a platform contract, and the next lab's
  * method silently renders wrong. If a method does not declare enough to build a
  * correct table, this module returns a diagnostic instead of guessing — a
@@ -39,6 +39,7 @@ import type {
   CertificateResultTable,
   CertificateStandard,
 } from "@calibra-facil/documents";
+import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 /** Either the layout prop, or the reasons it could not be built. */
 export type LayoutDataResult =
@@ -656,7 +657,7 @@ export function buildCertificateLayoutData(
   const data: CalibrationCertificateData = {
     certificateNumber: job.jobId,
     qrCodeDataUrl: options.qrCodeDataUrl ?? null,
-    verificationUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+    verificationUrl: certificateVerificationUrl(job.verificationToken),
 
     lab: {
       name: job.lab.name,

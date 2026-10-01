@@ -89,7 +89,7 @@ CustomerSuccessEmail.PreviewProps = {
   title: "Go-live em risco",
   message:
     "O go-live do laboratório entrou em estado de risco e exige acompanhamento prioritário.",
-  actionUrl: "https://calibrafacil.com/dashboard/customer-success",
+  actionUrl: "https://app.example.com/dashboard/customer-success",
 } satisfies CustomerSuccessEmailProps;
 
 export default CustomerSuccessEmail;

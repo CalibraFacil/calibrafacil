@@ -12,6 +12,7 @@ import {
   type CertificateImageContext,
 } from "./eccentricity-indicator.js";
 import { formatDecimalPtBr } from "./decimal-format.js";
+import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 /**
  * The job snapshot a certificate is rendered from — every value that can land
@@ -876,7 +877,7 @@ export function buildCertificateData(
       name: job.certificateName,
       // Public verification URL — drives the QR code binding on the certificate
       // PDF (same target as the thermal-label QR). See verifyRouter / verify page.
-      verificationUrl: `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+      verificationUrl: certificateVerificationUrl(job.verificationToken),
       issuedAt: toIsoDateish(job.approvedAt),
       issuedAtText: formatCertificateDate(job.approvedAt),
       supersedesId: job.supersedesId,

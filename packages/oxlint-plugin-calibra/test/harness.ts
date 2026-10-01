@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-// Spawn-the-real-oxlint test harness (reference-project pattern). Rules are exercised
+// Spawn-the-real-oxlint test harness. Rules are exercised
 // through the actual `oxlint` binary against a temp fixture tree — the same
 // loader, parser and config resolution `pnpm lint` uses — instead of a mocked
 // rule-tester that could pass while the real integration is broken.

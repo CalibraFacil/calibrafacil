@@ -312,6 +312,7 @@ import {
   resolvePortalAmendmentInfo,
   PORTAL_TERMINAL_CERTIFICATE_STATUSES,
 } from "../lib/certificate-amendment-chain";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 /**
  * Resolve a `/certificates/:id` URL param to a Drizzle predicate. Customers see
@@ -530,15 +531,15 @@ function getPortalHostOrigin(c: {
 function isDefaultPortalHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
 
-  if (
-    process.env.NODE_ENV !== "production" &&
-    normalized === "dev-portal.calibrafacil.com"
-  ) {
-    return true;
+  let configuredPortalHostname: string | null = null;
+  try {
+    configuredPortalHostname = new URL(portalBaseUrl()).hostname.toLowerCase();
+  } catch {
+    configuredPortalHostname = null;
   }
 
   return (
-    normalized === "portal.calibrafacil.com" ||
+    normalized === configuredPortalHostname ||
     normalized === "localhost" ||
     normalized === "127.0.0.1" ||
     normalized === "[::1]" ||

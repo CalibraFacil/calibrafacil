@@ -171,7 +171,7 @@ function RepeatabilityTable({ data }: { data: CertificateRepeatability }) {
 
 /**
  * Eccentricity, with the platform diagram beside the table — the arrangement
- * the lab's own FOR 51 form used, and the reason
+ * a pilot lab's own legacy form used, and the reason
  * `renderEccentricityIndicatorSvgMarkup` was salvaged out of the deleted XLSX
  * renderer in the first place. The diagram marks which position the indicator
  * sat on, which is what makes the per-position figures interpretable.

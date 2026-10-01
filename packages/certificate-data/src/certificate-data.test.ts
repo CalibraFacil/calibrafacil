@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 import {
   buildCertificateData,
@@ -160,9 +161,12 @@ describe("buildCertificateData", () => {
   it("maps certificate identity, verification URL and pt-BR dates", () => {
     const certificate = section("certificate");
     expect(certificate.number).toBe("CAL-2026-0042");
+    // The verification page lives on the deployment's own VERIFY_URL /
+    // PORTAL_APP_URL; the token is what the certificate data contributes.
     expect(certificate.verificationUrl).toBe(
-      "https://verify.calibrafacil.com/v/tok-abc123",
+      certificateVerificationUrl("tok-abc123"),
     );
+    expect(certificate.verificationUrl).toMatch(/\/v\/tok-abc123$/);
     expect(certificate.issuedAtText).toBe("12/06/2026");
     expect(section("job").performedAtText).toBe("10/06/2026");
   });

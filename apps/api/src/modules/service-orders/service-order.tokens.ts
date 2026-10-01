@@ -32,6 +32,7 @@ import {
   getServiceOrderDetail,
   toClientVisibleServiceOrderDetail,
 } from "./service-order.read-model";
+import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 type RequestMetadata = {
   ipAddress?: string | null;
@@ -172,9 +173,7 @@ export async function redeemServiceOrderAccessCode(
     });
   }
 
-  const portalAppUrl = (
-    process.env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com"
-  ).replace(/\/$/, "");
+  const portalAppUrl = portalBaseUrl();
   return {
     status: "ok",
     data: {

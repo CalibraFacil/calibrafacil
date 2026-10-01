@@ -24,6 +24,7 @@ import {
   findLabProvisioningUser,
   provisionLabAccount,
 } from "../services/lab-provisioning";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -81,9 +82,7 @@ function resolveTrustedAppUrl(c: { env?: unknown }) {
   const configured = envValue(c, "APP_URL") ?? envValue(c, "WEB_URL");
   if (configured) return configured.replace(/\/+$/, "");
 
-  return process.env.NODE_ENV === "production"
-    ? "https://calibrafacil.com"
-    : "http://localhost:5173";
+  return appBaseUrl();
 }
 
 /**

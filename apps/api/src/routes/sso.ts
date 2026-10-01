@@ -23,6 +23,7 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 const createProviderSchema = z.object({
   providerId: z
@@ -77,13 +78,13 @@ type SsoProviderRow = typeof ssoProvider.$inferSelect;
 
 function getApiBaseURL() {
   return process.env.NODE_ENV === "production"
-    ? process.env.API_URL || "https://api.calibrafacil.com"
+    ? process.env.API_URL || "http://localhost:3000"
     : "http://localhost:3000";
 }
 
 function getDashboardBaseURL() {
   return process.env.NODE_ENV === "production"
-    ? process.env.APP_URL || "https://calibrafacil.com"
+    ? process.env.APP_URL || appBaseUrl()
     : "http://localhost:5173";
 }
 

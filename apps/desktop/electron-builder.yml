@@ -27,11 +27,10 @@ files:
   - assets/notification-overlay.png
 extraMetadata:
   main: dist/main/main.cjs
-# Feed served from a Cloudflare R2 bucket (custom domain). Fed by the
-# "Desktop Publish Update Feed" workflow — see docs/desktop-auto-update.md.
+# Auto-update feed: the installers attached to this repository's GitHub
+# releases (see docs/desktop-auto-update.md).
 publish:
-  provider: generic
-  url: https://updates.calibrafacil.com/desktop
+  provider: github
 # calibrafacil:// deep links. Windows registers the scheme from NSIS, macOS
 # from the bundle plist, Linux from the .desktop MimeType — each platform needs
 # its own declaration, and `app.setAsDefaultProtocolClient` at runtime only

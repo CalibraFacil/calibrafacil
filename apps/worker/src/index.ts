@@ -90,6 +90,12 @@ import {
   notifyAuditPackReady,
   notifyCertificateReady,
 } from "@calibra-facil/notifications";
+import {
+  appBaseUrl,
+  certificateVerificationUrl,
+  portalBaseUrl as sharedPortalBaseUrl,
+  storedObjectUrl,
+} from "@calibra-facil/shared/public-urls";
 
 export interface R2BucketBinding {
   get(key: string): Promise<{
@@ -844,7 +850,7 @@ async function fetchServiceOrderDocumentData(
   if (!row) return null;
 
   const qrSvg = await QRCode.toString(
-    `https://portal.calibrafacil.com/service-orders/${row.id}`,
+    `${portalBaseUrl()}/service-orders/${row.id}`,
     {
       type: "svg",
       width: 200,
@@ -929,7 +935,7 @@ async function fetchServiceOrderDocumentData(
       terms: row.default_intake_terms,
     },
     qrCodeDataUrl: `data:image/svg+xml;base64,${btoa(qrSvg)}`,
-    publicUrl: `https://portal.calibrafacil.com/service-orders/${row.id}`,
+    publicUrl: `${portalBaseUrl()}/service-orders/${row.id}`,
   };
 }
 
@@ -1032,7 +1038,7 @@ async function processServiceOrderTag(
     });
     if (!data) return { success: false, error: "Service order not found" };
     const qrSvg = await QRCode.toString(
-      `https://calibrafacil.com/dashboard/service-orders/${serviceOrderId}`,
+      `${appBaseUrl()}/dashboard/service-orders/${serviceOrderId}`,
       { type: "svg", width: 200, margin: 1, errorCorrectionLevel: "M" },
     );
     const tag: ServiceOrderTagData = {
@@ -1368,7 +1374,7 @@ async function processLabelJob(
 
     // 2. Generate QR code as SVG (canvas not available in Workers)
     const qrStart = performance.now();
-    const verificationUrl = `https://verify.calibrafacil.com/v/${data.verificationToken}`;
+    const verificationUrl = certificateVerificationUrl(data.verificationToken);
     const qrSvg = await QRCode.toString(verificationUrl, {
       type: "svg",
       width: 200,
@@ -1428,7 +1434,7 @@ async function processLabelJob(
     );
 
     // 6. Build public URL
-    const labelUrl = `https://certificates.calibrafacil.com/${key}`;
+    const labelUrl = storedObjectUrl(key);
 
     // 7. Update DB
     const dbUpdateStart = performance.now();
@@ -1677,7 +1683,7 @@ async function processJob(
   });
 
   if (existingSnapshot) {
-    const certificateUrl = `https://certificates.calibrafacil.com/${existingSnapshot.pdf_r2_key}`;
+    const certificateUrl = storedObjectUrl(existingSnapshot.pdf_r2_key);
     await withDbClient(env, (client) =>
       updateJobWithCertificate(
         client,
@@ -1715,7 +1721,7 @@ async function processJob(
     // rather than producing a document that merely looks right.
     const layout = buildCertificateLayoutData(job, {
       qrCodeDataUrl: await QRCode.toDataURL(
-        `https://verify.calibrafacil.com/v/${job.verificationToken}`,
+        certificateVerificationUrl(job.verificationToken),
         { margin: 0, width: 240 },
       ),
     });
@@ -1848,7 +1854,7 @@ async function processJob(
       await updateJobWithCertificate(
         client,
         jobId,
-        `https://certificates.calibrafacil.com/${snapshotPdfR2Key}`,
+        storedObjectUrl(snapshotPdfR2Key),
         userId,
         insertedPdfR2Key
           ? signed.signatureMetadata
@@ -1861,7 +1867,7 @@ async function processJob(
 
     return {
       success: true,
-      certificateUrl: `https://certificates.calibrafacil.com/${issuedPdfR2Key}`,
+      certificateUrl: storedObjectUrl(issuedPdfR2Key),
     };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
@@ -2232,11 +2238,7 @@ function parseAuditPackParams(value: unknown): AuditPackParams {
 }
 
 function portalBaseUrl(): string {
-  return (
-    process.env.PORTAL_APP_URL ??
-    process.env.PORTAL_URL ??
-    "https://portal.calibrafacil.com"
-  ).replace(/\/$/, "");
+  return sharedPortalBaseUrl();
 }
 
 /** Sanitize a ZIP entry filename segment (keeps readable pt-BR-ish names). */

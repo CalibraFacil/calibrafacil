@@ -121,7 +121,7 @@ OotNotificationEmail.PreviewProps = {
   ncNumber: "NC-2026-0042",
   instrumentDescription: "Paquímetro digital 0–150 mm (TAG PQ-014)",
   certificateNumber: "CERT-2026-0318",
-  ackUrl: "https://calibrafacil.com/ack/oot/exemplo",
+  ackUrl: "https://app.example.com/ack/oot/exemplo",
 } satisfies OotNotificationEmailProps;
 
 export default OotNotificationEmail;

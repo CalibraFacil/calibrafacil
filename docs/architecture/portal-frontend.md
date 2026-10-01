@@ -111,8 +111,7 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 `/api/portal/*` uses raw `fetch`.
 
 - `getApiBaseUrl()` (`lib/utils.ts`) resolves the API origin per host
-  (localhost:3000 in dev, `dev-*.calibrafacil.com` same-origin, else
-  `api.calibrafacil.com`). Always go through it; never hardcode the origin.
+  (localhost:3000 in dev, `VITE_API_URL` when set, else the same origin). Always go through it; never hardcode the origin.
 - Wrap reads in `useQuery` with a stable `queryKey` and a sensible `staleTime`.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
   in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;

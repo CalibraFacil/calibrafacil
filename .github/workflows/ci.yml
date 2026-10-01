@@ -3,11 +3,18 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Optional Turborepo remote cache. Pull requests from forks get no secrets, so
+# both stay empty there and turbo simply builds without the remote cache.
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -51,8 +58,7 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      # Formatting drifted to 500+ files while nothing checked it (#930). Keep
-      # it flat: `pnpm format` locally, `.prettierignore` carries the
+      # Keep it flat: `pnpm format` locally; `.prettierignore` carries the
       # byte-stable exclusions (math-engine, generated files).
       - name: Format check
         run: bun run format:check
@@ -60,15 +66,15 @@ jobs:
       - name: Type Check
         run: bun run check-types
 
-      # build the real Vercel function bundles and assert their
-      # structural shape (shim default-export form, cron dispatch table, every
-      # mounted route surviving into the built artifact). Guards the class of
-      # failure behind the 2026-06-24 cron-routing 404 outage and the
-      # 2026-06-04/05 Bun default-export boot crashes.
+      # Build the real Vercel function bundles and assert their structural
+      # shape (shim default-export form, cron dispatch table, every mounted
+      # route surviving into the built artifact). Guards against cron routes
+      # 404ing and default-export boot crashes in the deployed functions.
       - name: Assert Vercel function bundle shape (apps/api)
         run: |
           bun apps/api/scripts/build-vercel-functions.mjs
           bun apps/api/scripts/assert-vercel-fn-shape.mjs
 
+      # Pull requests test the packages they touch; pushes to main test all.
       - name: Test
-        run: bunx turbo test --filter="[origin/main...HEAD]"
+        run: bunx turbo test ${{ github.event_name == 'pull_request' && '--filter="[origin/main...HEAD]"' || '' }}

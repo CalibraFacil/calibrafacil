@@ -20,7 +20,7 @@ interface PasswordResetEmailProps {
 
 export function PasswordResetEmail({
   recipientName = "usuário",
-  resetUrl = "https://calibrafacil.com/reset-password",
+  resetUrl = "https://app.example.com/reset-password",
   logoSrc,
   brand,
 }: PasswordResetEmailProps) {
@@ -52,7 +52,7 @@ export function PasswordResetEmail({
 
 PasswordResetEmail.PreviewProps = {
   recipientName: "Ana",
-  resetUrl: "https://calibrafacil.com/reset-password?token=abc",
+  resetUrl: "https://app.example.com/reset-password?token=abc",
 } satisfies PasswordResetEmailProps;
 
 export default PasswordResetEmail;

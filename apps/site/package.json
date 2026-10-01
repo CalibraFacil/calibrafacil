@@ -1,5 +1,6 @@
 {
   "name": "@calibra-facil/site",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,7 +23,6 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@hugeicons/core-free-icons": "^4.2.0",
     "@hugeicons/react": "^1.1.6",
-    "@vercel/analytics": "2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "next": "16.3.3",

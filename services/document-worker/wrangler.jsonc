@@ -22,23 +22,23 @@
     "PORT": "8080",
     "QUEUE_BATCH_SIZE": "10",
     "QUEUE_STALE_AFTER_MS": "600000",
-    // Non-secret runtime config — these MUST live here, not just in the
+    // Replace the example.com values below with your deployment's.
+  // Non-secret runtime config — these MUST live here, not just in the
     // dashboard: `wrangler deploy` treats `vars` as authoritative and wipes any
     // dashboard-added plaintext var not listed here. GOTENBERG_URL is what
     // routes XLSX/HTML → PDF to Gotenberg (without it the worker falls back to
     // local LibreOffice, which the container does not have).
-    "GOTENBERG_URL": "https://calibrafacil-gotenberg.example.workers.dev",
-    "APP_URL": "https://calibrafacil.com",
-    "RESEND_FROM_EMAIL": "no-reply@calibrafacil.com",
+    "GOTENBERG_URL": "https://gotenberg.example.com",
+    "APP_URL": "https://app.example.com",
+    "RESEND_FROM_EMAIL": "no-reply@example.com",
     // R2 bucket NAMES are not secrets — keep them here so `wrangler deploy` is
-    // authoritative and the container can't drift back onto the legacy
-    // `calibrafacil-certificates` bucket (which left certs unreadable by the API
-    // until the names were realigned). `documents` holds regulated records
+    // authoritative and must match the API's R2_BUCKET_NAME /
+    // R2_MEDIA_BUCKET_NAME exactly. `documents` holds regulated records
     // (certs, SO docs, standards); `media` holds branding. The matching R2
     // *credentials* (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY)
     // stay as `wrangler secret`s.
-    "R2_BUCKET_NAME": "calibrafacil-documents",
-    "R2_MEDIA_BUCKET_NAME": "calibrafacil-media",
+    "R2_BUCKET_NAME": "calibra-documents",
+    "R2_MEDIA_BUCKET_NAME": "calibra-media",
   },
 
   // standard-2 = 1 vCPU / 6 GiB / 12 GB disk, matching services/gotenberg.

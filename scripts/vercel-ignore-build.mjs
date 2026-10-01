@@ -10,8 +10,6 @@ const projects = new Map([
   ["web", "@calibra-facil/web"],
   ["portal", "@calibra-facil/portal"],
   ["docs", "@calibra-facil/docs"],
-  ["cms", "@calibra-facil/cms"],
-  ["backoffice", "@calibra-facil/backoffice"],
 ]);
 
 const globalBuildInputs = new Set([
@@ -21,7 +19,6 @@ const globalBuildInputs = new Set([
   "turbo.json",
   ".npmrc",
   ".vercelignore",
-  "scripts/setup-private-git-ssh.mjs",
   "scripts/vercel-ignore-build.mjs",
 ]);
 

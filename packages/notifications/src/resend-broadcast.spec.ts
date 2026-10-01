@@ -93,9 +93,9 @@ describe("sendMarketingBroadcast", () => {
     );
 
     const body = JSON.parse(callAt(fetchImpl, 0).init.body);
-    expect(body.from).toBe("CalibraFácil <no-reply@calibrafacil.com>");
+    expect(body.from).toBe("CalibraFácil <no-reply@example.com>");
     // reply_to defaults to the resolved from address when unset.
-    expect(body.reply_to).toBe("CalibraFácil <no-reply@calibrafacil.com>");
+    expect(body.reply_to).toBe("CalibraFácil <no-reply@example.com>");
   });
 
   it("REQ-BC-002 creates a DRAFT by default and NEVER calls /send", async () => {

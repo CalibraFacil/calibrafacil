@@ -133,9 +133,9 @@ import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
 } from "../lib/finance";
+import { storedObjectUrl } from "@calibra-facil/shared/public-urls";
 
 const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
-const CERTIFICATE_PUBLIC_BASE_URL = "https://certificates.calibrafacil.com";
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 
 // ============================================================================
@@ -1538,7 +1538,7 @@ async function applyDesktopCertificatePdfUpload(
       jobId: job.jobId,
       draftId: upload.draftId,
     });
-    const certificateUrl = `${CERTIFICATE_PUBLIC_BASE_URL}/${remoteKey}`;
+    const certificateUrl = storedObjectUrl(remoteKey);
     const r2Client = createR2Client(input.env);
     const actorUserId = getSyncActorUserId(
       buildCertificatePdfUploadSyncEvent(upload, {

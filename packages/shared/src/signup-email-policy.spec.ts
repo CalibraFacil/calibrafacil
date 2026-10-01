@@ -9,11 +9,11 @@ import {
 
 describe("checkSignupEmail", () => {
   it("accepts an address at the laboratory's own domain", () => {
-    const result = checkSignupEmail("carla@laboratorio.example");
+    const result = checkSignupEmail("carla@metrologiaexemplo.com.br");
     expect(result).toEqual({
       ok: true,
-      email: "carla@laboratorio.example",
-      domain: "laboratorio.example",
+      email: "carla@metrologiaexemplo.com.br",
+      domain: "metrologiaexemplo.com.br",
     });
   });
 

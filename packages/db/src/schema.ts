@@ -2945,8 +2945,7 @@ export type MethodInputField = {
     // round-trips the config either way; the authoritative validator is
     // @calibra-facil/schemas' MethodTableColumnSchema (which DOES carry it).
     // Adding the optional field to this view-only type pushes the API's inferred
-    // Hono AppType past the TS7056 serialization limit. See
-    // .goals/standard-certified-value-binding.md (PR1).
+    // Hono AppType past the TS7056 serialization limit.
   }>;
 };
 
@@ -3666,7 +3665,7 @@ export const referenceStandard = pgTable(
  * byte-identical `compositionProfile: true` block copied onto every mass
  * reference_standard.certified_values; this table is the single source of
  * truth (one row per org+class+nominal, with provenance), and the runtime reads
- * profiles from here. See .goals/composition-profile-catalog-normalization.md.
+ * profiles from here.
  */
 export const massCompositionProfile = pgTable(
   "mass_composition_profile",

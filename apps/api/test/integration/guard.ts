@@ -54,3 +54,20 @@ export function assertEphemeralTestDb(rawUrl: string | undefined): string {
 
   return rawUrl;
 }
+
+/**
+ * Stricter check for the destructive step itself: TRUNCATE may only ever run
+ * against the per-worker databases this harness creates (`calibra_w<N>`). The
+ * local development database from docker-compose.yml lives on localhost too, so
+ * the host check above alone would not protect it from a misconfigured run.
+ */
+export function assertHarnessWorkerDb(rawUrl: string | undefined): string {
+  const url = assertEphemeralTestDb(rawUrl);
+  const database = new URL(url).pathname.replace(/^\//, "");
+  if (!/^calibra_w\d+$/.test(database)) {
+    throw new Error(
+      `[int-guard] REFUSING to TRUNCATE database "${database}": only the harness's per-worker databases (calibra_w<N>) may be wiped.`,
+    );
+  }
+  return url;
+}

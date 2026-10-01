@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/CalibraFacil/calibrafacil/discussions
+    about: Ask questions, share ideas and get help from the community in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/CalibraFacil/calibrafacil/security/advisories/new
+    about: Report security problems privately, never in a public issue.
