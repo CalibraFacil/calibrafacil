@@ -2,7 +2,9 @@
 // Worker script. Static asset requests are free on every plan. Headers and
 // redirects live in public/_headers and public/_redirects.
 {
-  "name": "calibrafacil-site",
+  // The Worker that serves calibrafacil.com; Workers Builds deploys it from
+  // this directory on every push to main.
+  "name": "calibrafacil",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",
