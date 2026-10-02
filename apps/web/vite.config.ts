@@ -63,8 +63,8 @@ export default defineConfig({
         short_name: 'CalibraFácil',
         description:
           'Gestão de calibração, cálculo de incerteza conforme GUM e emissão automática de certificados para laboratórios alinhados à ISO/IEC 17025.',
-        // Installed app launches into the product, not the marketing landing
-        // page; the dashboard guard redirects to /sign-in when logged out.
+        // The installed app opens on the dashboard; the dashboard guard
+        // redirects to /sign-in when logged out.
         start_url: '/dashboard',
         display: 'standalone',
         theme_color: '#4f46e5',
@@ -90,34 +90,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png,woff,woff2}'],
-        // Marketing/OG imagery is not part of the app shell.
-        globIgnores: [
-          'og/**',
-          'landing/**',
-          'integrations/**',
-          'hero-preview*.png',
-          'tanstack-*',
-        ],
-        // The apex "/" is served by the Next marketing app (apps/site), not the
-        // SPA. Disabling the precache directoryIndex stops workbox from mapping
-        // "/" onto the precached index.html (which would otherwise serve the SPA
-        // shell — and redirect logged-in visitors to /dashboard — before the
-        // navigateFallbackDenylist below ever runs). With both in place, "/"
-        // falls through to the network and Vercel proxies it to apps/site.
-        directoryIndex: null,
-        // /api is the same-origin backend (incl. Better-Auth and magic-link
-        // GETs); /blog, /docs and /recursos are rewritten by Vercel to the
-        // external CMS / docs / marketing apps, and "/" is the Next landing —
-        // the SPA navigation fallback must never swallow any of them.
-        navigateFallbackDenylist: [
-          /^\/$/,
-          /^\/api\//,
-          /^\/blog(\/|$)/,
-          /^\/docs(\/|$)/,
-          /^\/recursos(\/|$)/,
-          /^\/solucoes(\/|$)/,
-          /^\/calibracao(\/|$)/,
-        ],
+        // A reverse proxy may serve the API under /api on this origin
+        // (including the Better Auth and magic-link GETs a user opens from an
+        // e-mail); the SPA navigation fallback must never answer those.
+        navigateFallbackDenylist: [/^\/api\//],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
